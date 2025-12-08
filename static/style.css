@@ -1,0 +1,77 @@
+/* static/style.css */
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f6f9;
+  margin: 0;
+  padding: 0;
+  color: #222;
+}
+.topbar {
+  background: #2f8f6f;
+  color: white;
+  padding: 14px 10px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 18px;
+}
+.container {
+  max-width: 420px;
+  margin: 20px auto;
+  background: white;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(20,20,20,0.06);
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: white;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #222;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+  margin-bottom: 12px;
+}
+.card .icon {
+  font-size: 28px;
+}
+.card .label {
+  font-size: 16px;
+  font-weight: 600;
+}
+.btn-primary, .btn-secondary {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: white;
+  margin: 10px 0;
+}
+.btn-primary { background: #007bff; }
+.btn-secondary { background: #6c757d; }
+.list { list-style: none; padding: 0; margin: 10px 0; }
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  margin-bottom: 8px;
+}
+.thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; }
+.muted { color: #777; text-align: center; padding: 18px 0; }
+label.checkbox { display: block; margin: 8px 0; }
+input[type="text"], input[type="file"], textarea {
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0 12px 0;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  box-sizing: border-box;
+}
+button.btn-primary { background: #007bff; color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; }

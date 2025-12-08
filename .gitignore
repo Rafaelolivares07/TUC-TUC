@@ -1,0 +1,40 @@
+# Environment variables (NEVER upload to GitHub)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Flask
+instance/
+.webassets-cache
+flask_session/
+
+# Base de datos local (la base se creará en Render)
+*.db
+*.db-shm
+*.db-wal
+
+# Archivos temporales
+*.bak
+*.xlsx
+*.html
+*.png
+*.exe
+*.lnk
+
+# Git
+.git/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Uploads locales
+uploads/

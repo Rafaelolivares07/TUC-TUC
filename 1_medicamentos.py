@@ -195,12 +195,10 @@ class PostgreSQLConnectionWrapper:
         # Convertir ? a %s para PostgreSQL
         query = query.replace('?', '%s')
 
-        # Convertir nombres de tablas a mayúsculas con comillas para PostgreSQL
-        # Lista completa de todas las tablas
+        # Tablas que están en MAYÚSCULAS en PostgreSQL
         tablas_mayusculas = [
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
-            'precios_competencia', 'precios_competencia_new', 'existencias',
-            'diagnosticos', 'recetas', 'pedidos', 'configuracion_precios',
+            'existencias', 'diagnosticos', 'recetas', 'pedidos', 'configuracion_precios',
             'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
             'navegacion_menu', 'terceros', 'terceros_competidores', 'requerimientos',
             'requerimiento_referencias', 'alertas_admin', 'archivos',
@@ -209,11 +207,22 @@ class PostgreSQLConnectionWrapper:
             'sugerir_sintomas', 'usuario_dispositivo'
         ]
 
+        # Tablas que están en minúsculas en PostgreSQL (excepciones)
+        tablas_minusculas = [
+            'precios_competencia', 'precios_competencia_new'
+        ]
+
+        import re
+
+        # Convertir tablas que deben ir en MAYÚSCULAS
         for tabla in tablas_mayusculas:
-            # Buscar el nombre de tabla (case-insensitive) y reemplazarlo con comillas y mayúsculas
-            import re
             pattern = r'\b' + tabla + r'\b'
             query = re.sub(pattern, f'"{tabla.upper()}"', query, flags=re.IGNORECASE)
+
+        # Convertir tablas que deben permanecer en minúsculas
+        for tabla in tablas_minusculas:
+            pattern = r'\b' + tabla + r'\b'
+            query = re.sub(pattern, f'"{tabla}"', query, flags=re.IGNORECASE)
 
         cursor = self._conn.cursor()
         cursor.execute(query, params)

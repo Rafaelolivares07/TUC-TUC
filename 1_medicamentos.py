@@ -317,7 +317,7 @@ def check_device_access():
 def index():
     """Página principal: muestra directamente la tienda de medicamentos."""
     # Redirigir directamente a la tienda
-    return redirect(url_for('tienda_home')) 
+    return redirect(url_for('tienda_home'))
 
 @app.route('/admin')
 def admin_login():

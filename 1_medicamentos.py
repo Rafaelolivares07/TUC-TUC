@@ -1160,11 +1160,17 @@ def obtener_productos():
     precio_max = request.args.get('precio_max', '')
     busqueda_sintomas = request.args.get('sintomas_busqueda', '').strip()
 
-    conn = get_db_connection()
+    try:
+        conn = get_db_connection()
 
-    # Cargar configuración de publicación
-    config_row = conn.execute("SELECT permitir_publicar_sin_cotizaciones FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
-    permitir_sin_cotizaciones = config_row['permitir_publicar_sin_cotizaciones'] if config_row else 0
+        # Cargar configuración de publicación
+        config_row = conn.execute("SELECT permitir_publicar_sin_cotizaciones FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
+        permitir_sin_cotizaciones = config_row['permitir_publicar_sin_cotizaciones'] if config_row else 0
+    except Exception as e:
+        print(f"ERROR en obtener_productos al inicio: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e), 'productos': []}), 500
 
     # DETECCIÓN INTELIGENTE: DIAGNÓSTICOS + SÍNTOMAS
     sintomas_detectados = []

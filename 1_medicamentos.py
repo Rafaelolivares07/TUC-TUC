@@ -415,12 +415,19 @@ def inicio():
 @app.route('/tienda')
 def tienda_home():
     """Catálogo de productos ecommerce"""
-    # Obtener todos los síntomas para filtros
-    conn = get_db_connection()
-    sintomas = conn.execute("SELECT id, nombre FROM sintomas ORDER BY nombre").fetchall()
-    conn.close()
-    
-    return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas])
+    try:
+        # Obtener todos los síntomas para filtros
+        conn = get_db_connection()
+        sintomas = conn.execute("SELECT id, nombre FROM sintomas ORDER BY nombre").fetchall()
+        conn.close()
+
+        return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas])
+    except Exception as e:
+        print(f"ERROR en tienda_home: {e}")
+        import traceback
+        traceback.print_exc()
+        # Devolver página sin síntomas si hay error
+        return render_template('tienda_home.html', sintomas=[])
 
 
 @app.route('/tienda/carrito')

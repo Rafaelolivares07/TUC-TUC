@@ -194,6 +194,23 @@ class PostgreSQLConnectionWrapper:
     def execute(self, query, params=()):
         # Convertir ? a %s para PostgreSQL
         query = query.replace('?', '%s')
+
+        # Convertir nombres de tablas a mayúsculas con comillas para PostgreSQL
+        # Lista de tablas conocidas que están en mayúsculas
+        tablas_mayusculas = [
+            'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
+            'precios_competencia', 'existencias', 'diagnosticos', 'recetas',
+            'pedidos', 'configuracion_precios', 'medicamento_sintoma',
+            'diagnostico_sintoma', 'diagnostico_medicamento', 'navegacion_menu',
+            'terceros', 'requerimientos', 'alertas_admin'
+        ]
+
+        for tabla in tablas_mayusculas:
+            # Buscar el nombre de tabla (case-insensitive) y reemplazarlo con comillas y mayúsculas
+            import re
+            pattern = r'\b' + tabla + r'\b'
+            query = re.sub(pattern, f'"{tabla.upper()}"', query, flags=re.IGNORECASE)
+
         cursor = self._conn.cursor()
         cursor.execute(query, params)
         return cursor

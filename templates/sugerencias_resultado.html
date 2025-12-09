@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Resultados de Sugerencias</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+
+    <header class="topbar">✅ Medicamentos Sugeridos</header>
+    <main class="container">
+        
+        <h2>Resultados para tus síntomas:</h2>
+        
+        {% if medicamentos %}
+            {% if diagnostico_principal %}
+                <p><strong>Diagnóstico Principal Identificado:</strong> <span class="text-primary">{{ diagnostico_principal }}</span></p>
+                <p>Los medicamentos listados a continuación se recomiendan para tratar esta condición y cubrir los síntomas principales.</p>
+            {% else %}
+                <p>Se encontraron **{{ medicamentos|length }}** productos para el tratamiento sintomático.</p>
+            {% endif %}
+
+        <div class="medicamento-list">
+            {% for med in medicamentos %}
+            <div class="card">
+                <div class="card-body">
+                    <h3>{{ med.nombre }}</h3>
+                    <p><strong>Presentación:</strong> {{ med.presentacion }}</p>
+                    <p><strong>Concentración:</strong> {{ med.concentracion }}</p>
+                    
+                    <p class="diagnostico-base">Recomendación:</p>
+                    <p><strong>{{ med.uso }}</strong></p>
+                    
+                    <p class="stock-info">
+                        Stock Actual: 
+                        <span class="fw-bold {% if med.stock_actual > 5 %}text-success{% elif med.stock_actual > 0 %}text-warning{% else %}text-danger{% endif %}">
+                            {{ med.stock_actual }} unidades
+                        </span>
+                    </p>
+
+                    <form method="GET" action="{{ url_for('nueva_receta') }}" class="mt-3">
+                        <input type="hidden" name="medicamento_id" value="{{ med.id }}">
+                        
+                        <input type="hidden" name="medicamento_nombre" value="{{ med.nombre }}">
+                        <input type="hidden" name="medicamento_presentacion" value="{{ med.concentracion }} ({{ med.presentacion }})">
+                        
+                        <input type="hidden" name="sintomas_ids" value="{{ sintomas_seleccionados_ids|join(',') }}">
+                        
+                        {% if med.stock_actual > 0 %}
+                        <button type="submit" class="btn-primary w-100">
+                            <i class="fas fa-prescription"></i> Generar Receta y Dosis
+                        </button>
+                        {% else %}
+                        <button type="button" class="btn-danger w-100" disabled>
+                            <i class="fas fa-times-circle"></i> Agotado (Stock 0)
+                        </button>
+                        {% endif %}
+                    </form>
+                    </div>
+                {% if med.imagen %}
+                <img src="{{ url_for('uploaded_file', filename=med.imagen) }}" alt="{{ med.nombre }}" class="card-img">
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+            <p>😥 Lo sentimos, no se encontraron medicamentos asociados que coincidan con la combinación exacta de tus síntomas.</p>
+            <p>Puedes intentar con menos síntomas o revisar las asociaciones en tu sistema.</p>
+        {% endif %}
+        <a class="btn-secondary mt-4 d-block" href="{{ url_for('paciente_area') }}">⬅ Volver a la consulta</a>    </main>
+    
+    <style>
+        /* Estilos CSS incluidos aquí para simplificar la entrega */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .topbar { background-color: #28a745; color: white; padding: 10px 20px; text-align: center; font-size: 1.2em; margin-bottom: 20px; }
+        .medicamento-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Sombra mejorada */
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* Para que el contenido y la imagen se distribuyan */
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .card-img {
+            max-height: 200px;
+            object-fit: contain;
+            width: 100%;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            background-color: #f8f9fa; /* Fondo claro para imágenes */
+        }
+        .card-body {
+            padding: 15px;
+            flex-grow: 1;
+        }
+        .diagnostico-base {
+            font-style: italic;
+            color: #555;
+            margin-bottom: 5px;
+            margin-top: 10px;
+        }
+        .stock-info {
+            font-size: 0.9em;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+        /* Estilos de botones básicos */
+        .btn-primary { background-color: #007bff; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-danger { background-color: #dc3545; color: white; border: none; padding: 10px; border-radius: 5px; cursor: not-allowed; opacity: 0.6; }
+        .btn-secondary { background-color: #6c757d; color: white; text-align: center; display: inline-block; padding: 10px 15px; border-radius: 5px; text-decoration: none; margin-top: 20px; }
+        .text-primary { color: #007bff; }
+        .text-success { color: #28a745; }
+        .text-warning { color: #ffc107; }
+        .text-danger { color: #dc3545; }
+        .fw-bold { font-weight: bold; }
+        .mt-3 { margin-top: 1rem; }
+        .mt-4 { margin-top: 1.5rem; }
+        .d-block { display: block; }
+        .w-100 { width: 100%; }
+    </style>
+</body>
+</html>

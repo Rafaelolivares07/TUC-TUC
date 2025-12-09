@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista de Medicamentos</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 10px; 
+      font-size: 18px; /* fuente más grande */
+    }
+
+    h1 { font-size: 24px; }
+
+    .button {
+      display: block;
+      width: 100%; /* ocupa todo el ancho disponible */
+      max-width: 400px;
+      margin: 10px auto;
+      padding: 12px;
+      font-size: 18px;
+      text-align: center;
+      background-color: #4CAF50;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+
+    .button:hover { background-color: #45a049; }
+
+    table {
+      border-collapse: collapse; 
+      width: 100%; 
+      margin-top: 15px;
+      font-size: 16px;
+    }
+
+    th, td { 
+      border: 1px solid #ddd; 
+      padding: 10px; 
+      text-align: left; 
+    }
+
+    th { background-color: #f2f2f2; }
+
+    img { 
+      max-width: 80px; 
+      max-height: 80px; 
+    }
+
+    /* Para pantallas pequeñas: tabla en bloque scroll horizontal */
+    @media (max-width: 600px) {
+      table, thead, tbody, th, td, tr { 
+        display: block; 
+      }
+
+      tr { margin-bottom: 15px; border: 1px solid #ccc; padding: 10px; }
+
+      td { 
+        border: none;
+        padding: 6px 0;
+        font-size: 18px;
+      }
+
+      th { display: none; } /* ocultamos cabeceras en móvil */
+    }
+  </style>
+</head>
+<body>
+  <h1>Lista de Medicamentos</h1>
+
+  <a class="button" href="{{ url_for('nuevo') }}">➕ Agregar Medicamento</a>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Descripción</th>
+        <th>Fabricante</th>
+        <th>Imagen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for med in medicamentos %}
+      <tr>
+        <td>{{ med[0] }}</td>
+        <td>{{ med[1] }}</td>
+        <td>{{ med[2] }}</td>
+        <td>{{ med[3] }}</td>
+        <td>
+          {% if med[4] %}
+            <img src="{{ url_for('static', filename='uploads/' ~ med[4]) }}" alt="Imagen de {{ med[1] }}">
+          {% else %}
+            Sin imagen
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <a class="button" href="{{ url_for('menu') }}">⬅ Volver al Menú</a>
+</body>
+</html>

@@ -24,7 +24,11 @@ flask_session/
 # Archivos temporales
 *.bak
 *.xlsx
-*.html
+# Solo ignorar HTMLs de reportes, NO los templates
+reporte*.html
+comparativa*.html
+test*.html
+debug*.html
 *.png
 *.exe
 *.lnk

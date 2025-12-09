@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tienda - Medicamentos a Domicilio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .filtros {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .filtros h3 {
+            margin-bottom: 1rem;
+            color: #667eea;
+        }
+        
+        .filtro-grupo {
+            margin-bottom: 1rem;
+        }
+        
+        .filtro-grupo label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #555;
+        }
+        
+        .filtro-grupo input, .filtro-grupo select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .filtro-grupo input:focus, .filtro-grupo select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filtros-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .btn-buscar {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn-buscar:hover {
+            background: #5568d3;
+        }
+        
+        .productos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .producto-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+        
+        .producto-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        
+        .producto-imagen {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            background: #f9f9f9;
+            padding: 1rem;
+        }
+        
+        .producto-info {
+            padding: 1rem;
+        }
+        
+        .producto-nombre {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .producto-fabricante {
+            color: #667eea;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        
+        .producto-presentacion {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+        
+        .producto-precio {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2ecc71;
+            margin-bottom: 1rem;
+        }
+        
+        .btn-agregar {
+            width: 100%;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn-agregar:hover {
+            background: #5568d3;
+        }
+        
+        .sin-resultados {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+        
+        .carrito-flotante {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #667eea;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .carrito-flotante:hover {
+            transform: scale(1.1);
+        }
+        
+        .carrito-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 768px) {
+            .filtros-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .productos-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🏥 Medicamentos a Domicilio</h1>
+            <p>Entrega en 30 minutos - Zona Norte de Cali</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Filtros -->
+        <div class="filtros">
+            <h3>🔍 Buscar Medicamentos</h3>
+            <div class="filtros-grid">
+                <div class="filtro-grupo">
+                    <label>Nombre o Fabricante</label>
+                    <input type="text" id="busqueda" placeholder="Ej: Ibuprofeno, MK...">
+                </div>
+                
+                <div class="filtro-grupo">
+                    <label>Buscar por Síntoma</label>
+                    <input type="text" id="sintomas_busqueda" placeholder="Ej: dolor, fiebre, inflamación...">
+                    <div id="sintomas_disponibles" style="margin-top: 0.5rem; max-height: 150px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; display: none;"></div>
+                </div>
+                
+                <div class="filtro-grupo">
+                    <label>Precio Mínimo</label>
+                    <input type="number" id="precioMin" placeholder="0">
+                </div>
+                
+                <div class="filtro-grupo">
+                    <label>Precio Máximo</label>
+                    <input type="number" id="precioMax" placeholder="50000">
+                </div>
+            </div>
+            
+            <button class="btn-buscar" onclick="buscarProductos()">Buscar</button>
+        </div>
+        
+        <!-- Productos -->
+        <div id="productosContainer" class="loading">
+            Cargando productos...
+        </div>
+    </div>
+    
+    <!-- Carrito Flotante -->
+    <div class="carrito-flotante" onclick="verCarrito()">
+        🛒
+        <span class="carrito-badge" id="carritoCount">0</span>
+    </div>
+    
+    <script>
+        let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+        actualizarBadgeCarrito();
+        
+        // Cargar productos al inicio
+        window.addEventListener('DOMContentLoaded', () => {
+            buscarProductos();
+        });
+        
+        // Buscar al presionar Enter
+        document.getElementById('busqueda').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') buscarProductos();
+        });
+        
+        // Búsqueda automática de síntomas mientras escribe
+        document.getElementById('sintomas_busqueda').addEventListener('input', () => {
+            buscarProductos();
+        });
+
+
+function buscarProductos() {
+    const busqueda = document.getElementById('busqueda').value;
+    const busqueda_sintomas = document.getElementById('sintomas_busqueda').value;
+    const precioMin = document.getElementById('precioMin').value;
+    const precioMax = document.getElementById('precioMax').value;
+    const params = new URLSearchParams();
+    if (busqueda) params.append('q', busqueda);
+    if (busqueda_sintomas) params.append('sintomas_busqueda', busqueda_sintomas);
+    if (precioMin) params.append('precio_min', precioMin);
+    if (precioMax) params.append('precio_max', precioMax);
+            
+            document.getElementById('productosContainer').innerHTML = '<div class="loading">Buscando...</div>';
+            
+            fetch(`/api/productos?${params.toString()}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok) {
+                        mostrarProductos(data.productos);
+                    } else {
+                        document.getElementById('productosContainer').innerHTML = 
+                            '<div class="sin-resultados">Error al cargar productos</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('productosContainer').innerHTML = 
+                        '<div class="sin-resultados">Error de conexión</div>';
+                });
+        }
+        
+        function mostrarProductos(productos) {
+            const container = document.getElementById('productosContainer');
+            
+            if (productos.length === 0) {
+                container.innerHTML = '<div class="sin-resultados">No se encontraron productos con esos filtros</div>';
+                return;
+            }
+            
+            container.className = 'productos-grid';
+            container.innerHTML = productos.map(p => `
+                <div class="producto-card">
+<img src="${p.imagen ? '/static/uploads/' + p.imagen : 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23eee%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2220%22%3ESin imagen%3C/text%3E%3C/svg%3E'}"
+                    alt="${p.nombre}"
+                    class="producto-imagen"
+                    style="cursor: pointer;"
+                    onclick="abrirModalImagen('${p.imagen ? '/static/uploads/' + p.imagen : 'https://placehold.co/300x300'}', '${p.nombre}')">
+                    <div class="producto-info">
+                        <div class="producto-nombre">${p.nombre}</div>
+                        <div class="producto-fabricante">${p.fabricante}</div>
+                        <div class="producto-presentacion">
+                           ${p.concentracion && p.concentracion.toUpperCase() !== 'NONE' ? p.concentracion : ''}
+                           ${p.presentacion && p.presentacion.toUpperCase() !== 'NONE' ? p.presentacion : ''}
+                        </div>
+                        <div class="producto-precio">$${formatearPrecio(p.precio)}</div>
+                        ${p.componente_activo ? `<div style="font-size: 0.85rem; color: #764ba2; font-weight: 500; margin-bottom: 0.5rem;">💊 Principio Activo: ${p.componente_activo}</div>` : ''}
+                        ${p.sintomas_filtrados && p.sintomas_filtrados.length > 0 ? `<div style="font-size: 0.85rem; color: #667eea; font-weight: 500; margin-bottom: 0.5rem;">✅ Trata: ${p.sintomas_filtrados.join(', ')}</div>` : ''}
+                        <button type="button" style="font-size: 0.8rem; color: #667eea; background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0;" onclick="toggleSintomas(${p.precio_id})">
+                            🔽 Ver ${p.sintomas_filtrados && p.sintomas_filtrados.length > 0 ? 'todos los' : ''} síntomas
+                        </button>
+                        <div id="sintomas-${p.precio_id}" style="display: none; font-size: 0.85rem; color: #667eea; font-weight: 500; margin: 0.5rem 0;">
+                            ✅ Trata: ${p.sintomas_totales.join(', ')}
+                        </div>
+                        <div style="margin-bottom: 2.5rem;"></div>
+                        <button class="btn-agregar" onclick='agregarAlCarrito(${JSON.stringify(p)})'>
+                            Agregar al Carrito
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function formatearPrecio(precio) {
+            return new Intl.NumberFormat('es-CO').format(precio);
+        }
+        
+        function agregarAlCarrito(producto) {
+            // Validar precio
+            if (!producto.precio || producto.precio <= 0) {
+                alert('Este producto no tiene precio disponible');
+                return;
+            }
+            
+            // Buscar si ya existe en carrito
+            const index = carrito.findIndex(item => item.precio_id === producto.precio_id);
+            
+            if (index >= 0) {
+                carrito[index].cantidad++;
+            } else {
+                carrito.push({
+                    ...producto,
+                    cantidad: 1
+                });
+            }
+            
+            localStorage.setItem('carrito', JSON.stringify(carrito));
+            actualizarBadgeCarrito();
+            
+            // Feedback visual
+            alert(`${producto.nombre} (${producto.fabricante}) agregado al carrito`);
+        }
+        
+        function actualizarBadgeCarrito() {
+            const total = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+            document.getElementById('carritoCount').textContent = total;
+        }
+        
+        function verCarrito() {
+            window.location.href = '/tienda/carrito';
+        }
+
+        // Toggle para mostrar/ocultar todos los síntomas
+        function toggleSintomas(precioId) {
+            const div = document.getElementById(`sintomas-${precioId}`);
+            if (div.style.display === 'none') {
+                div.style.display = 'block';
+            } else {
+                div.style.display = 'none';
+            }
+        }
+
+        // Modal para ver imagen grande
+        function abrirModalImagen(imagenSrc, nombreProducto) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                cursor: pointer;
+            `;
+            
+            const contenido = document.createElement('div');
+            contenido.style.cssText = `
+                position: relative;
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow: auto;
+            `;
+            
+            contenido.innerHTML = `
+                <img src="${imagenSrc}" alt="${nombreProducto}" style="width: 100%; border-radius: 8px;">
+                <button onclick="this.closest('div').parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px;">✕</button>
+            `;
+            
+            modal.appendChild(contenido);
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            document.body.appendChild(modal);
+        }
+
+    </script>
+</body>
+</html>

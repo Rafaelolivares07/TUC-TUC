@@ -1,0 +1,286 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sugerencias de síntomas</title>
+  <style>
+    body { font-family: sans-serif; padding:20px; }
+    .box { margin-top:14px; padding:14px; border:1px solid #ccc; border-radius:6px; }
+    .titulo-seccion { margin:0 0 8px 0; font-size:18px; font-weight:bold; }
+    .item { margin:4px 0; }
+    input[disabled] { opacity: 0.5; cursor: not-allowed; }
+    .alerta-busqueda { background:#fff3cd; padding:14px; border-radius:6px; margin:12px 0; border-left:4px solid #ffc107; }
+    .botones-busqueda { display:flex; gap:10px; margin:12px 0; flex-wrap:wrap; }
+    .botones-busqueda a { 
+      display:inline-block; 
+      padding:8px 14px; 
+      background:#007bff; 
+      color:#fff; 
+      text-decoration:none; 
+      border-radius:4px;
+      font-size:14px;
+    }
+    .botones-busqueda a:hover { background:#0056b3; }
+    .info-clipboard { color:#666; font-size:12px; margin-top:8px; }
+  </style>
+  <script>
+    // Pegar automáticamente desde clipboard si el textarea está vacío
+    window.addEventListener('load', function() {
+      const textarea = document.getElementById('textoExtraido');
+      if (textarea && (!textarea.value || textarea.value.trim() === '')) {
+        // Intentar acceder al clipboard
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText()
+            .then(function(text) {
+              if (text && text.trim().length > 20) {
+                textarea.value = text;
+                textarea.style.background = '#e8f5e9';
+                console.log('Texto pegado automáticamente desde clipboard');
+              }
+            })
+            .catch(function(err) {
+              console.log('No se pudo acceder al clipboard:', err);
+            });
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+  <a href="/sugerir-sintomas/pendientes">← Volver a la lista</a>
+  <h1>{{ med.nombre }} (ID {{ med.id }})</h1>
+  <p style="color:#666">Buscado por: <b>{{ termino }}</b> — Fuente: <i>{{ fuente or 'Automática' }}</i></p>
+
+  <h3>Texto extraído (lee y edita si quieres):</h3>
+  
+  <!-- Alerta si no hay texto -->
+  {% if not texto or 'No se encontró' in texto %}
+  <div class="alerta-busqueda">
+    <p><strong>⚠️ No se encontró información automática.</strong></p>
+    <p>Abre Google o Wikipedia, copia la descripción del medicamento y regresa:</p>
+    <div class="botones-busqueda">
+      <a href="https://www.google.com/search?q={{ termino }}%20que%20es%20para%20que%20sirve%20y%20como%20se%20utiliza" target="_blank">
+        🔍 Buscar en Google
+      </a>
+      <a href="https://es.wikipedia.org/wiki/{{ termino | replace(' ', '_') }}" target="_blank">
+        📖 Buscar en Wikipedia
+      </a>
+    </div>
+    <div class="info-clipboard">
+      💡 Al volver, el texto copiado se pegará automáticamente en el campo de abajo.
+    </div>
+  </div>
+  {% endif %}
+  
+  <textarea id="textoExtraido" style="width:100%; height:220px; padding:8px;">{{ texto }}</textarea>
+  
+  <!-- Botón para procesar texto pegado -->
+  <div style="margin-top:10px;">
+    <button type="button" onclick="procesarTextoPegado({{ med.id }})" style="padding:8px 14px; background:#ff9800; color:#fff; border:none; border-radius:4px; cursor:pointer;">
+      ⚡ Procesar texto pegado
+    </button>
+    <small style="color:#666; display:block; margin-top:6px;">
+      Clic aquí después de pegar texto para detectar automáticamente diagnósticos y síntomas.
+    </small>
+  </div>
+  
+  <script>
+    function procesarTextoPegado(medId) {
+      const textarea = document.getElementById('textoExtraido');
+      const texto = textarea.value;
+      
+      if (!texto || texto.trim().length < 20) {
+        alert('Por favor, pega un texto más largo (mínimo 20 caracteres)');
+        return;
+      }
+      
+      console.log('Procesando texto de', texto.length, 'caracteres...');
+      
+      // Mostrar loading
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '⏳ Procesando...';
+      
+      // Enviar al servidor
+      fetch('/sugerir-sintomas/procesar-texto/' + medId, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ texto: texto })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Respuesta:', data);
+        
+        if (data.success) {
+          // Actualizar diagnósticos dinámicamente
+          actualizarDiagnosticos(data.diagnosticos);
+          
+          // Actualizar síntomas dinámicamente
+          actualizarSintomas(data.sintomas);
+          
+          // Mensaje de éxito
+          alert('✅ Diagnósticos y síntomas actualizados correctamente');
+        } else {
+          alert('Error: ' + (data.error || 'Desconocido'));
+        }
+        
+        btn.disabled = false;
+        btn.textContent = '⚡ Procesar texto pegado';
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al procesar el texto: ' + error);
+        btn.disabled = false;
+        btn.textContent = '⚡ Procesar texto pegado';
+      });
+    }
+    
+    function actualizarDiagnosticos(diagnosticos) {
+      const container = document.getElementById('diagnosticos-container');
+      
+      if (!container) {
+        console.warn('Contenedor de diagnósticos no encontrado');
+        return;
+      }
+      
+      if (diagnosticos.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No se detectaron diagnósticos.</p>';
+        return;
+      }
+      
+      let html = '<div class="titulo-seccion">Diagnósticos detectados:</div>';
+      
+      diagnosticos.forEach((dx, idx) => {
+        const checked = !dx.id ? 'checked="checked"' : '';
+        const disabled = dx.id ? 'disabled="disabled"' : '';
+        const estado = dx.id ? '(existe)' : '(nuevo)';
+        
+        html += `
+          <div class="item">
+            <input type="checkbox" id="diagnostico_${idx}" name="diagnostico" 
+                   value="${dx.id ? 'dx:' + dx.id : 'new:' + dx.nombre}" 
+                   ${checked} ${disabled}>
+            <label for="diagnostico_${idx}">${dx.nombre} ${estado}</label>
+            ${dx.sintomas.length > 0 ? `
+              <div style="margin-left:20px; color:#444;">
+                <small>Incluye síntomas:</small><br>
+                ${dx.sintomas.map(s => '• ' + s).join('<br>')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+    }
+    
+    function actualizarSintomas(sintomas) {
+      const container = document.getElementById('sintomas-container');
+      
+      if (!container) {
+        console.warn('Contenedor de síntomas no encontrado');
+        return;
+      }
+      
+      if (sintomas.length === 0) {
+        container.innerHTML = '<p style="color: #b00">No se detectaron síntomas. Puedes agregar manualmente.</p>';
+        return;
+      }
+      
+      let html = '<div class="titulo-seccion">Síntomas sugeridos:</div>';
+      
+      sintomas.forEach((s, idx) => {
+        const checked = !s.id ? 'checked="checked"' : '';
+        const disabled = s.id ? 'disabled="disabled"' : '';
+        const estado = s.id ? '(ya existe)' : '(nuevo)';
+        
+        html += `
+          <div class="item">
+            <input type="checkbox" id="sintoma_${idx}" name="sintoma" 
+                   value="${s.id ? 'id:' + s.id : 'new:' + s.label}" 
+                   ${checked} ${disabled}>
+            <label for="sintoma_${idx}">${s.label} ${estado}</label>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
+    }
+  </script>
+
+  <!-- -------------- NUEVA SECCIÓN: DIAGNÓSTICOS DETECTADOS ---------------- -->
+  <form method="post" action="/sugerir-sintomas/guardar/{{ med.id }}">
+    
+    {% if diagnosticos|length > 0 %}
+    <div class="box" id="diagnosticos-box">
+      <div id="diagnosticos-container">
+        <div class="titulo-seccion">Diagnósticos detectados:</div>
+
+        {% for dx in diagnosticos %}
+          <div class="item">
+            {% if dx.id %}
+              <input type="checkbox" id="diagnostico_{{ loop.index }}" name="diagnostico" value="dx:{{ dx.id }}" disabled="disabled">
+            {% else %}
+              <input type="checkbox" id="diagnostico_{{ loop.index }}" name="diagnostico" value="new:{{ dx.nombre }}" checked="checked">
+            {% endif %}
+            <label for="diagnostico_{{ loop.index }}">{{ dx.nombre }} {% if not dx.id %}(nuevo){% else %}(existe){% endif %}</label>
+
+            {% if dx.sintomas|length > 0 %}
+            <div style="margin-left:20px; color:#444;">
+              <small>Incluye síntomas:</small><br>
+              {% for s in dx.sintomas %}
+                • {{ s }}<br>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="box" id="diagnosticos-box">
+      <div id="diagnosticos-container">
+        <p style="color: #999;">Cargando diagnósticos...</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- -------------- SÍNTOMAS SUGERIDOS ---------------- -->
+    <div class="box" id="sintomas-box">
+      <div id="sintomas-container">
+        <div class="titulo-seccion">Síntomas sugeridos:</div>
+        {% if sugestiones|length == 0 %}
+          <p style="color: #b00">No se detectaron sugerencias automáticas. Puedes agregar manualmente abajo.</p>
+        {% endif %}
+
+        {% for s in sugestiones %}
+          <div class="item">
+            {% if s.id %}
+              <input type="checkbox" id="sintoma_{{ loop.index }}" name="sintoma" value="id:{{ s.id }}" disabled="disabled">
+              <label for="sintoma_{{ loop.index }}">{{ s.label }} (ya existe)</label>
+            {% else %}
+              <input type="checkbox" id="sintoma_{{ loop.index }}" name="sintoma" value="new:{{ s.label }}" checked="checked">
+              <label for="sintoma_{{ loop.index }}">{{ s.label }} (nuevo)</label>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- -------------- AGREGAR SÍNTOMA MANUAL ---------------- -->
+    <div class="box">
+      <label for="extra">Agregar otro síntoma (texto libre):</label>
+      <input id="extra" name="sintoma" placeholder="ej: dificultad respiratoria severa" 
+             style="width:100%; padding:8px; margin-top:6px" />
+    </div>
+
+    <button type="submit" style="margin-top:12px; padding:10px 14px; background:#2b8a3e; color:#fff; border:none;">
+      Guardar seleccionados
+    </button>
+  </form>
+</body>
+</html>

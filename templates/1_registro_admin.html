@@ -1,0 +1,36 @@
+<!doctype html>
+<title>Registro Admin</title>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul style="color: red; list-style: none; padding: 0;">
+    {% for category, message in messages %}
+      <li style="font-weight: bold;">{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Registro de Nuevo Administrador</h1>
+<p>Por favor, ingrese el nombre para este perfil de gestión. Rol: <strong>{{ rol }}</strong></p>
+
+<form method="POST" action="{{ url_for('etapa1_nuevo_registro') }}" style="border: 1px solid #ccc; padding: 20px; max-width: 400px;">
+    <label for="nombre">Nombre o Alias de Administrador:</label>
+    <br>
+    <input type="text" id="nombre" name="nombre" required style="width: 100%; padding: 8px; margin: 10px 0;">
+    <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer;">
+        Completar Registro
+    </button>
+
+    <!-- 👇 Mensaje dinámico -->
+    <p id="mensaje-procesando" style="color: green; display: none; margin-top: 10px;">
+        Procesando registro...
+    </p>
+</form>
+
+<script>
+  const form = document.querySelector('form');
+  form.addEventListener('submit', () => {
+    document.getElementById('mensaje-procesando').style.display = 'block';
+  });
+</script>

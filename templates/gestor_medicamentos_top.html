@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Medicamentos TOP - Populares en Colombia</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .contenedor {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .encabezado {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .encabezado h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .encabezado p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        .seccion {
+            padding: 30px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .seccion h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .control-grupo {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-grupo label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #333;
+            text-transform: uppercase;
+        }
+        .control-grupo input,
+        .control-grupo select {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .control-grupo input:focus,
+        .control-grupo select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        .btn-secondary {
+            background: #26a69a;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #1e8b7e;
+        }
+        .grupo-componente {
+            margin-bottom: 25px;
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+        }
+        .grupo-titulo {
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .componente-activo-badge {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .tabla-medicamentos {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .tabla-medicamentos thead {
+            background: #f0f0f0;
+            border-bottom: 2px solid #ddd;
+        }
+        .tabla-medicamentos th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            color: #333;
+            text-transform: uppercase;
+        }
+        .tabla-medicamentos td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .tabla-medicamentos tbody tr:hover {
+            background: #f9f9f9;
+        }
+        .descripcion-med {
+            font-weight: 600;
+            color: #333;
+        }
+        .laboratorio-med {
+            font-size: 13px;
+            color: #666;
+        }
+        .botones-accion {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-small {
+            padding: 6px 10px;
+            font-size: 11px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-editar {
+            background: #ff9800;
+            color: white;
+        }
+        .btn-editar:hover {
+            background: #f57c00;
+        }
+        .btn-crear {
+            background: #4caf50;
+            color: white;
+        }
+        .btn-crear:hover {
+            background: #45a049;
+        }
+        .btn-eliminar {
+            background: #f44336;
+            color: white;
+        }
+        .btn-eliminar:hover {
+            background: #d32f2f;
+        }
+        .cargando {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .sin-resultados {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+        .estadisticas-rapidas {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-numero {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        .formulario-agregar {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .formulario-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 15px;
+            align-items: end;
+        }
+        .alerta {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        .alerta-exito {
+            background: #c8e6c9;
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+            display: block;
+        }
+        .alerta-error {
+            background: #ffcdd2;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+            display: block;
+        }
+        @media (max-width: 1024px) {
+            .formulario-grid {
+                grid-template-columns: 1fr;
+            }
+            .botones-accion {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="contenedor">
+        <div class="encabezado">
+            <h1>🏥 Gestor de Medicamentos TOP (Desde BD)</h1>
+            <p>Gestiona los medicamentos más vendidos en Colombia</p>
+        </div>
+
+        <!-- SECCIÓN 1: AGREGAR NUEVO MEDICAMENTO TOP -->
+        <div class="seccion">
+            <h2>➕ Agregar Nuevo Medicamento a TOP</h2>
+            <div id="alerta-agregar" class="alerta"></div>
+            <div class="formulario-agregar">
+                <div class="formulario-grid">
+                    <div class="control-grupo">
+                        <label>Componente Activo *</label>
+                        <input type="text" id="agregar-componente" placeholder="Ej: Ibuprofeno, Paracetamol..." required>
+                    </div>
+                    <div class="control-grupo">
+                        <label>Descripción Completa *</label>
+                        <input type="text" id="agregar-descripcion" placeholder="Ej: Ibuprofeno 400 mg Tableta Caja x 20" required>
+                    </div>
+                    <div class="control-grupo">
+                        <label>Laboratorio *</label>
+                        <input type="text" id="agregar-laboratorio" placeholder="Ej: Genérico (Procaps)" required>
+                    </div>
+                    <button class="btn btn-secondary" onclick="agregarMedicamentoTop()">
+                        ✅ Agregar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 2: MEDICAMENTOS TOP VENDIDOS -->
+        <div class="seccion">
+            <h2>📊 Medicamentos TOP - Desde Base de Datos</h2>
+            <div class="estadisticas-rapidas" id="estadisticas-top">
+                <div class="stat-card">
+                    <div class="stat-numero" id="stat-total">0</div>
+                    <div class="stat-label">Total en BD</div>
+                </div>
+            </div>
+            <div id="cargando-top" class="cargando" style="display: none;">
+                <div class="spinner"></div> Cargando medicamentos desde BD...
+            </div>
+            <div id="contenido-top" style="display: none;"></div>
+            <div id="sin-resultados-top" class="sin-resultados" style="display: none;">
+                <p>📭 No hay medicamentos TOP en la BD. ¡Agrega uno!</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ========================================
+        // CARGAR MEDICAMENTOS TOP DESDE BD
+        // ========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarMedicamentosTopDesdeAPI();
+        });
+
+        async function cargarMedicamentosTopDesdeAPI() {
+            console.log("🔄 Cargando medicamentos TOP desde API...");
+            document.getElementById('cargando-top').style.display = 'block';
+            document.getElementById('contenido-top').style.display = 'none';
+            document.getElementById('sin-resultados-top').style.display = 'none';
+
+            try {
+                const response = await fetch('/admin/medicamentos_top/lista', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log("✅ Datos recibidos:", data);
+
+                if (data.ok && data.medicamentos.length > 0) {
+                    mostrarMedicamentosTop(data.medicamentos);
+                } else {
+                    document.getElementById('sin-resultados-top').style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                document.getElementById('sin-resultados-top').innerHTML = `<p>Error cargando medicamentos: ${error.message}</p>`;
+                document.getElementById('sin-resultados-top').style.display = 'block';
+            } finally {
+                document.getElementById('cargando-top').style.display = 'none';
+            }
+        }
+
+        function mostrarMedicamentosTop(medicamentos) {
+            console.log(`📊 Mostrando ${medicamentos.length} medicamentos...`);
+
+            // Agrupar por componente_activo
+            const gruposMap = {};
+            medicamentos.forEach(med => {
+                const componente = med.componente_activo;
+                if (!gruposMap[componente]) {
+                    gruposMap[componente] = [];
+                }
+                gruposMap[componente].push(med);
+            });
+
+            let html = '';
+
+            // Iterar por componentes ordenados
+            Object.keys(gruposMap).sort().forEach(componente => {
+                const grupo = gruposMap[componente];
+                html += `
+                    <div class="grupo-componente">
+                        <div class="grupo-titulo">
+                            💊 ${componente}
+                            <span class="componente-activo-badge">${grupo.length} entrada(s)</span>
+                        </div>
+                        <table class="tabla-medicamentos">
+                            <thead>
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th>Laboratorio</th>
+                                    <th style="width: 200px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                grupo.forEach(med => {
+                    let botonEdicionCreacion = '';
+                    
+                    if (med.existe_en_medicamentos) {
+                        // Existe: mostrar botón Editar
+                        botonEdicionCreacion = `<a href="/admin/medicamentos/editar/${med.medicamento_id}" class="btn-small btn-editar">✏️ Editar</a>`;
+                    } else {
+                        // No existe: mostrar botón Crear
+                        botonEdicionCreacion = `<button class="btn-small btn-crear" onclick="crearMedicamento('${med.descripcion.replace(/'/g, "\\'")}', '${med.laboratorio.replace(/'/g, "\\'")}')">➕ Crear</button>`;
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td>
+                                <div class="descripcion-med">${med.descripcion}</div>
+                            </td>
+                            <td>
+                                <div class="laboratorio-med">${med.laboratorio}</div>
+                            </td>
+                            <td>
+                                <div class="botones-accion">
+                                    ${botonEdicionCreacion}
+                                    <button class="btn-small btn-eliminar" onclick="eliminarMedicamentoTop(${med.id}, '${med.descripcion.replace(/'/g, "\\'")}')">
+                                        ❌ Eliminar
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+
+            document.getElementById('stat-total').textContent = medicamentos.length;
+            document.getElementById('contenido-top').innerHTML = html;
+            document.getElementById('contenido-top').style.display = 'block';
+        }
+
+        // ========================================
+        // ELIMINAR MEDICAMENTO TOP
+        // ========================================
+        async function eliminarMedicamentoTop(medicamentoId, descripcion) {
+            const confirmar = confirm(`⚠️ ¿Eliminar "${descripcion}" de la lista TOP?\n\nEsta acción es irreversible.`);
+            
+            if (!confirmar) {
+                return;
+            }
+
+            console.log(`🗑️ Eliminando medicamento ID: ${medicamentoId}`);
+            
+            try {
+                const response = await fetch(`/admin/medicamentos_top/${medicamentoId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert(`✅ ${data.mensaje}`);
+                    cargarMedicamentosTopDesdeAPI(); // Recargar lista
+                } else {
+                    alert(`❌ Error: ${data.error}`);
+                }
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                alert(`Error al eliminar: ${error.message}`);
+            }
+        }
+
+        // ========================================
+        // AGREGAR MEDICAMENTO TOP
+        // ========================================
+        async function agregarMedicamentoTop() {
+            const componente = document.getElementById('agregar-componente').value.trim();
+            const descripcion = document.getElementById('agregar-descripcion').value.trim();
+            const laboratorio = document.getElementById('agregar-laboratorio').value.trim();
+
+            const alerta = document.getElementById('alerta-agregar');
+
+            if (!componente || !descripcion || !laboratorio) {
+                mostrarAlerta(alerta, 'error', '❌ Completa todos los campos');
+                return;
+            }
+
+            console.log("➕ Agregando medicamento...", { componente, descripcion, laboratorio });
+
+            try {
+                const response = await fetch('/admin/medicamentos_top/agregar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        componente_activo: componente,
+                        descripcion: descripcion,
+                        laboratorio: laboratorio
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    mostrarAlerta(alerta, 'exito', `✅ ${data.mensaje}`);
+                    
+                    // Limpiar formulario
+                    document.getElementById('agregar-componente').value = '';
+                    document.getElementById('agregar-descripcion').value = '';
+                    document.getElementById('agregar-laboratorio').value = '';
+
+                    // Recargar lista
+                    setTimeout(() => {
+                        cargarMedicamentosTopDesdeAPI();
+                    }, 1000);
+                } else {
+                    mostrarAlerta(alerta, 'error', `❌ ${data.error}`);
+                }
+
+            } catch (error) {
+                console.error('❌ Error:', error);
+                mostrarAlerta(alerta, 'error', `❌ Error: ${error.message}`);
+            }
+        }
+
+        // ========================================
+        // CREAR MEDICAMENTO (si no existe)
+        // ========================================
+        function crearMedicamento(descripcion, laboratorio) {
+            window.location.href = `/admin/medicamentos/editar/nuevo?nombre=${encodeURIComponent(descripcion)}&laboratorio=${encodeURIComponent(laboratorio)}`;
+        }
+
+        // ========================================
+        // MOSTRAR ALERTAS
+        // ========================================
+        function mostrarAlerta(elemento, tipo, mensaje) {
+            elemento.textContent = mensaje;
+            elemento.className = 'alerta alerta-' + tipo;
+            elemento.style.display = 'block';
+
+            // Auto-ocultar después de 4 segundos
+            setTimeout(() => {
+                elemento.style.display = 'none';
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

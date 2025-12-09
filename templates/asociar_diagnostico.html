@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Asociar a {{ diagnostico["descripcion"] }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">🔗 Asociar a "{{ diagnostico['descripcion'] }}"</header>
+  <main class="container">
+    <form method="POST">
+      <h4>Síntomas</h4>
+      {% for s in sintomas %}
+        <label class="checkbox"><input type="checkbox" name="sintomas" value="{{ s['id'] }}"> {{ s['descripcion'] }}</label>
+      {% endfor %}
+
+      <h4>Medicamentos</h4>
+      {% for m in medicamentos %}
+        <label class="checkbox"><input type="checkbox" name="medicamentos" value="{{ m['id'] }}"> {{ m['nombre'] }}</label>
+      {% endfor %}
+
+      <button class="btn-primary" type="submit">Guardar asociaciones</button>
+    </form>
+
+    <a class="btn-secondary" href="{{ url_for('detalle_diagnostico', diagnostico_id=diagnostico['id']) }}">⬅ Volver</a>
+  </main>
+</body>
+</html>

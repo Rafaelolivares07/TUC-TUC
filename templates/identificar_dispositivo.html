@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TUC TUC | Identificación Cliente</title>
+    <!-- Incluimos Tailwind CSS para diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .chat-bubble { max-width: 80%; }
+        .user-input-container { transition: all 0.3s ease; }
+        .tuc-tuc-icon { font-size: 2.5rem; color: #10b981; /* Tailwind emerald-500 */ }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        /* Estilos específicos para la entrada de números */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        #chatContainer {
+            /* Asegura que la ventana de chat ocupe el espacio correcto y se desplace */
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col h-[90vh] md:h-[80vh]">
+        
+        <!-- Header (TUC TUC) -->
+        <header class="bg-emerald-600 p-4 shadow-lg flex items-center justify-between">
+            <div class="flex items-center">
+                <i class="fas fa-robot tuc-tuc-icon text-white mr-3"></i>
+                <h1 class="text-xl font-bold text-white">TUC TUC | Asistente de Salud</h1>
+            </div>
+            <!-- Barra de Progreso -->
+            <div id="progressBarContainer" class="w-24 h-2 bg-emerald-700 rounded-full">
+                <div id="progressBar" class="h-full bg-emerald-300 rounded-full progress-bar" style="width: 0%;"></div>
+            </div>
+        </header>
+
+        <!-- Contenedor de Chat (Scrollable) -->
+        <div id="chatContainer" class="flex-grow overflow-y-auto p-4 space-y-4">
+            <!-- Los mensajes del chat se insertarán aquí por JavaScript -->
+        </div>
+
+        <!-- Área de Entrada de Usuario (Input y Botón) -->
+        <div class="user-input-container p-4 border-t border-gray-200">
+            <div id="inputArea">
+                <!-- Los campos de entrada (input, select) se insertarán aquí por JavaScript -->
+            </div>
+            <div id="errorBox" class="text-sm text-red-600 mt-2 p-2 bg-red-50 rounded-lg hidden" role="alert"></div>
+            <button id="nextStepButton" 
+                    class="mt-3 w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150">
+                Siguiente <i class="fas fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+
+    </div>
+
+    <p class="mt-4 text-center text-sm text-gray-400">
+        ¿Es administrador? 
+        <a href="{{ url_for('identificar_dispositivo_route', rol_master='Admin') }}" class="font-medium text-indigo-600 hover:text-indigo-500">
+            Ir a identificación de Administrador
+        </a>
+    </p>
+
+    <!-- -------------------------------------------------------------------------------------- -->
+    <!--                                LÓGICA JAVASCRIPT (INLINE)                              -->
+    <!-- -------------------------------------------------------------------------------------- -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatContainer = document.getElementById('chatContainer');
+            const inputArea = document.getElementById('inputArea');
+            const nextStepButton = document.getElementById('nextStepButton');
+            const errorBox = document.getElementById('errorBox');
+            const progressBar = document.getElementById('progressBar');
+
+            let currentStep = 0;
+            // Definición de los pasos del diálogo. 
+            // 'field' debe coincidir con el nombre de columna en tu tabla USUARIOS.
+            const steps = [
+                {
+                    prompt: "¡Hola! Soy TUC TUC, tu asistente de salud. Para empezar, ¿Cuál es tu nombre?",
+                    field: 'nombre',
+                    type: 'text',
+                    validation: value => value.trim().length > 1,
+                    error: "Por favor, ingresa un nombre válido."
+                },
+                {
+                    prompt: "¡Genial, {nombre}! Ahora, ¿cuál es tu edad?",
+                    field: 'edad',
+                    type: 'number',
+                    min: 1,
+                    max: 120,
+                    validation: value => value >= 1 && value <= 120,
+                    error: "Por favor, ingresa una edad válida (entre 1 y 120)."
+                },
+                {
+                    prompt: "¿Y cuál es tu peso aproximado en kilogramos? (ej: 75)",
+                    field: 'peso_aprox', // Coincide con el nombre de columna en la DB
+                    type: 'number',
+                    min: 1,
+                    max: 500,
+                    validation: value => value >= 1 && value <= 500,
+                    error: "Por favor, ingresa un peso válido en kg."
+                },
+                {
+                    prompt: "Por último, ¿cuál es tu género?",
+                    field: 'genero',
+                    type: 'select',
+                    options: [
+                        { value: 'Masculino', label: 'Masculino' },
+                        { value: 'Femenino', label: 'Femenino' },
+                        { value: 'Otro', label: 'Otro/Prefiero no decir' }
+                    ],
+                    validation: value => value !== '',
+                    error: "Por favor, selecciona una opción."
+                },
+                {
+                    prompt: "¡Perfecto! Hemos completado tu perfil. Ahora puedes empezar a usar TUC TUC.",
+                    field: 'final',
+                    type: 'final',
+                    message: "Redirigiendo al menú principal..."
+                }
+            ];
+
+            const clientData = {
+                rol_master: 'Cliente'
+            };
+
+            // --- Funciones de Interfaz ---
+
+            function scrollToBottom() {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            function showMessage(text, isUser = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+                
+                let content = '';
+                if (isUser) {
+                    // Mensaje del usuario (burbuja gris)
+                    content = `<div class="chat-bubble bg-indigo-500 text-white p-3 rounded-xl rounded-br-none shadow-md">${text}</div>`;
+                } else {
+                    // Mensaje del asistente (burbuja verde TUC TUC)
+                    content = `<div class="chat-bubble bg-emerald-500 text-white p-3 rounded-xl rounded-tl-none shadow-md">${text}</div>`;
+                }
+                
+                messageDiv.innerHTML = content;
+                chatContainer.appendChild(messageDiv);
+                scrollToBottom();
+            }
+
+            function updateProgressBar() {
+                // Calcula el progreso en base a la cantidad de pasos de entrada de datos (excluyendo el 'final')
+                const dataSteps = steps.filter(s => s.type !== 'final').length;
+                const progressIndex = steps.findIndex(s => s.field === steps[currentStep].field);
+                const progress = (progressIndex / dataSteps) * 100;
+                
+                progressBar.style.width = `${progress}%`;
+            }
+
+            function renderStep() {
+                if (currentStep >= steps.length) {
+                    handleFinalStep();
+                    return;
+                }
+
+                const step = steps[currentStep];
+                
+                // Limpiar área de input
+                inputArea.innerHTML = '';
+                nextStepButton.disabled = false;
+                nextStepButton.textContent = 'Siguiente';
+                errorBox.classList.add('hidden');
+                
+                // Reemplazar placeholder {nombre} en el prompt
+                let promptText = step.prompt;
+                if (step.field !== 'nombre' && clientData.nombre) {
+                    promptText = promptText.replace('{nombre}', clientData.nombre);
+                }
+                showMessage(promptText);
+
+                if (step.type === 'text' || step.type === 'number') {
+                    const input = document.createElement('input');
+                    input.type = step.type;
+                    input.id = step.field;
+                    input.name = step.field;
+                    input.placeholder = step.field === 'nombre' ? 'Tu nombre aquí...' : (step.field === 'edad' ? 'Ej: 30' : 'Ej: 75');
+                    input.className = 'w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-emerald-500 focus:border-emerald-500';
+                    input.min = step.min || '';
+                    input.max = step.max || '';
+                    input.step = step.step || '';
+                    inputArea.appendChild(input);
+
+                } else if (step.type === 'select') {
+                    const select = document.createElement('select');
+                    select.id = step.field;
+                    select.name = step.field;
+                    select.className = 'w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-emerald-500 focus:border-emerald-500 bg-white';
+                    
+                    // Opción por defecto
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = "";
+                    defaultOption.textContent = "Selecciona tu género...";
+                    defaultOption.disabled = true;
+                    defaultOption.selected = true;
+                    select.appendChild(defaultOption);
+
+                    step.options.forEach(option => {
+                        const opt = document.createElement('option');
+                        opt.value = option.value;
+                        opt.textContent = option.label;
+                        select.appendChild(opt);
+                    });
+                    inputArea.appendChild(select);
+
+                } else if (step.type === 'final') {
+                    nextStepButton.textContent = 'Ir al Menú';
+                    inputArea.innerHTML = `<p class="text-center text-gray-600">${step.message}</p>`;
+                }
+                updateProgressBar();
+                // Enfoca el input después de un pequeño retraso para asegurar que la UI se ha renderizado
+                setTimeout(() => {
+                    const input = document.getElementById(step.field);
+                    if (input) input.focus();
+                }, 100);
+            }
+
+            // --- Funciones de Lógica y Envio ---
+
+            /**
+             * Envía los datos como URLSearchParams (Form Data) para que Flask los lea con request.form.
+             * @param {object} payload - Los datos a enviar (ej: {rol_master: 'Cliente', nombre: 'Juan'})
+             */
+            async function sendData(payload) {
+                // Muestra un loader mientras se envía
+                nextStepButton.disabled = true;
+                nextStepButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Guardando...`;
+
+                // Convertir el objeto JS a formato de formulario (URLSearchParams)
+                const formData = new URLSearchParams();
+                for (const key in payload) {
+                    formData.append(key, payload[key]);
+                }
+
+                try {
+                    // Envío asíncrono al endpoint de Flask. 
+                    // No se necesita el Content-Type para URLSearchParams.
+                    const response = await fetch('{{ url_for("identificar_dispositivo_route") }}', {
+                        method: 'POST',
+                        body: formData // Envía el formato de formulario
+                    });
+
+                    // Si la respuesta es 400, 500, etc., lanza un error
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Error ${response.status}: El servidor rechazó los datos. Mensaje: ${errorText}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        // Si Flask devuelve 200 pero en el JSON dice success: false
+                        throw new Error(result.message || "La operación falló en el servidor sin un mensaje específico.");
+                    }
+                    
+                    // Restaurar botón y continuar
+                    nextStepButton.disabled = false;
+                    nextStepButton.textContent = 'Siguiente';
+                    errorBox.classList.add('hidden');
+                    
+                    // Si es exitoso, pasamos al siguiente paso.
+                    currentStep++;
+                    renderStep();
+
+                } catch (error) {
+                    // Manejo de errores de red o del servidor
+                    console.error("Error en la solicitud AJAX:", error);
+                    errorBox.textContent = `Error: ${error.message}`;
+                    errorBox.classList.remove('hidden');
+                    nextStepButton.disabled = false;
+                    nextStepButton.textContent = 'Siguiente';
+                }
+            }
+
+            function handleFinalStep() {
+                // Redirige al usuario al menú principal después del último paso
+                window.location.href = '{{ url_for("inicio") }}';
+            }
+
+            function handleNextStep() {
+                const step = steps[currentStep];
+                if (step.type === 'final') {
+                    handleFinalStep();
+                    return;
+                }
+
+                const inputElement = document.getElementById(step.field);
+                let value = inputElement ? inputElement.value.trim() : '';
+
+                // Validación
+                if (!step.validation(value)) {
+                    errorBox.textContent = step.error;
+                    errorBox.classList.remove('hidden');
+                    return;
+                }
+                
+                // Si el campo es numérico, convertimos el valor antes de guardar
+                if (step.type === 'number') {
+                    value = parseFloat(value);
+                }
+
+                // Mostrar respuesta del usuario en el chat
+                showMessage(value, true);
+
+                // Almacenar dato localmente (necesario para el prompt de 'edad')
+                clientData[step.field] = value;
+                
+                // Preparar el objeto de datos para enviar: solo el campo actual + rol_master
+                const payload = {
+                    rol_master: 'Cliente',
+                    [step.field]: value
+                };
+                
+                // Enviar el dato al servidor
+                sendData(payload);
+            }
+
+            // --- Event Listeners ---
+            nextStepButton.addEventListener('click', handleNextStep);
+            
+            // Permite presionar Enter en el input para avanzar
+            inputArea.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !nextStepButton.disabled) {
+                    handleNextStep();
+                }
+            });
+
+            // Iniciar el flujo
+            renderStep();
+        });
+    </script>
+</body>
+</html>

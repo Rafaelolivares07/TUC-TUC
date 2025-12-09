@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>➕ Nuevo Medicamento</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            font-size: 18px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .emoji {
+            font-size: 48px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            max-width: 500px;
+            margin: auto;
+            background: #fff;
+            padding: 24px;
+            border-radius: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        }
+        label {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        input, textarea, button {
+            font-size: 18px;
+            padding: 14px;
+            border-radius: 10px;
+            border: 2px solid #ccc;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .btn-option {
+            width: 48%;
+            font-size: 18px;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 10px;
+            border: 2px solid #007bff;
+            background: #fff;
+            color: #007bff;
+            font-weight: bold;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-option:hover {
+            background: #007bff;
+            color: #fff;
+        }
+        .btn-save {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 16px;
+            border-radius: 12px;
+            transition: background 0.2s ease-in-out;
+        }
+        .btn-save:hover {
+            background-color: #45a049;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        #preview {
+            text-align: center;
+        }
+        #miniatura {
+            margin-top: 10px;
+            max-width: 200px;
+            border-radius: 10px;
+            border: 2px solid #ddd;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Agregar Medicamento</h1>
+    <div class="emoji">💊</div>
+
+    <form action="{{ url_for('nuevo_medicamento') }}" method="post" enctype="multipart/form-data">
+        
+        <label for="nombre">Nombre</label>
+        <input type="text" id="nombre" name="nombre" required placeholder="Ej: Acetaminofén (se rellenará automáticamente)">
+
+        <label for="presentacion">Presentación</label>
+        <input type="text" id="presentacion" name="presentacion" placeholder="Ej: Caja con 20 Tabletas, Jarabe">
+
+        <label for="concentracion">Concentración</label>
+        <input type="text" id="concentracion" name="concentracion" placeholder="Ej: 500 mg, 10 mg/ml">
+
+        <label for="fabricante">Fabricante</label>
+        <input type="text" id="fabricante" name="fabricante" placeholder="Ej: Laboratorios XYZ">
+
+        <label for="cantidad">Cantidad Inicial (Inventario)</label>
+        <input type="number" id="cantidad" name="cantidad" value="1" min="0" required>
+        
+        <label>📷 Imagen del medicamento (opcional)</label>
+        <div class="btn-group">
+            <button type="button" class="btn-option" onclick="document.getElementById('input-fototeca').click()">📂 Galería</button>
+            <button type="button" class="btn-option" onclick="document.getElementById('input-camara').click()">📸 Cámara</button>
+        </div>
+        
+        <input type="file" id="input-fototeca" accept="image/*" class="hidden" onchange="manejarSubida(this)">
+        <input type="file" id="input-camara" accept="image/*" capture="environment" class="hidden" onchange="manejarSubida(this)">
+
+        <input type="file" id="input-final-imagen" name="imagen" class="hidden">
+        <canvas id="imageCanvas" class="hidden"></canvas> 
+
+        <div id="preview" style="display:none;">
+            <p>Imagen seleccionada:</p>
+            <img id="miniatura" src="" alt="Vista previa">
+        </div>
+
+        <button type="submit" class="btn-save">💾 Guardar Medicamento</button>
+    </form>
+
+    <script>
+        // Función central para manejar la selección de archivo
+        function manejarSubida(input) {
+            const finalInput = document.getElementById('input-final-imagen');
+            const previewDiv = document.getElementById('preview');
+            const miniatura = document.getElementById('miniatura');
+            const nombreInput = document.getElementById('nombre'); 
+            const imageCanvas = document.getElementById('imageCanvas');
+            const ctx = imageCanvas.getContext('2d');
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                
+                // 1. Mostrar la vista previa y redimensionar/procesar
+                let reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // Mostrar vista previa original o redimensionada (decide si quieres que la miniatura sea la original grande o la ya redimensionada)
+                        miniatura.src = e.target.result; // Muestra la imagen original para la vista previa
+                        previewDiv.style.display = 'block';
+
+                        // --- Lógica de Redimensionamiento en el Frontend ---
+                        const MAX_DIMENSION = 1600; // Máximo ancho o alto en píxeles para el OCR
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_DIMENSION) {
+                                height *= MAX_DIMENSION / width;
+                                width = MAX_DIMENSION;
+                            }
+                        } else {
+                            if (height > MAX_DIMENSION) {
+                                width *= MAX_DIMENSION / height;
+                                height = MAX_DIMENSION;
+                            }
+                        }
+
+                        imageCanvas.width = width;
+                        imageCanvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Convertir la imagen del canvas a un Blob (archivo)
+                        imageCanvas.toBlob(function(resizedBlob) {
+                            if (resizedBlob) {
+                                // Crear un File a partir del Blob para enviarlo al servidor
+                                const resizedFile = new File([resizedBlob], file.name, {
+                                    type: resizedBlob.type,
+                                    lastModified: Date.now()
+                                });
+
+                                // 2. Transferir el archivo redimensionado al input final con 'name="imagen"'
+                                // Esto asegura que el archivo redimensionado se envíe cuando el usuario pulse "Guardar"
+                                const dataTransfer = new DataTransfer();
+                                dataTransfer.items.add(resizedFile);
+                                finalInput.files = dataTransfer.files;
+                                
+                                // 3. 🚀 EJECUTAR OCR VÍA AJAX con el archivo redimensionado
+                                ejecutarOcrPreview(resizedFile, nombreInput);
+                            } else {
+                                console.error("Error al crear el Blob de la imagen redimensionada.");
+                                nombreInput.disabled = false;
+                                nombreInput.placeholder = "Error al procesar imagen. Intente manualmente.";
+                                nombreInput.value = "";
+                            }
+                        }, file.type, 0.8); // 0.8 es la calidad de compresión JPEG (para PNG no afecta)
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+
+            } else {
+                // Limpiar si se cancela la selección
+                finalInput.files = null; 
+                miniatura.src = "";
+                previewDiv.style.display = 'none';
+                nombreInput.value = "";
+                nombreInput.placeholder = "Ej: Acetaminofén (se rellenará automáticamente)";
+                nombreInput.disabled = false;
+            }
+        }
+
+        function ejecutarOcrPreview(file, nombreInput) {
+            const formData = new FormData();
+            formData.append('ocr_file', file); 
+            
+            nombreInput.value = ""; 
+            nombreInput.placeholder = "Procesando imagen con OCR (más rápido!)...";
+            nombreInput.disabled = true; 
+
+            fetch('{{ url_for("ocr_preview") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                nombreInput.disabled = false; 
+                nombreInput.placeholder = "Ej: Acetaminofén (se rellenará automáticamente)";
+
+                const extractedText = data.text;
+                if (extractedText) {
+                    nombreInput.value = extractedText;
+                } else {
+                    nombreInput.value = "";
+                    nombreInput.placeholder = "OCR no encontró texto. Ingrese el nombre manualmente.";
+                }
+            })
+            .catch(error => {
+                console.error('Error en la llamada AJAX de OCR:', error);
+                nombreInput.disabled = false;
+                nombreInput.placeholder = "Error de conexión/OCR. Ingrese el nombre manualmente.";
+                nombreInput.value = "";
+            });
+        }
+    </script>
+</body>
+</html>

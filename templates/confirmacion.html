@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedido Confirmado</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        
+        .confirmacion {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .icono-exito {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            animation: aparecer 0.5s ease-out;
+        }
+        
+        @keyframes aparecer {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        h1 {
+            color: #2ecc71;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .pedido-numero {
+            background: #f0f0f0;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            font-size: 1.2rem;
+        }
+        
+        .pedido-numero strong {
+            color: #667eea;
+            font-size: 1.5rem;
+        }
+        
+        .detalle {
+            text-align: left;
+            background: #f9f9f9;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+        }
+        
+        .detalle-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .detalle-item:last-child {
+            border-bottom: none;
+        }
+        
+        .detalle-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .detalle-valor {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .info-entrega {
+            background: #e8f5e9;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            border-left: 4px solid #2ecc71;
+        }
+        
+        .info-entrega h3 {
+            color: #2ecc71;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .info-entrega p {
+            color: #555;
+            line-height: 1.6;
+        }
+        
+        .botones {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn-principal {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-secundario {
+            background: #f0f0f0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="confirmacion">
+        <div class="icono-exito">✅</div>
+        <h1>¡Pedido Confirmado!</h1>
+        <p>Tu pedido ha sido recibido exitosamente</p>
+        
+        <div class="pedido-numero">
+            Número de Pedido: <strong>#{{ pedido.id }}</strong>
+        </div>
+        
+        <div class="detalle">
+            <div class="detalle-item">
+                <span class="detalle-label">Cliente:</span>
+                <span class="detalle-valor">{{ pedido.cliente_nombre }}</span>
+            </div>
+            <div class="detalle-item">
+                <span class="detalle-label">Teléfono:</span>
+                <span class="detalle-valor">{{ pedido.telefono }}</span>
+            </div>
+            <div class="detalle-item">
+                <span class="detalle-label">Dirección:</span>
+                <span class="detalle-valor">{{ pedido.direccion }}</span>
+            </div>
+            <div class="detalle-item">
+                <span class="detalle-label">Método de Pago:</span>
+                <span class="detalle-valor">{{ 'Efectivo' if pedido.metodo_pago == 'efectivo' else 'Transferencia' }}</span>
+            </div>
+            <div class="detalle-item">
+                <span class="detalle-label">Total:</span>
+                <span class="detalle-valor" style="color: #2ecc71; font-size: 1.2rem;">${{ "{:,}".format(pedido.total) }}</span>
+            </div>
+        </div>
+        
+        <div class="info-entrega">
+            <h3>⏱️ Tiempo de Entrega</h3>
+            <p>Tu pedido llegará en aproximadamente <strong>{{ pedido.tiempo_estimado_entrega }}</strong></p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem;">Te contactaremos pronto para confirmar la entrega</p>
+        </div>
+        
+        <div class="botones">
+            <a href="/tienda" class="btn btn-principal">Seguir Comprando</a>
+            <a href="/" class="btn btn-secundario">Ir al Inicio</a>
+        </div>
+    </div>
+</body>
+</html>

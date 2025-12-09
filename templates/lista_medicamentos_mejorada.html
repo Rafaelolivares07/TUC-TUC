@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión de Medicamentos - Lista Mejorada</title>
+<style>
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+body {
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+min-height: 100vh;
+padding: 20px;
+}
+.contenedor {
+max-width: 1400px;
+margin: 0 auto;
+background: white;
+border-radius: 12px;
+box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+overflow: hidden;
+}
+.encabezado {
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+color: white;
+padding: 30px;
+text-align: center;
+}
+.encabezado h1 {
+font-size: 28px;
+margin-bottom: 10px;
+}
+.encabezado p {
+opacity: 0.9;
+font-size: 14px;
+}
+.controles {
+padding: 20px 30px;
+background: #f8f9fa;
+border-bottom: 1px solid #e0e0e0;
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 15px;
+align-items: end;
+}
+.control-grupo {
+display: flex;
+flex-direction: column;
+gap: 5px;
+}
+.control-grupo label {
+font-weight: 600;
+font-size: 13px;
+color: #333;
+text-transform: uppercase;
+letter-spacing: 0.5px;
+}
+.control-grupo input,
+.control-grupo select {
+padding: 10px 12px;
+border: 1px solid #ddd;
+border-radius: 6px;
+font-size: 14px;
+transition: all 0.3s;
+}
+.control-grupo input:focus,
+.control-grupo select:focus {
+outline: none;
+border-color: #667eea;
+box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+.botones-controles {
+display: flex;
+gap: 10px;
+justify-content: flex-end;
+}
+.btn {
+padding: 10px 16px;
+border: none;
+border-radius: 6px;
+font-size: 14px;
+font-weight: 600;
+cursor: pointer;
+transition: all 0.3s;
+display: flex;
+align-items: center;
+gap: 6px;
+}
+.btn-primary {
+background: #667eea;
+color: white;
+}
+.btn-primary:hover {
+background: #5568d3;
+transform: translateY(-2px);
+box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+.estadisticas {
+padding: 20px 30px;
+background: white;
+border-bottom: 1px solid #e0e0e0;
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+gap: 15px;
+}
+.stat-card {
+background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+color: white;
+padding: 15px;
+border-radius: 8px;
+text-align: center;
+}
+.stat-card .numero {
+font-size: 28px;
+font-weight: bold;
+}
+.stat-card .label {
+font-size: 12px;
+opacity: 0.9;
+margin-top: 5px;
+}
+.tabla-contenedor {
+padding: 20px 30px;
+overflow-x: auto;
+max-height: 600px;
+overflow-y: auto;
+}
+table {
+width: 100%;
+border-collapse: collapse;
+}
+thead {
+background: #f0f0f0;
+border-bottom: 2px solid #e0e0e0;
+position: sticky;
+top: 0;
+z-index: 10;
+}
+th {
+padding: 12px;
+text-align: left;
+font-weight: 600;
+font-size: 13px;
+color: #333;
+text-transform: uppercase;
+letter-spacing: 0.5px;
+cursor: pointer;
+user-select: none;
+transition: all 0.2s;
+position: relative;
+}
+th:hover {
+background: #e8e8e8;
+}
+th.sortable::after {
+content: ' ⇅';
+opacity: 0.3;
+font-size: 11px;
+}
+
+th.sort-asc::after {
+content: ' ↑';
+opacity: 1;
+color: #667eea;
+}
+
+th.sort-desc::after {
+content: ' ↓';
+opacity: 1;
+color: #667eea;
+}
+
+td {
+padding: 12px;
+border-bottom: 1px solid #f0f0f0;
+vertical-align: middle;
+}
+
+td img {
+width: 140px !important;
+height: 140px !important;
+display: inline-block;
+}
+tbody tr:hover {
+background: #f9f9f9;
+}
+.nombre-med {
+font-weight: 600;
+color: #333;
+}
+.presentacion {
+font-size: 12px;
+color: #666;
+}
+.componente-activo {
+background: #e3f2fd;
+color: #1565c0;
+padding: 4px 8px;
+border-radius: 4px;
+font-size: 12px;
+font-weight: 500;
+}
+.sin-componente {
+color: #999;
+font-size: 12px;
+font-style: italic;
+}
+.indicador {
+font-size: 18px;
+text-align: center;
+}
+.indicador-si {
+color: #4caf50;
+}
+.indicador-no {
+color: #f44336;
+}
+.badge {
+display: inline-block;
+padding: 4px 8px;
+border-radius: 4px;
+font-size: 11px;
+font-weight: 600;
+}
+.badge-success {
+background: #c8e6c9;
+color: #2e7d32;
+}
+.badge-danger {
+background: #ffcdd2;
+color: #c62828;
+}
+.botones-accion {
+display: flex;
+gap: 8px;
+justify-content: center;
+flex-wrap: wrap;
+}
+.btn-small {
+padding: 6px 10px;
+font-size: 12px;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+transition: all 0.3s;
+}
+.btn-editar {
+background: #667eea;
+color: white;
+}
+.btn-editar:hover {
+background: #5568d3;
+}
+.btn-autocompletar {
+background: #ff9800;
+color: white;
+}
+.btn-autocompletar:hover {
+background: #f57c00;
+}
+.btn-eliminar {
+background: #f44336;
+color: white;
+}
+.btn-eliminar:hover {
+background: #d32f2f;
+}
+.sin-resultados {
+text-align: center;
+padding: 40px;
+color: #999;
+}
+.mensaje-cargando {
+text-align: center;
+padding: 40px;
+color: #667eea;
+}
+.spinner {
+display: inline-block;
+width: 20px;
+height: 20px;
+border: 3px solid #f3f3f3;
+border-top: 3px solid #667eea;
+border-radius: 50%;
+animation: spin 1s linear infinite;
+margin-right: 10px;
+}
+@keyframes spin {
+0% { transform: rotate(0deg); }
+100% { transform: rotate(360deg); }
+}
+/* Modal de confirmación */
+.modal {
+display: none;
+position: fixed;
+z-index: 1000;
+left: 0;
+top: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(0, 0, 0, 0.6);
+}
+.modal-content {
+background-color: #fff;
+margin: 10% auto;
+padding: 30px;
+border-radius: 8px;
+width: 90%;
+max-width: 400px;
+box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+text-align: center;
+}
+.modal-content h2 {
+color: #f44336;
+margin-bottom: 15px;
+}
+.modal-content p {
+color: #666;
+margin-bottom: 20px;
+font-size: 14px;
+}
+.modal-botones {
+display: flex;
+gap: 10px;
+justify-content: center;
+}
+.modal-botones button {
+padding: 10px 20px;
+border: none;
+border-radius: 4px;
+cursor: pointer;
+font-weight: 600;
+transition: all 0.3s;
+}
+.btn-confirmar-eliminar {
+background: #f44336;
+color: white;
+}
+.btn-confirmar-eliminar:hover {
+background: #d32f2f;
+}
+.btn-cancelar {
+background: #ccc;
+color: #333;
+}
+.btn-cancelar:hover {
+background: #bbb;
+}
+@media (max-width: 768px) {
+.controles {
+grid-template-columns: 1fr;
+}
+table {
+font-size: 12px;
+}
+th, td {
+padding: 8px;
+}
+.btn-small {
+padding: 4px 8px;
+font-size: 11px;
+}
+}
+</style>
+</head>
+<body>
+<div class="contenedor">
+<div class="encabezado">
+<h1>🏥 Gestión de Medicamentos</h1>
+<p>Lista mejorada con indicadores de completitud, componente activo y ordenamiento</p>
+</div>
+<!-- CONTROLES DE BÚSQUEDA Y FILTRO -->
+<div class="controles">
+<div class="control-grupo">
+<label for="buscar">🔍 Buscar medicamento:</label>
+<input type="text" id="buscar" placeholder="Ej: Paracetamol, Ibuprofeno...">
+</div>
+<div class="control-grupo">
+<label for="filtro">📋 Filtrar por:</label>
+<select id="filtro">
+<option value="todos">Todos los medicamentos</option>
+<option value="sin_precio">⚠️ Sin precio</option>
+<option value="sin_sintomas">⚠️ Sin síntomas</option>
+<option value="sin_imagen">⚠️ Sin imagen</option>
+<option value="incompletos">⚠️ Incompletos (cualquiera)</option>
+</select>
+</div>
+<div class="botones-controles">
+<button class="btn btn-primary" onclick="iniciarLlenador()" style="background: #10b981;">
+🚀 Iniciar Llenador
+</button>
+<button class="btn btn-primary" onclick="window.location.href='/admin/medicamentos/editar/nuevo'">
+➕ Nuevo Medicamento
+</button>
+<button class="btn btn-primary" onclick="cargarMedicamentos()">
+🔄 Aplicar filtros
+</button>
+</div>
+</div>
+<!-- ESTADÍSTICAS -->
+<div class="estadisticas" id="estadisticas" style="display: none;">
+<div class="stat-card">
+<div class="numero" id="stat-total">0</div>
+<div class="label">Total encontrados</div>
+</div>
+<div class="stat-card">
+<div class="numero" id="stat-completos">0</div>
+<div class="label">Completos</div>
+</div>
+<div class="stat-card">
+<div class="numero" id="stat-sin-precio">0</div>
+<div class="label">Sin precio</div>
+</div>
+<div class="stat-card">
+<div class="numero" id="stat-sin-sintomas">0</div>
+<div class="label">Sin síntomas</div>
+</div>
+<div class="stat-card">
+<div class="numero" id="stat-sin-imagen">0</div>
+<div class="label">Sin imagen</div>
+</div>
+</div>
+<!-- TABLA DE MEDICAMENTOS -->
+<div class="tabla-contenedor">
+<div id="cargando" class="mensaje-cargando" style="display: none;">
+<div class="spinner"></div>
+Cargando medicamentos...
+</div>
+<table id="tablaResultados" style="display: none;">
+<thead>
+<tr>
+<th class="sortable" data-column="nombre">Medicamento</th>
+<th class="sortable" data-column="presentacion" style="width: 120px;">Presentación</th>
+<th class="sortable" data-column="componente_activo_nombre" style="width: 140px;">🔬 Componente Activo</th>
+<th class="sortable" data-column="cantidad_precios" style="width: 60px;">💰 Precio</th>
+<th class="sortable" data-column="cantidad_sintomas" style="width: 60px;">🏷️ Síntomas</th>
+<th style="width: 200px;">📷 Imagen</th>
+<th class="sortable" data-column="stock_actual" style="width: 60px;">Stock</th>
+<th style="width: 140px;">Acciones</th>
+</tr>
+</thead>
+<tbody id="medicamentosBody"></tbody>
+</table>
+<div id="sinResultados" class="sin-resultados" style="display: none;">
+<h3>No se encontraron medicamentos</h3>
+<p>Intenta con otros filtros o búsqueda</p>
+</div>
+</div>
+</div>
+<!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
+<div id="modalEliminar" class="modal">
+<div class="modal-content">
+<h2>⚠️ ¿Eliminar medicamento?</h2>
+<p id="medicamentoEliminar"></p>
+<p style="font-size: 12px; color: #f44336; font-weight: bold;">
+⚠️ Se eliminará el medicamento y todos sus registros asociados
+</p>
+<div class="modal-botones">
+<button class="btn-cancelar" onclick="cerrarModal()">❌ Cancelar</button>
+<button class="btn-confirmar-eliminar" onclick="confirmarEliminar()">🗑️ Eliminar</button>
+</div>
+</div>
+</div>
+<script>
+let medicamentosActuales = [];
+let medicamentoAEliminar = null;
+let nombreMedicamentoAEliminar = null;
+let ordenActual = {
+columna: null,
+direccion: 'asc' // 'asc' o 'desc'
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+cargarMedicamentos();
+let timerBusqueda;
+document.getElementById('buscar').addEventListener('input', function() {
+clearTimeout(timerBusqueda);
+timerBusqueda = setTimeout(() => cargarMedicamentos(), 300);
+});
+document.getElementById('filtro').addEventListener('change', cargarMedicamentos);
+
+// 🆕 EVENT LISTENERS PARA ORDENAMIENTO
+document.querySelectorAll('th.sortable').forEach(th => {
+th.addEventListener('click', function() {
+const columna = this.getAttribute('data-column');
+ordenarPor(columna);
+});
+});
+});
+
+// 🆕 FUNCIÓN PARA ORDENAR
+function ordenarPor(columna) {
+// Si clickeamos la misma columna, invertir dirección
+if (ordenActual.columna === columna) {
+ordenActual.direccion = ordenActual.direccion === 'asc' ? 'desc' : 'asc';
+} else {
+ordenActual.columna = columna;
+ordenActual.direccion = 'asc';
+}
+
+// Actualizar visual de headers
+document.querySelectorAll('th.sortable').forEach(th => {
+th.classList.remove('sort-asc', 'sort-desc');
+});
+const thActual = document.querySelector(`th[data-column="${columna}"]`);
+if (thActual) {
+thActual.classList.add(ordenActual.direccion === 'asc' ? 'sort-asc' : 'sort-desc');
+}
+
+// Ordenar datos locales
+medicamentosActuales.sort((a, b) => {
+let valA = a[columna];
+let valB = b[columna];
+
+// Manejar nulls/undefined
+if (valA == null) valA = '';
+if (valB == null) valB = '';
+
+// Conversión de tipos
+if (typeof valA === 'number' && typeof valB === 'number') {
+return ordenActual.direccion === 'asc' ? valA - valB : valB - valA;
+}
+
+// String comparison
+valA = String(valA).toLowerCase();
+valB = String(valB).toLowerCase();
+return ordenActual.direccion === 'asc' 
+? valA.localeCompare(valB)
+: valB.localeCompare(valA);
+});
+
+// Mostrar datos ordenados
+mostrarMedicamentosDirecto(medicamentosActuales);
+}
+
+async function cargarMedicamentos() {
+const buscar = document.getElementById('buscar').value;
+const filtro = document.getElementById('filtro').value;
+document.getElementById('cargando').style.display = 'block';
+document.getElementById('tablaResultados').style.display = 'none';
+document.getElementById('sinResultados').style.display = 'none';
+document.getElementById('estadisticas').style.display = 'none';
+
+try {
+const params = new URLSearchParams();
+if (buscar) params.append('buscar', buscar);
+if (filtro !== 'todos') params.append('filtro', filtro);
+const response = await fetch(`/admin/medicamentos/lista_json?${params}`, {
+headers: {'X-Requested-With': 'XMLHttpRequest'}
+});
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const data = await response.json();
+if (!data.ok) {
+alert('Error: ' + data.error);
+return;
+}
+medicamentosActuales = data.medicamentos;
+
+// Resetear ordenamiento
+ordenActual = { columna: null, direccion: 'asc' };
+document.querySelectorAll('th.sortable').forEach(th => {
+th.classList.remove('sort-asc', 'sort-desc');
+});
+
+mostrarMedicamentos(data);
+} catch (error) {
+console.error('Error:', error);
+alert('Error cargando medicamentos: ' + error.message);
+} finally {
+document.getElementById('cargando').style.display = 'none';
+}
+}
+
+function mostrarMedicamentos(data) {
+const tbody = document.getElementById('medicamentosBody');
+tbody.innerHTML = '';
+const { medicamentos, estadisticas } = data;
+document.getElementById('stat-total').textContent = estadisticas.total;
+document.getElementById('stat-completos').textContent = estadisticas.completos;
+document.getElementById('stat-sin-precio').textContent = estadisticas.sin_precio;
+document.getElementById('stat-sin-sintomas').textContent = estadisticas.sin_sintomas;
+document.getElementById('stat-sin-imagen').textContent = estadisticas.sin_imagen;
+document.getElementById('estadisticas').style.display = 'grid';
+
+if (medicamentos.length === 0) {
+document.getElementById('sinResultados').style.display = 'block';
+document.getElementById('tablaResultados').style.display = 'none';
+return;
+}
+
+renderizarTabla(medicamentos);
+document.getElementById('tablaResultados').style.display = 'table';
+document.getElementById('sinResultados').style.display = 'none';
+}
+
+function mostrarMedicamentosDirecto(medicamentos) {
+renderizarTabla(medicamentos);
+}
+
+function renderizarTabla(medicamentos) {
+const tbody = document.getElementById('medicamentosBody');
+tbody.innerHTML = '';
+
+medicamentos.forEach(med => {
+const row = document.createElement('tr');
+const componenteHTML = med.componente_activo_nombre 
+? `<span class="componente-activo">${med.componente_activo_nombre}</span>`
+: `<span class="sin-componente">—</span>`;
+
+row.innerHTML = `
+<td>
+<div class="nombre-med">${med.nombre}</div>
+<div class="presentacion">${med.presentacion || 'N/A'}</div>
+${med.concentracion ? `<div class="presentacion">${med.concentracion}</div>` : ''}
+</td>
+<td>
+<span class="badge ${med.completitud.precio ? 'badge-success' : 'badge-danger'}">
+${med.completitud.precio ? `${med.cantidad_precios} fab.` : 'Sin precio'}
+</span>
+</td>
+<td>
+${componenteHTML}
+</td>
+<td class="indicador ${med.completitud.precio ? 'indicador-si' : 'indicador-no'}">
+${med.indicador_precio}
+</td>
+<td class="indicador ${med.completitud.sintomas ? 'indicador-si' : 'indicador-no'}">
+${med.indicador_sintomas}
+</td>
+<td>
+${med.primera_imagen_precio ? `<img src="/static/uploads/${med.primera_imagen_precio}" style="width: 140px; height: 140px; object-fit: cover;" title="Imagen disponible">` : `<span style="color: #ccc;">-</span>`}
+</td>
+<td>
+<span class="badge ${med.stock_actual > 0 ? 'badge-success' : 'badge-danger'}">
+${med.stock_actual} u.
+</span>
+</td>
+<td>
+<div class="botones-accion">
+<button class="btn-small btn-editar" onclick="editarMedicamento(${med.id})" title="Editar medicamento">
+✏️ Editar
+</button>
+<button class="btn-small btn-autocompletar" onclick="autocompletarMedicamento(${med.id}, '${med.nombre}')" title="Auto-completar datos">
+🚀 Auto
+</button>
+<button class="btn-small btn-eliminar" onclick="abrirModalEliminar(${med.id}, '${med.nombre}')" title="Eliminar medicamento">
+🗑️ Eliminar
+</button>
+</div>
+</td>
+`;
+tbody.appendChild(row);
+});
+}
+
+function editarMedicamento(medicamentoId) {
+window.location.href = `/admin/medicamentos/editar/${medicamentoId}`;
+}
+
+async function iniciarLlenador() {
+try {
+const resp = await fetch('/admin/medicamentos/siguiente_incompleto');
+const data = await resp.json();
+
+if (data.ok && data.medicamento_id) {
+window.location.href = `/admin/medicamentos/editar/${data.medicamento_id}?modo=llenado`;
+} else {
+alert('✅ Todos los medicamentos están completos!');
+}
+} catch (error) {
+console.error('Error:', error);
+alert('❌ Error iniciando llenador: ' + error.message);
+}
+}
+
+function autocompletarMedicamento(medicamentoId, nombre) {
+alert(`🚀 Auto-completar para: ${nombre}\n\nPróximo paso: Integración de búsqueda automática`);
+}
+
+async function abrirModalEliminar(medicamentoId, medicamentoNombre) {
+try {
+const response = await fetch(`/api/medicamentos/${medicamentoId}/validar_eliminacion`);
+const data = await response.json();
+if (!data.ok) {
+alert(`❌ ${data.error}`);
+return;
+}
+medicamentoAEliminar = medicamentoId;
+nombreMedicamentoAEliminar = medicamentoNombre;
+document.getElementById('medicamentoEliminar').textContent = `¿Eliminar "${medicamentoNombre}"?`;
+document.getElementById('modalEliminar').style.display = 'block';
+} catch (error) {
+alert('❌ Error validando medicamento: ' + error.message);
+}
+}
+
+function cerrarModal() {
+document.getElementById('modalEliminar').style.display = 'none';
+medicamentoAEliminar = null;
+nombreMedicamentoAEliminar = null;
+}
+
+async function confirmarEliminar() {
+if (!medicamentoAEliminar) {
+alert('Error: No hay medicamento seleccionado');
+return;
+}
+const medicamentoId = medicamentoAEliminar;
+cerrarModal();
+try {
+const response = await fetch(`/medicamentos/eliminar/${medicamentoId}`, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+'X-Requested-With': 'XMLHttpRequest'
+}
+});
+if (response.redirected) {
+window.location.href = response.url;
+} else if (response.ok) {
+const data = await response.json();
+if (data.ok) {
+alert('✅ Medicamento eliminado correctamente');
+cargarMedicamentos();
+} else {
+alert('❌ Error: ' + data.error);
+}
+} else {
+setTimeout(() => {
+window.location.reload();
+}, 500);
+}
+} catch (error) {
+console.error('Error:', error);
+alert('❌ Error eliminando medicamento: ' + error.message);
+}
+}
+
+window.onclick = function(event) {
+const modal = document.getElementById('modalEliminar');
+if (event.target == modal) {
+cerrarModal();
+}
+}
+</script>
+</body>
+</html>

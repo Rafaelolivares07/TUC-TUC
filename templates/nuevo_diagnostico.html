@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nuevo Diagnóstico</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">➕ Nuevo Diagnóstico</header>
+  <main class="container">
+    <form method="POST">
+      <label>Descripción</label>
+      <input type="text" name="descripcion" required>
+      <button class="btn-primary" type="submit">Guardar</button>
+    </form>
+    <a class="btn-secondary" href="{{ url_for('lista_diagnosticos') }}">⬅ Volver</a>
+  </main>
+</body>
+</html>

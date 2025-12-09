@@ -1,0 +1,731 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Población de Medicamentos</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { margin-bottom: 20px; color: #333; }
+    
+    /* Filtros con botones */
+    .filtros-container { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6; }
+    .filtro-grupo { margin-bottom: 12px; }
+    .filtro-grupo:last-child { margin-bottom: 0; }
+    .filtro-label { display: block; font-weight: bold; margin-bottom: 8px; color: #495057; font-size: 14px; }
+    .filtros-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+    .filtro-btn {
+      padding: 8px 16px;
+      border: 2px solid #dee2e6;
+      background: white;
+      color: #495057;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .filtro-btn:hover { background: #e9ecef; border-color: #adb5bd; }
+    .filtro-btn.activo {
+      background: #007bff;
+      color: white;
+      border-color: #0056b3;
+    }
+    
+    .seccion { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
+    .seccion-titulo { font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #333; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 6px; font-weight: bold; color: #555; }
+    input[type="checkbox"] { margin-right: 8px; cursor: pointer; }
+    select, input[type="text"] { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; }
+    textarea { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; resize: vertical; }
+    
+    /* Asignación de componente activo */
+    .asignar-componente-box { 
+      margin-top: 15px; 
+      padding: 12px; 
+      background: #fff3cd; 
+      border: 1px solid #ffc107; 
+      border-radius: 4px; 
+    }
+    .asignar-componente-box label { font-size: 13px; color: #856404; }
+    .busqueda-componente { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+    .busqueda-componente input { flex: 1; }
+    .busqueda-componente button { 
+      padding: 8px 14px; 
+      background: #28a745; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .busqueda-componente button:hover { background: #218838; }
+    .busqueda-componente button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .lista-componentes { margin-top: 8px; max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; background: white; }
+    .lista-componentes div { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
+    .lista-componentes div:hover { background: #e9ecef; }
+    .lista-componentes div:last-child { border-bottom: none; }
+    
+    .alerta { padding: 12px; margin: 10px 0; border-radius: 4px; border-left: 4px solid #ffc107; }
+    .alerta-warning { background: #fff3cd; color: #856404; display: none; }
+    .alerta-warning.visible { display: block; }
+    .info-small { font-size: 12px; color: #666; margin-top: 6px; }
+    .botones-busqueda { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .botones-busqueda a { 
+      display: inline-block; 
+      padding: 8px 14px; 
+      background: #007bff; 
+      color: white; 
+      text-decoration: none; 
+      border-radius: 4px; 
+      font-size: 13px;
+    }
+    .botones-busqueda a:hover { background: #0056b3; }
+    .item { margin: 8px 0; }
+    .item input[type="checkbox"] { cursor: pointer; }
+    .item label { display: inline; font-weight: normal; }
+    .item-disabled { opacity: 0.6; }
+    .item-sintomas { margin-left: 30px; color: #666; font-size: 13px; }
+    .titulo-seccion { font-size: 16px; font-weight: bold; margin: 15px 0 10px 0; color: #333; }
+    .loading { display: none; color: #ff9800; font-weight: bold; }
+    .loading.visible { display: inline; }
+    button { 
+      padding: 10px 16px; 
+      background: #2b8a3e; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      font-size: 14px;
+      font-weight: bold;
+    }
+    button:hover { background: #1f6030; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .box { margin-top: 15px; padding: 15px; border: 1px solid #ccc; border-radius: 6px; }
+    .error-msg { color: #d9534f; font-size: 12px; margin-top: 6px; }
+  </style>
+  <script>
+    let filtroTipo = 'todos';
+    let filtroPrecio = 'todos';
+    
+    window.addEventListener('load', function() {
+      const textarea = document.getElementById('textoExtraido');
+      if (textarea) {
+        if (textarea.value.includes('No se encontró')) {
+          textarea.value = '';
+          textarea.style.background = '#fff';
+        }
+      }
+      if (textarea && (!textarea.value || textarea.value.trim() === '')) {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText()
+            .then(function(text) {
+              if (text && text.trim().length > 20) {
+                textarea.value = text;
+                textarea.style.background = '#e8f5e9';
+                console.log('✅ Texto pegado automáticamente');
+                procesarTextoPegado();
+              }
+            })
+            .catch(function(err) {
+              console.log('ℹ️ No se pudo acceder al clipboard');
+            });
+        }
+      }
+    });
+
+    function setupAutoProcessing() {
+      const textarea = document.getElementById('textoExtraido');
+      const alertaWarning = document.querySelector('.alerta-warning');
+      if (!textarea) return;
+      
+      const cambioInterno = localStorage.getItem('cambioMedicamentoInterno') === '1';
+      localStorage.removeItem('cambioMedicamentoInterno');
+      
+      if (!cambioInterno) {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then(text => {
+            text = text.trim();
+            if (text.length > 20 && textarea.value.trim() !== text) {
+              textarea.value = text;
+              textarea.style.background = '#e8f5e9';
+              console.log('📌 Auto-pegado desde portapapeles (nuevo)');
+              procesarTextoPegado();
+            }
+          }).catch(() => {});
+        }
+      }
+      
+      textarea.addEventListener('paste', function() {
+        setTimeout(() => {
+          const texto = textarea.value.trim();
+          if (texto.length > 20) {
+            if (alertaWarning) alertaWarning.classList.remove('visible');
+            textarea.style.background = '#e8f5e9';
+            console.log('✅ Texto pegado → Procesando...');
+            procesarTextoPegado();
+          } else {
+            if (alertaWarning) alertaWarning.classList.add('visible');
+          }
+        }, 200);
+      });
+    }
+    window.setupAutoProcessing = setupAutoProcessing;
+
+    function procesarTextoPegado() {
+      const textarea = document.getElementById('textoExtraido');
+      const medId = document.getElementById('medId').value;
+      const texto = textarea.value;
+      if (!texto || texto.trim().length < 20) return;
+      const terminoBuscado = extraerTerminoBuscado();
+      if (terminoBuscado.length > 0 && !verificarCorrespondencia(texto, terminoBuscado)) {
+        const confirmar = confirm('⚠️ El texto pegado no parece corresponder al medicamento seleccionado.    ¿Deseas procesarlo de todas formas?');
+        if (!confirmar) {
+          textarea.value = '';
+          textarea.style.background = '#fff';
+          return;
+        }
+      }
+      const loading = document.getElementById('loading-procesando');
+      if (loading) loading.classList.add('visible');
+
+      // ✅ ✅ ✅ GUARDAR EL TEXTO FUENTE INMEDIATAMENTE
+      fetch('/sugerir-sintomas/guardar-texto-fuente/' + medId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto_fuente: texto.trim() })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log('✅ Texto fuente guardado inmediatamente en DB');
+          // Marcar visualmente que ya se guardó
+          textarea.dataset.textoGuardado = "1";
+        } else {
+          console.warn('⚠️ No se pudo guardar el texto fuente:', data.error || 'error desconocido');
+        }
+      })
+      .catch(error => {
+        console.error('❌ Error al guardar texto fuente:', error);
+      });
+
+      // ✅ Luego procesar diagnósticos/síntomas como antes
+      fetch('/sugerir-sintomas/procesar-texto/' + medId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: texto })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          actualizarDiagnosticos(data.diagnosticos);
+          actualizarSintomas(data.sintomas);
+        }
+        if (loading) loading.classList.remove('visible');
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        if (loading) loading.classList.remove('visible');
+      });
+    }
+
+
+    window.procesarTextoPegado = procesarTextoPegado;
+
+    function extraerTerminoBuscado() {
+      const terminos = [];
+      const parrafo = document.querySelector('p b');
+      if (parrafo) {
+        terminos.push(parrafo.textContent.trim().toLowerCase());
+      }
+      const h1 = document.getElementById('nombre-medicamento');
+      if (h1) {
+        let nombreCompleto = h1.textContent.trim();
+        nombreCompleto = nombreCompleto.split('(')[0].trim().toLowerCase();
+        nombreCompleto = nombreCompleto.replace(/\d+\s*(mg|mcg|ml|g|%)/gi, '');
+        nombreCompleto = nombreCompleto.replace(/\b(caja|frasco|tableta|tabletas|capsula|cápsula|x\d+)\b/gi, '');
+        nombreCompleto = nombreCompleto.trim();
+        const primeraPalabra = nombreCompleto.split(/\s+/)[0];
+        if (primeraPalabra && primeraPalabra.length > 3) {
+          terminos.push(primeraPalabra);
+        }
+      }
+      return terminos.filter(t => t && t.length > 3);
+    }
+
+    function verificarCorrespondencia(texto, terminos) {
+      if (!terminos || terminos.length === 0) return true;
+      const textoNorm = texto.toLowerCase();
+      return terminos.some(termino => textoNorm.includes(termino));
+    }
+
+    function actualizarDiagnosticos(diagnosticos) {
+      const container = document.getElementById('diagnosticos-container');
+      if (!container) return;
+      if (diagnosticos.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No se detectaron diagnósticos.</p>';
+        return;
+      }
+      let html = '<div class="titulo-seccion">Diagnósticos detectados:</div>';
+      diagnosticos.forEach((dx, idx) => {
+        const estado = dx.id ? '(existe)' : '(nuevo)';
+        html += `
+          <div class="item">
+            <input type="checkbox" id="diagnostico_${idx}" name="diagnostico" 
+                   value="${dx.id ? 'dx:' + dx.id : 'new:' + dx.nombre}" 
+                   checked="checked">
+            <label for="diagnostico_${idx}"><strong>${dx.nombre}</strong> ${estado}</label>
+            ${dx.sintomas.length > 0 ? `
+              <div class="item-sintomas">
+                <small>Incluye: ${dx.sintomas.join(', ')}</small>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function actualizarSintomas(sintomas) {
+      const container = document.getElementById('sintomas-container');
+      if (!container) return;
+      if (sintomas.length === 0) {
+        container.innerHTML = '<p style="color: #999;">No se detectaron síntomas.</p>';
+        return;
+      }
+      let html = '<div class="titulo-seccion">Síntomas sugeridos:</div>';
+      sintomas.forEach((s, idx) => {
+        const estado = s.id ? '(existe)' : '(nuevo)';
+        html += `
+          <div class="item">
+            <input type="checkbox" id="sintoma_${idx}" name="sintoma" 
+                   value="${s.id ? 'id:' + s.id : 'new:' + s.label}" 
+                   checked="checked">
+            <label for="sintoma_${idx}">${s.label} ${estado}</label>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function aplicarFiltro(tipo, valor) {
+      if (tipo === 'tipo') {
+        filtroTipo = valor;
+        document.querySelectorAll('[data-filtro="tipo"]').forEach(btn => {
+          btn.classList.toggle('activo', btn.dataset.valor === valor);
+        });
+      } else if (tipo === 'precio') {
+        filtroPrecio = valor;
+        document.querySelectorAll('[data-filtro="precio"]').forEach(btn => {
+          btn.classList.toggle('activo', btn.dataset.valor === valor);
+        });
+      }
+      
+      fetch(`/sugerir-sintomas/filtrar-medicamentos?tipo=${filtroTipo}&precio=${filtroPrecio}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            actualizarSelectorConFiltros(data.medicamentos);
+          }
+        })
+        .catch(error => console.error('Error al filtrar:', error));
+    }
+
+    function actualizarSelectorConFiltros(medicamentos) {
+      const select = document.getElementById('medicamentoSelect');
+      if (!select) return;
+      
+      const medActual = select.value;
+      select.innerHTML = '<option value="">-- Seleccione --</option>';
+      
+      const grupos = {
+        'genericos_con': { label: '✅ Genéricos CON precio', items: [] },
+        'genericos_sin': { label: '⚠️ Genéricos SIN precio', items: [] },
+        'comerciales_con': { label: '✅ Comerciales CON precio', items: [] },
+        'comerciales_sin': { label: '⚠️ Comerciales SIN precio', items: [] }
+      };
+      
+      medicamentos.forEach(m => {
+        const esGenerico = !m.componente_activo_id;
+        const tienePrecio = m.tiene_precio;
+        let clave;
+        if (esGenerico && tienePrecio) clave = 'genericos_con';
+        else if (esGenerico && !tienePrecio) clave = 'genericos_sin';
+        else if (!esGenerico && tienePrecio) clave = 'comerciales_con';
+        else clave = 'comerciales_sin';
+        
+        grupos[clave].items.push(m);
+      });
+      
+      Object.values(grupos).forEach(grupo => {
+        if (grupo.items.length > 0) {
+          const optgroup = document.createElement('optgroup');
+          optgroup.label = grupo.label;
+          grupo.items.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `[${m.id}] ${m.nombre}`;
+            if (m.id == medActual) opt.selected = true;
+            optgroup.appendChild(opt);
+          });
+          select.appendChild(optgroup);
+        }
+      });
+    }
+
+    function irAMedicamento() {
+      const select = document.getElementById('medicamentoSelect');
+      const medId = select.value;
+      if (!medId) return;
+      
+      const btnGuardar = document.getElementById('btn-guardar');
+      const mensajeGuardado = document.getElementById('mensaje-guardado');
+      if (btnGuardar) {
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = '✅ Guardar seleccionados';
+      }
+      if (mensajeGuardado) {
+        mensajeGuardado.style.display = 'none';
+      }
+      
+      const textarea = document.getElementById('textoExtraido');
+      if (textarea && !textarea.dataset.textoFijo) {
+        textarea.value = "";
+        textarea.style.background = "#fff";
+      }
+
+      const inputSintomaLibre = document.getElementById('extra');
+      if (inputSintomaLibre) {
+        inputSintomaLibre.value = "";
+      }
+
+      const diagContainer = document.getElementById('diagnosticos-container');
+      if (diagContainer) {
+        diagContainer.innerHTML = '<p style="color: #999;">Cargando diagnósticos...</p>';
+      }
+      const sintContainer = document.getElementById('sintomas-container');
+      if (sintContainer) {
+        sintContainer.innerHTML = '<p style="color: #999;">Detectando síntomas...</p>';
+      }
+      const alertaWarning = document.querySelector('.alerta-warning');
+      if (alertaWarning) alertaWarning.classList.remove('visible');
+      
+      fetch('/sugerir-sintomas/datos-medicamento/' + medId)
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            const h1 = document.getElementById('nombre-medicamento');
+            if (h1) {
+              h1.innerHTML = data.med.nombre + ' <small style="color: #999; font-size: 14px;">(ID ' + data.med.id + ')</small>';
+            }
+            const pTermino = document.querySelector('p b');
+            if (pTermino) {
+              pTermino.textContent = data.termino;
+            }
+            const form = document.querySelector('form[method="post"]');
+            if (form) {
+              form.action = '/sugerir-sintomas/guardar/' + data.med.id;
+            }
+            const medIdInput = document.getElementById('medId');
+            if (medIdInput) {
+              medIdInput.value = data.med.id;
+            }
+            actualizarEnlacesBusqueda(data.termino);
+            
+            const asignarBox = document.getElementById('asignar-componente-box');
+            if (asignarBox) {
+              asignarBox.style.display = data.med.tiene_componente ? 'none' : 'block';
+            }
+            
+            if (alertaWarning) alertaWarning.classList.add('visible');
+            console.log('✅ Medicamento cambiado a:', data.med.nombre);
+          }
+        })
+        .catch(error => {
+          console.error('Error al cambiar medicamento:', error);
+          alert('Error al cargar el medicamento. Por favor, recarga la página.');
+        });
+    }
+
+    function actualizarEnlacesBusqueda(termino) {
+      const linkGoogle = document.querySelector('a[href*="google.com"]');
+      if (linkGoogle) {
+        linkGoogle.href = 'https://www.google.com/search?q=' + encodeURIComponent(termino) + '%20que%20es%20para%20que%20sirve%20no%20muestres%20contraindicaciones';
+      }
+      const linkWiki = document.querySelector('a[href*="wikipedia.org"]');
+      if (linkWiki) {
+        linkWiki.href = 'https://es.wikipedia.org/wiki/' + termino.replace(/ /g, '_');
+      }
+    }
+
+    function buscarComponentesActivos() {
+      const query = document.getElementById('busquedaComponenteActivo').value.trim();
+      if (query.length < 2) {
+        document.getElementById('listaComponentes').innerHTML = '';
+        return;
+      }
+      
+      fetch(`/sugerir-sintomas/buscar-componentes?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+          const lista = document.getElementById('listaComponentes');
+          if (data.componentes.length === 0) {
+            lista.innerHTML = '<div style="padding: 8px; color: #999;">No se encontraron componentes activos</div>';
+          } else {
+            lista.innerHTML = data.componentes.map(c => 
+              `<div onclick="seleccionarComponente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')">[$${c.id}] ${c.nombre}</div>`
+            ).join('');
+          }
+        });
+    }
+
+    function seleccionarComponente(id, nombre) {
+      document.getElementById('busquedaComponenteActivo').value = nombre;
+      document.getElementById('listaComponentes').innerHTML = '';
+      document.getElementById('btnAsignarComponente').disabled = false;
+      document.getElementById('btnAsignarComponente').dataset.componenteId = id;
+    }
+
+    function asignarComponenteActivo() {
+      const btn = document.getElementById('btnAsignarComponente');
+      const componenteId = btn.dataset.componenteId;
+      const medId = document.getElementById('medId').value;
+      
+      if (!componenteId || !medId) return;
+      
+      btn.disabled = true;
+      btn.textContent = 'Asignando...';
+      
+      fetch('/sugerir-sintomas/asignar-componente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          medicamento_id: medId,
+          componente_activo_id: componenteId
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('✅ Componente activo asignado correctamente');
+          location.reload();
+        } else {
+          alert('❌ Error al asignar componente activo');
+          btn.disabled = false;
+          btn.textContent = 'Asignar';
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error al asignar componente activo');
+        btn.disabled = false;
+        btn.textContent = 'Asignar';
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.getElementById('form-guardar');
+      if (form) {
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          guardarSeleccionados();
+        });
+      }
+    });
+
+    function guardarSeleccionados() {
+      const form = document.getElementById('form-guardar');
+      const btnGuardar = document.getElementById('btn-guardar');
+      const mensajeGuardado = document.getElementById('mensaje-guardado');
+      const medId = document.getElementById('medId').value;
+      if (!form || !btnGuardar || !medId) {
+        console.error('Elementos no encontrados');
+        alert('Error: No se pudo inicializar el formulario. Recarga la página.');
+        return;
+      }
+
+      btnGuardar.disabled = true;
+      btnGuardar.textContent = '⏳ Guardando...';
+
+      // ✅ Usa FormData para enviar TODO incluyendo el textarea
+      const formData = new FormData(form);
+      
+      fetch('/sugerir-sintomas/guardar/' + medId, {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (response.ok) {
+          btnGuardar.textContent = '✅ Guardado';
+          if (mensajeGuardado) {
+            mensajeGuardado.style.display = 'block';
+            mensajeGuardado.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+          const select = document.getElementById('medicamentoSelect');
+          if (select) {
+            const optionToRemove = select.querySelector(`option[value="${medId}"]`);
+            if (optionToRemove) {
+              optionToRemove.remove();
+            }
+            select.value = "";
+            if (select.options.length <= 1) {
+              alert('¡Felicitaciones! Has completado todos los medicamentos pendientes.');
+            }
+          }
+          console.log('✅ Medicamento guardado exitosamente');
+        } else {
+          throw new Error('Error al guardar');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al guardar. Por favor, intenta de nuevo.');
+        btnGuardar.disabled = false;
+        btnGuardar.textContent = '✅ Guardar seleccionados';
+      });
+    }    
+
+    
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1 style="margin-bottom: 30px;">Población de Medicamentos - Síntomas y Diagnósticos</h1>
+    
+    <!-- FILTROS DINÁMICOS -->
+    <div class="filtros-container">
+      <div class="filtro-grupo">
+        <span class="filtro-label">Tipo de medicamento:</span>
+        <div class="filtros-botones">
+          <button type="button" class="filtro-btn activo" data-filtro="tipo" data-valor="todos" 
+                  onclick="aplicarFiltro('tipo', 'todos')">📦 Todos</button>
+          <button type="button" class="filtro-btn" data-filtro="tipo" data-valor="genericos" 
+                  onclick="aplicarFiltro('tipo', 'genericos')">🧪 Solo genéricos</button>
+          <button type="button" class="filtro-btn" data-filtro="tipo" data-valor="comerciales" 
+                  onclick="aplicarFiltro('tipo', 'comerciales')">💊 Solo comerciales</button>
+        </div>
+      </div>
+      
+      <div class="filtro-grupo">
+        <span class="filtro-label">Disponibilidad de precio:</span>
+        <div class="filtros-botones">
+          <button type="button" class="filtro-btn activo" data-filtro="precio" data-valor="todos" 
+                  onclick="aplicarFiltro('precio', 'todos')">💰 Todos</button>
+          <button type="button" class="filtro-btn" data-filtro="precio" data-valor="con" 
+                  onclick="aplicarFiltro('precio', 'con')">✅ Solo con precio</button>
+          <button type="button" class="filtro-btn" data-filtro="precio" data-valor="sin" 
+                  onclick="aplicarFiltro('precio', 'sin')">⚠️ Solo sin precio</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SELECCIÓN DE MEDICAMENTO -->
+    <div class="seccion">
+      <div class="seccion-titulo">1️⃣ Seleccionar medicamento</div>
+      <div class="form-group">
+        <label for="medicamentoSelect">Elige el medicamento a procesar:</label>
+        <select id="medicamentoSelect" onchange="irAMedicamento()">
+          <option value="">-- Seleccione --</option>
+          {% if medicamentos_agrupados %}
+            {% for grupo in medicamentos_agrupados %}
+              <optgroup label="{{ grupo.label }}">
+                {% for m in grupo['items'] %}
+                  <option value="{{ m.id }}" {% if med and m.id == med.id %}selected{% endif %}>
+                    [{{ m.id }}] {{ m.nombre }}
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          {% endif %}
+        </select>
+      </div>
+    </div>
+    
+    {% if med %}
+    <h1 id="nombre-medicamento">{{ med.nombre }} <small style="color: #999; font-size: 14px;">(ID {{ med.id }})</small></h1>
+    <p style="color: #666; margin-bottom: 15px;">Buscado por: <b>{{ termino }}</b></p>
+    
+    <!-- Asignación de componente activo (solo si no tiene) -->
+    <div id="asignar-componente-box" class="asignar-componente-box" style="display: {% if med.componente_activo_id %}none{% else %}block{% endif %};">
+      <label><strong>⚠️ Este medicamento NO tiene componente activo asignado</strong></label>
+      <div class="busqueda-componente">
+        <input type="text" id="busquedaComponenteActivo" placeholder="Buscar componente activo (ej: amoxicilina)" 
+               oninput="buscarComponentesActivos()">
+        <button type="button" id="btnAsignarComponente" disabled onclick="asignarComponenteActivo()">Asignar</button>
+      </div>
+      <div id="listaComponentes" class="lista-componentes"></div>
+    </div>
+    
+    <div id="mensaje-guardado" style="display: none; padding: 12px; margin: 15px 0; background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 4px; text-align: center;">
+      ✅ <strong>Medicamento actualizado correctamente.</strong> Por favor, selecciona otro medicamento para continuar.
+    </div>
+
+    <!-- PEGAR TEXTO -->
+    <div class="seccion">
+      <div class="seccion-titulo">2️⃣ Pega el texto del medicamento</div>
+      <div class="alerta alerta-warning visible" id="alertaWarning">
+        <p><strong>⚠️ No se encontró información automática</strong></p>
+        <p>Abre Google o Wikipedia, copia y regresa:</p>
+        <div class="botones-busqueda">
+          <a href="https://www.google.com/search?q={{ termino }}%20que%20es%20para%20que%20sirve%20no%20muestres%20contraindicaciones" target="_blank">
+            🔍 Buscar en Google
+          </a>
+          <a href="https://es.wikipedia.org/wiki/{{ termino | replace(' ', '_') }}" target="_blank">
+            📖 Buscar en Wikipedia
+          </a>
+        </div>
+        <div class="info-small">💡 Al volver, el texto se pegará automáticamente</div>
+      </div>
+      <textarea id="textoExtraido" name="textoExtraido" autocomplete="off" placeholder="Pega aquí el contenido que copiaste..." style="height: 200px;">{{ texto }}</textarea>      <div class="info-small" style="margin-top: 8px;">
+        ⏳ <span id="loading-procesando" class="loading">Analizando diagnósticos y síntomas...</span>
+      </div>
+    </div>
+
+    <!-- FORMULARIO PRINCIPAL -->
+    <form id="form-guardar" autocomplete="off">
+      <input type="hidden" id="medId" value="{{ med.id }}">
+      
+      <!-- DIAGNÓSTICOS -->
+      <div class="seccion">
+        <div id="diagnosticos-container">
+          <p style="color: #999;">Cargando diagnósticos...</p>
+        </div>
+      </div>
+      
+      <!-- SÍNTOMAS -->
+      <div class="seccion">
+        <div id="sintomas-container">
+          <p style="color: #999;">Detectando síntomas...</p>
+        </div>
+      </div>
+      
+      <!-- AGREGAR SÍNTOMA MANUAL -->
+      <div class="seccion">
+        <label for="extra">Agregar otro síntoma (texto libre):</label>
+        <input id="extra" name="sintoma" type="text" placeholder="ej: dificultad respiratoria severa" />
+        <div class="info-small">Escribe un síntoma que no esté en la lista</div>
+      </div>
+      
+      <!-- BOTÓN GUARDAR -->
+      <button type="submit" id="btn-guardar" style="width: 100%; padding: 12px; margin-top: 20px; font-size: 16px;">
+        ✅ Guardar seleccionados
+      </button>
+    </form>
+    {% else %}
+    <p style="color: #b00; margin-top: 20px;">Cargando primer medicamento pendiente...</p>
+    <script>
+      window.location.href = '/sugerir-sintomas/';
+    </script>
+    {% endif %}
+    
+    <script>
+      setupAutoProcessing();
+    </script>
+  </div>
+</body>
+</html>

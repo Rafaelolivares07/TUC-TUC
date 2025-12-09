@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mi App de Recetas{% endblock %}</title>
+    
+    <!-- 1. Bootstrap CSS (v5.3.3) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- 2. Bootstrap Icons (CRÍTICO para Dashboards) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- 3. Font Awesome (Opcional, pero usado para iconos grandes) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <!-- Estilo de Fuente Inter (Recomendado para buena legibilidad) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Aplicar la fuente Inter a todo el cuerpo */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa; /* Fondo gris claro */
+        }
+        /* Asegurar que el main tome el espacio restante */
+        .full-height-main {
+            min-height: calc(100vh - 56px - 40px); /* 100vh - header - footer */
+            background-color: white; /* Contenido principal blanco */
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); /* Sombra suave */
+            border-radius: 0.5rem;
+        }
+    </style>
+
+</head>
+<body>
+    <header>
+        <!-- Navbar mejorado con color de fondo y sombra -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="/">
+                    <i class="bi bi-box-seam-fill me-2"></i>App Recetas
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <!-- Enlaces de navegación comunes si el usuario está logeado -->
+                        {% if 'usuario_id' in session %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="/inicio">
+                                    <i class="bi bi-grid-fill me-1"></i>
+                                    Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/logout">
+                                    <i class="bi bi-box-arrow-right me-1"></i>
+                                    Cerrar Sesión
+                                </a>
+                            </li>
+                        {% else %}
+                            <!-- Enlaces si el usuario no está logeado -->
+                            <li class="nav-item">
+                                <a class="nav-link" href="/">
+                                    <i class="bi bi-house-door-fill me-1"></i>
+                                    Inicio
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link btn btn-outline-light btn-sm ms-lg-2" href="/login">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i>
+                                    Ingresar
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container py-4 full-height-main">
+        <!-- Manejo de Mensajes Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row">
+                    <div class="col-md-8 offset-md-2">
+                        {% for category, message in messages %}
+                            <!-- Ajustar la categoría a clases de Bootstrap: success, danger, warning, info -->
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Bloque de Contenido Principal -->
+        {% block content %}{% endblock %}
+        
+    </main>
+
+    <footer class="mt-4">
+        <div class="container">
+            <div class="text-center pt-3 pb-2 border-top">
+                <p class="text-muted small mb-0">&copy; {% if now is defined %}{{ now.year }}{% else %}2024{% endif %} App Recetas. Desarrollado con 💙.</p>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- 4. Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 5. Bloque para Scripts Específicos (como los de la factura o inicio) -->
+    {% block scripts %}{% endblock %}
+
+</body>
+</html>

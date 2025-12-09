@@ -1,0 +1,160 @@
+<!doctype html>
+<title>Bienvenido, Paciente</title>
+<style>
+    /* 1. Estilos Globales y de Contenedor */
+    @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300&display=swap');
+    
+    body {
+        /* Fuente más humana, delgada y estilizada: Lato Thin */
+        font-family: 'Lato', 'Helvetica Neue Thin', Arial, sans-serif; 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #e6ffe6; /* Fondo verde muy claro */
+        color: #333;
+        text-align: center;
+        overflow: hidden;
+    }
+    
+    /* 2. Contenedores de Pantalla (Hola y Tuk Tuk) */
+    .screen {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        opacity: 0; 
+        transition: opacity 1.5s ease-in-out; 
+        color: #28a745; 
+        /* Aseguramos el peso delgado de la fuente Lato */
+        font-weight: 300; 
+    }
+    
+    /* TAMAÑO: Pantalla 'Hola' (Gigante) */
+    #hola-screen h1 {
+        font-size: 30vw; 
+        margin: 0;
+        line-height: 1;
+    }
+
+    /* TAMAÑO: Pantalla 'Tuk Tuk' (Grande, legible en varias líneas) */
+    #tuk-tuk-screen h1 {
+        font-size: 10vw; 
+        padding: 0 5vw; 
+        margin: 0;
+        line-height: 1.2;
+    }
+    
+    .active {
+        opacity: 1;
+        z-index: 10;
+    }
+    
+    /* 3. Contenedor del Formulario (Cómo te llamas?) */
+    #name-input-container {
+        flex-direction: column;
+        /* TAMAÑO para "¿Cómo te llamas?" */
+        font-size: 8vw; 
+        padding: 20px;
+    }
+    
+    #name-input-container input[type="text"] {
+        /* TAMAÑO para la caja de texto */
+        font-size: 7vw; 
+        padding: 15px 10px;
+        margin-top: 30px;
+        border: 2px solid #28a745;
+        border-radius: 8px;
+        text-align: center;
+        opacity: 0; 
+        transition: opacity 2s ease-in-out;
+        /* Hereda la tipografía delgada */
+        font-weight: 300; 
+        max-width: 80vw;
+    }
+    
+    #name-input-container button {
+        margin-top: 30px;
+        padding: 15px 30px;
+        /* TAMAÑO para el botón */
+        font-size: 5vw; 
+        background-color: #28a745;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        opacity: 0; 
+        transition: opacity 2.5s ease-in-out;
+        /* Hereda la tipografía delgada */
+        font-weight: 300;
+    }
+
+    /* Media query para asegurar que la fuente externa se cargue bien */
+    @media (max-width: 600px) {
+        body {
+            font-family: 'Lato', sans-serif;
+        }
+    }
+</style>
+
+<div id="hola-screen" class="screen active">
+    <h1>Hola</h1>
+</div>
+
+<div id="tuk-tuk-screen" class="screen">
+    <h1>Soy Tuk Tuk. Estoy aquí para ayudarte.</h1>
+</div>
+
+<form id="name-input-container" class="screen" method="POST">
+    <label for="nombre">¿Cómo te llamas?</label>
+    <input type="text" id="nombre" name="nombre" required>
+    <button type="submit">Continuar</button>
+</form>
+
+<script>
+    // La lógica de JavaScript para los tiempos de aparición/desaparición no necesita cambios
+    const holaScreen = document.getElementById('hola-screen');
+    const tukTukScreen = document.getElementById('tuk-tuk-screen');
+    const nameInputContainer = document.getElementById('name-input-container');
+    const nameInput = document.getElementById('nombre');
+    const continueButton = document.querySelector('#name-input-container button');
+
+    // 1. Mostrar 'Hola' (Ya está activo por defecto)
+    
+    setTimeout(() => {
+        // 2. Desvanecer 'Hola'
+        holaScreen.classList.remove('active');
+        
+        // 3. Mostrar 'Tuk Tuk' después del desvanecimiento (1.5s + 0.1s)
+        setTimeout(() => {
+            holaScreen.style.display = 'none'; // Ocultar para que no estorbe
+            tukTukScreen.classList.add('active');
+            
+            // 4. Desvanecer 'Tuk Tuk'
+            setTimeout(() => {
+                tukTukScreen.classList.remove('active');
+                
+                // 5. Mostrar el formulario de nombre
+                setTimeout(() => {
+                    tukTukScreen.style.display = 'none'; // Ocultar
+                    nameInputContainer.classList.add('active');
+                    
+                    // 6. Aparecer lentamente la caja de texto y el botón
+                    setTimeout(() => {
+                        nameInput.style.opacity = '1';
+                    }, 500); // Aparece la caja
+                    
+                    setTimeout(() => {
+                        continueButton.style.opacity = '1';
+                    }, 1000); // Aparece el botón
+                    
+                }, 1500); // Espera 1.5s (duración de la transición)
+            }, 3000); // 'Tuk Tuk' visible por 3 segundos
+            
+        }, 1600); // Espera la transición de 'Hola'
+        
+    }, 2000); // 'Hola' visible por 2 segundos
+</script>

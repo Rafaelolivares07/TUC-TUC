@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menú de Gestión de Inventario</title>
+    <!-- Carga de Tailwind CSS para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Definición de la fuente Inter y estilos básicos */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- Tarjeta de Bienvenida y Usuario -->
+        <div class="bg-white shadow-xl rounded-xl p-6 mb-8 border-t-4 border-indigo-600">
+            <h1 class="text-3xl font-extrabold text-gray-900">
+                Panel de Administración
+            </h1>
+            <!-- Muestra el nombre del administrador de la sesión actual -->
+            <p class="mt-2 text-lg text-indigo-600">
+                Hola, <span class="font-semibold">{{ session.get('nombre', 'Administrador') }}</span>. Tienes acceso completo al sistema de gestión.
+            </p>
+            <p class="text-sm text-gray-500 mt-1">
+                Desde aquí puedes agregar, modificar y eliminar entradas en el inventario médico.
+            </p>
+            
+            <!-- Manejo de Mensajes Flash (ej. el mensaje de éxito del registro) -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mt-4 space-y-2">
+                        {% for category, message in messages %}
+                            <div class="text-sm rounded-lg p-3 text-white 
+                                {% if category == 'error' %} bg-red-500
+                                {% elif category == 'success' %} bg-green-500
+                                {% else %} bg-blue-500
+                                {% endif %}" role="alert">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+        </div>
+
+        <!-- Opciones de Gestión (Grid de 3 columnas en desktop, 1 en mobile) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <!-- Opción 1: Diagnósticos -->
+            <a href="{{ url_for('gestion_diagnosticos') }}" class="block p-6 bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 transform hover:scale-[1.02] border border-gray-100">
+                <div class="flex items-center space-x-4">
+                    <svg class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m-9 0V3h4v2m-4 0h4"></path></svg>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Gestionar Diagnósticos</h2>
+                        <p class="text-sm text-gray-500">Añadir, editar o eliminar condiciones médicas.</p>
+                    </div>
+                </div>
+            </a>
+
+            <!-- Opción 2: Síntomas -->
+            <a href="{{ url_for('gestion_sintomas') }}" class="block p-6 bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 transform hover:scale-[1.02] border border-gray-100">
+                <div class="flex items-center space-x-4">
+                    <svg class="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Gestionar Síntomas</h2>
+                        <p class="text-sm text-gray-500">Administrar el listado de síntomas reportables.</p>
+                    </div>
+                </div>
+            </a>
+
+            <!-- Opción 3: Medicamentos -->
+            <a href="{{ url_for('gestion_medicamentos') }}" class="block p-6 bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 transform hover:scale-[1.02] border border-gray-100">
+                <div class="flex items-center space-x-4">
+                    <svg class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.75L18.25 7 12 9.25 5.75 7 12 4.75zM5.75 17L12 19.25 18.25 17M18.25 11L12 13.25 5.75 11M5.75 14L12 16.25 18.25 14M12 21.5V1.5"></path></svg>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-800">Gestionar Medicamentos</h2>
+                        <p class="text-sm text-gray-500">Mantener el catálogo de medicamentos.</p>
+                    </div>
+                </div>
+            </a>
+
+        </div>
+        
+        <!-- Botón de Cerrar Sesión (Salida) -->
+        <div class="mt-8 text-center">
+             <!-- Este botón eliminará la sesión actual -->
+            <a href="{{ url_for('logout') }}" class="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gray-600 hover:bg-gray-700 transition duration-150 ease-in-out shadow-md">
+                <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                Cerrar Sesión (Reiniciar Dispositivo)
+            </a>
+        </div>
+
+    </div>
+</body>
+</html>

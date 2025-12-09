@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Factura y Confirmación{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-lg border-success">
+        <div class="card-header bg-success text-white text-center">
+            <i class="fas fa-check-circle fa-2x mb-2"></i>
+            <h1 class="h3 mb-0">Compra Confirmada y Receta Agendada</h1>
+        </div>
+        <div class="card-body p-4">
+            
+            <h4 class="card-title text-success mb-4">Detalle de la Transacción</h4>
+            <p class="text-muted">La siguiente información refleja la simulación de su compra y la programación de su tratamiento.</p>
+            
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm">
+                    <tbody>
+                        <tr>
+                            <td class="fw-bold bg-light" style="width: 40%;">ID de Receta (Agenda)</td>
+                            <td>#{{ agenda_id }}</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold bg-light">Producto Adquirido</td>
+                            <td>{{ med_nombre }}</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold bg-light">Cantidad Total</td>
+                            <td>{{ cantidad }} unidades (para {{ (frecuencia * cantidad) / 24 }} días)</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold bg-light">Costo Total (Simulado)</td>
+                            <td class="text-danger fw-bold h5">{{ total_simulado }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 class="mt-4 mb-3 text-primary">Instrucciones de Dosificación</h4>
+            <ul class="list-group">
+                <li class="list-group-item"><strong>Dosis:</strong> {{ dosis }}</li>
+                <li class="list-group-item"><strong>Frecuencia:</strong> Cada {{ frecuencia }} horas</li>
+                <li class="list-group-item bg-warning-light"><strong>¡Recordatorio!</strong> Su primera toma está programada en su agenda.</li>
+            </ul>
+
+            <div class="d-grid gap-2 mt-4">
+                <a href="{{ url_for('lista_medicamentos') }}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-box"></i> Ver Inventario
+                </a>
+                <a href="{{ url_for('consulta_sintomas') }}" class="btn btn-secondary">
+                    <i class="fas fa-search"></i> Nueva Consulta
+                </a>
+            </div>
+            
+        </div>
+        <div class="card-footer text-center text-muted">
+            Gracias por usar nuestro servicio de asistencia farmacéutica.
+        </div>
+    </div>
+</div>
+
+<style>
+/* Estilos adicionales para esta página */
+.bg-warning-light { background-color: #fff3cd; }
+.border-success { border-color: #28a745 !important; }
+.fw-bold { font-weight: bold; }
+</style>
+{% endblock %}

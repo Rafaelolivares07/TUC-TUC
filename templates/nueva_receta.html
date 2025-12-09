@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Nueva Receta / Agenda{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">📋 Crear Nueva Receta y Programación</h1>
+    <p class="text-muted">Define la dosis, la frecuencia y la duración para agendar las tomas.</p>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('nueva_receta') }}">
+                        
+                        <div class="mb-3">
+                            <label for="usuario_id" class="form-label fw-bold">Paciente / Usuario:</label>
+                            <select class="form-select" id="usuario_id" name="usuario_id" required>
+                                <option value="" selected disabled>Seleccione quién tomará el medicamento</option>
+                                {% for user in usuarios_cuidado %}
+                                    <option value="{{ user.id }}">{{ user.nombre }} ({{ user.edad }} años)</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="medicamento_id" class="form-label fw-bold">Medicamento a Recetar:</label>
+                            <select class="form-select" id="medicamento_id" name="medicamento_id" required>
+                                <option value="" {% if not med_id_precargado %}selected{% endif %} disabled>Seleccione el medicamento</option>
+                                {% for med in medicamentos %}
+                                    <option 
+                                        value="{{ med.id }}" 
+                                        {% if med.id | string == med_id_precargado %}selected{% endif %}>
+                                        
+                                        {{ med.nombre }} - {{ med.concentracion }} ({{ med.presentacion }})
+                                        {% if med.stock_actual is defined and med.stock_actual == 0 %} (¡Agotado!){% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">
+                                {% if med_id_precargado %}
+                                <span class="text-success fw-bold">Medicamento sugerido pre-seleccionado: {{ med_nombre_precargado }}</span>
+                                {% else %}
+                                Si no está en la lista, agréguelo primero en Inventario.
+                                {% endif %}
+                            </small>
+                        </div>
+
+                        <hr>
+                        
+                        <h5 class="mt-4 mb-3 text-primary">Detalles de la Dosis y Frecuencia</h5>
+                        
+                        <div id="stock-alert" class="alert alert-warning d-none" role="alert">
+                            ⚠️ Por favor, verifique el stock actual antes de confirmar la receta.
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="dosis_calculada" class="form-label">Dosis a Tomar (Ej: 1 pastilla, 5 ml, 20 mg):</label>
+                            <input type="text" class="form-control" id="dosis_calculada" name="dosis_calculada" placeholder="Ej: 1 pastilla" required>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="frecuencia_horas" class="form-label">Frecuencia (en Horas):</label>
+                                <input type="number" class="form-control" id="frecuencia_horas" name="frecuencia_horas" min="1" step="1" placeholder="Ej: 8 (cada 8 horas)" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="duracion_dias" class="form-label">Duración (en Días):</label>
+                                <input type="number" class="form-control" id="duracion_dias" name="duracion_dias" min="1" step="1" placeholder="Ej: 7 (días)" required>
+                                <small class="form-text text-info">Cantidad total necesaria calculada automáticamente en el servidor.</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="fecha_inicio" class="form-label">Fecha de Inicio:</label>
+                                <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ current_date }}" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="hora_inicio" class="form-label">Hora de la Primera Toma:</label>
+                                <input type="time" class="form-control" id="hora_inicio" name="hora_inicio" value="{{ current_time }}" required>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="sintomas_origen" value="{{ sintomas_origen }}">
+
+                        <button type="submit" class="btn btn-success mt-3 w-100">Guardar Receta, Programar y Comprar</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Script para mostrar una advertencia si el medicamento seleccionado tiene stock cero
+document.addEventListener('DOMContentLoaded', function() {
+    const selectMed = document.getElementById('medicamento_id');
+    const stockAlert = document.getElementById('stock-alert');
+
+    function checkStock() {
+        const selectedOption = selectMed.options[selectMed.selectedIndex];
+        
+        // Verifica si el texto de la opción incluye la etiqueta de agotado.
+        // Esto es una solución temporal ya que Flask no pasa datos JS al template.
+        if (selectedOption && selectedOption.text.includes('(¡Agotado!)')) {
+            stockAlert.classList.remove('d-none');
+        } else {
+            stockAlert.classList.add('d-none');
+        }
+    }
+
+    // Inicializar la comprobación en la carga
+    checkStock();
+
+    // Comprobar cada vez que cambia la selección
+    selectMed.addEventListener('change', checkStock);
+});
+</script>
+{% endblock %}

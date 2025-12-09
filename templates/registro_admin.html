@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración de Administrador</title>
+    <!-- Carga de Tailwind CSS para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Definición de la fuente Inter y estilos básicos de la página */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Contenedor Principal: Tarjeta centrada y responsive -->
+    <div class="w-full max-w-lg bg-white shadow-xl rounded-xl p-8 md:p-10 border border-gray-200">
+        
+        <!-- Encabezado y Explicación -->
+        <div class="text-center mb-8">
+            <svg class="mx-auto h-12 w-12 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2zM6 10h12a1 1 0 001-1V6a1 1 0 00-1-1H6a1 1 0 00-1 1v3a1 1 0 001 1z" />
+            </svg>
+            <h1 class="mt-4 text-2xl font-bold text-gray-900">Dispositivo No Reconocido</h1>
+            <p class="mt-2 text-sm text-gray-600">
+                Para configurar este dispositivo como administrador, ingrese su nombre. No se requiere contraseña.
+            </p>
+            
+            <!-- Manejo de Mensajes Flash (Errores o Éxito) -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mt-4 space-y-2">
+                        {% for category, message in messages %}
+                            <div class="text-sm rounded-lg p-3 text-white 
+                                {% if category == 'error' %} bg-red-500
+                                {% elif category == 'success' %} bg-green-500
+                                {% else %} bg-blue-500
+                                {% endif %}" role="alert">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Formulario de Registro -->
+        <!-- La acción apunta a la ruta POST /registro_admin que creamos en app.py -->
+        <form action="{{ url_for('registro_admin') }}" method="POST" class="space-y-6">
+            <div>
+                <label for="nombre" class="block text-sm font-medium text-gray-700">
+                    Tu Nombre (para el registro del sistema)
+                </label>
+                <div class="mt-1">
+                    <input 
+                        id="nombre" 
+                        name="nombre" 
+                        type="text" 
+                        autocomplete="name" 
+                        required 
+                        placeholder="Ej: Laura Gómez"
+                        class="appearance-none block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                    >
+                </div>
+            </div>
+
+            <div>
+                <!-- Botón de envío que activa la ruta POST /registro_admin -->
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Configurar y Acceder al Menú Principal
+                </button>
+            </div>
+        </form>
+
+    </div>
+</body>
+</html>

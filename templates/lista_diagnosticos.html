@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Diagnósticos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+    <div class="max-w-5xl mx-auto bg-white p-6 sm:p-12 rounded-2xl shadow-2xl border-t-8 border-red-500">
+        
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-8 flex-col sm:flex-row">
+            <div class="mb-4 sm:mb-0">
+                <h1 class="text-4xl font-extrabold text-red-700 mb-2">🩺 Gestión de Diagnósticos</h1>
+                <p class="text-gray-600">Crea y administra el catálogo de diagnósticos del sistema</p>
+            </div>
+            <a href="{{ url_for('admin_menu') }}" 
+               class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-full text-gray-700 bg-gray-100 hover:bg-gray-200 transition">
+                ← Volver al Menú
+            </a>
+        </div>
+
+        <!-- Mensajes Flash -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="p-4 mb-6 text-sm rounded-lg shadow-md 
+                    {% if category == 'success' %}bg-green-100 text-green-800 border border-green-300
+                    {% elif category == 'danger' %}bg-red-100 text-red-800 border border-red-300
+                    {% elif category == 'warning' %}bg-yellow-100 text-yellow-800 border border-yellow-300
+                    {% else %}bg-blue-100 text-blue-800 border border-blue-300
+                    {% endif %}" role="alert">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- FORMULARIO PARA CREAR/EDITAR DIAGNÓSTICO -->
+        <div class="bg-red-50 border-2 border-red-300 rounded-xl p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="tituloFormulario" class="text-2xl font-bold text-red-800">➕ Crear Nuevo Diagnóstico</h2>
+                <button id="btnCancelarEdicion" 
+                        class="hidden px-4 py-2 bg-gray-400 hover:bg-gray-500 text-white text-sm rounded-lg transition"
+                        onclick="cancelarEdicion()">
+                    ✖️ Cancelar
+                </button>
+            </div>
+            
+            <form id="formDiagnostico" class="space-y-4">
+                <input type="hidden" id="diagnosticoId" value="">
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Nombre del Diagnóstico *
+                    </label>
+                    <input type="text" 
+                           id="nombreDiagnostico" 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" 
+                           placeholder="Ej: Gripe"
+                           required>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Sinónimos / Descripción (opcional)
+                    </label>
+                    <textarea id="descripcionDiagnostico" 
+                              rows="5"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent" 
+                              placeholder="Ej: influenza, resfriado común, catarro, síntomas respiratorios agudos..."></textarea>
+                    <div class="flex items-center justify-between mt-1">
+                        <p class="text-xs text-gray-500">Palabras alternativas para identificar este diagnóstico</p>
+                        <button type="button" 
+                                onclick="buscarEnGoogle()" 
+                                class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded transition">
+                            🔍 Buscar en Google
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" 
+                        id="btnSubmit"
+                        class="w-full sm:w-auto px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow-md transition">
+                    Crear Diagnóstico
+                </button>
+            </form>
+
+            <!-- Mensaje de resultado -->
+            <div id="mensajeResultado" class="mt-4 hidden"></div>
+        </div>
+
+        <!-- SECCIÓN DE SÍNTOMAS (solo visible en modo edición) -->
+        <div id="seccionSintomas" class="hidden bg-blue-50 border-2 border-blue-300 rounded-xl p-6 mb-8">
+            <h2 class="text-2xl font-bold text-blue-800 mb-4">💊 Síntomas de este Diagnóstico</h2>
+            
+            <!-- Síntomas asociados -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3">Síntomas asociados:</h3>
+                <div id="sintomasAsociados" class="space-y-2">
+                    <!-- Se llenarán dinámicamente -->
+                </div>
+                <div id="sinSintomasAsociados" class="hidden text-gray-500 text-sm">
+                    No hay síntomas asociados a este diagnóstico
+                </div>
+            </div>
+
+            <!-- Agregar nuevo síntoma -->
+            <div class="border-t border-blue-200 pt-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3">➕ Asociar nuevo síntoma:</h3>
+                
+                <div class="flex gap-2">
+                    <input type="text" 
+                           id="buscarSintoma" 
+                           placeholder="Buscar síntoma..."
+                           class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <button onclick="buscarSintomas()" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
+                        🔍 Buscar
+                    </button>
+                </div>
+
+                <!-- Resultados de búsqueda -->
+                <div id="resultadosBusqueda" class="mt-4 hidden">
+                    <div class="max-h-60 overflow-y-auto space-y-2" id="listaSintomasDisponibles">
+                        <!-- Se llenarán dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LISTA DE DIAGNÓSTICOS -->
+        <div class="bg-gray-50 border-2 border-gray-300 rounded-xl p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">📋 Lista de Diagnósticos</h2>
+            
+            <!-- Loading -->
+            <div id="loadingDiagnosticos" class="text-center py-8">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                <p class="text-gray-600 mt-2">Cargando diagnósticos...</p>
+            </div>
+
+            <!-- Lista -->
+            <div id="listaDiagnosticos" class="hidden">
+                <div class="mb-4 text-sm text-gray-600">
+                    Total: <span id="totalDiagnosticos" class="font-bold">0</span> diagnósticos
+                </div>
+                <div id="contenedorDiagnosticos" class="space-y-2 max-h-96 overflow-y-auto">
+                    <!-- Los diagnósticos se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Sin datos -->
+            <div id="sinDiagnosticos" class="hidden text-center py-8 text-gray-500">
+                No hay diagnósticos registrados aún
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        let modoEdicion = false;
+        let diagnosticoActual = null;
+
+        // ==========================================
+        // CARGAR DIAGNÓSTICOS AL INICIAR
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarDiagnosticos();
+        });
+
+        // ==========================================
+        // FUNCIÓN: CARGAR DIAGNÓSTICOS
+        // ==========================================
+        function cargarDiagnosticos() {
+            document.getElementById('loadingDiagnosticos').classList.remove('hidden');
+            document.getElementById('listaDiagnosticos').classList.add('hidden');
+            document.getElementById('sinDiagnosticos').classList.add('hidden');
+
+            fetch('/admin/diagnosticos/json')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('loadingDiagnosticos').classList.add('hidden');
+                    
+                    if (data.ok && data.diagnosticos.length > 0) {
+                        document.getElementById('listaDiagnosticos').classList.remove('hidden');
+                        document.getElementById('totalDiagnosticos').textContent = data.diagnosticos.length;
+                        
+                        const contenedor = document.getElementById('contenedorDiagnosticos');
+                        contenedor.innerHTML = '';
+                        
+                        data.diagnosticos.forEach(diagnostico => {
+                            const div = document.createElement('div');
+                            div.className = 'flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition';
+                            
+                            div.innerHTML = `
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-semibold text-gray-800">
+                                        📋 ${diagnostico.nombre}
+                                        <span class="text-sm font-normal text-gray-500">(${diagnostico.total_sintomas} síntomas)</span>
+                                    </h3>
+                                    ${diagnostico.sinonimos ? `<p class="text-sm text-gray-500 mt-1">${diagnostico.sinonimos}</p>` : ''}
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <button onclick="editarDiagnostico(${diagnostico.id})" 
+                                            class="w-24 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition">
+                                        ✏️ Editar
+                                    </button>
+                                    <button onclick="eliminarDiagnostico(${diagnostico.id}, '${diagnostico.nombre.replace(/'/g, "\\'")}', ${diagnostico.total_sintomas})" 
+                                            class="w-24 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition">
+                                        🗑️ Eliminar
+                                    </button>
+                                </div>
+                            `;
+                            
+                            contenedor.appendChild(div);
+                        });
+                    } else {
+                        document.getElementById('sinDiagnosticos').classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('loadingDiagnosticos').classList.add('hidden');
+                    document.getElementById('sinDiagnosticos').classList.remove('hidden');
+                });
+        }
+
+        // ==========================================
+        // FUNCIÓN: EDITAR DIAGNÓSTICO
+        // ==========================================
+        function editarDiagnostico(id) {
+            modoEdicion = true;
+            
+            fetch(`/admin/diagnosticos/${id}/json`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        diagnosticoActual = data.diagnostico;
+                        
+                        // Llenar formulario
+                        document.getElementById('diagnosticoId').value = diagnosticoActual.id;
+                        document.getElementById('nombreDiagnostico').value = diagnosticoActual.nombre;
+                        document.getElementById('descripcionDiagnostico').value = diagnosticoActual.sinonimos || '';
+                        
+                        // Cambiar título y botón
+                        document.getElementById('tituloFormulario').innerHTML = '✏️ Editar Diagnóstico';
+                        document.getElementById('btnSubmit').textContent = 'Actualizar Diagnóstico';
+                        document.getElementById('btnCancelarEdicion').classList.remove('hidden');
+                        
+                        // Mostrar sección de síntomas
+                        document.getElementById('seccionSintomas').classList.remove('hidden');
+                        cargarSintomasAsociados(diagnosticoActual.sintomas || []);
+                        
+                        // Scroll al formulario
+                        document.getElementById('formDiagnostico').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarMensaje('Error al cargar diagnóstico', 'error');
+                });
+        }
+
+        // ==========================================
+        // FUNCIÓN: CARGAR SÍNTOMAS ASOCIADOS
+        // ==========================================
+        function cargarSintomasAsociados(sintomas) {
+            const contenedor = document.getElementById('sintomasAsociados');
+            const sinAsociados = document.getElementById('sinSintomasAsociados');
+            
+            contenedor.innerHTML = '';
+            
+            if (!sintomas || sintomas.length === 0) {
+                sinAsociados.classList.remove('hidden');
+                return;
+            }
+            
+            sinAsociados.classList.add('hidden');
+            
+            sintomas.forEach(sintoma => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-3 bg-white border border-blue-200 rounded-lg';
+                div.innerHTML = `
+                    <div>
+                        <span class="font-medium text-gray-800">💊 ${sintoma.nombre}</span>
+                    </div>
+                    <button onclick="quitarSintoma(${sintoma.id}, '${sintoma.nombre.replace(/'/g, "\\'")}')" 
+                            class="px-3 py-1 bg-red-400 hover:bg-red-500 text-white text-sm rounded transition">
+                        ✖️ Quitar
+                    </button>
+                `;
+                contenedor.appendChild(div);
+            });
+        }
+
+        // ==========================================
+        // FUNCIÓN: BUSCAR SÍNTOMAS
+        // ==========================================
+        function buscarSintomas() {
+            const termino = document.getElementById('buscarSintoma').value.trim();
+            
+            if (termino.length < 2) {
+                mostrarMensaje('Ingresa al menos 2 caracteres para buscar', 'error');
+                return;
+            }
+            
+            fetch(`/admin/sintomas/buscar?q=${encodeURIComponent(termino)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        mostrarResultadosBusqueda(data.sintomas);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarMensaje('Error al buscar síntomas', 'error');
+                });
+        }
+
+        // ==========================================
+        // FUNCIÓN: MOSTRAR RESULTADOS DE BÚSQUEDA
+        // ==========================================
+        function mostrarResultadosBusqueda(sintomas) {
+            const contenedor = document.getElementById('listaSintomasDisponibles');
+            const resultadosDiv = document.getElementById('resultadosBusqueda');
+            
+            contenedor.innerHTML = '';
+            
+            if (sintomas.length === 0) {
+                contenedor.innerHTML = '<div class="text-gray-500 text-sm p-3 bg-gray-50 rounded">No se encontraron síntomas</div>';
+                resultadosDiv.classList.remove('hidden');
+                return;
+            }
+            
+            // Filtrar síntomas ya asociados
+            const sintomasAsociadosIds = diagnosticoActual.sintomas.map(s => s.id);
+            const sintomasDisponibles = sintomas.filter(s => !sintomasAsociadosIds.includes(s.id));
+            
+            if (sintomasDisponibles.length === 0) {
+                contenedor.innerHTML = '<div class="text-gray-500 text-sm p-3 bg-gray-50 rounded">Todos los síntomas encontrados ya están asociados</div>';
+                resultadosDiv.classList.remove('hidden');
+                return;
+            }
+            
+            sintomasDisponibles.forEach(sintoma => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50';
+                div.innerHTML = `
+                    <div>
+                        <span class="font-medium text-gray-800">💊 ${sintoma.nombre}</span>
+                        ${sintoma.sinonimos ? `<p class="text-xs text-gray-500">${sintoma.sinonimos}</p>` : ''}
+                    </div>
+                    <button onclick="agregarSintoma(${sintoma.id}, '${sintoma.nombre.replace(/'/g, "\\'")}')" 
+                            class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-sm rounded transition">
+                        ➕ Agregar
+                    </button>
+                `;
+                contenedor.appendChild(div);
+            });
+            
+            resultadosDiv.classList.remove('hidden');
+        }
+
+        // ==========================================
+        // FUNCIÓN: AGREGAR SÍNTOMA
+        // ==========================================
+        function agregarSintoma(sintomaId, sintomaNombre) {
+            if (!diagnosticoActual) return;
+            
+            fetch(`/admin/diagnosticos/${diagnosticoActual.id}/sintomas/agregar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sintoma_id: sintomaId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    mostrarMensaje(data.mensaje, 'success');
+                    recargarDiagnosticoActual();
+                } else {
+                    mostrarMensaje(data.error || 'Error al agregar síntoma', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarMensaje('Error de conexión', 'error');
+            });
+        }
+
+        // ==========================================
+        // FUNCIÓN: QUITAR SÍNTOMA
+        // ==========================================
+        function quitarSintoma(sintomaId, sintomaNombre) {
+            if (!diagnosticoActual) return;
+            
+            if (!confirm(`¿Quitar el síntoma "${sintomaNombre}" de este diagnóstico?`)) {
+                return;
+            }
+            
+            fetch(`/admin/diagnosticos/${diagnosticoActual.id}/sintomas/quitar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sintoma_id: sintomaId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    mostrarMensaje(data.mensaje, 'success');
+                    recargarDiagnosticoActual();
+                } else {
+                    mostrarMensaje(data.error || 'Error al quitar síntoma', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarMensaje('Error de conexión', 'error');
+            });
+        }
+
+        // ==========================================
+        // FUNCIÓN: RECARGAR DIAGNÓSTICO ACTUAL
+        // ==========================================
+        function recargarDiagnosticoActual() {
+            fetch(`/admin/diagnosticos/${diagnosticoActual.id}/json`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        diagnosticoActual = data.diagnostico;
+                        cargarSintomasAsociados(diagnosticoActual.sintomas);
+                        cargarDiagnosticos();
+                        
+                        // Limpiar búsqueda
+                        document.getElementById('resultadosBusqueda').classList.add('hidden');
+                        document.getElementById('buscarSintoma').value = '';
+                    }
+                });
+        }
+
+        // ==========================================
+        // FUNCIÓN: CANCELAR EDICIÓN
+        // ==========================================
+        function cancelarEdicion() {
+            modoEdicion = false;
+            diagnosticoActual = null;
+            
+            // Restaurar título y botón
+            document.getElementById('tituloFormulario').innerHTML = '➕ Crear Nuevo Diagnóstico';
+            document.getElementById('btnSubmit').textContent = 'Crear Diagnóstico';
+            document.getElementById('btnCancelarEdicion').classList.add('hidden');
+            
+            // Ocultar sección de síntomas
+            document.getElementById('seccionSintomas').classList.add('hidden');
+            document.getElementById('resultadosBusqueda').classList.add('hidden');
+            document.getElementById('buscarSintoma').value = '';
+            
+            // Limpiar formulario
+            document.getElementById('diagnosticoId').value = '';
+            document.getElementById('nombreDiagnostico').value = '';
+            document.getElementById('descripcionDiagnostico').value = '';
+        }
+
+        // ==========================================
+        // FUNCIÓN: ELIMINAR DIAGNÓSTICO
+        // ==========================================
+        function eliminarDiagnostico(id, nombre, totalSintomas) {
+            let mensaje = `¿Estás seguro de eliminar el diagnóstico "${nombre}"?`;
+            
+            if (totalSintomas > 0) {
+                mensaje += `\n\n⚠️ ATENCIÓN: Este diagnóstico tiene ${totalSintomas} síntoma(s) asociado(s).`;
+                mensaje += `\nSe eliminarán también esas relaciones.`;
+            }
+            
+            if (!confirm(mensaje)) {
+                return;
+            }
+            
+            fetch(`/admin/diagnosticos/${id}/eliminar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    mostrarMensaje(data.mensaje, 'success');
+                    cargarDiagnosticos();
+                } else {
+                    mostrarMensaje(data.error || 'Error al eliminar diagnóstico', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarMensaje('Error de conexión al eliminar diagnóstico', 'error');
+            });
+        }
+
+        // ==========================================
+        // FUNCIÓN: SUBMIT FORMULARIO (CREAR O EDITAR)
+        // ==========================================
+        document.getElementById('formDiagnostico').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const nombre = document.getElementById('nombreDiagnostico').value.trim();
+            const descripcion = document.getElementById('descripcionDiagnostico').value.trim();
+            const diagnosticoId = document.getElementById('diagnosticoId').value;
+            
+            if (!nombre) {
+                mostrarMensaje('Por favor ingresa el nombre del diagnóstico', 'error');
+                return;
+            }
+
+            const btnSubmit = document.getElementById('btnSubmit');
+            const textoOriginal = btnSubmit.textContent;
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = modoEdicion ? 'Actualizando...' : 'Creando...';
+
+            // Decidir URL y método según el modo
+            const url = modoEdicion 
+                ? `/admin/diagnosticos/${diagnosticoId}/actualizar`
+                : '/admin/diagnosticos/crear';
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    nombre: nombre,
+                    descripcion: descripcion
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    mostrarMensaje(data.mensaje, 'success');
+                    
+                    if (modoEdicion) {
+                        // Si estamos editando, mantener el modo edición y actualizar
+                        diagnosticoActual.nombre = nombre;
+                        diagnosticoActual.sinonimos = descripcion;
+                    } else {
+                        // Si es creación, limpiar y resetear
+                        cancelarEdicion();
+                    }
+                    
+                    // Recargar lista
+                    cargarDiagnosticos();
+                } else {
+                    mostrarMensaje(data.error || 'Error al procesar diagnóstico', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarMensaje('Error de conexión', 'error');
+            })
+            .finally(() => {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = textoOriginal;
+            });
+        });
+
+        // ==========================================
+        // FUNCIÓN: BUSCAR EN GOOGLE
+        // ==========================================
+        function buscarEnGoogle() {
+            const nombre = document.getElementById('nombreDiagnostico').value.trim();
+            
+            if (!nombre) {
+                mostrarMensaje('Primero ingresa el nombre del diagnóstico', 'error');
+                return;
+            }
+            
+            // Abrir búsqueda de Google en nueva pestaña
+            const termino = encodeURIComponent(nombre + ' síntomas sinónimos descripción médica');
+            window.open(`https://www.google.com/search?q=${termino}`, '_blank');
+        }
+
+        // ==========================================
+        // FUNCIÓN: MOSTRAR MENSAJES
+        // ==========================================
+        function mostrarMensaje(texto, tipo) {
+            const mensajeDiv = document.getElementById('mensajeResultado');
+            mensajeDiv.classList.remove('hidden', 'bg-green-100', 'bg-red-100', 'text-green-800', 'text-red-800');
+            
+            if (tipo === 'success') {
+                mensajeDiv.classList.add('bg-green-100', 'text-green-800', 'border', 'border-green-300');
+            } else {
+                mensajeDiv.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-300');
+            }
+            
+            mensajeDiv.className += ' p-4 rounded-lg';
+            mensajeDiv.textContent = texto;
+            
+            // Ocultar después de 5 segundos
+            setTimeout(() => {
+                mensajeDiv.classList.add('hidden');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📋 Mi App Medicamentos</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 10px; 
+      text-align: center; 
+      font-size: 18px;
+    }
+
+    h1 { font-size: 26px; margin-bottom: 20px; }
+
+    .button {
+      display: block;
+      width: 100%;
+      max-width: 400px;
+      margin: 12px auto;
+      padding: 14px;
+      font-size: 20px;
+      text-align: center;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+    }
+
+    .button:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+  <h1>📋 Mi App Medicamentos</h1>
+
+  <a class="button" href="{{ url_for('lista') }}">💊 Ver medicamentos</a>
+  <a class="button" href="{{ url_for('nuevo') }}">➕ Agregar medicamento</a>
+  <a class="button" href="#">🩺 Diagnósticos</a>
+  <a class="button" href="#">🤒 Síntomas</a>
+</body>
+</html>

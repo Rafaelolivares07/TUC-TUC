@@ -1,0 +1,3706 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Precios Dinámicos</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 10px; }
+        h2 { margin: 0 0 2px 0; }
+        h3 { margin: 0 0 2px 0; font-size: 1.1em; }
+        h4 { margin: 0 0 2px 0; }
+        /* Contenedor con scroll para el listado */
+        .tabla-container {
+            max-height: 35vh;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            margin-bottom: 4px;
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            margin: 0;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 2px 6px;
+            text-align: left;
+            font-size: 0.95em;
+            line-height: 1.3;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        th:hover {
+            background-color: #e0e0e0;
+        }
+        th::after {
+            content: ' ⇅';
+            font-size: 0.8em;
+            color: #999;
+        }
+        /* Anchos específicos por columna */
+        #listado-medicamentos th:nth-child(1),
+        #listado-medicamentos td:nth-child(1) { width: 38%; }
+        #listado-medicamentos th:nth-child(2),
+        #listado-medicamentos td:nth-child(2) { width: 18.4%; }
+        #listado-medicamentos th:nth-child(3),
+        #listado-medicamentos td:nth-child(3) { width: 5%; text-align: right; }
+        #listado-medicamentos th:nth-child(4),
+        #listado-medicamentos td:nth-child(4) { width: 5%; }
+        #listado-medicamentos th:nth-child(5),
+        #listado-medicamentos td:nth-child(5) { width: 6%; }
+        #listado-medicamentos th:nth-child(6),
+        #listado-medicamentos td:nth-child(6) { width: 8%; }
+        #listado-medicamentos th:nth-child(7),
+        #listado-medicamentos td:nth-child(7) { width: 3.6%; text-align: right; }
+        #listado-medicamentos th:nth-child(8),
+        #listado-medicamentos td:nth-child(8) { width: 10.5%; }
+        #listado-medicamentos th:nth-child(9),
+        #listado-medicamentos td:nth-child(9) { width: 3%; text-align: center; white-space: nowrap; }
+        tbody tr:hover {
+            background-color: #f5f5f5;
+            cursor: pointer;
+        }
+        .panel {
+            background-color: #f9f9f9;
+            padding: 6px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 4px;
+        }
+        /* Layout de 3 columnas flexibles */
+        .contenido-flex-superior {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            width: 100%;
+        }
+        .columna-config {
+            flex: 2;
+            min-width: 300px;
+        }
+        .columna-precio-sugerido {
+            flex: 1.5;
+            min-width: 250px;
+        }
+        .columna-cotizacion {
+            flex: 2;
+            min-width: 300px;
+            margin-top: -35px;
+        }
+        .columna-competencia {
+            flex: 1;
+            min-width: 350px;
+        }
+        /* Tabla de competencia más compacta */
+        #listado-competencia {
+            font-size: 0.9em;
+        }
+        #listado-competencia th,
+        #listado-competencia td {
+            padding: 1px 4px;
+            line-height: 1;
+            font-size: 0.85em;
+        }
+        .btn-accion {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+            padding: 2px 5px;
+            margin: 0 2px;
+        }
+        .btn-accion:hover {
+            opacity: 0.7;
+        }
+        .btn-cancelar {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            max-width: 300px;
+        }
+        .btn-cancelar:hover {
+            background-color: #ff5252;
+        }
+        .modo-editar {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding-left: 11px;
+        }
+        input[type="text"], input[type="number"], select {
+            padding: 4px 6px;
+            margin: 1px 0;
+            width: 100%;
+            max-width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        select {
+            cursor: pointer;
+        }
+        .input-group {
+            margin-bottom: 1px;
+            position: relative;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.8em;
+            color: #555;
+            margin-bottom: 0;
+        }
+        /* Autocompletado dropdown */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-width: 300px;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: block;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* Contenedor de imagen del producto */
+        .imagen-producto-container {
+            margin-top: 15px;
+            text-align: center;
+        }
+        .imagen-producto {
+            width: 150px;
+            height: 150px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f9f9f9;
+            transition: all 0.3s ease;
+            overflow: hidden;
+            position: relative;
+        }
+        .imagen-producto:hover {
+            border-color: #4CAF50;
+            background-color: #f0f8f0;
+        }
+        .imagen-producto img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .imagen-producto-placeholder {
+            color: #999;
+            font-size: 0.9em;
+            text-align: center;
+            padding: 10px;
+        }
+        .imagen-producto-placeholder::before {
+            content: '📷';
+            display: block;
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        /* Imagen en sección de cotización (más grande) */
+        .imagen-producto-container-cotizacion {
+            text-align: center;
+        }
+        .imagen-producto-cotizacion {
+            width: 100%;
+            height: 200px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #fafafa;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .imagen-producto-cotizacion:hover {
+            border-color: #4CAF50;
+        }
+        .imagen-producto-cotizacion img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .autocomplete-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background-color: #e8f4ff;
+        }
+        .autocomplete-item small {
+            display: block;
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 2px;
+        }
+        .config-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin: 4px 0;
+        }
+        .config-inputs input,
+        .config-inputs select {
+            width: 100%;
+        }
+        .config-inputs .input-group label {
+            font-size: 0.85em;
+        }
+        .config-full-width {
+            grid-column: 1 / -1;
+        }
+        #precio-sugerido { 
+            background-color: #e6ffe6; 
+            font-weight: bold;
+            font-size: 1.2em;
+            width: 100%;
+            max-width: 200px;
+        }
+        h3 {
+            margin-top: 5px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        h3 .fabricante {
+            color: #666;
+            font-weight: normal;
+        }
+        h4 {
+            margin-top: 3px;
+            margin-bottom: 4px;
+            color: #333;
+            font-size: 0.95em;
+        }
+        /* Modal para huérfanos */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .modal-header {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .modal-header h3 {
+            margin: 0;
+            color: #4CAF50;
+        }
+        .modal-section {
+            margin-bottom: 20px;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+        .btn-secondary {
+            background-color: #999;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .btn-secondary:hover {
+            background-color: #777;
+        }
+        .btn-copiar {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .btn-copiar:hover {
+            background-color: #0b7dda;
+        }
+    </style>
+</head>
+<body>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="contador-medicamentos" style="font-size: 0.95em; color: #555; font-weight: bold;">Total productos: 0</span>
+            <button id="btn-dashboard" style="padding: 5px 10px; font-size: 0.9em; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">📊 DASHBOARD TOTAL</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button id="btn-fusionar-fabricantes" style="padding: 5px 10px; font-size: 0.9em; background: #9c27b0; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Fusionar fabricantes duplicados" onclick="window.location.href='/admin/fusionar-fabricantes'">
+                🔗 Fusionar Fabricantes
+            </button>
+            <button id="btn-auditar-urls" style="padding: 5px 10px; font-size: 0.9em; background: #ff9800; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Verificar todas las URLs guardadas">
+                🔍 Verificar URLs
+            </button>
+            <button id="btn-auditar-dispersion" style="padding: 5px 10px; font-size: 0.9em; background: #e91e63; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Auditar dispersión de precios">
+                📊 Auditar Dispersión
+            </button>
+        </div>
+    </div>
+    <div class="tabla-container">
+        <table id="listado-medicamentos">
+            <thead>
+                <tr>
+                    <th onclick="ordenarTabla(0)">Nombre</th>
+                    <th onclick="ordenarTabla(1)">Fabricante</th>
+                    <th onclick="ordenarTabla(2)">Precio</th>
+                    <th onclick="ordenarTabla(3)">Exist.</th>
+                    <th onclick="ordenarTabla(4)">Origen</th>
+                    <th onclick="ordenarTabla(5)">Competidor</th>
+                    <th onclick="ordenarTabla(6)">Costo</th>
+                    <th onclick="ordenarTabla(7)">Fecha</th>
+                    <th onclick="ordenarTabla(8)">URLs</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-medicamentos"></tbody>
+        </table>
+    </div>
+    <div id="panel-medicamento" class="panel" style="display:none;">
+        <div>
+            <h3 style="margin:0; display:inline;">Medicamento: <span id="nombre-medicamento"></span> <span class="fabricante">- <span id="nombre-fabricante"></span></span>
+                <button id="btn-eliminar-medicamento" class="btn-accion" style="background:#d9534f; color:white; border-radius:6px; padding:4px 8px; margin-left:6px; vertical-align:middle; font-size:0.95em;">🗑️</button>
+            </h3>
+        </div>
+        <div class="contenido-flex-superior">
+            <div class="columna-config">
+                <h4>Configuración de Precios (1)</h4>
+                <div class="config-inputs">
+                    <div class="input-group config-full-width">
+                        <label>Usar precio de competencia</label>
+                        <select id="config-usar-precio" data-campo="usar_precio">
+                            <option value="minimo">Mínimo</option>
+                            <option value="maximo">Máximo</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Recargo 1 Cotización (%)</label>
+                        <input type="number" id="config-recargo-1" data-campo="recargo_1_cotizacion" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Recargo 2 Cotizaciones (%)</label>
+                        <input type="number" id="config-recargo" data-campo="recargo_escaso" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Redondeo Superior</label>
+                        <input type="number" id="config-redondeo" data-campo="redondeo_superior" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Ganancia Mínima</label>
+                        <input type="number" id="config-ganancia-min" data-campo="ganancia_min_escaso" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Costo Operario Domicilio</label>
+                        <input type="number" id="config-costo-operario" data-campo="costo_operario_domicilio" step="100" placeholder="3333">
+                    </div>
+                    <div class="input-group" style="border-top: 2px solid #3498db; padding-top: 10px; margin-top: 45px; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                        <label style="font-weight: bold; color: #2c3e50; font-size: 1em; margin-bottom: 8px; display: block;">Escenario 1: Comp. Barata</label>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                            <span style="color: #666;">Precio Venta:</span>
+                            <span id="esc1-precio-venta" style="font-weight: bold;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                            <span style="color: #666;">Costo Compra:</span>
+                            <span id="esc1-costo-compra" style="font-weight: bold;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; padding-top: 3px; border-top: 1px dashed #ddd;">
+                            <span style="color: #666; font-weight: 600;">Margen Bruto:</span>
+                            <span id="esc1-margen-bruto" style="font-weight: bold;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; margin-top: 8px;">
+                            <span style="color: #666;">Ingreso Domicilio:</span>
+                            <span id="esc1-ingreso-domicilio" style="font-weight: bold; color: #27ae60;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                            <span style="color: #666;">Costo Entrega:</span>
+                            <span id="esc1-costo-entrega" style="font-weight: bold; color: #e74c3c;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-top: 8px; padding-top: 8px; border-top: 2px solid #3498db;">
+                            <span style="color: #2c3e50; font-weight: bold;">Margen Neto:</span>
+                            <span id="esc1-margen-neto" style="font-weight: bold; font-size: 1.1em;">-</span>
+                        </div>
+                    </div>
+                    <div class="input-group" style="border-top: 2px solid #e67e22; padding-top: 10px; margin-top: -185px; background: #fef5e7; padding: 10px; border-radius: 5px;">
+                        <label style="font-weight: bold; color: #2c3e50; font-size: 1em; margin-bottom: 8px; display: block;">Escenario 2: Comp. Cara</label>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                            <span style="color: #666;">Precio Venta:</span>
+                            <span id="esc2-precio-venta" style="font-weight: bold;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                            <span style="color: #666;">Costo Compra:</span>
+                            <span id="esc2-costo-compra" style="font-weight: bold;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; padding-top: 3px; border-top: 1px dashed #ddd;">
+                            <span style="color: #666; font-weight: 600;">Margen Bruto:</span>
+                            <span id="esc2-margen-bruto" style="font-weight: bold;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; margin-top: 8px;">
+                            <span style="color: #666;">Ingreso Domicilio:</span>
+                            <span id="esc2-ingreso-domicilio" style="font-weight: bold; color: #27ae60;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                            <span style="color: #666;">Costo Entrega:</span>
+                            <span id="esc2-costo-entrega" style="font-weight: bold; color: #e74c3c;">-</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-top: 8px; padding-top: 8px; border-top: 2px solid #e67e22;">
+                            <span style="color: #2c3e50; font-weight: bold;">Margen Neto:</span>
+                            <span id="esc2-margen-neto" style="font-weight: bold; font-size: 1.1em;">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="columna-precio-sugerido">
+                <h4>Configuración de Precios (2)</h4>
+                <div class="config-inputs">
+                    <div class="input-group">
+                        <label>Ganancia Máxima</label>
+                        <input type="number" id="config-ganancia-max" data-campo="ganancia_max_escaso" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Precio Domicilio</label>
+                        <input type="number" id="config-precio-domicilio" data-campo="precio_domicilio" step="500">
+                    </div>
+                    <div class="input-group">
+                        <label>Pedido Mín Domicilio Gratis</label>
+                        <input type="number" id="config-pedido-min-domicilio" data-campo="pedido_min_domicilio_gratis" step="1000">
+                    </div>
+                    <div class="input-group">
+                        <label>Brecha 2 Cot Baja ($)</label>
+                        <input type="number" id="config-brecha-2cot-baja" data-campo="umbral_brecha_2cot_baja" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Brecha 2 Cot Alta ($)</label>
+                        <input type="number" id="config-brecha-2cot-alta" data-campo="umbral_brecha_2cot_alta" step="100">
+                    </div>
+                    <div class="input-group config-full-width" style="margin-top: 15px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <span style="flex: 1;">Publicar productos sin cotizaciones</span>
+                            <button type="button" id="toggle-publicar-sin-cotizaciones"
+                                    style="width: 70px; height: 32px; border-radius: 16px; border: 2px solid #ccc; background: #e0e0e0; position: relative; transition: all 0.3s; cursor: pointer;">
+                                <span style="position: absolute; left: 2px; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: white; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></span>
+                            </button>
+                        </label>
+                        <small style="color: #666; font-size: 0.85em; margin-top: 5px; display: block;">
+                            Si está desactivado, los productos sin cotizaciones de competencia no aparecerán en la tienda
+                        </small>
+                    </div>
+                    <div class="input-group config-full-width" style="margin-top: 20px;">
+                        <button id="btn-aplicar-politicas-masivo" style="width: 100%; padding: 12px; background: #5cb85c; color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; transition: background 0.3s;">
+                            Aplicar Políticas a Todos los Productos
+                        </button>
+                        <small style="color: #666; font-size: 0.85em; margin-top: 5px; display: block;">
+                            Recalcula precios de todos los productos según configuración actual
+                        </small>
+                    </div>
+                    <div class="input-group config-full-width" style="margin-top: 15px;">
+                        <button id="btn-exportar-excel" style="width: 100%; padding: 12px; background: #0275d8; color: white; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; transition: background 0.3s;">
+                            Exportar Comparativa a Excel
+                        </button>
+                        <small style="color: #666; font-size: 0.85em; margin-top: 5px; display: block;">
+                            Descarga tabla con precios de todos los productos vs competidores
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="columna-cotizacion" id="contenedor-cotizacion">
+                <div style="display: flex; gap: 8px; margin-bottom: 4px;">
+                    <div style="flex: 1;">
+                        <h4 id="titulo-cotizacion" style="margin: 0 0 8px 0;">Agregar Cotización</h4>
+                        <div class="input-group">
+                            <label>Nombre del tercero *</label>
+                            <input type="text" id="tercero-nombre" placeholder="Escriba para buscar o crear" autocomplete="off">
+                            <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+                        </div>
+                        <div class="input-group">
+                            <label>Teléfono</label>
+                            <input type="text" id="tercero-telefono" placeholder="Opcional">
+                        </div>
+                        <div class="input-group">
+                            <label>Dirección</label>
+                            <input type="text" id="tercero-direccion" placeholder="Opcional">
+                        </div>
+                        <button id="btn-cancelar-edicion" class="btn-cancelar" style="display:none;">Cancelar Edición</button>
+                    </div>
+                    <div style="flex: 0.8; display: flex; flex-direction: column; gap: 4px;">
+                        <!-- Botones Modo Turbo -->
+                        <button id="btn-modo-turbo" style="padding: 6px 12px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%;">
+                            🚀 Captura Rápida
+                        </button>
+                        <div id="controles-modo-turbo" style="display: none; flex-direction: column; gap: 4px;">
+                            <button id="btn-siguiente-producto" style="padding: 6px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
+                                ➡️ Siguiente Producto
+                            </button>
+                            <button id="btn-salir-turbo" style="padding: 6px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
+                                ❌ Salir Modo Turbo
+                            </button>
+                        </div>
+
+                        <div class="imagen-producto-container-cotizacion">
+                            <div id="imagen-producto-cotizacion" class="imagen-producto-cotizacion" title="Click para pegar imagen desde portapapeles">
+                                <div class="imagen-producto-placeholder">📷</div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 1px 0;">Precio Sugerido</h4>
+                            <input type="number" id="precio-sugerido-cotizacion" step="100" style="width: 100%; background-color: #e6ffe6; font-weight: bold; font-size: 1em; padding: 6px; text-align: center;">
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group" style="margin-top: -80px;">
+                    <label>Precio</label>
+                    <input type="number" id="precio-cotizacion" placeholder="Precio de competencia">
+                </div>
+                <div class="input-group" style="max-width: 250px;">
+                    <label>URL de cotización</label>
+                    <input type="text" id="url-cotizacion" placeholder="Opcional: URL donde se cotizó">
+                    <div id="alerta-dominio" style="display:none; background: #fff3cd; border: 1px solid #ffc107; padding: 6px; margin-top: 4px; border-radius: 3px; font-size: 0.85em; color: #856404;">
+                        ⚠️ <span id="mensaje-dominio"></span>
+                    </div>
+                </div>
+                <input type="hidden" id="medicamento-activo">
+                <input type="hidden" id="fabricante-activo">
+                <input type="hidden" id="tercero-id">
+                <input type="hidden" id="cotizacion-id-editando">
+                <h4>Precios de Competencia</h4>
+                <table id="listado-competencia">
+                    <thead><tr><th>Competidor</th><th>Precio</th><th>Fecha</th><th>Acciones</th></tr></thead>
+                    <tbody id="tbody-competencia"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- Modal para gestionar huérfanos -->
+    <div id="modal-huerfano" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Gestionar Medicamento Huérfano</h3>
+            </div>
+            <div class="modal-section">
+                <h4>1. Nombre del Medicamento</h4>
+                <div class="input-group" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <button id="btn-buscar-google" class="btn-copiar" style="margin-left: 0;">🔍 Buscar en Google</button>
+                    <button id="btn-autocompletar" class="btn-primary" style="margin-left: 0;">✨ Autocompletar</button>
+                </div>
+                <div class="input-group" style="position: relative;">
+                    <label>Editar nombre o buscar para fusionar (Enter para crear)</label>
+                    <input type="text" id="huerfano-nombre" placeholder="Nombre del medicamento" autocomplete="off">
+                    <span id="label-exito" style="display: none; color: #4CAF50; font-weight: bold; margin-left: 10px; font-size: 0.9em;">✓ Medicamento creado</span>
+                    <div id="huerfano-autocomplete" class="autocomplete-dropdown"></div>
+                </div>
+                <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                    Escribe para buscar medicamentos existentes y fusionar, o presiona Enter para crear uno nuevo.
+                </p>
+            </div>
+            <div class="modal-section" id="seccion-fabricante">
+                <h4>2. Fabricante (obligatorio)</h4>
+                <div class="input-group">
+                    <label>Seleccionar o crear fabricante</label>
+                    <input type="text" id="huerfano-fabricante" placeholder="Escribir para buscar fabricante" autocomplete="off" disabled>
+                    <div id="fabricante-autocomplete" class="autocomplete-dropdown"></div>
+                    <input type="hidden" id="huerfano-fabricante-id">
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button id="btn-fusionar" class="btn-primary" style="display: none;">✓ Fusionar con medicamento seleccionado</button>
+                <button id="btn-crear-huerfano" class="btn-primary">✓ Crear medicamento nuevo</button>
+                <button id="btn-cerrar-modal" class="btn-secondary">Cancelar</button>
+            </div>
+            <input type="hidden" id="huerfano-nombre-original">
+            <input type="hidden" id="medicamento-fusionar-id">
+            <input type="hidden" id="medicamento-creado-id">
+        </div>
+    </div>
+
+    <!-- Modal para mostrar auditoría de URLs -->
+    <div id="modal-auditoria" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 900px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>Auditoría de URLs</h3>
+            </div>
+            <div id="contenido-auditoria" style="padding: 15px;">
+                <!-- Aquí se cargará el contenido dinámicamente -->
+            </div>
+            <div class="modal-buttons">
+                <button id="btn-cerrar-auditoria" class="btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para auditoría de dispersión de precios -->
+    <div id="modal-dispersion" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 1100px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3>📊 Auditoría de Dispersión de Precios</h3>
+            </div>
+            <div style="padding: 15px; border-bottom: 1px solid #ddd;">
+                <label style="font-weight: bold; margin-right: 10px;">Filtrar por dispersión mayor a:</label>
+                <select id="umbral-dispersion" style="padding: 5px 10px; border: 1px solid #ccc; border-radius: 3px; font-size: 0.95em;">
+                    <option value="10">10%</option>
+                    <option value="20">20%</option>
+                    <option value="30" selected>30%</option>
+                    <option value="40">40%</option>
+                    <option value="50">50%</option>
+                    <option value="75">75%</option>
+                    <option value="100">100%</option>
+                </select>
+                <button id="btn-aplicar-umbral" style="margin-left: 10px; padding: 5px 15px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                    Aplicar Filtro
+                </button>
+                <span id="resultado-conteo" style="margin-left: 15px; font-size: 0.9em; color: #666;"></span>
+            </div>
+            <div id="contenido-dispersion" style="padding: 15px; overflow-y: auto; flex: 1;">
+                <!-- Aquí se cargará el contenido dinámicamente -->
+            </div>
+            <div class="modal-buttons">
+                <button id="btn-cerrar-dispersion" class="btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para aplicación masiva de políticas -->
+    <div id="modal-aplicar-politicas" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 900px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h3>Aplicar Políticas de Precios</h3>
+            </div>
+            <div style="padding: 15px; border-bottom: 1px solid #ddd; background: #f9f9f9;">
+                <p style="margin: 0 0 10px 0;"><strong>Productos pendientes:</strong> <span id="productos-pendientes">0</span></p>
+                <p style="margin: 0; font-size: 0.9em; color: #666;">Revise cada cambio propuesto. Puede aprobar uno a uno o aplicar al resto cuando esté conforme.</p>
+            </div>
+            <div id="contenido-politicas" style="padding: 20px; overflow-y: auto; flex: 1;">
+                <div id="producto-actual-review" style="border: 2px solid #2196F3; border-radius: 8px; padding: 20px; background: white;">
+                    <!-- Contenido dinámico del producto actual -->
+                </div>
+            </div>
+            <div class="modal-buttons" style="display: flex; gap: 10px; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-rechazar-actual" class="btn-secondary" style="background: #d9534f; padding: 10px 20px;">Rechazar</button>
+                    <button id="btn-cerrar-politicas" class="btn-secondary" style="padding: 10px 20px;">Cerrar</button>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btn-aprobar-actual" style="background: #5cb85c; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Aprobar</button>
+                    <button id="btn-aplicar-resto" style="background: #f0ad4e; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">Aplicar al Resto</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let CONFIG = {};
+        let MEDICAMENTO_ACTIVO = null;
+        let MEDICAMENTOS_DATA = [];
+        let ORDEN_ASCENDENTE = [true, true, true, true, true, true, true];
+        let indiceMedicamentoActual = -1;
+        let autocompleteIndex = -1;
+        let autocompleteItems = [];
+        let modoEdicion = false;
+        // 🔻 NUEVO: Lista de pestañas abiertas de competencia
+        let pestañasCompetencia = [];
+        let productosParaRevisar = [];
+        let indiceReviewActual = 0;
+
+        // === MODO TURBO ===
+        let modoTurboActivo = false;
+        let productosPendientesTurbo = [];
+        let indiceTurboActual = 0;
+        let tercerosRanking = [];
+        let indiceTerceroActual = 0;
+
+        // === Cargar datos iniciales ===
+        fetch('/admin/precios-dinamicos/data')
+            .then(r => r.json())
+            .then(data => {
+                CONFIG = data.config;
+                MEDICAMENTOS_DATA = data.medicamentos;
+
+                // Ordenar inicialmente por nombre (normalizado)
+                MEDICAMENTOS_DATA.sort((a, b) => {
+                    const valorA = normalizarTexto(a.nombre);
+                    const valorB = normalizarTexto(b.nombre);
+                    if (valorA < valorB) return -1;
+                    if (valorA > valorB) return 1;
+                    return 0;
+                });
+
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                // Cargar configuración en inputs
+                document.getElementById('config-usar-precio').value = CONFIG.usar_precio || 'minimo';
+                document.getElementById('config-recargo-1').value = CONFIG.recargo_1_cotizacion || 30;
+                document.getElementById('config-recargo').value = CONFIG.recargo_escaso;
+                document.getElementById('config-redondeo').value = CONFIG.redondeo_superior;
+                document.getElementById('config-ganancia-min').value = CONFIG.ganancia_min_escaso;
+                document.getElementById('config-ganancia-max').value = CONFIG.ganancia_max_escaso;
+                document.getElementById('config-precio-domicilio').value = CONFIG.precio_domicilio || 5000;
+                document.getElementById('config-pedido-min-domicilio').value = CONFIG.pedido_min_domicilio_gratis || 50000;
+                document.getElementById('config-brecha-2cot-baja').value = CONFIG.umbral_brecha_2cot_baja || 2000;
+                document.getElementById('config-brecha-2cot-alta').value = CONFIG.umbral_brecha_2cot_alta || 5000;
+                document.getElementById('config-costo-operario').value = CONFIG.costo_operario_domicilio || 3333;
+
+                // Cargar estado del toggle
+                const toggleBtn = document.getElementById('toggle-publicar-sin-cotizaciones');
+                const permitirPublicar = CONFIG.permitir_publicar_sin_cotizaciones || 0;
+                actualizarEstadoToggle(toggleBtn, permitirPublicar === 1);
+                if (data.primer_med_id && data.primer_fab_id) {
+                    const medIndex = data.medicamentos.findIndex(
+                        m => m.medicamento_id == data.primer_med_id && m.fabricante_id == data.primer_fab_id
+                    );
+                    indiceMedicamentoActual = medIndex;
+                    seleccionarMedicamento(data.medicamentos[medIndex]);
+                    renderizarCompetencia(data.competencias_primer);
+                    document.getElementById('precio-sugerido-cotizacion').value = data.precio_sugerido || '';
+                    resaltarFilaActiva();
+                }
+                // Cargar últimos 4 terceros al inicio
+                cargarUltimosTerceros();
+            });
+
+        // 🔻 NUEVO: Cerrar pestañas anteriores al cambiar de medicamento
+        function cerrarPestañasCompetencia() {
+            pestañasCompetencia.forEach(w => {
+                if (w && !w.closed) w.close();
+            });
+            pestañasCompetencia = [];
+        }
+
+        // Función para cargar últimos terceros
+        function cargarUltimosTerceros() {
+            fetch('/admin/terceros/ultimos?limit=4')
+                .then(r => r.json())
+                .then(data => {
+                    mostrarDropdown(data.terceros);
+                })
+                .catch(err => {
+                    console.log('Error al cargar últimos terceros:', err);
+                });
+        }
+
+        function renderizarMedicamentos(meds) {
+            const tbody = document.getElementById('tbody-medicamentos');
+            tbody.innerHTML = meds.map((m, idx) => `
+                <tr onclick="seleccionarMedicamento(${JSON.stringify(m).replace(/"/g, '&quot;')}); indiceMedicamentoActual = ${idx}; resaltarFilaActiva();">
+                    <td>${m.nombre}</td>
+                    <td>${m.fabricante_nombre}</td>
+                    <td style="text-align: right;">${Math.round(m.precio_actual).toLocaleString('es-CO')}</td>
+                    <td>${m.estado_existencia}</td>
+                    <td>${m.origen || ''}</td>
+                    <td>${m.competencia_nombre || ''}</td>
+                    <td style="text-align: right;">${m.competencia_precio ? Math.round(m.competencia_precio).toLocaleString('es-CO') : ''}</td>
+                    <td>${m.competencia_fecha || ''}</td>
+                    <td>${(m.cotizaciones_con_url > 0 || m.cotizaciones_total > 0) ? `🔗 ${m.cotizaciones_con_url}/${m.cotizaciones_total}` : ''}</td>
+                </tr>
+            `).join('');
+            // Actualizar contador de productos
+            const contador = document.getElementById('contador-medicamentos');
+            if (contador) contador.textContent = `Total productos: ${meds.length}`;
+        }
+
+        function seleccionarMedicamento(med) {
+            // 🔻 NUEVO: cerrar pestañas anteriores
+            cerrarPestañasCompetencia();
+
+            MEDICAMENTO_ACTIVO = med;
+
+            // Limpiar alerta de dominio al cambiar de producto
+            dominioEsperadoTercero = null;
+            alertaDominio.style.display = 'none';
+
+            // Si es huérfano, abrir modal especial
+            if (med.origen === 'PASTILLERO') {
+                abrirModalHuerfano(med);
+                return;
+            }
+            // Si es medicamento normal, continuar con flujo normal
+            document.getElementById('nombre-medicamento').textContent = med.nombre;
+            document.getElementById('nombre-fabricante').textContent = med.fabricante_nombre;
+            document.getElementById('medicamento-activo').value = med.medicamento_id;
+            document.getElementById('fabricante-activo').value = med.fabricante_id;
+            document.getElementById('panel-medicamento').style.display = 'block';
+            // Limpiar modo edición al cambiar de producto
+            cancelarEdicion();
+            // Cargar competencia real
+            fetchCompetencia(med.medicamento_id, med.fabricante_id);
+            // Copiar al portapapeles
+            copiarAlPortapapeles(med.nombre, med.fabricante_nombre);
+            // Cargar imagen del producto
+            cargarImagenProducto(med.medicamento_id, med.fabricante_id);
+        }
+
+        function copiarAlPortapapeles(nombre, fabricante) {
+            const texto = `${nombre} - ${fabricante}`;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(texto).catch(err => {
+                    console.log('No se pudo copiar al portapapeles:', err);
+                });
+            }
+        }
+
+        function fetchCompetencia(medId, fabId) {
+            return fetch(`/admin/precios_competencia/listar?medicamento_id=${medId}&fabricante_id=${fabId}`)
+                .then(r => r.json())
+                .then(data => {
+                    renderizarCompetencia(data.competencias);
+                    // Recalcular precio sugerido
+                    recalcularPrecioSugerido(data.competencias);
+                    return data.competencias;
+                });
+        }
+
+        async function actualizarListadoPrincipal(medId, fabId) {
+            // Obtener las competencias actualizadas
+            const res = await fetch(`/admin/precios_competencia/listar?medicamento_id=${medId}&fabricante_id=${fabId}`);
+            const data = await res.json();
+            const competencias = data.competencias;
+            // Encontrar el índice del medicamento en el array
+            const medIndex = MEDICAMENTOS_DATA.findIndex(
+                m => m.medicamento_id == medId && m.fabricante_id == fabId
+            );
+            if (medIndex >= 0 && competencias.length > 0) {
+                // Encontrar el mejor precio (mínimo)
+                const mejorCompetencia = competencias.reduce((mejor, actual) =>
+                    actual.precio < mejor.precio ? actual : mejor
+                );
+                // Actualizar los datos en memoria
+                MEDICAMENTOS_DATA[medIndex].competencia_nombre = mejorCompetencia.nombre;
+                MEDICAMENTOS_DATA[medIndex].competencia_precio = mejorCompetencia.precio;
+                MEDICAMENTOS_DATA[medIndex].competencia_fecha = mejorCompetencia.fecha_actualizacion;
+                // Re-renderizar la tabla
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                resaltarFilaActiva();
+            } else if (medIndex >= 0 && competencias.length === 0) {
+                // Si no hay competencias, limpiar los datos
+                MEDICAMENTOS_DATA[medIndex].competencia_nombre = null;
+                MEDICAMENTOS_DATA[medIndex].competencia_precio = null;
+                MEDICAMENTOS_DATA[medIndex].competencia_fecha = null;
+                // Re-renderizar la tabla
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                resaltarFilaActiva();
+            }
+        }
+
+        async function recalcularPrecioSugerido(competencias) {
+            let precioSugerido = 0;
+
+            if (competencias && competencias.length > 0) {
+                // HAY cotizaciones, SIEMPRE consultar el backend (única fuente de verdad)
+                const medId = document.getElementById('medicamento-activo').value;
+                const fabId = document.getElementById('fabricante-activo').value;
+
+                try {
+                    const response = await fetch(`/admin/precios/calcular-precio-producto?medicamento_id=${medId}&fabricante_id=${fabId}`);
+                    const data = await response.json();
+                    if (data.precio_calculado !== null && data.precio_calculado !== undefined) {
+                        precioSugerido = data.precio_calculado;
+                    } else {
+                        console.warn('Backend no devolvió precio calculado');
+                        precioSugerido = MEDICAMENTO_ACTIVO.precio_actual || 0;
+                    }
+                } catch (err) {
+                    console.error('Error al calcular precio desde backend:', err);
+                    precioSugerido = MEDICAMENTO_ACTIVO.precio_actual || 0;
+                }
+            } else {
+                // NO hay cotizaciones, mostrar precio_actual sin modificar
+                precioSugerido = MEDICAMENTO_ACTIVO.precio_actual || 0;
+            }
+
+            document.getElementById('precio-sugerido-cotizacion').value = precioSugerido;
+
+            // Actualizar escenarios de compra a competencia
+            actualizarEscenariosCompetencia(competencias);
+        }
+
+        function actualizarEscenariosCompetencia(competencias) {
+            const costoOperario = parseFloat(document.getElementById('config-costo-operario').value) || 3333;
+            const precioDomicilio = parseFloat(document.getElementById('config-precio-domicilio').value) || 5000;
+            const precioNuestro = MEDICAMENTO_ACTIVO ? MEDICAMENTO_ACTIVO.precio_actual : 0;
+
+            if (!competencias || competencias.length === 0) {
+                // Sin cotizaciones, limpiar todos los campos
+                ['esc1', 'esc2'].forEach(esc => {
+                    document.getElementById(`${esc}-precio-venta`).textContent = '-';
+                    document.getElementById(`${esc}-costo-compra`).textContent = '-';
+                    document.getElementById(`${esc}-margen-bruto`).textContent = '-';
+                    document.getElementById(`${esc}-ingreso-domicilio`).textContent = '-';
+                    document.getElementById(`${esc}-costo-entrega`).textContent = '-';
+                    document.getElementById(`${esc}-margen-neto`).textContent = '-';
+                });
+                return;
+            }
+
+            // Obtener precios min y max
+            const precios = competencias.map(c => c.precio);
+            const precioBarato = Math.min(...precios);
+            const precioCaro = Math.max(...precios);
+
+            // ESCENARIO 1: Compra a competencia barata
+            const margenBruto1 = precioNuestro - precioBarato;
+            const margenNeto1 = margenBruto1 + precioDomicilio - costoOperario;
+
+            document.getElementById('esc1-precio-venta').textContent = `$${Math.round(precioNuestro).toLocaleString('es-CO')}`;
+            document.getElementById('esc1-costo-compra').textContent = `$${Math.round(precioBarato).toLocaleString('es-CO')}`;
+            document.getElementById('esc1-margen-bruto').textContent = `$${Math.round(margenBruto1).toLocaleString('es-CO')}`;
+            document.getElementById('esc1-margen-bruto').style.color = margenBruto1 >= 0 ? '#27ae60' : '#e74c3c';
+            document.getElementById('esc1-ingreso-domicilio').textContent = `$${Math.round(precioDomicilio).toLocaleString('es-CO')}`;
+            document.getElementById('esc1-costo-entrega').textContent = `$${Math.round(costoOperario).toLocaleString('es-CO')}`;
+            document.getElementById('esc1-margen-neto').textContent = `$${Math.round(margenNeto1).toLocaleString('es-CO')}`;
+            document.getElementById('esc1-margen-neto').style.color = margenNeto1 >= 0 ? '#27ae60' : '#e74c3c';
+
+            // ESCENARIO 2: Compra a competencia cara
+            const margenBruto2 = precioNuestro - precioCaro;
+            const margenNeto2 = margenBruto2 + precioDomicilio - costoOperario;
+
+            document.getElementById('esc2-precio-venta').textContent = `$${Math.round(precioNuestro).toLocaleString('es-CO')}`;
+            document.getElementById('esc2-costo-compra').textContent = `$${Math.round(precioCaro).toLocaleString('es-CO')}`;
+            document.getElementById('esc2-margen-bruto').textContent = `$${Math.round(margenBruto2).toLocaleString('es-CO')}`;
+            document.getElementById('esc2-margen-bruto').style.color = margenBruto2 >= 0 ? '#27ae60' : '#e74c3c';
+            document.getElementById('esc2-ingreso-domicilio').textContent = `$${Math.round(precioDomicilio).toLocaleString('es-CO')}`;
+            document.getElementById('esc2-costo-entrega').textContent = `$${Math.round(costoOperario).toLocaleString('es-CO')}`;
+            document.getElementById('esc2-margen-neto').textContent = `$${Math.round(margenNeto2).toLocaleString('es-CO')}`;
+            document.getElementById('esc2-margen-neto').style.color = margenNeto2 >= 0 ? '#27ae60' : '#e74c3c';
+        }
+
+        function renderizarCompetencia(lista) {
+            const tbody = document.getElementById('tbody-competencia');
+            tbody.innerHTML = lista.map(c => {
+                const urlEscapada = (c.url || '').replace(/'/g, "\\'");
+                const urlDisplay = c.url
+                    ? `<a href="javascript:void(0)" onclick="abrirURLCotizacion('${urlEscapada}')" title="Ver cotización" style="margin-left: 8px; color: #667eea; text-decoration: none; font-size: 1.1em; cursor: pointer;">🔗</a>`
+                    : '';
+                return `
+                    <tr>
+                        <td>${c.nombre}${urlDisplay}</td>
+                        <td style="text-align: right;">${Math.round(c.precio).toLocaleString('es-CO')}</td>
+                        <td>${c.fecha_actualizacion || ''}</td>
+                        <td>
+                            <button class="btn-accion" onclick="editarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.telefono || ''}', '${c.direccion || ''}', ${c.precio}, ${c.tercero_id}, '${urlEscapada}')" title="Editar">✏️</button>
+                            <button class="btn-accion" onclick="eliminarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', event)" title="Eliminar">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Función para abrir URL de cotización existente y agregarla a pestañas para cerrar automáticamente
+        function abrirURLCotizacion(url) {
+            if (url) {
+                const w = window.open(url, '_blank');
+                if (w) {
+                    pestañasCompetencia.push(w);
+                    console.log('Pestaña de cotización existente agregada a la lista. Total pestañas:', pestañasCompetencia.length);
+                }
+            }
+        }
+
+        function editarCotizacion(cotizacionId, nombre, telefono, direccion, precio, terceroId, url) {
+            modoEdicion = true;
+            // Cambiar a modo edición visual
+            document.getElementById('titulo-cotizacion').textContent = 'Editar Cotización';
+            document.getElementById('contenedor-cotizacion').classList.add('modo-editar');
+            document.getElementById('btn-cancelar-edicion').style.display = 'block';
+            // Ocultar dropdown de terceros
+            dropdown.style.display = 'none';
+            // Llenar formulario
+            document.getElementById('tercero-nombre').value = nombre;
+            document.getElementById('tercero-telefono').value = telefono;
+            document.getElementById('tercero-direccion').value = direccion;
+            document.getElementById('precio-cotizacion').value = precio;
+            document.getElementById('url-cotizacion').value = url || '';
+            document.getElementById('tercero-id').value = terceroId;
+            document.getElementById('cotizacion-id-editando').value = cotizacionId;
+            // Foco en URL primero
+            document.getElementById('url-cotizacion').focus();
+        }
+
+        async function eliminarCotizacion(cotizacionId, nombre, event) {
+            event.stopPropagation();
+            if (!confirm(`¿Eliminar cotización de ${nombre}?`)) {
+                return;
+            }
+            const res = await fetch('/admin/precio-competencia/eliminar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: cotizacionId})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const medId = document.getElementById('medicamento-activo').value;
+                const fabId = document.getElementById('fabricante-activo').value;
+
+                // Actualizar contadores y precio en el listado
+                const medIndex = MEDICAMENTOS_DATA.findIndex(
+                    m => m.medicamento_id == medId && m.fabricante_id == fabId
+                );
+                if (medIndex >= 0) {
+                    MEDICAMENTOS_DATA[medIndex].cotizaciones_con_url = data.cotizaciones_con_url;
+                    MEDICAMENTOS_DATA[medIndex].cotizaciones_total = data.cotizaciones_total;
+                    if (data.precio_nuevo !== null) {
+                        MEDICAMENTOS_DATA[medIndex].precio_actual = data.precio_nuevo;
+                    }
+                }
+
+                await fetchCompetencia(medId, fabId);
+                // Actualizar el listado principal
+                await actualizarListadoPrincipal(medId, fabId);
+            }
+        }
+
+        function cancelarEdicion() {
+            modoEdicion = false;
+            document.getElementById('titulo-cotizacion').textContent = 'Agregar Cotización';
+            document.getElementById('contenedor-cotizacion').classList.remove('modo-editar');
+            document.getElementById('btn-cancelar-edicion').style.display = 'none';
+            // Limpiar campos
+            document.getElementById('tercero-nombre').value = '';
+            document.getElementById('tercero-telefono').value = '';
+            document.getElementById('tercero-direccion').value = '';
+            document.getElementById('precio-cotizacion').value = '';
+            document.getElementById('url-cotizacion').value = '';
+            document.getElementById('tercero-id').value = '';
+            document.getElementById('cotizacion-id-editando').value = '';
+            // Recargar últimos terceros
+            cargarUltimosTerceros();
+        }
+
+        document.getElementById('btn-cancelar-edicion').addEventListener('click', cancelarEdicion);
+
+        // FUNCIÓN DEPRECADA - Ya no se usa, el backend es la única fuente de verdad
+        // function calcularPrecioSugerido(precioBase) {
+        //     if (precioBase <= 0) return 0;
+        //     const recargo = precioBase * (CONFIG.recargo_escaso / 100);
+        //     const ganancia = Math.max(
+        //         CONFIG.ganancia_min_escaso,
+        //         Math.min(CONFIG.ganancia_max_escaso, recargo)
+        //     );
+        //     let sugerido = precioBase + ganancia;
+        //     const redondeo = CONFIG.redondeo_superior;
+        //     if (redondeo > 0) {
+        //         sugerido = Math.ceil(sugerido / redondeo) * redondeo;
+        //     }
+        //     return Math.floor(sugerido);
+        // }
+
+        // === AUTOCOMPLETADO ===
+        const inputTercero = document.getElementById('tercero-nombre');
+        const dropdown = document.getElementById('autocomplete-dropdown');
+        let timeoutId;
+        // Input para buscar terceros
+        inputTercero.addEventListener('input', function() {
+            const query = this.value.trim();
+            clearTimeout(timeoutId);
+            if (query.length === 0) {
+                // Si borra todo, volver a mostrar últimos 4 terceros
+                cargarUltimosTerceros();
+                return;
+            }
+            if (query.length < 2) {
+                return;
+            }
+            // Buscar terceros que coincidan
+            timeoutId = setTimeout(() => {
+                fetch(`/admin/terceros/buscar?q=${encodeURIComponent(query)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        mostrarDropdown(data.terceros);
+                    });
+            }, 300);
+        });
+
+        function mostrarDropdown(terceros) {
+            autocompleteItems = terceros;
+            autocompleteIndex = -1;
+            if (terceros.length === 0) {
+                ocultarDropdown();
+                return;
+            }
+            dropdown.innerHTML = terceros.map((t, idx) => `
+                <div class="autocomplete-item" data-index="${idx}">
+                    <strong>${t.nombre}</strong>
+                    ${t.telefono || t.direccion ? `<small>${t.telefono || ''} ${t.direccion || ''}</small>` : ''}
+                </div>
+            `).join('');
+            dropdown.style.display = 'block';
+            // Click en items
+            dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const idx = parseInt(this.dataset.index);
+                    seleccionarTerceroExistente(autocompleteItems[idx]);
+                });
+            });
+        }
+
+        function ocultarDropdown() {
+            dropdown.style.display = 'none';
+            dropdown.innerHTML = '';
+            autocompleteItems = [];
+            autocompleteIndex = -1;
+        }
+
+        // 🔻 NUEVO: abrir URL del competidor al seleccionar
+        async function seleccionarTerceroExistente(tercero) {
+            document.getElementById('tercero-id').value = tercero.id;
+            document.getElementById('tercero-nombre').value = tercero.nombre;
+            document.getElementById('tercero-telefono').value = tercero.telefono || '';
+            document.getElementById('tercero-direccion').value = tercero.direccion || '';
+            // NO ocultar dropdown para permitir continuar con siguiente tercero si no se encuentra el producto
+            // dropdown.style.display = 'none';
+
+            // Limpiar alerta de dominio al seleccionar nuevo tercero
+            dominioEsperadoTercero = null;
+            alertaDominio.style.display = 'none';
+            document.getElementById('url-cotizacion').value = '';
+
+            // 🔹 ABRIR PORTAL
+            if (tercero.url_busqueda_base) {
+                const urlBusqueda = tercero.url_busqueda_base.replace('{producto}', encodeURIComponent(MEDICAMENTO_ACTIVO.nombre));
+                const w = window.open(urlBusqueda, '_blank');
+                if (w) pestañasCompetencia.push(w);
+            }
+
+            // 🔹 ✅ REEMPLAZAR PORTAPAPELES CON EL NOMBRE DEL MEDICAMENTO + FABRICANTE
+            try {
+                const textoPortapapeles = MEDICAMENTO_ACTIVO.fabricante_nombre
+                    ? `${MEDICAMENTO_ACTIVO.nombre} ${MEDICAMENTO_ACTIVO.fabricante_nombre}`
+                    : MEDICAMENTO_ACTIVO.nombre;
+                await navigator.clipboard.writeText(textoPortapapeles);
+            } catch (err) {
+                console.log('No se pudo actualizar el portapapeles:', err);
+            }
+
+            // 🔹 ESCUCHAR REGRESO PARA PEGAR URL
+            const pegarURLAlVolver = async () => {
+                try {
+                    const texto = await navigator.clipboard.readText();
+                    const urlLimpia = texto.trim();
+                    if (urlLimpia && (urlLimpia.startsWith('http://') || urlLimpia.startsWith('https://'))) {
+                        document.getElementById('url-cotizacion').value = urlLimpia;
+                    }
+                } catch (err) {
+                    console.log('No se pudo leer la URL al regresar:', err);
+                }
+                setTimeout(() => {
+                    document.getElementById('precio-cotizacion').focus();
+                }, 100);
+                window.removeEventListener('focus', pegarURLAlVolver);
+            };
+
+            window.addEventListener('focus', pegarURLAlVolver, { once: true });
+        }
+
+        async function crearNuevoTercero(nombre) {
+            const res = await fetch('/admin/terceros/buscar-o-crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nombre})
+            });
+            const data = await res.json();
+            if (data.id) {
+                document.getElementById('tercero-id').value = data.id;
+                // Ocultar dropdown
+                dropdown.style.display = 'none';
+                document.getElementById('tercero-telefono').focus();
+            }
+        }
+
+        // Navegación con teclado en input tercero
+        inputTercero.addEventListener('keydown', function(e) {
+            const dropdownVisible = dropdown.style.display === 'block';
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (dropdownVisible && autocompleteItems.length > 0) {
+                    autocompleteIndex = 0;
+                    actualizarSeleccionDropdown();
+                }
+            } else if (e.key === 'Escape') {
+                // NO ocultar dropdown, solo limpiar input
+                this.value = '';
+                cargarUltimosTerceros();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (autocompleteIndex >= 0 && autocompleteItems[autocompleteIndex]) {
+                    // Seleccionar de la lista
+                    seleccionarTerceroExistente(autocompleteItems[autocompleteIndex]);
+                } else {
+                    // Crear nuevo tercero
+                    const nombre = this.value.trim();
+                    if (nombre) {
+                        crearNuevoTercero(nombre);
+                        cargarUltimosTerceros();
+                    }
+                }
+            }
+        });
+
+        // Navegación con teclado en dropdown
+        dropdown.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (autocompleteIndex < autocompleteItems.length - 1) {
+                    autocompleteIndex++;
+                    actualizarSeleccionDropdown();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (autocompleteIndex > 0) {
+                    autocompleteIndex--;
+                    actualizarSeleccionDropdown();
+                } else {
+                    inputTercero.focus();
+                    autocompleteIndex = -1;
+                    actualizarSeleccionDropdown();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (autocompleteIndex >= 0) {
+                    seleccionarTerceroExistente(autocompleteItems[autocompleteIndex]);
+                }
+            } else if (e.key === 'Escape') {
+                // Volver foco al input y recargar lista
+                inputTercero.focus();
+                inputTercero.value = '';
+                cargarUltimosTerceros();
+            }
+        });
+
+        function actualizarSeleccionDropdown() {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            items.forEach((item, idx) => {
+                if (idx === autocompleteIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                    dropdown.setAttribute('tabindex', '-1');
+                    dropdown.focus();
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        // NO cerrar dropdown - mantenerlo siempre visible
+        // === Navegación con teclado en listado principal (FIX: no activar si dropdown visible o input activo) ===
+        document.addEventListener('keydown', function(e) {
+            // Debug: ver qué tecla se presiona
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                console.log('🔹 Tecla presionada:', e.key);
+                console.log('🔹 Elemento activo:', document.activeElement.tagName, document.activeElement.id);
+            }
+
+            // NO capturar flechas si:
+            // 1. Estamos escribiendo EN el input de terceros (dropdown activo para selección)
+            // 2. El modal de huérfanos está abierto
+            const modalHuerfano = document.getElementById('modal-huerfano');
+            const modalPoliticas = document.getElementById('modal-aplicar-politicas');
+            const inputTercero = document.getElementById('tercero-nombre');
+
+            // Solo bloquear flechas si dropdown visible Y estamos enfocados en el input o dropdown de terceros
+            if (dropdown.style.display === 'block' && (document.activeElement === inputTercero || document.activeElement === dropdown)) {
+                console.log('❌ Dropdown visible y navegando en terceros, ignorando flechas');
+                return;
+            }
+            if (modalHuerfano && modalHuerfano.style.display === 'flex') {
+                console.log('❌ Modal huérfano abierto, ignorando flechas');
+                return;
+            }
+            if (modalPoliticas && modalPoliticas.style.display === 'flex') {
+                console.log('❌ Modal políticas abierto, ignorando flechas');
+                return;
+            }
+
+            if (!MEDICAMENTOS_DATA.length) {
+                console.log('❌ No hay medicamentos, ignorando flechas');
+                return;
+            }
+
+            // Si presionan flecha arriba/abajo, quitar foco de inputs para navegar la tabla
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                console.log('✅ Procesando flecha para navegación');
+                // Si estamos en un input, quitarle el foco para navegar la tabla
+                if (document.activeElement.tagName === 'INPUT' ||
+                    document.activeElement.tagName === 'SELECT' ||
+                    document.activeElement.tagName === 'TEXTAREA') {
+                    console.log('🔸 Quitando foco del input:', document.activeElement.id);
+                    document.activeElement.blur();
+                }
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                // Si no hay selección, empezar en 0
+                if (indiceMedicamentoActual === -1) {
+                    indiceMedicamentoActual = 0;
+                } else {
+                    indiceMedicamentoActual = Math.min(indiceMedicamentoActual + 1, MEDICAMENTOS_DATA.length - 1);
+                }
+                const medicamento = MEDICAMENTOS_DATA[indiceMedicamentoActual];
+                if (medicamento) {
+                    console.log('Seleccionando medicamento:', medicamento.nombre, 'Índice:', indiceMedicamentoActual);
+                    seleccionarMedicamento(medicamento);
+                    resaltarFilaActiva();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                // Si no hay selección, empezar en el último
+                if (indiceMedicamentoActual === -1) {
+                    indiceMedicamentoActual = MEDICAMENTOS_DATA.length - 1;
+                } else {
+                    indiceMedicamentoActual = Math.max(indiceMedicamentoActual - 1, 0);
+                }
+                const medicamento = MEDICAMENTOS_DATA[indiceMedicamentoActual];
+                if (medicamento) {
+                    console.log('Seleccionando medicamento:', medicamento.nombre, 'Índice:', indiceMedicamentoActual);
+                    seleccionarMedicamento(medicamento);
+                    resaltarFilaActiva();
+                }
+            }
+        });
+
+        function resaltarFilaActiva() {
+            const filas = document.querySelectorAll('#tbody-medicamentos tr');
+            filas.forEach((fila, idx) => {
+                if (idx === indiceMedicamentoActual) {
+                    fila.style.backgroundColor = '#d0e8ff';
+                    fila.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    fila.style.backgroundColor = '';
+                }
+            });
+        }
+
+        // === Eventos de blur ===
+        document.getElementById('tercero-telefono').addEventListener('blur', guardarTerceroCampo);
+        document.getElementById('tercero-direccion').addEventListener('blur', guardarTerceroCampo);
+        document.getElementById('precio-cotizacion').addEventListener('blur', guardarPrecioCompetencia);
+        document.getElementById('precio-cotizacion').addEventListener('keypress', async function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+
+                // MODO TURBO: Si no hay URL y no hay precio, usuario confirma que tercero no tiene producto
+                if (modoTurboActivo) {
+                    const urlInput = document.getElementById('url-cotizacion');
+                    const precioInput = document.getElementById('precio-cotizacion');
+                    const precio = parseFloat(precioInput.value);
+
+                    if ((!urlInput.value || urlInput.value.trim() === '') && (!precio || precio <= 0)) {
+                        // Tercero no tiene el producto, avanzar al siguiente
+                        console.log('✅ Enter sin URL/precio - Avanzando al siguiente tercero...');
+                        indiceTerceroActual++;
+
+                        // Verificar si hay más terceros
+                        if (indiceTerceroActual >= tercerosRanking.length) {
+                            alert('⚠️ Se agotaron los terceros del ranking.\n\nPasando al siguiente producto...');
+                            indiceTurboActual++;
+                            procesarSiguienteProductoTurbo();
+                            return;
+                        }
+
+                        // Abrir siguiente tercero
+                        await abrirURLTerceroActual();
+                        return;
+                    }
+                }
+
+                // Proceso normal: guardar precio
+                guardarPrecioCompetencia(e);
+            }
+        });
+
+        async function guardarTerceroCampo(e) {
+            const campo = e.target.id.replace('tercero-', '');
+            const valor = e.target.value;
+            const terceroId = document.getElementById('tercero-id')?.value;
+            if (!terceroId) return;
+            await fetch('/admin/terceros/guardar-campo', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tercero_id: terceroId, campo, valor})
+            });
+        }
+
+        async function guardarPrecioCompetencia(e) {
+            const precio = parseFloat(e.target.value);
+            const medId = document.getElementById('medicamento-activo').value;
+            const fabId = document.getElementById('fabricante-activo').value;
+            const terceroId = document.getElementById('tercero-id')?.value;
+            const cotizacionId = document.getElementById('cotizacion-id-editando')?.value;
+            const url = document.getElementById('url-cotizacion')?.value.trim() || null;
+            if (!medId || !fabId || !terceroId || precio <= 0) return;
+            let res;
+            if (modoEdicion && cotizacionId) {
+                // EDITAR cotización existente
+                const payload = {id: cotizacionId, precio};
+                if (url) payload.url = url;
+                res = await fetch('/admin/precio-competencia/editar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                // AGREGAR nueva cotización
+                const payload = {
+                    medicamento_id: medId,
+                    fabricante_id: fabId,
+                    competidor_id: terceroId,
+                    precio
+                };
+                if (url) payload.url = url;
+                res = await fetch('/admin/precios_competencia/guardar-dinamico', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+            }
+            const ok = await res.json();
+            if (ok.ok) {
+                // El backend ya calculó y guardó el precio según políticas
+                const precioCalculado = ok.precio_calculado;
+
+                // Recargar competencia y recalcular
+                await fetchCompetencia(medId, fabId);
+                // Actualizar el listado principal
+                await actualizarListadoPrincipal(medId, fabId);
+
+                // Actualizar el precio sugerido en el input con el valor que calculó el backend
+                if (precioCalculado !== null && precioCalculado !== undefined) {
+                    document.getElementById('precio-sugerido-cotizacion').value = precioCalculado;
+
+                    // Actualizar precio_actual en memoria
+                    MEDICAMENTO_ACTIVO.precio_actual = precioCalculado;
+                    const medIndex = MEDICAMENTOS_DATA.findIndex(
+                        m => m.medicamento_id == medId && m.fabricante_id == fabId
+                    );
+                    if (medIndex >= 0) {
+                        MEDICAMENTOS_DATA[medIndex].precio_actual = precioCalculado;
+                        renderizarMedicamentos(MEDICAMENTOS_DATA);
+                        resaltarFilaActiva();
+                    }
+                }
+                // Cancelar modo edición y limpiar campos
+                cancelarEdicion();
+                inputTercero.focus();
+
+                // === MODO TURBO: Continuar flujo automático ===
+                if (modoTurboActivo) {
+                    // Actualizar conteo de cotizaciones del producto actual
+                    const productoActual = productosPendientesTurbo[indiceTurboActual];
+                    if (productoActual) {
+                        // Usar el conteo actualizado que viene del backend
+                        const cotizacionesActualizadas = ok.cotizaciones_total || 0;
+                        productoActual.cotizaciones_total = cotizacionesActualizadas;
+
+                        console.log(`📊 Producto tiene ${cotizacionesActualizadas} cotizaciones`);
+
+                        // Verificar si ya tiene 3 cotizaciones
+                        if (cotizacionesActualizadas >= 3) {
+                            // Producto completado, pasar al siguiente
+                            setTimeout(() => {
+                                alert('✓ Producto completado con 3 cotizaciones. Siguiente...');
+                                indiceTurboActual++;
+                                procesarSiguienteProductoTurbo();
+                            }, 500);
+                        } else {
+                            // Continuar con el siguiente tercero para el mismo producto
+                            setTimeout(() => {
+                                indiceTerceroActual++;
+                                abrirURLTerceroActual();
+                            }, 500);
+                        }
+                    }
+                }
+            }
+        }
+
+        // === Guardar precio sugerido ===
+        async function guardarPrecioSugerido(e) {
+            const precio = parseFloat(e.target.value);
+            const medId = document.getElementById('medicamento-activo').value;
+            const fabId = document.getElementById('fabricante-activo').value;
+            if (!medId || !fabId || precio <= 0) return;
+            const res = await fetch('/admin/precio-sugerido/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({medicamento_id: medId, fabricante_id: fabId, precio})
+            });
+            const data = await res.json();
+            if (data.ok) {
+                // Actualizar precio_actual en memoria
+                MEDICAMENTO_ACTIVO.precio_actual = precio;
+                // Recargar listado para reflejar cambio
+                const medIndex = MEDICAMENTOS_DATA.findIndex(
+                    m => m.medicamento_id == medId && m.fabricante_id == fabId
+                );
+                if (medIndex >= 0) {
+                    MEDICAMENTOS_DATA[medIndex].precio_actual = precio;
+                    renderizarMedicamentos(MEDICAMENTOS_DATA);
+                    resaltarFilaActiva();
+                }
+            }
+        }
+
+        document.getElementById('precio-sugerido-cotizacion').addEventListener('blur', guardarPrecioSugerido);
+        document.getElementById('precio-sugerido-cotizacion').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                guardarPrecioSugerido(e);
+            }
+        });
+
+        // === ELIMINAR MEDICAMENTO (AJAX) ===
+        // === ELIMINAR MEDICAMENTO CON LÓGICA INTELIGENTE ===
+        document.getElementById('btn-eliminar-medicamento').addEventListener('click', async function(e) {
+            e.stopPropagation();
+            if (!MEDICAMENTO_ACTIVO || !MEDICAMENTO_ACTIVO.medicamento_id) {
+                alert('Seleccione un medicamento primero.');
+                return;
+            }
+            const medId = MEDICAMENTO_ACTIVO.medicamento_id;
+            const fabId = MEDICAMENTO_ACTIVO.fabricante_id;
+            const nombreMed = MEDICAMENTO_ACTIVO.nombre;
+            const nombreFab = MEDICAMENTO_ACTIVO.fabricante_nombre;
+            // ✅ Primer intento: eliminar sin especificar fabricante
+            const confirmar = confirm(`¿Eliminar ${nombreMed}? Esta acción no se puede deshacer.`);
+            if (!confirmar) return;
+            const contenedor = document.querySelector('.tabla-container');
+            const savedScroll = contenedor ? contenedor.scrollTop : 0;
+            try {
+                // Primer request sin fabricante_id
+                const res = await fetch(`/medicamentos/eliminar/${medId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                // ✅ CASO 1: Eliminación exitosa
+                if (data && data.ok) {
+                    // Actualizar datos en memoria y UI
+                    const idx = MEDICAMENTOS_DATA.findIndex(m => 
+                        m.medicamento_id == medId && 
+                        (data.tipo === 'completo' || m.fabricante_id == fabId)
+                    );
+                    if (idx >= 0) MEDICAMENTOS_DATA.splice(idx, 1);
+                    if (indiceMedicamentoActual >= MEDICAMENTOS_DATA.length) {
+                        indiceMedicamentoActual = Math.max(0, MEDICAMENTOS_DATA.length - 1);
+                    }
+                    renderizarMedicamentos(MEDICAMENTOS_DATA);
+                    if (contenedor) contenedor.scrollTop = savedScroll;
+                    resaltarFilaActiva();
+                    // Ocultar panel si ya no hay elementos
+                    if (!MEDICAMENTOS_DATA.length) {
+                        document.getElementById('panel-medicamento').style.display = 'none';
+                    }
+                    alert(data.mensaje);
+                    return;
+                }
+                // ✅ CASO 2: Requiere especificar fabricante (múltiples fabricantes)
+                if (data && data.requiere_fabricante) {
+                    const opcion = confirm(
+                        `${data.error}
+` +
+                        `¿Qué deseas eliminar?
+` +
+                        `OK = Solo este precio (${nombreMed} - ${nombreFab})
+` +
+                        `Cancelar = Eliminar medicamento completo (todos los fabricantes)`
+                    );
+                    if (opcion) {
+                        // Usuario eligió eliminar solo este fabricante
+                        await eliminarSoloFabricante(medId, fabId, nombreMed, nombreFab, contenedor, savedScroll);
+                    } else {
+                        // Usuario eligió eliminar medicamento completo
+                        await eliminarMedicamentoCompleto(medId, nombreMed, contenedor, savedScroll);
+                    }
+                    return;
+                }
+                // ✅ CASO 3: Error (existencias, etc.)
+                if (data && data.error) {
+                    alert(data.error);
+                    return;
+                }
+                // Error genérico
+                alert('Error al eliminar el medicamento.');
+            } catch (err) {
+                console.error('Error al eliminar medicamento:', err);
+                alert('Error de conexión al eliminar el medicamento.');
+            }
+        });
+
+        // === Función para eliminar solo un fabricante específico ===
+        async function eliminarSoloFabricante(medId, fabId, nombreMed, nombreFab, contenedor, savedScroll) {
+            try {
+                const res = await fetch(`/medicamentos/eliminar/${medId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ fabricante_id: fabId })
+                });
+                const data = await res.json();
+                if (data && data.ok) {
+                    // Eliminar solo este registro de la lista
+                    const idx = MEDICAMENTOS_DATA.findIndex(m => 
+                        m.medicamento_id == medId && m.fabricante_id == fabId
+                    );
+                    if (idx >= 0) MEDICAMENTOS_DATA.splice(idx, 1);
+                    if (indiceMedicamentoActual >= MEDICAMENTOS_DATA.length) {
+                        indiceMedicamentoActual = Math.max(0, MEDICAMENTOS_DATA.length - 1);
+                    }
+                    renderizarMedicamentos(MEDICAMENTOS_DATA);
+                    if (contenedor) contenedor.scrollTop = savedScroll;
+                    resaltarFilaActiva();
+                    if (!MEDICAMENTOS_DATA.length) {
+                        document.getElementById('panel-medicamento').style.display = 'none';
+                    }
+                    alert(`Eliminado: ${nombreMed} - ${nombreFab}`);
+                } else {
+                    alert(data && data.error ? data.error : 'Error al eliminar.');
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Error de conexión.');
+            }
+        }
+
+        // === Función para eliminar medicamento completo (forzado) ===
+        async function eliminarMedicamentoCompleto(medId, nombreMed, contenedor, savedScroll) {
+            const confirmarCompleto = confirm(
+                `⚠️ ADVERTENCIA ⚠️
+` +
+                `Esto eliminará "${nombreMed}" con TODOS sus fabricantes y relaciones.
+` +
+                `¿Estás seguro?`
+            );
+            if (!confirmarCompleto) return;
+            try {
+                const res = await fetch(`/medicamentos/eliminar/${medId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ forzar_completo: true })
+                });
+                const data = await res.json();
+                if (data && data.ok) {
+                    // Eliminar TODOS los registros de este medicamento
+                    MEDICAMENTOS_DATA = MEDICAMENTOS_DATA.filter(m => m.medicamento_id != medId);
+                    if (indiceMedicamentoActual >= MEDICAMENTOS_DATA.length) {
+                        indiceMedicamentoActual = Math.max(0, MEDICAMENTOS_DATA.length - 1);
+                    }
+                    renderizarMedicamentos(MEDICAMENTOS_DATA);
+                    if (contenedor) contenedor.scrollTop = savedScroll;
+                    resaltarFilaActiva();
+                    if (!MEDICAMENTOS_DATA.length) {
+                        document.getElementById('panel-medicamento').style.display = 'none';
+                    }
+                    alert(data.mensaje);
+                } else {
+                    alert(data && data.error ? data.error : 'Error al eliminar.');
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Error de conexión.');
+            }
+        }
+
+        // === FIX: Select "usar precio" guarda inmediatamente al cambiar ===
+        document.getElementById('config-usar-precio').addEventListener('change', async function(e) {
+            await guardarCampoConfiguracion(e);
+        });
+        document.getElementById('config-recargo-1').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-recargo').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-redondeo').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-ganancia-min').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-ganancia-max').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-precio-domicilio').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-pedido-min-domicilio').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-brecha-2cot-baja').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-brecha-2cot-alta').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-costo-operario').addEventListener('blur', guardarCampoConfiguracion);
+
+        async function guardarCampoConfiguracion(e) {
+            const campo = e.target.dataset.campo;
+            const valor = e.target.value;
+            // Guardar en base de datos
+            const res = await fetch('/admin/configuracion-precios/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({campo, valor})
+            });
+            const data = await res.json();
+            // Actualizar CONFIG en memoria
+            if (campo === 'usar_precio') {
+                CONFIG.usar_precio = valor;
+            } else if (campo === 'recargo_1_cotizacion') {
+                CONFIG.recargo_1_cotizacion = parseFloat(valor);
+            } else if (campo === 'recargo_escaso') {
+                CONFIG.recargo_escaso = parseFloat(valor);
+            } else if (campo === 'redondeo_superior') {
+                CONFIG.redondeo_superior = parseFloat(valor);
+            } else if (campo === 'ganancia_min_escaso') {
+                CONFIG.ganancia_min_escaso = parseFloat(valor);
+            } else if (campo === 'ganancia_max_escaso') {
+                CONFIG.ganancia_max_escaso = parseFloat(valor);
+            } else if (campo === 'precio_domicilio') {
+                CONFIG.precio_domicilio = parseFloat(valor);
+            } else if (campo === 'pedido_min_domicilio_gratis') {
+                CONFIG.pedido_min_domicilio_gratis = parseFloat(valor);
+            } else if (campo === 'umbral_brecha_2cot_baja') {
+                CONFIG.umbral_brecha_2cot_baja = parseFloat(valor);
+            } else if (campo === 'umbral_brecha_2cot_alta') {
+                CONFIG.umbral_brecha_2cot_alta = parseFloat(valor);
+            } else if (campo === 'costo_operario_domicilio') {
+                CONFIG.costo_operario_domicilio = parseFloat(valor);
+            }
+            // Recalcular precio sugerido y escenarios
+            if (MEDICAMENTO_ACTIVO) {
+                const medId = document.getElementById('medicamento-activo').value;
+                const fabId = document.getElementById('fabricante-activo').value;
+                // Si solo cambió el costo operario o precio domicilio, solo recalcular escenarios
+                if (campo === 'costo_operario_domicilio' || campo === 'precio_domicilio') {
+                    fetchCompetencia(medId, fabId).then(competencias => {
+                        actualizarEscenariosCompetencia(competencias);
+                    });
+                } else {
+                    fetchCompetencia(medId, fabId);
+                }
+            }
+        }
+
+        // === Función para ordenar tabla ===
+        // Función auxiliar para normalizar texto
+        function normalizarTexto(texto) {
+            return texto
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, ''); // Eliminar acentos
+        }
+
+        function ordenarTabla(columna) {
+            const ascendente = ORDEN_ASCENDENTE[columna];
+            MEDICAMENTOS_DATA.sort((a, b) => {
+                let valorA, valorB;
+                switch(columna) {
+                    case 0: // Nombre
+                        valorA = normalizarTexto(a.nombre);
+                        valorB = normalizarTexto(b.nombre);
+                        break;
+                    case 1: // Fabricante
+                        valorA = normalizarTexto(a.fabricante_nombre);
+                        valorB = normalizarTexto(b.fabricante_nombre);
+                        break;
+                    case 2: // Precio
+                        valorA = parseFloat(a.precio_actual) || 0;
+                        valorB = parseFloat(b.precio_actual) || 0;
+                        break;
+                    case 3: // Existencia
+                        valorA = a.estado_existencia || '';
+                        valorB = b.estado_existencia || '';
+                        break;
+                    case 4: // Origen
+                        valorA = a.origen || '';
+                        valorB = b.origen || '';
+                        break;
+                    case 5: // Competidor (nombre)
+                        valorA = normalizarTexto(a.competencia_nombre || '');
+                        valorB = normalizarTexto(b.competencia_nombre || '');
+                        break;
+                    case 6: // Precio Competencia
+                        valorA = parseFloat(a.competencia_precio) || 0;
+                        valorB = parseFloat(b.competencia_precio) || 0;
+                        break;
+                    case 7: // Fecha Competencia
+                        valorA = a.competencia_fecha || '';
+                        valorB = b.competencia_fecha || '';
+                        break;
+                    case 8: // URLs (cotizaciones con URL)
+                        valorA = parseInt(a.cotizaciones_con_url) || 0;
+                        valorB = parseInt(b.cotizaciones_con_url) || 0;
+                        break;
+                }
+                if (valorA < valorB) return ascendente ? -1 : 1;
+                if (valorA > valorB) return ascendente ? 1 : -1;
+                return 0;
+            });
+            ORDEN_ASCENDENTE[columna] = !ascendente;
+            renderizarMedicamentos(MEDICAMENTOS_DATA);
+        }
+
+        // === MANEJO DE IMAGEN DEL PRODUCTO ===
+        const imagenProductoDiv = document.getElementById('imagen-producto-cotizacion');
+        // Cargar imagen desde la base de datos
+        function cargarImagenProducto(medId, fabId) {
+            console.log('Cargando imagen para medicamento:', medId, 'fabricante:', fabId);
+            fetch(`/admin/imagen-producto/obtener?medicamento_id=${medId}&fabricante_id=${fabId}`)
+                .then(r => r.json())
+                .then(data => {
+                    console.log('Respuesta del servidor:', data);
+                    if (data.imagen_url) {
+                        console.log('Mostrando imagen:', data.imagen_url.substring(0, 50));
+                        mostrarImagen(data.imagen_url);
+                    } else {
+                        console.log('No hay imagen, mostrando placeholder');
+                        mostrarPlaceholder();
+                    }
+                })
+                .catch(err => {
+                    console.log('Error al cargar imagen:', err);
+                    mostrarPlaceholder();
+                });
+        }
+        // Mostrar imagen
+        function mostrarImagen(url) {
+            imagenProductoDiv.innerHTML = `<img src="${url}" alt="Producto">`;
+        }
+        // Mostrar placeholder
+        function mostrarPlaceholder() {
+            imagenProductoDiv.innerHTML = '<div class="imagen-producto-placeholder">📷</div>';
+        }
+        // Click en imagen para pegar desde portapapeles
+        imagenProductoDiv.addEventListener('click', async function() {
+            try {
+                const clipboardItems = await navigator.clipboard.read();
+                for (const item of clipboardItems) {
+                    // Buscar imagen en el portapapeles
+                    const imageType = item.types.find(type => type.startsWith('image/'));
+                    if (imageType) {
+                        const blob = await item.getType(imageType);
+                        const reader = new FileReader();
+                        reader.onload = async function(e) {
+                            const base64 = e.target.result;
+                            // Mostrar imagen inmediatamente
+                            mostrarImagen(base64);
+                            // Guardar en base de datos
+                            const medId = document.getElementById('medicamento-activo').value;
+                            const fabId = document.getElementById('fabricante-activo').value;
+                            if (medId && fabId) {
+                                const res = await fetch('/admin/imagen-producto/guardar', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({
+                                        medicamento_id: medId,
+                                        fabricante_id: fabId,
+                                        imagen_base64: base64
+                                    })
+                                });
+                                const data = await res.json();
+                                if (!data.ok) {
+                                    alert('Error al guardar la imagen');
+                                    mostrarPlaceholder();
+                                }
+                            }
+                        };
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
+                }
+            } catch (err) {
+                console.error('Error al pegar imagen:', err);
+                alert('No se pudo pegar la imagen. Asegúrate de tener una imagen copiada en el portapapeles.');
+            }
+        });
+
+        // ===  FUNCIONES PARA GESTIONAR HUÉRFANOS ===
+        let huerfanoAutocompleteIndex = -1;
+        let huerfanoAutocompleteItems = [];
+        let fabricanteAutocompleteIndex = -1;
+        let fabricanteAutocompleteItems = [];
+        function abrirModalHuerfano(med) {
+            const modal = document.getElementById('modal-huerfano');
+            modal.style.display = 'flex';
+            document.getElementById('huerfano-nombre-original').value = med.nombre;
+            document.getElementById('huerfano-nombre').value = med.nombre;
+            document.getElementById('huerfano-fabricante').value = '';
+            document.getElementById('huerfano-fabricante-id').value = '';
+            document.getElementById('medicamento-fusionar-id').value = '';
+            document.getElementById('btn-fusionar').style.display = 'none';
+            document.getElementById('btn-crear-huerfano').style.display = 'inline-block';
+            setTimeout(() => {
+                document.getElementById('huerfano-nombre').focus();
+            }, 100);
+        }
+        function cerrarModalHuerfano() {
+            const modal = document.getElementById('modal-huerfano');
+            modal.style.display = 'none';
+            ocultarDropdownHuerfano();
+            ocultarDropdownFabricante();
+            // Resetear campos
+            document.getElementById('huerfano-nombre').removeAttribute('readonly');
+            document.getElementById('huerfano-nombre').value = '';
+            document.getElementById('huerfano-fabricante').value = '';
+            document.getElementById('huerfano-fabricante').setAttribute('disabled', true);
+            document.getElementById('label-exito').style.display = 'none';
+            document.getElementById('medicamento-creado-id').value = '';
+            document.getElementById('btn-fusionar').style.display = 'none';
+            document.getElementById('btn-crear-huerfano').style.display = 'inline-block';
+        }
+        document.getElementById('btn-cerrar-modal').addEventListener('click', cerrarModalHuerfano);
+        // Botón buscar en Google - abrir en nueva pestaña normal
+        document.getElementById('btn-buscar-google').addEventListener('click', function() {
+            const nombre = document.getElementById('huerfano-nombre').value.trim();
+            if (nombre) {
+                const query = `en colombia quien fabrica ${nombre}`;
+                const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+                window.open(url, '_blank');
+            }
+        });
+        // Botón autocompletar con Google Search API
+        document.getElementById('btn-autocompletar').addEventListener('click', async function() {
+            const nombre = document.getElementById('huerfano-nombre').value.trim();
+            if (!nombre) {
+                alert('Ingresa el nombre del medicamento primero');
+                return;
+            }
+
+            // Mostrar indicador de carga
+            this.disabled = true;
+            this.textContent = '⏳ Buscando...';
+
+            try {
+                const res = await fetch('/admin/huerfano/autocompletar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({nombre})
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    // Autocompletar nombre
+                    if (data.nombre_completo) {
+                        document.getElementById('huerfano-nombre').value = data.nombre_completo;
+                    }
+
+                    // Autocompletar fabricante si se encontró
+                    if (data.fabricante) {
+                        document.getElementById('huerfano-fabricante').value = data.fabricante;
+                        // Buscar ID del fabricante
+                        const fabRes = await fetch(`/admin/fabricantes/buscar?q=${encodeURIComponent(data.fabricante)}`);
+                        const fabData = await fabRes.json();
+                        if (fabData.fabricantes && fabData.fabricantes.length > 0) {
+                            const fabEncontrado = fabData.fabricantes.find(f =>
+                                f.nombre.toLowerCase() === data.fabricante.toLowerCase()
+                            );
+                            if (fabEncontrado) {
+                                document.getElementById('huerfano-fabricante-id').value = fabEncontrado.id;
+                            }
+                        }
+                    }
+
+                    // Mostrar mensaje
+                    if (data.confianza === 'alta') {
+                        alert(`✓ Información encontrada:\n\nNombre: ${data.nombre_completo}\nFabricante: ${data.fabricante || 'No encontrado'}\n\nRevisa y ajusta si es necesario.`);
+                    } else {
+                        alert(`⚠ Información parcial:\n\nNombre: ${data.nombre_completo}\nFabricante: ${data.fabricante || 'No encontrado'}\n\nPor favor verifica y completa manualmente.`);
+                    }
+                } else {
+                    alert(data.error || 'Error al buscar información');
+                }
+            } catch (err) {
+                alert('Error de conexión: ' + err.message);
+            } finally {
+                // Restaurar botón
+                this.disabled = false;
+                this.textContent = '✨ Autocompletar';
+            }
+        });
+        // Autocomplete para nombre (buscar medicamentos para fusionar)
+        const inputHuerfanoNombre = document.getElementById('huerfano-nombre');
+        const dropdownHuerfano = document.getElementById('huerfano-autocomplete');
+        let timeoutHuerfano;
+        // Navegación con teclado en input nombre
+        inputHuerfanoNombre.addEventListener('keydown', function(e) {
+            const dropdownVisible = dropdownHuerfano.style.display === 'block';
+            if (e.key === 'ArrowDown' && dropdownVisible && huerfanoAutocompleteItems.length > 0) {
+                e.preventDefault();
+                huerfanoAutocompleteIndex = 0;
+                actualizarSeleccionDropdownHuerfano();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (huerfanoAutocompleteIndex >= 0 && huerfanoAutocompleteItems[huerfanoAutocompleteIndex]) {
+                    // Seleccionar medicamento de la lista para fusionar
+                    seleccionarMedicamentoFusionar(huerfanoAutocompleteItems[huerfanoAutocompleteIndex]);
+                } else {
+                    // Crear medicamento nuevo
+                    crearMedicamentoSolo();
+                }
+            }
+        });
+        inputHuerfanoNombre.addEventListener('input', function() {
+            const query = this.value.trim();
+            clearTimeout(timeoutHuerfano);
+            if (query.length < 2) {
+                ocultarDropdownHuerfano();
+                return;
+            }
+            timeoutHuerfano = setTimeout(() => {
+                // Buscar en MEDICAMENTOS_DATA (excluir huérfanos)
+                const medicamentosNormales = MEDICAMENTOS_DATA.filter(m => m.origen !== 'PASTILLERO');
+                const coincidencias = medicamentosNormales.filter(m =>
+                    m.nombre.toLowerCase().includes(query.toLowerCase())
+                );
+                mostrarDropdownHuerfano(coincidencias);
+            }, 300);
+        });
+        function mostrarDropdownHuerfano(medicamentos) {
+            huerfanoAutocompleteItems = medicamentos;
+            huerfanoAutocompleteIndex = -1;
+            if (medicamentos.length === 0) {
+                ocultarDropdownHuerfano();
+                return;
+            }
+            dropdownHuerfano.innerHTML = medicamentos.map((m, idx) => `
+                <div class="autocomplete-item" data-index="${idx}">
+                    <strong>${m.nombre}</strong>
+                    <small>${m.fabricante_nombre || 'Sin fabricante'}</small>
+                </div>
+            `).join('');
+            dropdownHuerfano.style.display = 'block';
+            dropdownHuerfano.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const idx = parseInt(this.dataset.index);
+                    seleccionarMedicamentoFusionar(huerfanoAutocompleteItems[idx]);
+                });
+            });
+        }
+        function ocultarDropdownHuerfano() {
+            dropdownHuerfano.style.display = 'none';
+            dropdownHuerfano.innerHTML = '';
+            huerfanoAutocompleteItems = [];
+            huerfanoAutocompleteIndex = -1;
+        }
+        // Navegación con teclado en dropdown huérfano
+        dropdownHuerfano.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (huerfanoAutocompleteIndex < huerfanoAutocompleteItems.length - 1) {
+                    huerfanoAutocompleteIndex++;
+                    actualizarSeleccionDropdownHuerfano();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (huerfanoAutocompleteIndex > 0) {
+                    huerfanoAutocompleteIndex--;
+                    actualizarSeleccionDropdownHuerfano();
+                } else {
+                    inputHuerfanoNombre.focus();
+                    huerfanoAutocompleteIndex = -1;
+                    actualizarSeleccionDropdownHuerfano();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (huerfanoAutocompleteIndex >= 0) {
+                    seleccionarMedicamentoFusionar(huerfanoAutocompleteItems[huerfanoAutocompleteIndex]);
+                }
+            }
+        });
+        function actualizarSeleccionDropdownHuerfano() {
+            const items = dropdownHuerfano.querySelectorAll('.autocomplete-item');
+            items.forEach((item, idx) => {
+                if (idx === huerfanoAutocompleteIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                    dropdownHuerfano.setAttribute('tabindex', '-1');
+                    dropdownHuerfano.focus();
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+        function seleccionarMedicamentoFusionar(med) {
+            document.getElementById('huerfano-nombre').value = med.nombre;
+            document.getElementById('medicamento-fusionar-id').value = med.medicamento_id;
+            document.getElementById('btn-fusionar').style.display = 'inline-block';
+            document.getElementById('btn-crear-huerfano').style.display = 'none';
+            ocultarDropdownHuerfano();
+        }
+        // Autocomplete para fabricantes
+        const inputHuerfanoFabricante = document.getElementById('huerfano-fabricante');
+        const dropdownFabricante = document.getElementById('fabricante-autocomplete');
+        let timeoutFabricante;
+        // Navegación con teclado en input fabricante
+        inputHuerfanoFabricante.addEventListener('keydown', function(e) {
+            const dropdownVisible = dropdownFabricante.style.display === 'block';
+            if (e.key === 'ArrowDown' && dropdownVisible && fabricanteAutocompleteItems.length > 0) {
+                e.preventDefault();
+                fabricanteAutocompleteIndex = 0;
+                actualizarSeleccionDropdownFabricante();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (fabricanteAutocompleteIndex >= 0 && fabricanteAutocompleteItems[fabricanteAutocompleteIndex]) {
+                    // Seleccionar fabricante de la lista
+                    seleccionarFabricante(fabricanteAutocompleteItems[fabricanteAutocompleteIndex]);
+                } else {
+                    // Crear fabricante nuevo
+                    const nombre = this.value.trim();
+                    if (nombre) {
+                        crearYFinalizarFabricante(nombre);
+                    }
+                }
+            }
+        });
+        inputHuerfanoFabricante.addEventListener('input', function() {
+            const query = this.value.trim();
+            clearTimeout(timeoutFabricante);
+            if (query.length < 2) {
+                ocultarDropdownFabricante();
+                return;
+            }
+            timeoutFabricante = setTimeout(() => {
+                fetch(`/admin/fabricantes/buscar?q=${encodeURIComponent(query)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        mostrarDropdownFabricante(data.fabricantes || []);
+                    });
+            }, 300);
+        });
+        function mostrarDropdownFabricante(fabricantes) {
+            fabricanteAutocompleteItems = fabricantes;
+            fabricanteAutocompleteIndex = -1;
+            if (fabricantes.length === 0) {
+                ocultarDropdownFabricante();
+                return;
+            }
+            dropdownFabricante.innerHTML = fabricantes.map((f, idx) => `
+                <div class="autocomplete-item" data-index="${idx}">
+                    <strong>${f.nombre}</strong>
+                </div>
+            `).join('');
+            dropdownFabricante.style.display = 'block';
+            dropdownFabricante.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const idx = parseInt(this.dataset.index);
+                    seleccionarFabricante(fabricanteAutocompleteItems[idx]);
+                });
+            });
+        }
+        function ocultarDropdownFabricante() {
+            dropdownFabricante.style.display = 'none';
+            dropdownFabricante.innerHTML = '';
+            fabricanteAutocompleteItems = [];
+            fabricanteAutocompleteIndex = -1;
+        }
+        // Navegación con teclado en dropdown fabricante
+        dropdownFabricante.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (fabricanteAutocompleteIndex < fabricanteAutocompleteItems.length - 1) {
+                    fabricanteAutocompleteIndex++;
+                    actualizarSeleccionDropdownFabricante();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (fabricanteAutocompleteIndex > 0) {
+                    fabricanteAutocompleteIndex--;
+                    actualizarSeleccionDropdownFabricante();
+                } else {
+                    inputHuerfanoFabricante.focus();
+                    fabricanteAutocompleteIndex = -1;
+                    actualizarSeleccionDropdownFabricante();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (fabricanteAutocompleteIndex >= 0) {
+                    seleccionarFabricante(fabricanteAutocompleteItems[fabricanteAutocompleteIndex]);
+                }
+            }
+        });
+        function actualizarSeleccionDropdownFabricante() {
+            const items = dropdownFabricante.querySelectorAll('.autocomplete-item');
+            items.forEach((item, idx) => {
+                if (idx === fabricanteAutocompleteIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                    dropdownFabricante.setAttribute('tabindex', '-1');
+                    dropdownFabricante.focus();
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+        // Función auxiliar para crear fabricante y finalizar
+        async function crearYFinalizarFabricante(nombre) {
+            const res = await fetch('/admin/fabricantes/crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nombre})
+            });
+            const data = await res.json();
+            if (data.id) {
+                document.getElementById('huerfano-fabricante-id').value = data.id;
+                ocultarDropdownFabricante();
+                await finalizarConFabricante(data.id);
+            }
+        }
+        // Función para crear medicamento solo (sin fabricante)
+        async function crearMedicamentoSolo() {
+            const nombreOriginal = document.getElementById('huerfano-nombre-original').value;
+            const nombreNuevo = document.getElementById('huerfano-nombre').value.trim();
+            if (!nombreNuevo) {
+                alert('Ingresa el nombre del medicamento');
+                return;
+            }
+            const res = await fetch('/admin/huerfano/crear-solo-medicamento', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre_huerfano: nombreOriginal,
+                    nombre_nuevo: nombreNuevo
+                })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                // Guardar ID del medicamento creado
+                document.getElementById('medicamento-creado-id').value = data.medicamento_id;
+                // Deshabilitar nombre y mostrar éxito
+                document.getElementById('huerfano-nombre').setAttribute('readonly', true);
+                document.getElementById('label-exito').style.display = 'inline';
+                // Ocultar autocomplete
+                ocultarDropdownHuerfano();
+                // Habilitar fabricante y dar foco
+                document.getElementById('huerfano-fabricante').removeAttribute('disabled');
+                document.getElementById('huerfano-fabricante').focus();
+                // Ocultar botones de fusionar/crear
+                document.getElementById('btn-fusionar').style.display = 'none';
+                document.getElementById('btn-crear-huerfano').style.display = 'none';
+            } else {
+                alert(data.error || 'Error al crear medicamento');
+            }
+        }
+        // Función para finalizar con fabricante
+        async function finalizarConFabricante(fabricanteId) {
+            const medicamentoId = document.getElementById('medicamento-creado-id').value;
+            const nombreOriginal = document.getElementById('huerfano-nombre-original').value;
+            if (!medicamentoId) {
+                alert('Error: No se encontró el medicamento creado');
+                return;
+            }
+            const res = await fetch('/admin/huerfano/finalizar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    medicamento_id: medicamentoId,
+                    fabricante_id: fabricanteId,
+                    nombre_huerfano: nombreOriginal
+                })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                cerrarModalHuerfano();
+                // Recargar datos y seleccionar el medicamento recién creado
+                const reloadRes = await fetch('/admin/precios-dinamicos/data');
+                const reloadData = await reloadRes.json();
+                MEDICAMENTOS_DATA = reloadData.medicamentos;
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                // Buscar y seleccionar el medicamento recién creado
+                const nuevoMed = MEDICAMENTOS_DATA.find(m =>
+                    m.medicamento_id == medicamentoId &&
+                    m.fabricante_id == fabricanteId
+                );
+                if (nuevoMed) {
+                    const nuevoIndex = MEDICAMENTOS_DATA.indexOf(nuevoMed);
+                    indiceMedicamentoActual = nuevoIndex;
+                    seleccionarMedicamento(nuevoMed);
+                    resaltarFilaActiva();
+                }
+            } else {
+                alert(data.error || 'Error al finalizar');
+            }
+        }
+        // Función para editar medicamento existente (modo EDITAR)
+        function seleccionarFabricante(fab) {
+            document.getElementById('huerfano-fabricante').value = fab.nombre;
+            document.getElementById('huerfano-fabricante-id').value = fab.id;
+            ocultarDropdownFabricante();
+            const medicamentoCreado = document.getElementById('medicamento-creado-id').value;
+            if (medicamentoCreado) {
+                finalizarConFabricante(fab.id);
+            }
+        }
+        // Botón fusionar
+        document.getElementById('btn-fusionar').addEventListener('click', async function() {
+            const nombreOriginal = document.getElementById('huerfano-nombre-original').value;
+            const medicamentoId = document.getElementById('medicamento-fusionar-id').value;
+            if (!medicamentoId) {
+                alert('Selecciona un medicamento para fusionar');
+                return;
+            }
+            const confirmar = confirm(`¿Fusionar "${nombreOriginal}" con el medicamento seleccionado?`);
+            if (!confirmar) return;
+            const res = await fetch('/admin/huerfano/fusionar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre_huerfano: nombreOriginal,
+                    medicamento_id: medicamentoId
+                })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('Medicamento fusionado correctamente');
+                cerrarModalHuerfano();
+                // Recargar datos
+                location.reload();
+            } else {
+                alert(data.error || 'Error al fusionar');
+            }
+        });
+        // Botón crear nuevo medicamento
+        document.getElementById('btn-crear-huerfano').addEventListener('click', async function() {
+            const nombreOriginal = document.getElementById('huerfano-nombre-original').value;
+            const nombreNuevo = document.getElementById('huerfano-nombre').value.trim();
+            const fabricanteId = document.getElementById('huerfano-fabricante-id').value;
+            const fabricanteNombre = document.getElementById('huerfano-fabricante').value.trim();
+            if (!nombreNuevo) {
+                alert('Ingresa el nombre del medicamento');
+                return;
+            }
+            if (!fabricanteId && !fabricanteNombre) {
+                alert('Debes seleccionar o crear un fabricante');
+                return;
+            }
+            const confirmar = confirm(`¿Crear medicamento "${nombreNuevo}" con fabricante "${fabricanteNombre}"?`);
+            if (!confirmar) return;
+            const res = await fetch('/admin/huerfano/crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre_huerfano: nombreOriginal,
+                    nombre_nuevo: nombreNuevo,
+                    fabricante_id: fabricanteId,
+                    fabricante_nombre: fabricanteNombre
+                })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('Medicamento creado correctamente');
+                cerrarModalHuerfano();
+                // Recargar datos y seleccionar el medicamento recién creado
+                const reloadRes = await fetch('/admin/precios-dinamicos/data');
+                const reloadData = await reloadRes.json();
+                MEDICAMENTOS_DATA = reloadData.medicamentos;
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                // Buscar y seleccionar el medicamento recién creado
+                const nuevoMed = MEDICAMENTOS_DATA.find(m =>
+                    m.medicamento_id == data.medicamento_id &&
+                    m.fabricante_id == data.fabricante_id
+                );
+                if (nuevoMed) {
+                    const nuevoIndex = MEDICAMENTOS_DATA.indexOf(nuevoMed);
+                    indiceMedicamentoActual = nuevoIndex;
+                    seleccionarMedicamento(nuevoMed);
+                    resaltarFilaActiva();
+                }
+            } else {
+                alert(data.error || 'Error al crear medicamento');
+            }
+        });
+    </script>
+<!-- DASHBOARD TOTAL MEJORADO -->
+<div id="modal-dashboard" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index: 1001;">
+ <div class="modal-content" style="background:#fff; padding:20px; width:95%; height:95%; overflow:auto; border-radius:10px; position:relative;">
+   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+     <h2 style="color: #2196F3; margin: 0;">📊 Dashboard de Análisis de Precios</h2>
+     <button onclick="cerrarDashboard()" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: all 0.3s;" onmouseover="this.style.background='#d32f2f'" onmouseout="this.style.background='#f44336'">✕ Cerrar</button>
+   </div>
+
+   <!-- Filtros -->
+   <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+      <h3 style="margin-top: 0; color: #555;">Filtros</h3>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <input id="f-min" type="number" placeholder="Precio mín" style="padding: 8px; width: 120px;">
+        <input id="f-max" type="number" placeholder="Precio máx" style="padding: 8px; width: 120px;">
+        <select id="f-fab" style="padding: 8px; width: 150px;"></select>
+        <select id="f-origen" style="padding: 8px; width: 130px;">
+          <option value="">Todos los orígenes</option>
+          <option value="NORMAL">NORMAL</option>
+          <option value="PASTILLERO">PASTILLERO</option>
+          <option value="IMPORTADO">IMPORTADO</option>
+        </select>
+        <select id="f-ex" style="padding: 8px; width: 130px;"></select>
+        <input id="f-buscar" placeholder="Buscar por nombre" style="padding: 8px; flex: 1; min-width: 200px;">
+        <select id="f-competencia" style="padding: 8px; width: 180px;">
+          <option value="">Con/sin competencia</option>
+          <option value="si">Con competencia</option>
+          <option value="no">Sin competencia</option>
+        </select>
+        <select id="f-competidor" style="padding: 8px; width: 150px;">
+          <option value="">Todos los terceros</option>
+        </select>
+        <select id="f-margen" style="padding: 8px; width: 180px;">
+          <option value="">Todos los márgenes</option>
+          <option value="menor">Mi precio es menor</option>
+          <option value="mayor">Mi precio es mayor</option>
+          <option value="igual">Precios similares</option>
+        </select>
+      </div>
+   </div>
+
+   <!-- Estadísticas principales -->
+   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">
+      <div id="stats-general" style="background: #e3f2fd; padding: 15px; border-radius: 5px; border-left: 4px solid #2196F3;">
+        <h4 style="margin: 0 0 10px 0; color: #1976d2;">📦 Resumen General</h4>
+        <div id="stats-content"></div>
+      </div>
+      <div id="stats-terceros" style="background: #fff3e0; padding: 15px; border-radius: 5px; border-left: 4px solid #ff9800;">
+        <h4 style="margin: 0 0 10px 0; color: #f57c00;">🏆 Ranking de Terceros</h4>
+        <div id="ranking-content"></div>
+      </div>
+      <div id="stats-margenes" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border-left: 4px solid #4caf50;">
+        <h4 style="margin: 0 0 10px 0; color: #388e3c;">💰 Análisis de Márgenes</h4>
+        <div id="margenes-content"></div>
+      </div>
+   </div>
+
+   <!-- Tabla de productos -->
+   <div style="background: #fff; border: 1px solid #ddd; border-radius: 5px; overflow: hidden;">
+     <h3 style="background: #f5f5f5; margin: 0; padding: 15px; color: #555;">📋 Detalle de Productos</h3>
+     <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
+       <table id="tabla" style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+         <thead style="position: sticky; top: 0; z-index: 10;">
+           <tr style="background: #1565c0; color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+             <th onclick="ordenarDashboard(0)" style="padding: 12px; text-align: left; font-weight: bold; cursor: pointer; user-select: none; background: #1565c0;">Medicamento ↕</th>
+             <th onclick="ordenarDashboard(1)" style="padding: 12px; text-align: right; font-weight: bold; cursor: pointer; user-select: none; background: #1565c0;">Tu Precio ↕</th>
+             <th onclick="ordenarDashboard(2)" style="padding: 12px; text-align: left; font-weight: bold; cursor: pointer; user-select: none; background: #1565c0;">Mejor Competencia ↕</th>
+             <th onclick="ordenarDashboard(3)" style="padding: 12px; text-align: right; font-weight: bold; cursor: pointer; user-select: none; background: #1565c0;">Precio Comp. ↕</th>
+             <th onclick="ordenarDashboard(4)" style="padding: 12px; text-align: right; font-weight: bold; cursor: pointer; user-select: none; background: #1565c0;">Diferencia ↕</th>
+             <th onclick="ordenarDashboard(5)" style="padding: 12px; text-align: right; font-weight: bold; cursor: pointer; user-select: none; background: #1565c0;">Margen % ↕</th>
+           </tr>
+         </thead>
+         <tbody></tbody>
+       </table>
+     </div>
+   </div>
+
+   <!-- Botón flotante de cerrar -->
+   <button onclick="cerrarDashboard()" style="position: fixed; bottom: 30px; right: 30px; padding: 15px 25px; background: #f44336; color: white; border: none; border-radius: 50px; cursor: pointer; font-size: 1.1em; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1002; transition: all 0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">✕ Cerrar</button>
+ </div>
+</div>
+</body>
+</html>
+<script>
+document.getElementById("btn-dashboard").onclick = ()=>{ abrirDashboard(); };
+function abrirDashboard(){
+    document.getElementById("modal-dashboard").style.display="flex";
+    cargarDashboard();
+}
+function cerrarDashboard(){
+    document.getElementById("modal-dashboard").style.display="none";
+}
+
+// Cerrar dashboard con tecla ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modalDashboard = document.getElementById('modal-dashboard');
+        if (modalDashboard && modalDashboard.style.display === 'flex') {
+            cerrarDashboard();
+        }
+    }
+});
+
+// Cerrar dashboard haciendo clic fuera del contenido
+document.getElementById('modal-dashboard').addEventListener('click', function(e) {
+    if (e.target.id === 'modal-dashboard') {
+        cerrarDashboard();
+    }
+});
+
+// Variable global para almacenar el conteo de cotizaciones por tercero
+let conteoCotizacionesPorTercero = {};
+
+async function cargarDashboard(){
+   // Cargar fabricantes ordenados alfabéticamente (normalizado) con conteo
+   let fabset = [...new Set(MEDICAMENTOS_DATA.map(m=>m.fabricante_nombre))];
+   fabset.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+   let sel = document.getElementById("f-fab");
+   sel.innerHTML='<option value="">Todos los fabricantes</option>';
+   fabset.forEach(f=> {
+      const count = MEDICAMENTOS_DATA.filter(m => m.fabricante_nombre === f).length;
+      sel.innerHTML += `<option value="${f}">${f} (${count})</option>`;
+   });
+
+   // Cargar existencias
+   let exset = [...new Set(MEDICAMENTOS_DATA.map(m=>m.estado_existencia))];
+   let ex = document.getElementById("f-ex");
+   ex.innerHTML='<option value="">Todas las existencias</option>';
+   exset.forEach(f=> ex.innerHTML += `<option>${f}</option>`);
+
+   // Cargar competidores
+   let competidores = [...new Set(
+      MEDICAMENTOS_DATA
+         .filter(m => m.competencia_nombre)
+         .map(m => m.competencia_nombre)
+   )].sort();
+   let compSel = document.getElementById("f-competidor");
+   compSel.innerHTML = '<option value="">Todos los terceros</option>';
+   competidores.forEach(c => compSel.innerHTML += `<option>${c}</option>`);
+
+   // Cargar conteo de cotizaciones por tercero desde el backend
+   try {
+      const res = await fetch('/admin/competencia/conteo-por-tercero');
+      if (res.ok) {
+         conteoCotizacionesPorTercero = await res.json();
+      }
+   } catch (err) {
+      console.error('Error al cargar conteo de cotizaciones:', err);
+   }
+
+   aplicarDashboard();
+}
+
+document.addEventListener("input", function(e){
+ if(e.target.id.startsWith("f-")) aplicarDashboard();
+});
+
+function aplicarDashboard(){
+   let min = parseInt(document.getElementById("f-min").value)||0;
+   let max = parseInt(document.getElementById("f-max").value)||99999999;
+   let fab = document.getElementById("f-fab").value;
+   let ori = document.getElementById("f-origen").value;
+   let exi = document.getElementById("f-ex").value;
+   let txt = document.getElementById("f-buscar").value.toLowerCase();
+   let compFiltro = document.getElementById("f-competencia").value;
+   let competidorFiltro = document.getElementById("f-competidor").value;
+   let margenFiltro = document.getElementById("f-margen").value;
+
+   let res = MEDICAMENTOS_DATA.filter(m => {
+      if (m.precio_actual < min || m.precio_actual > max) return false;
+      if (fab && m.fabricante_nombre !== fab) return false;
+      if (ori && m.origen !== ori) return false;
+      if (exi && m.estado_existencia !== exi) return false;
+      if (txt && !m.nombre.toLowerCase().includes(txt)) return false;
+
+      const tieneCompetencia = !!m.competencia_precio;
+      if (compFiltro === 'si' && !tieneCompetencia) return false;
+      if (compFiltro === 'no' && tieneCompetencia) return false;
+
+      if (competidorFiltro && m.competencia_nombre !== competidorFiltro) return false;
+
+      if (margenFiltro && tieneCompetencia) {
+         const diff = m.precio_actual - m.competencia_precio;
+         const umbral = 50;
+         if (margenFiltro === 'menor' && diff >= umbral) return false;
+         if (margenFiltro === 'mayor' && diff <= -umbral) return false;
+         if (margenFiltro === 'igual' && Math.abs(diff) > umbral) return false;
+      }
+
+      return true;
+   });
+
+   // ============ ESTADÍSTICAS GENERALES ============
+   let conCompetencia = res.filter(m => m.competencia_precio);
+   let sinCompetencia = res.filter(m => !m.competencia_precio);
+
+   document.getElementById("stats-content").innerHTML = `
+      <div style="font-size: 0.95em; line-height: 1.8;">
+         <strong>Total productos:</strong> ${res.length}<br>
+         <strong>Con competencia:</strong> ${conCompetencia.length} (${res.length ? Math.round(conCompetencia.length/res.length*100) : 0}%)<br>
+         <strong>Sin competencia:</strong> ${sinCompetencia.length}<br>
+         <strong>Precio promedio tuyo:</strong> $${res.length ? Math.round(res.reduce((s,m)=>s+m.precio_actual,0)/res.length).toLocaleString() : 0}
+      </div>
+   `;
+
+   // ============ RANKING DE TERCEROS ============
+   let rankingTerceros = {};
+   let totalCotizacionesPorTercero = {};
+
+   // Contar cuántas veces cada tercero es el mejor
+   conCompetencia.forEach(m => {
+      if (!rankingTerceros[m.competencia_nombre]) {
+         rankingTerceros[m.competencia_nombre] = 0;
+      }
+      rankingTerceros[m.competencia_nombre]++;
+   });
+
+   let rankingArray = Object.entries(rankingTerceros)
+      .sort((a,b) => b[1] - a[1])
+      .slice(0, 5);
+
+   let rankingHTML = '';
+   if (rankingArray.length > 0) {
+      rankingHTML = '<div style="font-size: 0.9em;">';
+      rankingArray.forEach((entry, idx) => {
+         const [tercero, count] = entry;
+         // Obtener el total de cotizaciones de este tercero desde el backend
+         const totalCotizaciones = conteoCotizacionesPorTercero[tercero] || count;
+
+         // Porcentaje de competitividad (respecto a sus propias cotizaciones)
+         const pctCompetitividad = totalCotizaciones > 0 ? Math.round((count / totalCotizaciones) * 100) : 0;
+
+         // Porcentaje de dominio (respecto al total del mercado con competencia)
+         const pctDominio = conCompetencia.length > 0 ? Math.round((count / conCompetencia.length) * 100) : 0;
+
+         rankingHTML += `
+            <div style="margin-bottom: 10px;">
+               <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                  <span><strong>${idx+1}. ${tercero}</strong></span>
+                  <span style="font-size: 0.95em;">${count} de ${totalCotizaciones} cotizaciones</span>
+               </div>
+               <div style="font-size: 0.85em; color: #666; margin-bottom: 3px; display: flex; justify-content: space-between;">
+                  <span>Competitividad: ${pctCompetitividad}%</span>
+                  <span>Dominio mercado: ${pctDominio}%</span>
+               </div>
+               <div style="background: #ddd; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: #ff9800; height: 100%; width: ${pctCompetitividad}%;"></div>
+               </div>
+            </div>
+         `;
+      });
+      rankingHTML += '</div>';
+   } else {
+      rankingHTML = '<p style="color: #999; font-size: 0.9em;">No hay datos de competencia</p>';
+   }
+   document.getElementById("ranking-content").innerHTML = rankingHTML;
+
+   // ============ ANÁLISIS DE MÁRGENES ============
+   let ahorroTotal = 0;
+   let preciosMasBaratos = 0;
+   let preciosMasCaros = 0;
+
+   conCompetencia.forEach(m => {
+      const diff = m.precio_actual - m.competencia_precio;
+      if (diff > 0) {
+         ahorroTotal += diff;
+         preciosMasCaros++;
+      } else if (diff < 0) {
+         preciosMasBaratos++;
+      }
+   });
+
+   const margenPromedioStr = conCompetencia.length > 0
+      ? Math.round(ahorroTotal / conCompetencia.length).toLocaleString()
+      : '0';
+
+   document.getElementById("margenes-content").innerHTML = `
+      <div style="font-size: 0.95em; line-height: 1.8;">
+         <strong>Ahorro potencial total:</strong> $${ahorroTotal.toLocaleString()}<br>
+         <strong>Ahorro promedio/producto:</strong> $${margenPromedioStr}<br>
+         <strong style="color: #4caf50;">✓ Tus precios menores:</strong> ${preciosMasBaratos}<br>
+         <strong style="color: #f44336;">⚠ Tus precios mayores:</strong> ${preciosMasCaros}
+      </div>
+   `;
+
+   // ============ TABLA DETALLADA ============
+   // Guardar datos filtrados para ordenamiento
+   dashboardData = res;
+   renderizarTablaDashboard();
+}
+
+// Variables para ordenamiento del dashboard
+let dashboardData = [];
+let ordenDashboardAscendente = [true, true, true, true, true, true];
+
+function ordenarDashboard(columna) {
+   const ascendente = ordenDashboardAscendente[columna];
+   ordenDashboardAscendente[columna] = !ascendente;
+
+   dashboardData.sort((a, b) => {
+      let valorA, valorB;
+
+      switch(columna) {
+         case 0: // Medicamento
+            valorA = a.nombre.toLowerCase();
+            valorB = b.nombre.toLowerCase();
+            break;
+         case 1: // Tu Precio
+            valorA = a.precio_actual;
+            valorB = b.precio_actual;
+            break;
+         case 2: // Mejor Competencia
+            valorA = a.competencia_nombre || '';
+            valorB = b.competencia_nombre || '';
+            break;
+         case 3: // Precio Comp.
+            valorA = a.competencia_precio || 0;
+            valorB = b.competencia_precio || 0;
+            break;
+         case 4: // Diferencia
+            valorA = a.competencia_precio ? (a.precio_actual - a.competencia_precio) : 0;
+            valorB = b.competencia_precio ? (b.precio_actual - b.competencia_precio) : 0;
+            break;
+         case 5: // Margen %
+            valorA = a.competencia_precio ? ((a.precio_actual - a.competencia_precio) / a.competencia_precio * 100) : 0;
+            valorB = b.competencia_precio ? ((b.precio_actual - b.competencia_precio) / b.competencia_precio * 100) : 0;
+            break;
+      }
+
+      if (valorA < valorB) return ascendente ? -1 : 1;
+      if (valorA > valorB) return ascendente ? 1 : -1;
+      return 0;
+   });
+
+   renderizarTablaDashboard();
+}
+
+function renderizarTablaDashboard() {
+   let tb = document.querySelector("#tabla tbody");
+   tb.innerHTML = "";
+
+   dashboardData.forEach(m => {
+      const tieneComp = m.competencia_precio && m.competencia_nombre;
+      const diff = tieneComp ? (m.precio_actual - m.competencia_precio) : 0;
+      const margenPct = tieneComp && m.competencia_precio > 0
+         ? Math.round((diff / m.competencia_precio) * 100)
+         : 0;
+
+      const colorDiff = diff > 0 ? '#f44336' : (diff < 0 ? '#4caf50' : '#ff9800');
+      const colorMargen = margenPct > 0 ? '#f44336' : (margenPct < 0 ? '#4caf50' : '#ff9800');
+
+      tb.innerHTML += `
+         <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px;">${m.nombre}</td>
+            <td style="padding: 10px; text-align: right; font-weight: bold;">$${m.precio_actual.toLocaleString()}</td>
+            <td style="padding: 10px;">${tieneComp ? m.competencia_nombre : '<span style="color: #999;">Sin datos</span>'}</td>
+            <td style="padding: 10px; text-align: right;">${tieneComp ? '$'+m.competencia_precio.toLocaleString() : '-'}</td>
+            <td style="padding: 10px; text-align: right; color: ${colorDiff}; font-weight: bold;">
+               ${tieneComp ? (diff > 0 ? '+' : '') + '$' + diff.toLocaleString() : '-'}
+            </td>
+            <td style="padding: 10px; text-align: right; color: ${colorMargen}; font-weight: bold;">
+               ${tieneComp ? (margenPct > 0 ? '+' : '') + margenPct + '%' : '-'}
+            </td>
+         </tr>
+      `;
+   });
+
+   if (dashboardData.length === 0) {
+      tb.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; color: #999;">No hay resultados con los filtros aplicados</td></tr>';
+   }
+}
+
+// Validación de URL al pegar/cambiar
+const inputUrlCotizacion = document.getElementById('url-cotizacion');
+const alertaDominio = document.getElementById('alerta-dominio');
+const mensajeDominio = document.getElementById('mensaje-dominio');
+let dominioEsperadoTercero = null;
+
+// Función para validar URL
+async function validarUrlTercero() {
+    const url = inputUrlCotizacion.value.trim();
+    const terceroId = document.getElementById('tercero-id').value;
+
+    // Ocultar alerta si no hay URL o tercero
+    if (!url || !terceroId) {
+        alertaDominio.style.display = 'none';
+        return;
+    }
+
+    // Extraer dominio de la URL pegada
+    let dominioUrl;
+    try {
+        const urlObj = new URL(url.startsWith('http') ? url : 'https://' + url);
+        dominioUrl = urlObj.hostname.toLowerCase();
+        if (dominioUrl.startsWith('www.')) {
+            dominioUrl = dominioUrl.substring(4);
+        }
+    } catch (e) {
+        // URL inválida
+        mensajeDominio.textContent = 'URL inválida o formato incorrecto';
+        alertaDominio.style.display = 'block';
+        alertaDominio.style.background = '#f8d7da';
+        alertaDominio.style.borderColor = '#dc3545';
+        return;
+    }
+
+    // Obtener dominio esperado del tercero si no lo tenemos
+    if (!dominioEsperadoTercero || dominioEsperadoTercero.terceroId !== terceroId) {
+        try {
+            const res = await fetch(`/admin/competencia/obtener-dominio-tercero/${terceroId}`);
+            const data = await res.json();
+
+            if (res.ok && data.dominio) {
+                // Obtener el nombre del tercero actual
+                const terceroNombre = document.getElementById('tercero-nombre').value;
+
+                dominioEsperadoTercero = {
+                    terceroId: terceroId,
+                    terceroNombre: terceroNombre,
+                    dominio: data.dominio,
+                    frecuencia: data.frecuencia,
+                    total: data.total
+                };
+            } else {
+                // No hay historial de URLs para este tercero
+                alertaDominio.style.display = 'none';
+                return;
+            }
+        } catch (err) {
+            console.error('Error al obtener dominio del tercero:', err);
+            alertaDominio.style.display = 'none';
+            return;
+        }
+    }
+
+    // Comparar dominios
+    if (dominioUrl !== dominioEsperadoTercero.dominio) {
+        mensajeDominio.textContent = `Esta URL es de "${dominioUrl}" pero "${dominioEsperadoTercero.terceroNombre}" normalmente usa "${dominioEsperadoTercero.dominio}" (${dominioEsperadoTercero.frecuencia}/${dominioEsperadoTercero.total} URLs)`;
+        alertaDominio.style.display = 'block';
+        alertaDominio.style.background = '#fff3cd';
+        alertaDominio.style.borderColor = '#ffc107';
+    } else {
+        // Dominio correcto
+        mensajeDominio.textContent = `✓ Dominio correcto para "${dominioEsperadoTercero.terceroNombre}": "${dominioUrl}"`;
+        alertaDominio.style.display = 'block';
+        alertaDominio.style.background = '#d4edda';
+        alertaDominio.style.borderColor = '#28a745';
+    }
+}
+
+// Eventos para validar URL
+inputUrlCotizacion.addEventListener('input', validarUrlTercero);
+inputUrlCotizacion.addEventListener('paste', function() {
+    setTimeout(validarUrlTercero, 100); // Esperar a que se pegue el texto
+});
+
+// Limpiar caché de dominio cuando cambia el tercero
+document.getElementById('tercero-nombre').addEventListener('input', function() {
+    dominioEsperadoTercero = null;
+    alertaDominio.style.display = 'none';
+});
+
+// Botón para auditar URLs
+document.getElementById('btn-auditar-urls').addEventListener('click', async function() {
+    this.disabled = true;
+    this.textContent = '⏳ Verificando...';
+
+    try {
+        const res = await fetch('/admin/competencia/auditar-urls');
+        const data = await res.json();
+
+        if (res.ok) {
+            mostrarResultadosAuditoria(data);
+        } else {
+            alert('Error al auditar URLs: ' + (data.error || 'Error desconocido'));
+        }
+    } catch (err) {
+        alert('Error de conexión: ' + err.message);
+    } finally {
+        this.disabled = false;
+        this.textContent = '🔍 Verificar URLs';
+    }
+});
+
+// Cerrar modal de auditoría
+document.getElementById('btn-cerrar-auditoria').addEventListener('click', function() {
+    document.getElementById('modal-auditoria').style.display = 'none';
+});
+
+// Función para mostrar resultados de auditoría
+function mostrarResultadosAuditoria(data) {
+    const modal = document.getElementById('modal-auditoria');
+    const contenido = document.getElementById('contenido-auditoria');
+
+    if (data.total_problemas === 0) {
+        contenido.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #4CAF50;">
+                <h2>✓ Todo correcto</h2>
+                <p>No se encontraron problemas con las URLs guardadas.</p>
+            </div>
+        `;
+    } else {
+        // Agrupar problemas por tercero
+        const problemaPorTercero = {};
+
+        data.problemas.forEach(p => {
+            if (!problemaPorTercero[p.tercero_id]) {
+                problemaPorTercero[p.tercero_id] = {
+                    nombre: p.tercero_nombre,
+                    problemas: []
+                };
+            }
+            problemaPorTercero[p.tercero_id].problemas.push(p);
+        });
+
+        let html = `
+            <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107;">
+                <strong>⚠️ Se encontraron ${data.total_problemas} problema(s)</strong>
+            </div>
+        `;
+
+        // Mostrar problemas por tercero
+        for (const terceroId in problemaPorTercero) {
+            const info = problemaPorTercero[terceroId];
+            html += `
+                <div style="margin-bottom: 20px; border: 1px solid #ddd; border-radius: 5px; padding: 10px;">
+                    <h4 style="margin-top: 0; color: #333;">
+                        ${info.nombre} (${info.problemas.length} problema${info.problemas.length > 1 ? 's' : ''})
+                    </h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Medicamento</th>
+                                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Problema</th>
+                                <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">URL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            info.problemas.forEach(p => {
+                const urlCorta = p.url.length > 50 ? p.url.substring(0, 50) + '...' : p.url;
+                html += `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 8px;">${p.medicamento}</td>
+                        <td style="padding: 8px; color: ${p.tipo === 'url_invalida' ? '#d32f2f' : '#ff9800'};">
+                            ${p.mensaje}
+                        </td>
+                        <td style="padding: 8px; font-size: 0.85em; word-break: break-all;" title="${p.url}">
+                            ${urlCorta}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        contenido.innerHTML = html;
+    }
+
+    modal.style.display = 'flex';
+}
+
+// ========== AUDITORÍA DE DISPERSIÓN DE PRECIOS ==========
+
+// Abrir modal de auditoría de dispersión
+document.getElementById('btn-auditar-dispersion').addEventListener('click', function() {
+    const umbralInicial = 30;
+    document.getElementById('umbral-dispersion').value = umbralInicial;
+    cargarAuditoriaDispersion(umbralInicial);
+    document.getElementById('modal-dispersion').style.display = 'flex';
+});
+
+// Cerrar modal de dispersión
+document.getElementById('btn-cerrar-dispersion').addEventListener('click', function() {
+    document.getElementById('modal-dispersion').style.display = 'none';
+});
+
+// Aplicar filtro por umbral
+document.getElementById('btn-aplicar-umbral').addEventListener('click', function() {
+    const umbral = parseFloat(document.getElementById('umbral-dispersion').value);
+    cargarAuditoriaDispersion(umbral);
+});
+
+// Función para cargar auditoría de dispersión
+async function cargarAuditoriaDispersion(umbral) {
+    const contenido = document.getElementById('contenido-dispersion');
+    const resultadoConteo = document.getElementById('resultado-conteo');
+
+    contenido.innerHTML = '<div style="text-align: center; padding: 30px;">⏳ Analizando dispersión de precios...</div>';
+    resultadoConteo.textContent = '';
+
+    try {
+        const res = await fetch(`/admin/competencia/auditoria-dispersion?umbral=${umbral}`);
+        const data = await res.json();
+
+        if (res.ok) {
+            mostrarResultadosDispersion(data);
+        } else {
+            contenido.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: #d32f2f;">
+                    <h3>⚠️ Error</h3>
+                    <p>${data.error || 'Error desconocido'}</p>
+                </div>
+            `;
+        }
+    } catch (err) {
+        contenido.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #d32f2f;">
+                <h3>⚠️ Error de conexión</h3>
+                <p>${err.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Función para mostrar resultados de dispersión
+function mostrarResultadosDispersion(data) {
+    const contenido = document.getElementById('contenido-dispersion');
+    const resultadoConteo = document.getElementById('resultado-conteo');
+
+    resultadoConteo.textContent = `${data.total_encontrados} producto(s) encontrado(s) con dispersión ≥ ${data.umbral_aplicado}%`;
+
+    if (data.total_encontrados === 0) {
+        contenido.innerHTML = `
+            <div style="text-align: center; padding: 30px; color: #4CAF50;">
+                <h2>✓ Todo correcto</h2>
+                <p>No se encontraron medicamentos con dispersión mayor o igual a ${data.umbral_aplicado}%.</p>
+                <p style="color: #666; font-size: 0.9em;">Esto sugiere que los precios están bien capturados.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Guardar datos globalmente para ordenamiento
+    window.datosDispersionActual = data.medicamentos;
+    window.ordenDispersionActual = [true, true, true, true, true, true]; // Estado de orden por columna
+
+    renderizarTablaDispersion();
+}
+
+// Función para ordenar tabla de dispersión
+function ordenarTablaDispersion(columna) {
+    const ascendente = window.ordenDispersionActual[columna];
+    window.ordenDispersionActual[columna] = !ascendente;
+
+    window.datosDispersionActual.sort((a, b) => {
+        let valorA, valorB;
+
+        switch(columna) {
+            case 0: // Medicamento
+                valorA = a.medicamento_nombre.toLowerCase();
+                valorB = b.medicamento_nombre.toLowerCase();
+                break;
+            case 1: // Cotizaciones
+                valorA = a.num_cotizaciones;
+                valorB = b.num_cotizaciones;
+                break;
+            case 2: // Precio Min
+                valorA = a.precio_min;
+                valorB = b.precio_min;
+                break;
+            case 3: // Precio Max
+                valorA = a.precio_max;
+                valorB = b.precio_max;
+                break;
+            case 4: // Promedio
+                valorA = a.precio_promedio;
+                valorB = b.precio_promedio;
+                break;
+            case 5: // Dispersión %
+                valorA = a.dispersion_pct;
+                valorB = b.dispersion_pct;
+                break;
+        }
+
+        if (valorA < valorB) return ascendente ? -1 : 1;
+        if (valorA > valorB) return ascendente ? 1 : -1;
+        return 0;
+    });
+
+    renderizarTablaDispersion();
+}
+
+// Función para renderizar la tabla de dispersión
+function renderizarTablaDispersion() {
+    const contenido = document.getElementById('contenido-dispersion');
+
+    let html = `
+        <div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 3px;">
+            <strong>⚠️ Dispersiones altas detectadas</strong>
+            <p style="margin: 5px 0 0 0; font-size: 0.9em;">
+                Estos productos tienen diferencias de precio significativas. Revisa si hay errores de captura,
+                presentaciones diferentes, o precios desactualizados.
+            </p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+            <thead>
+                <tr style="background: #1565c0; color: white;">
+                    <th onclick="ordenarTablaDispersion(0)" style="padding: 10px; text-align: left; cursor: pointer; user-select: none;" title="Click para ordenar">
+                        Medicamento ↕
+                    </th>
+                    <th onclick="ordenarTablaDispersion(1)" style="padding: 10px; text-align: center; cursor: pointer; user-select: none;" title="Click para ordenar">
+                        Cotiz. ↕
+                    </th>
+                    <th onclick="ordenarTablaDispersion(2)" style="padding: 10px; text-align: right; cursor: pointer; user-select: none;" title="Click para ordenar">
+                        Precio Min ↕
+                    </th>
+                    <th onclick="ordenarTablaDispersion(3)" style="padding: 10px; text-align: right; cursor: pointer; user-select: none;" title="Click para ordenar">
+                        Precio Max ↕
+                    </th>
+                    <th onclick="ordenarTablaDispersion(4)" style="padding: 10px; text-align: right; cursor: pointer; user-select: none;" title="Click para ordenar">
+                        Promedio ↕
+                    </th>
+                    <th onclick="ordenarTablaDispersion(5)" style="padding: 10px; text-align: center; background: #d32f2f; cursor: pointer; user-select: none;" title="Click para ordenar">
+                        Dispersión % ↕
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    window.datosDispersionActual.forEach(m => {
+        // Color basado en dispersión
+        let colorDispersion = '#4CAF50';
+        if (m.dispersion_pct >= 100) colorDispersion = '#d32f2f';
+        else if (m.dispersion_pct >= 50) colorDispersion = '#ff5722';
+        else if (m.dispersion_pct >= 30) colorDispersion = '#ff9800';
+
+        html += `
+            <tr style="border-bottom: 1px solid #eee; cursor: pointer;"
+                onclick="irAProducto(${m.medicamento_id}, ${m.fabricante_id})"
+                onmouseover="this.style.background='#f5f5f5'"
+                onmouseout="this.style.background='white'"
+                title="Click para ir al formulario de este producto">
+                <td style="padding: 10px;">
+                    <strong>${m.medicamento_nombre}</strong>
+                    <br>
+                    <span style="font-size: 0.85em; color: #666;" title="${m.detalle_precios}">${m.detalle_precios}</span>
+                </td>
+                <td style="padding: 10px; text-align: center;">${m.num_cotizaciones}</td>
+                <td style="padding: 10px; text-align: right; color: #4CAF50; font-weight: bold;">$${m.precio_min.toLocaleString()}</td>
+                <td style="padding: 10px; text-align: right; color: #d32f2f; font-weight: bold;">$${m.precio_max.toLocaleString()}</td>
+                <td style="padding: 10px; text-align: right;">$${m.precio_promedio.toLocaleString()}</td>
+                <td style="padding: 10px; text-align: center; font-weight: bold; font-size: 1.1em; color: ${colorDispersion};">
+                    ${m.dispersion_pct}%
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+        <div style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 3px; font-size: 0.9em;">
+            <strong>💡 Recomendaciones:</strong>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>Dispersión <strong>&gt; 100%</strong>: Probable error de captura o presentación diferente</li>
+                <li>Dispersión <strong>50-100%</strong>: Revisar si son el mismo producto</li>
+                <li>Dispersión <strong>30-50%</strong>: Verificar precios desactualizados o promociones</li>
+            </ul>
+        </div>
+    `;
+
+    contenido.innerHTML = html;
+}
+
+// Función para ir al producto (medicamento + fabricante) en el listado principal
+function irAProducto(medicamentoId, fabricanteId) {
+    // Cerrar modal de dispersión
+    document.getElementById('modal-dispersion').style.display = 'none';
+
+    // Buscar el producto específico (medicamento_id + fabricante_id) en MEDICAMENTOS_DATA
+    const medIndex = MEDICAMENTOS_DATA.findIndex(m =>
+        m.medicamento_id === medicamentoId && m.fabricante_id === fabricanteId
+    );
+
+    if (medIndex >= 0) {
+        indiceMedicamentoActual = medIndex;
+        seleccionarMedicamento(MEDICAMENTOS_DATA[medIndex]);
+        resaltarFilaActiva();
+
+        // Scroll al producto en la tabla
+        const tbody = document.getElementById('tbody-medicamentos');
+        const fila = tbody.children[medIndex];
+        if (fila) {
+            fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    } else {
+        alert('Producto no encontrado en el listado principal. Es posible que esté filtrado.');
+    }
+}
+
+// ========== TOGGLE PUBLICAR SIN COTIZACIONES ==========
+
+function actualizarEstadoToggle(toggleBtn, activo) {
+    const bolaToggle = toggleBtn.querySelector('span');
+
+    if (activo) {
+        // Estado ON (verde)
+        toggleBtn.style.background = '#4CAF50';
+        toggleBtn.style.borderColor = '#4CAF50';
+        bolaToggle.style.left = '42px';
+    } else {
+        // Estado OFF (gris)
+        toggleBtn.style.background = '#e0e0e0';
+        toggleBtn.style.borderColor = '#ccc';
+        bolaToggle.style.left = '2px';
+    }
+}
+
+// Event listener para el toggle
+document.getElementById('toggle-publicar-sin-cotizaciones').addEventListener('click', async function() {
+    const activo = this.style.background !== 'rgb(76, 175, 80)'; // Si no está verde, activar
+
+    // Actualizar visualmente
+    actualizarEstadoToggle(this, activo);
+
+    // Guardar en backend
+    try {
+        const response = await fetch('/admin/configuracion-precios/guardar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                campo: 'permitir_publicar_sin_cotizaciones',
+                valor: activo ? 1 : 0
+            })
+        });
+
+        if (response.ok) {
+            CONFIG.permitir_publicar_sin_cotizaciones = activo ? 1 : 0;
+            console.log(`Publicar sin cotizaciones: ${activo ? 'ACTIVADO' : 'DESACTIVADO'}`);
+        } else {
+            alert('Error al guardar configuración');
+            // Revertir cambio visual
+            actualizarEstadoToggle(this, !activo);
+        }
+    } catch (err) {
+        alert('Error de conexión: ' + err.message);
+        // Revertir cambio visual
+        actualizarEstadoToggle(this, !activo);
+    }
+});
+
+// === Modal de aplicación masiva de políticas ===
+document.getElementById('btn-aplicar-politicas-masivo').addEventListener('click', async () => {
+    try {
+        const response = await fetch('/admin/precios/calcular-politicas-masivo');
+        const data = await response.json();
+
+        productosParaRevisar = data.productos;
+        indiceReviewActual = 0;
+
+        if (productosParaRevisar.length === 0) {
+            alert('✓ Todos los productos ya están actualizados según las políticas de precios.\n\nNo hay productos pendientes por revisar.');
+            return;
+        }
+
+        document.getElementById('modal-aplicar-politicas').style.display = 'flex';
+        mostrarProductoActual();
+    } catch (err) {
+        alert('Error al cargar productos: ' + err.message);
+    }
+});
+
+function mostrarProductoActual() {
+    if (indiceReviewActual >= productosParaRevisar.length) {
+        alert('Todos los productos han sido procesados');
+        document.getElementById('modal-aplicar-politicas').style.display = 'none';
+        return;
+    }
+
+    const prod = productosParaRevisar[indiceReviewActual];
+    const pendientes = productosParaRevisar.length - indiceReviewActual;
+
+    document.getElementById('productos-pendientes').textContent = pendientes;
+
+    const cambioColor = prod.cambio > 0 ? '#5cb85c' : prod.cambio < 0 ? '#d9534f' : '#666';
+    const cambioSigno = prod.cambio > 0 ? '+' : '';
+
+    const cotizacionesHTML = prod.cotizaciones.map(c => `$${c.toLocaleString()}`).join(', ');
+
+    document.getElementById('producto-actual-review').innerHTML = `
+        <h4 style="margin-top: 0; color: #333;">${prod.nombre}</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 15px 0;">
+            <div>
+                <p style="margin: 5px 0; font-size: 0.9em; color: #666;">Cotizaciones (${prod.num_cotizaciones}):</p>
+                <p style="margin: 5px 0; font-weight: bold;">${cotizacionesHTML}</p>
+            </div>
+            <div>
+                <p style="margin: 5px 0; font-size: 0.9em; color: #666;">Precio Actual:</p>
+                <p style="margin: 5px 0; font-weight: bold; font-size: 1.2em;">$${prod.precio_actual.toLocaleString()}</p>
+            </div>
+        </div>
+        <div style="background: #f0f8ff; padding: 15px; border-radius: 6px; border-left: 4px solid #2196F3;">
+            <p style="margin: 0 0 10px 0; font-size: 0.9em; color: #666;">Precio Calculado según Políticas:</p>
+            <p style="margin: 0; font-weight: bold; font-size: 1.5em; color: #2196F3;">$${prod.precio_nuevo.toLocaleString()}</p>
+            <p style="margin: 10px 0 0 0; font-size: 0.95em; color: ${cambioColor};">
+                Cambio: ${cambioSigno}$${prod.cambio.toLocaleString()} (${cambioSigno}${((prod.cambio / prod.precio_actual) * 100).toFixed(1)}%)
+            </p>
+        </div>
+    `;
+}
+
+document.getElementById('btn-aprobar-actual').addEventListener('click', async () => {
+    const prod = productosParaRevisar[indiceReviewActual];
+
+    try {
+        const response = await fetch('/admin/precios/aplicar-politica-producto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                medicamento_id: prod.medicamento_id,
+                fabricante_id: prod.fabricante_id,
+                precio_nuevo: prod.precio_nuevo
+            })
+        });
+
+        if (response.ok) {
+            // Actualizar el precio en el listado origen
+            const medIndex = MEDICAMENTOS_DATA.findIndex(
+                m => m.medicamento_id == prod.medicamento_id && m.fabricante_id == prod.fabricante_id
+            );
+            if (medIndex >= 0) {
+                MEDICAMENTOS_DATA[medIndex].precio_actual = prod.precio_nuevo;
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                resaltarFilaActiva();
+            }
+
+            indiceReviewActual++;
+            mostrarProductoActual();
+        } else {
+            alert('Error al aplicar precio');
+        }
+    } catch (err) {
+        alert('Error de conexión: ' + err.message);
+    }
+});
+
+document.getElementById('btn-rechazar-actual').addEventListener('click', () => {
+    indiceReviewActual++;
+    mostrarProductoActual();
+});
+
+document.getElementById('btn-exportar-excel').addEventListener('click', async () => {
+    try {
+        const btn = document.getElementById('btn-exportar-excel');
+        btn.disabled = true;
+        btn.textContent = 'Generando Excel...';
+
+        window.location.href = '/admin/precios/exportar-comparativa-excel';
+
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = 'Exportar Comparativa a Excel';
+        }, 2000);
+    } catch (err) {
+        alert('Error al exportar: ' + err.message);
+        const btn = document.getElementById('btn-exportar-excel');
+        btn.disabled = false;
+        btn.textContent = 'Exportar Comparativa a Excel';
+    }
+});
+
+document.getElementById('btn-aplicar-resto').addEventListener('click', async () => {
+    if (!confirm(`¿Aplicar políticas a los ${productosParaRevisar.length - indiceReviewActual} productos restantes?`)) {
+        return;
+    }
+
+    let exitosos = 0;
+    let fallidos = 0;
+
+    for (let i = indiceReviewActual; i < productosParaRevisar.length; i++) {
+        const prod = productosParaRevisar[i];
+
+        try {
+            const response = await fetch('/admin/precios/aplicar-politica-producto', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    medicamento_id: prod.medicamento_id,
+                    fabricante_id: prod.fabricante_id,
+                    precio_nuevo: prod.precio_nuevo
+                })
+            });
+
+            if (response.ok) {
+                exitosos++;
+                // Actualizar el precio en el listado origen
+                const medIndex = MEDICAMENTOS_DATA.findIndex(
+                    m => m.medicamento_id == prod.medicamento_id && m.fabricante_id == prod.fabricante_id
+                );
+                if (medIndex >= 0) {
+                    MEDICAMENTOS_DATA[medIndex].precio_actual = prod.precio_nuevo;
+                }
+            } else {
+                fallidos++;
+            }
+        } catch (err) {
+            fallidos++;
+        }
+    }
+
+    // Re-renderizar el listado completo después de aplicar todos
+    renderizarMedicamentos(MEDICAMENTOS_DATA);
+    resaltarFilaActiva();
+
+    alert(`Aplicación masiva completada:\n✓ Exitosos: ${exitosos}\n✗ Fallidos: ${fallidos}`);
+    document.getElementById('modal-aplicar-politicas').style.display = 'none';
+});
+
+// Botón cerrar modal
+document.getElementById('btn-cerrar-politicas').addEventListener('click', () => {
+    document.getElementById('modal-aplicar-politicas').style.display = 'none';
+});
+
+// Cerrar modal al hacer click fuera
+document.getElementById('modal-aplicar-politicas').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-aplicar-politicas') {
+        document.getElementById('modal-aplicar-politicas').style.display = 'none';
+    }
+});
+
+// ========== MODO TURBO - CAPTURA RÁPIDA ==========
+
+// Función para obtener ranking de terceros más económicos
+function obtenerRankingTerceros() {
+    const ranking = {};
+
+    // Contar cuántas veces cada tercero es el más barato
+    MEDICAMENTOS_DATA.forEach(m => {
+        if (m.competencia_nombre && m.competencia_precio) {
+            if (!ranking[m.competencia_nombre]) {
+                ranking[m.competencia_nombre] = {
+                    nombre: m.competencia_nombre,
+                    veces_mas_barato: 0,
+                    url_busqueda_base: null
+                };
+            }
+            ranking[m.competencia_nombre].veces_mas_barato++;
+        }
+    });
+
+    // Convertir a array y ordenar de mayor a menor
+    const rankingArray = Object.values(ranking).sort((a, b) =>
+        b.veces_mas_barato - a.veces_mas_barato
+    );
+
+    return rankingArray;
+}
+
+// Función para obtener productos pendientes (precio > 0 y 0 cotizaciones)
+function obtenerProductosPendientesTurbo() {
+    return MEDICAMENTOS_DATA.filter(m =>
+        m.precio_actual > 0 &&
+        (m.cotizaciones_total === 0 || !m.cotizaciones_total)
+    );
+}
+
+// Función para obtener productos con precio cero
+// Función para activar Modo Turbo
+async function activarModoTurbo() {
+    productosPendientesTurbo = obtenerProductosPendientesTurbo();
+    if (productosPendientesTurbo.length === 0) {
+        alert('🎉 ¡Excelente! No hay productos pendientes.\n\nTodos los productos con precio ya tienen cotizaciones completas.');
+        return;
+    }
+    console.log(`🚀 Modo Turbo: ${productosPendientesTurbo.length} productos sin cotizaciones`);
+
+    // Obtener ranking de terceros
+    tercerosRanking = obtenerRankingTerceros();
+
+    if (tercerosRanking.length === 0) {
+        alert('⚠️ No hay terceros en el ranking.\n\nPrimero debes agregar algunas cotizaciones manualmente.');
+        return;
+    }
+
+    // Obtener URLs de navegación para cada tercero del ranking
+    try {
+        const res = await fetch('/admin/terceros/todos');
+        const data = await res.json();
+        const todosLosTerceros = data.terceros || [];
+
+        // Asociar URLs y datos completos a cada tercero del ranking
+        tercerosRanking.forEach(terceroRank => {
+            const terceroCompleto = todosLosTerceros.find(t => t.nombre === terceroRank.nombre);
+            if (terceroCompleto) {
+                terceroRank.id = terceroCompleto.id;
+                terceroRank.telefono = terceroCompleto.telefono || '';
+                terceroRank.direccion = terceroCompleto.direccion || '';
+                terceroRank.url_busqueda_base = terceroCompleto.url_busqueda_base;
+            }
+        });
+    } catch (err) {
+        console.error('Error al cargar URLs de terceros:', err);
+    }
+
+    // Activar modo turbo
+    modoTurboActivo = true;
+    indiceTurboActual = 0;
+    indiceTerceroActual = 0;
+
+    // Mostrar controles y ocultar botón activar
+    document.getElementById('btn-modo-turbo').style.display = 'none';
+    document.getElementById('controles-modo-turbo').style.display = 'flex';
+    document.getElementById('titulo-cotizacion').textContent = '🚀 MODO TURBO ACTIVO';
+    document.getElementById('titulo-cotizacion').style.color = '#ff9800';
+
+    // Procesar primer producto
+    procesarSiguienteProductoTurbo();
+}
+
+// Función para procesar siguiente producto
+async function procesarSiguienteProductoTurbo() {
+    if (indiceTurboActual >= productosPendientesTurbo.length) {
+        // Ya no hay más productos pendientes
+        alert('🎉 ¡Todos los productos completados!\n\nNo hay más productos pendientes para capturar.');
+        desactivarModoTurbo();
+        return;
+    }
+
+    const producto = productosPendientesTurbo[indiceTurboActual];
+    indiceTerceroActual = 0;
+
+    // Seleccionar producto en el listado
+    const medIndex = MEDICAMENTOS_DATA.findIndex(
+        m => m.medicamento_id === producto.medicamento_id &&
+             m.fabricante_id === producto.fabricante_id
+    );
+
+    if (medIndex >= 0) {
+        indiceMedicamentoActual = medIndex;
+        seleccionarMedicamento(MEDICAMENTOS_DATA[medIndex]);
+        resaltarFilaActiva();
+    }
+
+    // Esperar 1 segundo para que el usuario vea el producto
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Abrir URL del primer tercero
+    abrirURLTerceroActual();
+}
+
+// Función para abrir URL del tercero actual en el ranking
+async function abrirURLTerceroActual() {
+    if (indiceTerceroActual >= tercerosRanking.length) {
+        // Ya no hay más terceros en el ranking
+        alert('⚠️ Se agotaron los terceros del ranking.\n\nPasando al siguiente producto...');
+        indiceTurboActual++;
+        procesarSiguienteProductoTurbo();
+        return;
+    }
+
+    const tercero = tercerosRanking[indiceTerceroActual];
+
+    if (tercero.url_busqueda_base && MEDICAMENTO_ACTIVO) {
+        // Seleccionar tercero en el formulario
+        document.getElementById('tercero-id').value = tercero.id || '';
+        document.getElementById('tercero-nombre').value = tercero.nombre || '';
+        document.getElementById('tercero-telefono').value = tercero.telefono || '';
+        document.getElementById('tercero-direccion').value = tercero.direccion || '';
+
+        // Limpiar campo URL y precio
+        document.getElementById('url-cotizacion').value = '';
+        document.getElementById('precio-cotizacion').value = '';
+
+        // Abrir ventana del portal
+        const urlBusqueda = tercero.url_busqueda_base.replace('{producto}', encodeURIComponent(MEDICAMENTO_ACTIVO.nombre));
+        const w = window.open(urlBusqueda, '_blank');
+
+        if (w) {
+            pestañasCompetencia.push(w);
+            console.log(`Modo Turbo: Abriendo ${tercero.nombre} (${indiceTerceroActual + 1}/${tercerosRanking.length})`);
+        } else {
+            console.warn(`⚠️ Navegador bloqueó popup para ${tercero.nombre}`);
+        }
+
+        // Copiar nombre del medicamento + fabricante al portapapeles
+        try {
+            const textoPortapapeles = MEDICAMENTO_ACTIVO.fabricante_nombre
+                ? `${MEDICAMENTO_ACTIVO.nombre} ${MEDICAMENTO_ACTIVO.fabricante_nombre}`
+                : MEDICAMENTO_ACTIVO.nombre;
+            await navigator.clipboard.writeText(textoPortapapeles);
+        } catch (err) {
+            console.log('No se pudo actualizar el portapapeles:', err);
+        }
+    } else {
+        console.warn(`Tercero ${tercero.nombre} no tiene URL configurada, saltando...`);
+        indiceTerceroActual++;
+        abrirURLTerceroActual();
+    }
+}
+
+// Función para desactivar Modo Turbo
+function desactivarModoTurbo() {
+    modoTurboActivo = false;
+    productosPendientesTurbo = [];
+    indiceTurboActual = 0;
+    tercerosRanking = [];
+    indiceTerceroActual = 0;
+
+    // Cerrar pestañas abiertas
+    cerrarPestañasCompetencia();
+
+    // Restaurar UI
+    document.getElementById('btn-modo-turbo').style.display = 'flex';
+    document.getElementById('controles-modo-turbo').style.display = 'none';
+    document.getElementById('titulo-cotizacion').textContent = 'Agregar Cotización';
+    document.getElementById('titulo-cotizacion').style.color = '';
+}
+
+// Botón activar Modo Turbo
+document.getElementById('btn-modo-turbo').addEventListener('click', activarModoTurbo);
+
+// Botón siguiente producto
+document.getElementById('btn-siguiente-producto').addEventListener('click', () => {
+    indiceTurboActual++;
+    procesarSiguienteProductoTurbo();
+});
+
+// Botón salir Modo Turbo
+document.getElementById('btn-salir-turbo').addEventListener('click', () => {
+    if (confirm('¿Salir del Modo Turbo?')) {
+        desactivarModoTurbo();
+    }
+});
+
+// === DETECCIÓN AUTOMÁTICA: Usuario regresa sin URL ===
+window.addEventListener('focus', async () => {
+    // Solo actuar si Modo Turbo está activo
+    if (!modoTurboActivo) return;
+
+    // Intentar pegar URL del portapapeles
+    try {
+        const texto = await navigator.clipboard.readText();
+        const urlLimpia = texto.trim();
+        if (urlLimpia && (urlLimpia.startsWith('http://') || urlLimpia.startsWith('https://'))) {
+            document.getElementById('url-cotizacion').value = urlLimpia;
+            console.log('✅ URL pegada automáticamente:', urlLimpia);
+        }
+    } catch (err) {
+        console.log('No se pudo leer URL del portapapeles:', err);
+    }
+
+    // Enfocar campo precio
+    setTimeout(() => {
+        document.getElementById('precio-cotizacion').focus();
+    }, 100);
+});
+
+
+</script>

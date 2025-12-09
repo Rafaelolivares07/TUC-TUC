@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Usos de {{ medicamento.nombre }}</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background-color: #f4f4f4; 
+        }
+        h1 { 
+            color: #333; 
+            border-bottom: 2px solid #ccc; 
+            padding-bottom: 10px; 
+        }
+        form { 
+            background: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            margin-top: 20px;
+        }
+        .uso-card { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin-bottom: 15px; 
+            border-radius: 6px; 
+            background-color: #fafafa;
+        }
+        .sintomas { 
+            font-size: 0.9em; 
+            color: #666; 
+            margin-top: 5px; 
+            padding-left: 25px; 
+            border-left: 3px solid #007bff; 
+        }
+        .buttons { 
+            margin-top: 20px; 
+            text-align: right; 
+        }
+        .buttons button, .buttons a {
+            padding: 10px 15px;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .buttons button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+        }
+        .buttons a {
+            background-color: #6c757d;
+            color: white;
+            margin-left: 10px;
+        }
+        /* Estilos para la nueva funcionalidad de búsqueda */
+        #api-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #e9f7ff;
+            border-radius: 8px;
+            border: 1px solid #cceeff;
+        }
+        #btn-buscar-usos {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #btn-buscar-usos:hover {
+            background-color: #0056b3;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+            display: none; /* Oculto por defecto */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #sugerencias-container {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px dashed #007bff;
+            border-radius: 6px;
+        }
+        .sugerencia-item {
+            display: block;
+            margin-bottom: 5px;
+        }
+        #sugerencias-container button {
+            background-color: #ffc107; 
+            color: #333; 
+            padding: 5px 10px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        #sugerencias-container button:hover {
+            background-color: #e0a800;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>💊 Usos y Diagnósticos para: {{ medicamento.nombre }}</h1>
+    <p>Marque los diagnósticos que este medicamento está indicado para tratar.</p>
+
+    <div id="api-section">
+        <strong>¿Buscas nuevos usos?</strong> Utiliza la inteligencia médica.
+        <div style="display: flex; align-items: center;">
+            <button id="btn-buscar-usos">
+                Buscar Sugerencias 🤖
+            </button>
+            <div class="loader" id="loader"></div>
+        </div>
+    </div>
+    
+    <div id="sugerencias-api-output" style="margin-bottom: 20px;"></div>
+    
+
+    <form method="POST" action="{{ url_for('gestionar_usos_medicamento', medicamento_id=medicamento.id) }}">
+        
+        <h2>Diagnósticos disponibles:</h2>
+        
+        <div id="diagnosticos-existentes">
+            {% for diag in diagnosticos_con_sintomas %}
+                <div class="uso-card">
+                    <div>
+                        <input type="checkbox" 
+                               id="diag_{{ diag.id }}" 
+                               name="diagnosticos_seleccionados" 
+                               value="{{ diag.id }}"
+                               {% if diag.id in asociaciones_diag_ids %}checked{% endif %}>
+                        <label for="diag_{{ diag.id }}"><strong>{{ diag.descripcion }}</strong></label>
+                    </div>
+                    <div class="sintomas">
+                        **Síntomas asociados:** {{ diag.sintomas or 'N/A' }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        
+        <div class="buttons">
+            <button type="submit">Guardar Asociaciones</button>
+            <a href="{{ url_for('lista_medicamentos') }}">Volver a la Lista</a>
+        </div>
+    </form>
+
+    <script>
+        document.getElementById('btn-buscar-usos').addEventListener('click', async function(e) {
+            e.preventDefault(); 
+            
+            const button = this;
+            const loader = document.getElementById('loader');
+            const output = document.getElementById('sugerencias-api-output');
+            const medicamentoId = {{ medicamento.id }};
+
+            button.disabled = true;
+            button.textContent = 'Buscando...';
+            loader.style.display = 'inline-block';
+            output.innerHTML = ''; 
+
+            try {
+                // Llama a la ruta en Flask que gestiona la traducción y la API externa
+                const response = await fetch(`/api/sugerir_diagnosticos/${medicamentoId}`);
+                const data = await response.json();
+
+                if (data.success && data.indicaciones_sugeridas.length > 0) {
+                    let htmlContent = '<div id="sugerencias-container">';
+                    // MODIFICACIÓN CLAVE: Quitamos el obsoleto data.nombre_generico
+                    htmlContent += `<strong>Clasificaciones ATC sugeridas:</strong>`;
+                    
+                    data.indicaciones_sugeridas.forEach((indicacion, index) => {
+                        const tempId = `sug_new_${index}`; 
+                        
+                        htmlContent += `<div class="sugerencia-item">
+                                            <input type="checkbox" 
+                                                   id="${tempId}" 
+                                                   name="diagnosticos_sugeridos_temp" 
+                                                   value="${indicacion}">
+                                            <label for="${tempId}">
+                                                ${indicacion} <small style="color: grey;">(Nuevo)</small>
+                                            </label>
+                                        </div>`;
+                    });
+                    
+                    htmlContent += `<div style="text-align: right; margin-top: 10px;">
+                                        <button type="button" id="btn-agregar-sugerencias">
+                                            Agregar Seleccionados como Diagnósticos
+                                        </button>
+                                    </div></div>`;
+                    output.innerHTML = htmlContent;
+
+                    // Adjuntar el evento para registrar los nuevos diagnósticos
+                    document.getElementById('btn-agregar-sugerencias').addEventListener('click', async function() {
+                        await agregarSugerencias(medicamentoId);
+                    });
+
+                } else {
+                    output.innerHTML = '<p style="color: red;">⚠️ No se encontraron sugerencias o hubo un error al conectar con la API.</p>';
+                }
+
+            } catch (error) {
+                console.error('Error al buscar sugerencias:', error);
+                output.innerHTML = '<p style="color: red;">Error de conexión con el servicio API.</p>';
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Buscar Sugerencias 🤖';
+                loader.style.display = 'none';
+            }
+        });
+
+        // Función que registra los nuevos diagnósticos en la BD (vía la nueva ruta API en Flask)
+        async function agregarSugerencias(medicamentoId) {
+            const checkboxes = document.querySelectorAll('input[name="diagnosticos_sugeridos_temp"]:checked');
+            const nuevosDiagnosticos = Array.from(checkboxes).map(cb => cb.value);
+
+            if (nuevosDiagnosticos.length === 0) {
+                alert("Por favor, selecciona al menos un diagnóstico para agregar.");
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/registrar_diagnosticos', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ diagnosticos: nuevosDiagnosticos })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    let message = `¡Éxito! Se registraron ${data.count} nuevos diagnósticos. `;
+                    
+                    if (data.count < nuevosDiagnosticos.length) {
+                        message += "Algunos ya existían y fueron ignorados. ";
+                    }
+                    
+                    message += "Recargando la página para que puedas asociarlos a este medicamento.";
+                    
+                    alert(message);
+                    
+                    // Recargar la página para que los nuevos diagnósticos aparezcan en la lista principal
+                    window.location.reload(); 
+                } else {
+                    alert(`Error al registrar diagnósticos: ${data.message}`);
+                }
+
+            } catch (error) {
+                console.error('Error al registrar diagnósticos:', error);
+                alert('Error de conexión o de servidor al intentar registrar los nuevos diagnósticos.');
+            }
+        }
+    </script>
+</body>
+</html>

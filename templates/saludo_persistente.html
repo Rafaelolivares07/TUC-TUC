@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Bienvenido de vuelta{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos para el mensaje de diálogo que aparece en el centro */
+    .app-dialog {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        font-weight: 300; 
+        color: #007bff; /* Color azul, si tienes un color principal en tu app, úsalo */
+        /* Animación de entrada más suave */
+        transition: opacity 1.5s ease-in-out;
+    }
+</style>
+
+<div class="d-flex justify-content-center align-items-center" style="height: 100%;">
+    <div class="text-center">
+        <h1 id="dialog-message" class="display-3 app-dialog" style="opacity: 0;"></h1>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const dialogMessage = document.getElementById('dialog-message');
+    // Capturamos el nombre que Flask nos envía
+    const nombre = "{{ nombre | safe }}"; 
+
+    const startPersistentGreeting = () => {
+        
+        // 1. Mostrar el saludo gentil: "Hola de nuevo, [Nombre]!"
+        dialogMessage.textContent = `¡Hola de nuevo, ${nombre}!`;
+        dialogMessage.style.opacity = '1';
+
+        // 2. Transición a la siguiente frase después de 2 segundos
+        setTimeout(() => {
+             dialogMessage.textContent = `¿En qué puedo ayudarte hoy?`;
+        }, 2000); // 2 segundos
+
+        // 3. Redirigir después de un tiempo total (4.5 segundos)
+        setTimeout(() => {
+            // Animación de desvanecimiento suave (0.5s)
+            dialogMessage.style.opacity = '0';
+            setTimeout(() => {
+                // Redirigir a la pantalla de consulta
+                window.location.href = "{{ url_for('consulta') }}";
+            }, 500); 
+        }, 4500); // 4.5 segundos en total
+
+    };
+    
+    startPersistentGreeting();
+});
+</script>
+
+{% endblock %}

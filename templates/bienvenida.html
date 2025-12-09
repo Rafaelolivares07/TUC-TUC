@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Bienvenido a Tuk Tuk{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilo para la fuente delgada y grande, ideal para la calma y la legibilidad */
+    .app-dialog {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Usamos una fuente sans-serif limpia */
+        font-weight: 300; /* Fuente delgada (Light/Thin) */
+        color: #007bff; /* Color primario para el texto */
+    }
+    .text-input-style {
+        border: none;
+        border-bottom: 2px solid #007bff; /* Borde inferior azul para un look moderno */
+        box-shadow: none;
+        text-align: center;
+        font-size: 2rem;
+        font-weight: 300;
+        outline: none; /* Quitar el borde de foco */
+    }
+    .text-input-style:focus {
+        border-bottom: 2px solid #0056b3; /* Color más oscuro al enfocar */
+    }
+    .fade-in {
+        opacity: 1 !important;
+        transition: opacity 1.5s ease-in-out;
+    }
+    
+    /* ESTILOS DE LOS BOTONES DE CHAT */
+    .chat-options-container {
+        display: flex;
+        flex-direction: column; /* Apilamos las opciones */
+        align-items: center;
+        margin-top: 20px;
+        min-width: 300px;
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+    }
+    .chat-btn {
+        width: 100%;
+        margin: 5px 0;
+        padding: 10px 20px;
+        font-size: 1.1rem;
+        background-color: #e9ecef; /* Color gris suave */
+        color: #495057; /* Texto oscuro */
+        border: 1px solid #ced4da;
+        transition: background-color 0.2s;
+    }
+    .chat-btn:hover {
+        background-color: #007bff;
+        color: white;
+    }
+</style>
+
+<div class="d-flex justify-content-center align-items-center" style="height: 100%;">
+    <div class="text-center" id="dialog-content"> 
+        <h1 id="dialog-message" class="display-3 app-dialog" style="opacity: 0;"></h1>
+        
+        <div id="text-input-container" style="display: none; margin-top: 30px; min-width: 300px;">
+            <input type="text" id="user-input" class="form-control form-control-lg text-input-style" placeholder="Escribe aquí..." maxlength="50">
+        </div>
+
+        <div id="age-options-container" class="chat-options-container" style="display: none;">
+            <button class="chat-btn" data-age-type="CHILD">Niño/a (Menor de 12)</button>
+            <button class="chat-btn" data-age-type="TEEN">Adolescente (12-17)</button>
+            <button class="chat-btn" data-age-type="ADULT">Adulto (18-64)</button>
+            <button class="chat-btn" data-age-type="SENIOR">Adulto Mayor (65+)</button>
+            <button class="chat-btn btn-outline-secondary" data-age-type="SPECIFY">Quiero escribir mi edad exacta</button>
+        </div>
+        
+        <div id="weight-options-container" class="chat-options-container" style="display: none;">
+            <button class="chat-btn" data-weight-range="LOW">Bajo (Menos de 50 kg)</button>
+            <button class="chat-btn" data-weight-range="NORMAL">Normal (50 - 75 kg)</button>
+            <button class="chat-btn" data-weight-range="HIGH">Alto (75 - 100 kg)</button>
+            <button class="chat-btn" data-weight-range="VERY_HIGH">Muy Alto (Más de 100 kg)</button>
+            <button class="chat-btn btn-outline-secondary" data-weight-range="SPECIFY">Quiero escribir mi peso exacto</button>
+        </div>
+
+        <div id="gender-options-container" class="chat-options-container" style="display: none;">
+            <button class="chat-btn" data-gender="M">Hombre</button>
+            <button class="chat-btn" data-gender="F">Mujer</button>
+            <button class="chat-btn btn-outline-secondary" data-gender="N">Prefiero no decir</button>
+        </div>
+        
+        <div id="confirmation-container" style="display: none; margin-top: 20px;">
+            <p id="confirmation-text" class="lead app-dialog mb-3"></p>
+            <button id="btn-yes" class="btn btn-success btn-lg mx-2">Sí, confirmar</button>
+            <button id="btn-no" class="btn btn-outline-secondary btn-lg mx-2">No, corregir</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/JS/bienvenida.js?v=3.2"></script>
+
+
+{% endblock %}

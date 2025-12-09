@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrito - Medicamentos a Domicilio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        
+        .carrito-vacio {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .carrito-vacio-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .btn-volver {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 1.5rem;
+            transition: background 0.3s;
+        }
+        
+        .btn-volver:hover {
+            background: #5568d3;
+        }
+        
+        .carrito-items {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .item {
+            display: grid;
+            grid-template-columns: 100px 1fr auto;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            align-items: center;
+        }
+        
+        .item:last-child {
+            border-bottom: none;
+        }
+        
+        .item-imagen {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+        
+        .item-info {
+            flex: 1;
+        }
+        
+        .item-nombre {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        
+        .item-fabricante {
+            color: #667eea;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .item-presentacion {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        
+        .item-precio {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #2ecc71;
+            margin-bottom: 0.5rem;
+        }
+        
+        .item-controles {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: flex-end;
+        }
+        
+        .cantidad-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-cantidad {
+            background: #667eea;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+        
+        .btn-cantidad:hover {
+            background: #5568d3;
+        }
+        
+        .cantidad-display {
+            min-width: 40px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .btn-eliminar {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+        
+        .btn-eliminar:hover {
+            background: #c0392b;
+        }
+        
+        .resumen {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .resumen h2 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        
+        .resumen-linea {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .resumen-linea.total {
+            border-bottom: none;
+            border-top: 2px solid #333;
+            margin-top: 0.5rem;
+            padding-top: 1rem;
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .resumen-label {
+            color: #666;
+        }
+        
+        .resumen-valor {
+            font-weight: 600;
+        }
+        
+        .btn-checkout {
+            width: 100%;
+            background: #2ecc71;
+            color: white;
+            border: none;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: background 0.3s;
+        }
+        
+        .btn-checkout:hover {
+            background: #27ae60;
+        }
+        
+        .nota-domicilio {
+            font-size: 0.85rem;
+            color: #666;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .item {
+                grid-template-columns: 80px 1fr;
+                gap: 0.75rem;
+            }
+            
+            .item-controles {
+                grid-column: 1 / -1;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .item-imagen {
+                width: 80px;
+                height: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🛒 Tu Carrito</h1>
+            <a href="/tienda" style="color: white; text-decoration: none; font-size: 0.9rem;">← Seguir comprando</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Carrito vacío -->
+        <div id="carritoVacio" class="carrito-vacio" style="display: none;">
+            <div class="carrito-vacio-icon">🛒</div>
+            <h2>Tu carrito está vacío</h2>
+            <p>Agrega productos para comenzar tu compra</p>
+            <a href="/tienda" class="btn-volver">Ver productos</a>
+        </div>
+        
+        <!-- Carrito con items -->
+        <div id="carritoConItems" style="display: none;">
+            <div class="carrito-items">
+                <h2 style="margin-bottom: 1rem;">Productos</h2>
+                <div id="listaItems"></div>
+            </div>
+            
+            <div class="resumen">
+                <h2>Resumen del Pedido</h2>
+                <div class="resumen-linea">
+                    <span class="resumen-label">Subtotal</span>
+                    <span class="resumen-valor" id="subtotal">$0</span>
+                </div>
+                <div class="resumen-linea">
+                    <span class="resumen-label">Domicilio</span>
+                    <span class="resumen-valor" id="domicilio">$0</span>
+                </div>
+                <div class="resumen-linea total">
+                    <span>Total</span>
+                    <span id="total">$0</span>
+                </div>
+                <button class="btn-checkout" onclick="irCheckout()">
+                    Continuar con la Compra
+                </button>
+                <p class="nota-domicilio">* Domicilio gratis para compras mayores a $50,000</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const COSTO_DOMICILIO = 5000;
+        const DOMICILIO_GRATIS_MIN = 50000;
+        
+        let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+        
+        function formatearPrecio(precio) {
+            return new Intl.NumberFormat('es-CO').format(precio);
+        }
+        
+        function actualizarCarrito() {
+            if (carrito.length === 0) {
+                document.getElementById('carritoVacio').style.display = 'block';
+                document.getElementById('carritoConItems').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('carritoVacio').style.display = 'none';
+            document.getElementById('carritoConItems').style.display = 'block';
+            
+            // Renderizar items
+            const listaItems = document.getElementById('listaItems');
+            listaItems.innerHTML = carrito.map((item, index) => `
+                <div class="item">
+                    <img src="${item.imagen ? '/static/uploads/' + item.imagen : '/static/placeholder.png'}" 
+                         alt="${item.nombre}" 
+                         class="item-imagen"
+                         onerror="this.style.display='none'">
+                    
+                    <div class="item-info">
+                        <div class="item-nombre">${item.nombre}</div>
+                        <div class="item-fabricante">${item.fabricante}</div>
+                        <div class="item-presentacion">
+                            ${item.concentracion || ''} ${item.presentacion || ''}
+                        </div>
+                        <div class="item-precio">$${formatearPrecio(item.precio)}</div>
+                    </div>
+                    
+                    <div class="item-controles">
+                        <div class="cantidad-control">
+                            <button class="btn-cantidad" onclick="cambiarCantidad(${index}, -1)">−</button>
+                            <span class="cantidad-display">${item.cantidad}</span>
+                            <button class="btn-cantidad" onclick="cambiarCantidad(${index}, 1)">+</button>
+                        </div>
+                        <button class="btn-eliminar" onclick="eliminarItem(${index})">🗑️ Eliminar</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Calcular totales
+            const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+            const domicilio = subtotal >= DOMICILIO_GRATIS_MIN ? 0 : COSTO_DOMICILIO;
+            const total = subtotal + domicilio;
+            
+            document.getElementById('subtotal').textContent = '$' + formatearPrecio(subtotal);
+            document.getElementById('domicilio').textContent = domicilio === 0 ? 'GRATIS' : '$' + formatearPrecio(domicilio);
+            document.getElementById('total').textContent = '$' + formatearPrecio(total);
+        }
+        
+        function cambiarCantidad(index, cambio) {
+            carrito[index].cantidad += cambio;
+            
+            if (carrito[index].cantidad <= 0) {
+                eliminarItem(index);
+                return;
+            }
+            
+            localStorage.setItem('carrito', JSON.stringify(carrito));
+            actualizarCarrito();
+        }
+        
+        function eliminarItem(index) {
+            carrito.splice(index, 1);
+            localStorage.setItem('carrito', JSON.stringify(carrito));
+            actualizarCarrito();
+        }
+        
+        function irCheckout() {
+            if (carrito.length === 0) {
+                alert('El carrito está vacío');
+                return;
+            }
+            window.location.href = '/tienda/checkout';
+        }
+        
+        // Inicializar
+        actualizarCarrito();
+    </script>
+</body>
+</html>

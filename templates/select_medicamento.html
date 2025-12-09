@@ -1,0 +1,39 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seleccionar medicamento</title>
+  <script>
+    function goTo(id){ 
+      if(!id) return; 
+      const skipScraping = document.getElementById('skipScraping').checked ? '1' : '0';
+      window.location='/sugerir-sintomas/ver/'+id+'?skip_scraping='+skipScraping;
+    }
+  </script>
+</head>
+<body style="font-family: sans-serif; padding:20px;">
+  <h1>Seleccionar medicamento pendiente</h1>
+  <p>Lista de medicamentos que tienen <code>componente_activo_id</code> y <strong>sin</strong> síntomas asociados.</p>
+  
+  <!-- Checkbox para skipear scraping -->
+  <div style="margin:12px 0; padding:10px; background:#f0f0f0; border-radius:4px;">
+    <label>
+      <input type="checkbox" id="skipScraping" />
+      <strong>⚡ Saltear scraping</strong> (ir directo a búsqueda manual en Google/Wikipedia)
+    </label>
+    <small style="display:block; color:#666; margin-top:6px;">
+      Activa esto si el scraping es lento. Irás directo a los botones de búsqueda.
+    </small>
+  </div>
+
+  <select id="sel" onchange="goTo(this.value)" style="width:100%; padding:8px; margin-top:8px;">
+    <option value="">-- Seleccione --</option>
+    {% for m in meds %}
+      <option value="{{ m.id }}">[{{ m.id }}] {{ m.nombre }}</option>
+    {% endfor %}
+  </select>
+  <p style="margin-top:12px;"><a href="/sugerir-sintomas/pendientes">Actualizar lista</a></p>
+</body>
+</html>

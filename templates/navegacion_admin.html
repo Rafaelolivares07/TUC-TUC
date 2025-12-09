@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de URLs - Navegación</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .form-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .form-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-open {
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+        
+        .btn-open:hover {
+            background: #218838;
+        }
+        
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+        
+        .btn-delete:hover {
+            background: #c82333;
+        }
+        
+        .btn-toggle {
+            background: #ffc107;
+            color: #333;
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+        
+        .btn-toggle:hover {
+            background: #e0a800;
+        }
+        
+        .table-section {
+            margin-top: 30px;
+        }
+        
+        .table-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            padding: 8px 15px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        tbody tr {
+            transition: all 0.2s;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .toast.success {
+            border-left: 4px solid #28a745;
+        }
+        
+        .toast.error {
+            border-left: 4px solid #dc3545;
+        }
+        
+        .url-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .url-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔗 Gestor de URLs de Navegación</h1>
+            <p>Administra las páginas y enlaces de tu aplicación</p>
+        </div>
+        
+        <div class="content">
+            <!-- Formulario para agregar URLs -->
+            <div class="form-section">
+                <h2>➕ Agregar Nueva URL</h2>
+                <form id="formNavegacion">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="nombreCorto">Nombre Corto (máx. 3 palabras) *</label>
+                            <input type="text" id="nombreCorto" placeholder="ej: Inicio" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="url">URL *</label>
+                            <input type="text" id="url" placeholder="ej: /index o /medicamentos" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="orden">Orden</label>
+                            <input type="number" id="orden" value="0" min="0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="descripcion">Descripción</label>
+                        <textarea id="descripcion" placeholder="Descripción opcional de la página..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span>💾</span> Guardar URL
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Tabla de URLs -->
+            <div class="table-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">📋 URLs Registradas</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-open" onclick="ordenarPor('alfabetico')" style="background: #17a2b8;">
+                            🔤 A-Z
+                        </button>
+                        <button class="btn btn-open" onclick="ordenarPor('reciente')" style="background: #6c757d;">
+                            ⏰ Recientes
+                        </button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table id="tablaNavegacion">
+                        <thead>
+                            <tr>
+                                <th>Orden</th>
+                                <th>Nombre</th>
+                                <th>URL</th>
+                                <th>Descripción</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bodyNavegacion">
+                            <!-- Se llenará con JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast para notificaciones -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Configuración de la API
+        const API_URL = '/api/navegacion';
+        let datosNavegacion = []; // Guardar datos para ordenar
+        let ordenActual = 'reciente'; // Orden por defecto
+
+        // Cargar URLs al iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarNavegacion();
+        });
+        
+        // Enviar formulario
+        document.getElementById('formNavegacion').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                nombre_corto: document.getElementById('nombreCorto').value.trim(),
+                url: document.getElementById('url').value.trim(),
+                descripcion: document.getElementById('descripcion').value.trim(),
+                orden: parseInt(document.getElementById('orden').value)
+            };
+            
+            // Validar máximo 3 palabras
+            if (data.nombre_corto.split(' ').length > 3) {
+                mostrarToast('El nombre debe tener máximo 3 palabras', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    mostrarToast('✅ URL agregada correctamente', 'success');
+                    document.getElementById('formNavegacion').reset();
+                    cargarNavegacion();
+                } else {
+                    mostrarToast('❌ ' + result.error, 'error');
+                }
+            } catch (error) {
+                mostrarToast('❌ Error al guardar la URL', 'error');
+                console.error(error);
+            }
+        });
+        
+        // Cargar todas las URLs
+        async function cargarNavegacion() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                // Guardar datos para ordenar
+                datosNavegacion = data;
+
+                // Aplicar ordenamiento actual
+                aplicarOrdenamiento();
+
+            } catch (error) {
+                console.error('Error al cargar navegación:', error);
+                mostrarToast('❌ Error al cargar las URLs', 'error');
+            }
+        }
+
+        // Aplicar ordenamiento y renderizar
+        function aplicarOrdenamiento() {
+            const tbody = document.getElementById('bodyNavegacion');
+
+            if (datosNavegacion.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <div>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                </svg>
+                                <h3>No hay URLs registradas</h3>
+                                <p>Agrega tu primera URL usando el formulario de arriba</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Ordenar datos
+            let datosOrdenados = [...datosNavegacion];
+
+            if (ordenActual === 'alfabetico') {
+                datosOrdenados.sort((a, b) => a.nombre_corto.localeCompare(b.nombre_corto));
+            } else if (ordenActual === 'reciente') {
+                datosOrdenados.sort((a, b) => {
+                    // Los que NO tienen fecha_ultimo_uso van al final
+                    if (!a.fecha_ultimo_uso && !b.fecha_ultimo_uso) return 0;
+                    if (!a.fecha_ultimo_uso) return 1;  // a al final
+                    if (!b.fecha_ultimo_uso) return -1; // b al final
+                    // Los que sí tienen fecha: más recientes primero
+                    return new Date(b.fecha_ultimo_uso) - new Date(a.fecha_ultimo_uso);
+                });
+            }
+
+            tbody.innerHTML = datosOrdenados.map(item => `
+                <tr>
+                    <td>${item.orden}</td>
+                    <td><strong>${item.nombre_corto}</strong></td>
+                    <td><a href="${item.url}" class="url-link" target="_blank">${item.url}</a></td>
+                    <td>${item.descripcion || '-'}</td>
+                    <td>
+                        <span class="badge ${item.activo ? 'badge-active' : 'badge-inactive'}">
+                            ${item.activo ? '✓ Activa' : '✗ Inactiva'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="actions">
+                            <button class="btn btn-open" onclick="abrirURL('${item.url}', ${item.id})">
+                                🔗 Abrir
+                            </button>
+                            <button class="btn btn-toggle" onclick="toggleEstado(${item.id})">
+                                ${item.activo ? '👁️' : '🔒'}
+                            </button>
+                            <button class="btn btn-delete" onclick="eliminarURL(${item.id})">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Cambiar tipo de ordenamiento
+        function ordenarPor(tipo) {
+            ordenActual = tipo;
+            aplicarOrdenamiento();
+        }
+        
+        // Abrir URL en nueva ventana y registrar uso
+        async function abrirURL(url, id) {
+            // Abrir URL
+            window.open(url, '_blank');
+
+            // Registrar uso
+            try {
+                await fetch(`${API_URL}/${id}/uso`, {
+                    method: 'PUT'
+                });
+
+                // Recargar datos para actualizar el ordenamiento por recientes
+                cargarNavegacion();
+            } catch (error) {
+                console.error('Error al registrar uso:', error);
+            }
+        }
+        
+        // Toggle activo/inactivo
+        async function toggleEstado(id) {
+            try {
+                const response = await fetch(`${API_URL}/${id}/toggle`, {
+                    method: 'PUT'
+                });
+                
+                if (response.ok) {
+                    mostrarToast('✅ Estado actualizado', 'success');
+                    cargarNavegacion();
+                }
+            } catch (error) {
+                mostrarToast('❌ Error al actualizar estado', 'error');
+            }
+        }
+        
+        // Eliminar URL
+        async function eliminarURL(id) {
+            if (!confirm('¿Estás seguro de eliminar esta URL?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    mostrarToast('✅ URL eliminada correctamente', 'success');
+                    cargarNavegacion();
+                }
+            } catch (error) {
+                mostrarToast('❌ Error al eliminar la URL', 'error');
+            }
+        }
+        
+        // Mostrar notificación toast
+        function mostrarToast(mensaje, tipo) {
+            const toast = document.getElementById('toast');
+            toast.textContent = mensaje;
+            toast.className = `toast ${tipo}`;
+            toast.style.display = 'flex';
+            
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

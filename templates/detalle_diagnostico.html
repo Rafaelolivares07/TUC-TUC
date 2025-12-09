@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Detalle Diagnóstico</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">🩺 {{ diagnostico["descripcion"] }}</header>
+  <main class="container">
+    <h3>Síntomas asociados</h3>
+    {% if sintomas %}
+      <ul class="list">
+        {% for s in sintomas %}
+          <li class="list-item">{{ s["descripcion"] }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No hay síntomas asociados.</p>
+    {% endif %}
+
+    <h3>Medicamentos asociados</h3>
+    {% if medicamentos %}
+      <ul class="list">
+        {% for m in medicamentos %}
+          <li class="list-item">{{ m["nombre"] }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No hay medicamentos asociados.</p>
+    {% endif %}
+
+    <a class="btn-primary" href="{{ url_for('asociar_diagnostico', diagnostico_id=diagnostico['id']) }}">✏️ Asociar</a>
+    <a class="btn-secondary" href="{{ url_for('lista_diagnosticos') }}">⬅ Volver</a>
+  </main>
+</body>
+</html>

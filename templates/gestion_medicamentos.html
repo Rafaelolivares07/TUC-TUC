@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>💊 Gestión de Medicamentos</title>
+    <!-- Incluimos Tailwind CSS para diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Estilos personalizados para sobrescribir/complementar Tailwind */
+        .btn-usos {
+            background-color: #2563eb; /* blue-600 */
+        }
+        .btn-usos:hover {
+            background-color: #1d4ed8; /* blue-700 */
+        }
+        .btn-eliminar {
+            background-color: #dc2626; /* red-600 */
+        }
+        .btn-eliminar:hover {
+            background-color: #b91c1c; /* red-700 */
+        }
+        .med-image {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <header class="text-3xl font-extrabold text-center p-4 bg-indigo-600 text-white rounded-xl shadow-lg mb-6 sticky top-0 z-10">
+        💊 Gestión de Medicamentos
+    </header>
+    
+    <main class="container mx-auto max-w-6xl">
+        
+        <!-- Muestra mensajes flash (éxito o error) -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="space-y-3 mb-4">
+            {% for category, message in messages %}
+                <div class="p-3 text-sm rounded-lg 
+                    {% if category == 'success' %} bg-green-100 text-green-700 {% elif category == 'danger' or category == 'error' %} bg-red-100 text-red-700 {% else %} bg-blue-100 text-blue-700 {% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+            </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- Botón Agregar Medicamento -->
+        <a class="w-full block bg-green-500 hover:bg-green-600 text-white text-xl font-bold py-4 px-6 rounded-xl shadow-md transition duration-200 mb-6 text-center" 
+           href="{{ url_for('nuevo_medicamento') }}">
+            <i class="fas fa-plus-circle mr-2"></i> Agregar nuevo medicamento
+        </a>
+
+        {% if medicamentos %}
+            <ul class="space-y-4">
+                {% for m in medicamentos %}
+                    <li class="flex flex-wrap items-center justify-between bg-white p-4 rounded-xl shadow-md border-l-4 border-indigo-400 gap-4">
+                        
+                        <!-- IMAGEN (Izquierda) -->
+                        <div class="flex-shrink-0">
+                            {% if m["imagen"] %}
+                                <img src="{{ url_for('static', filename='uploads/' ~ m['imagen']) }}" 
+                                     onerror="this.onerror=null;this.src='https://placehold.co/120x120/f3f4f6/4b5563?text=Sin+Foto';"
+                                     class="med-image" 
+                                     alt="Imagen de {{ m['nombre'] }}">
+                            {% else %}
+                                <div class="med-image bg-gray-200 flex items-center justify-center">
+                                    <i class="fas fa-image text-gray-400 text-3xl"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Sección de Información (Centro) -->
+                        <div class="med-info flex-grow min-w-[250px]">
+                            <strong class="text-xl font-bold text-gray-800 block">{{ m["nombre"] }}</strong>
+                            <small class="text-sm text-gray-500 block mb-2">{{ m["presentacion"] }} • {{ m["concentracion"] }}</small>
+                            
+                            <!-- Stock -->
+                            <div class="text-base mt-2 space-y-1">
+                                {% set stock_color_class = 'text-green-600' if m['stock_actual'] and m['stock_actual'] > 0 else 'text-red-600' %}
+                                <span title="Existencias Actuales" 
+                                      class="font-semibold {{ stock_color_class }} block">
+                                    <i class="fas fa-boxes mr-1"></i> Stock: {{ m["stock_actual"] | default(0) }} unid.
+                                </span>
+                                
+                                <!-- Código ATC -->
+                                {% if m['codigo_atc_puro'] %}
+                                <span title="Clasificación ATC: {{ m['descripcion_tecnica_atc'] }}" class="text-blue-600 font-semibold text-xs block">
+                                    <i class="fas fa-barcode mr-1"></i> ATC: {{ m['codigo_atc_puro'] }}
+                                </span>
+                                {% endif %}
+
+                                <!-- Uso -->
+                                {% if m['uso'] %}
+                                <span class="text-gray-600 text-sm block">
+                                    <i class="fas fa-prescription-bottle mr-1"></i> {{ m['uso'] }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div> 
+                        
+                        <!-- Sección de Acciones (Derecha) -->
+                        <div class="med-actions flex items-center flex-wrap gap-2 flex-shrink-0">
+                            <!-- BOTÓN EDITAR -->
+                            <a href="{{ url_for('editar_medicamento_admin', medicamento_id=m.id) }}"
+                               class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition duration-150" 
+                               title="Editar información del medicamento y cambiar imagen">
+                                <i class="fas fa-edit mr-1"></i> Editar
+                            </a>
+                            
+                            <!-- FORMULARIO ELIMINAR -->
+                            <form class="delete-form" data-med-name="{{ m.nombre }}" method="POST" 
+                                  action="{{ url_for('eliminar_medicamento', medicamento_id=m.id) }}" 
+                                  style="display: inline-block;">
+                                <button type="submit" class="btn-eliminar text-white px-4 py-2 rounded-lg shadow-sm font-medium transition duration-150" 
+                                        title="Eliminar definitivamente este medicamento y todos sus registros">
+                                    <i class="fas fa-trash mr-1"></i> Eliminar
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="text-center mt-10 p-6 bg-yellow-50 rounded-xl border border-yellow-200">
+                <i class="fas fa-exclamation-triangle text-yellow-600 text-3xl mb-3"></i>
+                <p class="text-gray-600 text-lg">No hay medicamentos registrados aún.</p>
+                <p class="text-sm text-gray-400 mt-2">Usa el botón "Agregar nuevo medicamento" para empezar.</p>
+            </div>
+        {% endif %}
+
+        <!-- Botón Volver -->
+        <a class="w-full block bg-gray-300 hover:bg-gray-400 text-gray-800 text-lg font-semibold py-3 px-6 rounded-xl shadow-sm transition duration-200 mt-8 text-center" 
+           href="{{ url_for('admin_area') }}">
+            <i class="fas fa-arrow-left mr-2"></i> Volver al Menú de Admin
+        </a>
+    </main>
+
+<script>
+    document.querySelectorAll('.delete-form').forEach(form => {
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const medName = this.getAttribute('data-med-name');
+            
+            if (confirm(`¿Estás seguro de eliminar "${medName}"?\n\nEsto eliminará el medicamento y todos sus registros asociados.`)) {
+                this.submit();
+            }
+        });
+    });
+</script>
+
+</body>
+</html>

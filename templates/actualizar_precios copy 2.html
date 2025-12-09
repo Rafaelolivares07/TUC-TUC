@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Actualizar Precios</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        h1 { color: #007b5e; }
+        .medicamento-card { 
+            background: #f9f9f9; 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            border-left: 4px solid #007b5e;
+        }
+        .med-nombre { font-size: 1.1em; font-weight: bold; margin-bottom: 10px; }
+        input[type="text"], input[type="number"], select { 
+            padding: 6px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            width: 50%;
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        .precios-grid { 
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 10px; 
+            margin: 10px 0;
+        }
+        .precio-item { background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        .precio-item label { font-size: 0.85em; color: #666; display: block; margin-bottom: 5px; }
+        .precio-item input { width: 90%; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9em; }
+        .btn-buscar { background: #007b5e; color: white; font-size: 0.75em; padding: 5px 10px; }
+        .btn-guardar { background: #28a745; color: white; }
+        .btn-agregar { background: #17a2b8; color: white; }
+        .precio-sugerido { 
+            background: #fff3cd; 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin: 10px 0;
+            font-size: 1em;
+            font-weight: bold;
+        }
+        .flex-row { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+        .guardado-ok { color: #28a745; font-size: 0.9em; margin-left: 10px; }
+        .paste-zone-precio { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            width: 150px; 
+            height: 150px; 
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 2em;
+            transition: all 0.3s ease;
+        }
+        .paste-zone-precio:hover {
+            border-color: #007b5e;
+            background: #f0f9f8;
+        }
+        .paste-zone-precio.active {
+            border-color: #28a745;
+            background: #e8f5e9;
+            font-size: 1.5em;
+        }
+        .imagen-preview {
+            position: relative;
+        }
+        .imagen-preview img {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 Actualizar Precios con Competencia</h1>
+        
+        {% for med in medicamentos %}
+        <div class="medicamento-card" 
+             data-med-id="{{ med[0] }}" 
+             data-precio-id="{{ med[5] }}"
+             data-nombre-original="{{ med[1] }}">
+            
+        <div style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px;">
+            <!-- LADO IZQUIERDO: Nombre, Fabricante y Precios -->
+            <div style="flex: 1;">
+                <!-- Nombre y Fabricante -->
+                <div style="margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <label style="font-size: 0.9em; color: #666;">Medicamento:</label>
+                        <input type="text"
+                            id="nombre_{{ med[0] }}"
+                            value="{{ med[1] }}"
+                            placeholder="Nombre del medicamento"
+                            onblur="actualizarNombre({{ med[0] }})"
+                            style="width: 152%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
+                        <span id="guardado_nombre_{{ med[0] }}" class="guardado-ok"></span>
+                    </div>
+                    
+                    <div>
+                        <label style="font-size: 0.9em; color: #666;">Fabricante:</label>
+                        <select id="fabricante_{{ med[0] }}" style="width: 157%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
+                            {% for fab in fabricantes %}
+                            <option value="{{ fab[0] }}" {% if fab[0] == med[2] %}selected{% endif %}>
+                                {{ fab[1] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Precios con botones de búsqueda inline -->
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    {% for comp in competidores %}
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label style="min-width: 100px; font-size: 0.9em; font-weight: bold; color: #666;">
+                            {{ comp[1] }}
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 0; flex: 1;">
+                            <span style="font-size: 0.9em; padding: 6px 4px;">$</span>
+                            <input type="number" 
+                                class="precio-competidor" 
+                                data-comp-id="{{ comp[0] }}"
+                                data-med-id="{{ med[0] }}"
+                                placeholder="0"
+                                oninput="calcularSugerido({{ med[0] }})"
+                                style="width: 115px; padding: 6px; border: 1px solid #ddd; border-radius: 4px 0 0 4px; font-size: 0.85em;">
+                            <button class="btn btn-buscar" 
+                                    onclick="buscarEnFarmacia('{{ comp[1] }}', {{ med[0] }}, {{ comp[0] }})"
+                                    style="padding: 6px 10px; font-size: 0.9em; background: #007b5e; color: white; border-radius: 0 4px 4px 0; border: 1px solid #007b5e; margin-left: -1px;">
+                                🔍
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- LADO DERECHO: Imagen (alineada abajo con los precios) -->
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0;">
+                <!-- Mostrar imagen si existe, sino zona de pegado -->
+                {% if med[6] %}
+                    <div class="imagen-preview" style="position: relative;">
+                        <img id="imagen_{{ med[0] }}"
+                            src="/static/uploads/{{ med[6] }}"
+                            alt="Imagen precio"
+                            style="width: 150px; height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd;"
+                            title="Clic para pegar imagen">
+                    </div>
+                {% else %}
+                    <div class="paste-zone-precio" 
+                         data-precio-id="{{ med[5] }}"
+                         data-med-id="{{ med[0] }}"
+                         title="Clic + Ctrl+V para pegar imagen">
+                        📋
+                    </div>
+                {% endif %}
+                
+                <small style="color: #666; font-size: 0.8em; text-align: center;">
+                    Clic + Ctrl+V
+                </small>
+            </div>
+        </div>
+
+
+
+        <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
+            <label style="font-weight: bold; color: #666;">💰 Precio sugerido:</label>
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <span style="font-size: 0.9em;">$</span>
+                <input type="number" 
+                    id="sugerido_{{ med[0] }}" 
+                    class="precio-sugerido-input"
+                    data-med-id="{{ med[0] }}"
+                    placeholder="0"
+                    value="{{ med[3] or 0 }}"
+                    style="width: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; font-size: 1em;">
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-guardar" onclick="guardarPrecios({{ med[0] }}, this.closest('[data-med-id]').dataset.precioId || null)">
+                💾 Guardar
+            </button>
+            <button class="btn btn-agregar" onclick="agregarFabricante({{ med[0] }})">
+                ➕ Otro fabricante
+            </button>
+            <span id="guardado_precio_{{ med[0] }}" class="guardado-ok"></span>
+        </div>
+            
+         {% endfor %}
+    </div>
+
+    <script>
+
+
+
+        function limpiarNombreMedicamento(nombre) {
+            // Palabras que indican presentación
+            const presentaciones = [
+                'tableta', 'tablet', 'capsula', 'cápsula', 'jarabe', 'solución',
+                'inyección', 'inyeccion', 'spray', 'crema', 'ungüento', 'polvo',
+                'gotas', 'gota', 'comprimido', 'cápsula', 'ampolla', 'vial',
+                'suspensión', 'emulsión', 'loción', 'pasta', 'pomada', 'gel'
+            ];
+            
+            let resultado = nombre;
+            
+            // 1️⃣ Quitar patrones de "caja x 20", "display por 10", etc.
+            resultado = resultado.replace(/\b(caja|display|blister|tubo|frasco)\s+[x|por]\s*\d+\b/gi, '');
+            resultado = resultado.replace(/\bx\s*\d+\b/gi, ''); // "x 20" o "x20"
+            resultado = resultado.replace(/\bpor\s*\d+\b/gi, ''); // "por 10"
+            
+            // 2️⃣ Quitar presentaciones
+            let resultadoLower = resultado.toLowerCase();
+            for (let palabra of presentaciones) {
+                const index = resultadoLower.indexOf(palabra);
+                if (index !== -1) {
+                    resultado = resultado.substring(0, index).trim();
+                    resultadoLower = resultado.toLowerCase();
+                    break;
+                }
+            }
+            
+            // 3️⃣ Limpiar espacios extras
+            resultado = resultado.replace(/\s+/g, ' ').trim();
+            
+            return resultado || nombre;
+        }
+
+        function abrirFarmacia(dominio, medicamento) {
+            const medLimpio = limpiarNombreMedicamento(medicamento);
+            const medEncodificado = encodeURIComponent(medLimpio);
+            
+            let url;
+            if (dominio === 'cruzverde.com.co') {
+                url = `https://www.${dominio}/search?query=${medEncodificado}`;
+            } else if (dominio === 'farmatodo.com.co') {
+                url = `https://www.${dominio}/buscar?product=${medEncodificado}&departamento=Todos&filtros=`;
+            } else {
+                url = `https://www.${dominio}/${medLimpio}?_q=${medEncodificado}&map=ft`;
+            }
+            
+            window.open(url, '_blank');
+        }
+
+
+
+        function actualizarNombre(medId) {
+            const input = document.getElementById(`nombre_${medId}`);
+            const nombreOriginal = document.querySelector(`[data-med-id="${medId}"]`).dataset.nombreOriginal;
+            const nuevoNombre = input.value.trim();
+            
+            if (nuevoNombre === nombreOriginal) return;
+            
+            const formData = new FormData();
+            formData.append('accion', 'actualizar_nombre');
+            formData.append('medicamento_id', medId);
+            formData.append('nuevo_nombre', nuevoNombre);
+            
+            fetch('/admin/actualizar_precios', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    document.getElementById(`guardado_nombre_${medId}`).innerHTML = '✅ Guardado';
+                    setTimeout(() => {
+                        document.getElementById(`guardado_nombre_${medId}`).innerHTML = '';
+                    }, 3000);
+                    document.querySelector(`[data-med-id="${medId}"]`).dataset.nombreOriginal = nuevoNombre;
+                }
+            });
+        }
+
+        function calcularSugerido(medId) {
+            const precios = document.querySelectorAll(`.precio-competidor[data-med-id="${medId}"]`);
+            const valores = Array.from(precios)
+                .map(input => parseFloat(input.value) || 0)
+                .filter(val => val > 0);
+            
+            if (valores.length > 0) {
+                const max = Math.max(...valores);
+                const sugerido = max - 200;
+                
+                // 🆕 LLENAR EL INPUT CON EL VALOR CALCULADO
+                const inputSugerido = document.getElementById(`sugerido_${medId}`);
+                inputSugerido.value = sugerido;
+                
+                console.log(`📊 Sugerido actualizado: $${sugerido}`);
+            }
+        }
+
+        function guardarPrecios(medId, precioId) {
+            const fabricanteId = document.getElementById(`fabricante_${medId}`).value;
+            if (!fabricanteId) {
+                alert('Selecciona un fabricante');
+                return;
+            }
+            
+            const precios = document.querySelectorAll(`.precio-competidor[data-med-id="${medId}"]`);
+            const valores = Array.from(precios)
+                .map(input => parseFloat(input.value) || 0)
+                .filter(val => val > 0);
+
+            // 🆕 LEER EL VALOR DEL INPUT EDITABLE
+            const precioSugeridoInput = document.getElementById(`sugerido_${medId}`);
+            const precioSugerido = parseFloat(precioSugeridoInput.value) || 0;
+
+            console.log(`📊 Precio sugerido (del input): $${precioSugerido}`);
+            
+            // 🆕 CALCULAR EL MÁXIMO DE LA COMPETENCIA
+            const maxCompetencia = valores.length > 0 ? Math.max(...valores) : 0;
+            const minCompetencia = valores.length > 0 ? Math.min(...valores) : 0;
+
+            console.log(`📈 Máximo competencia: $${maxCompetencia}`);
+            console.log(`📉 Mínimo competencia: $${minCompetencia}`);
+
+            // 🆕 VALIDACIONES CON ALERTAS
+            if (precioSugerido > maxCompetencia && maxCompetencia > 0) {
+                const confirmar = confirm(`⚠️ ADVERTENCIA\n\nTu precio ($${precioSugerido}) está ARRIBA del máximo de competencia ($${maxCompetencia})\n\n¿Deseas continuar?`);
+                if (!confirmar) return;
+            } 
+            else if (precioSugerido < minCompetencia && minCompetencia > 0) {
+                const confirmar = confirm(`⚠️ ADVERTENCIA\n\nTu precio ($${precioSugerido}) está DEBAJO del mínimo de competencia ($${minCompetencia})\n\n¿Deseas continuar?`);
+                if (!confirmar) return;
+            }
+
+            if (precioSugerido <= 0) {
+                alert('Ingresa precios válidos de las farmacias');
+                return;
+            }
+            
+            fetch('/admin/precios/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    id: precioId || null,
+                    medicamento_id: medId,
+                    fabricante_id: fabricanteId,
+                    precio: precioSugerido
+                })
+            })
+
+            .then(r => {
+                console.log('📥 Response status:', r.status);  // 🆕 AGREGA ESTO
+                return r.json();
+            })
+
+            .then(data => {
+                console.log('📦 Response data:', data);  // 🆕 AGREGA ESTO
+                if (data.ok) {
+                    // 🆕 SI ES NUEVO, ACTUALIZAR data-precio-id CON EL ID RETORNADO
+                    if (!precioId && data.precio_id) {
+                        const card = document.querySelector(`[data-med-id="${medId}"]`);
+                        card.dataset.precioId = data.precio_id;
+                        
+                        // 🆕 ACTUALIZAR TAMBIÉN LA ZONA DE PEGADO
+                        const pasteZone = card.querySelector('.paste-zone-precio');
+                        if (pasteZone) {
+                            pasteZone.dataset.precioId = data.precio_id;
+                        }
+                        
+                        console.log(`✅ Nuevo precio_id capturado: ${data.precio_id}`);
+                    }
+                    
+                    document.getElementById(`guardado_precio_${medId}`).innerHTML = '✅ Guardado exitosamente!';
+                    setTimeout(() => {
+                        document.getElementById(`guardado_precio_${medId}`).innerHTML = '';
+                    }, 3000);
+                } else {
+                    alert('❌ Error: ' + (data.error || 'desconocido'));
+                }
+            })
+            .catch(err => {
+                alert('❌ Error: ' + err.message);
+            });
+        }
+
+        function agregarFabricante(medId) {
+            // Limpiar los campos de precios
+            const precios = document.querySelectorAll(`.precio-competidor[data-med-id="${medId}"]`);
+            precios.forEach(input => input.value = '');
+            
+            // Limpiar el precio sugerido
+            document.getElementById(`sugerido_${medId}`).innerHTML = '💰 Precio sugerido: -';
+            
+            // Resetear el SELECT a la primera opción
+            document.getElementById(`fabricante_${medId}`).selectedIndex = 0;
+            
+            // 🆕 VACIAR el precio_id para indicar que es un NUEVO REGISTRO
+            const card = document.querySelector(`[data-med-id="${medId}"]`);
+            card.dataset.precioId = '';
+            
+            // 🆕🆕 LIMPIAR IMAGEN - Reemplazar con zona de pegado
+            const imagenContainer = card.querySelector('div[style*="display: flex"][style*="flex-direction: column"][style*="align-items: center"]');
+            
+            if (imagenContainer) {
+                // Reemplazar TODO el contenido con la zona de pegado limpia
+                imagenContainer.innerHTML = `
+                    <div class="paste-zone-precio" 
+                        data-precio-id=""
+                        data-med-id="${medId}"
+                        title="Clic + Ctrl+V para pegar imagen">
+                        📋
+                    </div>
+                    <small style="color: #666; font-size: 0.8em; text-align: center;">
+                        Clic + Ctrl+V
+                    </small>
+                `;
+            }
+            
+            // Scroll al formulario
+            card.scrollIntoView({ behavior: 'smooth' });
+            
+            console.log('✅ Formulario limpio. Selecciona otro fabricante e ingresa los precios.');
+        }
+
+
+        let inputActivo = null; // Guardar referencia del input
+
+        function buscarEnFarmacia(nombreFarmacia, medId, compId) {
+            // Guardar referencia del input
+            inputActivo = document.querySelector(
+                `.precio-competidor[data-med-id="${medId}"][data-comp-id="${compId}"]`
+            );
+            
+            const nombre = document.getElementById(`nombre_${medId}`).value;
+            const medLimpio = limpiarNombreMedicamento(nombre);
+            const medEncodificado = encodeURIComponent(medLimpio);
+            
+            let url;
+            if (nombreFarmacia === 'Cruz Verde') {
+                url = `https://www.cruzverde.com.co/search?query=${medEncodificado}`;
+            } else if (nombreFarmacia === 'Farmatodo') {
+                url = `https://www.farmatodo.com.co/buscar?product=${medEncodificado}&departamento=Todos&filtros=`;
+            } else if (nombreFarmacia === 'Locatel') {
+                url = `https://www.locatelcolombia.com/search?q=${medEncodificado}`;
+            } else if (nombreFarmacia === 'La Rebaja') {
+                url = `https://www.larebajavirtual.com/search?query=${medEncodificado}`;
+            }
+            
+            window.open(url, '_blank');
+            
+            // Traer la ventana al frente cuando vuelve
+            window.addEventListener('focus', () => {
+                if (inputActivo) {
+                    setTimeout(() => {
+                        inputActivo.focus();
+                    }, 100);
+                }
+            }, { once: true });
+        }
+
+
+        // ========================================
+        // 🎯 NUEVO SISTEMA DE PEGADO DE IMÁGENES
+        // ========================================
+        let imagenActiva = null;
+        let pasteListenerActivo = false;
+
+        // Al hacer clic en zona de pegado o imagen existente
+        document.addEventListener('click', function(e) {
+            // ZONA DE PEGADO (sin imagen aún)
+            if (e.target.classList.contains('paste-zone-precio')) {
+                const precioId = e.target.dataset.precioId;
+                const medId = e.target.dataset.medId;
+                
+                if (!precioId) {
+                    alert("⚠️ Primero guarda el precio, luego podrás pegar la imagen");
+                    return;
+                }
+                
+                imagenActiva = {
+                    precioId: precioId,
+                    medId: medId,
+                    elemento: e.target,
+                    tipo: 'zona'
+                };
+                
+                e.target.classList.add('active');
+                e.target.textContent = '✅ Listo! Pega con Ctrl+V';
+                pasteListenerActivo = true;
+                console.log('🖼️ Zona de pegado activa:', { precioId, medId });
+            }
+            
+            // IMAGEN EXISTENTE (click para cambiarla)
+            else if (e.target.tagName === 'IMG' && e.target.id.includes('imagen_')) {
+                const medId = e.target.id.replace('imagen_', '');
+                const card = document.querySelector(`[data-med-id="${medId}"]`);
+                const precioId = card.dataset.precioId;
+                
+                if (!precioId) {
+                    alert("⚠️ Primero guarda el precio, luego podrás cambiar la imagen");
+                    return;
+                }
+                
+                imagenActiva = {
+                    precioId: precioId,
+                    medId: medId,
+                    elemento: e.target,
+                    tipo: 'imagen'
+                };
+                
+                e.target.style.border = '3px solid red';
+                e.target.style.opacity = '0.6';
+                pasteListenerActivo = true;
+                console.log('🖼️ Imagen activa (cambiar):', { precioId, medId });
+            }
+        });
+
+        // Detectar Ctrl+V globalmente
+        document.addEventListener('paste', function(e) {
+            console.log('📋 Paste detectado');
+            
+            if (!pasteListenerActivo || !imagenActiva) {
+                console.log('❌ No hay zona/imagen activa');
+                return;
+            }
+            
+            const items = e.clipboardData?.items;
+            console.log('📦 Items en clipboard:', items?.length);
+            
+            if (!items) {
+                console.log('❌ No hay items en clipboard');
+                return;
+            }
+            
+            for (let item of items) {
+                console.log('🔍 Item type:', item.type);
+                
+                if (item.type.indexOf('image') === -1) continue;
+                
+                e.preventDefault();
+                const blob = item.getAsFile();
+                const formData = new FormData();
+                formData.append('imagen', blob, 'imagen.jpg');
+                
+                const elemento = imagenActiva.elemento;
+                const estadoOriginal = imagenActiva.tipo === 'zona' ? elemento.textContent : null;
+                
+                if (imagenActiva.tipo === 'zona') {
+                    elemento.textContent = '⏳ Guardando...';
+                }
+                
+                console.log(`📤 Enviando imagen a endpoint: /admin/precios/${imagenActiva.precioId}/imagen`);
+                
+                fetch(`/admin/precios/${imagenActiva.precioId}/imagen`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => {
+                    console.log('📥 Response status:', r.status);
+                    return r.json();
+                })
+                .then(data => {
+                    console.log('📦 Response data:', data);
+                    
+                    if (data.ok && data.imagen) {
+                        console.log('✅ Imagen OK, actualizando...');
+                        
+                        if (imagenActiva.tipo === 'zona') {
+                            // Reemplazar zona de pegado con imagen
+                            const nuevoHTML = `
+                                <div class="imagen-preview" style="position: relative;">
+                                    <img id="imagen_${imagenActiva.medId}"
+                                        src="/static/uploads/${data.imagen}?t=${Date.now()}"
+                                        alt="Imagen precio"
+                                        style="width: 150px; height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #ddd;"
+                                        title="Clic para cambiar imagen">
+                                </div>
+                            `;
+                            elemento.parentElement.innerHTML = nuevoHTML;
+                        } else {
+                            // Actualizar imagen existente
+                            elemento.src = `/static/uploads/${data.imagen}?t=${Date.now()}`;
+                            elemento.style.border = '2px solid #ddd';
+                            elemento.style.opacity = '1';
+                        }
+                        
+                        alert('✅ Imagen guardada correctamente');
+                    } else {
+                        alert('❌ Error: ' + (data.error || 'desconocido'));
+                        if (imagenActiva.tipo === 'zona') {
+                            elemento.textContent = '📋';
+                        } else {
+                            elemento.style.border = '2px solid #ddd';
+                            elemento.style.opacity = '1';
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('❌ Error:', err);
+                    alert('❌ Error guardando imagen');
+                    if (imagenActiva.tipo === 'zona') {
+                        elemento.textContent = '📋';
+                    } else {
+                        elemento.style.border = '2px solid #ddd';
+                        elemento.style.opacity = '1';
+                    }
+                })
+                .finally(() => {
+                    pasteListenerActivo = false;
+                    imagenActiva = null;
+                });
+                
+                break;
+            }
+        });
+
+
+    </script>
+</body>
+</html>

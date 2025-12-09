@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Panel de Administración{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h2 text-dark border-bottom pb-2 mb-4">
+                <i class="bi bi-gear-fill text-primary me-2"></i>Panel de Administración
+            </h1>
+            <p class="text-muted">Bienvenido(a), **{{ session.get('nombre_usuario', 'Administrador') }}**. Desde aquí puedes gestionar la plataforma, usuarios y el sistema de pedidos.</p>
+        </div>
+    </div>
+
+    <!-- Sección de Tarjetas de Resumen (Resumen Ejecutivo) -->
+    <div class="row g-4 mb-5">
+        
+        <!-- Tarjeta 1: Total de Usuarios (Mock Data) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow border-start border-primary border-4 h-100">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">
+                                Clientes Activos
+                            </div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">12,500</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-people-fill fa-2x text-gray-300" style="font-size: 2rem; color: #ccc;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjeta 2: Total de Pedidos del Mes (Mock Data) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow border-start border-success border-4 h-100">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-success text-uppercase mb-1">
+                                Pedidos Pendientes
+                            </div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">45</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-basket-fill fa-2x text-gray-300" style="font-size: 2rem; color: #ccc;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjeta 3: Ingresos Potenciales (Mock Data) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow border-start border-info border-4 h-100">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-info text-uppercase mb-1">Ingresos (Estimado)</div>
+                            <div class="row no-gutters align-items-center">
+                                <div class="col-auto">
+                                    <div class="h5 mb-0 mr-3 fw-bold text-gray-800">$215,000</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-currency-dollar fa-2x text-gray-300" style="font-size: 2rem; color: #ccc;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tarjeta 4: Tasa de Conversión (Mock Data) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow border-start border-warning border-4 h-100">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">
+                                Retención
+                            </div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">75%</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-graph-up fa-2x text-gray-300" style="font-size: 2rem; color: #ccc;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Gestión Rápida (Lista de Módulos) -->
+    <div class="row g-4">
+        
+        <!-- Gestión de Clientes -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-primary text-white fw-bold">
+                    <i class="bi bi-people-fill me-2"></i>Gestión de Usuarios
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Administra las cuentas de los clientes, modifica sus datos de contacto y revisa su historial de actividad.</p>
+                    <a href="#" class="btn btn-sm btn-outline-primary">Ver Clientes</a>
+                    <a href="#" class="btn btn-sm btn-outline-secondary">Crear Nuevo</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gestión de Recetas / Productos -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-success text-white fw-bold">
+                    <i class="bi bi-book-fill me-2"></i>Gestión de Recetas
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Crea, edita o desactiva las recetas disponibles en el menú. Sube imágenes y actualiza ingredientes.</p>
+                    <a href="#" class="btn btn-sm btn-outline-success">Ver Recetas</a>
+                    <a href="/recetas/nueva" class="btn btn-sm btn-success">Nueva Receta</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gestión de Pedidos -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-info text-white fw-bold">
+                    <i class="bi bi-truck me-2"></i>Control de Pedidos
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Monitorea el estado de todos los pedidos activos, desde la confirmación hasta la entrega final.</p>
+                    <a href="#" class="btn btn-sm btn-outline-info">Ver Pedidos Pendientes</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pie de página de administración -->
+    <footer class="mt-5 pt-3 border-top text-center text-muted small">
+        © 2024 Panel de Administración. Todos los derechos reservados.
+    </footer>
+
+</div>
+{% endblock %}

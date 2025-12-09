@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diagnósticos</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">🩺 Diagnósticos</header>
+  <main class="container">
+    <a class="btn-primary" href="{{ url_for('nuevo_diagnostico') }}">➕ Agregar diagnóstico</a>
+
+    {% if diagnosticos %}
+      <ul class="list">
+        {% for d in diagnosticos %}
+          <li class="list-item">
+            <div>{{ d["descripcion"] }}</div>
+            <div>
+              <a class="link" href="{{ url_for('detalle_diagnostico', diagnostico_id=d['id']) }}">Ver</a>
+              <a class="link" href="{{ url_for('asociar_diagnostico', diagnostico_id=d['id']) }}">Asociar</a>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No hay diagnósticos aún.</p>
+    {% endif %}
+
+    <a class="btn-secondary" href="{{ url_for('index') }}">⬅ Volver</a>
+  </main>
+</body>
+</html>

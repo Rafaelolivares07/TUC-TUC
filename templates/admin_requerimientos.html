@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Requerimientos</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 20px; }
+        .btn { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
+        .btn:hover { background: #0056b3; }
+        .btn-small {
+            padding: 6px 12px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .btn-small:hover { background: #218838; }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-copy {
+            background: #6c757d;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .btn-copy:hover {
+            background: #5a6268;
+        }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-family: Arial; }
+        textarea { min-height: 100px; }
+        .table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
+        .table th { background: #007bff; color: white; padding: 12px; text-align: left; }
+        .table td { padding: 12px; border-bottom: 1px solid #ddd; }
+        .table tr:hover { background: #f9f9f9; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; }
+        .modal.active { display: flex; justify-content: center; align-items: flex-start; padding-top: 20px; }
+        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 700px; }
+        .close { float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: red; }
+        .badge { padding: 5px 10px; border-radius: 3px; font-size: 12px; }
+        .badge-alta { background: #ff4444; color: white; }
+        .badge-media { background: #ff9800; color: white; }
+        .badge-baja { background: #4caf50; color: white; }
+        .badge-pendiente { background: #6c757d; color: white; }
+        .badge-en-progreso { background: #ffc107; color: black; }
+        .badge-completado { background: #28a745; color: white; }
+        .badge-funcion { background: #17a2b8; color: white; font-size: 10px; }
+        .badge-id { background: #fd7e14; color: white; font-size: 10px; }
+        .badge-clase { background: #6f42c1; color: white; font-size: 10px; }
+        .badge-variable { background: #e83e8c; color: white; font-size: 10px; }
+        .referencias-section { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 20px; border: 1px solid #ddd; }
+        .referencias-section h3 { margin-bottom: 15px; }
+        .referencia-item { background: white; padding: 15px; margin-bottom: 10px; border-left: 4px solid #007bff; }
+        .referencia-item strong { display: block; margin-bottom: 5px; }
+        .referencia-item small { color: #666; display: block; margin-bottom: 8px; }
+        .referencia-estado { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+        .referencia-estado select { width: 150px; padding: 6px; }
+        
+        /* NUEVO: Estilos para búsqueda y grupos */
+        .identificadores-search { margin-bottom: 15px; }
+        .identificadores-search input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        
+        /* Contenedor con scroll */
+        .identificadores-container { 
+            background: #f0f8ff; 
+            padding: 15px; 
+            border-radius: 5px; 
+            border-left: 4px solid #17a2b8;
+            height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        /* Grupos colapsables */
+        .identificadores-grupo {
+            margin-bottom: 15px;
+            background: white;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+        }
+        
+        .identificadores-grupo-header {
+            background: #e9ecef;
+            padding: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        
+        .identificadores-grupo-header:hover {
+            background: #dee2e6;
+        }
+        
+        .identificadores-grupo-header .toggle {
+            font-size: 14px;
+            transition: transform 0.3s;
+        }
+        
+        .identificadores-grupo-header.collapsed .toggle {
+            transform: rotate(-90deg);
+        }
+        
+        .identificadores-grupo-items {
+            padding: 0;
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s;
+        }
+        
+        .identificadores-grupo.collapsed .identificadores-grupo-items {
+            max-height: 0;
+        }
+        
+        .identificador-fila {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            position: relative;
+        }
+        
+        .identificador-fila:hover {
+            background: #f0f8ff;
+        }
+        
+        .identificador-fila code {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .identificador-acciones {
+            display: flex;
+            gap: 5px;
+        }
+        
+        /* Panel de código flotante - ELIMINADO, ahora está dentro del modal */
+        
+        .modal-codigo { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 700px; height: 70vh; background: white; z-index: 2000; border-radius: 10px; box-shadow: 0 0 30px rgba(0,0,0,0.3); }
+        .modal-codigo.active { display: flex; flex-direction: column; }
+        .modal-codigo-header { padding: 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+        .modal-codigo-header h2 { margin: 0; font-size: 18px; }
+        .modal-codigo-header p { margin: 5px 0 0 0; color: #666; font-size: 12px; }
+        .modal-codigo-body { flex: 1; overflow-y: auto; background: #f5f5f5; }
+        .codigo-container { display: flex; }
+        .json-box { background: #f0f0f0; padding: 15px; border-radius: 5px; margin-top: 20px; border: 1px solid #ddd; }
+        .json-box label { margin-bottom: 10px; }
+        .json-box textarea { font-family: 'Courier New', monospace; font-size: 12px; background: white; }
+        .json-box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .json-box-header h4 { margin: 0; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { padding: 8px 15px; background: #e0e0e0; border: none; border-radius: 5px; cursor: pointer; }
+        .tab-btn.active { background: #007bff; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        @media (max-width: 1200px) {
+            .panel-codigo-flotante {
+                width: 300px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .panel-codigo-flotante {
+                position: absolute;
+                width: 100%;
+                right: 0;
+                top: auto;
+                bottom: 0;
+                border-radius: 8px 8px 0 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📋 Gestión de Requerimientos</h1>
+    <button class="btn" onclick="abrirFormulario()">➕ Agregar Nuevo Requerimiento</button>
+    <button class="btn" style="background: #6c757d;" onclick="poblarArchivos()">📂 Poblar Tabla Archivos</button>
+
+    <!-- MODAL PARA AGREGAR / EDITAR -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="cerrarFormulario()">×</span>
+            <h2>Nuevo Requerimiento</h2>
+            <!-- TABS -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="cambiarTab('edicion')">✏️ Edición</button>
+                <button class="tab-btn" onclick="cambiarTab('json')">📄 JSON</button>
+            </div>
+            <!-- TAB EDICIÓN -->
+            <div id="tab-edicion" class="tab-content active">
+                <form onsubmit="guardarRequerimiento(event)">
+                    <div class="form-group">
+                        <label>📝 Descripción (amplia)</label>
+                        <textarea id="descripcion" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>📦 Módulo</label>
+                        <input type="text" id="modulo" placeholder="Ej: Inventario, UI/UX, Base de datos..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>⚡ Prioridad</label>
+                        <select id="prioridad" required>
+                            <option value="">Selecciona...</option>
+                            <option value="Alta">Alta</option>
+                            <option value="Media">Media</option>
+                            <option value="Baja">Baja</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>✅ Estado</label>
+                        <select id="estado" required>
+                            <option value="Planificación">Planificación</option>
+                            <option value="En Progreso">En Progreso</option>
+                            <option value="Completado">Completado</option>
+                            <option value="Bloqueado">Bloqueado</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn">💾 Guardar Requerimiento</button>
+                </form>
+
+                <!-- SECCIÓN DE REFERENCIAS -->
+                <div class="referencias-section" id="referencias-section" style="display:none;">
+                    <h3>📌 Referencias de Código (0)</h3>
+                    <div id="referencias-lista"></div>
+                    <h4 style="margin-top: 20px; margin-bottom: 10px;">➕ Agregar Nueva Referencia</h4>
+
+                    <!-- SELECCIONAR ARCHIVO -->
+                    <div class="form-group">
+                        <label>📂 Archivo HTML</label>
+                        <select id="ref-archivo-select" onchange="cargarIdentificadores()">
+                            <option value="">Selecciona archivo...</option>
+                        </select>
+                    </div>
+
+                    <!-- BÚSQUEDA Y GRUPOS DE IDENTIFICADORES + PANEL CÓDIGO -->
+                    <div id="identificadores-section" style="display:none;">
+                        <h4>🔍 Identificadores Disponibles</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; min-height: 500px;">
+                            <!-- COLUMNA IZQUIERDA: IDENTIFICADORES -->
+                            <div>
+                                <div class="identificadores-search">
+                                    <input type="text" id="identificadores-buscar" placeholder="Buscar identificador..." onkeyup="filtrarIdentificadores()">
+                                </div>
+                                <div class="identificadores-container" id="identificadores-container">
+                                    <!-- Se llena dinámicamente -->
+                                </div>
+                            </div>
+                            <!-- COLUMNA DERECHA: PANEL CÓDIGO -->
+                            <div>
+                                <div style="background: white; border: 1px solid #ddd; border-radius: 5px; height: 100%; display: flex; flex-direction: column;">
+                                    <div style="padding: 15px; border-bottom: 1px solid #ddd; flex-shrink: 0;">
+                                        <h4 id="panel-titulo-modal" style="margin: 0; font-size: 14px;">📄 Código</h4>
+                                        <p id="panel-info-modal" style="margin: 5px 0 0 0; font-size: 11px; color: #666;"></p>
+                                    </div>
+                                    <div style="flex: 1; overflow-y: auto; background: #f5f5f5; display: flex;">
+                                        <div class="codigo-lineas" id="panel-lineas-modal"></div>
+                                        <div class="codigo-contenido" id="panel-contenido-modal"></div>
+                                    </div>
+                                    <div style="padding: 12px 15px; border-top: 1px solid #ddd; display: flex; gap: 8px; flex-shrink: 0;">
+                                        <button type="button" class="btn-copy" onclick="copiarCodigoPanel()" style="flex: 1;">📋 Copiar</button>
+                                        <button type="button" class="btn-small" onclick="agregarDesdePanel()" style="flex: 1;">✅ Agregar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FORMULARIO MANUAL -->
+                    <hr style="margin: 20px 0;">
+                    <h4>✏️ O agregar manualmente:</h4>
+                    <form onsubmit="agregarReferencia(event)" style="background: #f0f0f0; padding: 15px; border-radius: 5px;">
+                        <div class="form-group">
+                            <label>Archivo HTML</label>
+                            <input type="text" id="ref-archivo" placeholder="Ej: lista_medicamentos_mejorada.html">
+                        </div>
+                        <div class="form-group">
+                            <label>Identificador (ID, Clase o Función)</label>
+                            <input type="text" id="ref-identificador" placeholder="Ej: eliminar, btn-eliminar, confirmarEliminar" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Descripción (opcional)</label>
+                            <input type="text" id="ref-descripcion" placeholder="Ej: Botón eliminar medicamento">
+                        </div>
+                        <div class="form-group">
+                            <label>Estado Inicial</label>
+                            <select id="ref-estado" required>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="En Progreso">En Progreso</option>
+                                <option value="Completado">Completado</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn">✅ Agregar Referencia Manual</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- TAB JSON -->
+            <div id="tab-json" class="tab-content">
+                <div class="json-box">
+                    <div class="json-box-header">
+                        <h4>📋 JSON del Requerimiento</h4>
+                        <button type="button" class="btn-copy" onclick="copiarJSON()">📋 Copiar JSON</button>
+                    </div>
+                    <textarea id="json-contenido" readonly rows="15"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA VER CÓDIGO (no se usa más con el panel flotante, pero lo dejo por compatibilidad) -->
+    <div id="modal-codigo" class="modal-codigo">
+        <div class="modal-codigo-header">
+            <div>
+                <h2 id="codigo-titulo">Código Encontrado</h2>
+                <p id="codigo-tipo"></p>
+            </div>
+            <span class="close" onclick="cerrarModalCodigo()" style="cursor: pointer;">×</span>
+        </div>
+        <div class="modal-codigo-body">
+            <div class="codigo-container">
+                <div class="codigo-lineas" id="codigo-lineas"></div>
+                <div class="codigo-contenido" id="codigo-contenido"></div>
+            </div>
+        </div>
+        <div style="padding: 15px 20px; border-top: 1px solid #ddd; display: flex; gap: 10px;">
+            <button class="btn-copy" onclick="copiarCodigo()">📋 Copiar Código</button>
+            <button class="btn" onclick="cerrarModalCodigo()">Cerrar</button>
+        </div>
+    </div>
+
+
+
+    <!-- TABLA DE REQUERIMIENTOS -->
+    <table class="table" id="tabla">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Descripción</th>
+                <th>Módulo</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="tbody">
+            <tr><td colspan="7" style="text-align: center;">Cargando...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let requerimiento_id_actual = null;
+    let identificadores_actuales = {};
+    let codigo_panel_actual = null;
+
+    function cambiarTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${tab}`).classList.add('active');
+        event.target.classList.add('active');
+        if (tab === 'json') {
+            actualizarJSON();
+        }
+    }
+
+    function cargarArchivos() {
+        fetch('/api/archivos')
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    const select = document.getElementById('ref-archivo-select');
+                    select.innerHTML = '<option value="">Selecciona archivo...</option>';
+                    data.archivos.forEach(archivo => {
+                        const option = document.createElement('option');
+                        option.value = archivo.nombre_archivo;
+                        option.textContent = archivo.nombre_archivo;
+                        select.appendChild(option);
+                    });
+                }
+            });
+    }
+
+    function cargarIdentificadores() {
+        const archivo = document.getElementById('ref-archivo-select').value;
+        if (!archivo) {
+            document.getElementById('identificadores-section').style.display = 'none';
+            return;
+        }
+
+        fetch(`/api/requerimientos/extraer_identificadores?archivo=${archivo}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    identificadores_actuales = {
+                        archivo: archivo,
+                        funciones: data.funciones,
+                        ids: data.ids,
+                        clases: data.clases,
+                        variables: data.variables
+                    };
+                    mostrarIdentificadoresConGrupos();
+                    document.getElementById('identificadores-section').style.display = 'block';
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            });
+    }
+
+    function mostrarIdentificadoresConGrupos() {
+        const container = document.getElementById('identificadores-container');
+        container.innerHTML = '';
+
+        const grupos = [
+            { nombre: 'Funciones', datos: identificadores_actuales.funciones, tipo: 'Función', badge: 'badge-funcion' },
+            { nombre: 'IDs', datos: identificadores_actuales.ids, tipo: 'ID', badge: 'badge-id' },
+            { nombre: 'Clases', datos: identificadores_actuales.clases, tipo: 'Clase', badge: 'badge-clase' },
+            { nombre: 'Variables', datos: identificadores_actuales.variables, tipo: 'Variable', badge: 'badge-variable' }
+        ];
+
+        grupos.forEach(grupo => {
+            if (grupo.datos.length === 0) return;
+
+            const grupoDiv = document.createElement('div');
+            grupoDiv.className = 'identificadores-grupo';
+            grupoDiv.innerHTML = `
+                <div class="identificadores-grupo-header" onclick="toggleGrupo(this)">
+                    <span>${grupo.nombre} (${grupo.datos.length})</span>
+                    <span class="toggle">▼</span>
+                </div>
+                <div class="identificadores-grupo-items">
+                    ${grupo.datos.map(id => `
+                        <div class="identificador-fila" onmouseenter="mostrarCodigoFlotante('${identificadores_actuales.archivo}', '${id}', '${grupo.tipo}')">
+                            <div>
+                                <span class="badge ${grupo.badge}">${grupo.tipo}</span>
+                                <code>${id}</code>
+                            </div>
+                            <div class="identificador-acciones">
+                                <button type="button" class="btn-small" onclick="agregarIdentificadorRapido('${id}', '${grupo.tipo}')">➕</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.appendChild(grupoDiv);
+        });
+    }
+
+    function toggleGrupo(header) {
+        const grupo = header.parentElement;
+        grupo.classList.toggle('collapsed');
+    }
+
+    function filtrarIdentificadores() {
+        const busqueda = document.getElementById('identificadores-buscar').value.toLowerCase();
+        const filas = document.querySelectorAll('.identificador-fila');
+        
+        filas.forEach(fila => {
+            const codigo = fila.querySelector('code').textContent.toLowerCase();
+            fila.style.display = codigo.includes(busqueda) ? 'flex' : 'none';
+        });
+
+        // Mostrar/ocultar grupos vacíos
+        const grupos = document.querySelectorAll('.identificadores-grupo');
+        grupos.forEach(grupo => {
+            const filasVisibles = grupo.querySelectorAll('.identificador-fila[style="display: flex"]').length;
+            grupo.style.display = filasVisibles > 0 ? 'block' : 'none';
+        });
+    }
+
+    function mostrarCodigoFlotante(archivo, identificador, tipo) {
+        // Limpiar panel primero
+        document.getElementById('panel-titulo-modal').textContent = `${tipo}: ${identificador}`;
+        document.getElementById('panel-info-modal').textContent = '';
+        document.getElementById('panel-contenido-modal').textContent = '';
+        document.getElementById('panel-lineas-modal').textContent = '';
+        
+        codigo_panel_actual = { archivo, identificador, tipo };
+        
+        fetch(`/api/requerimientos/buscar_codigo?archivo=${archivo}&identificador=${identificador}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    document.getElementById('panel-info-modal').textContent = `Línea ${data.linea} | ${archivo}`;
+                    document.getElementById('panel-contenido-modal').textContent = data.codigo;
+                    agregarNumerosDeLineaPanel(data.codigo, data.linea);
+                } else {
+                    document.getElementById('panel-info-modal').textContent = '❌ No encontrado';
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                document.getElementById('panel-info-modal').textContent = '⚠️ Error buscando código';
+            });
+    }
+
+    function ocultarPanelCodigo() {
+        // Ya no desaparece, siempre está visible
+    }
+
+    function cerrarPanelCodigo() {
+        // Ya no existe, el panel siempre está visible dentro del modal
+        codigo_panel_actual = null;
+    }
+
+    function agregarNumerosDeLineaPanel(codigo, lineaInicial) {
+        const lineas = codigo.split('\n');
+        const numeros = lineas.map((_, i) => lineaInicial + i).join('\n');
+        document.getElementById('panel-lineas-modal').textContent = numeros;
+    }
+
+    function agregarDesdePanel() {
+        if (!codigo_panel_actual) {
+            alert('❌ Selecciona un identificador primero');
+            return;
+        }
+        agregarIdentificadorRapido(codigo_panel_actual.identificador, codigo_panel_actual.tipo);
+    }
+
+    function copiarCodigoPanel() {
+        const codigo = document.getElementById('panel-contenido-modal').textContent;
+        if (!codigo || codigo.trim() === '') {
+            alert('❌ No hay código para copiar');
+            return;
+        }
+        navigator.clipboard.writeText(codigo).then(() => {
+            alert('✅ Código copiado');
+        }).catch(() => {
+            alert('❌ Error al copiar');
+        });
+    }
+
+    function agregarIdentificadorRapido(identificador, tipo) {
+        const archivo = identificadores_actuales.archivo;
+        const datos = {
+            archivo_relacionado: archivo,
+            seccion_identificador: identificador,
+            descripcion_referencia: `${tipo}: ${identificador}`,
+            estado: 'Pendiente'
+        };
+        const id = requerimiento_id_actual;
+        if (!id) {
+            alert('❌ Debes guardar el requerimiento primero');
+            return;
+        }
+        fetch(`/api/requerimientos/${id}/referencias`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    alert('✅ Referencia agregada');
+                    cargarReferencias(id);
+                    actualizarJSON();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function actualizarJSON() {
+        const id = document.querySelector('form').dataset.id;
+        if (!id) {
+            document.getElementById('json-contenido').value = 'Guarda el requerimiento primero para ver el JSON';
+            return;
+        }
+        fetch('/api/requerimientos')
+            .then(r => r.json())
+            .then(data => {
+                const req = data.requerimientos.find(r => r.id == id);
+                if (req) {
+                    fetch(`/api/requerimientos/${id}/referencias`)
+                        .then(r => r.json())
+                        .then(refData => {
+                            const jsonCompleto = {
+                                requerimiento: req,
+                                referencias: refData.referencias || []
+                            };
+                            document.getElementById('json-contenido').value = JSON.stringify(jsonCompleto, null, 2);
+                        });
+                }
+            });
+    }
+
+    function copiarJSON() {
+        const textarea = document.getElementById('json-contenido');
+        textarea.select();
+        document.execCommand('copy');
+        alert('✅ JSON copiado al portapapeles');
+    }
+
+    function abrirFormulario(esNuevo = true) {
+        // Solo limpiar si es un nuevo requerimiento
+        if (esNuevo) {
+            document.querySelector('form').reset();
+            delete document.querySelector('form').dataset.id;
+            requerimiento_id_actual = null;
+            
+            // Limpiar panel de código
+            document.getElementById('panel-titulo-modal').textContent = '📄 Código';
+            document.getElementById('panel-info-modal').textContent = '';
+            document.getElementById('panel-contenido-modal').textContent = '';
+            document.getElementById('panel-lineas-modal').textContent = '';
+            document.getElementById('identificadores-buscar').value = '';
+            
+            document.querySelector('.modal-content h2').textContent = 'Nuevo Requerimiento';
+            document.getElementById('referencias-section').style.display = 'none';
+            document.getElementById('identificadores-section').style.display = 'none';
+        }
+        
+        document.getElementById('modal').classList.add('active');
+        cargarArchivos();
+    }
+
+    function cerrarFormulario() {
+        document.getElementById('modal').classList.remove('active');
+    }
+
+    function editarRequerimiento(id) {
+        requerimiento_id_actual = id;
+        fetch('/api/requerimientos')
+            .then(r => r.json())
+            .then(data => {
+                const req = data.requerimientos.find(r => r.id === id);
+                if (req) {
+                    document.getElementById('descripcion').value = req.descripcion;
+                    document.getElementById('modulo').value = req.modulo;
+                    document.getElementById('prioridad').value = req.prioridad;
+                    document.getElementById('estado').value = req.estado;
+                    document.querySelector('.modal-content h2').textContent = `Editar Requerimiento #${id}`;
+                    document.querySelector('form').dataset.id = id;
+                    document.getElementById('referencias-section').style.display = 'block';
+                    cargarArchivos();
+                    cargarReferencias(id);
+                    abrirFormulario(false); // false = es edición, no nuevo
+                }
+            });
+    }
+
+    function cargarReferencias(requerimiento_id) {
+        fetch(`/api/requerimientos/${requerimiento_id}/referencias`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    const lista = document.getElementById('referencias-lista');
+                    const total = data.referencias.length;
+                    document.querySelector('.referencias-section h3').textContent = `📌 Referencias de Código (${total})`;
+                    if (total === 0) {
+                        lista.innerHTML = '<p style="color: #999;">Sin referencias aún</p>';
+                        return;
+                    }
+                    lista.innerHTML = '';
+                    data.referencias.forEach(ref => {
+                        const badgeEstado = `badge-${ref.estado.toLowerCase().replace(' ', '-')}`;
+                        const item = `
+                            <div class="referencia-item">
+                                <strong>📄 ${ref.archivo_relacionado}</strong>
+                                <small>Identificador: <code>${ref.seccion_identificador}</code></small>
+                                ${ref.descripcion_referencia ? `<small>Desc: ${ref.descripcion_referencia}</small>` : ''}
+                                <div class="referencia-estado">
+                                    <label style="margin: 0; font-weight: normal;">Estado:</label>
+                                    <select onchange="actualizarEstadoReferencia(${requerimiento_id}, ${ref.id}, this.value)" style="width: 150px;">
+                                        <option value="Pendiente" ${ref.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+                                        <option value="En Progreso" ${ref.estado === 'En Progreso' ? 'selected' : ''}>En Progreso</option>
+                                        <option value="Completado" ${ref.estado === 'Completado' ? 'selected' : ''}>Completado</option>
+                                    </select>
+                                    <span class="badge ${badgeEstado}">${ref.estado}</span>
+                                </div>
+                                <div style="margin-top: 8px;">
+                                    <button type="button" class="btn-small" onclick="verCodigo('${ref.archivo_relacionado}', '${ref.seccion_identificador}')">👁️ Ver Código</button>
+                                    <button type="button" class="btn-small btn-danger" onclick="eliminarReferencia(${requerimiento_id}, ${ref.id})">🗑️ Eliminar</button>
+                                </div>
+                            </div>
+                        `;
+                        lista.innerHTML += item;
+                    });
+                }
+            });
+    }
+
+    function actualizarEstadoReferencia(requerimiento_id, ref_id, nuevoEstado) {
+        fetch(`/api/requerimientos/${requerimiento_id}/referencias/${ref_id}/estado`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: nuevoEstado })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    cargarReferencias(requerimiento_id);
+                    actualizarJSON();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function verCodigo(archivo, identificador) {
+        fetch(`/api/requerimientos/buscar_codigo?archivo=${archivo}&identificador=${identificador}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    document.getElementById('codigo-titulo').textContent = `Código: ${identificador}`;
+                    document.getElementById('codigo-tipo').textContent = `Tipo: ${data.tipo} | Línea: ${data.linea} | Archivo: ${archivo}`;
+                    document.getElementById('codigo-contenido').textContent = data.codigo;
+                    agregarNumerosDeLinea(data.codigo, data.linea);
+                    document.getElementById('modal-codigo').classList.add('active');
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function agregarNumerosDeLinea(codigo, lineaInicial) {
+        const lineas = codigo.split('\n');
+        const numeros = lineas.map((_, i) => lineaInicial + i).join('\n');
+        document.getElementById('codigo-lineas').textContent = numeros;
+    }
+
+    function cerrarModalCodigo() {
+        document.getElementById('modal-codigo').classList.remove('active');
+    }
+
+    function copiarCodigo() {
+        const codigo = document.getElementById('codigo-contenido').textContent;
+        navigator.clipboard.writeText(codigo).then(() => {
+            alert('✅ Código copiado al portapapeles');
+        }).catch(() => {
+            alert('❌ Error al copiar');
+        });
+    }
+
+    function agregarReferencia(event) {
+        event.preventDefault();
+        const id = requerimiento_id_actual;
+        if (!id) {
+            alert('❌ Debes guardar el requerimiento primero');
+            return;
+        }
+        const datos = {
+            archivo_relacionado: document.getElementById('ref-archivo').value,
+            seccion_identificador: document.getElementById('ref-identificador').value,
+            descripcion_referencia: document.getElementById('ref-descripcion').value,
+            estado: document.getElementById('ref-estado').value
+        };
+        fetch(`/api/requerimientos/${id}/referencias`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    alert('✅ Referencia agregada');
+                    document.getElementById('ref-archivo').value = '';
+                    document.getElementById('ref-identificador').value = '';
+                    document.getElementById('ref-descripcion').value = '';
+                    document.getElementById('ref-estado').value = 'Pendiente';
+                    cargarReferencias(id);
+                    actualizarJSON();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function eliminarReferencia(requerimiento_id, ref_id) {
+        if (!confirm('¿Eliminar esta referencia?')) return;
+        fetch(`/api/requerimientos/${requerimiento_id}/referencias/${ref_id}`, {
+            method: 'DELETE'
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    alert('✅ Referencia eliminada');
+                    cargarReferencias(requerimiento_id);
+                    actualizarJSON();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function guardarRequerimiento(event) {
+        event.preventDefault();
+        const id = document.querySelector('form').dataset.id;
+        const datos = {
+            descripcion: document.getElementById('descripcion').value,
+            modulo: document.getElementById('modulo').value,
+            prioridad: document.getElementById('prioridad').value,
+            estado: document.getElementById('estado').value
+        };
+        const url = id ? `/api/requerimientos/${id}` : '/api/requerimientos';
+        const metodo = id ? 'PUT' : 'POST';
+        fetch(url, {
+            method: metodo,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    if (!id) {
+                        requerimiento_id_actual = data.id;
+                        document.querySelector('form').dataset.id = data.id;
+                        document.querySelector('.modal-content h2').textContent = `Editar Requerimiento #${data.id}`;
+                        document.getElementById('referencias-section').style.display = 'block';
+                        
+                        // Limpiar lista de referencias viejas
+                        document.getElementById('referencias-lista').innerHTML = '<p style="color: #999;">Sin referencias aún</p>';
+                        document.querySelector('.referencias-section h3').textContent = `📌 Referencias de Código (0)`;
+                        
+                        alert('✅ Requerimiento guardado. Ahora agrega referencias.');
+                    } else {
+                        alert('✅ Requerimiento actualizado');
+                        cerrarFormulario();
+                        cargarRequerimientos();
+                        document.querySelector('form').reset();
+                        delete document.querySelector('form').dataset.id;
+                    }
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function cargarRequerimientos() {
+        fetch('/api/requerimientos')
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    const tbody = document.getElementById('tbody');
+                    tbody.innerHTML = '';
+                    if (data.requerimientos.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Sin requerimientos aún</td></tr>';
+                        return;
+                    }
+                    data.requerimientos.forEach(req => {
+                        const badge = `badge-${req.prioridad.toLowerCase()}`;
+                        const fecha = new Date(req.fecha_creacion).toLocaleDateString('es-CO');
+                        const tr = `
+                            <tr>
+                                <td><strong>#${req.id}</strong></td>
+                                <td>${req.descripcion}</td>
+                                <td>${req.modulo}</td>
+                                <td><span class="badge ${badge}">${req.prioridad}</span></td>
+                                <td>${req.estado}</td>
+                                <td>${fecha}</td>
+                                <td>
+                                    <button class="btn-small" onclick="editarRequerimiento(${req.id})">✏️ Editar</button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.innerHTML += tr;
+                    });
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    function poblarArchivos() {
+        fetch('/api/archivos/poblar', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    alert(`✅ Completado:\n- Agregados: ${data.agregados}\n- Existentes: ${data.existentes}`);
+                    location.reload();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            });
+    }
+
+    // Panel siempre visible dentro del modal, no necesita listeners de hover
+    document.addEventListener('DOMContentLoaded', () => {
+        cargarRequerimientos();
+    });
+</script>
+</body>
+</html>

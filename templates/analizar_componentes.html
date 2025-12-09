@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Análisis de Componentes Activos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">🔍 Análisis de Componentes Activos</h1>
+            
+            <!-- Botones de Análisis -->
+            <div class="mb-6 flex flex-wrap gap-3">
+                <button id="btnAnalizar" onclick="iniciarAnalisis()" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">
+                    🚀 Iniciar Análisis Automático
+                </button>
+                
+                <button id="btnExportarExtraccion" onclick="exportarExtraccionActual()" 
+                    class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg">
+                    🔬 Exportar Datos de Extracción Actual
+                </button>
+                
+                <button id="btnExportarJSON" onclick="exportarJSON()" 
+                    class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg">
+                    📤 Exportar JSON para Análisis Manual
+                </button>
+                
+                <div class="flex gap-2 items-center">
+                    <input type="file" id="fileImportarJSON" accept=".json" class="hidden">
+                    <button onclick="document.getElementById('fileImportarJSON').click()" 
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">
+                        📥 Importar JSON Corregido
+                    </button>
+                </div>
+                
+                <span id="progreso" class="ml-4 text-gray-600 self-center"></span>
+            </div>
+
+            <!-- Tabla de Sugerencias -->
+            <div id="tablaSugerencias" class="hidden">
+                <h2 class="text-2xl font-bold mb-4">📋 Sugerencias Pendientes</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white border border-gray-300">
+                        <thead class="bg-gray-200">
+                            <tr>
+                                <th class="px-4 py-2 border">Medicamento Original</th>
+                                <th class="px-4 py-2 border">Nombre Base</th>
+                                <th class="px-4 py-2 border">Componente Activo Sugerido</th>
+                                <th class="px-4 py-2 border">Acción</th>
+                                <th class="px-4 py-2 border">Confianza</th>
+                                <th class="px-4 py-2 border">Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodySugerencias">
+                            <!-- Se llena dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-6 flex gap-4 flex-wrap">
+                    <button onclick="aprobarAltaConfianza()" 
+                        class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg">
+                        ✅ Aprobar Todas (Alta Confianza)
+                    </button>
+                    <button onclick="guardarEstados()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">
+                        💾 Guardar Estados en BD
+                    </button>
+                    <button onclick="aplicarAprobados()" 
+                        class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg">
+                        🚀 Aplicar Cambios Aprobados
+                    </button>
+                    <button onclick="limpiarSugerencias()" 
+                        class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg">
+                        🗑️ Limpiar Todo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sugerencias = [];
+
+        async function iniciarAnalisis() {
+            const btn = document.getElementById('btnAnalizar');
+            const progreso = document.getElementById('progreso');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            progreso.textContent = 'Cargando candidatos...';
+
+            try {
+                const respCandidatos = await fetch('/admin/componentes_activos/analizar');
+                const dataCandidatos = await respCandidatos.json();
+                
+                const total = dataCandidatos.total;
+                
+                if (total === 0) {
+                    progreso.textContent = '✅ No hay medicamentos pendientes de análisis';
+                    return;
+                }
+                
+                progreso.textContent = `Analizando ${total} medicamentos...`;
+
+                for (let i = 0; i < dataCandidatos.medicamentos.length; i++) {
+                    const med = dataCandidatos.medicamentos[i];
+                    progreso.textContent = `Analizando ${i + 1}/${total}: ${med.nombre}`;
+                    
+                    await analizarMedicamento(med);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                progreso.textContent = `✅ Análisis completado: ${total} medicamentos`;
+                await cargarSugerencias();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                progreso.textContent = '❌ Error en el análisis: ' + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        async function analizarMedicamento(medicamento) {
+            try {
+                const response = await fetch('/admin/componentes_activos/analizar_medicamento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        medicamento_id: medicamento.id,
+                        nombre_medicamento: medicamento.nombre
+                    })
+                });
+
+                const analisis = await response.json();
+
+                await fetch('/admin/componentes_activos/guardar_sugerencia', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(analisis)
+                });
+
+            } catch (error) {
+                console.error('Error analizando', medicamento.nombre, error);
+            }
+        }
+
+        async function cargarSugerencias() {
+            const resp = await fetch('/admin/componentes_activos/sugerencias');
+            const data = await resp.json();
+            sugerencias = data.sugerencias;
+            
+            mostrarSugerencias();
+        }
+
+        function mostrarSugerencias() {
+            const tbody = document.getElementById('tbodySugerencias');
+            tbody.innerHTML = '';
+
+            if (sugerencias.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-500">No hay sugerencias pendientes</td></tr>';
+                document.getElementById('tablaSugerencias').classList.remove('hidden');
+                return;
+            }
+
+            sugerencias.forEach(sug => {
+                const tr = document.createElement('tr');
+                
+                let bgColor = 'bg-white';
+                if (sug.confianza === 'alta' && !sug.necesita_crear_nuevo) bgColor = 'bg-green-50';
+                if (sug.necesita_crear_nuevo) bgColor = 'bg-yellow-50';
+                
+                tr.className = bgColor;
+                tr.innerHTML = `
+                    <td class="px-4 py-2 border text-sm">${sug.nombre_medicamento}</td>
+                    <td class="px-4 py-2 border font-semibold text-blue-700">${sug.nombre_base_extraido || '-'}</td>
+                    <td class="px-4 py-2 border">
+                        <div>${sug.componente_activo_sugerido}</div>
+                        ${sug.necesita_crear_nuevo ? '<span class="text-xs text-orange-600 font-semibold">⚠️ Requiere creación</span>' : '<span class="text-xs text-green-600 font-semibold">✓ Ya existe en BD</span>'}
+                    </td>
+                    <td class="px-4 py-2 border text-center">
+                        <select id="accion_${sug.id}" class="border rounded px-2 py-1 text-sm">
+                            <option value="pendiente" ${sug.estado === 'pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
+                            <option value="aprobado" ${sug.estado === 'aprobado' ? 'selected' : ''}>✅ Aprobar</option>
+                            <option value="rechazado" ${sug.estado === 'rechazado' ? 'selected' : ''}>❌ Rechazar</option>
+                        </select>
+                    </td>
+                    <td class="px-4 py-2 border text-center">
+                        <span class="px-2 py-1 rounded text-xs font-semibold
+                            ${sug.confianza === 'alta' ? 'bg-green-200 text-green-800' : ''}
+                            ${sug.confianza === 'media' ? 'bg-yellow-200 text-yellow-800' : ''}
+                            ${sug.confianza === 'baja' ? 'bg-red-200 text-red-800' : ''}">
+                            ${sug.confianza.toUpperCase()}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2 border text-xs text-gray-600">${sug.observaciones || '-'}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('tablaSugerencias').classList.remove('hidden');
+        }
+
+        async function exportarExtraccionActual() {
+            if (sugerencias.length === 0) {
+                alert('⚠️ Primero ejecuta el análisis automático');
+                return;
+            }
+            
+            const datos = sugerencias.map(sug => ({
+                id: sug.medicamento_id,
+                nombre_original: sug.nombre_medicamento,
+                nombre_base_extraido: sug.nombre_base_extraido || "null",
+                componente_sugerido_actual: sug.componente_activo_sugerido
+            }));
+            
+            const json = JSON.stringify(datos, null, 2);
+            
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'extraccion_actual.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            alert(`✅ JSON descargado: extraccion_actual.json\n${datos.length} medicamentos\n\n📋 Abre el archivo y pégame el contenido`);
+        }
+
+        async function exportarJSON() {
+            if (sugerencias.length === 0) {
+                alert('⚠️ Primero ejecuta el análisis automático');
+                return;
+            }
+            
+            const datos = sugerencias.map(sug => ({
+                medicamento_id: sug.medicamento_id,
+                nombre_original: sug.nombre_medicamento,
+                nombre_base_extraido: sug.nombre_base_extraido,
+                componente_activo_sugerido: sug.componente_activo_sugerido
+            }));
+            
+            const json = JSON.stringify(datos, null, 2);
+            
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'medicamentos_para_analisis.json';
+            a.click();
+            
+            alert(`✅ JSON exportado con ${datos.length} medicamentos\n\nAhora pégaselo a Claude para análisis`);
+        }
+
+        document.getElementById('fileImportarJSON').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const text = await file.text();
+                const datosCorregidos = JSON.parse(text);
+                
+                if (!Array.isArray(datosCorregidos)) {
+                    alert('❌ Formato de JSON inválido');
+                    return;
+                }
+                
+                const response = await fetch('/admin/componentes_activos/importar_corregidos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ datos: datosCorregidos })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ Importación exitosa!\n\n` +
+                          `• ${result.actualizados} registros actualizados\n` +
+                          `• ${result.creados} componentes nuevos a crear`);
+                    
+                    await cargarSugerencias();
+                } else {
+                    alert('❌ Error en importación: ' + result.error);
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al procesar el archivo: ' + error.message);
+            }
+            
+            e.target.value = '';
+        });
+
+        async function aprobarAltaConfianza() {
+            let contador = 0;
+            sugerencias.forEach(sug => {
+                if (sug.confianza === 'alta') {
+                    const select = document.getElementById(`accion_${sug.id}`);
+                    if (select) {
+                        select.value = 'aprobado';
+                        contador++;
+                    }
+                }
+            });
+            
+            if (contador > 0) {
+                alert(`✅ ${contador} sugerencias de alta confianza marcadas para aprobación\n\n⚠️ IMPORTANTE: Haz clic en "💾 Guardar Estados en BD" para guardar los cambios`);
+            } else {
+                alert('⚠️ No hay sugerencias de alta confianza para aprobar');
+            }
+        }
+
+        async function guardarEstados() {
+            const estados = [];
+            
+            sugerencias.forEach(sug => {
+                const select = document.getElementById(`accion_${sug.id}`);
+                if (select) {
+                    estados.push({
+                        id: sug.id,
+                        estado: select.value
+                    });
+                }
+            });
+
+            if (estados.length === 0) {
+                alert('⚠️ No hay estados para guardar');
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/componentes_activos/guardar_estados', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ estados: estados })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ Estados guardados exitosamente!\n\n• ${result.actualizados} registros actualizados`);
+                    await cargarSugerencias();
+                } else {
+                    alert('❌ Error al guardar estados: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al guardar estados: ' + error.message);
+            }
+        }
+
+        async function aplicarAprobados() {
+            if (!confirm('⚠️ ADVERTENCIA:\n\nEsto aplicará TODOS los cambios aprobados:\n• Creará componentes activos nuevos\n• Asignará relaciones\n• Actualizará la base de datos\n\n¿Estás seguro?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/componentes_activos/aplicar_aprobados', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ ¡Cambios aplicados exitosamente!\n\n` +
+                          `• Componentes activos creados: ${result.componentes_creados}\n` +
+                          `• Medicamentos actualizados: ${result.asignaciones_realizadas}`);
+                    
+                    await cargarSugerencias();
+                } else {
+                    alert('❌ Error al aplicar cambios: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al aplicar cambios: ' + error.message);
+            }
+        }
+
+        async function limpiarSugerencias() {
+            if (!confirm('¿Estás seguro de limpiar todas las sugerencias pendientes?')) return;
+            
+            alert('🚧 Funcionalidad en desarrollo');
+        }
+
+        // 🆕 CARGAR SUGERENCIAS AUTOMÁTICAMENTE AL INICIAR
+        window.addEventListener('DOMContentLoaded', async function() {
+            try {
+                await cargarSugerencias();
+                if (sugerencias.length > 0) {
+                    console.log('✅ Sugerencias cargadas:', sugerencias.length);
+                }
+            } catch (error) {
+                console.log('ℹ️ No hay sugerencias para cargar');
+            }
+        });
+
+    </script>
+</body>
+</html>

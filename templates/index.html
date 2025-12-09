@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TUC TUC: Para Sentirte Bien!</title>
+    <style>
+        /* Estilos generales y reset */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif; /* Fuente moderna y legible */
+            margin: 0;
+            padding: 0;
+            background-color: #f0fdf4; /* Verde muy sutil, casi blanco */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+
+        /* Contenedor principal para centrar el contenido */
+        .container {
+            width: 90%;
+            max-width: 400px;
+            padding: 35px 25px;
+            background-color: rgba(255, 255, 255, 0.9); /* Fondo blanco semitransparente */
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden; /* Para que el fondo entramado no se salga */
+        }
+
+        /* Fondo entramado sutil dentro del contenedor */
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle, #d1fae5 1px, transparent 1px) 0 0 / 20px 20px,
+                radial-gradient(circle, #d1fae5 1px, transparent 1px) 10px 10px / 20px 20px;
+            opacity: 0.3; /* Muy sutil */
+            z-index: 0;
+        }
+
+        /* Contenido encima del fondo entramado */
+        .content {
+            position: relative;
+            z-index: 1; /* Asegura que el contenido esté sobre el fondo */
+        }
+
+        /* Estilo para el logotipo integrado */
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            font-size: 2.8rem; /* Tamaño de la tipografía del logo */
+            font-weight: bold;
+            color: #166534; /* Verde oscuro para el texto del logo */
+            letter-spacing: -1px; /* Ajuste para que las letras estén más juntas */
+        }
+
+        /* Estilo para el latido SVG simulado con CSS */
+        .heartbeat-icon {
+            width: 50px; /* Ancho del icono del latido */
+            height: 25px; /* Altura del icono del latido */
+            position: relative;
+            margin: 0 5px; /* Espacio entre TUC y TUC */
+            display: inline-block;
+            vertical-align: middle;
+            background: 
+                linear-gradient(to right, transparent 0%, transparent 40%, #166534 40%, #166534 60%, transparent 60%, transparent 100%), /* Linea central */
+                linear-gradient(to right, transparent 0%, transparent 20%, #166534 20%, #166534 30%, transparent 30%, transparent 100%); /* Simula el pico y valle */
+            background-repeat: no-repeat;
+            background-position: center center, 25% 40%, 75% 60%;
+            background-size: 100% 2px, 10% 100%, 10% 100%; /* Ajuste de tamaño y posición del "pico" */
+        }
+        /* Para un SVG real sería mejor, pero esto simula */
+        .heartbeat-icon::before, .heartbeat-icon::after {
+            content: '';
+            position: absolute;
+            background-color: #166534; /* Color del latido */
+        }
+        .heartbeat-icon::before { /* Pico */
+            width: 3px;
+            height: 15px;
+            top: 0;
+            left: 30%;
+            transform: rotate(-30deg);
+        }
+        .heartbeat-icon::after { /* Valle */
+            width: 3px;
+            height: 15px;
+            bottom: 0;
+            left: 45%;
+            transform: rotate(30deg);
+        }
+        /* Fin de simulación SVG */
+
+
+        /* Eslogan */
+        .slogan {
+            color: #344a3a; /* Verde más oscuro para el eslogan */
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        /* Botón de Llamada a la Acción (CTA) */
+        .cta-button {
+            display: inline-block; /* Para centrarlo si el contenedor es más grande */
+            width: auto; /* Ancho automático basado en el contenido */
+            min-width: 220px; /* Ancho mínimo */
+            padding: 15px 30px;
+            background-color: #84cc16; /* Verde lima vibrante */
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            box-shadow: 0 6px 20px rgba(132, 204, 22, 0.4);
+        }
+
+        .cta-button:hover {
+            background-color: #65a30d; /* Verde más oscuro al pasar el ratón */
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <div class="logo">
+                TUC <span class="heartbeat-icon"></span> TUC
+            </div>
+            <p class="slogan">Para Sentirte Bien!</p>
+
+            <a href="{{ url_for('consulta_sintomas') }}" class="cta-button">
+                SENTIRME BIEN
+            </a>
+        </div>
+    </div>
+</body>
+</html>

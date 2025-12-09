@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Receta Generada</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"></head><body><header class="topbar">📋 Receta Generada Automáticamente</header>
+<main class="container">
+    
+    <div class="card bg-success-light text-center">
+        <h1>¡Receta Generada con Éxito!</h1>
+        <p>La siguiente prescripción ha sido calculada automáticamente por el sistema.</p>
+        <p class="h4 mt-3">Receta ID: <strong>#{{ receta_id }}</strong></p>
+    </div>
+
+    <div class="receta-details">
+        <h2 class="text-primary mt-5 mb-4">Detalles de la Prescripción</h2>
+        
+        <div class="detail-group">
+            <span class="detail-label">Medicamento:</span>
+            <span class="detail-value fw-bold">{{ med_nombre }}</span>
+        </div>
+        
+        <div class="detail-group">
+            <span class="detail-label">Presentación:</span>
+            <span class="detail-value">{{ med_presentacion }}</span>
+        </div>
+        
+        <div class="detail-group highlight">
+            <span class="detail-label"><i class="fas fa-prescription-bottle"></i> Dosis Calculada:</span>
+            <span class="detail-value fw-bold text-success">{{ dosis }}</span>
+        </div>
+        
+        <div class="detail-group highlight">
+            <span class="detail-label"><i class="fas fa-clock"></i> Frecuencia:</span>
+            <span class="detail-value">{{ frecuencia }}</span>
+        </div>
+        
+        <div class="detail-group">
+            <span class="detail-label"><i class="fas fa-calendar-alt"></i> Duración Máxima:</span>
+            <span class="detail-value">{{ duracion }} días</span>
+        </div>
+        
+        <p class="text-danger mt-4">⚠️ **Importante:** Esta es una sugerencia automática. Siempre consulte a un profesional de la salud.</p>
+    </div>
+
+    <a class="btn-secondary mt-5 d-block" href="{{ url_for('paciente_area') }}">
+        <i class="fas fa-home"></i> Volver a la consulta
+    </a>
+</main>
+
+<style>
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .topbar { background-color: #007bff; color: white; padding: 15px 20px; text-align: center; font-size: 1.5em; margin-bottom: 30px; border-radius: 8px; }
+    .card { padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .bg-success-light { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .receta-details { margin-top: 40px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+    .detail-group {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px dotted #eee;
+    }
+    .detail-group:last-child { border-bottom: none; }
+    .detail-label { font-weight: 500; color: #555; }
+    .detail-value { font-weight: normal; color: #333; }
+    .highlight { background-color: #f8f9fa; padding: 10px 15px; border-radius: 4px; margin: 5px 0; border: 1px solid #e9ecef; }
+    .text-primary { color: #007bff; }
+    .text-success { color: #28a745; font-size: 1.1em; }
+    .text-danger { color: #dc3545; font-size: 0.9em; }
+    .fw-bold { font-weight: bold; }
+    .mt-3 { margin-top: 1rem; }
+    .mt-5 { margin-top: 3rem; }
+    .d-block { display: block; }
+    .btn-secondary { background-color: #6c757d; color: white; text-align: center; display: inline-block; padding: 12px 20px; border-radius: 5px; text-decoration: none; font-size: 1.1em; transition: background-color 0.2s; }
+    .btn-secondary:hover { background-color: #5a6268; }
+</style>
+</body></html>

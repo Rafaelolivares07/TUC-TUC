@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Medicamentos – Búsqueda por Síntoma</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      margin: 0; padding: 16px;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.3em;
+      margin: 0 0 16px;
+      color: #1a73e8;
+    }
+    #search {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1em;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .product {
+      background: white;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-left: 4px solid #1a73e8;
+    }
+    .name {
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 6px;
+      color: #111;
+    }
+    .price {
+      color: #2e7d32;
+      font-weight: bold;
+      margin: 6px 0;
+    }
+    .symptoms {
+      font-size: 0.92em;
+      color: #555;
+      line-height: 1.4;
+    }
+    .symptoms strong {
+      color: #d32f2f;
+    }
+    #results {
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+    .no-results {
+      text-align: center;
+      padding: 30px 20px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <h1>Busca por medicamento, síntoma o fabricante</h1>
+  <input type="text" id="search" placeholder="Ej: dol, ibupro, fiebre, Bayer..." autofocus autocomplete="off" />
+  <div id="results"></div>
+
+  <script>
+    // === FUNCIONES DE APOYO ===
+    function normalize(str) {
+      return str.toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim();
+    }
+
+    // === DATOS COMPLETOS EXTRAÍDOS DE TU ARCHIVO ===
+    const productos = [
+      {"id":8,"nombre":"Aspirina 100 mg tableta caja x 28","fabricante":"Bayer","precio":20000.0,"imagen":"Aspirina_100_mg_tableta_caja_x_28_Bayer.jpg","sintomas":["antiinflamatorio","dolor"]},
+      {"id":9,"nombre":"Ácido Acetilsalicílico 100 mg tableta caja x30","fabricante":"Genfar","precio":13800.0,"imagen":"Ácido_Acetilsalicílico_100_mg_tableta_caja_x30_Genfar.jpg","sintomas":["antiinflamatorio","calor local","enrojecimiento","Fiebre","hinchazón","dolor"]},
+      {"id":11,"nombre":"Tramadol 50 mg blister x 10","fabricante":"Genfar","precio":14763.0,"imagen":"Tramadol_50_mg_blister_x_10_Genfar.jpg","sintomas":["antiinflamatorio","Dolor de espalda","hinchazón","limitación de movimiento","rigidez matutina"]},
+      {"id":177,"nombre":"Levonorgestrel 1.5 mg tableta caja x 1","fabricante":"Lafrancol","precio":19400.0,"imagen":"med_219_83f44e1fa376.jpg","sintomas":["control hormonal","control natal","embarazo no deseado","prevención de embarazo no deseado","píldora anticonceptiva"]},
+      {"id":178,"nombre":"Carbamazepina 200 mg tableta caja X 30","fabricante":"laproff","precio":17100.0,"imagen":"Carbamazepina_200_mg_tableta_caja_X_30_genérico.jpg","sintomas":["confusión","convulsiones","debilidad muscular","dolor neuropático","Entumecimiento","espasmos musculares","hormigueo","pérdida de conciencia"]},
+      {"id":179,"nombre":"Fenitoína Sódica Mk 100 Mg Frasco X 50 Cápsulas","fabricante":"MK","precio":27700.0,"imagen":"med_179_164280403f38.jpg","sintomas":["confusión","convulsiones","espasmos musculares","pérdida de conciencia","Tratamiento Parenteral"]},
+      {"id":184,"nombre":"Candesartán 8 mg tableta caja x30","fabricante":"MK","precio":15800.0,"imagen":"Candesartán_8_mg_tableta_caja_x30_AstraZeneca.jpg","sintomas":["arritmia","Cansancio","dificultad respiratoria","fatiga","mareo","presión arterial elevada"]},
+      {"id":217,"nombre":"Anticonceptivo oral etinilestradiol + levonorgestrel caja x21","fabricante":"Bayer","precio":7000.0,"imagen":"Anticonceptivo_oral_etinilestradiol__levonorgestrel_caja_x21_Bayer.jpg","sintomas":["control hormonal","control natal","prevención de embarazo no deseado","regulación menstrual","píldora anticonceptiva"]},
+      {"id":221,"nombre":"Misoprostol Cytil 200Mcg Tabletas Caja X 7","fabricante":"TQ","precio":181500.0,"imagen":"med_221_35ef7a20c4f6.jpg","sintomas":["antiinflamatorio","escaras","heridas crónicas","llagas por presión","llagas vasculares","úlceras de decúbito","úlceras en piernas"]},
+      {"id":551,"nombre":"Nistatina suspensión 100,000 UI/ml frasco 60 ml","fabricante":"promarcas","precio":40000.0,"imagen":"Nistatina_suspensión_100000_UIml_frasco_60_ml_promarcas.jpg","sintomas":["candidiasis vaginal","Cansancio","Comezón","confusión","Congestión nasal","debilitamiento","descamación","Diarrea","Dolor abdominal","enrojecimiento","Fiebre","Fiebre Alta","hipotensión","hongos vaginales","inestabilidad","maceramiento","olor característico","pus","taquicardia","tos","Dolor muscular (mialgia)","Infección Bacterial","Vaginosis bacteriana","inflamación local"]},
+      {"id":552,"nombre":"Insulina humana regular 100 UI/ml 10 ml","fabricante":"Novo Nordisk","precio":34850.0,"imagen":"Insulina_humana_regular_100_UIml_10_ml_Novo_Nordisk.jpg","sintomas":["fatiga","hambre extrema","orina frecuente","pérdida de peso","sed excesiva","Visión borrosa"]},
+      {"id":560,"nombre":"Metformina 850 mg tableta caja x 30","fabricante":"Genfar","precio":27893.0,"imagen":"Metformina_850_mg_tableta_caja_x_30_Genfar.jpg","sintomas":["fatiga","hambre extrema","orina frecuente","pérdida de peso","sed excesiva","sobrepeso","Visión borrosa"]},
+      {"id":12,"nombre":"acetaminofen fosfato de Codeína 30 mg tableta caja x 30","fabricante":"Genfar","precio":38275.0,"imagen":"acetaminofen_fosfato_de_Codeína_30_mg_tableta_caja_x_30_Genfar.jpg","sintomas":["Cansancio","Congestión nasal","Dificultad para respirar","dificultad respiratoria","Dolor de garganta","Escalofríos","estornudos","Fiebre Alta","mucosidad","opresión torácica","Producción De Flema","rinorrea","Sibilancias","taquicardia","tos","Dolor muscular (mialgia)","dolor torácico o dolor en el pecho","Infección Bacterial","inflamación local"]},
+      {"id":63,"nombre":"Complejo Multivitamínico Centrum Women Tabletas Frasco X30","fabricante":"Pfizer","precio":50500.0,"imagen":"med_63_4e932a979774.jpg","sintomas":["Cansancio","carencia nutricional","déficit vitamínico","falta de vitaminas","multivitamínico","protección celular","radicales libres","salud del cabello","salud digestiva","suplementación nutricional","suplementación vitamínica"]},
+      {"id":69,"nombre":"Fluoxetina 20Mg Capsulas Caja X 30","fabricante":"AG","precio":13900.0,"imagen":"med_69_ccbaaedfef80.jpg","sintomas":["falta de motivación","fatiga","inquietud","Insomnio","nerviosismo","palpitaciones","Pérdida de apetito","sudoración","Temblores","tristeza persistente"]},
+      {"id":72,"nombre":"Escitalopram 10 mg tableta caja x30","fabricante":"MK","precio":99100.0,"imagen":"Escitalopram_10_mg_tableta_caja_x30_Lundbeck.jpg","sintomas":["inquietud","nerviosismo","palpitaciones","sudoración","Temblores"]},
+      {"id":131,"nombre":"Ibuprofeno 400 mg tableta caja x 10","fabricante":"Genfar","precio":3500.0,"imagen":"Ibuprofeno_400_mg_tableta_caja_x20_Genfar.jpg","sintomas":["antiinflamatorio","calor local","dolor","Fiebre","hinchazón","dolor de cabeza","Dolor de garganta"]},
+      {"id":132,"nombre":"Ibuprofeno 400mg x 100 tabletas","fabricante":"Genfar","precio":28000.0,"imagen":"Ibuprofeno_400mg_Genfar.jpg","sintomas":["antiinflamatorio","calor local","dolor","Fiebre","hinchazón","dolor de cabeza","Dolor de garganta"]}
+    ];
+
+    const searchInput = document.getElementById('search');
+    const resultsDiv = document.getElementById('results');
+
+    function buscar(termino) {
+      const t = normalize(termino);
+      if (!t) {
+        resultsDiv.innerHTML = '';
+        return;
+      }
+
+      const resultados = productos.filter(p => {
+        const nombreCompleto = `${p.nombre} ${p.fabricante}`;
+        const buscaEnNombre = normalize(nombreCompleto).includes(t);
+        const buscaEnSintomas = p.sintomas.some(s => normalize(s).includes(t));
+        return buscaEnNombre || buscaEnSintomas;
+      });
+
+      mostrarResultados(resultados);
+    }
+
+    function mostrarResultados(lista) {
+      if (lista.length === 0) {
+        resultsDiv.innerHTML = `<div class="no-results">No se encontraron resultados para "<strong>${searchInput.value}</strong>".</div>`;
+        return;
+      }
+
+      resultsDiv.innerHTML = lista.map(p => `
+        <div class="product">
+          <div class="name">${p.nombre} <small>(${p.fabricante})</small></div>
+          <div class="price">$${p.precio.toLocaleString('es-CO')}</div>
+          <div class="symptoms"><strong>Síntomas:</strong> ${p.sintomas.length ? p.sintomas.join(', ') : '—'}</div>
+        </div>
+      `).join('');
+    }
+
+    searchInput.addEventListener('input', () => {
+      buscar(searchInput.value);
+    });
+  </script>
+</body>
+</html>

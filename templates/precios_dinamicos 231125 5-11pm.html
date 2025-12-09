@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Precios Dinámicos</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        
+        h2 { margin-bottom: 5px; }
+        
+        /* Contenedor con scroll para el listado */
+        .tabla-container {
+            max-height: 35vh;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+        
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            margin: 0;
+        }
+        
+        th, td { 
+            border: 1px solid #ccc; 
+            padding: 6px; 
+            text-align: left; 
+            font-size: 0.95em;
+        }
+        
+        th { 
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        th:hover {
+            background-color: #e0e0e0;
+        }
+        
+        th::after {
+            content: ' ⇅';
+            font-size: 0.8em;
+            color: #999;
+        }
+        
+        /* Anchos específicos por columna */
+        #listado-medicamentos th:nth-child(1),
+        #listado-medicamentos td:nth-child(1) { width: 22%; }
+        
+        #listado-medicamentos th:nth-child(2),
+        #listado-medicamentos td:nth-child(2) { width: 13%; }
+        
+        #listado-medicamentos th:nth-child(3),
+        #listado-medicamentos td:nth-child(3) { width: 10%; }
+        
+        #listado-medicamentos th:nth-child(4),
+        #listado-medicamentos td:nth-child(4) { width: 10%; }
+        
+        #listado-medicamentos th:nth-child(5),
+        #listado-medicamentos td:nth-child(5) { width: 45%; }
+        
+        tbody tr:hover {
+            background-color: #f5f5f5;
+            cursor: pointer;
+        }
+        
+        .panel { 
+            background-color: #f9f9f9; 
+            padding: 15px; 
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Layout de 4 columnas */
+        .contenido-flex-superior {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        
+        .columna-config {
+            flex: 0 0 auto;
+            width: 400px;
+        }
+        
+        .columna-precio-sugerido {
+            flex: 0 0 auto;
+            width: 200px;
+        }
+        
+        .columna-cotizacion {
+            flex: 0 0 auto;
+            width: 280px;
+        }
+        
+        .columna-competencia {
+            flex: 1;
+            min-width: 350px;
+        }
+        
+        /* Tabla de competencia más compacta */
+        #listado-competencia {
+            font-size: 0.9em;
+        }
+        
+        #listado-competencia th,
+        #listado-competencia td {
+            padding: 4px 6px;
+        }
+        
+        .btn-accion {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+            padding: 2px 5px;
+            margin: 0 2px;
+        }
+        
+        .btn-accion:hover {
+            opacity: 0.7;
+        }
+        
+        .btn-cancelar {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .btn-cancelar:hover {
+            background-color: #ff5252;
+        }
+        
+        .modo-editar {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding-left: 11px;
+        }
+        
+        input[type="text"], input[type="number"], select {
+            padding: 8px; 
+            margin: 4px 0; 
+            width: 100%;
+            max-width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        select {
+            cursor: pointer;
+        }
+        
+        .input-group {
+            margin-bottom: 8px;
+            position: relative;
+        }
+        
+        .input-group label {
+            display: block;
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 2px;
+        }
+        
+        /* Autocompletado dropdown */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-width: 300px;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .autocomplete-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background-color: #e8f4ff;
+        }
+        
+        .autocomplete-item small {
+            display: block;
+            color: #666;
+            font-size: 0.85em;
+            margin-top: 2px;
+        }
+        
+        .config-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        
+        .config-inputs input,
+        .config-inputs select {
+            width: 100%;
+        }
+        
+        .config-inputs .input-group label {
+            font-size: 0.85em;
+        }
+        
+        .config-full-width {
+            grid-column: 1 / -1;
+        }
+        
+        #precio-sugerido { 
+            background-color: #e6ffe6; 
+            font-weight: bold;
+            font-size: 1.2em;
+            width: 100%;
+            max-width: 200px;
+        }
+        
+        h3 {
+            margin-top: 5px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        h3 .fabricante {
+            color: #666;
+            font-weight: normal;
+        }
+        
+        h4 {
+            margin-top: 5px;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 1em;
+        }
+    </style>
+</head>
+<body>
+    <h2>Listado de Medicamentos</h2>
+    <div class="tabla-container">
+        <table id="listado-medicamentos">
+            <thead>
+                <tr>
+                    <th onclick="ordenarTabla(0)">Nombre</th>
+                    <th onclick="ordenarTabla(1)">Fabricante</th>
+                    <th onclick="ordenarTabla(2)">Precio Actual</th>
+                    <th onclick="ordenarTabla(3)">Existencia</th>
+                    <th onclick="ordenarTabla(4)">Competencia (mejor)</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-medicamentos"></tbody>
+        </table>
+    </div>
+
+    <div id="panel-medicamento" class="panel" style="display:none;">
+        <h3>Medicamento: <span id="nombre-medicamento"></span> <span class="fabricante">- <span id="nombre-fabricante"></span></span></h3>
+
+        <div class="contenido-flex-superior">
+            <div class="columna-config">
+                <h4>Configuración de Precios</h4>
+                <div class="config-inputs">
+                    <div class="input-group config-full-width">
+                        <label>Usar precio de competencia</label>
+                        <select id="config-usar-precio" data-campo="usar_precio">
+                            <option value="minimo">Mínimo</option>
+                            <option value="maximo">Máximo</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Recargo Escaso (%)</label>
+                        <input type="number" id="config-recargo" data-campo="recargo_escaso" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Redondeo Superior</label>
+                        <input type="number" id="config-redondeo" data-campo="redondeo_superior" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Ganancia Mínima</label>
+                        <input type="number" id="config-ganancia-min" data-campo="ganancia_min_escaso" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Ganancia Máxima</label>
+                        <input type="number" id="config-ganancia-max" data-campo="ganancia_max_escaso" step="100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="columna-precio-sugerido">
+                <h4>Precio Sugerido</h4>
+                <input type="number" id="precio-sugerido" step="100">
+            </div>
+
+            <div class="columna-cotizacion" id="contenedor-cotizacion">
+                <h4 id="titulo-cotizacion">Agregar Cotización</h4>
+                <div class="input-group">
+                    <label>Nombre del tercero *</label>
+                    <input type="text" id="tercero-nombre" placeholder="Escriba para buscar o crear" autocomplete="off">
+                    <div id="autocomplete-dropdown" class="autocomplete-dropdown"></div>
+                </div>
+                <div class="input-group">
+                    <label>Teléfono</label>
+                    <input type="text" id="tercero-telefono" placeholder="Opcional">
+                </div>
+                <div class="input-group">
+                    <label>Dirección</label>
+                    <input type="text" id="tercero-direccion" placeholder="Opcional">
+                </div>
+                <div class="input-group">
+                    <label>Precio</label>
+                    <input type="number" id="precio-cotizacion" placeholder="Precio de competencia">
+                </div>
+                <button id="btn-cancelar-edicion" class="btn-cancelar" style="display:none;">Cancelar Edición</button>
+                <input type="hidden" id="medicamento-activo">
+                <input type="hidden" id="fabricante-activo">
+                <input type="hidden" id="tercero-id">
+                <input type="hidden" id="cotizacion-id-editando">
+            </div>
+
+            <div class="columna-competencia">
+                <h4>Precios de Competencia</h4>
+                <table id="listado-competencia">
+                    <thead><tr><th>Competidor</th><th>Precio</th><th>Fecha</th><th>Acciones</th></tr></thead>
+                    <tbody id="tbody-competencia"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let CONFIG = {};
+        let MEDICAMENTO_ACTIVO = null;
+        let MEDICAMENTOS_DATA = [];
+        let ORDEN_ASCENDENTE = [true, true, true, true, true];
+        let indiceMedicamentoActual = -1;
+        let autocompleteIndex = -1;
+        let autocompleteItems = [];
+        let modoEdicion = false;
+
+        // === Cargar datos iniciales ===
+        fetch('/admin/precios-dinamicos/data')
+            .then(r => r.json())
+            .then(data => {
+                CONFIG = data.config;
+                MEDICAMENTOS_DATA = data.medicamentos;
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+                
+                // Cargar configuración en inputs
+                document.getElementById('config-usar-precio').value = CONFIG.usar_precio || 'minimo';
+                document.getElementById('config-recargo').value = CONFIG.recargo_escaso;
+                document.getElementById('config-redondeo').value = CONFIG.redondeo_superior;
+                document.getElementById('config-ganancia-min').value = CONFIG.ganancia_min_escaso;
+                document.getElementById('config-ganancia-max').value = CONFIG.ganancia_max_escaso;
+                
+                if (data.primer_med_id && data.primer_fab_id) {
+                    const medIndex = data.medicamentos.findIndex(
+                        m => m.medicamento_id == data.primer_med_id && m.fabricante_id == data.primer_fab_id
+                    );
+                    indiceMedicamentoActual = medIndex;
+                    seleccionarMedicamento(data.medicamentos[medIndex]);
+                    renderizarCompetencia(data.competencias_primer);
+                    document.getElementById('precio-sugerido').value = data.precio_sugerido || '';
+                    resaltarFilaActiva();
+                }
+            });
+
+        function renderizarMedicamentos(meds) {
+            const tbody = document.getElementById('tbody-medicamentos');
+            tbody.innerHTML = meds.map((m, idx) => `
+                <tr onclick="seleccionarMedicamento(${JSON.stringify(m).replace(/"/g, '&quot;')}); indiceMedicamentoActual = ${idx}; resaltarFilaActiva();">
+                    <td>${m.nombre}</td>
+                    <td>${m.fabricante_nombre}</td>
+                    <td>${m.precio_actual}</td>
+                    <td>${m.estado_existencia}</td>
+                    <td>${m.competencia_nombre ? `${m.competencia_nombre} - $${m.competencia_precio} (${m.competencia_fecha || ''})` : ''}</td>
+                </tr>
+            `).join('');
+        }
+
+        function seleccionarMedicamento(med) {
+            MEDICAMENTO_ACTIVO = med;
+            document.getElementById('nombre-medicamento').textContent = med.nombre;
+            document.getElementById('nombre-fabricante').textContent = med.fabricante_nombre;
+            document.getElementById('medicamento-activo').value = med.medicamento_id;
+            document.getElementById('fabricante-activo').value = med.fabricante_id;
+            document.getElementById('panel-medicamento').style.display = 'block';
+
+            // Limpiar modo edición al cambiar de producto
+            cancelarEdicion();
+
+            // Cargar competencia real
+            fetchCompetencia(med.medicamento_id, med.fabricante_id);
+        }
+
+        function fetchCompetencia(medId, fabId) {
+            fetch(`/admin/precios_competencia/listar?medicamento_id=${medId}&fabricante_id=${fabId}`)
+                .then(r => r.json())
+                .then(data => {
+                    renderizarCompetencia(data.competencias);
+                    // Recalcular precio sugerido
+                    recalcularPrecioSugerido(data.competencias);
+                });
+        }
+
+        function recalcularPrecioSugerido(competencias) {
+            let precioSugerido;
+            
+            if (competencias && competencias.length > 0) {
+                // HAY cotizaciones, calcular precio sugerido
+                const precios = competencias.map(c => c.precio);
+                const usarPrecio = CONFIG.usar_precio || 'minimo';
+                
+                let precioBase;
+                if (usarPrecio === 'minimo') {
+                    precioBase = Math.min(...precios);
+                } else {
+                    precioBase = Math.max(...precios);
+                }
+                
+                precioSugerido = calcularPrecioSugerido(precioBase);
+            } else {
+                // NO hay cotizaciones, mostrar precio_actual sin modificar
+                precioSugerido = MEDICAMENTO_ACTIVO.precio_actual || 0;
+            }
+            
+            document.getElementById('precio-sugerido').value = precioSugerido;
+        }
+
+        function renderizarCompetencia(lista) {
+            const tbody = document.getElementById('tbody-competencia');
+            tbody.innerHTML = lista.map(c => `
+                <tr>
+                    <td>${c.nombre}</td>
+                    <td>$${c.precio}</td>
+                    <td>${c.fecha_actualizacion || ''}</td>
+                    <td>
+                        <button class="btn-accion" onclick="editarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.telefono || ''}', '${c.direccion || ''}', ${c.precio}, ${c.tercero_id})" title="Editar">✏️</button>
+                        <button class="btn-accion" onclick="eliminarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', event)" title="Eliminar">🗑️</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editarCotizacion(cotizacionId, nombre, telefono, direccion, precio, terceroId) {
+            modoEdicion = true;
+            
+            // Cambiar a modo edición visual
+            document.getElementById('titulo-cotizacion').textContent = 'Editar Cotización';
+            document.getElementById('contenedor-cotizacion').classList.add('modo-editar');
+            document.getElementById('btn-cancelar-edicion').style.display = 'block';
+            
+            // Llenar formulario
+            document.getElementById('tercero-nombre').value = nombre;
+            document.getElementById('tercero-telefono').value = telefono;
+            document.getElementById('tercero-direccion').value = direccion;
+            document.getElementById('precio-cotizacion').value = precio;
+            document.getElementById('tercero-id').value = terceroId;
+            document.getElementById('cotizacion-id-editando').value = cotizacionId;
+            
+            // Foco en precio
+            document.getElementById('precio-cotizacion').focus();
+        }
+
+        async function eliminarCotizacion(cotizacionId, nombre, event) {
+            event.stopPropagation();
+            
+            if (!confirm(`¿Eliminar cotización de ${nombre}?`)) {
+                return;
+            }
+            
+            const res = await fetch('/admin/precio-competencia/eliminar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: cotizacionId})
+            });
+            
+            const data = await res.json();
+            if (data.ok) {
+                const medId = document.getElementById('medicamento-activo').value;
+                const fabId = document.getElementById('fabricante-activo').value;
+                fetchCompetencia(medId, fabId);
+            }
+        }
+
+        function cancelarEdicion() {
+            modoEdicion = false;
+            document.getElementById('titulo-cotizacion').textContent = 'Agregar Cotización';
+            document.getElementById('contenedor-cotizacion').classList.remove('modo-editar');
+            document.getElementById('btn-cancelar-edicion').style.display = 'none';
+            
+            // Limpiar campos
+            document.getElementById('tercero-nombre').value = '';
+            document.getElementById('tercero-telefono').value = '';
+            document.getElementById('tercero-direccion').value = '';
+            document.getElementById('precio-cotizacion').value = '';
+            document.getElementById('tercero-id').value = '';
+            document.getElementById('cotizacion-id-editando').value = '';
+            
+            ocultarDropdown();
+        }
+
+        document.getElementById('btn-cancelar-edicion').addEventListener('click', cancelarEdicion);
+
+        function calcularPrecioSugerido(precioBase) {
+            if (precioBase <= 0) return 0;
+            const recargo = precioBase * (CONFIG.recargo_escaso / 100);
+            const ganancia = Math.max(
+                CONFIG.ganancia_min_escaso,
+                Math.min(CONFIG.ganancia_max_escaso, recargo)
+            );
+            let sugerido = precioBase + ganancia;
+            const redondeo = CONFIG.redondeo_superior;
+            if (redondeo > 0) {
+                sugerido = Math.ceil(sugerido / redondeo) * redondeo;
+            }
+            return Math.floor(sugerido);
+        }
+
+        // === AUTOCOMPLETADO ===
+        const inputTercero = document.getElementById('tercero-nombre');
+        const dropdown = document.getElementById('autocomplete-dropdown');
+        let timeoutId;
+
+        inputTercero.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            clearTimeout(timeoutId);
+            
+            if (query.length < 2) {
+                ocultarDropdown();
+                return;
+            }
+            
+            timeoutId = setTimeout(() => {
+                fetch(`/admin/terceros/buscar?q=${encodeURIComponent(query)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        mostrarDropdown(data.terceros);
+                    });
+            }, 300);
+        });
+
+        function mostrarDropdown(terceros) {
+            autocompleteItems = terceros;
+            autocompleteIndex = -1;
+            
+            if (terceros.length === 0) {
+                ocultarDropdown();
+                return;
+            }
+            
+            dropdown.innerHTML = terceros.map((t, idx) => `
+                <div class="autocomplete-item" data-index="${idx}">
+                    <strong>${t.nombre}</strong>
+                    ${t.telefono || t.direccion ? `<small>${t.telefono || ''} ${t.direccion || ''}</small>` : ''}
+                </div>
+            `).join('');
+            
+            dropdown.style.display = 'block';
+            
+            // Click en items
+            dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const idx = parseInt(this.dataset.index);
+                    seleccionarTerceroExistente(autocompleteItems[idx]);
+                });
+            });
+        }
+
+        function ocultarDropdown() {
+            dropdown.style.display = 'none';
+            dropdown.innerHTML = '';
+            autocompleteItems = [];
+            autocompleteIndex = -1;
+        }
+
+        function seleccionarTerceroExistente(tercero) {
+            document.getElementById('tercero-id').value = tercero.id;
+            document.getElementById('tercero-nombre').value = tercero.nombre;
+            document.getElementById('tercero-telefono').value = tercero.telefono || '';
+            document.getElementById('tercero-direccion').value = tercero.direccion || '';
+            ocultarDropdown();
+            document.getElementById('precio-cotizacion').focus();
+        }
+
+        async function crearNuevoTercero(nombre) {
+            const res = await fetch('/admin/terceros/buscar-o-crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nombre})
+            });
+            const data = await res.json();
+            if (data.id) {
+                document.getElementById('tercero-id').value = data.id;
+                document.getElementById('tercero-telefono').focus();
+            }
+        }
+
+        // Navegación con teclado en input tercero
+        inputTercero.addEventListener('keydown', function(e) {
+            const dropdownVisible = dropdown.style.display === 'block';
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (dropdownVisible && autocompleteItems.length > 0) {
+                    autocompleteIndex = 0;
+                    actualizarSeleccionDropdown();
+                }
+            } else if (e.key === 'Escape') {
+                ocultarDropdown();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (autocompleteIndex >= 0 && autocompleteItems[autocompleteIndex]) {
+                    // Seleccionar de la lista
+                    seleccionarTerceroExistente(autocompleteItems[autocompleteIndex]);
+                } else {
+                    // Crear nuevo tercero
+                    const nombre = this.value.trim();
+                    if (nombre) {
+                        crearNuevoTercero(nombre);
+                        ocultarDropdown();
+                    }
+                }
+            }
+        });
+
+        // Navegación con teclado en dropdown
+        dropdown.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (autocompleteIndex < autocompleteItems.length - 1) {
+                    autocompleteIndex++;
+                    actualizarSeleccionDropdown();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (autocompleteIndex > 0) {
+                    autocompleteIndex--;
+                    actualizarSeleccionDropdown();
+                } else {
+                    inputTercero.focus();
+                    autocompleteIndex = -1;
+                    actualizarSeleccionDropdown();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (autocompleteIndex >= 0) {
+                    seleccionarTerceroExistente(autocompleteItems[autocompleteIndex]);
+                }
+            } else if (e.key === 'Escape') {
+                ocultarDropdown();
+                inputTercero.focus();
+            }
+        });
+
+        function actualizarSeleccionDropdown() {
+            const items = dropdown.querySelectorAll('.autocomplete-item');
+            items.forEach((item, idx) => {
+                if (idx === autocompleteIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                    dropdown.setAttribute('tabindex', '-1');
+                    dropdown.focus();
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+
+        // Cerrar dropdown al hacer clic fuera
+        document.addEventListener('click', function(e) {
+            if (!inputTercero.contains(e.target) && !dropdown.contains(e.target)) {
+                ocultarDropdown();
+            }
+        });
+
+        // === Navegación con teclado en listado principal ===
+        document.addEventListener('keydown', function(e) {
+            // Solo si no estamos en un input
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'SELECT') {
+                return;
+            }
+            
+            if (!MEDICAMENTOS_DATA.length) return;
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                indiceMedicamentoActual = Math.min(indiceMedicamentoActual + 1, MEDICAMENTOS_DATA.length - 1);
+                seleccionarMedicamento(MEDICAMENTOS_DATA[indiceMedicamentoActual]);
+                resaltarFilaActiva();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                indiceMedicamentoActual = Math.max(indiceMedicamentoActual - 1, 0);
+                seleccionarMedicamento(MEDICAMENTOS_DATA[indiceMedicamentoActual]);
+                resaltarFilaActiva();
+            }
+        });
+
+        function resaltarFilaActiva() {
+            const filas = document.querySelectorAll('#tbody-medicamentos tr');
+            filas.forEach((fila, idx) => {
+                if (idx === indiceMedicamentoActual) {
+                    fila.style.backgroundColor = '#d0e8ff';
+                    fila.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } else {
+                    fila.style.backgroundColor = '';
+                }
+            });
+        }
+
+        // === Eventos de blur ===
+        document.getElementById('tercero-telefono').addEventListener('blur', guardarTerceroCampo);
+        document.getElementById('tercero-direccion').addEventListener('blur', guardarTerceroCampo);
+        document.getElementById('precio-cotizacion').addEventListener('blur', guardarPrecioCompetencia);
+
+        async function guardarTerceroCampo(e) {
+            const campo = e.target.id.replace('tercero-', '');
+            const valor = e.target.value;
+            const terceroId = document.getElementById('tercero-id')?.value;
+            if (!terceroId) return;
+            await fetch('/admin/terceros/guardar-campo', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tercero_id: terceroId, campo, valor})
+            });
+        }
+
+        async function guardarPrecioCompetencia(e) {
+            const precio = parseFloat(e.target.value);
+            const medId = document.getElementById('medicamento-activo').value;
+            const fabId = document.getElementById('fabricante-activo').value;
+            const terceroId = document.getElementById('tercero-id')?.value;
+            const cotizacionId = document.getElementById('cotizacion-id-editando')?.value;
+            
+            if (!medId || !fabId || !terceroId || precio <= 0) return;
+
+            let res;
+            if (modoEdicion && cotizacionId) {
+                // EDITAR cotización existente
+                res = await fetch('/admin/precio-competencia/editar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: cotizacionId, precio})
+                });
+            } else {
+                // AGREGAR nueva cotización
+                res = await fetch('/admin/precios_competencia/guardar-dinamico', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        medicamento_id: medId, 
+                        fabricante_id: fabId,
+                        competidor_id: terceroId, 
+                        precio
+                    })
+                });
+            }
+            
+            const ok = await res.json();
+            if (ok.ok) {
+                // Recargar competencia y recalcular
+                fetchCompetencia(medId, fabId);
+                // Cancelar modo edición y limpiar campos
+                cancelarEdicion();
+                inputTercero.focus();
+            }
+        }
+
+        // === Blur en precio sugerido (GUARDA EN BD) ===
+        document.getElementById('precio-sugerido').addEventListener('blur', async function() {
+            const precio = parseFloat(this.value);
+            const medId = document.getElementById('medicamento-activo').value;
+            const fabId = document.getElementById('fabricante-activo').value;
+            
+            if (!medId || !fabId || precio <= 0) return;
+            
+            const res = await fetch('/admin/precio-sugerido/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({medicamento_id: medId, fabricante_id: fabId, precio})
+            });
+            
+            const data = await res.json();
+            if (data.ok) {
+                // Actualizar precio_actual en memoria
+                MEDICAMENTO_ACTIVO.precio_actual = precio;
+                // Recargar listado para reflejar cambio
+                const medIndex = MEDICAMENTOS_DATA.findIndex(
+                    m => m.medicamento_id == medId && m.fabricante_id == fabId
+                );
+                if (medIndex >= 0) {
+                    MEDICAMENTOS_DATA[medIndex].precio_actual = precio;
+                    renderizarMedicamentos(MEDICAMENTOS_DATA);
+                    resaltarFilaActiva();
+                }
+            }
+        });
+
+        // === Eventos blur para configuración (GUARDAN EN BD) ===
+        document.getElementById('config-usar-precio').addEventListener('change', guardarCampoConfiguracion);
+        document.getElementById('config-recargo').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-redondeo').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-ganancia-min').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-ganancia-max').addEventListener('blur', guardarCampoConfiguracion);
+
+        async function guardarCampoConfiguracion(e) {
+            const campo = e.target.dataset.campo;
+            const valor = e.target.value;
+            
+            // Guardar en base de datos
+            await fetch('/admin/configuracion-precios/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({campo, valor})
+            });
+            
+            // Actualizar CONFIG en memoria
+            if (campo === 'usar_precio') {
+                CONFIG.usar_precio = valor;
+            } else if (campo === 'recargo_escaso') {
+                CONFIG.recargo_escaso = parseFloat(valor);
+            } else if (campo === 'redondeo_superior') {
+                CONFIG.redondeo_superior = parseFloat(valor);
+            } else if (campo === 'ganancia_min_escaso') {
+                CONFIG.ganancia_min_escaso = parseFloat(valor);
+            } else if (campo === 'ganancia_max_escaso') {
+                CONFIG.ganancia_max_escaso = parseFloat(valor);
+            }
+            
+            // Recalcular precio sugerido
+            if (MEDICAMENTO_ACTIVO) {
+                const medId = document.getElementById('medicamento-activo').value;
+                const fabId = document.getElementById('fabricante-activo').value;
+                fetchCompetencia(medId, fabId);
+            }
+        }
+
+        // === Función para ordenar tabla ===
+        function ordenarTabla(columna) {
+            const ascendente = ORDEN_ASCENDENTE[columna];
+            
+            MEDICAMENTOS_DATA.sort((a, b) => {
+                let valorA, valorB;
+                
+                switch(columna) {
+                    case 0: // Nombre
+                        valorA = a.nombre.toLowerCase();
+                        valorB = b.nombre.toLowerCase();
+                        break;
+                    case 1: // Fabricante
+                        valorA = a.fabricante_nombre.toLowerCase();
+                        valorB = b.fabricante_nombre.toLowerCase();
+                        break;
+                    case 2: // Precio Actual
+                        valorA = parseFloat(a.precio_actual) || 0;
+                        valorB = parseFloat(b.precio_actual) || 0;
+                        break;
+                    case 3: // Existencia
+                        valorA = a.estado_existencia || '';
+                        valorB = b.estado_existencia || '';
+                        break;
+                    case 4: // Competencia
+                        valorA = parseFloat(a.competencia_precio) || 0;
+                        valorB = parseFloat(b.competencia_precio) || 0;
+                        break;
+                }
+                
+                if (valorA < valorB) return ascendente ? -1 : 1;
+                if (valorA > valorB) return ascendente ? 1 : -1;
+                return 0;
+            });
+            
+            ORDEN_ASCENDENTE[columna] = !ascendente;
+            renderizarMedicamentos(MEDICAMENTOS_DATA);
+        }
+    </script>
+</body>
+</html>

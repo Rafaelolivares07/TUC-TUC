@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TUC TUC: Búsqueda de Soluciones</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    
+    <div class="content-centered"> 
+
+        <div class="logo-pequeno">
+            TUC <span class="heartbeat-icon-small"></span> TUC
+        </div>
+
+        <h2 id="consulta-saludo" class="app-dialog-consulta">
+            Hola, {{ session.get('nombre', 'Usuario') }}. ¡Dime qué sientes!
+        </h2>
+        
+        <div id="main-input-area" class="main-input-wrapper">
+            <form method="POST" action="{{ url_for('mostrar_sugerencias') }}" id="sintomasForm">
+                
+                <div id="sintomasSeleccionadosDisplay" class="seleccionados-display" style="display: none;">
+                    </div>
+                
+                <div class="form-group mb-4">
+                    <input type="text" id="filtroSintomas" class="form-control form-control-xlg" 
+                            placeholder="Ej: dolor de cabeza, dolor muscular..."
+                            onkeyup="filtrarSintomas()" autofocus>
+                </div>
+                
+                <div id="sintomasGrid" class="sintomas-grid">
+                    </div>
+
+                <div id="checkboxesContainer" style="display: none;"></div> 
+
+                <button class="btn-cta mt-4 hidden" type="submit" id="btnBuscar">
+                    SENTIRME BIEN
+                </button>
+                
+            </form>
+        </div>
+        <a class="btn-salir" href="{{ url_for('index') }}">SALIR</a>
+        
+    </div>
+    <script id="sintomasData" type="application/json">
+        {{ sintomas_data | safe }}
+    </script>
+
+    <script>
+        // -------------------------------------------------------------
+        // LÓGICA DE TRANSICIÓN PARA EL SALUDO
+        // -------------------------------------------------------------
+        document.addEventListener('DOMContentLoaded', () => {
+            const saludoElement = document.getElementById('consulta-saludo');
+            const inputArea = document.getElementById('main-input-area');
+
+            // Ocultar el área de input hasta que el saludo termine de aparecer
+            inputArea.style.opacity = '0';
+            inputArea.style.transition = 'opacity 2s ease-in-out';
+            
+            // 1. Iniciar la transición del saludo
+            setTimeout(() => {
+                saludoElement.style.opacity = '1';
+            }, 500); // 0.5 segundos después de la carga
+
+            // 2. Iniciar la transición del área de input (después de que el saludo haya aparecido)
+            setTimeout(() => {
+                inputArea.style.opacity = '1';
+            }, 2500); // 2.5 segundos (Permite 2s para el fade-in del saludo + 0.5s de retraso)
+
+            // Inicializar la lógica de síntomas
+            inicializarTucTuc();
+        });
+
+        // -------------------------------------------------------------
+        // LÓGICA DE SELECCIÓN DE SÍNTOMAS (EXISTENTE)
+        // -------------------------------------------------------------
+        var sintomasDB = [];
+        var seleccionados = new Set();
+        var btnBuscar;
+        var displayDiv;
+        var sintomasGrid;
+        var checkboxesContainer;
+
+        function inicializarTucTuc() {
+            // Cargar datos de síntomas desde el script tag JSON
+            try {
+                const dataElement = document.getElementById('sintomasData');
+                if (dataElement && dataElement.textContent) {
+                    sintomasDB = JSON.parse(dataElement.textContent);
+                }
+            } catch (e) {
+                console.error("Error al cargar datos JSON:", e);
+            }
+            
+            btnBuscar = document.getElementById('btnBuscar');
+            displayDiv = document.getElementById('sintomasSeleccionadosDisplay');
+            sintomasGrid = document.getElementById('sintomasGrid');
+            checkboxesContainer = document.getElementById('checkboxesContainer');
+
+            // 1. Ocultar el botón principal al cargar
+            btnBuscar.classList.add('hidden');
+        }
+        
+        function actualizarEstadoUI() {
+            // 1. Limpiar contenedores
+            displayDiv.innerHTML = '';
+            checkboxesContainer.innerHTML = '';
+            
+            // 2. Lógica de renderizado
+            if (seleccionados.size > 0) {
+                displayDiv.style.display = 'flex';
+                btnBuscar.classList.remove('hidden'); // MOSTRAR BOTÓN
+
+                seleccionados.forEach(id => {
+                    var sintoma = sintomasDB.find(s => s.id == id);
+                    if(sintoma) {
+                        // Crear el tag visual
+                        var tagHtml = `<span class="tag-seleccionado" data-id="${id}">
+                                            ${sintoma.nombre} 
+                                            <span class="tag-cerrar" onclick="deseleccionarPorDisplay('${id}')">×</span>
+                                          </span>`;
+                        displayDiv.innerHTML += tagHtml;
+                        
+                        // Crear el checkbox hidden para el envío (CRUCIAL)
+                        var checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.name = 'sintomas_id';
+                        checkbox.value = id;
+                        checkbox.checked = true;
+                        checkboxesContainer.appendChild(checkbox);
+                    }
+                });
+            } else {
+                displayDiv.style.display = 'none';
+                btnBuscar.classList.add('hidden'); // OCULTAR BOTÓN
+            }
+            
+            // 3. Actualizar el texto del botón
+            btnBuscar.textContent = `SENTIRME BIEN (${seleccionados.size})`;
+            
+            // 4. Asegurar que los tags en el grid reflejen el estado de selección
+            actualizarSeleccionVisual();
+        }
+        
+        function deseleccionarPorDisplay(id) {
+            if (seleccionados.has(parseInt(id))) {
+                seleccionados.delete(parseInt(id));
+            }
+            actualizarEstadoUI();
+        }
+
+        function seleccionarSintoma(tagElement) {
+            var id = parseInt(tagElement.getAttribute('data-id'));
+            
+            if (seleccionados.has(id)) {
+                seleccionados.delete(id);
+            } else {
+                seleccionados.add(id);
+            }
+            
+            actualizarEstadoUI();
+        }
+
+        function actualizarSeleccionVisual() {
+            // Itera sobre los tags actualmente visibles en el grid
+            Array.from(sintomasGrid.children).forEach(tag => {
+                var id = parseInt(tag.getAttribute('data-id'));
+                if (seleccionados.has(id)) {
+                    tag.classList.add('seleccionado');
+                } else {
+                    tag.classList.remove('seleccionado');
+                }
+            });
+        }
+
+        function filtrarSintomas() {
+            var input = document.getElementById('filtroSintomas').value.trim().toLowerCase();
+            
+            // 1. Limpiamos el contenedor del grid
+            sintomasGrid.innerHTML = ''; 
+
+            if (input.length < 1) {
+                // Si la búsqueda está vacía, NO MOSTRAMOS NADA
+                return; 
+            }
+            
+            // 2. Filtramos y generamos los tags
+            var resultados = sintomasDB.filter(sintoma => 
+                sintoma.descripcion_lower.includes(input)
+            );
+            
+            resultados.forEach(sintoma => {
+                // Generar el elemento DOM del tag
+                var tagElement = document.createElement('span');
+                tagElement.className = 'sintoma-tag';
+                tagElement.setAttribute('data-id', sintoma.id);
+                tagElement.setAttribute('data-nombre', sintoma.nombre);
+                tagElement.textContent = sintoma.nombre;
+                tagElement.onclick = function() { seleccionarSintoma(this); };
+
+                // Restaurar estado visual (color verde) si ya está seleccionado
+                if (seleccionados.has(sintoma.id)) {
+                    tagElement.classList.add('seleccionado');
+                }
+                
+                sintomasGrid.appendChild(tagElement);
+            });
+            
+            // 3. No necesitamos llamar a actualizarEstadoUI() aquí, solo al seleccionar.
+        }
+    </script>
+
+    <style>
+        /* ------------------------------------------------------------- */
+        /* ESTILOS DE PANTALLA GENERAL (Minimalista y Centrada) */
+        /* ------------------------------------------------------------- */
+        
+        body { 
+            background-color: #f0fdf4; /* Fondo verde claro */
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            color: #333; 
+        }
+
+        .content-centered {
+            display: flex;
+            flex-direction: column; 
+            justify-content: flex-start; /* Alineación arriba para el logo */
+            align-items: center; /* Centrado horizontal */
+            min-height: 100vh; 
+            padding: 30px 20px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        /* Saludo Sutil (Más grande y con transición) */
+        .app-dialog-consulta {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-weight: 300; 
+            color: #007bff; 
+            opacity: 0; 
+            transition: opacity 2s ease-in-out; 
+            margin-bottom: 30px; 
+            text-align: center;
+            font-size: 2.8rem; /* Tamaño aumentado */
+            max-width: 90%;
+        }
+        
+        /* Contenedor del formulario flotante */
+        .main-input-wrapper {
+            width: 90%; 
+            max-width: 500px; /* Aseguramos el ancho máximo para contener los tags */
+        }
+        
+        /* Eliminamos los estilos del contenedor blanco anterior */
+        .container { 
+            padding: 0; 
+            position: static;
+            width: 100%;
+            max-width: 500px;
+            margin: 0;
+            background-color: transparent; 
+            box-shadow: none; 
+        }
+        
+        /* ------------------------------------------------------------- */
+        /* ESTILOS ESPECÍFICOS DE LA CONSULTA (Restaurados y Verificados) */
+        /* ------------------------------------------------------------- */
+        
+        .form-control-xlg { width: 100%; padding: 18px 20px; font-size: 1.4rem; border-radius: 12px; border: 2px solid #bbf7d0; box-sizing: border-box; transition: border-color 0.3s; }
+        .form-control-xlg:focus { outline: none; border-color: #34d399; }
+
+        /* ESTILOS PARA EL DISPLAY DE SÍNTOMAS SELECCIONADOS (ARRIBA) */
+        .seleccionados-display {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; padding: 10px; border: 1px solid #bbf7d0; border-radius: 10px; background-color: #f0fdf4;
+        }
+
+        .tag-seleccionado {
+            display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 20px; background-color: #34d399; color: white; font-size: 0.9em; font-weight: 500;
+        }
+
+        .tag-cerrar {
+            margin-left: 8px; cursor: pointer; font-weight: bold; font-size: 1.1em; line-height: 1; transition: opacity 0.2s;
+        }
+        .tag-cerrar:hover { opacity: 0.8; }
+        
+        /* GRID DE SÍNTOMAS (BOTONES) - Restaurado */
+        .sintomas-grid { 
+            display: flex; 
+            flex-wrap: wrap; /* CRUCIAL: Permite que los botones bajen de línea */
+            gap: 12px; 
+            margin-top: 20px; 
+            padding: 10px 0; 
+        }
+
+        /* BOTÓN INDIVIDUAL DE SÍNTOMA (Color inicial) - Restaurado */
+        .sintoma-tag {
+            padding: 10px 18px; 
+            border-radius: 30px; 
+            background-color: #e0f2f1; /* Color inicial */
+            color: #166534; 
+            cursor: pointer; 
+            transition: background-color 0.2s, color 0.2s, transform 0.1s; 
+            font-size: 1.1em; 
+            border: 1px solid #c8e6c9; 
+            user-select: none; 
+            display: inline-block;
+        }
+
+        /* BOTÓN SELECCIONADO (Color verde fuerte) - Restaurado */
+        .sintoma-tag.seleccionado {
+            background-color: #4CAF50; /* Verde fuerte */
+            color: white;
+            border-color: #388e3c;
+            transform: none !important;
+        }
+
+        /* ESTILO PARA OCULTAR */
+        .hidden {
+            display: none !important;
+        }
+
+        /* BOTÓN PRINCIPAL (SENTIRME BIEN) */
+        .btn-cta {
+            display: block; 
+            width: 100%; padding: 18px 20px; 
+            background: linear-gradient(135deg, #34d399 0%, #10b981 100%); 
+            color: white; 
+            text-decoration: none; border: none; border-radius: 15px; font-size: 1.4rem; font-weight: bold; transition: transform 0.1s, box-shadow 0.3s; cursor: pointer; box-shadow: 0 5px 15px rgba(52, 211, 153, 0.4);
+        }
+
+        /* BOTÓN SALIR */
+        .btn-salir { display: inline-block; margin-top: 20px; color: #9ca3af; text-decoration: none; font-size: 0.9em; transition: color 0.2s; text-align: center; width: 100%; }
+        .btn-salir:hover { color: #4b5563; }
+        
+        /* LOGO PEQUEÑO */
+        .logo-pequeno { display: flex; align-items: center; justify-content: center; margin: 0 0 30px 0; font-size: 1.8rem; font-weight: bold; color: #166534; }
+        .heartbeat-icon-small { width: 30px; height: 15px; position: relative; margin: 0 3px; display: inline-block; vertical-align: middle; }
+    </style>
+</body>
+</html>

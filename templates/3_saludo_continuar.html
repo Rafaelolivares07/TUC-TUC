@@ -1,0 +1,64 @@
+<!doctype html>
+<title>Continuemos</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300&display=swap');
+    
+    body {
+        font-family: 'Lato', 'Helvetica Neue Thin', Arial, sans-serif; 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #e6ffe6; 
+        color: #333;
+        text-align: center;
+        overflow: hidden;
+    }
+    .screen {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column; /* Para centrar dos líneas de texto */
+        justify-content: center;
+        align-items: center;
+        opacity: 0; 
+        transition: opacity 1.5s ease-in-out; 
+        color: #28a745; 
+        font-weight: 300; 
+        padding: 0 10vw;
+    }
+    .active {
+        opacity: 1;
+        z-index: 10;
+    }
+    h1 {
+        font-size: 10vw; 
+        margin: 5px 0;
+        line-height: 1.2;
+    }
+</style>
+
+<div id="saludo-screen" class="screen active">
+    <h1>¡Hola, {{ nombre }}!</h1>
+    <h1>Continuemos el registro.</h1>
+</div>
+
+<script>
+    const saludoScreen = document.getElementById('saludo-screen');
+    const siguienteRuta = "{{ siguiente_ruta }}";
+    
+    // 1. Mostrar Saludo (Ya está activo)
+    
+    setTimeout(() => {
+        // 2. Desvanecer el Saludo
+        saludoScreen.classList.remove('active');
+        
+        // 3. Redirección final a la etapa pendiente
+        setTimeout(() => {
+            window.location.href = siguienteRuta;
+        }, 1500); // Espera 1.5s (duración de la transición)
+        
+    }, 2500); // Saludo visible por 2.5 segundos
+</script>

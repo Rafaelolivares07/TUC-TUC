@@ -1,0 +1,94 @@
+<!doctype html>
+<title>Bienvenido de Nuevo</title>
+<style>
+    /* 1. Estilos Globales y de Contenedor */
+    @import url('https://fonts.googleapis.com/css2?family=Lato:wght@300&display=swap');
+    
+    body {
+        font-family: 'Lato', 'Helvetica Neue Thin', Arial, sans-serif; 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+        background-color: #e6ffe6; /* Fondo verde muy claro */
+        color: #333;
+        text-align: center;
+        overflow: hidden;
+    }
+    
+    /* 2. Contenedores de Pantalla (Hola y Tuk Tuk) */
+    .screen {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        opacity: 0; 
+        transition: opacity 1.5s ease-in-out; 
+        color: #28a745; 
+        font-weight: 300; 
+    }
+    
+    /* TAMAÑO: Pantalla 'Hola' (Gigante) */
+    #hola-screen h1 {
+        font-size: 30vw; 
+        margin: 0;
+        line-height: 1;
+    }
+
+    /* TAMAÑO: Pantalla de Mensaje (Grande, legible en varias líneas) */
+    #mensaje-screen h1 {
+        font-size: 10vw; 
+        padding: 0 5vw; 
+        margin: 0;
+        line-height: 1.2;
+    }
+    
+    .active {
+        opacity: 1;
+        z-index: 10;
+    }
+</style>
+
+<div id="hola-screen" class="screen active">
+    <h1>¡Hola, {{ nombre }}!</h1>
+</div>
+
+<div id="mensaje-screen" class="screen">
+    <h1>Me alegra verte de nuevo.</h1>
+</div>
+
+
+<script>
+    const holaScreen = document.getElementById('hola-screen');
+    const mensajeScreen = document.getElementById('mensaje-screen');
+    
+    // 1. Mostrar 'Hola, [Nombre]' (Ya está activo por defecto)
+    
+    setTimeout(() => {
+        // 2. Desvanecer 'Hola, [Nombre]'
+        holaScreen.classList.remove('active');
+        
+        // 3. Mostrar el Segundo Mensaje después del desvanecimiento (1.5s + 0.1s)
+        setTimeout(() => {
+            holaScreen.style.display = 'none'; // Ocultar para que no estorbe
+            mensajeScreen.classList.add('active');
+            
+            // 4. Desvanecer el Segundo Mensaje
+            setTimeout(() => {
+                mensajeScreen.classList.remove('active');
+                
+                // 5. REDIRECCIÓN FINAL a la zona de paciente
+                setTimeout(() => {
+                    // CAMBIO AQUÍ: Redirigir al verificador de progreso
+                    window.location.href = "{{ url_for('verificar_progreso_paciente') }}"; 
+                }, 1500); // Espera 1.5s (duración de la transición)
+                
+            }, 3000); // Mensaje visible por 3 segundos
+            
+        }, 1600); // Espera la transición de 'Hola'
+        
+    }, 2000); // 'Hola' visible por 2 segundos
+</script>

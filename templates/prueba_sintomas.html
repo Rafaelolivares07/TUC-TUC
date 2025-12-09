@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Prueba de Síntomas y Diagnósticos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .results {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .btn {
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        .suggestions {
+            border: 1px solid #ddd;
+            border-top: none;
+            max-height: 250px; /* Aumentamos la altura máxima para ver más elementos */
+            min-height: 40px; /* Altura mínima para que se note cuando está vacía o tiene poco contenido */
+            overflow-y: auto; /* Activa el scroll vertical si hay más contenido */
+            background-color: white;
+            z-index: 1000; /* Asegura que esté por encima de otros elementos */
+            position: absolute; /* Necesario para posicionar relativo al input */
+            width: calc(100% - 4px); /* Ajustar al ancho del input (considerando el borde de 1px por lado) */
+            box-sizing: border-box; /* Incluye el padding y el borde en el ancho/alto total */
+            left: 0; /* Asegura que esté alineado a la izquierda del input */
+            top: 100%; /* Colócalo justo debajo del input */
+            margin-top: 0; /* Elimina cualquier margen superior extra */
+            padding: 0; /* Elimina padding si lo hubiera */
+            /* Opcional: Sombra para mejor visibilidad */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Opcional: Estilo para los ítems de la lista */
+        .suggestion-item {
+            padding: 8px 10px; /* Espaciado interno */
+            cursor: pointer;
+            border-bottom: 1px solid #eee; /* Línea separadora sutil */
+            transition: background-color 0.2s; /* Transición suave para hover */
+            white-space: nowrap; /* Evita que el texto se rompa en varias líneas */
+            overflow: hidden; /* Oculta texto que exceda el ancho */
+            text-overflow: ellipsis; /* Añade "..." si el texto es muy largo */
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none; /* Quita la línea del último ítem */
+        }
+
+        /* Estilo para el ítem seleccionado con teclado */
+        .suggestion-item.selected {
+            background-color: #007bff; /* Color de fondo para el ítem seleccionado */
+            color: white; /* Color del texto para mejor contraste */
+        }
+
+        /* Estilo para el ítem al pasar el mouse (puede combinarse con 'selected') */
+        .suggestion-item:hover {
+            background-color: #f0f0f0; /* Color de fondo al hacer hover */
+        }
+
+        .suggestion-item:hover, .suggestion-item.selected { /* Añadido estilo para 'selected' */
+            background-color: #f0f0f0;
+        }
+        .selected-sintoma {
+            display: inline-block;
+            background-color: #e0e0e0;
+            padding: 3px 8px;
+            margin: 2px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .diagnostico-item {
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #f0f8ff;
+            border-left: 3px solid #007bff;
+        }
+        .sintoma-faltante {
+            color: #6c757d; /* Color gris para resaltar que falta */
+            font-style: italic;
+        }
+        /* Nuevo estilo para los medicamentos */
+        .medicamento-item {
+            margin: 3px 0;
+            padding: 2px;
+            background-color: #f8f9fa; /* Un color de fondo claro */
+            border-left: 2px solid #28a745; /* Una línea verde para distinguirlo */
+        }
+
+
+        /* Estilo para la línea divisoria de cobertura completa */
+        .linea-cobertura-completa {
+            border-top: 2px dashed #007bff; /* Línea punteada azul */
+            padding-top: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        /* Opcional: Estilo para la advertencia si no se cubren todos los síntomas */
+        .advertencia-cobertura {
+            color: #dc3545; /* Rojo */
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Prueba de Síntomas y Diagnósticos</h1>
+
+    <!-- 1. Captura de Síntomas -->
+    <div class="section">
+        <h2>Síntomas</h2>
+        <div class="input-group" style="position: relative;"> <!-- Añadido style="position: relative;" -->
+            <label for="inputSintoma">Buscar o ingresar síntoma:</label>
+            <input type="text" id="inputSintoma" placeholder="Escribe un síntoma...">
+            <div id="suggestions" class="suggestions" style="display: none;"></div>
+            <button class="btn" onclick="crearYSolicitarActualizacion()">Agregar/Crear Síntoma</button>
+        </div>
+        <div>
+            <h3>Síntomas Agregados:</h3>
+            <div id="listaSintomas"></div>
+        </div>
+    </div>
+
+    <!-- 2. Diagnósticos Sugeridos -->
+    <div class="section">
+        <h2>Diagnósticos Sugeridos (Actualización en Vivo)</h2>
+        <div id="listaDiagnosticos"></div>
+        <!-- El botón ya no es necesario para la actualización manual -->
+        <!-- <button class="btn" onclick="sugerirDiagnosticos()">Actualizar Diagnósticos</button> -->
+    </div>
+
+    <!-- 3. Medicamentos Relacionados -->
+    <div class="section">
+        <h2>Medicamentos Relacionados</h2>
+        <!-- NUEVO: Contenedor para costo total y botón -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <!-- NUEVO: Elemento para mostrar el costo total estimado -->
+            <div id="costo-total-receta" style="font-weight: bold; color: #007bff; font-size: 1.1em;">
+                Costo Total Estimado: $0
+            </div>
+            <!-- NUEVO: Botón para alternar entre recetas -->
+            <button id="boton-toggle-receta" class="btn" onclick="alternarReceta()" style="">Mostrar Receta Más Económica</button>
+        </div>
+        <div id="listaMedicamentos"></div>
+        <!-- Se elimina la nota de simulación -->
+    </div>
+
+    <!-- 4. Captura de Datos para Análisis -->
+    <div class="section">
+        <h2>Resultado de la Prueba</h2>
+        <button class="btn" onclick="capturarDatos()">Capturar Datos para Análisis</button>
+        <button class="btn" onclick="capturarAsistenciaMedica()">Enviar a Asistente Médico</button> <!-- Nuevo botón -->
+        <div class="results" id="resultadoPrueba">Aún no se han capturado datos.</div>
+    </div>
+
+</div>
+
+<script>
+    // Estado de la aplicación
+    let sintomasSeleccionados = []; // [{id: X, nombre: "Nombre"}, ...] o [{nombre: "Nombre", nuevo: true}, ...]
+    let timeoutBusqueda = null;
+    let indiceSugerenciaSeleccionada = -1; // Para manejar navegación por teclado
+
+    const inputSintoma = document.getElementById('inputSintoma');
+    const suggestionsDiv = document.getElementById('suggestions');
+
+    // Evento para búsqueda en tiempo real
+    inputSintoma.addEventListener('input', function() {
+        clearTimeout(timeoutBusqueda);
+        const valor = this.value.trim();
+        if (valor.length > 1) {
+            timeoutBusqueda = setTimeout(() => buscarSintomas(valor), 300); // 300ms delay
+        } else {
+            hideSuggestions();
+        }
+    });
+
+    // Manejo de teclas para navegación en sugerencias
+    inputSintoma.addEventListener('keydown', function(e) {
+        if (suggestionsDiv.style.display === 'block') {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const items = suggestionsDiv.querySelectorAll('.suggestion-item');
+                if (items.length === 0) return;
+                indiceSugerenciaSeleccionada = (indiceSugerenciaSeleccionada + 1) % items.length;
+                actualizarSeleccionVisual(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const items = suggestionsDiv.querySelectorAll('.suggestion-item');
+                if (items.length === 0) return;
+                indiceSugerenciaSeleccionada = (indiceSugerenciaSeleccionada - 1 + items.length) % items.length;
+                actualizarSeleccionVisual(items);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const items = suggestionsDiv.querySelectorAll('.suggestion-item');
+                if (items.length > 0 && indiceSugerenciaSeleccionada >= 0) {
+                    items[indiceSugerenciaSeleccionada].click(); // Simula clic en el item seleccionado
+                }
+            } else if (e.key === 'Escape') {
+                hideSuggestions();
+                indiceSugerenciaSeleccionada = -1;
+            }
+        }
+    });
+
+    function actualizarSeleccionVisual(items) {
+        items.forEach((item, index) => {
+            if (index === indiceSugerenciaSeleccionada) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+        });
+        // 👇 Esto fuerza el scroll automático al ítem seleccionado
+        if (indiceSugerenciaSeleccionada >= 0 && items[indiceSugerenciaSeleccionada]) {
+            items[indiceSugerenciaSeleccionada].scrollIntoView({
+                block: 'nearest' // o 'center' si prefieres centrarlo
+            });
+        }        
+    }
+
+
+    // Ocultar sugerencias al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (e.target !== inputSintoma && e.target !== suggestionsDiv) {
+            hideSuggestions();
+            indiceSugerenciaSeleccionada = -1; // Reiniciar índice al ocultar
+        }
+    });
+
+    // Función para buscar síntomas en la BD
+    function buscarSintomas(termino) {
+        fetch(`/api/sintomas/buscar?q=${encodeURIComponent(termino)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    mostrarSugerencias(data.sintomas);
+                } else {
+                    console.error('Error en la API de búsqueda:', data.error);
+                    hideSuggestions();
+                }
+            })
+            .catch(error => {
+                console.error('Error de red:', error);
+                hideSuggestions();
+            });
+    }
+
+    // Mostrar sugerencias en la lista
+    function mostrarSugerencias(sintomas) {
+        suggestionsDiv.innerHTML = '';
+        if (sintomas.length === 0) {
+            hideSuggestions();
+            return;
+        }
+        sintomas.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.textContent = s.nombre;
+            div.onclick = () => seleccionarSintoma(s.id, s.nombre);
+            suggestionsDiv.appendChild(div);
+        });
+        suggestionsDiv.style.display = 'block';
+        indiceSugerenciaSeleccionada = -1; // Reiniciar al mostrar nuevas sugerencias
+    }
+
+    // Ocultar lista de sugerencias
+    function hideSuggestions() {
+        suggestionsDiv.style.display = 'none';
+        indiceSugerenciaSeleccionada = -1; // Reiniciar al ocultar
+    }
+
+    // Seleccionar un síntoma existente de la lista
+    function seleccionarSintoma(id, nombre) {
+        if (!sintomasSeleccionados.some(s => s.id === id && s.nombre === nombre)) {
+            sintomasSeleccionados.push({ id: id, nombre: nombre });
+            actualizarListaSintomas();
+            // Actualizar diagnósticos y medicamentos automáticamente
+            sugerirDiagnosticos();
+        }
+        inputSintoma.value = '';
+        hideSuggestions();
+    }
+
+    // Crear un nuevo síntoma o agregar uno existente si no se ha buscado
+    function crearYSolicitarActualizacion() {
+        const valor = inputSintoma.value.trim();
+        if (!valor) {
+            alert("Por favor, escribe un síntoma en el campo de búsqueda antes de hacer clic en 'Agregar/Crear Síntoma'.");
+            inputSintoma.focus(); // Enfocar el campo para facilitar la escritura
+            return;
+        }
+        // Verificar si ya está en la lista (nuevo o existente)
+        if (sintomasSeleccionados.some(s => s.nombre.toLowerCase() === valor.toLowerCase())) {
+            alert("Este síntoma ya ha sido agregado.");
+            inputSintoma.value = '';
+            return;
+        }
+
+        // Intentar crearlo como nuevo síntoma
+        fetch('/api/sintomas/crear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre: valor })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.ok) {
+                // Si ya existía, usar el ID existente. Si se creó nuevo, usar el nuevo ID.
+                if (data.id) {
+                     // Síntoma ya existente en BD o recién creado
+                     sintomasSeleccionados.push({ id: data.id, nombre: data.nombre });
+                     console.log("Síntoma agregado:", data.nombre);
+                } else {
+                    // Caso raro, debería tener ID si ok=True
+                    sintomasSeleccionados.push({ nombre: data.nombre, nuevo: true });
+                    console.log("Síntoma temporal agregado:", data.nombre);
+                }
+                actualizarListaSintomas();
+                // Actualizar diagnósticos y medicamentos automáticamente
+                sugerirDiagnosticos();
+                inputSintoma.value = '';
+            } else {
+                alert("Error al crear síntoma: " + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error de red al crear síntoma:', error);
+            // Si falla la creación, agregarlo como temporal (sin ID)
+            sintomasSeleccionados.push({ nombre: valor, nuevo: true });
+            console.log("Síntoma temporal agregado:", valor);
+            actualizarListaSintomas();
+            // Actualizar diagnósticos y medicamentos automáticamente
+            sugerirDiagnosticos();
+            inputSintoma.value = '';
+        });
+    }
+
+
+    // Actualiza la lista visual de síntomas
+    function actualizarListaSintomas() {
+        const lista = document.getElementById('listaSintomas');
+        lista.innerHTML = '';
+        sintomasSeleccionados.forEach((s, index) => {
+            const span = document.createElement('span');
+            span.className = 'selected-sintoma';
+            // Mostrar si es nuevo o existente
+            const etiqueta = s.id ? `(${s.id}) ${s.nombre}` : `[Nuevo] ${s.nombre}`;
+            span.textContent = etiqueta;
+            // Botón para eliminar
+            const btn = document.createElement('button');
+            btn.textContent = '×';
+            btn.onclick = () => {
+                sintomasSeleccionados.splice(index, 1);
+                actualizarListaSintomas();
+                // Actualizar diagnósticos y medicamentos automáticamente al quitar
+                sugerirDiagnosticos();
+            };
+            span.appendChild(btn);
+            lista.appendChild(span);
+        });
+    }
+
+// Solicita diagnósticos basados en síntomas seleccionados (usando IDs ahora)
+// Y luego llama a la nueva ruta para obtener medicamentos sugeridos
+// Maneja errores de forma robusta y actualiza window.ultimosResultados
+function sugerirDiagnosticos() {
+    // Inicializamos los resultados como vacíos
+    window.ultimosResultados = {
+        sintomas_seleccionados: sintomasSeleccionados,
+        diagnosticos: [],
+        medicamentos: [],
+        datos_crudos_diagnosticos: { ok: false, error: "No se ha ejecutado la llamada aún." },
+        datos_crudos_productos: { ok: false, error: "No se ha ejecutado la llamada aún." }
+    };
+
+    if (sintomasSeleccionados.length === 0) {
+        document.getElementById('listaDiagnosticos').innerHTML = '<p>No hay síntomas para analizar.</p>';
+        document.getElementById('listaMedicamentos').innerHTML = '<p>No hay síntomas para sugerir medicamentos.</p>';
+        // Actualizar resultados con estado vacío
+        window.ultimosResultados.diagnosticos = [];
+        window.ultimosResultados.medicamentos = [];
+        return;
+    }
+
+    // CORREGIDO: Obtener solo los IDs de los síntomas seleccionados que tengan un ID (no los nuevos temporales)
+    const idsSintomas = sintomasSeleccionados.filter(s => s.id).map(s => s.id);
+
+    // Validar que tengamos IDs antes de proceder
+    if (idsSintomas.length === 0) {
+         document.getElementById('listaDiagnosticos').innerHTML = '<p>No hay síntomas con ID válido para analizar.</p>';
+         document.getElementById('listaMedicamentos').innerHTML = '<p>No hay medicamentos para mostrar (no hay IDs de síntomas válidos).</p>';
+         // Actualizar resultados con estado de error de IDs
+         window.ultimosResultados.diagnosticos = ['No hay síntomas con ID válido para analizar.'];
+         window.ultimosResultados.medicamentos = ['No hay medicamentos para mostrar (no hay IDs de síntomas válidos).'];
+         return;
+    }
+
+    console.log("🔍 Iniciando solicitud de diagnósticos para IDs:", idsSintomas);
+
+    // --- LLAMADA A /api/diagnosticos/buscar_simple ---
+    fetch('/api/diagnosticos/buscar_simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids_sintomas_usuario: idsSintomas })
+    })
+    .then(response => {
+        if (!response.ok) {
+            // Capturar error de red o HTTP
+            throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log("🔍 Diagnósticos API response:", data);
+        const lista = document.getElementById('listaDiagnosticos');
+        lista.innerHTML = '';
+        if (data.ok && data.diagnosticos.length > 0) {
+            data.diagnosticos.forEach(d => {
+                const div = document.createElement('div');
+                div.className = 'diagnostico-item';
+                let descripcion_html = `<strong>${d.descripcion}</strong>`;
+                if (d.sintomas_faltantes && d.sintomas_faltantes.length > 0) {
+                    descripcion_html += ` <span class="sintoma-faltante">[Faltan: ${d.sintomas_faltantes.map(s => s.nombre).join(', ')}]</span>`;
+                }
+                div.innerHTML = descripcion_html;
+                lista.appendChild(div);
+            });
+            // Actualizar resultados con diagnósticos exitosos
+            window.ultimosResultados.diagnosticos = Array.from(document.querySelectorAll('#listaDiagnosticos .diagnostico-item')).map(d => d.textContent);
+        } else if (data.mensaje) {
+             lista.innerHTML = `<p>${data.mensaje}</p>`;
+             // Actualizar resultados con mensaje
+             window.ultimosResultados.diagnosticos = [data.mensaje];
+        } else {
+            lista.innerHTML = '<p>No se encontraron diagnósticos asociados a los síntomas.</p>';
+            // Actualizar resultados con mensaje de vacío
+            window.ultimosResultados.diagnosticos = ['No se encontraron diagnósticos.'];
+        }
+        // Actualizar datos crudos de diagnósticos
+        window.ultimosResultados.datos_crudos_diagnosticos = data;
+
+        // --- LLAMADA A LA NUEVA RUTA /api/medicamentos/por_sintomas_ids ---
+        fetch('/api/medicamentos/por_sintomas_ids', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids_sintomas_usuario: idsSintomas })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error HTTP en medicamentos: ${response.status} - ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(dataProductos => {
+            console.log("🔍 Medicamentos API response:", dataProductos);
+            // --- CORRECCIÓN: Vaciar la lista económica al recibir nuevos productos originales ---
+            productosEconomicos = []; // <-- AÑADIR ESTA LÍNEA AQUÍ
+
+        // --- PROCESAMIENTO DE MEDICAMENTOS CON LÍNEA DE COBERTURA Y CÁLCULO DE COSTO ---
+        fetch('/api/medicamentos/por_sintomas_ids', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids_sintomas_usuario: idsSintomas })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error HTTP en medicamentos: ${response.status} - ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(dataProductos => {
+            console.log("🔍 Medicamentos API response:", dataProductos);
+            const listaMed = document.getElementById('listaMedicamentos');
+            listaMed.innerHTML = ''; // Limpiar lista anterior
+
+            // Inicializar acumulador de costo
+            let costoTotalReceta = 0;
+            let costoTotalAntesLinea = 0; // Costo de medicamentos antes de la línea divisoria
+
+            if (dataProductos.ok && dataProductos.productos && dataProductos.productos.length > 0) {
+                // 1. Obtener los nombres de los síntomas ingresados por el usuario (los que deben cubrirse)
+                const sintomasObjetivoSet = new Set(sintomasSeleccionados.filter(s => s.nombre).map(s => s.nombre.toLowerCase()));
+                console.log("🔍 Síntomas objetivo (a cubrir):", Array.from(sintomasObjetivoSet));
+
+                // 2. Iterar la lista de medicamentos ya ordenados por el backend (Greedy)
+                let sintomasCubiertosSet = new Set(); // Para ir acumulando síntomas cubiertos
+                let coberturaCompletaAlcanzada = false; // Indicador
+                productosOriginales = dataProductos.productos;
+                for (let i = 0; i < dataProductos.productos.length; i++) {
+                    const p = dataProductos.productos[i];
+
+                    // 3. Identificar síntomas del medicamento que son parte del objetivo
+                    const sintomasDelMedicamento = p.sintomas_totales || []; // Usamos sintomas_totales de la API
+                    const sintomasCoincidentesDelMedicamento = sintomasDelMedicamento.filter(nombre => sintomasObjetivoSet.has(nombre.toLowerCase()));
+                    const sintomasSobrantesDelMedicamento = sintomasDelMedicamento.filter(nombre => !sintomasObjetivoSet.has(nombre.toLowerCase()));
+
+                    // 4. Añadir los síntomas coincidentes de este medicamento al conjunto de cubiertos
+                    sintomasCoincidentesDelMedicamento.forEach(nombre => sintomasCubiertosSet.add(nombre.toLowerCase()));
+
+                    // 5. Construir el elemento del medicamento
+                    const divMed = document.createElement('div');
+                    divMed.className = 'medicamento-item';
+
+                    let fabricanteTexto = p.fabricante ? ` - ${p.fabricante}` : '';
+                    let componenteTexto = p.componente_activo ? ` (${p.componente_activo})` : '';
+
+                    // --- INFORMACIÓN DE SÍNTOMAS ---
+                    let infoSintomas = ` (Trata: `;
+                    if (sintomasCoincidentesDelMedicamento.length > 0) {
+                        infoSintomas += `<strong>${sintomasCoincidentesDelMedicamento.join(', ')}</strong>`;
+                        if (sintomasSobrantesDelMedicamento.length > 0) {
+                            infoSintomas += `, también `;
+                        }
+                    }
+                    if (sintomasSobrantesDelMedicamento.length > 0) {
+                        infoSintomas += `<em>${sintomasSobrantesDelMedicamento.join(', ')}</em>`;
+                    }
+                    infoSintomas += `)`;
+
+                    divMed.innerHTML = `- ${p.nombre} ${componenteTexto}${fabricanteTexto} - $${p.precio} <span class="info-sintomas">${infoSintomas}</span>`;
+
+                    // 6. Añadir el medicamento a la lista
+                    listaMed.appendChild(divMed);
+
+                    // 7. Acumular el precio del medicamento actual al costo total general
+                    costoTotalReceta += p.precio;
+
+                    // 8. Verificar si la cobertura es completa *después* de añadir este medicamento
+                    if (!coberturaCompletaAlcanzada && sintomasCubiertosSet.size === sintomasObjetivoSet.size) {
+                        coberturaCompletaAlcanzada = true;
+                        console.log(`✅ Cobertura completa lograda después del medicamento ${i+1}: ${p.nombre}`);
+
+                        // Acumular también el precio de *este* último medicamento para la línea
+                        costoTotalAntesLinea += p.precio;
+
+                        // 9. Añadir la línea divisoria después de este elemento
+                        const divLinea = document.createElement('div');
+                        divLinea.className = 'linea-cobertura-completa'; // Clase para estilizar
+                        divLinea.textContent = '--- Cobertura de Síntomas Completa ---';
+                        listaMed.appendChild(divLinea);
+                    } else if (!coberturaCompletaAlcanzada) {
+                        // Si aún no se alcanzó la cobertura, este medicamento forma parte de la "receta antes de la línea"
+                        costoTotalAntesLinea += p.precio;
+                    }
+                }
+
+                // 10. Opcional: Si nunca se alcanzó la cobertura completa, podrías indicarlo
+                if (!coberturaCompletaAlcanzada) {
+                    console.log("⚠️ Advertencia: No se logró cubrir todos los síntomas con los medicamentos sugeridos.");
+                    const divAdvertencia = document.createElement('div');
+                    divAdvertencia.className = 'advertencia-cobertura';
+                    divAdvertencia.textContent = '⚠️ No se encontraron medicamentos que cubran todos los síntomas ingresados.';
+                    listaMed.appendChild(divAdvertencia);
+                }
+
+                // 11. Actualizar el elemento del costo total estimado (usando el costo antes de la línea como referencia principal)
+                // Puedes cambiar esta línea para mostrar costoTotalReceta si prefieres el costo de *todos* los medicamentos mostrados
+                document.getElementById('costo-total-receta').textContent = `Costo Total Estimado (hasta cobertura): $${costoTotalAntesLinea}`;
+
+                // Actualizar resultados con medicamentos exitosos
+                window.ultimosResultados.medicamentos = Array.from(document.querySelectorAll('#listaMedicamentos .medicamento-item')).map(m => m.textContent);
+            } else {
+                // Mostrar mensaje si no hay productos sugeridos
+                listaMed.innerHTML = '<p>No se encontraron medicamentos sugeridos para los síntomas ingresados.</p>';
+                // Actualizar elemento de costo si no hay medicamentos
+                document.getElementById('costo-total-receta').textContent = `Costo Total Estimado: $0`;
+                // Actualizar resultados con mensaje de vacío
+                window.ultimosResultados.medicamentos = ['No se encontraron medicamentos sugeridos.'];
+            }
+            // Actualizar datos crudos de productos
+            window.ultimosResultados.datos_crudos_productos = dataProductos;
+        })
+        .catch(error => {
+            console.error('Error obteniendo medicamentos desde la nueva ruta:', error);
+            document.getElementById('listaMedicamentos').innerHTML = '<p>Error al obtener medicamentos desde la nueva ruta. Revisa la consola.</p>';
+            // Actualizar elemento de costo si hay error
+            document.getElementById('costo-total-receta').textContent = `Costo Total Estimado: Error`;
+            // Actualizar resultados con error de medicamentos
+            window.ultimosResultados.medicamentos = [`Error al obtener medicamentos: ${error.message}`];
+            window.ultimosResultados.datos_crudos_productos = { ok: false, error: error.message, productos: [] };
+        });
+        // --- FIN PROCESAMIENTO CON LÍNEA DE COBERTURA ---
+
+            // Actualizar datos crudos de productos
+            window.ultimosResultados.datos_crudos_productos = dataProductos;
+        })
+        .catch(error => {
+            console.error('Error obteniendo medicamentos desde la nueva ruta:', error);
+            document.getElementById('listaMedicamentos').innerHTML = '<p>Error al obtener medicamentos desde la nueva ruta. Revisa la consola.</p>';
+            // Actualizar resultados con error de medicamentos
+            window.ultimosResultados.medicamentos = [`Error al obtener medicamentos: ${error.message}`];
+            window.ultimosResultados.datos_crudos_productos = { ok: false, error: error.message, productos: [] };
+        });
+        // --- FIN LLAMADA A LA NUEVA RUTA ---
+
+
+
+    })
+    .catch(error => {
+        console.error('❌ Error en la solicitud de diagnósticos:', error);
+        document.getElementById('listaDiagnosticos').innerHTML = '<p>Error al obtener diagnósticos. Revisa la consola.</p>';
+        document.getElementById('listaMedicamentos').innerHTML = '<p>No se pudieron obtener medicamentos debido a un error en los diagnósticos.</p>';
+
+        // Actualizar resultados con error de diagnósticos
+        window.ultimosResultados.diagnosticos = [`Error de diagnóstico: ${error.message}`];
+        window.ultimosResultados.medicamentos = ['No disponibles (error de diagnóstico).'];
+        window.ultimosResultados.datos_crudos_diagnosticos = { ok: false, error: error.message };
+        window.ultimosResultados.datos_crudos_productos = { ok: false, error: 'No se llamó a /api/medicamentos/por_sintomas_ids debido al error previo.' };
+    });
+}
+
+// Modificamos la función capturarDatos para usar los resultados almacenados
+function capturarDatos() {
+    // Usamos los datos almacenados en la variable global
+    const datos = window.ultimosResultados || {
+        sintomas_seleccionados: sintomasSeleccionados,
+        diagnosticos: Array.from(document.querySelectorAll('#listaDiagnosticos .diagnostico-item')).map(d => d.textContent),
+        medicamentos: Array.from(document.querySelectorAll('#listaMedicamentos .medicamento-item')).map(m => m.textContent),
+        datos_crudos_diagnosticos: "No disponibles",
+        datos_crudos_productos: "No disponibles"
+    };
+
+    const resultado = document.getElementById('resultadoPrueba');
+    // Mostrar el JSON con todos los datos, incluyendo los crudos
+    resultado.textContent = JSON.stringify(datos, null, 2);
+
+    // Opcional: Copiar al portapapeles
+    navigator.clipboard.writeText(JSON.stringify(datos, null, 2));
+    alert("Datos completos (incluyendo datos crudos de APIs) copiados al portapapeles para análisis.");
+}
+
+
+// --- NUEVA FUNCIÓN: Generar JSON para Asistencia Médica ---
+function generarJsonAsistenciaMedica() {
+    // Asumimos que 'window.ultimosResultados' contiene los datos actuales
+    // como se actualizó por la última llamada a sugerirDiagnosticos()
+    const datos = window.ultimosResultados || {
+        sintomas_seleccionados: sintomasSeleccionados,
+        diagnosticos: Array.from(document.querySelectorAll('#listaDiagnosticos .diagnostico-item')).map(d => d.textContent),
+        medicamentos: Array.from(document.querySelectorAll('#listaMedicamentos .medicamento-item')).map(m => m.textContent),
+        datos_crudos_diagnosticos: "No disponibles",
+        datos_crudos_productos: "No disponibles"
+    };
+
+    // Construir el nuevo JSON de asistencia
+    const jsonAsistencia = {
+        consulta: {
+            id: null, // Opcional: Podrías asignar un ID temporal si lo deseas
+            timestamp: new Date().toISOString(), // Marca de tiempo actual
+            paciente: {
+                id: null, // Opcional: Si tienes ID de paciente
+                nombre: "Paciente Anónimo" // Opcional: Nombre del paciente si está disponible
+            }
+        },
+        entrada_usuario: {
+            sintomas_ingresados: datos.sintomas_seleccionados.map(s => ({
+                id: s.id,
+                nombre: s.nombre
+            }))
+        },
+        analisis_sistema: {
+            diagnosticos_posibles: [],
+            medicamentos_sugeridos: []
+        },
+        estado_cobertura: {
+            sintomas_objetivo: datos.sintomas_seleccionados.map(s => s.nombre),
+            sintomas_cubiertos: [], // Se calculará
+            cobertura_completa_lograda: false, // Se calculará
+            medicamentos_para_cobertura_completa: [] // Se calculará
+        }
+    };
+
+    // Procesar diagnósticos crudos para poblar 'analisis_sistema.diagnosticos_posibles'
+    if (datos.datos_crudos_diagnosticos && datos.datos_crudos_diagnosticos.ok) {
+        jsonAsistencia.analisis_sistema.diagnosticos_posibles = datos.datos_crudos_diagnosticos.diagnosticos.map(d => ({
+            id: d.id,
+            descripcion: d.descripcion,
+            sintomas_faltantes_para_confirmar: d.sintomas_faltantes.map(s => ({
+                id: s.id,
+                nombre: s.nombre
+            }))
+        }));
+    }
+
+    // Procesar medicamentos crudos para poblar 'analisis_sistema.medicamentos_sugeridos'
+    // y calcular 'estado_cobertura'
+    if (datos.datos_crudos_productos && datos.datos_crudos_productos.ok) {
+        const productos = datos.datos_crudos_productos.productos;
+        const idsSintomasObjetivo = new Set(datos.sintomas_seleccionados.map(s => s.id)); // IDs objetivo
+        let sintomasCubiertosSet = new Set();
+        let medicamentosCobertura = [];
+        let coberturaLograda = false;
+
+        jsonAsistencia.analisis_sistema.medicamentos_sugeridos = productos.map(p => {
+            const idsCoincidentes = p.ids_coincidentes || [];
+            const idsSobrantes = p.ids_sobrantes || [];
+
+            // Añadir síntomas coincidentes al conjunto de cubiertos
+            idsCoincidentes.forEach(id => sintomasCubiertosSet.add(id));
+
+            // Calcular si la cobertura se completa *con este medicamento*
+            if (!coberturaLograda && sintomasCubiertosSet.size === idsSintomasObjetivo.size) {
+                coberturaLograda = true;
+                medicamentosCobertura.push(p.nombre); // O p.medicamento_id
+            }
+
+            return {
+                id: p.precio_id, // O podrías usar p.medicamento_id si es más representativo
+                nombre: p.nombre,
+                componente_activo: p.componente_activo,
+                fabricante: p.fabricante,
+                precio: p.precio,
+                sintomas_tratados: {
+                    coincidentes_con_usuario: p.sintomas_coincidentes_nombres || [],
+                    sobrantes: p.sintomas_sobrantes_nombres || []
+                },
+                score_relevancia: p.score // Opcional: Incluir el score interno
+            };
+        });
+
+        // Actualizar estado de cobertura
+        jsonAsistencia.estado_cobertura.sintomas_cubiertos = Array.from(sintomasCubiertosSet).map(id => {
+            // Buscar el nombre del síntoma objetivo por su ID
+            const sintomaObj = datos.sintomas_seleccionados.find(s => s.id === id);
+            return sintomaObj ? sintomaObj.nombre : `Síntoma ID ${id}`; // Fallback si no se encuentra
+        });
+        jsonAsistencia.estado_cobertura.cobertura_completa_lograda = coberturaLograda;
+        jsonAsistencia.estado_cobertura.medicamentos_para_cobertura_completa = medicamentosCobertura;
+    }
+
+    return jsonAsistencia;
+}
+
+// --- NUEVA FUNCIÓN: Capturar y Mostrar JSON de Asistencia ---
+function capturarAsistenciaMedica() {
+    const jsonAsistencia = generarJsonAsistenciaMedica();
+
+    // Mostrar el JSON en el área de resultados (reutilizando el div existente)
+    const resultado = document.getElementById('resultadoPrueba');
+    resultado.textContent = JSON.stringify(jsonAsistencia, null, 2);
+
+    // Opcional: Copiar al portapapeles
+    navigator.clipboard.writeText(JSON.stringify(jsonAsistencia, null, 2));
+    alert("JSON de Asistencia Médica copiado al portapapeles.");
+}
+
+
+
+// --- VARIABLES GLOBALES PARA ALTERNAR RECETA ---
+let estadoRecetaActual = 'eficiente'; // 'eficiente' o 'economica'
+let productosOriginales = []; // Para almacenar la lista original de productos
+let productosEconomicos = []; // Para almacenar la lista calculada económicamente
+
+// --- FUNCIÓN: Alternar entre receta eficiente y económica ---
+function alternarReceta() {
+    if (estadoRecetaActual === 'eficiente') {
+        // Cambiar a modo económico
+        estadoRecetaActual = 'economica';
+        document.getElementById('boton-toggle-receta').textContent = 'Volver a Receta Eficiente';
+        // Llamar a la función que muestra la receta económica
+        mostrarRecetaEconomica();
+    } else {
+        // Cambiar a modo eficiente (original)
+        estadoRecetaActual = 'eficiente';
+        document.getElementById('boton-toggle-receta').textContent = 'Mostrar Receta Más Económica';
+        // Volver a mostrar la receta original (la del algoritmo greedy)
+        mostrarRecetaOriginal(); // <-- AÑADIR ESTA LÍNEA
+    }
+}
+
+// --- FUNCIÓN: Mostrar la receta original (greedy) ---
+function mostrarRecetaOriginal() {
+    if (productosOriginales.length === 0) {
+        // Si no hay productos originales guardados, mostrar mensaje o recargar
+        console.warn("⚠️ No hay productos originales guardados para mostrar.");
+        // Opcional: Llamar de nuevo a sugerirDiagnosticos() si no están guardados
+        // sugerirDiagnosticos();
+        return;
+    }
+    // Usar la lista original guardada
+    procesarYMostrarMedicamentos(productosOriginales, 'original');
+}
+
+// --- FUNCIÓN: Mostrar la receta económica ---
+function mostrarRecetaEconomica() {
+    if (productosEconomicos.length === 0) {
+        // Si no hay productos económicos calculados, llamar a la API
+        console.log("🔍 Buscando receta económica...");
+        const sintomasObjetivoIds = new Set(sintomasSeleccionados.filter(s => s.id).map(s => s.id));
+        if (sintomasObjetivoIds.size === 0) {
+            alert("No hay síntomas seleccionados para calcular una receta económica.");
+            // Volver al estado original si se intenta sin síntomas
+            estadoRecetaActual = 'eficiente';
+            document.getElementById('boton-toggle-receta').textContent = 'Mostrar Receta Más Económica';
+            return;
+        }
+
+        fetch('/api/medicamentos/economicos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids_sintomas_usuario: Array.from(sintomasObjetivoIds) })
+        })
+        .then(response => {
+             if (!response.ok) {
+                alert("La funcionalidad de receta económica aún no está completamente implementada en el backend o ocurrió un error.");
+                console.error("La ruta /api/medicamentos/economicos no está disponible o falló:", response.status, response.statusText);
+                // Volver al estado original en caso de error
+                estadoRecetaActual = 'eficiente';
+                document.getElementById('boton-toggle-receta').textContent = 'Mostrar Receta Más Económica';
+                return { ok: false, error: "Ruta no disponible o error", productos: [] };
+             }
+             return response.json();
+        })
+        .then(dataProductosEconomicos => {
+            if(dataProductosEconomicos.ok && dataProductosEconomicos.productos && dataProductosEconomicos.productos.length > 0) {
+                // Guardar la lista económica
+                productosEconomicos = dataProductosEconomicos.productos;
+                // Mostrar la lista económica
+                procesarYMostrarMedicamentos(productosEconomicos, 'economica');
+            } else {
+                console.error("Error o respuesta vacía de /api/medicamentos/economicos:", dataProductosEconomicos);
+                alert("No se pudo obtener la receta económica. Revisa la consola.");
+                // Volver al estado original si falla la API
+                estadoRecetaActual = 'eficiente';
+                document.getElementById('boton-toggle-receta').textContent = 'Mostrar Receta Más Económica';
+            }
+        })
+        .catch(error => {
+            console.error('Error obteniendo medicamentos económicos:', error);
+            alert("Error al intentar obtener la receta económica. Revisa la consola.");
+             // Volver al estado original en caso de error JS
+            estadoRecetaActual = 'eficiente';
+            document.getElementById('boton-toggle-receta').textContent = 'Mostrar Receta Más Económica';
+        });
+    } else {
+        // Si ya están calculados, mostrar directamente
+        procesarYMostrarMedicamentos(productosEconomicos, 'economica');
+    }
+}
+
+// --- FUNCIÓN: Procesar y mostrar una lista de productos (original o económica) ---
+// Recibe la lista de productos y un identificador del tipo ('original' o 'economica')
+function procesarYMostrarMedicamentos(listaProductos, tipoRecetaEtiqueta) {
+    const listaMed = document.getElementById('listaMedicamentos');
+    listaMed.innerHTML = ''; // Limpiar lista anterior
+
+    // Inicializar acumulador de costo
+    let costoTotalReceta = 0;
+    let costoTotalAntesLinea = 0; // Costo de medicamentos antes de la línea divisoria
+    let sintomasCubiertosSet = new Set(); // Para ir acumulando síntomas cubiertos
+    let coberturaCompletaAlcanzada = false; // Indicador
+
+    // 1. Obtener los IDs de los síntomas ingresados por el usuario (los que deben cubrirse)
+    // Asumimos que 'sintomasSeleccionados' contiene objetos como {id: X, nombre: "Nombre"}
+    const idsSintomasObjetivoSet = new Set(sintomasSeleccionados.filter(s => s.id).map(s => s.id));
+    console.log(`🔍 Procesando receta (${tipoRecetaEtiqueta}): Síntomas objetivo (IDs):`, Array.from(idsSintomasObjetivoSet));
+
+    if (listaProductos && listaProductos.length > 0) {
+        // --- ITERACIÓN DE LA LISTA DE MEDICAMENTOS ---
+        for (let i = 0; i < listaProductos.length; i++) {
+            const p = listaProductos[i];
+
+            // 2. Identificar síntomas del medicamento que son parte del objetivo (usando IDs)
+            const idsSintomasDelMedicamento = p.sintomas_ids_asociados || []; // Asumimos que la API devuelve esta lista de IDs
+            const idsCoincidentesDelMedicamento = idsSintomasDelMedicamento.filter(id => idsSintomasObjetivoSet.has(id));
+            const idsSobrantesDelMedicamento = idsSintomasDelMedicamento.filter(id => !idsSintomasObjetivoSet.has(id));
+            // Obtener nombres para mostrar (opcional, si no vienen en la API, hay que consultarlos)
+            // Por ahora, asumimos que la API también devuelve los nombres correspondientes
+            // o que podemos mapear los IDs a nombres si es necesario.
+            // Usamos los nombres directamente de los campos devueltos por la API si están presentes
+            const nombresCoincidentesDelMedicamento = p.sintomas_coincidentes_nombres || idsCoincidentesDelMedicamento.map(id => `Síntoma ID ${id}`); // Fallback si no hay nombres
+            const nombresSobrantesDelMedicamento = p.sintomas_sobrantes_nombres || idsSobrantesDelMedicamento.map(id => `Síntoma ID ${id}`); // Fallback si no hay nombres
+
+
+            // 3. Añadir los IDs de síntomas coincidentes de este medicamento al conjunto de cubiertos
+            idsCoincidentesDelMedicamento.forEach(id => sintomasCubiertosSet.add(id));
+
+            // 4. Construir el elemento del medicamento
+            const divMed = document.createElement('div');
+            divMed.className = 'medicamento-item';
+
+            let fabricanteTexto = p.fabricante ? ` - ${p.fabricante}` : '';
+            let componenteTexto = p.componente_activo ? ` (${p.componente_activo})` : '';
+
+            // --- INFORMACIÓN DE SÍNTOMAS ---
+            let infoSintomas = ` (Trata: `;
+            if (nombresCoincidentesDelMedicamento.length > 0) {
+                infoSintomas += `<strong>${nombresCoincidentesDelMedicamento.join(', ')}</strong>`;
+                if (nombresSobrantesDelMedicamento.length > 0) {
+                    infoSintomas += `, también `;
+                }
+            }
+            if (nombresSobrantesDelMedicamento.length > 0) {
+                infoSintomas += `<em>${nombresSobrantesDelMedicamento.join(', ')}</em>`;
+            }
+            infoSintomas += `)`;
+
+            divMed.innerHTML = `- ${p.nombre} ${componenteTexto}${fabricanteTexto} - $${p.precio} <span class="info-sintomas">${infoSintomas}</span>`;
+
+            // 5. Añadir el medicamento a la lista
+            listaMed.appendChild(divMed);
+
+            // 6. Acumular el precio del medicamento actual al costo total general
+            costoTotalReceta += p.precio;
+
+            // 7. Verificar si la cobertura es completa *después* de añadir este medicamento
+            if (!coberturaCompletaAlcanzada && sintomasCubiertosSet.size === idsSintomasObjetivoSet.size) {
+                coberturaCompletaAlcanzada = true;
+                console.log(`✅ Cobertura completa lograda después del medicamento ${i+1} (${tipoRecetaEtiqueta}): ${p.nombre}`);
+
+                // Acumular también el precio de *este* último medicamento para la línea
+                costoTotalAntesLinea += p.precio;
+
+                // 8. Añadir la línea divisoria después de este elemento
+                const divLinea = document.createElement('div');
+                divLinea.className = 'linea-cobertura-completa'; // Clase para estilizar
+                divLinea.textContent = `--- Cobertura de Síntomas Completa (${tipoRecetaEtiqueta === 'economica' ? 'Económica' : 'Eficiente'}) ---`;
+                listaMed.appendChild(divLinea);
+            } else if (!coberturaCompletaAlcanzada) {
+                // Si aún no se alcanzó la cobertura, este medicamento forma parte de la "receta antes de la línea"
+                costoTotalAntesLinea += p.precio;
+            }
+        }
+
+        // 9. Opcional: Si nunca se alcanzó la cobertura completa, podrías indicarlo
+        if (!coberturaCompletaAlcanzada) {
+            console.log(`⚠️ Advertencia: No se logró cubrir todos los síntomas con la receta ${tipoRecetaEtiqueta}.`);
+            const divAdvertencia = document.createElement('div');
+            divAdvertencia.className = 'advertencia-cobertura';
+            divAdvertencia.textContent = `⚠️ No se encontraron medicamentos suficientes para cubrir todos los síntomas ingresados con la receta ${tipoRecetaEtiqueta}.`;
+            listaMed.appendChild(divAdvertencia);
+        }
+
+        // 10. Actualizar el elemento del costo total estimado (usando el costo antes de la línea como referencia principal)
+        // Usamos costoTotalAntesLinea si se alcanzó la cobertura, sino costoTotalReceta
+        const costoAPresentar = coberturaCompletaAlcanzada ? costoTotalAntesLinea : costoTotalReceta;
+        const textoCosto = tipoRecetaEtiqueta === 'economica' ? '(Receta Económica)' : '(Receta Eficiente)';
+        document.getElementById('costo-total-receta').textContent = `Costo Total Estimado ${textoCosto}: $${costoAPresentar}`;
+
+    } else {
+        // Mostrar mensaje si no hay productos sugeridos para este tipo de receta
+        listaMed.innerHTML = `<p>No se encontraron medicamentos para la receta ${tipoRecetaEtiqueta} con los síntomas ingresados.</p>`;
+        // Actualizar elemento de costo si no hay medicamentos
+        document.getElementById('costo-total-receta').textContent = `Costo Total Estimado (${tipoRecetaEtiqueta}): $0`;
+    }
+    // Opcional: Actualizar window.ultimosResultados.medicamentos si es necesario aquí
+    // window.ultimosResultados.medicamentos = Array.from(document.querySelectorAll('#listaMedicamentos .medicamento-item')).map(m => m.textContent);
+}
+
+
+
+// --- NUEVA FUNCIÓN: Reordenar medicamentos por economía ---
+function reordenarPorEconomia() {
+    // Aquí iría la lógica para llamar a una nueva ruta Flask
+    // que aplique un algoritmo de selección económica.
+    // Por ahora, simulamos el comportamiento o mostramos un mensaje.
+
+    // 1. Obtener los síntomas objetivo
+    const sintomasObjetivoIds = new Set(sintomasSeleccionados.filter(s => s.id).map(s => s.id));
+    if (sintomasObjetivoIds.size === 0) {
+        alert("No hay síntomas seleccionados para calcular una receta económica.");
+        return;
+    }
+
+    // 2. Llamar a una NUEVA ruta Flask (ej: /api/medicamentos/economicos)
+    // Esta ruta recibirá los IDs de síntomas y devolverá una lista
+    // de medicamentos ordenados por costo total para cubrir esos síntomas.
+    fetch('/api/medicamentos/economicos', { // <-- Nueva ruta a implementar
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids_sintomas_usuario: Array.from(sintomasObjetivoIds) })
+    })
+    .then(response => {
+         if (!response.ok) {
+            // Si la ruta no existe aún, mostramos un mensaje o simulamos
+            // Opcional: Puedes crear la ruta con el algoritmo económico ahora
+            alert("La funcionalidad de receta económica aún no está completamente implementada en el backend.");
+            console.error("La ruta /api/medicamentos/economicos no está disponible.");
+            return { ok: false, error: "Ruta no disponible", productos: [] }; // Simular respuesta vacía
+            // Descomentar la siguiente línea si creas la ruta:
+            // throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+         }
+         return response.json();
+    })
+    .then(dataProductosEconomicos => {
+        if(dataProductosEconomicos.ok && dataProductosEconomicos.productos && dataProductosEconomicos.productos.length > 0) {
+            // 3. Procesar la respuesta de la nueva ruta (muy similar a sugerirDiagnosticos)
+            // pero usando dataProductosEconomicos en lugar de la respuesta original.
+
+            const listaMed = document.getElementById('listaMedicamentos');
+            listaMed.innerHTML = ''; // Limpiar lista anterior
+
+            let costoTotalRecetaEconomica = 0;
+            let costoTotalAntesLineaEconomica = 0; // Costo de medicamentos antes de la línea divisoria en la receta económica
+            let sintomasCubiertosSet = new Set();
+            let coberturaCompletaAlcanzada = false;
+
+            // Asumimos que la nueva ruta devuelve los medicamentos en el orden económico óptimo
+            // y posiblemente ya calcula cuáles cubren la cobertura completa.
+            // La lógica aquí debe reflejar eso.
+
+            // Iterar la lista de medicamentos económicos
+            for (let i = 0; i < dataProductosEconomicos.productos.length; i++) {
+                const p = dataProductosEconomicos.productos[i];
+
+                // Identificar síntomas del medicamento que son parte del objetivo
+                const sintomasDelMedicamento = p.sintomas_totales || [];
+                const sintomasCoincidentesDelMedicamento = sintomasDelMedicamento.filter(nombre => {
+                    // Buscar el ID del síntoma objetivo por su nombre
+                    const sintomaObj = sintomasSeleccionados.find(s => s.nombre.toLowerCase() === nombre.toLowerCase());
+                    return sintomaObj && sintomasObjetivoIds.has(sintomaObj.id);
+                });
+                const sintomasSobrantesDelMedicamento = sintomasDelMedicamento.filter(nombre => {
+                     const sintomaObj = sintomasSeleccionados.find(s => s.nombre.toLowerCase() === nombre.toLowerCase());
+                     return !sintomaObj || !sintomasObjetivoIds.has(sintomaObj.id);
+                });
+
+                // Añadir los síntomas coincidentes de este medicamento al conjunto de cubiertos
+                sintomasCoincidentesDelMedicamento.forEach(nombre => {
+                    // Buscar el ID del síntoma objetivo por su nombre para añadirlo al set
+                    const sintomaObj = sintomasSeleccionados.find(s => s.nombre.toLowerCase() === nombre.toLowerCase());
+                    if(sintomaObj) {
+                        sintomasCubiertosSet.add(sintomaObj.nombre.toLowerCase()); // Usamos el nombre para consistencia con el set
+                    }
+                });
+
+                // Construir el elemento del medicamento
+                const divMed = document.createElement('div');
+                divMed.className = 'medicamento-item';
+
+                let fabricanteTexto = p.fabricante ? ` - ${p.fabricante}` : '';
+                let componenteTexto = p.componente_activo ? ` (${p.componente_activo})` : '';
+
+                // --- INFORMACIÓN DE SÍNTOMAS ---
+                let infoSintomas = ` (Trata: `;
+                if (sintomasCoincidentesDelMedicamento.length > 0) {
+                    infoSintomas += `<strong>${sintomasCoincidentesDelMedicamento.join(', ')}</strong>`;
+                    if (sintomasSobrantesDelMedicamento.length > 0) {
+                        infoSintomas += `, también `;
+                    }
+                }
+                if (sintomasSobrantesDelMedicamento.length > 0) {
+                    infoSintomas += `<em>${sintomasSobrantesDelMedicamento.join(', ')}</em>`;
+                }
+                infoSintomas += `)`;
+
+                divMed.innerHTML = `- ${p.nombre} ${componenteTexto}${fabricanteTexto} - $${p.precio} <span class="info-sintomas">${infoSintomas}</span>`;
+
+                // Añadir el medicamento a la lista
+                listaMed.appendChild(divMed);
+
+                // Acumular el precio del medicamento actual al costo total
+                costoTotalRecetaEconomica += p.precio;
+
+                // Verificar si la cobertura es completa *después* de añadir este medicamento
+                // La nueva ruta debería indicar claramente cuándo se alcanza la cobertura completa.
+                // Si no lo indica, asumimos que cuando se cubren todos los objetivos.
+                if (!coberturaCompletaAlcanzada && sintomasCubiertosSet.size === sintomasObjetivoIds.size) {
+                    coberturaCompletaAlcanzada = true;
+                    console.log(`✅ Cobertura completa lograda con la receta económica después del medicamento ${i+1}: ${p.nombre}`);
+
+                    // Acumular también el precio de *este* último medicamento para la línea
+                    costoTotalAntesLineaEconomica += p.precio;
+
+                    // Añadir la línea divisoria después de este elemento
+                    const divLinea = document.createElement('div');
+                    divLinea.className = 'linea-cobertura-completa';
+                    divLinea.textContent = '--- Cobertura de Síntomas Completa (Económica) ---';
+                    listaMed.appendChild(divLinea);
+                } else if (!coberturaCompletaAlcanzada) {
+                    // Si aún no se alcanzó la cobertura, este medicamento forma parte de la "receta antes de la línea"
+                    costoTotalAntesLineaEconomica += p.precio;
+                }
+            }
+
+            // Opcional: Si nunca se alcanzó la cobertura completa, podrías indicarlo
+            if (!coberturaCompletaAlcanzada) {
+                console.log("⚠️ Advertencia: No se logró cubrir todos los síntomas con la receta económica sugerida.");
+                const divAdvertencia = document.createElement('div');
+                divAdvertencia.className = 'advertencia-cobertura';
+                divAdvertencia.textContent = '⚠️ La receta económica no cubrió todos los síntomas ingresados.';
+                listaMed.appendChild(divAdvertencia);
+            }
+
+            // Actualizar el elemento del costo total estimado con el nuevo valor económico
+            document.getElementById('costo-total-receta').textContent = `Costo Total Estimado (Receta Económica): $${costoTotalAntesLineaEconomica}`;
+
+            // Opcional: Actualizar window.ultimosResultados con los nuevos datos si es necesario
+            // window.ultimosResultados.medicamentos = Array.from(document.querySelectorAll('#listaMedicamentos .medicamento-item')).map(m => m.textContent);
+            // window.ultimosResultados.datos_crudos_productos_economicos = dataProductosEconomicos; // Nuevo campo opcional
+
+        } else {
+            console.error("Error o respuesta vacía de /api/medicamentos/economicos:", dataProductosEconomicos);
+            alert("No se pudo obtener la receta económica. Revisa la consola.");
+        }
+    })
+    .catch(error => {
+        console.error('Error obteniendo medicamentos económicos:', error);
+        alert("Error al intentar obtener la receta económica. Revisa la consola.");
+    });
+}
+
+
+</script>
+
+</body>
+</html>

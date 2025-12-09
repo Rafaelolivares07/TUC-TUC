@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Pedidos - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .filtros {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filtros select {
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-card .numero {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-card .label {
+            color: #666;
+            margin-top: 0.5rem;
+        }
+        
+        .pedidos-lista {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .pedido-item {
+            padding: 1.5rem;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .pedido-item:hover {
+            background: #f9f9f9;
+        }
+        
+        .pedido-item:last-child {
+            border-bottom: none;
+        }
+        
+        .pedido-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .pedido-numero {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .pedido-estado {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .estado-pendiente {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .estado-en_camino {
+            background: #cce5ff;
+            color: #004085;
+        }
+        
+        .estado-entregado {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .estado-cancelado {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .estado-VERIFICANDO_DISPONIBILIDAD {
+            background: #e3f2fd;
+            color: #1565c0;
+            animation: pulso 2s infinite;
+        }
+        
+        @keyframes pulso {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .pedido-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+        
+        .info-valor {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            font-size: 1.5rem;
+        }
+        
+        .btn-cerrar {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+        
+        .modal-body {
+            padding: 2rem;
+        }
+        
+        .seccion {
+            margin-bottom: 2rem;
+        }
+        
+        .seccion h3 {
+            margin-bottom: 1rem;
+            color: #667eea;
+        }
+        
+        .productos-lista {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .producto-item {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .producto-item:last-child {
+            border-bottom: none;
+        }
+        
+        .producto-imagen {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+        
+        .producto-info {
+            flex: 1;
+        }
+        
+        .producto-nombre {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .producto-fabricante {
+            color: #667eea;
+            font-size: 0.9rem;
+        }
+        
+        .producto-cantidad {
+            font-weight: bold;
+            color: #2ecc71;
+        }
+        
+        .acciones {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #27ae60;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+
+
+        /* Estilos para modal de compras */
+        #modalCompras {
+            display: none;
+        }
+
+        #modalCompras .modal-content {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .check-producto {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }        
+
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>📦 Gestión de Pedidos</h1>
+            <div class="nav-links">
+                <a href="/admin/medicamentos">Medicamentos</a>
+                <a href="/admin/pedidos">Pedidos</a>
+                <a href="/tienda">Ver Tienda</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Estadísticas -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="numero" id="stat-pendientes">0</div>
+                <div class="label">Pendientes</div>
+            </div>
+            <div class="stat-card">
+                <div class="numero" id="stat-encamino">0</div>
+                <div class="label">En Camino</div>
+            </div>
+            <div class="stat-card">
+                <div class="numero" id="stat-entregados">0</div>
+                <div class="label">Entregados</div>
+            </div>
+            <div class="stat-card">
+                <div class="numero" id="stat-total">$0</div>
+                <div class="label">Total Hoy</div>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div class="filtros">
+            <label>Filtrar por estado:</label>
+            <select id="filtroEstado" onchange="cargarPedidos()">
+                <option value="todos">Todos</option>
+                <option value="pendiente">Pendientes</option>
+                <option value="en_camino">En Camino</option>
+                <option value="entregado">Entregados</option>
+                <option value="cancelado">Cancelados</option>
+            </select>
+            
+            <button onclick="abrirModalCompras()" style="padding: 0.75rem 1.5rem; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; margin-left: auto;">
+                🛒 Lista de Compras
+            </button>
+        </div>
+        
+        <!-- Lista de Pedidos -->
+        <div class="pedidos-lista" id="listaPedidos">
+            <div class="loading">Cargando pedidos...</div>
+        </div>
+    </div>
+    
+    <!-- Modal Detalle -->
+    <div class="modal" id="modalDetalle">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitulo">Pedido #123</h2>
+                <button class="btn-cerrar" onclick="cerrarModal()">×</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Contenido dinámico -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Lista de Compras -->
+    <div class="modal" id="modalCompras">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header" style="flex-direction: column; align-items: flex-start;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <h2>📋 Lista de Compras por Proveedor</h2>
+                    <button class="btn-cerrar" onclick="cerrarModalCompras()">×</button>
+                </div>
+                <div id="granTotalCompras" style="font-size: 1.5rem; font-weight: bold; margin-top: 0.75rem; padding: 0.75rem 1rem; background: rgba(255,255,255,0.2); border-radius: 8px; width: 100%;">
+                    Total General: $0
+                </div>
+            </div>
+            <div class="modal-body" id="modalComprasBody">
+                <div class="loading">Cargando productos...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pedidos = [];
+        
+        function formatearPrecio(precio) {
+            return new Intl.NumberFormat('es-CO').format(precio);
+        }
+        
+        function formatearFecha(fecha) {
+            const d = new Date(fecha);
+            return d.toLocaleString('es-CO', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        async function cargarPedidos() {
+            const estado = document.getElementById('filtroEstado').value;
+            
+            try {
+                const resp = await fetch(`/admin/pedidos/lista?estado=${estado}`);
+                const data = await resp.json();
+                
+                if (data.ok) {
+                    pedidos = data.pedidos;
+                    renderizarPedidos();
+                    actualizarStats();
+                }
+            } catch (error) {
+                console.error('Error cargando pedidos:', error);
+            }
+        }
+        
+        function renderizarPedidos() {
+            const lista = document.getElementById('listaPedidos');
+            
+            if (pedidos.length === 0) {
+                lista.innerHTML = '<div class="empty">No hay pedidos para mostrar</div>';
+                return;
+            }
+            
+            lista.innerHTML = pedidos.map(p => `
+                <div class="pedido-item" onclick="verDetalle(${p.id})">
+                    <div class="pedido-header">
+                        <div class="pedido-numero">Pedido #${p.id}</div>
+                        <div class="pedido-estado estado-${p.estado}">
+                            ${p.estado.replace('_', ' ').toUpperCase()}
+                        </div>
+                    </div>
+                    <div class="pedido-info">
+                        <div class="info-item">
+                            <div class="info-label">Cliente</div>
+                            <div class="info-valor">${p.cliente_nombre}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Teléfono</div>
+                            <div class="info-valor">${p.telefono}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Dirección</div>
+                            <div class="info-valor">${p.direccion_entrega}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Total</div>
+                            <div class="info-valor" style="color: #2ecc71; font-size: 1.2rem;">$${formatearPrecio(p.total)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fecha</div>
+                            <div class="info-valor">${formatearFecha(p.fecha)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Método Pago</div>
+                            <div class="info-valor">${p.metodo_pago.toUpperCase()}</div>
+                        </div>
+                        ${p.notas ? `
+                        <div class="info-item" style="grid-column: 1 / -1;">
+                            <div class="info-label">📋 Solicitud</div>
+                            <div class="info-valor" style="background: #fff3cd; padding: 0.75rem; border-radius: 5px; border-left: 4px solid #ffc107;">
+                                ${p.notas}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function actualizarStats() {
+            const pendientes = pedidos.filter(p => p.estado === 'pendiente').length;
+            const enCamino = pedidos.filter(p => p.estado === 'en_camino').length;
+            const entregados = pedidos.filter(p => p.estado === 'entregado').length;
+            
+            // Total de hoy
+            const hoy = new Date().toISOString().split('T')[0];
+            const pedidosHoy = pedidos.filter(p => p.fecha.startsWith(hoy));
+            const totalHoy = pedidosHoy.reduce((sum, p) => sum + p.total, 0);
+            
+            document.getElementById('stat-pendientes').textContent = pendientes;
+            document.getElementById('stat-encamino').textContent = enCamino;
+            document.getElementById('stat-entregados').textContent = entregados;
+            document.getElementById('stat-total').textContent = '$' + formatearPrecio(totalHoy);
+        }
+        
+        async function verDetalle(pedidoId) {
+            try {
+                const resp = await fetch(`/admin/pedidos/${pedidoId}/detalles`);
+                const data = await resp.json();
+                
+                if (data.ok) {
+                    mostrarModal(data.pedido, data.productos);
+                }
+            } catch (error) {
+                console.error('Error cargando detalle:', error);
+            }
+        }
+        
+function mostrarModal(pedido, productos) {
+            document.getElementById('modalTitulo').textContent = `Pedido #${pedido.id}`;
+            
+            const mapsLink = pedido.latitud_entrega && pedido.longitud_entrega
+                ? `https://www.google.com/maps?q=${pedido.latitud_entrega},${pedido.longitud_entrega}`
+                : '#';
+            
+            document.getElementById('modalBody').innerHTML = `
+                <div class="seccion">
+                    <h3>Información del Cliente</h3>
+                    <div class="pedido-info">
+                        <div class="info-item">
+                            <div class="info-label">Nombre</div>
+                            <div class="info-valor">${pedido.cliente_nombre}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Teléfono</div>
+                            <div class="info-valor">${pedido.telefono}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Dirección</div>
+                            <div class="info-valor">${pedido.direccion_entrega}</div>
+                        </div>
+                        ${pedido.latitud_entrega ? `
+                        <div class="info-item">
+                            <div class="info-label">Ubicación</div>
+                            <div class="info-valor">
+                                <a href="${mapsLink}" target="_blank" style="color: #667eea;">
+                                    📍 Ver en Google Maps
+                                </a>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                ${pedido.notas ? `
+                <div class="seccion" style="background: linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%); border-left: 5px solid #ffc107; padding: 1.5rem;">
+                    <h3 style="color: #856404; margin-bottom: 1rem;">📋 Solicitud Especial</h3>
+                    <div style="background: white; padding: 1.25rem; border-radius: 8px;">
+                        <div style="font-size: 1.1rem; font-weight: 600; color: #333; margin-bottom: 0.5rem;">
+                            ${pedido.notas}
+                        </div>
+                        ${pedido.estado === 'VERIFICANDO_DISPONIBILIDAD' ? `
+                        <div style="margin-top: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 5px; color: #1565c0; border-left: 3px solid #1565c0;">
+                            ⏳ <strong>Pendiente de confirmación</strong><br>
+                            <span style="font-size: 0.9rem;">Contacta al cliente para verificar disponibilidad y precio</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div class="seccion">
+                    <h3>Productos</h3>
+                    <div class="productos-lista">
+                        ${productos.map(p => `
+                            <div class="producto-item">
+                                <img src="/static/uploads/${p.imagen_especifica || p.imagen_generica || 'placeholder.png'}" 
+                                     class="producto-imagen"
+                                     onerror="this.style.display='none'">
+                                <div class="producto-info">
+                                    <div class="producto-nombre">${p.medicamento}</div>
+                                    <div class="producto-fabricante">${p.fabricante}</div>
+                                    <div>${p.concentracion} - ${p.presentacion}</div>
+                                </div>
+                                <div class="producto-cantidad">x${p.cantidad}</div>
+                                <div style="font-weight: bold;">$${formatearPrecio(p.precio * p.cantidad)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="seccion">
+                    <h3>Totales</h3>
+                    <div class="pedido-info">
+                        <div class="info-item">
+                            <div class="info-label">Subtotal</div>
+                            <div class="info-valor">$${formatearPrecio(pedido.total - pedido.costo_domicilio)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Domicilio</div>
+                            <div class="info-valor">$${formatearPrecio(pedido.costo_domicilio)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Total</div>
+                            <div class="info-valor" style="font-size: 1.3rem; color: #2ecc71;">
+                                $${formatearPrecio(pedido.total)}
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Método de Pago</div>
+                            <div class="info-valor">${pedido.metodo_pago.toUpperCase()}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="seccion">
+                    <h3>Cambiar Estado</h3>
+                    <div class="acciones">
+                        ${pedido.estado !== 'pendiente' && pedido.estado !== 'VERIFICANDO_DISPONIBILIDAD' ? '' : `
+                            <button class="btn btn-primary" onclick="cambiarEstado(${pedido.id}, 'en_camino')">
+                                🚚 Marcar En Camino
+                            </button>
+                        `}
+                        ${pedido.estado !== 'en_camino' ? '' : `
+                            <button class="btn btn-success" onclick="cambiarEstado(${pedido.id}, 'entregado')">
+                                ✅ Marcar Entregado
+                            </button>
+                        `}
+                        ${pedido.estado === 'entregado' ? '<p style="color: #2ecc71;">✅ Pedido ya entregado</p>' : ''}
+                        <button class="btn btn-danger" onclick="cambiarEstado(${pedido.id}, 'cancelado')">
+                            ❌ Cancelar Pedido
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('modalDetalle').classList.add('active');
+        }
+        
+        function cerrarModal() {
+            document.getElementById('modalDetalle').classList.remove('active');
+        }
+        
+        async function cambiarEstado(pedidoId, nuevoEstado) {
+            if (!confirm(`¿Cambiar estado a ${nuevoEstado.replace('_', ' ')}?`)) {
+                return;
+            }
+            
+            try {
+                const resp = await fetch(`/admin/pedidos/${pedidoId}/cambiar_estado`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({estado: nuevoEstado})
+                });
+                
+                const data = await resp.json();
+                
+                if (data.ok) {
+                    alert('✅ Estado actualizado');
+                    cerrarModal();
+                    cargarPedidos();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error actualizando estado');
+            }
+        }
+        
+        // Inicializar
+        cargarPedidos();
+        
+        // Auto-refresh cada 30 segundos
+        setInterval(cargarPedidos, 30000);
+
+
+        // ==========================================
+        // FUNCIONES PARA LISTA DE COMPRAS
+        // ==========================================
+
+        function abrirModalCompras() {
+            document.getElementById('modalCompras').style.display = 'flex';
+            cargarListaCompras();
+        }
+
+        function cerrarModalCompras() {
+            document.getElementById('modalCompras').style.display = 'none';
+        }
+
+        async function cargarListaCompras() {
+            try {
+                const response = await fetch('/api/compras/obtener_lista');
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarListaCompras(data.proveedores, data.sin_precios);
+                } else {
+                    document.getElementById('modalComprasBody').innerHTML = 
+                        '<p style="color: red;">Error al cargar la lista</p>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('modalComprasBody').innerHTML = 
+                    '<p style="color: red;">Error de conexión</p>';
+            }
+        }
+
+        function mostrarListaCompras(proveedores, sin_precios) {
+            let html = '';
+
+            // Calcular gran total
+            const granTotal = proveedores.reduce((sum, prov) => sum + prov.total, 0);
+            document.getElementById('granTotalCompras').textContent = `Total General: $${formatearPrecio(granTotal)}`;
+
+            // Mostrar proveedores con productos
+            proveedores.forEach(proveedor => {
+                html += `
+                    <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem;">
+                        <h3 style="color: #667eea; margin-bottom: 1rem;">
+                            🏪 ${proveedor.nombre} - Total: $${formatearPrecio(proveedor.total)}
+                        </h3>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem;">
+                                📄 Número de Factura:
+                            </label>
+                            <input type="text" 
+                                id="factura_${proveedor.id}" 
+                                placeholder="Ej: FAC-001234"
+                                style="width: 100%; padding: 0.5rem; border: 2px solid #e0e0e0; border-radius: 5px;">
+                        </div>
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: white;">
+                                    <th style="padding: 0.75rem; text-align: left;">✓</th>
+                                    <th style="padding: 0.75rem; text-align: left;">Medicamento</th>
+                                    <th style="padding: 0.75rem; text-align: center;">Cant.</th>
+                                    <th style="padding: 0.75rem; text-align: right;">Precio Unit.</th>
+                                    <th style="padding: 0.75rem; text-align: right;">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productos_${proveedor.id}">`;
+                
+                proveedor.productos.forEach((prod, idx) => {
+                    const urlIcono = prod.url
+                        ? `<a href="${prod.url}" target="_blank" title="Ver cotización" style="margin-left: 8px; color: #667eea; text-decoration: none; font-size: 1.1em;">🔗</a>`
+                        : '';
+
+                    html += `
+                        <tr style="background: white; border-top: 1px solid #e0e0e0;">
+                            <td style="padding: 0.75rem;">
+                                <input type="checkbox"
+                                    class="check-producto"
+                                    data-proveedor="${proveedor.id}"
+                                    data-existencias="${prod.existencias_ids}"
+                                    onchange="recalcularTotalesProveedor(${proveedor.id})"
+                                    checked>
+                            </td>
+                            <td style="padding: 0.75rem;">
+                                ${prod.medicamento}${urlIcono}
+                            </td>
+                            <td style="padding: 0.75rem; text-align: center;">${prod.cantidad}</td>
+                            <td style="padding: 0.75rem; text-align: right;">
+                                <input type="number"
+                                    id="precio_${proveedor.id}_${idx}"
+                                    value="${prod.precio_unitario}"
+                                    onchange="recalcularSubtotal(${proveedor.id}, ${idx}, ${prod.cantidad})"
+                                    style="width: 100px; padding: 0.5rem; border: 2px solid #e0e0e0; border-radius: 5px; text-align: right;"
+                                    step="0.01">
+                            </td>
+                            <td style="padding: 0.75rem; text-align: right;">
+                                <span id="subtotal_${proveedor.id}_${idx}" style="font-weight: bold;">$${formatearPrecio(prod.subtotal)}</span>
+                            </td>
+                        </tr>`;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                        <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 1.2rem; font-weight: bold; color: #667eea;">
+                                Total: <span id="total_proveedor_${proveedor.id}">$${formatearPrecio(proveedor.total)}</span>
+                            </div>
+                            <button onclick="registrarCompraProveedor(${proveedor.id})"
+                                    style="padding: 0.75rem 1.5rem; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                ✓ Registrar Compra
+                            </button>
+                        </div>
+                    </div>`;
+            });
+            
+            // Mostrar productos sin precios
+            if (sin_precios.length > 0) {
+                html += `
+                    <div style="background: #fff3cd; padding: 1.5rem; border-radius: 10px; border: 2px solid #ffc107;">
+                        <h3 style="color: #856404; margin-bottom: 1rem;">
+                            ⚠️ Productos sin Precios Registrados
+                        </h3>
+                        <ul>`;
+                
+                sin_precios.forEach(prod => {
+                    html += `<li>${prod.medicamento} x${prod.cantidad}</li>`;
+                });
+                
+                html += `
+                        </ul>
+                        <p style="margin-top: 1rem; font-size: 0.9rem; color: #856404;">
+                            Estos productos necesitan que registres sus precios antes de poder comprarlos.
+                        </p>
+                    </div>`;
+            }
+            
+            if (proveedores.length === 0 && sin_precios.length === 0) {
+                html = '<p style="text-align: center; padding: 2rem; color: #666;">No hay productos pendientes para comprar</p>';
+            }
+            
+            document.getElementById('modalComprasBody').innerHTML = html;
+        }
+
+        function recalcularSubtotal(proveedor_id, idx, cantidad) {
+            const precioInput = document.getElementById(`precio_${proveedor_id}_${idx}`);
+            const precioUnitario = parseFloat(precioInput.value) || 0;
+            const subtotal = precioUnitario * cantidad;
+
+            // Actualizar subtotal del producto
+            document.getElementById(`subtotal_${proveedor_id}_${idx}`).textContent = `$${formatearPrecio(subtotal)}`;
+
+            // Recalcular total del proveedor
+            let totalProveedor = 0;
+            const tbody = document.getElementById(`productos_${proveedor_id}`);
+            const rows = tbody.querySelectorAll('tr');
+
+            rows.forEach((row, rowIdx) => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && checkbox.checked) {
+                    const precioInput = document.getElementById(`precio_${proveedor_id}_${rowIdx}`);
+                    if (precioInput) {
+                        const precio = parseFloat(precioInput.value) || 0;
+                        const cantidadCell = row.cells[2].textContent;
+                        const cant = parseInt(cantidadCell) || 0;
+                        totalProveedor += precio * cant;
+                    }
+                }
+            });
+
+            // Actualizar total del proveedor
+            document.getElementById(`total_proveedor_${proveedor_id}`).textContent = `$${formatearPrecio(totalProveedor)}`;
+
+            // Recalcular gran total
+            recalcularGranTotal();
+        }
+
+        function recalcularTotalesProveedor(proveedor_id) {
+            let totalProveedor = 0;
+            const tbody = document.getElementById(`productos_${proveedor_id}`);
+            const rows = tbody.querySelectorAll('tr');
+
+            rows.forEach((row, idx) => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox && checkbox.checked) {
+                    const precioInput = document.getElementById(`precio_${proveedor_id}_${idx}`);
+                    if (precioInput) {
+                        const precio = parseFloat(precioInput.value) || 0;
+                        const cantidadCell = row.cells[2].textContent;
+                        const cant = parseInt(cantidadCell) || 0;
+                        totalProveedor += precio * cant;
+                    }
+                }
+            });
+
+            // Actualizar total del proveedor
+            document.getElementById(`total_proveedor_${proveedor_id}`).textContent = `$${formatearPrecio(totalProveedor)}`;
+
+            // Recalcular gran total
+            recalcularGranTotal();
+        }
+
+        function recalcularGranTotal() {
+            let granTotal = 0;
+
+            // Buscar todos los totales de proveedores
+            document.querySelectorAll('[id^="total_proveedor_"]').forEach(span => {
+                const texto = span.textContent.replace(/[$,]/g, '');
+                const valor = parseFloat(texto) || 0;
+                granTotal += valor;
+            });
+
+            document.getElementById('granTotalCompras').textContent = `Total General: $${formatearPrecio(granTotal)}`;
+        }
+
+        async function registrarCompraProveedor(proveedor_id) {
+            const factura = document.getElementById(`factura_${proveedor_id}`).value.trim();
+
+            if (!factura) {
+                alert('Por favor ingresa el número de factura');
+                return;
+            }
+
+            // Obtener productos seleccionados con sus precios actualizados
+            const checkboxes = document.querySelectorAll(`input[data-proveedor="${proveedor_id}"]:checked`);
+            const productos = [];
+
+            checkboxes.forEach((cb, idx) => {
+                // Obtener el precio actualizado del input
+                const precioInput = document.getElementById(`precio_${proveedor_id}_${idx}`);
+                const precioUnitario = parseFloat(precioInput.value) || 0;
+
+                // Separar los IDs de existencias
+                const ids = cb.dataset.existencias.split(',').map(id => parseInt(id.trim()));
+
+                // Agregar cada existencia con su precio
+                ids.forEach(id => {
+                    productos.push({
+                        existencia_id: id,
+                        precio_compra: precioUnitario
+                    });
+                });
+            });
+
+            if (productos.length === 0) {
+                alert('Selecciona al menos un producto');
+                return;
+            }
+
+            if (!confirm(`¿Confirmar compra de ${productos.length} productos con factura ${factura}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/compras/registrar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        drogueria_id: proveedor_id,
+                        numero_documento: factura,
+                        productos: productos
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✓ Compra registrada exitosamente');
+                    cargarListaCompras(); // Recargar lista
+                    cargarPedidos(); // Actualizar lista de pedidos
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al registrar la compra');
+            }
+        }
+
+
+    </script>
+</body>
+</html>
+```
+
+---
+
+**Guarda el archivo, reinicia Flask y ve a:**
+```
+http://127.0.0.1:5000/admin/pedidos

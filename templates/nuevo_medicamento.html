@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nuevo Medicamento</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Estilo para la vista previa de la imagen */
+        #vistaPreviaImg {
+            display: none;
+            max-width: 100%;
+            max-height: 400px;
+            width: auto;
+            height: auto;
+            border: 3px solid #4CAF50;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">➕ Nuevo Medicamento</header>
+    <main class="container">
+        <form method="POST" enctype="multipart/form-data" onsubmit="return confirmarEnvio()">
+            <label>Nombre</label>
+            <input type="text" name="nombre" required>
+
+            <label>Presentación</label>
+            <input type="text" name="presentacion">
+
+            <label>Concentración</label>
+            <input type="text" name="concentracion">
+
+            <label>Fabricante (Ej: Pfizer)</label>
+            <input type="text" name="fabricante_nombre" required>
+
+            <label>Código ATC Puro (Ej: A02BC02)</label>
+            <input type="text" name="codigo_atc_puro">
+
+            <label>Descripción ATC (Ej: Inhibidor de la bomba de protones)</label>
+            <input type="text" name="descripcion_tecnica_atc">
+            
+            <label>Foto (opcional)</label>
+            <input type="file" name="imagen" id="imagen" accept="image/*">
+            
+            <img id="vistaPreviaImg" src="#" alt="Vista previa de la imagen seleccionada">
+
+            <label>Cantidad Inicial Comprada (Existencia)</label>
+            <input type="number" name="cantidad_inicial" required min="1">
+            
+            <button class="btn-primary" type="submit">Guardar y registrar entrada</button>
+        </form>
+
+        <a class="btn-secondary" href="{{ url_for('lista_medicamentos') }}">⬅ Volver</a>
+    </main>
+
+    <script>
+        // Confirmación antes de enviar
+        function confirmarEnvio() {
+            return confirm("¿Deseas guardar y registrar este nuevo medicamento?");
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputImagen = document.getElementById('imagen');
+            const inputNombre = document.querySelector('input[name="nombre"]');
+            const vistaPrevia = document.getElementById('vistaPreviaImg'); 
+
+            // 🔹 Limpieza inicial (Rafa Debug)
+            inputImagen.value = '';
+            vistaPrevia.src = '#';
+            vistaPrevia.style.display = 'none';
+
+            inputImagen.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    const file = this.files[0];
+                    const formData = new FormData();
+                    formData.append('imagen_ocr', file);
+
+                    // 🔹 Vista previa grande
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        vistaPrevia.src = e.target.result;
+                        vistaPrevia.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+
+                    // 🔹 Inicia OCR
+                    inputNombre.value = 'Procesando imagen con OCR...';
+                    inputNombre.disabled = true;
+
+                    fetch('{{ url_for("ocr_procesar") }}', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // 🔹 Verificación para evitar conflicto si el usuario cambia la imagen (Rafa Debug)
+                        if (inputImagen.files[0] !== file) {
+                            console.log("⚠ OCR ignorado: usuario cambió la imagen antes de completar.");
+                            return;
+                        }
+
+                        inputNombre.disabled = false;
+                        if (data.nombre_detectado) {
+                            inputNombre.value = data.nombre_detectado;
+                        } else {
+                            inputNombre.value = '';
+                            alert('OCR no detectó texto.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error de red/servidor:', error);
+                        if (inputImagen.files[0] === file) {
+                            inputNombre.disabled = false;
+                            inputNombre.value = '';
+                            alert('Error de red o servidor durante OCR.');
+                        }
+                    });
+                } else {
+                    // 🔹 Si no hay archivo, limpia vista previa
+                    vistaPrevia.style.display = 'none';
+                    vistaPrevia.src = '#';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

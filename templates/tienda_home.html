@@ -1,0 +1,3068 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tienda - Medicamentos a Domicilio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.75rem 1rem;  /* 🆕 Reducido de 1.5rem */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.3rem;  /* 🆕 Reducido de 1.8rem */
+            margin-bottom: 0.25rem;  /* 🆕 Reducido de 0.5rem */
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.8rem;  /* 🆕 Reducido de 0.9rem */
+        }
+        
+        /* 🆕 ESTILOS PARA BOTONES DEL HEADER */
+        .btn-header {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-header:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .btn-carrito-grande {
+            font-size: 1.1rem;
+            padding: 0.7rem 1.5rem;
+        }
+        
+        .badge-header {
+            background: #e74c3c;
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0.5rem;  /* 🆕 Reducido de 0.75rem */
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                padding: 1rem;  /* 🆕 Reducido de 1.5rem */
+            }
+        }
+        
+        .filtros {
+            background: white;
+            padding: 1rem;  /* 🆕 Reducido de 1.5rem */
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;  /* 🆕 Reducido de 2rem */
+        }
+
+        .filtros h3 {
+            margin-bottom: 0.5rem;  /* 🆕 Reducido de 1rem */
+            color: #667eea;
+            font-size: 1rem;  /* 🆕 Reducido de 1.1rem */
+        }
+        
+        .filtro-grupo {
+            margin-bottom: 1rem;
+        }
+        
+        .filtro-grupo label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #555;
+        }
+        
+        .filtro-grupo input, .filtro-grupo select, .filtro-grupo textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+        
+        .filtro-grupo textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .filtro-grupo input:focus, .filtro-grupo select:focus, .filtro-grupo textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filtros-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .btn-buscar {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .btn-buscar:hover {
+            background: #5568d3;
+        }
+        
+        /* 🆕 ESTILOS PARA DIAGNÓSTICOS DETECTADOS */
+        .diagnosticos-detectados {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 0.75rem;  /* 🆕 Reducido de 1rem */
+            margin-bottom: 1rem;  /* 🆕 Reducido de 1.5rem */
+        }
+
+        .diagnosticos-detectados h4 {
+            color: #667eea;
+            margin-bottom: 0.4rem;  /* 🆕 Reducido de 0.5rem */
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;  /* 🆕 Más pequeño */
+        }
+        
+        .sintomas-detectados {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .sintoma-tag {
+            background: #667eea;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .diagnostico-tag {
+            background: #e74c3c;
+            color: white;
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .productos-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            max-width: 100% !important;
+            width: 100%;
+            padding: 0;
+            margin: -3 -3rem;
+        }
+        
+        /* 🆕 RESPONSIVE LAYOUT */
+        @media (min-width: 768px) {
+            .productos-grid {
+                grid-template-columns: repeat(2, 1fr);
+                max-width: 100%;
+                width: 100%;
+            }
+        }
+        
+        /* Mobile: 2 columnas solo cuando está activado */
+        .productos-grid.dos-columnas {
+            grid-template-columns: repeat(2, 1fr);
+            max-width: 100% !important;
+            width: 100%;
+            gap: 0.75rem;  /* Reducir gap en móvil */
+            padding: 0;
+            margin: 0;
+        }
+        
+        /* 🆕 BOTÓN TOGGLE DE COLUMNAS */
+        .toggle-columnas {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;  /* 🆕 Reducido de 1.5rem */
+            padding: 0.75rem;  /* 🆕 Reducido de 1rem */
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .toggle-columnas label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: #333;
+            margin: 0;
+        }
+        
+        .toggle-columnas input[type="checkbox"] {
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+        }
+        
+        @media (min-width: 768px) {
+            .toggle-columnas {
+                display: none;
+            }
+        }
+        
+        .producto-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .producto-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        
+        
+        .producto-imagen {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            background: #f9f9f9;
+            padding: 1rem;
+        }
+        
+        .producto-info {
+            padding: 1rem;
+        }
+        
+        .producto-nombre {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .producto-fabricante {
+            color: #667eea;
+            font-size: 0.9rem;
+            margin-bottom: 0.3rem;
+        }
+        
+        .producto-presentacion {
+            color: #888;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .producto-diagnostico {
+            background: #ffe6e6;
+            padding: 0.5rem;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .producto-precio {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2ecc71;
+            margin: 0.5rem 0;
+        }
+        
+        .btn-agregar {
+            width: 100%;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            width: calc(100% - 2rem);
+        }
+        
+        .btn-agregar:hover {
+            background: #5568d3;
+        }
+        
+        .sin-resultados {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+        }
+        
+        .carrito-flotante {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #667eea;
+            color: white;
+            width: 80px;  /* 🆕 Aumentado de 60px */
+            height: 80px; /* 🆕 Aumentado de 60px */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;  /* 🆕 Aumentado de 1.5rem */
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s;
+            z-index: 1000;
+        }
+        
+        .carrito-flotante:hover {
+            transform: scale(1.1);
+        }
+        
+        .carrito-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            width: 28px;  /* 🆕 Aumentado de 24px */
+            height: 28px; /* 🆕 Aumentado de 24px */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;  /* 🆕 Aumentado de 0.75rem */
+            font-weight: bold;
+        }
+        
+        /* 🆕 BOTÓN FLOTANTE PASTILLERO */
+        .pastillero-flotante {
+            position: fixed;
+            bottom: 10rem;  /* 🆕 Movido más arriba para no tapar botón de subir */
+            left: 2rem;
+            background: #2ecc71;
+            color: white;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: none;  /* Oculto por defecto */
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s;
+            z-index: 1000;
+        }
+        
+        .pastillero-flotante:hover {
+            transform: scale(1.1);
+        }
+        
+        .pastillero-flotante.visible {
+            display: flex;
+        }
+        
+        .pastillero-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        
+        /* 🆕 BOTÓN SCROLL TO TOP - Moverlo más arriba */
+        .scroll-to-top {
+            bottom: 12rem !important;  /* Moverlo arriba del pastillero */
+        }
+        
+        /* 🆕 ESTILOS MODAL PASTILLERO */
+        .modal-pastillero {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-pastillero.active {
+            display: flex;
+        }
+        
+        .modal-pastillero-content {
+            background: white;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-pastillero-header {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-pastillero-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-cerrar-modal {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+        
+        .btn-cerrar-modal:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* 🆕 BOTÓN ORDENAR PASTILLERO */
+        .btn-ordenar-pastillero {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        
+        .btn-ordenar-pastillero:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .modal-pastillero-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+        
+        .pastillero-busqueda {
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+        
+        .pastillero-busqueda input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .pastillero-busqueda input:focus {
+            outline: none;
+            border-color: #2ecc71;
+        }
+        
+        .pastillero-sugerencias {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #2ecc71;
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .pastillero-sugerencias.active {
+            display: block;
+        }
+        
+        .sugerencia-item {
+            padding: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .sugerencia-item:hover {
+            background: #f8f8f8;
+        }
+        
+        .sugerencia-item.sugerencia-activa {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .sugerencia-item:last-child {
+            border-bottom: none;
+        }
+        
+        .medicamento-item {
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 2px solid #e0e0e0;
+            transition: border-color 0.3s;
+        }
+        
+        .medicamento-item:hover {
+            border-color: #2ecc71;
+        }
+        
+        .medicamento-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 0.5rem;
+        }
+        
+        .medicamento-nombre {
+            font-weight: 600;
+            color: #333;
+            font-size: 1.1rem;
+        }
+        
+        .medicamento-cantidad {
+            background: #2ecc71;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .medicamento-acciones {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        
+        .btn-medicamento {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+        
+        .btn-tome {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-tome:hover {
+            background: #c0392b;
+        }
+        
+        .btn-agregar-cantidad {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .btn-agregar-cantidad:hover {
+            background: #27ae60;
+        }
+        
+        .btn-ver-sintomas {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-ver-sintomas:hover {
+            background: #2980b9;
+        }
+        
+        .medicamento-sintomas {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 6px;
+            display: none;
+        }
+        
+        .medicamento-sintomas.visible {
+            display: block;
+        }
+        
+        .medicamento-sintomas h4 {
+            color: #3498db;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+        
+        .sintomas-lista {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        /* 🆕 Animación para alertar medicamentos disponibles */
+        @keyframes pulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+            }
+            50% { 
+                transform: scale(1.08); 
+                box-shadow: 0 0 0 10px rgba(46, 204, 113, 0);
+            }
+        }
+        
+        .pastillero-vacio {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #999;
+        }
+        
+        .pastillero-vacio-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .filtros-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .productos-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1>🏥 Medicamentos a Domicilio</h1>
+                <p>Entrega en 30 minutos - Zona Norte de Cali</p>
+            </div>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <button id="btn-pastillero-header" class="btn-header" onclick="abrirPastillero()">
+                    <span style="font-size: 1.3rem;">💊</span>
+                    <span>Mi Pastillero</span>
+                    <span id="pastillero-count-header" class="badge-header">0</span>
+                </button>
+                
+                <!-- 🔍 BOTÓN DEBUG (temporal) -->
+                <button class="btn-header" onclick="mostrarDebugJSON()" style="background: rgba(231, 76, 60, 0.3); border-color: rgba(231, 76, 60, 0.5);">
+                    <span>🔍 DEBUG</span>
+                </button>
+                
+                <button id="btn-carrito-header" class="btn-header btn-carrito-grande" onclick="window.location.href='{{ url_for('carrito') }}'">
+                    <span style="font-size: 1.8rem;">🛒</span>
+                    <span>Carrito</span>
+                    <span id="cart-count-header" class="badge-header">0</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Filtros UNIFICADOS -->
+        <div class="filtros">
+            <h3>🔍 BUSCA POR NOMBRE DE MEDICAMENTO Y/O DESCRIBE TUS SINTOMAS,AFECCIONES O NECESIDADES</h3>
+            
+            <div class="filtro-grupo" style="margin-bottom: 1rem;">
+                <textarea 
+                    id="busqueda_unificada" 
+                    placeholder="Escribe aqui el nombre del medicamento o describe brevemente lo que sientes (necesidades, afecciones o sintomas)"
+                    rows="1"
+                    style="
+                        width: 100%;
+                        padding: 1rem;
+                        border: 2px solid #e0e0e0;
+                        border-radius: 8px;
+                        font-size: 1.1rem;
+                        font-family: inherit;
+                        resize: none;
+                        overflow: hidden;
+                        transition: border-color 0.3s;
+                        min-height: 42px;  /* 🆕 Más pequeño */
+                    "
+                    oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
+                    onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
+                ></textarea>
+                <small style="color: #666; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                    💡 Escribe libremente lo que necesitas. Presiona Enter para buscar o espera 0.8s.
+                </small>
+            </div>
+            
+            <!-- Filtros de precio (opcional, colapsados) -->
+            <details style="margin-top: 1rem;">
+                <summary style="cursor: pointer; color: #667eea; font-weight: 600; user-select: none;">
+                    ⚙️ Filtros avanzados (opcional)
+                </summary>
+                <div class="filtros-grid" style="margin-top: 1rem;">
+                    <div class="filtro-grupo">
+                        <label>Precio Mínimo</label>
+                        <input type="number" id="precioMin" placeholder="0">
+                    </div>
+                    
+                    <div class="filtro-grupo">
+                        <label>Precio Máximo</label>
+                        <input type="number" id="precioMax" placeholder="50000">
+                    </div>
+                </div>
+            </details>
+        </div>
+        
+        <!-- 🆕 Diagnósticos Detectados -->
+        <div id="diagnosticosDetectados" style="display: none;" class="diagnosticos-detectados">
+            <h4>🩺 Análisis de tus síntomas:</h4>
+            <div id="diagnosticosContent"></div>
+            <div id="sintomasDetectados" class="sintomas-detectados"></div>
+        </div>
+        
+        <!-- 🆕 TOGGLE DE COLUMNAS (solo móvil) -->
+        <div class="toggle-columnas" id="toggleColumnasContainer">
+            <label>
+                <input type="checkbox" id="toggleDosColumnas">
+                 Ver 2 medicamentos por pantalla
+            </label>
+        </div>
+        
+        <!-- Productos -->
+        <div id="productosContainer" class="loading">
+            Cargando productos...
+        </div>
+    </div>
+    
+    <!-- Carrito Flotante -->
+    <!-- 🆕 BOTÓN FLOTANTE PASTILLERO (lado izquierdo) -->
+    <div id="pastillero-flotante" class="pastillero-flotante" onclick="abrirPastillero()">
+        💊
+        <span class="pastillero-badge" id="pastilleroCount">0</span>
+    </div>
+    
+    <!-- BOTÓN FLOTANTE CARRITO (lado derecho) -->
+    <div class="carrito-flotante" onclick="verCarrito()">
+        🛒
+        <span class="carrito-badge" id="carritoCount">0</span>
+    </div>
+    
+    <script>
+        let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+        actualizarBadgeCarrito();
+        
+        // Cargar productos al inicio
+        window.addEventListener('DOMContentLoaded', () => {
+            buscarProductos();
+        });
+
+        // Función para auto-expandir el textarea
+        function autoExpand(field) {
+            field.style.height = 'inherit';
+            
+            const computed = window.getComputedStyle(field);
+            const height = field.scrollHeight
+                + parseInt(computed.getPropertyValue('border-top-width'), 10)
+                + parseInt(computed.getPropertyValue('border-bottom-width'), 10);
+            
+            const maxHeight = 200;
+            
+            if (height > maxHeight) {
+                field.style.height = maxHeight + 'px';
+                field.style.overflowY = 'auto';
+            } else {
+                field.style.height = height + 'px';
+                field.style.overflowY = 'hidden';
+            }
+        }
+
+        // 🆕 Variable global para síntomas actuales
+        let sintomasBuscados = '';
+        let sintomasDetectadosGlobal = []; // 🆕 Síntomas que el backend detectó
+        let productosMostradosEnTienda = []; // 🎯 NUEVO: Productos actualmente mostrados en tienda
+        
+        // 🔍 EXPONER GLOBALMENTE para debug desde consola
+        window.DEBUG_verProductosTienda = function() {
+            console.log('📦 Productos en tienda:', productosMostradosEnTienda.length);
+            console.log(productosMostradosEnTienda);
+            return productosMostradosEnTienda;
+        };
+        
+        function buscarProductos() {
+            alert('🚨 FUNCIÓN buscarProductos() SE EJECUTÓ 🚨');
+            console.log('%c🚨🚨🚨 BUSCAR PRODUCTOS LLAMADO 🚨🚨🚨', 'background: red; color: white; font-size: 30px; padding: 10px;');
+            
+            const busquedaUnificada = document.getElementById('busqueda_unificada').value;
+            
+            // 🆕 Guardar síntomas buscados
+            sintomasBuscados = busquedaUnificada.trim();
+            
+            // 🆕 No buscar si hay menos de 3 caracteres
+            if (busquedaUnificada.trim().length > 0 && busquedaUnificada.trim().length < 3) {
+                return; // Esperar a que escriba más
+            }
+            
+            // 🆕 NUEVO: Prevenir 414 URI Too Long
+            if (busquedaUnificada.length > 200) {
+                document.getElementById('productosContainer').innerHTML = `
+                    <div class="sin-resultados">
+                        <p style="color: #e74c3c;">⚠️ La búsqueda es demasiado larga (máx 200 caracteres)</p>
+                        <p style="font-size: 0.9rem; margin-top: 0.5rem;">Por favor, describe tus síntomas de forma más breve.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const precioMin = document.getElementById('precioMin').value;
+            const precioMax = document.getElementById('precioMax').value;
+            const params = new URLSearchParams();
+            
+            if (busquedaUnificada) {
+                params.append('sintomas_busqueda', busquedaUnificada);
+                params.append('q', busquedaUnificada);
+            }
+            
+            if (precioMin) params.append('precio_min', precioMin);
+            if (precioMax) params.append('precio_max', precioMax);
+            
+            document.getElementById('productosContainer').innerHTML = '<div class="loading">Buscando...</div>';
+            
+            console.log('🚀 INICIANDO BÚSQUEDA con params:', params.toString());
+            
+            fetch(`/api/productos?${params.toString()}`)
+                .then(res => res.json())
+                .then(data => {
+                    console.log('📥 RESPUESTA RECIBIDA:', {
+                        ok: data.ok,
+                        productos_count: data.productos ? data.productos.length : 0
+                    });
+                    
+                    if (data.ok) {
+                        // 🆕 Envolver en try-catch para que errores no detengan verificación de pastillero
+                        try {
+                            mostrarDiagnosticos(data.sintomas_detectados || [], data.diagnosticos_posibles || [], data.busqueda_parcial || false);
+                        } catch(e) {
+                            console.error('Error en mostrarDiagnosticos:', e);
+                        }
+                        
+                        try {
+                            mostrarProductos(data.productos, data);
+                        } catch(e) {
+                            console.error('Error en mostrarProductos:', e);
+                        }
+                        
+                        // 🎯 CRÍTICO: Guardar productos ANTES del setTimeout
+                        productosMostradosEnTienda = data.productos || [];
+                        alert('💾 GUARDANDO ' + productosMostradosEnTienda.length + ' PRODUCTOS 💾');
+                        console.log('%c💾💾💾 PRODUCTOS GUARDADOS: ' + productosMostradosEnTienda.length, 'background: green; color: white; font-size: 30px; padding: 10px;');
+                        console.log('💾 Productos guardados en productosMostradosEnTienda:', productosMostradosEnTienda.length);
+                        console.log('💾 Primeros 3 productos:', productosMostradosEnTienda.slice(0, 3).map(p => ({
+                            nombre: p.nombre,
+                            medicamento_id: p.medicamento_id
+                        })));
+                        
+                        // 🆕 CRÍTICO: Verificar pastillero SIEMPRE, incluso si hay errores arriba
+                        // Usar setTimeout para asegurar que se ejecute después de todo lo demás
+                        setTimeout(() => {
+                            try {
+                                const sintomasDetectados = data.sintomas_detectados || [];
+                                sintomasDetectadosGlobal = sintomasDetectados; // 🆕 Guardar globalmente
+                                
+                                if (sintomasDetectados.length > 0 || productosMostradosEnTienda.length > 0) {
+                                    console.log('🔍 Llamando verificarMedicamentosPastillero');
+                                    console.log('   Síntomas:', sintomasDetectados);
+                                    console.log('   Productos:', productosMostradosEnTienda.length);
+                                    verificarMedicamentosPastillero();
+                                } else {
+                                    console.log('ℹ️ No hay síntomas ni productos, desactivando animación');
+                                    desactivarAnimacionPastillero();
+                                }
+                            } catch(e) {
+                                console.error('Error en verificarMedicamentosPastillero:', e);
+                            }
+                        }, 100);
+                    } else {
+                        document.getElementById('productosContainer').innerHTML = 
+                            '<div class="sin-resultados">Error al cargar productos</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('productosContainer').innerHTML = 
+                        '<div class="sin-resultados">Error de conexión</div>';
+                });
+        }
+        
+        // 🆕 Verificar si el usuario tiene medicamentos en su pastillero para los síntomas buscados
+        // 🎯 VERSIÓN SIMPLE: Verificar qué productos de la tienda están en el pastillero
+        function verificarMedicamentosPastillero() {
+            console.log('🔍 Verificando coincidencias entre tienda y pastillero...');
+            console.log('🏪 Productos en tienda:', productosMostradosEnTienda.length);
+            
+            // 🎯 NUEVO: Solo verificar si el usuario buscó algo específico
+            const busquedaActual = document.getElementById('busqueda_unificada').value.trim();
+            if (!busquedaActual || busquedaActual.length < 3) {
+                console.log('ℹ️ No hay búsqueda activa, no verificar pastillero');
+                desactivarAnimacionPastillero();
+                return;
+            }
+            
+            if (productosMostradosEnTienda.length === 0) {
+                console.log('❌ No hay productos en la tienda para comparar');
+                desactivarAnimacionPastillero();
+                return;
+            }
+            
+            // Traer el pastillero completo (simple GET, sin filtros)
+            fetch('/api/pastillero')
+                .then(res => res.json())
+                .then(data => {
+                    const medicamentosPastillero = data.medicamentos || [];
+                    console.log('📦 Medicamentos en pastillero:', medicamentosPastillero.length);
+                    
+                    // 🔍 DEBUG: Ver estructura de datos COMPLETA
+                    if (medicamentosPastillero.length > 0) {
+                        console.log('📦 PASTILLERO COMPLETO:', medicamentosPastillero[0]);
+                        console.log('📦 Todos los medicamentos del pastillero:', medicamentosPastillero.map(m => ({
+                            nombre: m.nombre,
+                            todos_los_campos: Object.keys(m)
+                        })));
+                    }
+                    if (productosMostradosEnTienda.length > 0) {
+                        console.log('🏪 TIENDA COMPLETO:', productosMostradosEnTienda[0]);
+                        console.log('🏪 Todos los productos de la tienda:', productosMostradosEnTienda.map(p => ({
+                            nombre: p.nombre,
+                            todos_los_campos: Object.keys(p)
+                        })));
+                    }
+                    
+                    // 🔍 PROBAR TODAS LAS COMBINACIONES POSIBLES
+                    console.log('🧪 PROBANDO COMPARACIONES...');
+                    productosMostradosEnTienda.forEach(producto => {
+                        medicamentosPastillero.forEach(med => {
+                            if (producto.nombre.toLowerCase().includes('aspirina') && 
+                                med.nombre.toLowerCase().includes('aspirina')) {
+                                console.log('🎯 ENCONTRÉ ASPIRINA EN AMBOS:', {
+                                    producto: {
+                                        nombre: producto.nombre,
+                                        todos_ids: Object.entries(producto).filter(([k,v]) => k.includes('id'))
+                                    },
+                                    medicamento: {
+                                        nombre: med.nombre,
+                                        todos_ids: Object.entries(med).filter(([k,v]) => k.includes('id'))
+                                    }
+                                });
+                            }
+                        });
+                    });
+                    
+                    // 🎯 COMPARAR IDS: ¿Cuáles productos de la tienda están en el pastillero?
+                    const coincidencias = productosMostradosEnTienda.filter(producto => 
+                        medicamentosPastillero.some(med => 
+                            med.id_medicamento === producto.medicamento_id ||
+                            med.medicamento_id === producto.medicamento_id
+                        )
+                    );
+                    
+                    console.log('✅ Coincidencias encontradas:', coincidencias.length);
+                    if (coincidencias.length > 0) {
+                        console.log('   Medicamentos:', coincidencias.map(c => c.nombre));
+                    }
+                    
+                    const btnPastillero = document.getElementById('btn-pastillero-header');
+                    
+                    if (!btnPastillero) {
+                        console.warn('⚠️ Botón pastillero no encontrado');
+                        return;
+                    }
+                    
+                    if (coincidencias.length > 0) {
+                        console.log(`🎯 ACTIVANDO ANIMACIÓN: ${coincidencias.length} de los productos mostrados están en tu pastillero`);
+                        btnPastillero.style.animation = 'pulse 1.5s ease-in-out infinite';
+                        btnPastillero.style.boxShadow = '0 0 20px rgba(46, 204, 113, 0.7)';
+                        btnPastillero.title = `¡Tienes ${coincidencias.length} de estos medicamentos en tu pastillero!`;
+                    } else {
+                        console.log('❌ Ningún producto mostrado está en el pastillero');
+                        desactivarAnimacionPastillero();
+                    }
+                })
+                .catch(err => {
+                    console.error('💥 Error al verificar pastillero:', err);
+                    desactivarAnimacionPastillero();
+                });
+        }
+        
+        // 🆕 Desactivar animación del pastillero
+        function desactivarAnimacionPastillero() {
+            console.log('🔇 desactivarAnimacionPastillero llamada');
+            const btnPastillero = document.getElementById('btn-pastillero-header');
+            
+            if (!btnPastillero) {
+                console.warn('⚠️ Botón no encontrado al desactivar');
+                return;
+            }
+            
+            btnPastillero.style.animation = '';
+            btnPastillero.style.boxShadow = '';
+            btnPastillero.title = 'Mi Pastillero';
+            console.log('✅ Animación desactivada');
+        }
+        
+
+
+        function mostrarDiagnosticos(sintomas, diagnosticos, esBusquedaParcial = false) {
+            const container = document.getElementById('diagnosticosDetectados');
+            const content = document.getElementById('diagnosticosContent');
+            const sintomasDiv = document.getElementById('sintomasDetectados');
+            
+            if (sintomas.length === 0 && diagnosticos.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            
+            const diagnosticosDirectos = diagnosticos.filter(d => d.es_directo);
+            const diagnosticosPorSintomas = diagnosticos.filter(d => !d.es_directo);
+            
+            let html = '';
+            
+            if (diagnosticosDirectos.length > 0) {
+                diagnosticosDirectos.forEach(d => {
+                    html += `
+                        <div class="diagnostico-directo" style="
+                            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+                            border: 2px solid #667eea;
+                            border-radius: 10px;
+                            padding: 1rem;
+                            margin-bottom: 1rem;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span style="font-size: 1.5rem;">🎯</span>
+                                <strong style="color: #667eea; font-size: 1.1rem;">Diagnóstico y/o tratamiento identificado:</strong>
+                                <span style="color: #333; font-size: 1.1rem; font-weight: 600;">${d.nombre}</span>
+                            </div>
+                    `;
+                    
+                    if (d.sintomas_faltantes && d.sintomas_faltantes.length > 0) {
+                        html += `
+                            <div style="margin-top: 1rem; padding: 0.75rem; background: white; border-radius: 8px;">
+                                <div style="color: #666; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                    ❓ ¿También presentas estos síntomas y/o indicaciones?
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        `;
+                        
+                        d.sintomas_faltantes.forEach(sintoma => {
+                            html += `
+                                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 5px; transition: background 0.2s;" 
+                                       onmouseover="this.style.background='#f0f0f0'" 
+                                       onmouseout="this.style.background='transparent'">
+                                    <input type="checkbox" 
+                                           class="sintoma-faltante-check" 
+                                           data-sintoma-id="${sintoma.id}" 
+                                           data-sintoma-nombre="${sintoma.nombre}"
+                                           style="width: 18px; height: 18px; cursor: pointer;">
+                                    <span style="color: #555; font-size: 0.95rem;">${sintoma.nombre}</span>
+                                </label>
+                            `;
+                        });
+                        
+                        html += `
+                                </div>
+                                <button onclick="refinarBusquedaConSintomasFaltantes()" 
+                                        style="
+                                            margin-top: 0.75rem;
+                                            background: #667eea;
+                                            color: white;
+                                            border: none;
+                                            padding: 0.5rem 1rem;
+                                            border-radius: 6px;
+                                            cursor: pointer;
+                                            font-weight: 600;
+                                            transition: background 0.3s;
+                                        "
+                                        onmouseover="this.style.background='#5568d3'"
+                                        onmouseout="this.style.background='#667eea'">
+                            Refinar búsqueda
+                        </button>
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+        });
+    }
+    
+    if (diagnosticosPorSintomas.length > 0) {
+        diagnosticosPorSintomas.forEach(d => {
+            html += `
+                <div class="diagnostico-sintomas" style="
+                    background: linear-gradient(135deg, #e74c3c15 0%, #c0392b15 100%);
+                    border: 2px solid #e74c3c;
+                    border-radius: 10px;
+                    padding: 1rem;
+                    margin-bottom: 1rem;
+                ">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <span style="font-size: 1.5rem;">🩺</span>
+                        <strong style="color: #e74c3c; font-size: 1rem;">Posible diagnóstico y/o tratamiento:</strong>
+                        <span style="color: #333; font-size: 1rem; font-weight: 600;">${d.nombre}</span>
+                        <span style="
+                            background: #e74c3c;
+                            color: white;
+                            padding: 0.25rem 0.75rem;
+                            border-radius: 15px;
+                            font-size: 0.85rem;
+                            font-weight: 600;
+                        ">
+                            ${d.coincidencias} de ${d.total_sintomas} síntomas - ${Math.round(d.porcentaje)}% match
+                        </span>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    if (diagnosticos.length === 0 && sintomas.length > 0) {
+        html = '<p style="color: #666; font-size: 0.9rem;">No se detectó un diagnóstico y/o tratamiento específico, pero encontramos medicamentos para tus síntomas y/o indicaciones.</p>';
+    }
+    
+    content.innerHTML = html;
+    
+    if (sintomas.length > 0) {
+        const tituloSintomas = esBusquedaParcial 
+            ? '💡 Posibles síntomas: ¿se refiere a alguno de estos? Agregue palabras para refinar su búsqueda y así encontremos los mejores resultados'
+            : 'Síntomas y/o indicaciones detectadas:';
+        
+        sintomasDiv.innerHTML = `
+            <strong style="display: block; margin-bottom: 0.5rem; color: #667eea;">${tituloSintomas}</strong>
+            ${sintomas.map(s => `<span class="sintoma-tag">✓ ${s}</span>`).join('')}
+        `;
+    }
+}
+
+        function refinarBusquedaConSintomasFaltantes() {
+            const checkboxes = document.querySelectorAll('.sintoma-faltante-check:checked');
+            
+            if (checkboxes.length === 0) {
+                alert('Por favor selecciona al menos un síntoma y/o indicación adicional');
+                return;
+            }
+            
+            const busquedaActual = document.getElementById('busqueda_unificada').value;
+            const nombresAdicionales = Array.from(checkboxes).map(cb => cb.dataset.sintomaNombre).join(' ');
+            const nuevaBusqueda = busquedaActual + ' ' + nombresAdicionales;
+            
+            document.getElementById('busqueda_unificada').value = nuevaBusqueda;
+            autoExpand(document.getElementById('busqueda_unificada'));
+            buscarProductos();
+            
+            const mensaje = document.createElement('div');
+            mensaje.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #2ecc71;
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 9999;
+                animation: slideIn 0.3s ease-out;
+            `;
+            mensaje.innerHTML = `
+                <strong>✅ Búsqueda refinada</strong><br>
+                <span style="font-size: 0.9rem;">Incluyendo ${checkboxes.length} síntoma(s) y/o indicación(es) adicional(es)</span>
+            `;
+            document.body.appendChild(mensaje);
+            
+            setTimeout(() => {
+                mensaje.style.animation = 'slideOut 0.3s ease-in';
+                setTimeout(() => mensaje.remove(), 300);
+            }, 3000);
+        }
+
+        if (!document.getElementById('diagnosticos-animations')) {
+            const style = document.createElement('style');
+            style.id = 'diagnosticos-animations';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+       
+        
+        
+        function mostrarProductos(productos, data) {  // 🆕 Agregamos 'data'
+            const container = document.getElementById('productosContainer');
+            
+            // 🆕 DETECTAR si es búsqueda por síntomas/diagnósticos
+            const esBusquedaInteligente = (data.sintomas_detectados && data.sintomas_detectados.length > 0) || 
+                                        (data.diagnosticos_posibles && data.diagnosticos_posibles.length > 0);
+            
+            if (productos.length === 0) {
+                // 🆕 Detectar si es búsqueda de producto específico o síntomas
+                const busquedaActual = document.getElementById('busqueda_unificada').value.trim();
+                const esProducto = esProductoEspecifico(busquedaActual);
+                
+                let mensaje = '';
+                let tipoBusqueda = '';
+                
+                if (esProducto) {
+                    tipoBusqueda = 'producto';
+                    mensaje = `
+                        <div class="sin-resultados" style="text-align: center; padding: 3rem 1.5rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">🔄</div>
+                            <h3 style="color: #667eea; margin-bottom: 1rem;">Actualizando inventario</h3>
+                            <p style="color: #666; margin-bottom: 2rem; line-height: 1.6;">
+                                Este producto está en proceso de ingreso al sistema.<br>
+                                <strong>¿Quieres que verifiquemos disponibilidad inmediata?</strong>
+                            </p>
+                            <button onclick="abrirModalTelefono('${busquedaActual.replace(/'/g, "\\'")}', '${tipoBusqueda}')" 
+                                    style="
+                                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                        color: white;
+                                        border: none;
+                                        padding: 1rem 2.5rem;
+                                        border-radius: 50px;
+                                        font-size: 1.1rem;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                                        transition: all 0.3s;
+                                    "
+                                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(102, 126, 234, 0.6)';"
+                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(102, 126, 234, 0.4)';">
+                                ✅ Verificar disponibilidad ahora
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    tipoBusqueda = 'sintoma';
+                    mensaje = `
+                        <div class="sin-resultados" style="text-align: center; padding: 3rem 1.5rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">🩺</div>
+                            <h3 style="color: #667eea; margin-bottom: 1rem;">No encontramos productos exactos</h3>
+                            <p style="color: #666; margin-bottom: 2rem; line-height: 1.6;">
+                                Para estos síntomas o necesidades específicas,<br>
+                                <strong>nuestro equipo puede asesorarte personalmente</strong>
+                            </p>
+                            <button onclick="abrirModalTelefono('${busquedaActual.replace(/'/g, "\\'")}', '${tipoBusqueda}')" 
+                                    style="
+                                        background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+                                        color: white;
+                                        border: none;
+                                        padding: 1rem 2.5rem;
+                                        border-radius: 50px;
+                                        font-size: 1.1rem;
+                                        font-weight: 600;
+                                        cursor: pointer;
+                                        box-shadow: 0 4px 15px rgba(46, 204, 113, 0.4);
+                                        transition: all 0.3s;
+                                    "
+                                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(46, 204, 113, 0.6)';"
+                                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 15px rgba(46, 204, 113, 0.4)';">
+                                💬 Contactar asesor ahora
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                container.innerHTML = mensaje;
+                return;
+            }
+            
+            container.classList.add('productos-grid');
+            // 🆕 MANTENER LA CLASE dos-columnas si está activada
+            if (localStorage.getItem('productosDosColunas') === 'true') {
+                container.classList.add('dos-columnas');
+            }
+            
+            // 🆕 FUNCIÓN HELPER: Validar y limpiar URL de imagen
+            function obtenerUrlImagen(imagenOriginal) {
+                if (!imagenOriginal) {
+                    return 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23eee%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2220%22%3ESin imagen%3C/text%3E%3C/svg%3E';
+                }
+                
+                // Si ya es una URL completa (empieza con http o data:), devolverla tal cual
+                if (imagenOriginal.startsWith('http') || imagenOriginal.startsWith('data:')) {
+                    return imagenOriginal;
+                }
+                
+                // 🔥 CRÍTICO: Solo rechazar si es EXTREMADAMENTE larga (>500 caracteres = probablemente base64 corrupto)
+                if (imagenOriginal.length > 500) {
+                    console.warn('⚠️ URL de imagen muy larga, usando placeholder:', imagenOriginal.substring(0, 50));
+                    return 'https://placehold.co/300x300?text=Imagen+no+disponible';
+                }
+                
+                // Si parece un nombre de archivo normal, construir la ruta
+                return '/static/uploads/' + imagenOriginal;
+            }
+            
+            container.innerHTML = productos.map(p => `
+            
+            
+                <div class="producto-card" onclick="abrirModalProducto(${JSON.stringify(p).replace(/"/g, '&quot;')})" style="cursor: pointer;">
+                    
+                    <img src="${obtenerUrlImagen(p.imagen)}"
+                        alt="${p.nombre}"
+                        class="producto-imagen"
+                        style="cursor: pointer;"
+                        onerror="this.src='https://placehold.co/300x300?text=Sin+imagen'"
+                        onclick="event.stopPropagation(); abrirModalImagen('${obtenerUrlImagen(p.imagen)}', '${p.nombre}')">
+                    <div class="producto-info">
+                        <div class="producto-nombre">${p.nombre}</div>
+                        <div class="producto-fabricante">${p.fabricante}</div>
+                        <div class="producto-presentacion">
+                           ${p.concentracion && p.concentracion.toUpperCase() !== 'NONE' ? p.concentracion : ''}
+                           ${p.presentacion && p.presentacion.toUpperCase() !== 'NONE' ? p.presentacion : ''}
+                        </div>
+                        
+                        ${p.diagnostico_detectado ? `
+                            <div class="producto-diagnostico">
+                                🩺 Posible diagnóstico y/o tratamiento: <strong>${p.diagnostico_detectado}</strong>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="producto-precio">$${formatearPrecio(p.precio)}</div>
+                        
+                        ${p.componente_activo ? `<div style="font-size: 0.85rem; color: #764ba2; font-weight: 500; margin-bottom: 0.5rem;">💊 Principio Activo: ${p.componente_activo}</div>` : ''}
+                        
+                        ${p.coincidencias > 0 ? `<div style="font-size: 0.85rem; color: #2ecc71; font-weight: 600; margin-bottom: 0.5rem;">✅ Trata ${p.coincidencias} de tus síntomas y/o indicaciones</div>` : ''}
+                        
+                        ${p.sintomas_filtrados && p.sintomas_filtrados.length > 0 ? `<div style="font-size: 0.85rem; color: #667eea; font-weight: 500; margin-bottom: 0.5rem;">✅ Trata: ${p.sintomas_filtrados.join(', ')}</div>` : ''}
+                        
+                        <button type="button" id="btn-sintomas-${p.precio_id}" style="font-size: 0.8rem; color: #667eea; background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0;" onclick="toggleSintomas(${p.precio_id})">
+                            ${esBusquedaInteligente ? '🔼' : '🔽'} ${esBusquedaInteligente ? 'Ocultar' : 'Ver'} síntomas y/o indicaciones
+                        </button>
+                        <div id="sintomas-${p.precio_id}" style="display: ${esBusquedaInteligente ? 'block' : 'none'}; font-size: 0.85rem; color: #667eea; font-weight: 500; margin: 0.5rem 0;">
+                            ✅ Trata: ${p.sintomas_totales.join(', ')}
+                        </div>
+                        
+                        <div style="margin-bottom: 2.5rem;"></div>
+                        <button class="btn-agregar" onclick='agregarAlCarrito(${JSON.stringify(p)})'>
+                            Agregar al Carrito
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function formatearPrecio(precio) {
+            return new Intl.NumberFormat('es-CO').format(precio);
+        }
+        
+        function agregarAlCarrito(producto) {
+            if (!producto.precio || producto.precio <= 0) {
+                alert('Este producto no tiene precio disponible');
+                return;
+            }
+            
+            const index = carrito.findIndex(item => item.precio_id === producto.precio_id);
+            
+            if (index >= 0) {
+                carrito[index].cantidad++;
+            } else {
+                carrito.push({
+                    ...producto,
+                    cantidad: 1
+                });
+            }
+            
+            localStorage.setItem('carrito', JSON.stringify(carrito));
+            actualizarBadgeCarrito();
+            
+            alert(`${producto.nombre} (${producto.fabricante}) agregado al carrito`);
+        }
+        
+        function actualizarBadgeCarrito() {
+            const total = carrito.reduce((sum, item) => sum + item.cantidad, 0);
+            document.getElementById('carritoCount').textContent = total;
+            // 🆕 Actualizar también el badge del header
+            document.getElementById('cart-count-header').textContent = total;
+        }
+        
+        // 🆕 FUNCIONES DEL PASTILLERO
+        function abrirPastillero() {
+            document.getElementById('modal-pastillero').classList.add('active');
+            
+            // 🎯 LÓGICA SIMPLE: Mostrar solo los medicamentos que están tanto en tienda como en pastillero
+            if (productosMostradosEnTienda.length > 0) {
+                console.log('📌 Abriendo pastillero filtrado por productos mostrados en tienda');
+                cargarMedicamentosPastilleroFiltrado();
+                modoFiltradoPastillero = true;
+            } else {
+                console.log('📋 Abriendo pastillero completo (no hay productos en tienda)');
+                cargarMedicamentosPastillero();
+                modoFiltradoPastillero = false;
+            }
+            
+            document.getElementById('input-buscar-medicamento').focus();
+        }
+        
+        // 🆕 Variable global para el orden actual
+        let ordenActualPastillero = 'recientes';
+        let modoFiltradoPastillero = false;  // 🆕 Para modo filtrado
+        
+        function cerrarPastillero() {
+            document.getElementById('modal-pastillero').classList.remove('active');
+            document.getElementById('input-buscar-medicamento').value = '';
+            document.getElementById('sugerencias-medicamentos').classList.remove('active');
+            modoFiltradoPastillero = false;  // 🆕 Reset modo filtrado
+        }
+        
+        function cargarMedicamentosPastillero(orden = null, sintomas = null) {
+            // Si no se especifica orden, usar el actual
+            if (orden) {
+                ordenActualPastillero = orden;
+            }
+            
+            // 🆕 Usar POST si hay síntomas para evitar URL muy larga
+            if (sintomas) {
+                fetch('/api/pastillero', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orden: ordenActualPastillero,
+                        sintomas: sintomas
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        mostrarMedicamentosPastillero(data.medicamentos || [], sintomas);
+                    })
+                    .catch(err => {
+                        console.error('Error al cargar pastillero:', err);
+                        document.getElementById('lista-medicamentos-pastillero').innerHTML = `
+                            <div class="pastillero-vacio">
+                                <div class="pastillero-vacio-icon">⚠️</div>
+                                <p>Error al cargar medicamentos</p>
+                            </div>
+                        `;
+                    });
+            } else {
+                // Sin síntomas, usar GET normal
+                fetch(`/api/pastillero?orden=${ordenActualPastillero}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        mostrarMedicamentosPastillero(data.medicamentos || [], sintomas);
+                    })
+                    .catch(err => {
+                        console.error('Error al cargar pastillero:', err);
+                        document.getElementById('lista-medicamentos-pastillero').innerHTML = `
+                            <div class="pastillero-vacio">
+                                <div class="pastillero-vacio-icon">⚠️</div>
+                                <p>Error al cargar medicamentos</p>
+                            </div>
+                        `;
+                    });
+            }
+        }
+        
+        // 🎯 NUEVA FUNCIÓN SIMPLE: Cargar solo medicamentos que coinciden con la tienda
+        function cargarMedicamentosPastilleroFiltrado() {
+            console.log('🔍 Cargando pastillero filtrado por productos de la tienda');
+            
+            // 1. Traer TODO el pastillero
+            fetch(`/api/pastillero?orden=${ordenActualPastillero}`)
+                .then(res => res.json())
+                .then(data => {
+                    const todosPastillero = data.medicamentos || [];
+                    totalMedicamentosPastillero = todosPastillero.length; // 🎯 Guardar total
+                    console.log('📦 Total en pastillero:', todosPastillero.length);
+                    console.log('🏪 Total en tienda:', productosMostradosEnTienda.length);
+                    
+                    // 2. Filtrar solo los que están en la tienda
+                    const medicamentosFiltrados = todosPastillero.filter(medicamento => 
+                        productosMostradosEnTienda.some(producto => 
+                            medicamento.id_medicamento === producto.medicamento_id ||
+                            medicamento.medicamento_id === producto.medicamento_id
+                        )
+                    );
+                    
+                    console.log('✅ Medicamentos filtrados:', medicamentosFiltrados.length);
+                    
+                    // 3. Para cada medicamento filtrado, encontrar sus síntomas desde los productos de la tienda
+                    const medicamentosConSintomas = medicamentosFiltrados.map(med => {
+                        const productoTienda = productosMostradosEnTienda.find(p => 
+                            p.medicamento_id === med.id_medicamento ||
+                            p.medicamento_id === med.medicamento_id
+                        );
+                        
+                        return {
+                            ...med,
+                            sintomas_mostrar: productoTienda ? productoTienda.sintomas_filtrados : []
+                        };
+                    });
+                    
+                    // 4. Mostrar con banner verde
+                    mostrarMedicamentosPastilleroFiltrado(medicamentosConSintomas);
+                })
+                .catch(err => {
+                    console.error('Error al cargar pastillero filtrado:', err);
+                    document.getElementById('lista-medicamentos-pastillero').innerHTML = `
+                        <div class="pastillero-vacio">
+                            <div class="pastillero-vacio-icon">⚠️</div>
+                            <p>Error al cargar medicamentos</p>
+                        </div>
+                    `;
+                });
+        }
+        
+        function toggleOrdenPastillero() {
+            // Alternar entre recientes y alfabético
+            const nuevoOrden = ordenActualPastillero === 'recientes' ? 'alfabetico' : 'recientes';
+            
+            // Actualizar UI del botón
+            const icono = document.getElementById('icono-orden');
+            const texto = document.getElementById('texto-orden');
+            
+            if (nuevoOrden === 'alfabetico') {
+                icono.textContent = '🔤';
+                texto.textContent = 'A-Z';
+            } else {
+                icono.textContent = '📅';
+                texto.textContent = 'Recientes';
+            }
+            
+            // Recargar medicamentos con nuevo orden
+            cargarMedicamentosPastillero(nuevoOrden);
+        }
+        
+        function mostrarMedicamentosPastillero(medicamentos, sintomas = null) {
+            const lista = document.getElementById('lista-medicamentos-pastillero');
+            
+            // 🆕 Banner de filtro si hay síntomas
+            let bannerFiltro = '';
+            if (sintomas) {
+                bannerFiltro = `
+                    <div style="background: #e8f5e9; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #4caf50;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: #2e7d32;">📌 Medicamentos para: ${sintomas}</strong>
+                                <p style="font-size: 0.85rem; color: #666; margin-top: 0.3rem;">${medicamentos.length} coincidencia(s) encontrada(s)</p>
+                            </div>
+                            <button onclick="verTodosPastillero()" style="background: #2ecc71; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                📋 Ver todos (${totalMedicamentosPastillero || 0})
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (medicamentos.length === 0) {
+                lista.innerHTML = bannerFiltro + `
+                    <div class="pastillero-vacio">
+                        <div class="pastillero-vacio-icon">💊</div>
+                        <p>${sintomas ? `No tienes medicamentos para "${sintomas}"` : 'Tu pastillero está vacío'}</p>
+                        <p style="font-size: 0.9rem; margin-top: 0.5rem;">${sintomas ? 'Pero puedes buscar en la tienda arriba' : 'Busca un medicamento arriba para agregarlo'}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            lista.innerHTML = bannerFiltro + medicamentos.map(med => `
+                <div class="medicamento-item" data-medicamento-id="${med.id}">
+                    <div class="medicamento-header">
+                        <div class="medicamento-nombre">${med.nombre}</div>
+                        <div class="cantidad-medicamento">${med.cantidad} ${med.unidad}</div>
+                    </div>
+                    <div class="medicamento-acciones">
+                        <button class="btn-medicamento btn-tome" onclick="tomarMedicamento(${med.id})">
+                            Tomé (−1)
+                        </button>
+                        <button class="btn-medicamento btn-agregar-cantidad" onclick="agregarCantidad(${med.id})">
+                            Agregar (+)
+                        </button>
+                        ${med.sintomas && med.sintomas.length > 0 && med.sintomas[0] !== '' ? `
+                            <button class="btn-medicamento btn-ver-sintomas" onclick="toggleSintomasPastillero(${med.medicamento_id})">
+                                ¿Para qué sirve?
+                            </button>
+                        ` : ''}
+                    </div>
+                    ${med.sintomas && med.sintomas.length > 0 && med.sintomas[0] !== '' ? `
+                        <div id="sintomas-${med.medicamento_id}" class="medicamento-sintomas">
+                            <h4>Ayuda con:</h4>
+                            <div class="sintomas-lista">
+                                ${med.sintomas.map(s => `<span class="sintoma-tag">${s}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+        
+        // 🎯 NUEVA FUNCIÓN: Mostrar medicamentos filtrados con banner verde y síntomas
+        function mostrarMedicamentosPastilleroFiltrado(medicamentos) {
+            const lista = document.getElementById('lista-medicamentos-pastillero');
+            
+            // Crear lista de síntomas únicos de todos los productos mostrados en tienda
+            const sintomasUnicos = [...new Set(
+                productosMostradosEnTienda.flatMap(p => p.sintomas_filtrados || [])
+            )].join(', ');
+            
+            // Banner verde mostrando los síntomas
+            const bannerFiltro = `
+                <div style="background: #e8f5e9; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #4caf50;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: #2e7d32;">📌 Medicamentos para: ${sintomasUnicos || 'síntomas detectados'}</strong>
+                            <p style="font-size: 0.85rem; color: #666; margin-top: 0.3rem;">${medicamentos.length} de los productos mostrados están en tu pastillero</p>
+                        </div>
+                        <button onclick="verTodosPastillero()" style="background: #2ecc71; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            📋 Ver todos (${totalMedicamentosPastillero || '...'})
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            if (medicamentos.length === 0) {
+                lista.innerHTML = bannerFiltro + `
+                    <div class="pastillero-vacio">
+                        <div class="pastillero-vacio-icon">💊</div>
+                        <p>Ninguno de los productos mostrados está en tu pastillero</p>
+                        <p style="font-size: 0.9rem; margin-top: 0.5rem;">Pero puedes ver todos tus medicamentos haciendo clic en "Ver todos"</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Renderizar medicamentos con sus síntomas específicos
+            lista.innerHTML = bannerFiltro + medicamentos.map(med => `
+                <div class="medicamento-item" data-medicamento-id="${med.id}">
+                    <div class="medicamento-header">
+                        <div class="medicamento-nombre">${med.nombre}</div>
+                        <div class="cantidad-medicamento">${med.cantidad} ${med.unidad}</div>
+                    </div>
+                    
+                    ${med.sintomas_mostrar && med.sintomas_mostrar.length > 0 ? `
+                        <div style="background: #f0f8ff; padding: 0.5rem; border-radius: 6px; margin: 0.5rem 0; font-size: 0.85rem;">
+                            <strong style="color: #667eea;">✅ Sirve para:</strong> ${med.sintomas_mostrar.join(', ')}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="medicamento-acciones">
+                        <button class="btn-medicamento btn-tome" onclick="tomarMedicamento(${med.id})">
+                            Tomé (−1)
+                        </button>
+                        <button class="btn-medicamento btn-agregar-cantidad" onclick="agregarCantidad(${med.id})">
+                            Agregar (+)
+                        </button>
+                        ${med.sintomas && med.sintomas.length > 0 && med.sintomas[0] !== '' ? `
+                            <button class="btn-medicamento btn-ver-sintomas" onclick="toggleSintomasPastillero(${med.medicamento_id})">
+                                Ver todos los síntomas
+                            </button>
+                        ` : ''}
+                    </div>
+                    ${med.sintomas && med.sintomas.length > 0 && med.sintomas[0] !== '' ? `
+                        <div id="sintomas-${med.medicamento_id}" class="medicamento-sintomas">
+                            <h4>Todos los síntomas que trata:</h4>
+                            <div class="sintomas-lista">
+                                ${med.sintomas.map(s => `<span class="sintoma-tag">${s}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+        
+        // Función separada para toggle de síntomas en pastillero (evitar conflicto con tienda)
+        function toggleSintomasPastillero(medicamentoId) {
+            const sintomasDiv = document.getElementById(`sintomas-${medicamentoId}`);
+            if (sintomasDiv) {
+                sintomasDiv.classList.toggle('visible');
+            }
+        }
+        
+        // 🆕 Variable para guardar el total de medicamentos
+        let totalMedicamentosPastillero = 0;
+        
+        // 🆕 Función para ver todos los medicamentos (quitar filtro)
+        function verTodosPastillero() {
+            modoFiltradoPastillero = false;
+            cargarMedicamentosPastillero();  // Cargar sin filtro
+        }
+        
+        function toggleSintomas(medicamentoId) {
+            const sintomasDiv = document.getElementById(`sintomas-${medicamentoId}`);
+            if (sintomasDiv) {
+                sintomasDiv.classList.toggle('visible');
+            } else {
+                console.error(`No se encontró elemento con ID: sintomas-${medicamentoId}`);
+            }
+        }
+        
+        function tomarMedicamento(medicamentoId) {
+            fetch(`/api/pastillero/${medicamentoId}/tomar`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    // Actualizar solo la cantidad en el DOM sin reordenar
+                    const cantidadElement = document.querySelector(`[data-medicamento-id="${medicamentoId}"] .cantidad-medicamento`);
+                    if (cantidadElement && data.nueva_cantidad !== undefined) {
+                        cantidadElement.textContent = `${data.nueva_cantidad} ${data.unidad || 'unidades'}`;
+                    }
+                    actualizarBadgePastillero();
+                } else {
+                    alert(data.error || 'Error al actualizar');
+                }
+            })
+            .catch(err => console.error('Error:', err));
+        }
+        
+        function agregarCantidad(medicamentoId) {
+            const cantidad = prompt('¿Cuántas unidades agregar?', '1');
+            if (!cantidad) return;
+
+            fetch(`/api/pastillero/${medicamentoId}/agregar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cantidad: parseInt(cantidad) })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    // Actualizar solo la cantidad en el DOM sin reordenar
+                    const cantidadElement = document.querySelector(`[data-medicamento-id="${medicamentoId}"] .cantidad-medicamento`);
+                    if (cantidadElement && data.nueva_cantidad !== undefined) {
+                        cantidadElement.textContent = `${data.nueva_cantidad} ${data.unidad || 'unidades'}`;
+                    }
+                    actualizarBadgePastillero();
+                } else {
+                    alert(data.error || 'Error al actualizar');
+                }
+            })
+            .catch(err => console.error('Error:', err));
+        }
+        
+        // Búsqueda y autocompletado
+        let timeoutBusqueda;
+        let sugerenciaActiva = -1; // Índice de la sugerencia seleccionada
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const input = document.getElementById('input-buscar-medicamento');
+            const sugerencias = document.getElementById('sugerencias-medicamentos');
+            
+            input.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                clearTimeout(timeoutBusqueda);
+                sugerenciaActiva = -1; // Reset al escribir
+                
+                if (query.length < 2) {
+                    sugerencias.classList.remove('active');
+                    return;
+                }
+                
+                timeoutBusqueda = setTimeout(() => {
+                    buscarMedicamentosParaPastillero(query);
+                }, 300);
+            });
+            
+            input.addEventListener('keydown', function(e) {
+                const items = sugerencias.querySelectorAll('.sugerencia-item');
+                const haysugerencias = sugerencias.classList.contains('active') && items.length > 0;
+                
+                // Flecha ABAJO
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (haysugerencias) {
+                        sugerenciaActiva = (sugerenciaActiva + 1) % items.length;
+                        resaltarSugerencia(items, sugerenciaActiva);
+                    }
+                }
+                
+                // Flecha ARRIBA
+                else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (haysugerencias) {
+                        sugerenciaActiva = (sugerenciaActiva - 1 + items.length) % items.length;
+                        resaltarSugerencia(items, sugerenciaActiva);
+                    }
+                }
+                
+                // ENTER
+                else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    
+                    if (haysugerencias && sugerenciaActiva >= 0) {
+                        // Seleccionar la sugerencia resaltada
+                        items[sugerenciaActiva].click();
+                    } else {
+                        // Crear medicamento nuevo
+                        const query = this.value.trim();
+                        if (query) {
+                            crearMedicamentoNuevo(query);
+                        }
+                    }
+                }
+                
+                // ESC
+                else if (e.key === 'Escape') {
+                    sugerencias.classList.remove('active');
+                    sugerenciaActiva = -1;
+                }
+            });
+            
+            // Cerrar sugerencias al hacer click fuera
+            document.addEventListener('click', function(e) {
+                if (!input.contains(e.target) && !sugerencias.contains(e.target)) {
+                    sugerencias.classList.remove('active');
+                    sugerenciaActiva = -1;
+                }
+            });
+        });
+        
+        function resaltarSugerencia(items, indice) {
+            // Quitar resaltado de todas
+            items.forEach(item => item.classList.remove('sugerencia-activa'));
+            
+            // Resaltar la actual
+            if (indice >= 0 && indice < items.length) {
+                items[indice].classList.add('sugerencia-activa');
+                items[indice].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+        
+        function buscarMedicamentosParaPastillero(query) {
+            fetch(`/api/productos/buscar?q=${encodeURIComponent(query)}`)
+                .then(res => res.json())
+                .then(data => {
+                    mostrarSugerenciasMedicamentos(data.productos || []);
+                })
+                .catch(err => console.error('Error al buscar:', err));
+        }
+        
+        function mostrarSugerenciasMedicamentos(productos) {
+            const sugerencias = document.getElementById('sugerencias-medicamentos');
+            
+            if (productos.length === 0) {
+                sugerencias.innerHTML = `
+                    <div class="sugerencia-item" style="color: #999;">
+                        No se encontraron medicamentos. Presiona Enter para crear uno nuevo.
+                    </div>
+                `;
+                sugerencias.classList.add('active');
+                return;
+            }
+            
+            sugerencias.innerHTML = productos.slice(0, 5).map(prod => {
+                // 🆕 Determinar si es medicamento personal (NULL)
+                const esPersonal = prod.es_personal || prod.medicamento_id === null;
+                const badge = esPersonal ? '<span style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 8px;">📋 Personal</span>' : '';
+                
+                // Para onclick, si es NULL pasar como string 'null', sino el ID
+                const idParam = esPersonal ? 'null' : prod.medicamento_id;
+                
+                return `
+                    <div class="sugerencia-item" onclick="seleccionarMedicamento(${idParam}, '${prod.nombre.replace(/'/g, "\\'")}')">
+                        <strong>${prod.nombre}</strong>${badge}
+                    </div>
+                `;
+            }).join('');
+            
+            sugerencias.classList.add('active');
+        }
+        
+        function seleccionarMedicamento(medicamentoId, nombre) {
+            // Convertir 'null' string a null real
+            if (medicamentoId === 'null' || medicamentoId === null) {
+                medicamentoId = null;
+            }
+            
+            // 🆕 Primero verificar si ya existe en el pastillero
+            // Para medicamentos personales (null), no verificamos porque ya están en el pastillero
+            if (medicamentoId === null) {
+                // Es un medicamento personal, preguntar cantidad directamente
+                const cantidad = prompt(`Ya tienes "${nombre}" en tu pastillero.\n¿Cuántas MÁS quieres agregar?`, '10');
+                if (!cantidad) return;
+                
+                // Agregar al pastillero (sumará a lo existente)
+                fetch('/api/pastillero/agregar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        medicamento_id: null,
+                        nombre: nombre,
+                        cantidad: parseInt(cantidad),
+                        unidad: 'pastillas'  // Usar unidad por defecto
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok) {
+                        document.getElementById('input-buscar-medicamento').value = '';
+                        document.getElementById('sugerencias-medicamentos').classList.remove('active');
+                        cargarMedicamentosPastillero();
+                        actualizarBadgePastillero();
+                        document.getElementById('input-buscar-medicamento').focus();
+                    } else {
+                        alert(data.error || 'Error al agregar');
+                    }
+                })
+                .catch(err => console.error('Error:', err));
+                return;
+            }
+            
+            // Para medicamentos oficiales, verificar si existe
+            fetch(`/api/pastillero/verificar/${medicamentoId}`)
+                .then(res => res.json())
+                .then(data => {
+                    let mensajeCantidad, mensajeUnidad;
+                    
+                    if (data.existe) {
+                        // Ya existe - mostrar info actual
+                        mensajeCantidad = `Ya tienes ${data.cantidad} ${data.unidad} de ${nombre}.\n¿Cuántas MÁS quieres agregar?`;
+                        mensajeUnidad = data.unidad; // Usar la misma unidad
+                    } else {
+                        // No existe - mensaje normal
+                        mensajeCantidad = `¿Cuántas unidades de ${nombre} tienes?`;
+                        mensajeUnidad = null;
+                    }
+                    
+                    const cantidad = prompt(mensajeCantidad, '10');
+                    if (!cantidad) return;
+                    
+                    // Solo pedir unidad si es nuevo medicamento
+                    let unidad;
+                    if (mensajeUnidad) {
+                        unidad = mensajeUnidad;
+                    } else {
+                        unidad = prompt('Unidad de medida:', 'pastillas');
+                        if (!unidad) return;
+                    }
+                    
+                    // Agregar al pastillero
+                    fetch('/api/pastillero/agregar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            medicamento_id: medicamentoId,
+                            nombre: nombre,  // 🆕 Enviar nombre también
+                            cantidad: parseInt(cantidad),
+                            unidad: unidad
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.ok) {
+                            document.getElementById('input-buscar-medicamento').value = '';
+                            document.getElementById('sugerencias-medicamentos').classList.remove('active');
+                            cargarMedicamentosPastillero();
+                            actualizarBadgePastillero();
+                            // 🆕 Volver el foco al input para seguir agregando
+                            document.getElementById('input-buscar-medicamento').focus();
+                        } else {
+                            alert(data.error || 'Error al agregar');
+                        }
+                    })
+                    .catch(err => console.error('Error:', err));
+                })
+                .catch(err => {
+                    console.error('Error al verificar:', err);
+                    // Si falla la verificación, continuar con flujo normal
+                    const cantidad = prompt(`¿Cuántas unidades de ${nombre} tienes?`, '10');
+                    if (!cantidad) return;
+                    
+                    const unidad = prompt('Unidad de medida:', 'pastillas');
+                    if (!unidad) return;
+                    
+                    fetch('/api/pastillero/agregar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            medicamento_id: medicamentoId,
+                            nombre: nombre,
+                            cantidad: parseInt(cantidad),
+                            unidad: unidad
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.ok) {
+                            document.getElementById('input-buscar-medicamento').value = '';
+                            document.getElementById('sugerencias-medicamentos').classList.remove('active');
+                            cargarMedicamentosPastillero();
+                            actualizarBadgePastillero();
+                            document.getElementById('input-buscar-medicamento').focus();
+                        } else {
+                            alert(data.error || 'Error al agregar');
+                        }
+                    })
+                    .catch(err => console.error('Error:', err));
+                });
+        }
+        
+        function crearMedicamentoNuevo(nombre) {
+            const cantidad = prompt(`¿Cuántas unidades de "${nombre}" tienes?`, '10');
+            if (!cantidad) return;
+            
+            const unidad = prompt('Unidad de medida:', 'pastillas');
+            if (!unidad) return;
+            
+            fetch('/api/pastillero/crear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nombre: nombre,
+                    cantidad: parseInt(cantidad),
+                    unidad: unidad
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    alert('Medicamento agregado. Se notificará al administrador para completar la información.');
+                    document.getElementById('input-buscar-medicamento').value = '';
+                    document.getElementById('sugerencias-medicamentos').classList.remove('active');
+                    cargarMedicamentosPastillero();
+                    actualizarBadgePastillero();
+                    // 🆕 Volver el foco al input para seguir agregando
+                    document.getElementById('input-buscar-medicamento').focus();
+                } else {
+                    alert(data.error || 'Error al crear medicamento');
+                }
+            })
+            .catch(err => console.error('Error:', err));
+        }
+        
+        function actualizarBadgePastillero() {
+            fetch('/api/pastillero/count')
+                .then(res => res.json())
+                .then(data => {
+                    const count = data.count || 0;
+                    totalMedicamentosPastillero = count;  // 🆕 Guardar total global
+                    document.getElementById('pastilleroCount').textContent = count;
+                    // 🆕 Actualizar también el badge del header
+                    document.getElementById('pastillero-count-header').textContent = count;
+                    
+                    // Mostrar/ocultar botón flotante según si tiene medicamentos
+                    const flotante = document.getElementById('pastillero-flotante');
+                    if (count > 0) {
+                        flotante.classList.add('visible');
+                    } else {
+                        flotante.classList.remove('visible');
+                    }
+                })
+                .catch(err => console.error('Error al actualizar pastillero:', err));
+        }
+        
+        // Actualizar contador del pastillero al cargar
+        document.addEventListener('DOMContentLoaded', function() {
+            actualizarBadgePastillero();
+        });
+        
+        // 🔍 FUNCIÓN DEBUG: Mostrar JSON de comparación tienda vs pastillero
+        function mostrarDebugJSON() {
+            console.log('🔍 Generando JSON de debug...');
+            console.log('🔍 productosMostradosEnTienda existe?', typeof productosMostradosEnTienda);
+            console.log('🔍 productosMostradosEnTienda.length:', productosMostradosEnTienda ? productosMostradosEnTienda.length : 'undefined');
+            console.log('🔍 productosMostradosEnTienda contenido:', productosMostradosEnTienda);
+            
+            // Si está vacío, intentar obtenerlo del DOM
+            if (!productosMostradosEnTienda || productosMostradosEnTienda.length === 0) {
+                alert('⚠️ No hay productos en tienda. Primero busca algo (ej: "me duele") y luego haz clic en DEBUG.');
+                return;
+            }
+            
+            // Primero obtener el pastillero
+            fetch('/api/pastillero')
+                .then(res => res.json())
+                .then(data => {
+                    const medicamentosPastillero = data.medicamentos || [];
+                    
+                    const debugInfo = {
+                        fecha_hora: new Date().toLocaleString('es-CO'),
+                        productos_en_tienda: productosMostradosEnTienda.length,
+                        medicamentos_en_pastillero: medicamentosPastillero.length,
+                        
+                        // Productos de la tienda con TODOS sus IDs
+                        tienda: productosMostradosEnTienda.map(p => ({
+                            nombre: p.nombre,
+                            id: p.id,
+                            precio_id: p.precio_id,
+                            medicamento_id: p.medicamento_id,
+                            sintomas_filtrados: p.sintomas_filtrados
+                        })),
+                        
+                        // Medicamentos del pastillero con TODOS sus IDs
+                        pastillero: medicamentosPastillero.map(m => ({
+                            nombre: m.nombre,
+                            id: m.id,
+                            id_medicamento: m.id_medicamento,
+                            medicamento_id: m.medicamento_id,
+                            cantidad: m.cantidad,
+                            unidad: m.unidad
+                        }))
+                    };
+                    
+                    // Crear modal con el JSON
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(0,0,0,0.9);
+                        z-index: 99999;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 2rem;
+                    `;
+                    
+                    const jsonStr = JSON.stringify(debugInfo, null, 2);
+                    
+                    modal.innerHTML = `
+                        <div style="
+                            background: #1e1e1e;
+                            color: #d4d4d4;
+                            padding: 2rem;
+                            border-radius: 10px;
+                            max-width: 90%;
+                            max-height: 90%;
+                            overflow: auto;
+                            font-family: 'Courier New', monospace;
+                        ">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                                <h2 style="color: #e74c3c; margin: 0;">🔍 DEBUG - Comparación Tienda vs Pastillero</h2>
+                                <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                                        style="background: #e74c3c; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer;">
+                                    Cerrar
+                                </button>
+                            </div>
+                            <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent); alert('JSON copiado al portapapeles!')" 
+                                    style="background: #2ecc71; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; cursor: pointer; margin-bottom: 1rem;">
+                                📋 Copiar JSON
+                            </button>
+                            <pre style="
+                                background: #2d2d2d;
+                                padding: 1.5rem;
+                                border-radius: 5px;
+                                overflow: auto;
+                                max-height: 70vh;
+                                font-size: 0.9rem;
+                                line-height: 1.5;
+                            ">${jsonStr}</pre>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(modal);
+                    
+                    // También hacer console.log
+                    console.log('🔍 DEBUG JSON:', debugInfo);
+                })
+                .catch(err => {
+                    console.error('Error al obtener pastillero:', err);
+                    alert('Error al generar DEBUG: ' + err.message);
+                });
+        }
+        
+        function verCarrito() {
+            window.location.href = '/tienda/carrito';
+        }
+
+        function toggleSintomas(precioId) {
+            const div = document.getElementById(`sintomas-${precioId}`);
+            const btn = document.getElementById(`btn-sintomas-${precioId}`);
+            
+            // 🆕 Validar que los elementos existen antes de manipularlos
+            if (!div || !btn) {
+                console.warn('⚠️ Elementos no encontrados para precioId:', precioId);
+                return;
+            }
+            
+            if (div.style.display === 'none') {
+                div.style.display = 'block';
+                btn.innerHTML = '🔼 Ocultar síntomas y/o indicaciones';
+            } else {
+                div.style.display = 'none';
+                btn.innerHTML = '🔽 Ver síntomas y/o indicaciones';
+            }
+        }
+
+        // 🆕 MODAL COMPLETO DEL PRODUCTO
+        function abrirModalProducto(producto) {
+            // 🆕 Validar URL de imagen
+            function obtenerUrlImagenSegura(imagen) {
+                if (!imagen) return 'https://placehold.co/300x300?text=Sin+imagen';
+                if (imagen.startsWith('http') || imagen.startsWith('data:')) return imagen;
+                // Solo rechazar URLs EXTREMADAMENTE largas (>500 chars)
+                if (imagen.length > 500) {
+                    console.warn('⚠️ URL muy larga en modal');
+                    return 'https://placehold.co/300x300?text=Imagen+no+disponible';
+                }
+                return `/static/uploads/${imagen}`;
+            }
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.9);
+                display: flex;
+                align-items: flex-start;
+                justify-content: center;
+                z-index: 9999;
+                overflow-y: auto;
+                padding: 0.5rem;
+                padding-top: 2rem;
+            `;
+            
+            const contenido = document.createElement('div');
+            contenido.style.cssText = `
+                position: relative;
+                background: white;
+                border-radius: 15px;
+                max-width: 500px;
+                width: 100%;
+                padding: 1.5rem;
+                max-height: 85vh;
+                overflow-y: auto;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            `;
+            
+            const imagenHtml = obtenerUrlImagenSegura(producto.imagen);
+            
+            contenido.innerHTML = `
+                <button onclick="this.closest('div').parentElement.remove()" style="position: absolute; top: 15px; right: 15px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px; font-weight: bold;">✕</button>
+                
+                <img src="${imagenHtml}" alt="${producto.nombre}" onerror="this.src='https://placehold.co/300x300?text=Sin+imagen'" style="width: 100%; height: 250px; object-fit: contain; border-radius: 10px; margin-bottom: 1.5rem;">
+                
+                <div style="margin-bottom: 1rem;">
+                    <h2 style="font-size: 1.5rem; color: #333; margin-bottom: 0.5rem;">${producto.nombre}</h2>
+                    <p style="font-size: 1.1rem; color: #667eea; font-weight: 600; margin-bottom: 0.5rem;">${producto.fabricante}</p>
+                    ${producto.concentracion && producto.concentracion.toUpperCase() !== 'NONE' ? `<p style="font-size: 0.95rem; color: #666;">${producto.concentracion}</p>` : ''}
+                    ${producto.presentacion && producto.presentacion.toUpperCase() !== 'NONE' ? `<p style="font-size: 0.95rem; color: #666;">${producto.presentacion}</p>` : ''}
+                </div>
+                
+                ${producto.diagnostico_detectado ? `
+                    <div style="background: #e8f4f8; border-left: 4px solid #667eea; padding: 0.75rem; margin-bottom: 1rem; border-radius: 5px;">
+                        <div style="font-size: 0.9rem; color: #667eea; font-weight: 600;">🩺 Posible diagnóstico y/o tratamiento:</div>
+                        <div style="font-size: 0.95rem; color: #333; margin-top: 0.25rem;">${producto.diagnostico_detectado}</div>
+                    </div>
+                ` : ''}
+                
+                ${producto.componente_activo ? `
+                    <div style="background: #f0f4ff; padding: 0.75rem; margin-bottom: 1rem; border-radius: 5px;">
+                        <div style="font-size: 0.9rem; color: #764ba2; font-weight: 600;">💊 Principio Activo:</div>
+                        <div style="font-size: 0.95rem; color: #333; margin-top: 0.25rem;">${producto.componente_activo}</div>
+                    </div>
+                ` : ''}
+                
+                ${producto.sintomas_totales && producto.sintomas_totales.length > 0 ? `
+                    <div style="background: #e8f8f0; padding: 0.75rem; margin-bottom: 1rem; border-radius: 5px;">
+                        <div style="font-size: 0.9rem; color: #2ecc71; font-weight: 600;">✅ Trata estos síntomas y/o indicaciones:</div>
+                        <div style="font-size: 0.85rem; color: #333; margin-top: 0.5rem; line-height: 1.6;">${producto.sintomas_totales.join(', ')}</div>
+                    </div>
+                ` : ''}
+                
+                <div style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); color: white; padding: 1.5rem; border-radius: 10px; text-align: center; margin-bottom: 2.5rem;">
+                    <div style="font-size: 2rem; font-weight: 700;">$${formatearPrecio(producto.precio)}</div>
+                </div>
+                
+                <button class="btn-agregar" onclick='agregarAlCarrito(${JSON.stringify(producto)})' style="position: relative !important; bottom: auto !important; left: auto !important; right: auto !important; width: 100% !important; box-sizing: border-box; padding: 1.2rem; font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; line-height: 1.4;">
+                    ✅ Agregar al Carrito
+                </button>
+                
+                <button onclick="this.closest('div').parentElement.remove()" style="width: 100%; padding: 1rem; font-size: 1rem; background: #e0e0e0; color: #333; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                    Volver
+                </button>
+            `;
+            
+            modal.appendChild(contenido);
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            document.body.appendChild(modal);
+        }
+
+        function abrirModalImagen(imagenSrc, nombreProducto) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                cursor: pointer;
+            `;
+            
+            const contenido = document.createElement('div');
+            contenido.style.cssText = `
+                position: relative;
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                max-width: 600px;
+                max-height: 80vh;
+                overflow: auto;
+            `;
+            
+            contenido.innerHTML = `
+                <img src="${imagenSrc}" alt="${nombreProducto}" style="width: 100%; border-radius: 8px;">
+                <button onclick="this.closest('div').parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px;">✕</button>
+            `;
+            
+            modal.appendChild(contenido);
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+            document.body.appendChild(modal);
+        }
+        
+        // 🆕 LÓGICA DEL TOGGLE DE COLUMNAS
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggle = document.getElementById('toggleDosColumnas');
+            const container = document.getElementById('productosContainer');
+            
+            // Cargar preferencia guardada
+            const dosColumnasGuardada = localStorage.getItem('productosDosColunas') === 'true';
+            toggle.checked = dosColumnasGuardada;
+            
+            if (dosColumnasGuardada && window.innerWidth < 768) {
+                container.classList.add('dos-columnas');
+            }
+            
+            // Manejar cambios
+            toggle.addEventListener('change', function() {
+                localStorage.setItem('productosDosColunas', this.checked);
+                
+                if (this.checked) {
+                    container.classList.add('dos-columnas');
+                } else {
+                    container.classList.remove('dos-columnas');
+                }
+            });
+        });
+        
+        // 🆕 BOTÓN VOLVER ARRIBA FLOTANTE
+        const scrollButton = document.createElement('button');
+        scrollButton.id = 'scrollToTop';
+        scrollButton.innerHTML = '⬆️ Arriba';
+        scrollButton.style.cssText = `
+            position: fixed;
+            bottom: 40px;
+            left: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.8rem 1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            display: none;
+            z-index: 999;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        `;
+        
+        scrollButton.addEventListener('mouseover', function() {
+            this.style.transform = 'translateY(-3px)';
+            this.style.boxShadow = '0 6px 20px rgba(102, 126, 234, 0.6)';
+        });
+        
+        scrollButton.addEventListener('mouseout', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+        });
+        
+        scrollButton.addEventListener('click', function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        
+        document.body.appendChild(scrollButton);
+        
+        window.addEventListener('scroll', function() {
+            if (window.scrollY > 300) {
+                scrollButton.style.display = 'block';
+            } else {
+                scrollButton.style.display = 'none';
+            }
+        });
+
+
+
+        // ============================================
+        // 🆕 FUNCIONES PARA SOLICITUDES ESPECIALES
+        // ============================================
+        
+        function esProductoEspecifico(texto) {
+            /**
+             * Detecta si la búsqueda es un producto específico o síntomas/necesidades
+             * Retorna: true = producto, false = síntomas
+             */
+            if (!texto || texto.length < 3) return false;
+            
+            const textoLower = texto.toLowerCase().trim();
+            const palabras = textoLower.split(/\s+/);
+            
+            // Palabras que indican SÍNTOMAS (no producto)
+            const indicadoresSintomas = [
+                'me', 'tengo', 'siento', 'duele', 'dolor', 'arde', 'ardor',
+                'pica', 'picazón', 'molesta', 'siento', 'estoy', 'sufro',
+                'padezco', 'presento', 'tenía', 'sentía'
+            ];
+            
+            // Si tiene palabras de síntomas = NO es producto
+            const tieneSintomas = palabras.some(p => indicadoresSintomas.includes(p));
+            if (tieneSintomas) return false;
+            
+            // Si es muy largo (más de 6 palabras) = probablemente síntomas
+            if (palabras.length > 6) return false;
+            
+            // Patrones que indican PRODUCTO específico
+            const patronesProducto = [
+                /\d+\s*(mg|ml|g|mcg|ui)/i,  // Tiene dosis: 500mg, 20ml
+                /(forte|plus|max|extra|duo|triple)/i,  // Sufijos comerciales
+                /(mk|bayer|genfar|tecnoquimicas|lafrancol)/i,  // Laboratorios
+                /^[a-z]+(\s+[a-z]+){0,2}$/i  // 1-3 palabras simples
+            ];
+            
+            const esProducto = patronesProducto.some(patron => patron.test(textoLower));
+            if (esProducto) return true;
+            
+            // Por defecto: si es corto (1-3 palabras) = producto
+            return palabras.length <= 3;
+        }
+        
+        function abrirModalTelefono(busqueda, tipo) {
+            /**
+             * Abre modal para capturar teléfono del cliente
+             * @param {string} busqueda - Lo que buscó el cliente
+             * @param {string} tipo - 'producto' o 'sintoma'
+             */
+            const modal = document.createElement('div');
+            modal.id = 'modalSolicitudEspecial';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                padding: 1rem;
+            `;
+            
+            const emoji = tipo === 'producto' ? '💊' : '🩺';
+            const titulo = tipo === 'producto' ? 'Verificar disponibilidad' : 'Asesoría personalizada';
+            const colorBoton = tipo === 'producto' ? '#667eea' : '#2ecc71';
+            const colorBotonHover = tipo === 'producto' ? '#5568d3' : '#27ae60';
+            
+            const contenido = document.createElement('div');
+            contenido.style.cssText = `
+                background: white;
+                border-radius: 15px;
+                padding: 2rem;
+                max-width: 450px;
+                width: 100%;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            `;
+            
+            contenido.innerHTML = `
+                <div style="text-align: center; margin-bottom: 1.5rem;">
+                    <div style="font-size: 3rem; margin-bottom: 0.5rem;">${emoji}</div>
+                    <h2 style="color: #333; margin-bottom: 0.5rem; font-size: 1.5rem;">${titulo}</h2>
+                    <p style="color: #666; font-size: 0.95rem; line-height: 1.5;">
+                        Para confirmar disponibilidad inmediata,<br>necesitamos tu número de contacto
+                    </p>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.25rem;">Buscaste:</div>
+                    <div style="font-weight: 600; color: #333;">"${busqueda}"</div>
+                </div>
+                
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="display: block; font-weight: 600; color: #555; margin-bottom: 0.5rem;">
+                        Teléfono celular 📱 <span style="color: #e74c3c;">*</span>
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="telefonoSolicitud"
+                        placeholder="300 123 4567"
+                        maxlength="12"
+                        style="
+                            width: 100%;
+                            padding: 0.9rem;
+                            border: 2px solid #e0e0e0;
+                            border-radius: 8px;
+                            font-size: 1.1rem;
+                            text-align: center;
+                            letter-spacing: 1px;
+                            transition: border-color 0.3s;
+                        "
+                        oninput="formatearTelefono(this)"
+                        onkeypress="if(event.key === 'Enter') enviarSolicitudEspecial('${busqueda}', '${tipo}')"
+                    >
+                    <div id="errorTelefono" style="color: #e74c3c; font-size: 0.85rem; margin-top: 0.5rem; display: none;"></div>
+                    <div style="color: #999; font-size: 0.8rem; margin-top: 0.5rem; text-align: center;">
+                        Ejemplo: 300 123 4567 (10 dígitos)
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                    <p style="font-size: 0.85rem; color: #666; line-height: 1.5; text-align: center;">
+                        ⏱️ Te contactaremos en <strong>menos de 5 minutos</strong> para confirmar disponibilidad y precio
+                    </p>
+                </div>
+                
+                <div style="display: flex; gap: 0.75rem;">
+                    <button 
+                        onclick="document.getElementById('modalSolicitudEspecial').remove()"
+                        style="
+                            flex: 1;
+                            padding: 0.9rem;
+                            background: #e0e0e0;
+                            color: #666;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 1rem;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: background 0.3s;
+                        "
+                        onmouseover="this.style.background='#d0d0d0'"
+                        onmouseout="this.style.background='#e0e0e0'">
+                        Cancelar
+                    </button>
+                    <button 
+                        onclick="enviarSolicitudEspecial('${busqueda.replace(/'/g, "\\'")}', '${tipo}')"
+                        style="
+                            flex: 2;
+                            padding: 0.9rem;
+                            background: ${colorBoton};
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            font-size: 1rem;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: background 0.3s;
+                        "
+                        onmouseover="this.style.background='${colorBotonHover}'"
+                        onmouseout="this.style.background='${colorBoton}'">
+                        ✅ Enviar solicitud
+                    </button>
+                </div>
+            `;
+            
+            modal.appendChild(contenido);
+            document.body.appendChild(modal);
+            
+            // Cerrar con ESC
+            document.addEventListener('keydown', function cerrarConEsc(e) {
+                if (e.key === 'Escape') {
+                    modal.remove();
+                    document.removeEventListener('keydown', cerrarConEsc);
+                }
+            });
+            
+            // Cerrar al hacer click fuera
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            // Focus en el input
+            setTimeout(() => {
+                document.getElementById('telefonoSolicitud').focus();
+            }, 100);
+        }
+        
+        function formatearTelefono(input) {
+            /**
+             * Formatea el teléfono mientras escribe: 300 123 4567
+             * Solo permite números y auto-formatea con espacios
+             */
+            let valor = input.value.replace(/\D/g, ''); // Solo números
+            
+            // Limitar a 10 dígitos
+            if (valor.length > 10) {
+                valor = valor.substring(0, 10);
+            }
+            
+            // Formatear: 300 123 4567
+            if (valor.length > 6) {
+                valor = valor.substring(0, 3) + ' ' + valor.substring(3, 6) + ' ' + valor.substring(6);
+            } else if (valor.length > 3) {
+                valor = valor.substring(0, 3) + ' ' + valor.substring(3);
+            }
+            
+            input.value = valor;
+            
+            // Cambiar borde a verde si está completo
+            const soloNumeros = valor.replace(/\s/g, '');
+            if (soloNumeros.length === 10 && soloNumeros.startsWith('3')) {
+                input.style.borderColor = '#2ecc71';
+            } else {
+                input.style.borderColor = '#e0e0e0';
+            }
+        }
+        
+        function validarTelefono(telefono) {
+            /**
+             * Valida que el teléfono sea correcto
+             * @returns {object} {valido: boolean, error: string}
+             */
+            const soloNumeros = telefono.replace(/\s/g, '');
+            
+            if (!soloNumeros) {
+                return {valido: false, error: 'El teléfono es obligatorio'};
+            }
+            
+            if (soloNumeros.length !== 10) {
+                return {valido: false, error: 'Debe tener exactamente 10 dígitos'};
+            }
+            
+            if (!soloNumeros.startsWith('3')) {
+                return {valido: false, error: 'Debe ser un celular (iniciar con 3)'};
+            }
+            
+            return {valido: true, error: ''};
+        }
+        
+        function enviarSolicitudEspecial(busqueda, tipo) {
+            /**
+             * Envía la solicitud especial al backend
+             */
+            const input = document.getElementById('telefonoSolicitud');
+            const errorDiv = document.getElementById('errorTelefono');
+            const telefono = input.value;
+            
+            // Validar
+            const validacion = validarTelefono(telefono);
+            if (!validacion.valido) {
+                errorDiv.textContent = '❌ ' + validacion.error;
+                errorDiv.style.display = 'block';
+                input.style.borderColor = '#e74c3c';
+                input.focus();
+                return;
+            }
+            
+            // Limpiar error
+            errorDiv.style.display = 'none';
+            
+            // Teléfono sin espacios para enviar
+            const telefonoLimpio = telefono.replace(/\s/g, '');
+            
+            // Deshabilitar botón mientras envía
+            const btnEnviar = event.target;
+            const textoOriginal = btnEnviar.innerHTML;
+            btnEnviar.disabled = true;
+            btnEnviar.innerHTML = '⏳ Enviando...';
+            btnEnviar.style.opacity = '0.6';
+            
+            // Enviar a Flask
+            fetch('/tienda/solicitud_especial', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    telefono: telefonoLimpio,
+                    busqueda: busqueda,
+                    tipo: tipo
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    // Cerrar modal
+                    document.getElementById('modalSolicitudEspecial').remove();
+                    
+                    // Mostrar confirmación
+                    mostrarConfirmacionSolicitud(data.mensaje, tipo);
+                } else {
+                    errorDiv.textContent = '❌ ' + (data.error || 'Error al enviar solicitud');
+                    errorDiv.style.display = 'block';
+                    btnEnviar.disabled = false;
+                    btnEnviar.innerHTML = textoOriginal;
+                    btnEnviar.style.opacity = '1';
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                errorDiv.textContent = '❌ Error de conexión. Intenta nuevamente';
+                errorDiv.style.display = 'block';
+                btnEnviar.disabled = false;
+                btnEnviar.innerHTML = textoOriginal;
+                btnEnviar.style.opacity = '1';
+            });
+        }
+        
+        function mostrarConfirmacionSolicitud(mensaje, tipo) {
+            /**
+             * Muestra confirmación visual después de enviar solicitud
+             */
+            const emoji = tipo === 'producto' ? '💊' : '🩺';
+            const color = tipo === 'producto' ? '#667eea' : '#2ecc71';
+            
+            const confirmacion = document.createElement('div');
+            confirmacion.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 2.5rem;
+                border-radius: 15px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                z-index: 10001;
+                text-align: center;
+                max-width: 400px;
+                animation: aparecer 0.3s ease-out;
+            `;
+            
+            confirmacion.innerHTML = `
+                <div style="font-size: 4rem; margin-bottom: 1rem;">${emoji}</div>
+                <div style="font-size: 3rem; color: #2ecc71; margin-bottom: 1rem;">✅</div>
+                <h3 style="color: ${color}; margin-bottom: 1rem; font-size: 1.4rem;">¡Solicitud recibida!</h3>
+                <p style="color: #666; line-height: 1.6; margin-bottom: 1.5rem;">
+                    ${mensaje}
+                </p>
+                <button 
+                    onclick="this.parentElement.remove()"
+                    style="
+                        padding: 0.9rem 2rem;
+                        background: ${color};
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">
+                    Entendido
+                </button>
+            `;
+            
+            document.body.appendChild(confirmacion);
+            
+            // Auto-cerrar después de 5 segundos
+            setTimeout(() => {
+                if (confirmacion.parentElement) {
+                    confirmacion.remove();
+                }
+            }, 5000);
+        }
+        
+        // Agregar animación
+        if (!document.getElementById('animacion-solicitud')) {
+            const style = document.createElement('style');
+            style.id = 'animacion-solicitud';
+            style.textContent = `
+                @keyframes aparecer {
+                    from { 
+                        opacity: 0;
+                        transform: translate(-50%, -50%) scale(0.9);
+                    }
+                    to { 
+                        opacity: 1;
+                        transform: translate(-50%, -50%) scale(1);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+
+
+        <!-- 🔒 Sistema de acceso oculto y reporte interno -->
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // 🔍 DEBUGGING: Verificar sistema de pastillero
+            console.group('🚀 INICIALIZACIÓN SISTEMA PASTILLERO');
+            
+            const btnPastillero = document.getElementById('btn-pastillero-header');
+            console.log('🎯 Botón pastillero encontrado:', btnPastillero);
+            
+            if (!btnPastillero) {
+                console.error('❌ CRÍTICO: Botón btn-pastillero-header NO encontrado');
+                console.log('Botones disponibles con "pastillero":', 
+                    Array.from(document.querySelectorAll('button, a'))
+                        .filter(el => el.textContent.toLowerCase().includes('pastillero'))
+                        .map(el => ({ id: el.id, text: el.textContent.trim() }))
+                );
+            } else {
+                console.log('✅ Botón OK - ID:', btnPastillero.id);
+                console.log('✅ Botón OK - Clases:', btnPastillero.className);
+            }
+            
+            // Verificar funciones disponibles
+            console.log('Funciones disponibles:', {
+                verificarMedicamentosPastillero: typeof verificarMedicamentosPastillero,
+                desactivarAnimacionPastillero: typeof desactivarAnimacionPastillero,
+                buscarProductos: typeof buscarProductos
+            });
+            
+            console.groupEnd();
+            
+            // 1. Añadir listener al título para activar autenticación
+            const titulo = document.querySelector('.header h1');
+            if (titulo) {
+                let intentos = 0;
+                titulo.addEventListener('click', () => {
+                    intentos++;
+                    if (intentos < 3) return; // Requiere 3 clics rápidos (opcional para más secreto)
+                    intentos = 0;
+
+                    const claveSecreta = prompt("🔐 Clave de acceso (invisible):");
+                    if (claveSecreta === "admin123") { // 🔑 Cambia esta clave si lo deseas
+                        mostrarReporteInterno();
+                    }
+                });
+            }
+        });
+
+        function mostrarReporteInterno() {
+            // Buscar datos ya cargados (asumiendo que ya se llamó a buscarProductos)
+            const productos = window.ultimosProductos || [];
+
+            const total = productos.length;
+            const sinSintomas = productos.filter(p => 
+                !p.sintomas_totales || p.sintomas_totales.length === 0
+            ).length;
+
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.85);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 99999;
+                font-family: monospace;
+            `;
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 12px;
+                    max-width: 500px;
+                    width: 90%;
+                    box-shadow: 0 0 30px rgba(0,0,0,0.6);
+                ">
+                    <h3 style="color: #e74c3c; margin-bottom: 1.5rem;">🔒 Reporte Interno (Solo Admin)</h3>
+                    <p><strong>🕗 Fecha/hora:</strong> ${new Date().toLocaleString('es-CO')}</p>
+                    <p><strong>📦 Total productos montados:</strong> ${total}</p>
+                    <p><strong>⚠️ Productos sin síntomas:</strong> ${sinSintomas}</p>
+                    <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #666;">
+                        Este reporte se basa en la última carga de productos.
+                    </p>
+                    <button onclick="this.parentElement.parentElement.remove()" 
+                            style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        Cerrar
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // Guardar productos globalmente para el reporte
+        const originalBuscarProductos = window.buscarProductos;
+        window.buscarProductos = function() {
+            const busquedaUnificada = document.getElementById('busqueda_unificada').value;
+            if (busquedaUnificada.trim().length > 0 && busquedaUnificada.trim().length < 3) return;
+
+            const precioMin = document.getElementById('precioMin').value;
+            const precioMax = document.getElementById('precioMax').value;
+            const params = new URLSearchParams();
+            if (busquedaUnificada) {
+                params.append('sintomas_busqueda', busquedaUnificada);
+                params.append('q', busquedaUnificada);
+            }
+            if (precioMin) params.append('precio_min', precioMin);
+            if (precioMax) params.append('precio_max', precioMax);
+
+            document.getElementById('productosContainer').innerHTML = '<div class="loading">Buscando...</div>';
+            fetch(`/api/productos?${params.toString()}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok) {
+                        window.ultimosProductos = data.productos; // ✅ Guardar para el reporte
+                        productosMostradosEnTienda = data.productos || []; // 🎯 CRÍTICO: Guardar aquí también
+                        console.log('💾💾💾 PRODUCTOS GUARDADOS (desde función sobrescrita):', productosMostradosEnTienda.length);
+                        
+                        mostrarDiagnosticos(data.sintomas_detectados || [], data.diagnosticos_posibles || [], data.busqueda_parcial || false);
+                        mostrarProductos(data.productos, data);
+                        
+                        // 🎯 Verificar pastillero después de mostrar productos
+                        setTimeout(() => {
+                            if (productosMostradosEnTienda.length > 0) {
+                                verificarMedicamentosPastillero();
+                            }
+                        }, 100);
+                    } else {
+                        document.getElementById('productosContainer').innerHTML = 
+                            '<div class="sin-resultados">Error al cargar productos</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('productosContainer').innerHTML = 
+                        '<div class="sin-resultados">Error de conexión</div>';
+                });
+        };
+
+
+
+
+
+    </script>
+    
+    <!-- 🆕 MODAL DEL PASTILLERO -->
+    <div id="modal-pastillero" class="modal-pastillero">
+        <div class="modal-pastillero-content">
+            <div class="modal-pastillero-header">
+                <h2><span>💊</span> Mi Pastillero</h2>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button id="btn-ordenar-pastillero" class="btn-ordenar-pastillero" onclick="toggleOrdenPastillero()">
+                        <span id="icono-orden">📅</span> <span id="texto-orden">Recientes</span>
+                    </button>
+                    <button class="btn-cerrar-modal" onclick="cerrarPastillero()">×</button>
+                </div>
+            </div>
+            <div class="modal-pastillero-body">
+                <!-- Búsqueda de medicamentos -->
+                <div class="pastillero-busqueda">
+                    <input 
+                        type="text" 
+                        id="input-buscar-medicamento" 
+                        placeholder="Buscar medicamento para agregar (Enter para crear)"
+                        autocomplete="off"
+                    >
+                    <div id="sugerencias-medicamentos" class="pastillero-sugerencias"></div>
+                </div>
+                
+                <!-- Lista de medicamentos -->
+                <div id="lista-medicamentos-pastillero">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

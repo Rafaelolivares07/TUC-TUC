@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bienvenido a Tuc Tuc</title>
+    <!-- Carga de Tailwind CSS para estilos humanizados y responsividad -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fuente Inter con peso ligero para el efecto humanizado -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Estilos generales para el fondo y la tipografía */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            /* Fondo verde claro: bg-emerald-50 */
+            background-color: #ecfdf5; 
+            overflow: hidden; /* Evita barras de desplazamiento durante las animaciones */
+        }
+        
+        /* Contenedor del "Hola" (Paso 1) */
+        #greeting-hola {
+            font-weight: 100; /* Extra-light */
+            color: #1e3a8a; /* Azul oscuro elegante */
+            transition: opacity 1s ease-in-out;
+            opacity: 0; /* Inicia invisible y aparece en JS */
+        }
+        
+        /* Contenedor del "Tuc Tuc" (Paso 2) */
+        #greeting-tuc-tuc {
+            font-weight: 300; /* Light */
+            color: #1e3a8a; 
+            transition: opacity 1.5s ease-in-out, transform 1.5s ease-in-out;
+            opacity: 0; /* Inicia invisible */
+            transform: scale(0.95); /* Inicia ligeramente reducido */
+        }
+        
+        /* Estilo para el nombre 'Tuc Tuc' con peso más fuerte */
+        .tuc-tuc-name {
+            font-weight: 700; /* Bold */
+            color: #059669; /* Verde esmeralda más fuerte */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Contenedor principal centrado -->
+    <div class="text-center w-full max-w-2xl">
+
+        <!-- PASO 1: Hola solo -->
+        <h1 id="greeting-hola" class="text-7xl sm:text-8xl md:text-9xl tracking-tight">
+            Hola
+        </h1>
+
+        <!-- PASO 2: Identificación de la aplicación -->
+        <div id="greeting-tuc-tuc" class="space-y-4">
+            <h1 class="text-5xl sm:text-6xl md:text-7xl tracking-tight">
+                Soy <span class="tuc-tuc-name">Tuc Tuc</span>.
+            </h1>
+            <p class="text-xl sm:text-2xl text-gray-600">
+                Estoy aquí para ayudarte.
+            </p>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const hola = document.getElementById('greeting-hola');
+            const tucTuc = document.getElementById('greeting-tuc-tuc');
+            
+            const DURATION = 5500; // Duración total antes de la redirección (en ms)
+            
+            // 1. Mostrar "Hola"
+            setTimeout(() => {
+                hola.style.opacity = '1';
+            }, 100); // Pequeño retraso para que la transición CSS funcione
+
+            // 2. Transición a "Tuc Tuc"
+            setTimeout(() => {
+                // a) Desvanecer "Hola"
+                hola.style.opacity = '0'; 
+                
+                // b) Mostrar "Tuc Tuc" después de que "Hola" casi desaparece
+                setTimeout(() => {
+                    hola.style.display = 'none'; // Ocultar para que no estorbe
+                    tucTuc.style.opacity = '1';
+                    tucTuc.style.transform = 'scale(1)';
+                }, 800); // Espera 800ms mientras "Hola" se desvanece
+                
+            }, 1500); // 1.5s después de cargar, empieza la transición
+
+            // 3. Redirección final
+            setTimeout(() => {
+                // Redirecciona a la ruta que maneja la identificación de Administrador/Cliente
+                window.location.href = "{{ url_for('identificar_dispositivo_route') }}";
+            }, DURATION); 
+        });
+    </script>
+</body>
+</html>

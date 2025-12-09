@@ -187,11 +187,31 @@ Session(app)
 DB_NAME = 'medicamentos.db'
 
 def get_db_connection():
-    """Conexión a SQLite con WAL mode para mejor concurrencia."""
-    conn = sqlite3.connect(DB_NAME, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA journal_mode=WAL')  # 🆕 ACTIVAR WAL
-    conn.execute('PRAGMA busy_timeout=5000')  # 🆕 ESPERAR 5 segundos
+    """
+    Conexión a base de datos.
+    - En producción (Render): usa PostgreSQL
+    - En local: usa SQLite
+    """
+    database_url = os.getenv('DATABASE_URL')
+
+    if database_url:
+        # PRODUCCIÓN: PostgreSQL en Render
+        # Render usa postgres://, pero psycopg2 necesita postgresql://
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(database_url)
+        # Para que funcione igual que SQLite con conn.Row
+        conn.row_factory = psycopg2.extras.RealDictCursor
+        return conn
+    else:
+        # LOCAL: SQLite
+        conn = sqlite3.connect(DB_NAME, timeout=10)
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA busy_timeout=5000')
     return conn
 
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif"}

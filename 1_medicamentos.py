@@ -186,6 +186,35 @@ Session(app)
 # 📁 Nombre de la base de datos
 DB_NAME = 'medicamentos.db'
 
+class PostgreSQLConnectionWrapper:
+    """Wrapper para que PostgreSQL funcione como SQLite con conn.execute()"""
+    def __init__(self, pg_conn):
+        self._conn = pg_conn
+
+    def execute(self, query, params=()):
+        # Convertir ? a %s para PostgreSQL
+        query = query.replace('?', '%s')
+        cursor = self._conn.cursor()
+        cursor.execute(query, params)
+        return cursor
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self.rollback()
+        self.close()
+
 def get_db_connection():
     """
     Conexión a base de datos.
@@ -202,9 +231,10 @@ def get_db_connection():
 
         import psycopg2
         import psycopg2.extras
-        # Usar RealDictConnection para que los resultados sean diccionarios (como SQLite Row)
-        conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.RealDictCursor)
-        return conn
+        # Usar RealDictCursor para que los resultados sean diccionarios (como SQLite Row)
+        pg_conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.RealDictCursor)
+        # Envolver la conexión para que funcione como SQLite
+        return PostgreSQLConnectionWrapper(pg_conn)
     else:
         # LOCAL: SQLite
         conn = sqlite3.connect(DB_NAME, timeout=10)

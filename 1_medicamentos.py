@@ -196,13 +196,17 @@ class PostgreSQLConnectionWrapper:
         query = query.replace('?', '%s')
 
         # Convertir nombres de tablas a mayúsculas con comillas para PostgreSQL
-        # Lista de tablas conocidas que están en mayúsculas
+        # Lista completa de todas las tablas
         tablas_mayusculas = [
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
-            'precios_competencia', 'existencias', 'diagnosticos', 'recetas',
-            'pedidos', 'configuracion_precios', 'medicamento_sintoma',
-            'diagnostico_sintoma', 'diagnostico_medicamento', 'navegacion_menu',
-            'terceros', 'requerimientos', 'alertas_admin'
+            'precios_competencia', 'precios_competencia_new', 'existencias',
+            'diagnosticos', 'recetas', 'pedidos', 'configuracion_precios',
+            'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
+            'navegacion_menu', 'terceros', 'terceros_competidores', 'requerimientos',
+            'requerimiento_referencias', 'alertas_admin', 'archivos',
+            'componentes_activos_sugerencias', 'indicaciones_rechazadas',
+            'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
+            'sugerir_sintomas', 'usuario_dispositivo'
         ]
 
         for tabla in tablas_mayusculas:

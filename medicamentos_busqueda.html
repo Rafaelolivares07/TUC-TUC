@@ -1,0 +1,6797 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Medicamentos – Búsqueda por Síntoma</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      margin: 0; padding: 16px;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.3em;
+      margin: 0 0 16px;
+      color: #1a73e8;
+    }
+    #search {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1em;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .product {
+      background: white;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-left: 4px solid #1a73e8;
+    }
+    .name {
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 6px;
+      color: #111;
+    }
+    .price {
+      color: #2e7d32;
+      font-weight: bold;
+      margin: 6px 0;
+    }
+    .symptoms {
+      font-size: 0.92em;
+      color: #555;
+      line-height: 1.4;
+    }
+    #results {
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+    .no-results {
+      text-align: center;
+      padding: 30px 20px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <h1>Busca por medicamento, síntoma o fabricante</h1>
+  <input type="text" id="search" placeholder="Ej: dol, ibupro, fiebre, Bayer..." autofocus autocomplete="off" />
+  <div id="results"></div>
+
+  <script>
+    const productos = [
+  {
+    "id": 3,
+    "nombre": "Acetaminofén 500 mg tableta caja x20",
+    "fabricante": "Procaps",
+    "precio": 6500.0,
+    "imagen": "Acetaminofén_500_mg_tableta_caja_x20_Procaps.jpg",
+    "sintomas": [
+      "Congestión nasal",
+      "Dolor de cabeza",
+      "Dolor de garganta",
+      "Dolor muscular (mialgia)",
+      "Fiebre",
+      "Dolor en las articulaciones (artralgia)",
+      "dolor"
+    ]
+  },
+  {
+    "id": 7,
+    "nombre": "Diclofenaco 50 mg cápsula caja x 30",
+    "fabricante": "Genfar",
+    "precio": 7400.0,
+    "imagen": "Diclofenaco_50_mg_cápsula_caja_x_30_Genfar.jpg",
+    "sintomas": [
+      "Dolor de cabeza",
+      "Dolor de espalda",
+      "Dolor en las articulaciones (artralgia)",
+      "Dolor muscular (mialgia)",
+      "Dolor por periodo"
+    ]
+  },
+  {
+    "id": 8,
+    "nombre": "Aspirina 100 mg tableta caja x 28",
+    "fabricante": "Bayer",
+    "precio": 20000.0,
+    "imagen": "Aspirina_100_mg_tableta_caja_x_28_Bayer.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "dolor"
+    ]
+  },
+  {
+    "id": 9,
+    "nombre": "Ácido Acetilsalicílico 100 mg tableta caja x30",
+    "fabricante": "Genfar",
+    "precio": 13800.0,
+    "imagen": "Ácido_Acetilsalicílico_100_mg_tableta_caja_x30_Genfar.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "enrojecimiento",
+      "Fiebre",
+      "hinchazón",
+      "dolor"
+    ]
+  },
+  {
+    "id": 11,
+    "nombre": "Tramadol 50 mg blister x 10",
+    "fabricante": "Genfar",
+    "precio": 14763.0,
+    "imagen": "Tramadol_50_mg_blister_x_10_Genfar.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "Dolor de espalda",
+      "hinchazón",
+      "limitación de movimiento",
+      "rigidez matutina"
+    ]
+  },
+  {
+    "id": 12,
+    "nombre": "acetaminofen fosfato de Codeína 30 mg tableta caja x 30",
+    "fabricante": "Genfar",
+    "precio": 38275.0,
+    "imagen": "acetaminofen_fosfato_de_Codeína_30_mg_tableta_caja_x_30_Genfar.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "Dolor de garganta",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre Alta",
+      "mucosidad",
+      "opresión torácica",
+      "Producción De Flema",
+      "rinorrea",
+      "Sibilancias",
+      "tos",
+      "tos nocturna",
+      "Tos seca",
+      "Dolor muscular (mialgia)",
+      "tos crónica o persistente"
+    ]
+  },
+  {
+    "id": 13,
+    "nombre": "Cetirizina 10 mg tableta caja x10",
+    "fabricante": "Genfar",
+    "precio": 7780.0,
+    "imagen": "Cetirizina_10_mg_tableta_caja_x10_Genfar.jpg",
+    "sintomas": [
+      "Comezón",
+      "Congestión nasal",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "Secreción nasal",
+      "tos"
+    ]
+  },
+  {
+    "id": 14,
+    "nombre": "Loratadina 10 mg x10",
+    "fabricante": "MK",
+    "precio": 5800.0,
+    "imagen": "Loratadina_10_mg_x10_MK.jpg",
+    "sintomas": [
+      "Comezón",
+      "Congestión nasal",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "lagrimeo",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "sarpullido"
+    ]
+  },
+  {
+    "id": 15,
+    "nombre": "Desloratadina 5 mg tableta caja x10",
+    "fabricante": "MK",
+    "precio": 52500.0,
+    "imagen": "Desloratadina_5_mg_tableta_caja_x10_MK.jpg",
+    "sintomas": [
+      "Comezón",
+      "Congestión nasal",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "Secreción nasal"
+    ]
+  },
+  {
+    "id": 16,
+    "nombre": "Omeprazol 20 mg cápsula caja x 30",
+    "fabricante": "LA SANTE",
+    "precio": 10300.0,
+    "imagen": "Omeprazol_20_mg_cápsula_caja_x_30_LA_SANTE.jpg",
+    "sintomas": [
+      "Acidez estomacal",
+      "Esofagitis",
+      "Indigestión"
+    ]
+  },
+  {
+    "id": 17,
+    "nombre": "Esomeprazol 40 mg cápsula caja x 10",
+    "fabricante": "MK",
+    "precio": 36898.0,
+    "imagen": "Esomeprazol_40_mg_cápsula_caja_x_10_MK.jpg",
+    "sintomas": [
+      "Acidez estomacal",
+      "Esofagitis",
+      "Indigestión"
+    ]
+  },
+  {
+    "id": 18,
+    "nombre": "Lansoprazol 30 mg cápsula caja x 28",
+    "fabricante": "LA SANTE",
+    "precio": 28600.0,
+    "imagen": "Lansoprazol_30_mg_cápsula_caja_x_28_LA_SANTE.jpg",
+    "sintomas": [
+      "Acidez estomacal",
+      "antiinflamatorio",
+      "calor local",
+      "enrojecimiento",
+      "escaras",
+      "Esofagitis",
+      "heridas crónicas",
+      "hinchazón",
+      "Indigestión",
+      "llagas por presión",
+      "llagas vasculares",
+      "úlceras de decúbito",
+      "úlceras en piernas"
+    ]
+  },
+  {
+    "id": 19,
+    "nombre": "Pantoprazol 40 mg tableta caja x28",
+    "fabricante": "MK",
+    "precio": 126550.0,
+    "imagen": "Pantoprazol_40_mg_tableta_caja_x28_Roche.jpg",
+    "sintomas": [
+      "acidez",
+      "Acidez estomacal",
+      "antiinflamatorio",
+      "ardor",
+      "escaras",
+      "heridas crónicas",
+      "llagas por presión",
+      "llagas vasculares",
+      "úlceras de decúbito",
+      "úlceras en piernas"
+    ]
+  },
+  {
+    "id": 20,
+    "nombre": "Ranitidina 300 mg tableta caja x 10",
+    "fabricante": "MK",
+    "precio": 10900.0,
+    "imagen": "Ranitidina_300_mg_tableta_caja_x_10_genérico_Procaps.jpg",
+    "sintomas": [
+      "acidez",
+      "antiinflamatorio",
+      "ardor",
+      "calor local",
+      "cicatrización",
+      "enrojecimiento",
+      "escaras",
+      "Esofagitis",
+      "heridas crónicas",
+      "hinchazón",
+      "llagas por presión",
+      "llagas vasculares",
+      "Úlceras",
+      "úlceras de decúbito",
+      "úlceras en piernas"
+    ]
+  },
+  {
+    "id": 21,
+    "nombre": "Metoclopramida 10 mg tableta caja x 5 ampollas",
+    "fabricante": "Genfar",
+    "precio": 36850.0,
+    "imagen": "Metoclopramida_10_mg_tableta_caja_x_5_ampollas_Genfar.jpg",
+    "sintomas": [
+      "acidez",
+      "Acidez estomacal",
+      "aliviar la acidez",
+      "ardor estomacal",
+      "deshidratación",
+      "Diarrea",
+      "Dolor abdominal",
+      "dolor abdominal severo",
+      "dolor de cabeza severo",
+      "Fiebre",
+      "Náuseas",
+      "Pérdida de apetito",
+      "Visión borrosa",
+      "Vómitos",
+      "Úlceras",
+      "Dolor de espalda",
+      "Sensibilidad a la luz (fotofobia)"
+    ]
+  },
+  {
+    "id": 22,
+    "nombre": "Domperidona 10 mg tableta caja x 20",
+    "fabricante": "Genfar",
+    "precio": 4645.0,
+    "imagen": "Domperidona_10_mg_tableta_caja_x20_Lafrancol.jpg",
+    "sintomas": [
+      "hinchazón",
+      "Hinchazón abdominal",
+      "Indigestión",
+      "Náuseas",
+      "Vómitos"
+    ]
+  },
+  {
+    "id": 23,
+    "nombre": "Amoxicilina 500 mg cápsula blister x 10",
+    "fabricante": "Genfar",
+    "precio": 7238.0,
+    "imagen": "Amoxicilina_500_mg_cápsula_blister_x_10_Genfar.jpg",
+    "sintomas": [
+      "infeccion Clamidia",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 24,
+    "nombre": "Amoxicilina + ácido clavulánico 875/125 mg tableta caja x14",
+    "fabricante": "ASCEND",
+    "precio": 65700.0,
+    "imagen": "Amoxicilina__ácido_clavulánico_875125_mg_tableta_caja_x14_Merck__Sandoz.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Fiebre Alta",
+      "Infección Bacterial",
+      "Producción De Flema",
+      "Dolor muscular (mialgia)",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 26,
+    "nombre": "Cefuroxima 250mg/5ML SUSPENSION ORAL FRASCO  70 ML",
+    "fabricante": "Novartis",
+    "precio": 135200.0,
+    "imagen": "Cefuroxima_250_mg_tableta_caja_x10_Roche.jpg",
+    "sintomas": [
+      "amígdalas inflamadas",
+      "Cansancio",
+      "cefalea sinusal",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad al tragar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "dolor facial",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "garganta irritada",
+      "hipotensión",
+      "inflamación de garganta",
+      "maceramiento",
+      "meningitis",
+      "mucosidad",
+      "mucosidad nasal espesa",
+      "olor característico",
+      "presión sinusal",
+      "prevención de infección",
+      "Producción De Flema",
+      "pus",
+      "rinorrea",
+      "Sibilancias",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 27,
+    "nombre": "Azitromicina 500 mg tableta caja x 3",
+    "fabricante": "LA SANTE",
+    "precio": 14750.0,
+    "imagen": "Azitromicina_500_mg_tableta_caja_x_3_Pfizer.jpg",
+    "sintomas": [
+      "Fiebre",
+      "infeccion con Sinusitis",
+      "Dolor de garganta",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 28,
+    "nombre": "Ciprofloxacino 500 mg tableta caja x 10",
+    "fabricante": "LA SANTE",
+    "precio": 10100.0,
+    "imagen": "Ciprofloxacino_500_mg_tableta_caja_x10_Bayer.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad para orinar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "dolor pélvico",
+      "dolor suprapúbico",
+      "enrojecimiento",
+      "Escalofríos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "orina frecuente",
+      "pus",
+      "taquicardia",
+      "tos",
+      "urgencia urinaria",
+      "Dolor al orinar (disuria)",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 30,
+    "nombre": "Doxiciclina 100 mg cápsula caja x 10",
+    "fabricante": "Genfar",
+    "precio": 10000.0,
+    "imagen": "Doxiciclina_100_mg_cápsula_caja_x20_Novartis.jpg",
+    "sintomas": [
+      "Cansancio",
+      "comedones",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "enrojecimiento facial",
+      "Escalofríos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "pápulas",
+      "pústulas",
+      "rubor facial",
+      "taquicardia",
+      "tos",
+      "vasos sanguíneos visibles",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 31,
+    "nombre": "Metronidazol 500 mg tableta blister x 10",
+    "fabricante": "LA SANTE",
+    "precio": 2600.0,
+    "imagen": "Metronidazol_500_mg_tableta_blister_x_10_Laboratorio_Nacional__Procaps.jpg",
+    "sintomas": [
+      "Amebiasis",
+      "antiparasitario",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "Giardiasis",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Tricomoniasis",
+      "Vaginosis bacteriana",
+      "Úlceras",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 32,
+    "nombre": "Fluconazol 150 mg tableta caja x1",
+    "fabricante": "Genfar",
+    "precio": 7620.0,
+    "imagen": "Fluconazol_150_mg_tableta_caja_x1_Pfizer.jpg",
+    "sintomas": [
+      "calor local",
+      "candidiasis vaginal",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hinchazón",
+      "hipotensión",
+      "hongos vaginales",
+      "maceramiento",
+      "meningitis",
+      "olor característico",
+      "prevención de infección",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "Vaginosis bacteriana"
+    ]
+  },
+  {
+    "id": 33,
+    "nombre": "Nistatina suspensión 100,000 UI/ml frasco 60 ml",
+    "fabricante": "labinco",
+    "precio": 10043.0,
+    "imagen": "Nistatina_suspensión_100000_UIml_frasco_60_ml_labinco.jpg",
+    "sintomas": [
+      "candidiasis vaginal",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "hongos vaginales",
+      "inestabilidad",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "Vaginosis bacteriana",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 34,
+    "nombre": "Clotrimazol crema 1% tubo 20 g",
+    "fabricante": "colmed",
+    "precio": 10500.0,
+    "imagen": "Clotrimazol_crema_1_tubo_20_g_colmed.jpg",
+    "sintomas": [
+      "candidiasis vaginal",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "hongos vaginales",
+      "maceramiento",
+      "olor característico",
+      "pie de atleta",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "Vaginosis bacteriana",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 35,
+    "nombre": "Ketoconazol champú 1% frasco 250 ml",
+    "fabricante": "farmanal ltda",
+    "precio": 25000.0,
+    "imagen": "Ketoconazol_champú_1_frasco_250_ml_farmanal_ltda.jpg",
+    "sintomas": [
+      "calor local",
+      "Comezón",
+      "dermatitis seborreica",
+      "descamación",
+      "descamación del cuero cabelludo",
+      "enrojecimiento",
+      "hinchazón",
+      "Irritación",
+      "maceramiento",
+      "olor característico",
+      "picazón del cuero cabelludo",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 36,
+    "nombre": "Insulina humana regular 100 UI/ml 10 ml",
+    "fabricante": "Sanofi",
+    "precio": 140700.0,
+    "imagen": "Insulina_humana_regular_100_UIml_10_ml_Biocon__Eli_Lilly.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 38,
+    "nombre": "Insulina glargina 100 UI/ml pluma 3 ml",
+    "fabricante": "Sanofi",
+    "precio": 40900.0,
+    "imagen": "Insulina_glargina_100_UIml_pluma_3_ml_Sanofi.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 39,
+    "nombre": "Metformina 850 mg tableta caja x 30",
+    "fabricante": "MK",
+    "precio": 42750.0,
+    "imagen": "Metformina_850_mg_tableta_caja_x_30_Merck__Sandoz.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "sobrepeso",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 40,
+    "nombre": "Glibenclamida 5 mg tableta caja x30",
+    "fabricante": "Genfar",
+    "precio": 19200.0,
+    "imagen": "Glibenclamida_5_mg_tableta_caja_x30_Sanofi.jpg",
+    "sintomas": [
+      "debilidad muscular",
+      "dolor neuropático",
+      "Entumecimiento",
+      "fatiga",
+      "hambre extrema",
+      "hormigueo",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 41,
+    "nombre": "Glimepirida 2 mg tableta caja x 15",
+    "fabricante": "MK",
+    "precio": 28000.0,
+    "imagen": "Glimepirida_2_mg_tableta_caja_x_15_Novo_Nordisk.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 42,
+    "nombre": "Sitagliptina 100 mg tableta caja x30",
+    "fabricante": "MSD",
+    "precio": 174000.0,
+    "imagen": "Sitagliptina_100_mg_tableta_caja_x30_Merck.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 43,
+    "nombre": "Empagliflozina 10 mg tableta caja x 30",
+    "fabricante": "Boehringer Ingelheim",
+    "precio": 156850.0,
+    "imagen": "Empagliflozina_10_mg_tableta_caja_x_30_Boehringer_Ingelheim.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "fatiga",
+      "hambre extrema",
+      "hinchazón de pies",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 44,
+    "nombre": "Atorvastatina 20 mg tableta caja x 30",
+    "fabricante": "COASPHARMA",
+    "precio": 40000.0,
+    "imagen": "Atorvastatina_20_mg_tableta_caja_x_30_COASPHARMA.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "opresión torácica",
+      "sudoración",
+      "dolor torácico o dolor en el pecho",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 45,
+    "nombre": "Simvastatina 20 mg tableta caja x30",
+    "fabricante": "MK",
+    "precio": 36711.0,
+    "imagen": "Simvastatina_20_mg_tableta_caja_x30_Merck.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "derrame cerebral",
+      "dificultad respiratoria",
+      "Entumecimiento",
+      "evento cardiovascular",
+      "evento cerebrovascular isquémico",
+      "fatiga",
+      "hambre extrema",
+      "ictus",
+      "infarto al corazón",
+      "infarto cerebral",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "dolor torácico o dolor en el pecho",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 46,
+    "nombre": "Rosuvastatina 10 mg tableta caja x 28",
+    "fabricante": "MK",
+    "precio": 162040.0,
+    "imagen": "Rosuvastatina_10_mg_tableta_caja_x_28_AstraZeneca.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "evento cardiovascular",
+      "eventos cardiovasculares",
+      "infarto al corazón",
+      "prevención cardiovascular",
+      "protección cardíaca",
+      "dolor torácico o dolor en el pecho"
+    ]
+  },
+  {
+    "id": 47,
+    "nombre": "Ezetimiba/Simvastatina 10 mg tableta caja x 14",
+    "fabricante": "MK",
+    "precio": 36711.0,
+    "imagen": "EzetimibaSimvastatina_10_mg_tableta_caja_x_14_Merck.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "derrame cerebral",
+      "evento cardiovascular",
+      "evento cerebrovascular isquémico",
+      "eventos cardiovasculares",
+      "ictus",
+      "infarto al corazón",
+      "infarto cerebral",
+      "dolor torácico o dolor en el pecho"
+    ]
+  },
+  {
+    "id": 48,
+    "nombre": "Losartán 50 mg tableta caja x30",
+    "fabricante": "MintLab",
+    "precio": 10900.0,
+    "imagen": "Losartán_50_mg_tableta_caja_x30_MintLab.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "derrame cerebral",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "evento cerebrovascular isquémico",
+      "fatiga",
+      "hambre extrema",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "ictus",
+      "infarto cerebral",
+      "orina frecuente",
+      "presión arterial elevada",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 49,
+    "nombre": "Enalapril 10 mg tableta caja x30",
+    "fabricante": "MK",
+    "precio": 11850.0,
+    "imagen": "Enalapril_10_mg_tableta_caja_x30_Sanofi.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "presión arterial elevada",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 50,
+    "nombre": "Captopril 25 mg tableta caja x 30",
+    "fabricante": "(genérico)",
+    "precio": 9900.0,
+    "imagen": "Captopril_25_mg_tableta_caja_x_30_genérico.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hambre extrema",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "orina frecuente",
+      "presión arterial elevada",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 51,
+    "nombre": "Amlodipino 5 mg tableta caja x30",
+    "fabricante": "AG",
+    "precio": 18000.0,
+    "imagen": "Amlodipino_5_mg_tableta_caja_x30_AG.jpg",
+    "sintomas": [
+      "Angina",
+      "Hipertensión Arterial",
+      "dolor torácico o dolor en el pecho"
+    ]
+  },
+  {
+    "id": 52,
+    "nombre": "Hidroclorotiazida 25 mg tableta caja x 30",
+    "fabricante": "LA SANTE",
+    "precio": 5500.0,
+    "imagen": "Hidroclorotiazida_25_mg_tableta_caja_x_30_Sandoz.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor óseo",
+      "fatiga",
+      "fortalecimiento óseo",
+      "fracturas frecuentes",
+      "fragilidad ósea",
+      "hambre extrema",
+      "hinchazón",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "orina frecuente",
+      "osteopenia",
+      "presión arterial elevada",
+      "prevención de fracturas",
+      "pérdida de altura",
+      "pérdida de peso",
+      "sed excesiva",
+      "suplementación de calcio",
+      "Visión borrosa",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 53,
+    "nombre": "Furosemida 40 mg tableta blister x 10",
+    "fabricante": "Genfar",
+    "precio": 1900.0,
+    "imagen": "Furosemida_40_mg_tableta_blister_x_10_Tecnoquímicas.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hinchazón",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "presión arterial elevada",
+      "Quemadura",
+      "Quemazón",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 54,
+    "nombre": "Clonidina 0.15 mg tableta caja x 20",
+    "fabricante": "Genfar",
+    "precio": 18800.0,
+    "imagen": "Clonidina_015_mg_tableta_caja_x_20_Boehringer_Ingelheim.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "Hipertensión Arterial",
+      "inquietud",
+      "nerviosismo",
+      "palpitaciones",
+      "presión arterial elevada",
+      "sudoración",
+      "Temblores",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 55,
+    "nombre": "Metoprolol 50 mg tableta caja x30",
+    "fabricante": "AstraZeneca",
+    "precio": 17845.0,
+    "imagen": "Metoprolol_50_mg_tableta_caja_x30_AstraZeneca.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor de cabeza severo",
+      "evento cardiovascular",
+      "fatiga",
+      "Hipertensión Arterial",
+      "infarto al corazón",
+      "opresión torácica",
+      "palpitaciones",
+      "presión arterial elevada",
+      "sudoración",
+      "síncope",
+      "Visión borrosa",
+      "dolor torácico o dolor en el pecho",
+      "Vómitos",
+      "Sensibilidad a la luz (fotofobia)",
+      "Náuseas",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 56,
+    "nombre": "Carvedilol 25 mg tableta caja x 30",
+    "fabricante": "Genfar",
+    "precio": 28800.0,
+    "imagen": "Carvedilol_25_mg_tableta_caja_x30_GlaxoSmithKline_GSK.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "opresión torácica",
+      "presión arterial elevada",
+      "sudoración",
+      "dolor torácico o dolor en el pecho",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 57,
+    "nombre": "Propranolol 40 mg tableta caja x 30",
+    "fabricante": "MK",
+    "precio": 22300.0,
+    "imagen": "Propranolol_40_mg_tableta_caja_x_30_genérico.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor de cabeza severo",
+      "fatiga",
+      "inquietud",
+      "nerviosismo",
+      "opresión torácica",
+      "palpitaciones",
+      "presión arterial elevada",
+      "sudoración",
+      "síncope",
+      "Temblores",
+      "Visión borrosa",
+      "dolor torácico o dolor en el pecho",
+      "Vómitos",
+      "Sensibilidad a la luz (fotofobia)",
+      "Náuseas",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 58,
+    "nombre": "Warfarina 5 mg tableta caja x30",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 59,
+    "nombre": "Rivaroxabán Xarelto 2.5Mg Tabletas Recubiertas Caja X 28",
+    "fabricante": "Bayer",
+    "precio": 139600.0,
+    "imagen": "med_59_d3443e9e6dce.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 60,
+    "nombre": "Apixabán 2.5 mg tableta caja x 20",
+    "fabricante": "Pfizer",
+    "precio": 115178.0,
+    "imagen": "Apixabán_25_mg_tableta_caja_x_20_Pfizer__Bristol-Myers_Squibb.jpg",
+    "sintomas": [
+      "calor local",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "fatiga",
+      "hinchazón",
+      "palpitaciones",
+      "síncope",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 61,
+    "nombre": "Ácido fólico 5 mg tableta caja x30",
+    "fabricante": "Procaps",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 62,
+    "nombre": "Vitamina B12 1000 mcg inyección ampolla 1 ml",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 63,
+    "nombre": "Complejo Multivitamínico Centrum Women Tabletas Frasco X30",
+    "fabricante": "Pfizer",
+    "precio": 50500.0,
+    "imagen": "med_63_4e932a979774.jpg",
+    "sintomas": [
+      "Cansancio",
+      "carencia nutricional",
+      "crecimiento de uñas",
+      "cuidado del cabello",
+      "déficit vitamínico",
+      "falta de vitaminas",
+      "fatiga",
+      "fortalecimiento capilar",
+      "multivitamínico",
+      "prevención de deficiencias",
+      "protección celular",
+      "radicales libres",
+      "salud del cabello",
+      "suplementación nutricional",
+      "suplementación vitamínica",
+      "uñas débiles",
+      "uñas quebradizas"
+    ]
+  },
+  {
+    "id": 64,
+    "nombre": "Vitamina D3 1000 UI cápsula caja x30",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 65,
+    "nombre": "Calcio + Vitamina D tableta caja x60",
+    "fabricante": "NutriFit",
+    "precio": 40200.0,
+    "imagen": "Calcio__Vitamina_D_tableta_caja_x60_NutriFit.jpg",
+    "sintomas": [
+      "carencia nutricional",
+      "deformidad",
+      "dolor severo",
+      "dolor óseo",
+      "déficit vitamínico",
+      "falta de vitaminas",
+      "fortalecimiento óseo",
+      "fracturas frecuentes",
+      "fragilidad ósea",
+      "hematoma",
+      "imposibilidad de movimiento",
+      "insuficiencia de vitamina d",
+      "osteopenia",
+      "prevención de deficiencias",
+      "prevención de fracturas",
+      "pérdida de altura",
+      "suplementación de calcio",
+      "suplementación de vitamina d",
+      "suplementación nutricional",
+      "suplementación vitamínica",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 66,
+    "nombre": "Alendronato 70 mg tableta caja x 4",
+    "fabricante": "MK",
+    "precio": 59000.0,
+    "imagen": "Alendronato_70_mg_tableta_caja_x_4_Merck.jpg",
+    "sintomas": [
+      "dolor óseo",
+      "fracturas frecuentes",
+      "fragilidad ósea",
+      "pérdida de altura"
+    ]
+  },
+  {
+    "id": 67,
+    "nombre": "Carbidopa+Levodopa 250Mg+25Mg Caja X 30 Tabletas",
+    "fabricante": "Genfar",
+    "precio": 70100.0,
+    "imagen": "med_67_551d82aee645.jpg",
+    "sintomas": [
+      "espasmos",
+      "inestabilidad",
+      "lentitud de movimiento",
+      "rigidez",
+      "rigidez muscular",
+      "Temblores"
+    ]
+  },
+  {
+    "id": 68,
+    "nombre": "Pramipexol Pramixole Er 1.5Mg Tableta Liberación Prolongada Caja por 30",
+    "fabricante": "LEGRAND",
+    "precio": 147300.0,
+    "imagen": "med_68_4b1cb000cd81.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 69,
+    "nombre": "Fluoxetina 20Mg Capsulas Caja X 30",
+    "fabricante": "AG",
+    "precio": 13900.0,
+    "imagen": "med_69_ccbaaedfef80.jpg",
+    "sintomas": [
+      "falta de motivación",
+      "fatiga",
+      "inquietud",
+      "Insomnio",
+      "nerviosismo",
+      "palpitaciones",
+      "Pérdida de apetito",
+      "sudoración",
+      "Temblores",
+      "tristeza persistente"
+    ]
+  },
+  {
+    "id": 70,
+    "nombre": "Sertralina Tabletas Recubiertas 50 mg Caja X 10",
+    "fabricante": "memphis",
+    "precio": 51300.0,
+    "imagen": "med_70_ec921e63fc20.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 71,
+    "nombre": "Paroxetina 20Mg Tableta Recubierta Caja X 10 Tabletas Amer Gen",
+    "fabricante": "AG",
+    "precio": 39400.0,
+    "imagen": "med_71_70d1b5e8d355.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 72,
+    "nombre": "Escitalopram 10 mg tableta caja x30",
+    "fabricante": "MK",
+    "precio": 99100.0,
+    "imagen": "Escitalopram_10_mg_tableta_caja_x30_Lundbeck.jpg",
+    "sintomas": [
+      "inquietud",
+      "nerviosismo",
+      "palpitaciones",
+      "sudoración",
+      "Temblores"
+    ]
+  },
+  {
+    "id": 78,
+    "nombre": "Dexametasona Fosfato Solución Inyectable 8Mg/2mL X 1 Ampolla X 2mL",
+    "fabricante": "Genfar",
+    "precio": 6500.0,
+    "imagen": "Dexametasona_Fosfato_Solución_Inyectable_8Mg2mL_X_1_Ampolla_X_2mL_genérico.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "Comezón",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "estornudos",
+      "hinchazón",
+      "Irritación",
+      "limitación de movimiento",
+      "Náuseas",
+      "opresión torácica",
+      "reacción alérgica",
+      "rigidez matutina",
+      "Sibilancias",
+      "tos nocturna",
+      "Vómitos"
+    ]
+  },
+  {
+    "id": 79,
+    "nombre": "Budesonida inhalador bucal 200 mcg frasco 200 dosis",
+    "fabricante": "Faes Farma",
+    "precio": 114300.0,
+    "imagen": "Budesonida_inhalador_bucal_200_mcg_frasco_200_dosis_AstraZeneca.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "Cansancio",
+      "Comezón",
+      "Congestión nasal",
+      "cólicos",
+      "diarrea con sangre",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "estornudos",
+      "hinchazón",
+      "inflamación intestinal",
+      "obstrucción nasal",
+      "opresión torácica",
+      "picazón nasal",
+      "Producción De Flema",
+      "reacción alérgica",
+      "rinorrea",
+      "Sibilancias",
+      "tos",
+      "tos nocturna",
+      "tos crónica o persistente"
+    ]
+  },
+  {
+    "id": 80,
+    "nombre": "Inhalador Furoato De Fluticasona 27.5Mcg/Dosis Suspension Nasal Frasco X 120Dosis Novamed",
+    "fabricante": "NovaMed",
+    "precio": 35500.0,
+    "imagen": "med_80_49d9f83d88ef.jpg",
+    "sintomas": [
+      "calor local",
+      "Comezón",
+      "Congestión nasal",
+      "descamación",
+      "descamación plateada",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "hinchazón",
+      "lagrimeo",
+      "obstrucción nasal",
+      "opresión torácica",
+      "picazón nasal",
+      "placas gruesas",
+      "reacción alérgica",
+      "rinorrea",
+      "Sibilancias",
+      "tos nocturna"
+    ]
+  },
+  {
+    "id": 81,
+    "nombre": "Salbutamol Airmax 100Mcg/Dosis Suspension Inhalador Oral Frasco X 200Dosis",
+    "fabricante": "chalver de colombia s.a.",
+    "precio": 22400.0,
+    "imagen": "med_81_2a59759829bd.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 82,
+    "nombre": "Salbutamol Sacrusyt 100Mcg/Dosis Susp Inh Oral Caja X 1Frasco X 200Dosis",
+    "fabricante": "sacrusyt",
+    "precio": 22300.0,
+    "imagen": "med_82_02237cbd3550.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 83,
+    "nombre": "Iprasynt 20Mcg/Dosis Solución Inhalación Oral Frasco X 200 Dosis",
+    "fabricante": "jewin pharmaceutical",
+    "precio": 24600.0,
+    "imagen": "med_83_a6d5bf0e81e5.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "estornudos",
+      "mucosidad",
+      "obstrucción nasal",
+      "opresión torácica",
+      "picazón nasal",
+      "Producción De Flema",
+      "rinorrea",
+      "Secreción nasal",
+      "Sibilancias",
+      "tos",
+      "tos crónica",
+      "tos nocturna"
+    ]
+  },
+  {
+    "id": 84,
+    "nombre": "Montelukast 10Mg Caja X 10 Tabletas",
+    "fabricante": "LA SANTE",
+    "precio": 29600.0,
+    "imagen": "med_84_95abb53209af.jpg",
+    "sintomas": [
+      "Comezón",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "estornudos",
+      "hinchazón",
+      "obstrucción nasal",
+      "opresión torácica",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "Sibilancias",
+      "tos nocturna"
+    ]
+  },
+  {
+    "id": 85,
+    "nombre": "Ketoconazol Mk 200Mg Caja X 10",
+    "fabricante": "Janssen",
+    "precio": 17100.0,
+    "imagen": "Ketoconazol_Mk_200Mg_Caja_X_10_Janssen.jpg",
+    "sintomas": [
+      "candidiasis vaginal",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "dermatitis seborreica",
+      "descamación",
+      "descamación del cuero cabelludo",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "hongos vaginales",
+      "Irritación",
+      "maceramiento",
+      "olor característico",
+      "picazón del cuero cabelludo",
+      "pie de atleta",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "Vaginosis bacteriana",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 86,
+    "nombre": "Prednisolona Tabletas 5Mg Caja X 30",
+    "fabricante": "Genfar",
+    "precio": 18000.0,
+    "imagen": "med_86_b004382c1571.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 87,
+    "nombre": "Clorfeniramina Tabletas 4Mg Caja X 20",
+    "fabricante": "ECAR",
+    "precio": 7700.0,
+    "imagen": "Clorfeniramina_Ecar_Tabletas_4Mg_Caja_X_20_genérico.jpg",
+    "sintomas": [
+      "alivio de picazón por picadura",
+      "Comezón",
+      "Congestión nasal",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "enrojecimiento ocular",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "lagrimeo",
+      "mordeduras",
+      "Náuseas",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción a picadura",
+      "reacción alérgica",
+      "rinorrea",
+      "secreción ocular",
+      "Vómitos",
+      "tos",
+      "Sensibilidad a la luz (fotofobia)",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 88,
+    "nombre": "Difenhidramina 12.5mg5ml Jarabe Frasco X 120 Ml",
+    "fabricante": "laproff",
+    "precio": 10500.0,
+    "imagen": "Difenhidramina_125mg5ml_Jarabe_Frasco_X_120_Ml_genérico.jpg",
+    "sintomas": [
+      "cansancio diurno",
+      "Comezón",
+      "Congestión nasal",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "Secreción nasal",
+      "sueño no reparador",
+      "tos"
+    ]
+  },
+  {
+    "id": 89,
+    "nombre": "Hidrocortisona Crema Tópica 1,0 % Tubo X 15g",
+    "fabricante": "memphis",
+    "precio": 8900.0,
+    "imagen": "med_89_dccf542b0134.jpg",
+    "sintomas": [
+      "alivio de picazón por picadura",
+      "calor local",
+      "Comezón",
+      "descamación",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "hinchazón",
+      "Irritación",
+      "limitación de movimiento",
+      "mordeduras",
+      "opresión torácica",
+      "reacción a picadura",
+      "rigidez matutina",
+      "Sibilancias",
+      "tos nocturna"
+    ]
+  },
+  {
+    "id": 90,
+    "nombre": "Pomada Derma Q Mupirocina + Clotrimazol + Mometasona 2%/1%/0.1% Sanfer Crema Tubo X 20 Gr",
+    "fabricante": "Sanfer",
+    "precio": 49700.0,
+    "imagen": "med_90_2e9fb163e2a7.jpg",
+    "sintomas": [
+      "antisepsia",
+      "Cansancio",
+      "cicatrización",
+      "cierre de heridas",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "dermatitis de contacto",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "dolor muscular",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "inflamación",
+      "Irritación",
+      "limpieza de heridas",
+      "maceramiento",
+      "olor característico",
+      "prevención de infección",
+      "pus",
+      "Quemadura",
+      "Quemazón",
+      "regeneración de tejido",
+      "taquicardia",
+      "tos"
+    ]
+  },
+  {
+    "id": 91,
+    "nombre": "Sulfato De Magnesio Paquete X 500Gr",
+    "fabricante": "laboratorios leon",
+    "precio": 13900.0,
+    "imagen": "med_91_8fc05ff366bf.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 92,
+    "nombre": "Clopidogrel Tabletas Recubiertas 75Mg Caja X 28",
+    "fabricante": "AG",
+    "precio": 39700.0,
+    "imagen": "Clopidogrel_Tabletas_Recubiertas_75Mg_Caja_X_28_Sanofi.jpg",
+    "sintomas": [
+      "ait",
+      "angina inestable",
+      "ataque cardíaco",
+      "claudicación intermitente",
+      "derrame cerebral",
+      "dolor en piernas al caminar",
+      "evento cardiovascular",
+      "evento cerebrovascular isquémico",
+      "evento coronario",
+      "ictus",
+      "infarto al corazón",
+      "infarto cerebral",
+      "isquemia cerebral transitoria",
+      "mini derrame",
+      "prevención de ictus",
+      "prevención de infarto",
+      "problemas de circulación en piernas",
+      "protección cardiovascular",
+      "dolor torácico o dolor en el pecho"
+    ]
+  },
+  {
+    "id": 93,
+    "nombre": "Prasugrel Effient Tabletas Recubiertas 10Mg Caja X 28",
+    "fabricante": "BIOPAS",
+    "precio": 261200.0,
+    "imagen": "med_93_68edd0c710c9.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 94,
+    "nombre": "Ticagrelor 90 mg tableta caja x60",
+    "fabricante": "AstraZeneca",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 96,
+    "nombre": "Sucralfato Dip Suspensión Vía Oral Frasco X 200mL",
+    "fabricante": "Merck",
+    "precio": 109400.0,
+    "imagen": "med_96_07577674259d.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 99,
+    "nombre": "Simeticona Finigax Simeticona 125Mg Caja X 20 Tabletas Masticable",
+    "fabricante": "ABBOTT",
+    "precio": 36400.0,
+    "imagen": "med_99_b4f58b192b2d.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 100,
+    "nombre": "Glicerina supositorios Lass Laxante Adulto 2.3Gr Sobre X 5",
+    "fabricante": "Bussie",
+    "precio": 11900.0,
+    "imagen": "med_100_c53279232af5.jpg",
+    "sintomas": [
+      "comedones",
+      "cuidado del cabello",
+      "distensión abdominal",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "fortalecimiento capilar",
+      "líneas de expresión",
+      "pápulas",
+      "pústulas",
+      "salud del cabello",
+      "tos",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 101,
+    "nombre": "Hidratante con urea Crema Anti-Rugosidades Ureadin Ultra 20 Tubo X 100Gr",
+    "fabricante": "Isdin",
+    "precio": 76400.0,
+    "imagen": "med_101_77e9627960a1.jpg",
+    "sintomas": [
+      "administración de líquidos",
+      "descamación",
+      "deshidratación de piel",
+      "hidratación parenteral",
+      "Irritación",
+      "reposición de líquidos",
+      "sequedad cutánea",
+      "xerosis"
+    ]
+  },
+  {
+    "id": 102,
+    "nombre": "Oticaina Benzocaína 2% frasco 10 ml",
+    "fabricante": "Bussie",
+    "precio": 28500.0,
+    "imagen": "Oticaina_Benzocaína_2_frasco_10_ml_genérico.jpg",
+    "sintomas": [
+      "alivio de picazón por picadura",
+      "ampollas por quemadura",
+      "Comezón",
+      "escaldaduras",
+      "Irritación",
+      "mordeduras",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "quemaduras de segundo grado",
+      "Quemazón",
+      "rasguños",
+      "reacción a picadura",
+      "Úlceras"
+    ]
+  },
+  {
+    "id": 103,
+    "nombre": "Otirilin (40Mg+10Mg)/Gr Solución Otica Frasco X 15 mL - lidocaina",
+    "fabricante": "axon pharma",
+    "precio": 53800.0,
+    "imagen": "med_103_2f98ab7a111d.jpg",
+    "sintomas": [
+      "adormecimiento local",
+      "alivio de picazón por picadura",
+      "ampollas",
+      "ardor",
+      "bloqueo de dolor",
+      "Comezón",
+      "dificultad respiratoria",
+      "dolor neuropático",
+      "Entumecimiento",
+      "escaldaduras",
+      "fatiga",
+      "inflamación local",
+      "insensibilidad temporal",
+      "mareo",
+      "mordeduras",
+      "palpitaciones",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "Quemazón",
+      "reacción a picadura",
+      "síncope",
+      "Tratamiento Parenteral"
+    ]
+  },
+  {
+    "id": 106,
+    "nombre": "Nifedipino Cápsulas Con Microgránulos Liberación Prolongada 30Mg Caja x 30",
+    "fabricante": "Richmond",
+    "precio": 49400.0,
+    "imagen": "med_106_2d9e6885e093.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor en el pecho",
+      "dolor torácico",
+      "fatiga",
+      "Hipertensión Arterial",
+      "mareo",
+      "opresión torácica",
+      "presión arterial elevada",
+      "sudoración",
+      "Prevencion Parto prematuro evitar contracciones"
+    ]
+  },
+  {
+    "id": 107,
+    "nombre": "Diltiazem 60 mg tableta caja x 20",
+    "fabricante": "Genfar",
+    "precio": 8500.0,
+    "imagen": "Diltiazem_60_mg_tableta_caja_x_20_genérico.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "Hipertensión Arterial",
+      "opresión torácica",
+      "osteopenia",
+      "palpitaciones",
+      "presión arterial elevada",
+      "sudoración",
+      "suplementación de calcio",
+      "síncope",
+      "dolor torácico o dolor en el pecho",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 108,
+    "nombre": "Sildenafilo Tabletas Recubiertas 50Mg Caja X 4",
+    "fabricante": "Genfar",
+    "precio": 16200.0,
+    "imagen": "med_108_9affa881ee69.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 109,
+    "nombre": "Tadalafilo Mk 5Mg Caja X 30 Tabletas Recubiertas",
+    "fabricante": "MK",
+    "precio": 98300.0,
+    "imagen": "med_109_bce1c7d51bcc.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 110,
+    "nombre": "Finasterida Tabletas Recubiertas 1Mg Caja X 28",
+    "fabricante": "AG",
+    "precio": 116600.0,
+    "imagen": "med_110_090c6b2a9b25.jpg",
+    "sintomas": [
+      "calvicie",
+      "cuidado del cabello",
+      "debilitamiento capilar",
+      "debilitamiento del cabello",
+      "fortalecimiento capilar",
+      "pérdida de cabello",
+      "salud del cabello"
+    ]
+  },
+  {
+    "id": 111,
+    "nombre": "Tamsulosina Winthrop 0.4Mg Caja X 30 Cápsulas Liberación Prolongada",
+    "fabricante": "Genfar",
+    "precio": 49700.0,
+    "imagen": "med_111_6dfa0290482e.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 112,
+    "nombre": "Mutum Cr Oxibutinina Clorhidrato 10 Mg Tecnofarma Caja X 20 Comprimidos",
+    "fabricante": "tecnofarma",
+    "precio": 109900.0,
+    "imagen": "med_112_1e3ff9ee45bc.jpg",
+    "sintomas": [
+      "espasmos",
+      "espasmos musculares",
+      "nicturia",
+      "pérdida involuntaria de orina",
+      "sudoración",
+      "urgencia urinaria"
+    ]
+  },
+  {
+    "id": 113,
+    "nombre": "Solifenacina Vesomni Tabletas Liberación Prolongada (6+0.4)Mg Caja X 3",
+    "fabricante": "Astellas",
+    "precio": 217200.0,
+    "imagen": "med_113_54e6d6dc9d50.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 114,
+    "nombre": "Nf Potasio 120Mg Nutrifit Capsula Blanda Frasco por 100",
+    "fabricante": "NutriFit",
+    "precio": 39000.0,
+    "imagen": "med_114_2745fb39b13e.jpg",
+    "sintomas": [
+      "acidez",
+      "complemento alimenticio",
+      "cuidado dental",
+      "dientes sensibles",
+      "dolor dental al frío",
+      "enjuague bucal",
+      "hilo dental",
+      "hipersensibilidad dental",
+      "limpieza dental",
+      "multivitamínico",
+      "prevención de deficiencias",
+      "refuerzo nutricional"
+    ]
+  },
+  {
+    "id": 116,
+    "nombre": "Colchicina 0.5Mg Tableta Caja X 40",
+    "fabricante": "expofarma",
+    "precio": 15600.0,
+    "imagen": "Colchicina_05Mg_Tableta_Caja_X_40_genérico.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "crisis gotosa",
+      "depositos de urato",
+      "enrojecimiento",
+      "eventos cardiovasculares",
+      "Fiebre",
+      "hinchazón",
+      "niveles altos de ácido úrico",
+      "prevención cardiovascular",
+      "primer dedo del pie",
+      "protección cardíaca",
+      "tofáceos"
+    ]
+  },
+  {
+    "id": 117,
+    "nombre": "Zyloprim Alopurinol 100mg X 60 Tabletas",
+    "fabricante": "aspen",
+    "precio": 41000.0,
+    "imagen": "Zyloprim_Alopurinol_100mg_X_60_Tabletas_aspen.jpg",
+    "sintomas": [
+      "Gota",
+      "Urticaria",
+      "Linfedema",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 118,
+    "nombre": "Metotrexato Tecnofarma 2.5Mg Blister x 20 Tabletas",
+    "fabricante": "tecnofarma",
+    "precio": 44800.0,
+    "imagen": "med_118_8a9e917da9d4.jpg",
+    "sintomas": [
+      "administración de quimioterapia",
+      "calor local",
+      "Comezón",
+      "descamación plateada",
+      "enrojecimiento",
+      "hinchazón",
+      "infusión de citostáticos",
+      "limitación de movimiento",
+      "placas gruesas",
+      "rigidez matutina",
+      "tratamiento oncológico"
+    ]
+  },
+  {
+    "id": 120,
+    "nombre": "Sulfasalazina Tabletas Recubiertas 500Mg Caja X 10",
+    "fabricante": "Genfar",
+    "precio": 23300.0,
+    "imagen": "med_120_09a1e4cb51df.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 121,
+    "nombre": "Etoricoxib 90 mg tableta caja x 14",
+    "fabricante": "MK",
+    "precio": 84400.0,
+    "imagen": "Etoricoxib_90_mg_tableta_caja_x_14_MK.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "crisis gotosa",
+      "crujidos",
+      "deformidad",
+      "depositos de urato",
+      "enrojecimiento",
+      "hinchazón",
+      "limitación de movimiento",
+      "primer dedo del pie",
+      "rigidez",
+      "rigidez matutina",
+      "tofáceos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 122,
+    "nombre": "Celecoxib 200Mg Cápsulas Caja X 10",
+    "fabricante": "Genfar",
+    "precio": 10400.0,
+    "imagen": "Celecoxib_200Mg_Cápsulas_Caja_X_10_Pfizer.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "crujidos",
+      "deformidad",
+      "enrojecimiento",
+      "Fiebre",
+      "hinchazón",
+      "limitación de movimiento",
+      "rigidez",
+      "rigidez matutina"
+    ]
+  },
+  {
+    "id": 123,
+    "nombre": "Bupropión 150 mg tableta caja x30",
+    "fabricante": "Europharma",
+    "precio": 63200.0,
+    "imagen": "Bupropión_150_mg_tableta_caja_x30_GlaxoSmithKline_GSK.jpg",
+    "sintomas": [
+      "aumento de peso",
+      "dificultad respiratoria",
+      "falta de motivación",
+      "fatiga",
+      "Insomnio",
+      "Pérdida de apetito",
+      "sobrepeso",
+      "tristeza persistente"
+    ]
+  },
+  {
+    "id": 124,
+    "nombre": "Vareniclina 1 mg tableta caja x56",
+    "fabricante": "Pfizer",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 125,
+    "nombre": "Nicorette Nicotina 2 Mg Menta Helada Masticable Caja X 30 Tabletas",
+    "fabricante": "Nicorette",
+    "precio": 101200.0,
+    "imagen": "med_125_a8bf54bc35dc.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 127,
+    "nombre": "Aciclovir 200 mg caja x24(25)",
+    "fabricante": "LA SANTE",
+    "precio": 17000.0,
+    "imagen": "Aciclovir_200_mg_caja_x2425_LA_SANTE.jpg",
+    "sintomas": [
+      "infeccion Clamidia"
+    ]
+  },
+  {
+    "id": 128,
+    "nombre": "Valaciclovir 500 mg tableta caja x10",
+    "fabricante": "GlaxoSmithKline (GSK)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 130,
+    "nombre": "Zanamivir inhalador 5 mg polvo",
+    "fabricante": "GlaxoSmithKline (GSK)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 132,
+    "nombre": "Rifampicina 300Mg Caja X 20 Capsulas",
+    "fabricante": "MK",
+    "precio": 86800.0,
+    "imagen": "med_132_eeee96dad94e.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 138,
+    "nombre": "Zidovudina 300 mg tableta caja x60",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 139,
+    "nombre": "Lyrica 300Mg Caja X 30 Cápsulas",
+    "fabricante": "Pfizer",
+    "precio": 196000.0,
+    "imagen": "Lyrica_300Mg_Caja_X_30_Cápsulas_Bristol-Myers_Squibb.jpg",
+    "sintomas": [
+      "ampollas",
+      "ardor",
+      "Comezón",
+      "confusión",
+      "convulsiones",
+      "debilidad muscular",
+      "dolor neuropático",
+      "dolor persistente",
+      "Entumecimiento",
+      "espasmos musculares",
+      "fatiga",
+      "hormigueo",
+      "inflamación local",
+      "inquietud",
+      "limitación de movimiento",
+      "nerviosismo",
+      "palpitaciones",
+      "pérdida de conciencia",
+      "Quemazón",
+      "rigidez",
+      "sudoración",
+      "Temblores"
+    ]
+  },
+  {
+    "id": 142,
+    "nombre": "Eritropoyetina Humana Recom 2000Ui/mL Solución Inyectable X 1 Ampolla",
+    "fabricante": "Delta",
+    "precio": 10300.0,
+    "imagen": "Eritropoyetina_Humana_Recom_2000UimL_Solución_Inyectable_X_1_Ampolla_Janssen.jpg",
+    "sintomas": [
+      "Debilidad",
+      "dificultad respiratoria",
+      "fatiga",
+      "palidez",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 144,
+    "nombre": "Somatropina Genotropin 36Ui(12Mg) Polvo Inyectable Caja por 1",
+    "fabricante": "Pfizer",
+    "precio": 450300.0,
+    "imagen": "med_144_1abce2a113cf.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 145,
+    "nombre": "Levotiroxina Sódica Tabletas Colmed International 50Mcg Caja X 30 Tabletas",
+    "fabricante": "colmed",
+    "precio": 19400.0,
+    "imagen": "med_145_2678289a028d.jpg",
+    "sintomas": [
+      "aumento de peso",
+      "depresión",
+      "fatiga",
+      "intolerancia al frío",
+      "Piel seca"
+    ]
+  },
+  {
+    "id": 146,
+    "nombre": "Propiltiouracilo Tirostat 50Mg Blister X 10 Tabletas",
+    "fabricante": "SIEGFRIED S.A.S.",
+    "precio": 11300.0,
+    "imagen": "med_146_0f10238dd7d3.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 147,
+    "nombre": "Espasmobil (300+10)Mg Tabletas Recubiertas Caja X 12",
+    "fabricante": "farmacol chnon",
+    "precio": 27700.0,
+    "imagen": "med_147_669ab6274d2b.jpg",
+    "sintomas": [
+      "espasmos",
+      "espasmos musculares",
+      "Fiebre",
+      "Fiebre Alta"
+    ]
+  },
+  {
+    "id": 148,
+    "nombre": "Lioton Gel 1000Ui/Gr Tubo X 30Gr Heparina",
+    "fabricante": "menarini",
+    "precio": 81500.0,
+    "imagen": "med_148_7eb62da986f9.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "enrojecimiento",
+      "hematoma",
+      "hinchazón"
+    ]
+  },
+  {
+    "id": 149,
+    "nombre": "Sulfato Ferroso 200 Mg Tabletas Recubiertas Fco X 100 Ecar",
+    "fabricante": "ECAR",
+    "precio": 18700.0,
+    "imagen": "med_149_3c3311b8dbe2.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 150,
+    "nombre": "Multimineral complejo Caltrate Plus M Tabletas Frasco X 60",
+    "fabricante": "Haleon",
+    "precio": 101500.0,
+    "imagen": "med_150_886d5b482ffa.jpg",
+    "sintomas": [
+      "Calambres musculares",
+      "carencia nutricional",
+      "complemento alimenticio",
+      "deformidad",
+      "dolor severo",
+      "dolor óseo",
+      "déficit vitamínico",
+      "falta de vitaminas",
+      "fracturas frecuentes",
+      "fragilidad ósea",
+      "hematoma",
+      "imposibilidad de movimiento",
+      "inflamación",
+      "insuficiencia de vitamina d",
+      "multivitamínico",
+      "osteopenia",
+      "prevención de deficiencias",
+      "pérdida de altura",
+      "refuerzo nutricional",
+      "suplementación de calcio",
+      "suplementación de vitamina d",
+      "suplementación vitamínica"
+    ]
+  },
+  {
+    "id": 151,
+    "nombre": "Antiséptico clorhexidina solución 0.12% frasco 250 ml",
+    "fabricante": "COLGATE",
+    "precio": 39900.0,
+    "imagen": "Antiséptico_clorhexidina_solución_012_frasco_250_ml_genérico.jpg",
+    "sintomas": [
+      "abrasiones",
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "cortadas",
+      "desinfección",
+      "desinfectar la piel",
+      "Dolor de garganta",
+      "eliminación de gérmenes",
+      "enfermedad periodontal",
+      "inflamación de encías",
+      "prevención de infección",
+      "rasguños",
+      "raspones",
+      "regeneración de tejido",
+      "sangrado de encías",
+      "Úlceras",
+      "Infección Bacterial",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 152,
+    "nombre": "Alcohol isopropílico 70% frasco 350 ml",
+    "fabricante": "MK",
+    "precio": 5800.0,
+    "imagen": "Alcohol_isopropílico_70_frasco_350_ml_MK.jpg",
+    "sintomas": [
+      "desinfectar la piel",
+      "limpiar y desinfectar heridas superficiales",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 153,
+    "nombre": "Agua oxigenada 120 ml",
+    "fabricante": "JGB",
+    "precio": 5500.0,
+    "imagen": "Agua_oxigenada_120_ml_JGB.jpg",
+    "sintomas": [
+      "Picazón Piel",
+      "limpiar y desinfectar heridas superficiales",
+      "úlceras y quemaduras leves",
+      "dolores fuertes de muelas",
+      "hongos en las uñas",
+      "pie de atleta",
+      "Congestión nasal",
+      "limpieza de oidos"
+    ]
+  },
+  {
+    "id": 154,
+    "nombre": "Sales de rehidratación Electrolit Suero Rehidratante Solución Oral Sabor Coco 30meq (na)/l Frasco x 625ml",
+    "fabricante": "electrolit",
+    "precio": 11200.0,
+    "imagen": "med_154_ed31dc70c80a.jpg",
+    "sintomas": [
+      "agotamiento muscular",
+      "cansancio muscular",
+      "descanso muscular",
+      "Dolor abdominal",
+      "dolor muscular",
+      "dolor muscular post-ejercicio",
+      "electrolitos",
+      "evacuaciones frecuentes",
+      "pérdida de líquidos",
+      "recuperación muscular",
+      "regeneración muscular",
+      "reposición de líquidos",
+      "restauración de energía",
+      "sales de rehidratación",
+      "sudoración",
+      "suero oral",
+      "vómito",
+      "Vómitos"
+    ]
+  },
+  {
+    "id": 155,
+    "nombre": "Antiemético ondansetrón 4 mg tableta caja x10",
+    "fabricante": "Biolab",
+    "precio": 74800.0,
+    "imagen": "Antiemético_ondansetrón_4_mg_tableta_caja_x10_GSK.jpg",
+    "sintomas": [
+      "Náuseas",
+      "Vómitos"
+    ]
+  },
+  {
+    "id": 158,
+    "nombre": "Suplemento hierro + vitamina C Dayamineral Fe Complemento Multivitamínico Jarabe Frasco X 240 mL",
+    "fabricante": "Lafrancol",
+    "precio": 68100.0,
+    "imagen": "med_158_48de18d94228.jpg",
+    "sintomas": [
+      "anemia ferropénica",
+      "Cansancio",
+      "carencia nutricional",
+      "complemento alimenticio",
+      "Debilidad",
+      "dificultad respiratoria",
+      "déficit vitamínico",
+      "escorbuto",
+      "falta de vitaminas",
+      "fatiga",
+      "mareo",
+      "multivitamínico",
+      "osteopenia",
+      "palidez",
+      "prevención de deficiencias",
+      "refuerzo nutricional",
+      "suplementación de calcio",
+      "suplementación de hierro",
+      "suplementación vitamina c",
+      "suplementación vitamínica"
+    ]
+  },
+  {
+    "id": 159,
+    "nombre": "Jarabe para la tos Dextrometorfano Broncochem F Niños X 120Ml",
+    "fabricante": "SIEGFRIED S.A.S.",
+    "precio": 37700.0,
+    "imagen": "med_159_ea3a4567ab16.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Comezón",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "Dolor de garganta",
+      "dolor muscular",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre Alta",
+      "hinchazón",
+      "lagrimeo",
+      "mucosidad",
+      "opresión torácica",
+      "Producción De Flema",
+      "reacción alérgica",
+      "rinorrea",
+      "Secreción nasal",
+      "Sibilancias",
+      "tos",
+      "tos crónica",
+      "tos leve",
+      "tos nocturna",
+      "Tos seca"
+    ]
+  },
+  {
+    "id": 160,
+    "nombre": "Bronquisol Forte Dextrometorfano + Guaifenesina Jarabe Adulto Tos Seca Frasco X 120 Ml",
+    "fabricante": "JGB",
+    "precio": 33700.0,
+    "imagen": "med_160_22a55014bf1e.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "Dolor de garganta",
+      "dolor muscular",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre Alta",
+      "Irritación",
+      "mucosidad",
+      "opresión torácica",
+      "Producción De Flema",
+      "rinorrea",
+      "Sibilancias",
+      "tos",
+      "Tos con flema",
+      "tos crónica",
+      "tos leve",
+      "tos nocturna",
+      "Tos seca"
+    ]
+  },
+  {
+    "id": 161,
+    "nombre": "Gotas nasales xylometazolina 0.1% frasco 10 ml",
+    "fabricante": "(genérico)",
+    "precio": 88600.0,
+    "imagen": "med_161_82c75cf9569c.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "cefalea sinusal",
+      "Comezón",
+      "Congestión nasal",
+      "crisis gotosa",
+      "depositos de urato",
+      "Dolor de garganta",
+      "dolor facial",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "hinchazón",
+      "mucosidad nasal espesa",
+      "presión sinusal",
+      "primer dedo del pie",
+      "reacción alérgica",
+      "rinorrea",
+      "tofáceos",
+      "tos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 164,
+    "nombre": "Insulina Novorapid Solución Inyectable en Pluma Prellenada 70/30 100Ui/mL (0,035Mg) Cartucho X 3mL",
+    "fabricante": "Novo Nordisk",
+    "precio": 34900.0,
+    "imagen": "med_164_426c9ceea10c.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 165,
+    "nombre": "Clopidogrel 75 mg tableta x 28",
+    "fabricante": "AG",
+    "precio": 39700.0,
+    "imagen": "Clopidogrel_75_mg_tableta_x_30_Sanofi.jpg",
+    "sintomas": [
+      "angina inestable",
+      "claudicación intermitente",
+      "derrame cerebral",
+      "dolor en piernas al caminar",
+      "evento coronario",
+      "eventos aterotrombóticos",
+      "eventos cardiovasculares",
+      "infarto cerebral",
+      "prevención aterotrombótica",
+      "problemas de circulación en piernas",
+      "trombosis arterial",
+      "dolor torácico o dolor en el pecho"
+    ]
+  },
+  {
+    "id": 167,
+    "nombre": "Isotretinoína Acnotin 20Mg Capsula Blanda Caja por 30",
+    "fabricante": "mega we care",
+    "precio": 175100.0,
+    "imagen": "med_167_c5f06fc27b69.jpg",
+    "sintomas": [
+      "administración de quimioterapia",
+      "comedones",
+      "enrojecimiento",
+      "inflamación",
+      "infusión de citostáticos",
+      "pápulas",
+      "pústulas",
+      "tratamiento oncológico"
+    ]
+  },
+  {
+    "id": 169,
+    "nombre": "Meloxicam 15Mg Tabletas Caja X 10",
+    "fabricante": "LA SANTE",
+    "precio": 19700.0,
+    "imagen": "med_169_fbb893520596.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "enrojecimiento",
+      "Fiebre",
+      "hinchazón",
+      "limitación de movimiento",
+      "rigidez",
+      "rigidez matutina"
+    ]
+  },
+  {
+    "id": 172,
+    "nombre": "Tizanidina 2 mg tableta caja x30",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 173,
+    "nombre": "Pregabalina 75 mg cápsula caja x30",
+    "fabricante": "Pfizer",
+    "precio": 17600.0,
+    "imagen": "med_173_ede1a731fd62.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 174,
+    "nombre": "Gabapentina 300 mg cápsula caja x 30",
+    "fabricante": "MK",
+    "precio": 14100.0,
+    "imagen": "med_174_fd89899e549b.jpg",
+    "sintomas": [
+      "ampollas",
+      "ardor",
+      "cansancio diurno",
+      "Comezón",
+      "confusión",
+      "convulsiones",
+      "debilidad muscular",
+      "dolor neuropático",
+      "dolor persistente",
+      "Entumecimiento",
+      "espasmos musculares",
+      "falta de motivación",
+      "fatiga",
+      "hambre extrema",
+      "hormigueo",
+      "inflamación local",
+      "inquietud",
+      "limitación de movimiento",
+      "nerviosismo",
+      "orina frecuente",
+      "palpitaciones",
+      "Pérdida de apetito",
+      "pérdida de conciencia",
+      "pérdida de peso",
+      "rigidez",
+      "sed excesiva",
+      "sudoración",
+      "sueño no reparador",
+      "Temblores",
+      "tristeza persistente",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 175,
+    "nombre": "Topiramato 100 mg tableta caja x30",
+    "fabricante": "Janssen",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 176,
+    "nombre": "Lamictal Tabletas Dispersables 50Mg Caja X 30 - Lamotrigina",
+    "fabricante": "GlaxoSmithKline (GSK)",
+    "precio": 31600.0,
+    "imagen": "med_176_d77e2adbdaef.jpg",
+    "sintomas": [
+      "confusión",
+      "convulsiones",
+      "espasmos musculares",
+      "pérdida de conciencia"
+    ]
+  },
+  {
+    "id": 177,
+    "nombre": "Levetiracetam 500Mg Tableta Recubierta Caja X 30",
+    "fabricante": "MK",
+    "precio": 43300.0,
+    "imagen": "med_177_9ad05b13ffd7.jpg",
+    "sintomas": [
+      "confusión",
+      "convulsiones",
+      "espasmos musculares",
+      "pérdida de conciencia"
+    ]
+  },
+  {
+    "id": 178,
+    "nombre": "Carbamazepina 200 mg tableta caja X 30",
+    "fabricante": "laproff",
+    "precio": 17100.0,
+    "imagen": "Carbamazepina_200_mg_tableta_caja_X_30_genérico.jpg",
+    "sintomas": [
+      "confusión",
+      "convulsiones",
+      "debilidad muscular",
+      "dolor neuropático",
+      "Entumecimiento",
+      "espasmos musculares",
+      "hormigueo",
+      "pérdida de conciencia"
+    ]
+  },
+  {
+    "id": 179,
+    "nombre": "Fenitoína Sódica Mk 100 Mg Frasco X 50 Cápsulas",
+    "fabricante": "MK",
+    "precio": 27700.0,
+    "imagen": "med_179_164280403f38.jpg",
+    "sintomas": [
+      "confusión",
+      "convulsiones",
+      "espasmos musculares",
+      "pérdida de conciencia",
+      "Tratamiento Parenteral"
+    ]
+  },
+  {
+    "id": 180,
+    "nombre": "Valproato de sodio 500 mg tableta caja x60",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 181,
+    "nombre": "Vigabatrina 500 mg tableta caja x30",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 184,
+    "nombre": "Candesartán 8 mg tableta caja x30",
+    "fabricante": "MK",
+    "precio": 15800.0,
+    "imagen": "Candesartán_8_mg_tableta_caja_x30_AstraZeneca.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hambre extrema",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "orina frecuente",
+      "presión arterial elevada",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 185,
+    "nombre": "Olmesartan Medoxomil 20Mg Tabletas Recubiertas Caja X 30",
+    "fabricante": "MK",
+    "precio": 25800.0,
+    "imagen": "med_185_59c828324205.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "mareo",
+      "presión arterial elevada"
+    ]
+  },
+  {
+    "id": 186,
+    "nombre": "Nebivolol Nebilet Tabletas 5Mg Caja X 28",
+    "fabricante": "menarini",
+    "precio": 59700.0,
+    "imagen": "med_186_3812fc656d3e.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "mareo",
+      "presión arterial elevada"
+    ]
+  },
+  {
+    "id": 187,
+    "nombre": "Gynotran Óvulos Uso Vaginal 750Mg+200Mg Caja X 7 - Miconazol",
+    "fabricante": "Exeltis",
+    "precio": 77400.0,
+    "imagen": "med_187_fd7a894cfd64.jpg",
+    "sintomas": [
+      "candidiasis vaginal",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "dolor muscular",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "hongos vaginales",
+      "inflamación",
+      "maceramiento",
+      "olor característico",
+      "pie de atleta",
+      "pus",
+      "taquicardia",
+      "tos",
+      "vaginosis"
+    ]
+  },
+  {
+    "id": 188,
+    "nombre": "Terbinafina 250 mg tableta caja x14",
+    "fabricante": "MK",
+    "precio": 88600.0,
+    "imagen": "med_188_932c779e0916.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 189,
+    "nombre": "Tinidazol 500 mg tableta caja x10",
+    "fabricante": "Genfar",
+    "precio": 9800.0,
+    "imagen": "Tinidazol_500_mg_tableta_caja_x10_genérico.jpg",
+    "sintomas": [
+      "Amebiasis",
+      "Giardiasis",
+      "Tricomoniasis",
+      "Vaginosis bacteriana",
+      "Diarrea",
+      "infeccion Clamidia"
+    ]
+  },
+  {
+    "id": 191,
+    "nombre": "Vancomicina 500 mg vial polvo",
+    "fabricante": "(genérico/hospitalario)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 194,
+    "nombre": "PIPERACICLINA + TAZOBACTAM AMPOLLA 4 GR",
+    "fabricante": "Vitalis",
+    "precio": 20100.0,
+    "imagen": "med_194_59ec483bacc7.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 195,
+    "nombre": "Insulina humana Novorapid Solución Inyectable en Pluma Prellenada 70/30 100Ui/mL (0,035Mg) Cartucho X 3mL",
+    "fabricante": "Novo Nordisk",
+    "precio": 34900.0,
+    "imagen": "med_195_b4a6f1c25dbf.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 196,
+    "nombre": "Analgésico tópico diclofenaco gel 1% tubo 50 g",
+    "fabricante": "Genfar",
+    "precio": 26638.0,
+    "imagen": "Analgésico_tópico_diclofenaco_gel_1_tubo_50_g_Lafrancol.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "crisis gotosa",
+      "crujidos",
+      "deformidad",
+      "depositos de urato",
+      "limitación de movimiento",
+      "primer dedo del pie",
+      "rigidez",
+      "rigidez matutina",
+      "tofáceos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 201,
+    "nombre": "Cloruro De Sodio + Cloruro De Potasio 0,26g/0,15g Tecnoquímicas Caja X 4 Sachets",
+    "fabricante": "Tecnoquímicas",
+    "precio": 17300.0,
+    "imagen": "Cloruro_De_Sodio__Cloruro_De_Potasio_026g015g_Tecnoquímicas_Caja_X_4_Sachets_genérico.jpg",
+    "sintomas": [
+      "deshidratación",
+      "Dolor abdominal",
+      "evacuaciones frecuentes"
+    ]
+  },
+  {
+    "id": 202,
+    "nombre": "Carbocisteína jarabe 250 ml",
+    "fabricante": "JGB",
+    "precio": 33000.0,
+    "imagen": "Carbocisteína_jarabe_250_ml_genérico.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "Dolor de garganta",
+      "estornudos",
+      "mucosidad",
+      "Producción De Flema",
+      "rinorrea",
+      "Sibilancias",
+      "tos",
+      "Tos con flema",
+      "tos crónica o persistente"
+    ]
+  },
+  {
+    "id": 203,
+    "nombre": "Bromhexina jarabe 4mg/5ml 120 ml",
+    "fabricante": "TQ",
+    "precio": 38100.0,
+    "imagen": "Bromhexina_jarabe_4mg5ml_120_ml_genérico.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Congestión nasal",
+      "dificultad respiratoria",
+      "Dolor de garganta",
+      "Escalofríos",
+      "Fiebre Alta",
+      "Irritación",
+      "mucosidad",
+      "Producción De Flema",
+      "Sibilancias",
+      "tos",
+      "Tos seca",
+      "congestion toraxica",
+      "Dolor muscular (mialgia)"
+    ]
+  },
+  {
+    "id": 205,
+    "nombre": "Antifúngico oral itraconazol 100 mg cápsula caja x 15",
+    "fabricante": "SUIPHAR DE COLOMBIA",
+    "precio": 47348.0,
+    "imagen": "Antifúngico_oral_itraconazol_100_mg_cápsula_caja_x_15_Janssen.jpg",
+    "sintomas": [
+      "candidiasis vaginal",
+      "hongos vaginales",
+      "Infección Bacterial",
+      "Vaginosis bacteriana"
+    ]
+  },
+  {
+    "id": 207,
+    "nombre": "Tobramicina oftálmica gotas 0.3% frasco 5 ml",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 208,
+    "nombre": "Colirio antiinflamatorio ketorolaco frasco 5 ml Solución Oftálmica 0,04%",
+    "fabricante": "Allergan",
+    "precio": 110400.0,
+    "imagen": "Colirio_antiinflamatorio_ketorolaco_frasco_5_ml_Solución_Oftálmica_004_Alcon.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "ardor",
+      "calor local",
+      "Comezón",
+      "dificultad nocturna",
+      "enrojecimiento",
+      "enrojecimiento ocular",
+      "estornudos",
+      "hinchazón",
+      "lagrimeo",
+      "opacidad del cristalino",
+      "reacción alérgica",
+      "secreción ocular",
+      "Visión borrosa",
+      "Sensibilidad a la luz (fotofobia)"
+    ]
+  },
+  {
+    "id": 209,
+    "nombre": "Latanoprost colirio Latanox Solución Oftálmica Frasco X 5mL",
+    "fabricante": "Procaps",
+    "precio": 45700.0,
+    "imagen": "med_209_c2dc417dd66f.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "crisis gotosa",
+      "depositos de urato",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "Dolor ocular",
+      "fatiga",
+      "halos visuales",
+      "mareo",
+      "presión arterial elevada",
+      "presión ocular elevada",
+      "primer dedo del pie",
+      "tofáceos",
+      "visión periférica reducida",
+      "ácido úrico"
+    ]
+  },
+  {
+    "id": 210,
+    "nombre": "Timolol colirio 0.5% frasco 5 ml",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 211,
+    "nombre": "Brimonidina solucion oftalmica 0.2% frasco 5 ml",
+    "fabricante": "Allergan",
+    "precio": 28900.0,
+    "imagen": "Brimonidina_solucion_oftalmica_02_frasco_5_ml_Allergan.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "crisis gotosa",
+      "depositos de urato",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "Dolor ocular",
+      "enrojecimiento",
+      "enrojecimiento facial",
+      "fatiga",
+      "halos visuales",
+      "presión arterial elevada",
+      "presión ocular elevada",
+      "primer dedo del pie",
+      "rubor facial",
+      "tofáceos",
+      "vasos sanguíneos visibles",
+      "visión periférica reducida",
+      "niveles altos de ácido úrico",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 214,
+    "nombre": "Óxido de zinc crema protectora tubo 100 g",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 215,
+    "nombre": "Gel de aloe vera + camomilla Caladerm Clear Plus Frasco X 120 Gr",
+    "fabricante": "laboratoires francais",
+    "precio": 31800.0,
+    "imagen": "med_215_cf03e3dd1535.jpg",
+    "sintomas": [
+      "afecciones cutáneas",
+      "ampollas por quemadura",
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "comedones",
+      "Comezón",
+      "cuidado del cabello",
+      "dermatitis seborreica",
+      "descamación del cuero cabelludo",
+      "descamación plateada",
+      "enfermedad periodontal",
+      "enrojecimiento",
+      "escaldaduras",
+      "fortalecimiento capilar",
+      "inflamación de encías",
+      "Irritación",
+      "picazón del cuero cabelludo",
+      "placas gruesas",
+      "prevención de infección",
+      "pápulas",
+      "pústulas",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "quemaduras de segundo grado",
+      "Quemazón",
+      "regeneración de tejido",
+      "salud bucal",
+      "salud del cabello",
+      "sangrado de encías",
+      "limpiar y desinfectar heridas superficiales",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 216,
+    "nombre": "Protector Solar Eucerin Ultra 100 Solar Uv+ Fps 50+ Tubo 80Ml Fluid Cream",
+    "fabricante": "eucerin",
+    "precio": 185100.0,
+    "imagen": "med_216_7c8391193380.jpg",
+    "sintomas": [
+      "bloqueador solar",
+      "hiperpigmentación",
+      "prevención de irritación",
+      "prevención de quemaduras solares",
+      "protección contra rayos solares",
+      "protección uv",
+      "radicales libres"
+    ]
+  },
+  {
+    "id": 217,
+    "nombre": "Anticonceptivo oral etinilestradiol + levonorgestrel caja x21",
+    "fabricante": "Bayer",
+    "precio": 7000.0,
+    "imagen": "Anticonceptivo_oral_etinilestradiol__levonorgestrel_caja_x21_Bayer.jpg",
+    "sintomas": [
+      "anticoncepción postcoital",
+      "control hormonal",
+      "control natal",
+      "prevención de embarazo no deseado",
+      "píldora anticonceptiva",
+      "regulación menstrual"
+    ]
+  },
+  {
+    "id": 219,
+    "nombre": "Postday 1 1.5Mg Caja X 1 Tableta - Levonorgestrel",
+    "fabricante": "Lafrancol",
+    "precio": 19400.0,
+    "imagen": "med_219_83f44e1fa376.jpg",
+    "sintomas": [
+      "control hormonal",
+      "control natal",
+      "método anticonceptivo",
+      "planificación familiar",
+      "prevención de embarazo",
+      "píldora anticonceptiva",
+      "regulación menstrual"
+    ]
+  },
+  {
+    "id": 220,
+    "nombre": "Acetato de medroxiprogesterona inyección 150 mg/ml",
+    "fabricante": "CAICLOS",
+    "precio": 18000.0,
+    "imagen": "Acetato_de_medroxiprogesterona_inyección_150_mgml_CAICLOS.jpg",
+    "sintomas": [
+      "anticoncepción",
+      "hemorragias irregulares",
+      "hemorragias abundantes",
+      "prevención del cáncer de endometrio",
+      "endometriosis",
+      "inducir un ciclo menstrual",
+      "prevención de embarazo no deseado"
+    ]
+  },
+  {
+    "id": 221,
+    "nombre": "Misoprostol Cytil 200Mcg Tabletas Caja X 7",
+    "fabricante": "TQ",
+    "precio": 181500.0,
+    "imagen": "med_221_35ef7a20c4f6.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "escaras",
+      "heridas crónicas",
+      "llagas por presión",
+      "llagas vasculares",
+      "Úlceras",
+      "úlceras de decúbito",
+      "úlceras en piernas"
+    ]
+  },
+  {
+    "id": 223,
+    "nombre": "Terbutalina solución inyectable 0.5 mg/ml ampolla",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 224,
+    "nombre": "Sinutab Plus Ns Congestión y Gripe Tabletas Recubiertas (500+5)Mg Caja X 12 Fenilefrina",
+    "fabricante": "Johnson & Johnson / (genérico)",
+    "precio": 24000.0,
+    "imagen": "med_224_cfb02727effc.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "Cansancio",
+      "cefalea sinusal",
+      "Comezón",
+      "Congestión nasal",
+      "crisis gotosa",
+      "depositos de urato",
+      "Dolor de garganta",
+      "dolor facial",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hinchazón",
+      "hipotensión",
+      "mucosidad nasal espesa",
+      "presión sinusal",
+      "primer dedo del pie",
+      "reacción alérgica",
+      "rinorrea",
+      "tofáceos",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 225,
+    "nombre": "Bromuro de ipratropio Solución Para Inhalar (0.25Mg+0.50Mg/mL) Frasco X 20mL",
+    "fabricante": "Boehringer Ingelheim",
+    "precio": 41300.0,
+    "imagen": "Bromuro_de_ipratropio_Solución_Para_Inhalar_025Mg050MgmL_Frasco_X_20mL_Boehringer_Ingelheim.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "mucosidad",
+      "opresión torácica",
+      "Producción De Flema",
+      "Sibilancias",
+      "tos",
+      "tos nocturna",
+      "tos crónica o persistente"
+    ]
+  },
+  {
+    "id": 233,
+    "nombre": "Tramadol solución inyectable 50 mg/ml ampolla",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 237,
+    "nombre": "Vacuna influenza inyectable dosis 2025",
+    "fabricante": "Sanofi / GSK (según proveedor)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 238,
+    "nombre": "Vacuna Covid-19 (ARNm) dosis",
+    "fabricante": "Pfizer / Moderna (según proveedor)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 239,
+    "nombre": "Vacuna Hepatitis B 10 µg dosis",
+    "fabricante": "Merck / GSK",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 240,
+    "nombre": "Vacuna Tdap dosis",
+    "fabricante": "Sanofi",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 241,
+    "nombre": "Vacuna neumocócica (conjugada) dosis",
+    "fabricante": "Pfizer",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 242,
+    "nombre": "Vacuna rotavirus oral dosis",
+    "fabricante": "Merck",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 243,
+    "nombre": "Vacuna VPH dosis",
+    "fabricante": "Merck / GSK",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 244,
+    "nombre": "Heparina Lioton Gel 1000Ui/Gr Tubo X 30 Gr",
+    "fabricante": "menarini",
+    "precio": 81500.0,
+    "imagen": "med_244_d1c18541c897.jpg",
+    "sintomas": [
+      "agregación plaquetaria",
+      "anticoagulación preventiva",
+      "ataque cardíaco",
+      "calor local",
+      "dolor torácico",
+      "enrojecimiento",
+      "evento cardiovascular",
+      "hematoma",
+      "hinchazón",
+      "infarto al corazón",
+      "riesgo de coagulación"
+    ]
+  },
+  {
+    "id": 248,
+    "nombre": "Tranexámico 500 mg tableta caja x30",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 249,
+    "nombre": "Ácido tranexámico inyectable 100 mg/ml ampolla",
+    "fabricante": "(hospitalario)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 250,
+    "nombre": "ciclopentolato oftalmico 1% gotas 15ml",
+    "fabricante": "Alcon",
+    "precio": 76500.0,
+    "imagen": "ciclopentolato_oftalmico_1_gotas_15ml_genérico.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "crisis gotosa",
+      "depositos de urato",
+      "enrojecimiento",
+      "hinchazón",
+      "Irritación",
+      "primer dedo del pie",
+      "tofáceos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 252,
+    "nombre": "Clindamicina Cápsulas 300Mg Caja X 24",
+    "fabricante": "LA SANTE",
+    "precio": 77900.0,
+    "imagen": "Clindamicina_Cápsulas_300Mg_Caja_X_24_Sandoz.jpg",
+    "sintomas": [
+      "Cansancio",
+      "comedones",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Escalofríos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "Infección De Piel",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "pápulas",
+      "pústulas",
+      "taquicardia",
+      "tos",
+      "Vaginosis bacteriana",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 253,
+    "nombre": "Lincomicina 600 Mg/2 Ml Solución Inyectable Ampolla X 2Ml",
+    "fabricante": "Genfar",
+    "precio": 7400.0,
+    "imagen": "med_253_1b0aaeb4586b.jpg",
+    "sintomas": [
+      "amígdalas inflamadas",
+      "Cansancio",
+      "cefalea sinusal",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad al tragar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "dolor en el pecho",
+      "dolor facial",
+      "dolor muscular",
+      "enrojecimiento",
+      "Escalofríos",
+      "Fiebre",
+      "Fiebre Alta",
+      "garganta irritada",
+      "hipotensión",
+      "inflamación",
+      "inflamación de garganta",
+      "maceramiento",
+      "mucosidad",
+      "mucosidad nasal espesa",
+      "olor característico",
+      "presión sinusal",
+      "Producción De Flema",
+      "pus",
+      "Sibilancias",
+      "taquicardia",
+      "tos"
+    ]
+  },
+  {
+    "id": 254,
+    "nombre": "Nitrofurantoina Cápsulas 100Mg Caja X 40",
+    "fabricante": "TQ",
+    "precio": 38800.0,
+    "imagen": "med_254_585b7e06d383.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "dolor en el pecho",
+      "dolor muscular",
+      "dolor suprapúbico",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "inflamación",
+      "maceramiento",
+      "olor característico",
+      "orina frecuente",
+      "prevención de infección",
+      "pus",
+      "rinorrea",
+      "taquicardia",
+      "tos",
+      "tos leve",
+      "urgencia urinaria"
+    ]
+  },
+  {
+    "id": 255,
+    "nombre": "Fosfomicina Urofos 3Gr/Sobre Polvo Solución Oral Caja X 1 Sobre X 8.7Gr",
+    "fabricante": "NovaMed",
+    "precio": 23800.0,
+    "imagen": "med_255_bb4f1a5c492d.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "dolor suprapúbico",
+      "enrojecimiento",
+      "Escalofríos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "maceramiento",
+      "meningitis",
+      "olor característico",
+      "orina frecuente",
+      "prevención de infección",
+      "pus",
+      "taquicardia",
+      "tos",
+      "urgencia urinaria",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 256,
+    "nombre": "Metronidazol 500Mg Ovul Blister X 10 ovulos vaginales",
+    "fabricante": "colmed",
+    "precio": 12200.0,
+    "imagen": "med_256_eb2dfab7e906.jpg",
+    "sintomas": [
+      "Amebiasis",
+      "antiparasitario",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "cuidado de suturas",
+      "curación postoperatoria",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "dolor muscular",
+      "eliminación de parásitos",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "inflamación",
+      "lombrices",
+      "maceramiento",
+      "olor característico",
+      "oxiuros",
+      "prevención de infección quirúrgica",
+      "pus",
+      "taquicardia",
+      "tos",
+      "tratamiento antiparasitario",
+      "Tricomoniasis",
+      "vaginosis",
+      "Vaginosis bacteriana",
+      "vermífugo"
+    ]
+  },
+  {
+    "id": 257,
+    "nombre": "Dapsona 20 mg gel al 5%",
+    "fabricante": "ABBOTT",
+    "precio": 126700.0,
+    "imagen": "Dapsona_20_mg_gel_al_5_genérico.jpg",
+    "sintomas": [
+      "ampollas",
+      "antiinflamatorio",
+      "calor local",
+      "comedones",
+      "Comezón",
+      "descamación",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "Escalofríos",
+      "Fiebre",
+      "hinchazón",
+      "Irritación",
+      "pápulas",
+      "pústulas",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 258,
+    "nombre": "Trimetoprim Sulfa F 160Mg+800Mg Blister X 10 Tabletas",
+    "fabricante": "Genfar",
+    "precio": 8700.0,
+    "imagen": "med_258_bd28c900019e.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 260,
+    "nombre": "Uroxacin Tabletas Recubiertas 200Mg Caja X 7 Fenazopiridina",
+    "fabricante": "tecnofarma",
+    "precio": 81700.0,
+    "imagen": "med_260_2230a239d705.jpg",
+    "sintomas": [
+      "ardor",
+      "dolor suprapúbico",
+      "Irritación",
+      "orina frecuente",
+      "urgencia urinaria",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 261,
+    "nombre": "Tolterodina 2 mg tableta caja x30",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 262,
+    "nombre": "Mirabegron Myrbetric 25Mg Tabletas Liberación Prolongada Caja X 30",
+    "fabricante": "Astellas",
+    "precio": 84600.0,
+    "imagen": "med_262_d00a44651188.jpg",
+    "sintomas": [
+      "nicturia",
+      "pérdida involuntaria de orina",
+      "urgencia urinaria"
+    ]
+  },
+  {
+    "id": 263,
+    "nombre": "Bacitracina pomada tubo 5 g",
+    "fabricante": "OFTALMO QUIMICA",
+    "precio": 116000.0,
+    "imagen": "Bacitracina_pomada_tubo_5_g_genérico.jpg",
+    "sintomas": [
+      "antisepsia",
+      "Cansancio",
+      "cicatrización",
+      "cierre de heridas",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "escaldaduras",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "prevención de infección",
+      "pus",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "Quemazón",
+      "regeneración de tejido",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "limpiar y desinfectar heridas superficiales",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 264,
+    "nombre": "Dermaskin (1+0.04+0.5)% Crema Tópica Tubo X 40Gr Neomicina pomada",
+    "fabricante": "MedicBrand",
+    "precio": 23400.0,
+    "imagen": "med_264_9012bcf46cce.jpg",
+    "sintomas": [
+      "administración de antibióticos",
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "crisis gotosa",
+      "debilitamiento",
+      "depositos de urato",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "dolor muscular",
+      "enrojecimiento",
+      "escaldaduras",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "inflamación",
+      "infusión de fármacos",
+      "maceramiento",
+      "olor característico",
+      "primer dedo del pie",
+      "pus",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "Quemazón",
+      "suministro de medicamentos",
+      "taquicardia",
+      "terapia antibiótica parenteral",
+      "terapia intravenosa",
+      "tofáceos",
+      "tos",
+      "ácido úrico"
+    ]
+  },
+  {
+    "id": 266,
+    "nombre": "Beclometasona inhalador 50 mcg frasco 200 dosis",
+    "fabricante": "ECLOSYNT",
+    "precio": 44000.0,
+    "imagen": "Beclometasona_inhalador_50_mcg_frasco_200_dosis_genérico.jpg",
+    "sintomas": [
+      "afecciones cutáneas",
+      "calor local",
+      "Comezón",
+      "Congestión nasal",
+      "dermatitis de contacto",
+      "descamación",
+      "descamación plateada",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "estornudos",
+      "hinchazón",
+      "Irritación",
+      "obstrucción nasal",
+      "opresión torácica",
+      "picazón nasal",
+      "placas gruesas",
+      "rinorrea",
+      "Sibilancias",
+      "tos nocturna"
+    ]
+  },
+  {
+    "id": 269,
+    "nombre": "Betametasona 4 mg inyección ampolla",
+    "fabricante": "Vitalis",
+    "precio": 4900.0,
+    "imagen": "Betametasona_4_mg_inyección_ampolla_genérico.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "Comezón",
+      "crisis gotosa",
+      "cólicos",
+      "depositos de urato",
+      "dermatitis de contacto",
+      "descamación",
+      "descamación plateada",
+      "diarrea con sangre",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "hinchazón",
+      "inflamación intestinal",
+      "Irritación",
+      "limitación de movimiento",
+      "opresión torácica",
+      "placas gruesas",
+      "primer dedo del pie",
+      "rigidez matutina",
+      "Sibilancias",
+      "tofáceos",
+      "tos nocturna",
+      "Infección Bacterial",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 270,
+    "nombre": "Triamcinolona 40 mg/ml ampolla",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 271,
+    "nombre": "Beclazone Nifedipina 30 Mg Novamed Caja X 10 Cápsulas Nifedipino",
+    "fabricante": "farmacapsulas s.a.",
+    "precio": 16600.0,
+    "imagen": "med_271_77ab79a96087.jpg",
+    "sintomas": [
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor en el pecho",
+      "dolor torácico",
+      "fatiga",
+      "Hipertensión Arterial",
+      "mareo",
+      "opresión torácica",
+      "osteopenia",
+      "presión arterial elevada",
+      "sudoración",
+      "suplementación de calcio",
+      "tensión"
+    ]
+  },
+  {
+    "id": 274,
+    "nombre": "Cytil Misoprostol 200 Mcg Tecnoquimicas Caja X 7 Tabletas",
+    "fabricante": "TQ",
+    "precio": 181500.0,
+    "imagen": "med_274_32c70015cde7.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "enrojecimiento",
+      "escaras",
+      "heridas crónicas",
+      "hinchazón",
+      "limitación de movimiento",
+      "llagas por presión",
+      "llagas vasculares",
+      "rigidez matutina",
+      "Úlceras",
+      "úlceras de decúbito",
+      "úlceras en piernas"
+    ]
+  },
+  {
+    "id": 276,
+    "nombre": "Biperideno 2 mg tableta caja x 90",
+    "fabricante": "(genérico)",
+    "precio": 93300.0,
+    "imagen": "Biperideno_2_mg_tableta_caja_x_90_genérico.jpg",
+    "sintomas": [
+      "inestabilidad",
+      "lentitud de movimiento",
+      "rigidez",
+      "rigidez muscular",
+      "sudoración",
+      "Temblores"
+    ]
+  },
+  {
+    "id": 277,
+    "nombre": "Propranolol 80Mg Tabletas Caja X 30 Mk",
+    "fabricante": "MK",
+    "precio": 63000.0,
+    "imagen": "med_277_fe493de72e60.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 279,
+    "nombre": "Calamina loción 120 ml",
+    "fabricante": "Laboratorios Gerko",
+    "precio": 18300.0,
+    "imagen": "Calamina_loción_120_ml_genérico.jpg",
+    "sintomas": [
+      "alivio de picazón por picadura",
+      "Comezón",
+      "descamación",
+      "enrojecimiento",
+      "habones",
+      "hinchazón",
+      "Irritación",
+      "mordeduras",
+      "Quemadura",
+      "Quemazón",
+      "reacción a picadura",
+      "sarpullido"
+    ]
+  },
+  {
+    "id": 280,
+    "nombre": "Permetrina loción Nopion Plus 1% Crema Capilar Frasco X 60 Gr",
+    "fabricante": "TQ",
+    "precio": 43300.0,
+    "imagen": "med_280_653972e66995.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 281,
+    "nombre": "Ivermectina 0.6% Solución Oral Oral Frasco X 5mL",
+    "fabricante": "MK",
+    "precio": 26200.0,
+    "imagen": "med_281_2d2c4025380e.jpg",
+    "sintomas": [
+      "antiparasitario",
+      "comezón intensa",
+      "eliminación de parásitos",
+      "enrojecimiento facial",
+      "escabiosis",
+      "infestación de piojos",
+      "infestación de ácaros",
+      "lombrices",
+      "oxiuros",
+      "piojos",
+      "rubor facial",
+      "tratamiento antiparasitario",
+      "tratamiento de piojos",
+      "vasos sanguíneos visibles",
+      "vermífugo",
+      "ácaros"
+    ]
+  },
+  {
+    "id": 282,
+    "nombre": "Albendazol 400 mg/ml Suspensión Oral X 10ml",
+    "fabricante": "MK",
+    "precio": 7600.0,
+    "imagen": "Albendazol_400_mg_tableta_MK.jpg",
+    "sintomas": [
+      "parasitos",
+      "parasito tenia"
+    ]
+  },
+  {
+    "id": 287,
+    "nombre": "Pamoato De Pirantel Genfar 250mg Jarabe Frasco X 15 Ml",
+    "fabricante": "Genfar",
+    "precio": 83600.0,
+    "imagen": "med_287_b83cfd5bb42f.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 291,
+    "nombre": "Cloroquina Humax 250 Mg Caja X 20 Tabletas",
+    "fabricante": "Humax",
+    "precio": 13900.0,
+    "imagen": "Cloroquina_Humax_250_Mg_Caja_X_20_Tabletas_genérico.jpg",
+    "sintomas": [
+      "Amebiasis",
+      "hinchazón",
+      "limitación de movimiento",
+      "rigidez matutina",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 292,
+    "nombre": "Metformina Clorhidrato 850Mg Caja X 30 Tabletas Recubiertas",
+    "fabricante": "Genfar",
+    "precio": 33400.0,
+    "imagen": "med_292_1cfc57b6a2a0.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 293,
+    "nombre": "Hidratante para bebés Crema Liquida Hidratante Para Antes De Dormir Jhonson'S Baby Frasco X 400 Ml",
+    "fabricante": "Johnson & Johnson / (genérico)",
+    "precio": 33800.0,
+    "imagen": "med_293_929c6f5bc3ed.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 294,
+    "nombre": "Crema antifúngica Nistatina+Oxido De Zinc Antipañalitis Tubo X 60g para bebes",
+    "fabricante": "colmed",
+    "precio": 24500.0,
+    "imagen": "Crema_antifúngica_NistatinaOxido_De_Zinc_Antipañalitis_Tubo_X_60g_para_bebes_genérico.jpg",
+    "sintomas": [
+      "calor local",
+      "Comezón",
+      "descamación",
+      "enrojecimiento",
+      "hinchazón",
+      "Irritación",
+      "irritación por pañal",
+      "pañalitis",
+      "rozadura de pañal",
+      "sarpullido de pañal",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 295,
+    "nombre": "Gotas para bebés paracetamol Cronofen Solución Oral Frasco X 30mL Cereza",
+    "fabricante": "NovaMed",
+    "precio": 20100.0,
+    "imagen": "med_295_78555b17d975.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "Cansancio",
+      "Congestión nasal",
+      "crisis gotosa",
+      "cólicos del lactante",
+      "depositos de urato",
+      "dolor abdominal en bebé",
+      "dolor de encías en bebé",
+      "Dolor de garganta",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "gases en bebé",
+      "irritación por pañal",
+      "molestias por dentición",
+      "pañalitis",
+      "primer dedo del pie",
+      "rinorrea",
+      "rozadura de pañal",
+      "salida de dientes",
+      "sarpullido de pañal",
+      "tofáceos",
+      "tos",
+      "dolor",
+      "Dolor muscular (mialgia)",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 297,
+    "nombre": "Vitamina A gotas pediátricas",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 299,
+    "nombre": "Multivitamínico pediátrico Gommi Zoo Probioticos Vitaminas, Zinc Limon Fresa Piña Frasco X 300Gr",
+    "fabricante": "Gommi zoo",
+    "precio": 42800.0,
+    "imagen": "med_299_7cf66405a520.jpg",
+    "sintomas": [
+      "carencia nutricional",
+      "cuidado dental",
+      "dientes sensibles",
+      "dolor dental al frío",
+      "déficit vitamínico",
+      "enjuague bucal",
+      "falta de vitaminas",
+      "flora intestinal",
+      "hilo dental",
+      "hipersensibilidad dental",
+      "limpieza dental",
+      "multivitamínico",
+      "prevención de deficiencias",
+      "salud digestiva",
+      "suplementación nutricional",
+      "suplementación vitamínica"
+    ]
+  },
+  {
+    "id": 300,
+    "nombre": "Colirios lubricantes para bebés Eritromicina Solución Tópica Frasco X 50 ml",
+    "fabricante": "Tecnoquímicas",
+    "precio": 110200.0,
+    "imagen": "Colirios_lubricantes_para_bebés_Eritromicina_Solución_Tópica_Frasco_X_50_ml_genérico.jpg",
+    "sintomas": [
+      "amígdalas inflamadas",
+      "Cansancio",
+      "comedones",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad al tragar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "enrojecimiento facial",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "garganta irritada",
+      "hipotensión",
+      "Infección De Garganta",
+      "inflamación de garganta",
+      "maceramiento",
+      "mucosidad",
+      "olor característico",
+      "Producción De Flema",
+      "pus",
+      "pápulas",
+      "pústulas",
+      "rinorrea",
+      "rubor facial",
+      "Sibilancias",
+      "taquicardia",
+      "tos",
+      "vasos sanguíneos visibles",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 305,
+    "nombre": "Isopto Carpina Pilocarpina 2% Axon Frasco X 15 Ml",
+    "fabricante": "Novartis",
+    "precio": 55100.0,
+    "imagen": "med_305_4c112ad1c9af.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 306,
+    "nombre": "Atropina oftálmica 1% gotas 5ML",
+    "fabricante": "Alcon",
+    "precio": 38000.0,
+    "imagen": "Atropina_oftálmica_1_gotas_5ML_genérico.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "crisis gotosa",
+      "depositos de urato",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "fatiga",
+      "hinchazón",
+      "palpitaciones",
+      "primer dedo del pie",
+      "síncope",
+      "tofáceos",
+      "niveles altos de ácido úrico",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 307,
+    "nombre": "Strepsils Intensive Miel Y Limón Flurbiprofeno 8,75 Mg Rb Health Caja X 16 Tabletas",
+    "fabricante": "Strepsils",
+    "precio": 28000.0,
+    "imagen": "med_307_93be77299588.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "Fiebre",
+      "hinchazón",
+      "limitación de movimiento",
+      "rigidez matutina"
+    ]
+  },
+  {
+    "id": 309,
+    "nombre": "Enjuague Bucal Clorhexidina Colgate Periogard Encías Saludables Caja X 250 Ml",
+    "fabricante": "COLGATE",
+    "precio": 27100.0,
+    "imagen": "med_309_2c023c4b952b.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 310,
+    "nombre": "Enjuague Bucal Vitis Con Fluor Encias Frasco X 500Ml",
+    "fabricante": "DentaId",
+    "precio": 36200.0,
+    "imagen": "Enjuague_Bucal_Vitis_Con_Fluor_Encias_Frasco_X_500Ml_DentaId.jpg",
+    "sintomas": [
+      "calor local",
+      "cuidado de dientes",
+      "enfermedad periodontal",
+      "enjuague bucal",
+      "enrojecimiento",
+      "hinchazón",
+      "inflamación de encías",
+      "limpieza dental",
+      "prevención de caries",
+      "salud bucal",
+      "sangrado de encías"
+    ]
+  },
+  {
+    "id": 312,
+    "nombre": "Kit Viajero Whitening (Crema Dental + Cepillo + Seda Dental)",
+    "fabricante": "SunStar",
+    "precio": 32000.0,
+    "imagen": "med_312_76a56ad20107.jpg",
+    "sintomas": [
+      "cuidado de dientes",
+      "cuidado de rostro",
+      "cuidado dental",
+      "dientes sensibles",
+      "dolor dental al frío",
+      "eliminación de impurezas",
+      "enfermedad periodontal",
+      "enjuague bucal",
+      "higiene facial",
+      "hilo dental",
+      "hipersensibilidad dental",
+      "inflamación de encías",
+      "limpieza de piel",
+      "limpieza dental",
+      "prevención de caries",
+      "purificación de piel",
+      "salud bucal",
+      "sangrado de encías"
+    ]
+  },
+  {
+    "id": 317,
+    "nombre": "Enzimas digestivas Leprit enzimatico (25+80+150)Mg Caja X 60 Grageas",
+    "fabricante": "Bussie",
+    "precio": 160400.0,
+    "imagen": "Enzimas_digestivas_Leprit_enzimatico_2580150Mg_Caja_X_60_Grageas_Bussie.jpg",
+    "sintomas": [
+      "Absorción De Nutrientes",
+      "deficiencia de enzimas",
+      "digestión difícil",
+      "dispepsia",
+      "estómago pesado",
+      "Indigestión",
+      "malestar después de comer",
+      "malestar digestivo",
+      "malestar estomacal",
+      "sensación de llenura"
+    ]
+  },
+  {
+    "id": 318,
+    "nombre": "Loperamida 2Mg Tabletas Caja X 6",
+    "fabricante": "ECAR",
+    "precio": 9100.0,
+    "imagen": "med_318_35b39782a396.jpg",
+    "sintomas": [
+      "cólicos",
+      "deshidratación",
+      "diarrea con sangre",
+      "distensión abdominal",
+      "Dolor abdominal",
+      "electrolitos",
+      "Estreñimiento",
+      "evacuaciones frecuentes",
+      "gases",
+      "inflamación intestinal",
+      "náusea",
+      "vómito"
+    ]
+  },
+  {
+    "id": 319,
+    "nombre": "Lactulosa Lactulax 66.7g/100Ml Jarabe Frasco X 240mL",
+    "fabricante": "chalver de colombia s.a.",
+    "precio": 113700.0,
+    "imagen": "med_319_6d472d1d55f6.jpg",
+    "sintomas": [
+      "distensión abdominal",
+      "Dolor abdominal",
+      "salud digestiva"
+    ]
+  },
+  {
+    "id": 321,
+    "nombre": "Senósidos jcalcicos(A+B) laxante",
+    "fabricante": "farmacol chnon",
+    "precio": 22500.0,
+    "imagen": "med_321_35c47fcd1342.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 322,
+    "nombre": "Polietilenglicol Nulytely (105+4.6)Gr/Sobre Polvo Suspension Oral Sobre X 110.1Gr Lima Limon",
+    "fabricante": "tecnofarma",
+    "precio": 25100.0,
+    "imagen": "med_322_8ab87d7faec2.jpg",
+    "sintomas": [
+      "cuidado de rostro",
+      "deshidratación",
+      "distensión abdominal",
+      "Dolor abdominal",
+      "electrolitos",
+      "eliminación de impurezas",
+      "evacuaciones frecuentes",
+      "higiene facial",
+      "limpieza de piel",
+      "purificación de piel"
+    ]
+  },
+  {
+    "id": 323,
+    "nombre": "Tiras reactivas glucosa paquete X 100",
+    "fabricante": "Roche",
+    "precio": 140000.0,
+    "imagen": "Accu-Chek_tiras_reactivas_glucosa_paquete_X_100_Roche.jpg",
+    "sintomas": [
+      "medir glucosa"
+    ]
+  },
+  {
+    "id": 324,
+    "nombre": "Glucometro Glucoquick Gratis Tiras Diamond Lancetas X50 Ref Gd50 Paquete",
+    "fabricante": "glucoquick",
+    "precio": 97700.0,
+    "imagen": "med_324_f1e00909855c.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "crisis gotosa",
+      "depositos de urato",
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "primer dedo del pie",
+      "pérdida de peso",
+      "sed excesiva",
+      "tofáceos",
+      "Visión borrosa",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 325,
+    "nombre": "Lancetas Accu-Chek Softclix Caja X 200",
+    "fabricante": "Roche",
+    "precio": 169300.0,
+    "imagen": "med_325_356ac4eba387.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "crisis gotosa",
+      "depositos de urato",
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "primer dedo del pie",
+      "pérdida de peso",
+      "sed excesiva",
+      "tofáceos",
+      "Visión borrosa",
+      "ácido úrico"
+    ]
+  },
+  {
+    "id": 326,
+    "nombre": "Termómetro digital",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 327,
+    "nombre": "Tensiómetro De Brazo Automático Digital Caja X 1",
+    "fabricante": "SCANMED",
+    "precio": 162400.0,
+    "imagen": "med_327_2e70eae07e33.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 328,
+    "nombre": "Nebulizador Portátil Lenz, Lt-n100, Recargable, Caja X 1 Lenz Caja X 1",
+    "fabricante": "Lenz",
+    "precio": 205700.0,
+    "imagen": "med_328_5a9c44a5f24f.jpg",
+    "sintomas": [
+      "administración de medicamentos inhalados",
+      "Cansancio",
+      "Comezón",
+      "Congestión nasal",
+      "Dificultad para respirar",
+      "dificultad respiratoria",
+      "enrojecimiento",
+      "estornudos",
+      "hinchazón",
+      "mucosidad",
+      "opresión torácica",
+      "Producción De Flema",
+      "reacción alérgica",
+      "Sibilancias",
+      "terapia respiratoria",
+      "tos",
+      "tos crónica",
+      "tos nocturna",
+      "tratamiento de asma"
+    ]
+  },
+  {
+    "id": 330,
+    "nombre": "Guantes desechables nitrilo Libre de Talco Alfasafe Talla S Azul Ref Guna009 Caja X 100",
+    "fabricante": "Alfa Safe",
+    "precio": 28200.0,
+    "imagen": "med_330_9c1fbe8f1fa5.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 331,
+    "nombre": "Gasas estériles No Tejida Alfasafe Sobre X 24 Unidades",
+    "fabricante": "alfa trading",
+    "precio": 7600.0,
+    "imagen": "med_331_256618028367.jpg",
+    "sintomas": [
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "cuidado de rostro",
+      "desinfección",
+      "eliminación de impurezas",
+      "heridas crónicas",
+      "higiene facial",
+      "limpieza de piel",
+      "prevención de infección",
+      "purificación de piel",
+      "regeneración de tejido",
+      "Infección Bacterial",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 332,
+    "nombre": "Venda elástica 10 cm x 4 m",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 333,
+    "nombre": "Esparadrapo Tela Blister por 1 Famset 24Mm por 5M Blanco",
+    "fabricante": "Famset",
+    "precio": 13500.0,
+    "imagen": "Esparadrapo_Tela_Blister_por_1_Famset_24Mm_por_5M_Blanco_Famset.jpg",
+    "sintomas": [
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "hematoma",
+      "inestabilidad",
+      "Irritación",
+      "limitación de movimiento",
+      "prevención de infección",
+      "regeneración de tejido",
+      "limpiar y desinfectar heridas superficiales",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 334,
+    "nombre": "Jeringa 3Partes Referencia 21Gx1 Pulg 1/2 Pulg 5mL Sobre X 1 Unidad",
+    "fabricante": "Alfa Safe",
+    "precio": 4000.0,
+    "imagen": "med_334_9a5c4727fd33.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 335,
+    "nombre": "Jeringas descartables Jeringa Para Insulina Ref 326678 Ultra-Fine Becton Dickinson 1mL - 31G X 6Mm Sobre x 1",
+    "fabricante": "Becton Dickinson",
+    "precio": 4600.0,
+    "imagen": "med_335_ca247c49570f.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 336,
+    "nombre": "Cateter Intravenoso 18g X 1 1/4 32mm X 1 Und",
+    "fabricante": "Alfa Safe",
+    "precio": 3100.0,
+    "imagen": "Cateter_Intravenoso_18g_X_1_14_32mm_X_1_Und_genérico.jpg",
+    "sintomas": [
+      "acceso venoso prolongado",
+      "administración de hemoderivados",
+      "administración de líquidos",
+      "análisis de sangre",
+      "extracción de muestras",
+      "hidratación intravenosa",
+      "laboratorio clínico",
+      "reposición de sangre",
+      "suministro de medicamentos",
+      "terapia parenteral",
+      "toma de muestras de sangre",
+      "transfusión sanguínea",
+      "tratamiento a largo plazo"
+    ]
+  },
+  {
+    "id": 338,
+    "nombre": "Suero Fisiológico Cloruro De Sodio Quibi Bolsa X 500 Ml",
+    "fabricante": "Quibi",
+    "precio": 7000.0,
+    "imagen": "Suero_Fisiológico_Cloruro_De_Sodio_Quibi_Bolsa_X_500_Ml_genérico.jpg",
+    "sintomas": [
+      "electrolitos",
+      "pérdida de líquidos",
+      "reposición de líquidos",
+      "sales de rehidratación",
+      "suero oral",
+      "Tratamiento Parenteral"
+    ]
+  },
+  {
+    "id": 339,
+    "nombre": "Termómetro infrarrojo sin contacto",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 340,
+    "nombre": "Oximetro De Pulso Ref Fs20K Caja por 1 Scanmed",
+    "fabricante": "SCANMED",
+    "precio": 120900.0,
+    "imagen": "med_340_5e105adfa79f.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 341,
+    "nombre": "Faja Soporte Embarazo Paquete X 1 Unidad Talla U",
+    "fabricante": "kamex",
+    "precio": 100400.0,
+    "imagen": "Faja_Soporte_Embarazo_Paquete_X_1_Unidad_Talla_U_kamex.jpg",
+    "sintomas": [
+      "Dolor de espalda",
+      "tensión"
+    ]
+  },
+  {
+    "id": 342,
+    "nombre": "Muñequera inmovilizador Ambidiestro Ortix Caja X 1 Talla Universal",
+    "fabricante": "Ortix",
+    "precio": 38800.0,
+    "imagen": "med_342_8c59b7e6ae16.jpg",
+    "sintomas": [
+      "debilidad muscular",
+      "dolor en tendón",
+      "hematoma",
+      "inestabilidad",
+      "inflamación",
+      "limitación de movimiento"
+    ]
+  },
+  {
+    "id": 344,
+    "nombre": "Tobillera deportiva",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 345,
+    "nombre": "Collar Cervical Blando X 1 Inmovilizador De Cuello Blando Para Lesiones Musculares Menores O Espásticas",
+    "fabricante": "Ortopedicos y Droguerias Futuro",
+    "precio": 60500.0,
+    "imagen": "Collarín_cervical_desechable_genérico.jpg",
+    "sintomas": [
+      "hematoma",
+      "inestabilidad",
+      "limitación de movimiento",
+      "tensión",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 348,
+    "nombre": "Tiras de prueba embarazo",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 349,
+    "nombre": "Crema Corporal Nivea Anti-Manchas Y Estrias Tubo por 200Ml",
+    "fabricante": "NIVEA",
+    "precio": 49000.0,
+    "imagen": "Crema_Corporal_Nivea_Anti-Manchas_Y_Estrias_Tubo_por_200Ml_genérico.jpg",
+    "sintomas": [
+      "aclarado de piel",
+      "administración de líquidos",
+      "atenuación de estrías",
+      "hidratación parenteral",
+      "hiperpigmentación",
+      "marcas de estiramiento",
+      "melasma",
+      "prevención de estrías",
+      "reposición de líquidos",
+      "uniformidad del tono"
+    ]
+  },
+  {
+    "id": 350,
+    "nombre": "Crema antiacné con peróxido de benzoilo 5% tubo x 60",
+    "fabricante": "Galderma",
+    "precio": 111200.0,
+    "imagen": "Crema_antiacné_con_peróxido_de_benzoilo_5_tubo_x_60_genérico.jpg",
+    "sintomas": [
+      "calor local",
+      "comedones",
+      "confusión",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hinchazón",
+      "hipotensión",
+      "pus",
+      "pápulas",
+      "pústulas",
+      "taquicardia",
+      "Dolor muscular (mialgia)"
+    ]
+  },
+  {
+    "id": 351,
+    "nombre": "Bioderma Sébium Gel Moussant limpiador para piel mixta a grasa 200mL",
+    "fabricante": "bioderma",
+    "precio": 128900.0,
+    "imagen": "med_351_f0d1d1b01ff5.jpg",
+    "sintomas": [
+      "control de brillo",
+      "control de brotes",
+      "control de sebo",
+      "cuidado de rostro",
+      "eliminación de impurezas",
+      "exceso de grasa",
+      "higiene facial",
+      "limpieza de piel",
+      "piel oleosa",
+      "prevención de granitos",
+      "prevención de imperfecciones",
+      "producción de grasa",
+      "purificación de piel",
+      "seborrea"
+    ]
+  },
+  {
+    "id": 352,
+    "nombre": "Protector Labial Isdin Spf 30 Tubo X 4G",
+    "fabricante": "Isdin",
+    "precio": 35600.0,
+    "imagen": "med_352_89502ae6f93d.jpg",
+    "sintomas": [
+      "antienvejecimiento",
+      "bloqueador solar",
+      "déficit vitamínico",
+      "prevención de deficiencias",
+      "prevención de irritación",
+      "prevención de quemaduras solares",
+      "protección celular",
+      "protección contra rayos solares",
+      "protección uv",
+      "radicales libres"
+    ]
+  },
+  {
+    "id": 354,
+    "nombre": "Cinta Microporosa Micropore Nexcare 48Mm X 5M Paquete X 1",
+    "fabricante": "3M",
+    "precio": 32500.0,
+    "imagen": "Cinta_Microporosa_Micropore_Nexcare_48Mm_X_5M_Paquete_X_1_genérico.jpg",
+    "sintomas": [
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "Irritación",
+      "marcas en piel",
+      "prevención de infección",
+      "prevención de irritación",
+      "queloides",
+      "regeneración cutánea",
+      "regeneración de tejido",
+      "tensión",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 356,
+    "nombre": "Aguja Autoinyector Insulina Caja X 100 Glucoquick 31G X 5Mm",
+    "fabricante": "glucoquick",
+    "precio": 79600.0,
+    "imagen": "Aguja_Autoinyector_Insulina_Ref_208592_Caja_X_100_Glucoquick_31G_X_5Mm_glucoquick.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 362,
+    "nombre": "Test rápido COVID-19 antígeno",
+    "fabricante": "Abbott / SD Biosensor",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 363,
+    "nombre": "Test rápido embarazo digital",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 364,
+    "nombre": "Test de glucosa en orina",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 365,
+    "nombre": "Bolsa Drenable Ostomia 57Mm 1 Unidad",
+    "fabricante": "Convatec",
+    "precio": 13300.0,
+    "imagen": "Bolsa_Drenable_Ostomia_57Mm_1_Unidad_genérico.jpg",
+    "sintomas": [
+      "control de olores",
+      "discreción",
+      "Irritación",
+      "manejo de drenaje",
+      "manejo de drenaje urinario",
+      "prevención de fugas",
+      "prevención de irritación",
+      "protección de piel",
+      "protección de piel periestoma",
+      "recolección de efluentes",
+      "recolección de orina",
+      "vaciado controlado"
+    ]
+  },
+  {
+    "id": 369,
+    "nombre": "Muletas ajustables aluminio par tallas S M y L",
+    "fabricante": "trulife",
+    "precio": 105600.0,
+    "imagen": "med_369_9ec5fc0b40c8.jpg",
+    "sintomas": [
+      "deformidad",
+      "dolor severo",
+      "hematoma",
+      "imposibilidad de movimiento",
+      "inestabilidad",
+      "inflamación",
+      "limitación de movimiento",
+      "apoyo para caminar"
+    ]
+  },
+  {
+    "id": 375,
+    "nombre": "Cepillo dental interdental Sobre X 6 Gum 0.8Mm",
+    "fabricante": "SunStar",
+    "precio": 30100.0,
+    "imagen": "Cepillo_dental_interdental_pack_genérico.jpg",
+    "sintomas": [
+      "aliento desagradable",
+      "cuidado de dientes",
+      "cuidado dental",
+      "dientes sensibles",
+      "dolor dental al frío",
+      "enfermedad periodontal",
+      "enjuague bucal",
+      "halitosis",
+      "hilo dental",
+      "hipersensibilidad dental",
+      "inflamación de encías",
+      "limpieza dental",
+      "prevención de caries",
+      "salud bucal",
+      "sangrado de encías"
+    ]
+  },
+  {
+    "id": 376,
+    "nombre": "Enjuague Bucal Odontoseptic Glucontao De Clorhexidina Menta X 240 Ml",
+    "fabricante": "Biochem",
+    "precio": 40500.0,
+    "imagen": "Enjuague_Antiséptico_Bucal_02Gr_Solución_Clara_Frasco_X_180mL_Biochem.jpg",
+    "sintomas": [
+      "acidez",
+      "calor local",
+      "cicatrización",
+      "desinfección",
+      "eliminación de gérmenes",
+      "enfermedad periodontal",
+      "enjuague bucal",
+      "enrojecimiento",
+      "hinchazón",
+      "inflamación de encías",
+      "prevención de infección",
+      "sangrado de encías"
+    ]
+  },
+  {
+    "id": 377,
+    "nombre": "Crema para hemorroides lidocaína Procto Glyvenol 5%+2% Crema Tubo X 30 Gr",
+    "fabricante": "GlaxoSmithKline (GSK)",
+    "precio": 66000.0,
+    "imagen": "Crema_para_hemorroides_con_lidocaína_Procto_Glyvenol_52_Crema_Tubo_X_30_Gr_GlaxoSmithKline_GSK.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "ardor",
+      "calor local",
+      "Comezón",
+      "enrojecimiento",
+      "hinchazón"
+    ]
+  },
+  {
+    "id": 378,
+    "nombre": "Suplemento proteico Prowhey Oncare Plus Con Proteina Whey Epa & Dha Lata por 415Gr Vainilla",
+    "fabricante": "PROWHEY",
+    "precio": 122400.0,
+    "imagen": "med_378_7be9c29e1a89.jpg",
+    "sintomas": [
+      "administración de quimioterapia",
+      "antiinflamatorio",
+      "fatiga",
+      "hambre extrema",
+      "infusión de citostáticos",
+      "infusión de fármacos",
+      "nutrición clínica",
+      "orina frecuente",
+      "pérdida de peso",
+      "refuerzo nutricional",
+      "salud cardiovascular",
+      "sed excesiva",
+      "suministro de medicamentos",
+      "suplementación alimentaria",
+      "suplementación omega 3",
+      "terapia intravenosa",
+      "tratamiento oncológico",
+      "Visión borrosa",
+      "ácidos grasos esenciales"
+    ]
+  },
+  {
+    "id": 383,
+    "nombre": "Gasa para heridas Fitostimoline Caja X 10 Gasas",
+    "fabricante": "Euroetika Ltda",
+    "precio": 142800.0,
+    "imagen": "med_383_f6ed222c7064.jpg",
+    "sintomas": [
+      "ampollas por quemadura",
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "escaldaduras",
+      "escaras",
+      "heridas crónicas",
+      "llagas por presión",
+      "llagas vasculares",
+      "marcas en piel",
+      "prevención de infección",
+      "queloides",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "quemaduras de segundo grado",
+      "Quemazón",
+      "regeneración cutánea",
+      "regeneración de tejido",
+      "Úlceras",
+      "úlceras de decúbito",
+      "úlceras en piernas",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 384,
+    "nombre": "Cinta Adhesiva Quirurgica Caja X 1 Fixo Roll 10Cm X 2Mt",
+    "fabricante": "TQ",
+    "precio": 36800.0,
+    "imagen": "Cinta_Adhesiva_Quirurgica_Caja_X_1_Fixo_Roll_10Cm_X_2Mt_TQ.jpg",
+    "sintomas": [
+      "acceso venoso prolongado",
+      "administración de líquidos",
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "extracción de muestras",
+      "hidratación intravenosa",
+      "prevención de infección",
+      "regeneración de tejido",
+      "suministro de medicamentos",
+      "terapia parenteral",
+      "tratamiento a largo plazo",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 385,
+    "nombre": "Aguja hipodermica 31Gx5Mm x unidad",
+    "fabricante": "BD",
+    "precio": 1000.0,
+    "imagen": "Aguja_hipodermica_31Gx5Mm_x_unidad_BD.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 386,
+    "nombre": "Jabón Quirúrgico Espuma Aseptidina Solución Tópica 4% Frasco X 120 Ml - clorhexidina",
+    "fabricante": "proasepsis",
+    "precio": 11700.0,
+    "imagen": "med_386_55a0babddb13.jpg",
+    "sintomas": [
+      "desinfección",
+      "desinfectar la piel",
+      "eliminación de gérmenes",
+      "prevención de infección",
+      "prevención de irritación"
+    ]
+  },
+  {
+    "id": 388,
+    "nombre": "Frasco Recolector Orina Para Muestras 24 Horas Bolsa X 1",
+    "fabricante": "biolife",
+    "precio": 11100.0,
+    "imagen": "med_388_7c74ac06a64a.jpg",
+    "sintomas": [
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 390,
+    "nombre": "Tubos capilares para laboratorio",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 391,
+    "nombre": "Alcohol antiséptico en toallitas Caja X 100 Sobres",
+    "fabricante": "proasepsis",
+    "precio": 12000.0,
+    "imagen": "Alcohol_antiséptico_en_toallitas_Caja_X_100_Sobres_proasepsis.jpg",
+    "sintomas": [
+      "desinfectar la piel",
+      "limpiar y desinfectar heridas superficiales",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 392,
+    "nombre": "Toallas húmedas antisépticas paquete",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 394,
+    "nombre": "Spray nasal con solución salina NASOGEL SPRAY X 30ML",
+    "fabricante": "NEILMED",
+    "precio": 67700.0,
+    "imagen": "med_394_58a54f713123.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 398,
+    "nombre": "Termómetro de mercurio (repuesto)",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 401,
+    "nombre": "Crema regeneradora y cicatrisar Fitostimoline Crema Tubo X 32 Gr",
+    "fabricante": "Euroetika Ltda",
+    "precio": 89000.0,
+    "imagen": "Crema_regeneradora_y_cicatrisar_Fitostimoline_Crema_Tubo_X_32_Gr_Euroetika_Ltda.jpg",
+    "sintomas": [
+      "ampollas por quemadura",
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "escaldaduras",
+      "prevención de infección",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "quemaduras de segundo grado",
+      "Quemazón",
+      "regeneración de tejido",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 402,
+    "nombre": "Sulfaplata 1% Crema Quemaduras Pote X 30Gr",
+    "fabricante": "Bussie",
+    "precio": 32200.0,
+    "imagen": "Sulfaplata_1_Crema_Quemaduras_Pote_X_30Gr_genérico.jpg",
+    "sintomas": [
+      "abrasiones",
+      "ampollas por quemadura",
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "cortadas",
+      "escaldaduras",
+      "escaras",
+      "heridas crónicas",
+      "llagas por presión",
+      "llagas vasculares",
+      "prevención de infección",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "quemaduras de segundo grado",
+      "Quemazón",
+      "rasguños",
+      "raspones",
+      "regeneración de tejido",
+      "Úlceras",
+      "úlceras de decúbito",
+      "úlceras en piernas",
+      "Infección Bacterial",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 403,
+    "nombre": "Higiene Auricular A-Cerumen® Spray X 40 mL",
+    "fabricante": "axon pharma",
+    "precio": 81100.0,
+    "imagen": "med_403_a63677f34738.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 404,
+    "nombre": "Vendas cohesivas 5 cm x 4 m",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 406,
+    "nombre": "Faja Post-parto Anne Shantel Canelle Xl Anne Shantel Individual X 1 Faja Contura Alta Con Cierre Lateral Desprendible Para Facilitar Su Postura. Abrochadura En Entrepierna De 2 Posiciones. Power Net, Forro Frente En Power Net Y Lycra Algodón, Forro Espalda En Power Ne",
+    "fabricante": "anne shantel",
+    "precio": 269900.0,
+    "imagen": "med_406_d857f699a5d3.jpg",
+    "sintomas": [
+      "cicatrización"
+    ]
+  },
+  {
+    "id": 409,
+    "nombre": "Venda tubular elástica",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 410,
+    "nombre": "Fenilefrina - Fluzetrin (325Mg+15Mg+5Mg)/5mL Jarabe Frasco X 60mL",
+    "fabricante": "chalver de colombia s.a.",
+    "precio": 36500.0,
+    "imagen": "med_410_45355eef0f27.jpg",
+    "sintomas": [
+      "calor local",
+      "Cansancio",
+      "Comezón",
+      "Congestión nasal",
+      "Dolor de cabeza",
+      "Dolor de garganta",
+      "dolor muscular",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hinchazón",
+      "lagrimeo",
+      "reacción alérgica",
+      "rinorrea",
+      "tos",
+      "tos leve"
+    ]
+  },
+  {
+    "id": 412,
+    "nombre": "Gotas óticas para cera Otoglicar 3 Aerosol Frasco X 30mL",
+    "fabricante": "Laboratorios Gerko",
+    "precio": 11500.0,
+    "imagen": "med_412_97954be523e7.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 413,
+    "nombre": "Gotas óticas antibiótico Panotil Beta Solución 10000Ui+3.75Mg+1Mg+40Mg Frasco X 8mL",
+    "fabricante": "zambon",
+    "precio": 27000.0,
+    "imagen": "med_413_9b01272acb72.jpg",
+    "sintomas": [
+      "administración de antibióticos",
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "crisis gotosa",
+      "debilitamiento",
+      "depositos de urato",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hinchazón",
+      "hipotensión",
+      "Infección De Oído",
+      "infusión de fármacos",
+      "Irritación",
+      "maceramiento",
+      "olor característico",
+      "primer dedo del pie",
+      "pus",
+      "suministro de medicamentos",
+      "taquicardia",
+      "terapia antibiótica parenteral",
+      "terapia intravenosa",
+      "tofáceos",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 414,
+    "nombre": "Gotas óticas antiinflamatorias Oticaina 2% Solución optica Frasco X 10 mL",
+    "fabricante": "Bussie",
+    "precio": 23200.0,
+    "imagen": "med_414_2642467aa31f.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 415,
+    "nombre": "Productos para incontinencia (pañales adultos) Tena Basic Incontinencia Fuerte Talla M Paquete X 21",
+    "fabricante": "Tena",
+    "precio": 53600.0,
+    "imagen": "med_415_9fb050bbac4c.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 418,
+    "nombre": "Huggies Natural Care Puro y Natural Pañales Desechables etapa xg paq x 50 unisex",
+    "fabricante": "huggies",
+    "precio": 87700.0,
+    "imagen": "med_418_c8fb204be102.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 419,
+    "nombre": "Toallitas húmedas para bebés paquete",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 420,
+    "nombre": "Loción Hidratante Para Bebé Suavinex Hidratante X 500 Ml",
+    "fabricante": "Suavinex",
+    "precio": 70700.0,
+    "imagen": "med_420_732a3cb3196f.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 421,
+    "nombre": "Aceite para masajes bebés 100 ml",
+    "fabricante": "Johnson & Johnson / (genérico)",
+    "precio": 15800.0,
+    "imagen": "Aceite_para_masajes_bebés_100_ml_Johnson__Johnson__genérico.jpg",
+    "sintomas": [
+      "bebe inquieto"
+    ]
+  },
+  {
+    "id": 423,
+    "nombre": "Lagrimas Artificiales 3Mg/mL Solución Oftalmica La Santé Frasco X 15 mL gotas",
+    "fabricante": "LA SANTE",
+    "precio": 44500.0,
+    "imagen": "Lagrimas_Artificiales_3MgmL_Solución_Oftalmica_La_Santé_Frasco_X_15_mL_gotas_LA_SANTE.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 425,
+    "nombre": "Ácido hialurónico inyectable (estético)",
+    "fabricante": "(especializado)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 426,
+    "nombre": "Botox (toxina botulínica) 100 UI",
+    "fabricante": "Babaria",
+    "precio": 69300.0,
+    "imagen": "Botox_toxina_botulínica_100_UI_especializado.jpg",
+    "sintomas": [
+      "anti-edad",
+      "dolor de cabeza severo",
+      "espasmos",
+      "líneas de expresión",
+      "reducción de arrugas",
+      "rejuvenecimiento",
+      "sudoración",
+      "Visión borrosa",
+      "Vómitos",
+      "Sensibilidad a la luz (fotofobia)",
+      "Náuseas"
+    ]
+  },
+  {
+    "id": 427,
+    "nombre": "Ácido hialurónico gel relleno",
+    "fabricante": "(especializado)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 428,
+    "nombre": "Crema Topica despigmentantes hidroquinona - Cremoquinona 0,04 Tubo X 30Gr",
+    "fabricante": "INCOBRA",
+    "precio": 25600.0,
+    "imagen": "Crema_Topica_despigmentantes_hidroquinona_-_Dermoquinona_004_Tubo_X_30Gr_INCOBRA.jpg",
+    "sintomas": [
+      "aclarado de piel",
+      "ampollas por quemadura",
+      "calor local",
+      "cicatrización",
+      "comedones",
+      "enrojecimiento",
+      "escaldaduras",
+      "hinchazón",
+      "hiperpigmentación",
+      "marcas en piel",
+      "melasma",
+      "pápulas",
+      "pústulas",
+      "queloides",
+      "Quemadura",
+      "quemadura solar",
+      "quemaduras de primer grado",
+      "quemaduras de segundo grado",
+      "Quemazón",
+      "regeneración cutánea",
+      "uniformidad del tono"
+    ]
+  },
+  {
+    "id": 429,
+    "nombre": "Crema Fotocorrectora Diaria Anthelios Antiarrugas 50 Fps Frasco X 50mL",
+    "fabricante": "la roche possay",
+    "precio": 106000.0,
+    "imagen": "med_429_f6fb5716e9f4.jpg",
+    "sintomas": [
+      "aclarado de piel",
+      "administración de líquidos",
+      "anti-edad",
+      "hidratación parenteral",
+      "hiperpigmentación",
+      "líneas de expresión",
+      "melasma",
+      "reducción de arrugas",
+      "rejuvenecimiento",
+      "reposición de líquidos",
+      "uniformidad del tono"
+    ]
+  },
+  {
+    "id": 430,
+    "nombre": "Loción capilar Minoxidil Forte Spray 5% Loción Capilar Frasco X 100Ml",
+    "fabricante": "colmed",
+    "precio": 64000.0,
+    "imagen": "med_430_83b52aee180c.jpg",
+    "sintomas": [
+      "calvicie",
+      "cuidado del cabello",
+      "debilitamiento capilar",
+      "debilitamiento del cabello",
+      "fortalecimiento capilar",
+      "pérdida de cabello",
+      "salud del cabello"
+    ]
+  },
+  {
+    "id": 431,
+    "nombre": "Champú anticaspa con ketoconazol 2% frasco 250 ml",
+    "fabricante": "Pharmaderm Sa",
+    "precio": 90000.0,
+    "imagen": "Champú_anticaspa_con_ketoconazol_2_frasco_200_ml_genérico.jpg",
+    "sintomas": [
+      "alopecia",
+      "calor local",
+      "calvicie",
+      "Comezón",
+      "cuidado del cabello",
+      "debilitamiento capilar",
+      "dermatitis seborreica",
+      "descamación",
+      "descamación del cuero cabelludo",
+      "enrojecimiento",
+      "fortalecimiento capilar",
+      "hinchazón",
+      "Irritación",
+      "picazón del cuero cabelludo",
+      "pérdida de cabello",
+      "salud del cabello"
+    ]
+  },
+  {
+    "id": 432,
+    "nombre": "Suplemento Omega 3 + Vitamina E Botanitas Cápsulas Blandas Frasco X 100",
+    "fabricante": "botanitas",
+    "precio": 63700.0,
+    "imagen": "med_432_524bb7c80377.jpg",
+    "sintomas": [
+      "antienvejecimiento",
+      "antiinflamatorio",
+      "calor local",
+      "carencia nutricional",
+      "déficit vitamínico",
+      "enrojecimiento",
+      "falta de vitaminas",
+      "hinchazón",
+      "prevención de deficiencias",
+      "protección celular",
+      "radicales libres",
+      "salud cardiovascular",
+      "suplementación nutricional",
+      "suplementación omega 3",
+      "suplementación vitamínica",
+      "ácidos grasos esenciales"
+    ]
+  },
+  {
+    "id": 433,
+    "nombre": "Suplemento Vical Vitamina C Tableta Masticable Sabor a Naranja 500 Mg Sobre X 12",
+    "fabricante": "ECAR",
+    "precio": 6200.0,
+    "imagen": "med_433_2dd897e2d8ea.jpg",
+    "sintomas": [
+      "antisepsia",
+      "Cansancio",
+      "cicatrización",
+      "cierre de heridas",
+      "fatiga",
+      "limpieza de heridas",
+      "prevención de infección",
+      "radicales libres",
+      "regeneración de tejido"
+    ]
+  },
+  {
+    "id": 434,
+    "nombre": "suplemento Citrato De Magnesio Botanitas Tarro X 250Gr Limonada De Coco",
+    "fabricante": "botanitas",
+    "precio": 63700.0,
+    "imagen": "med_434_dbc77086befc.jpg",
+    "sintomas": [
+      "Absorción De Nutrientes",
+      "distensión abdominal",
+      "Dolor abdominal",
+      "salud digestiva"
+    ]
+  },
+  {
+    "id": 435,
+    "nombre": "Suplemento de zinc Neurexan (0.06+0.06+0.06+0.06)Mg Tableta Frasco X 50",
+    "fabricante": "HEEL COLOMBIA",
+    "precio": 70400.0,
+    "imagen": "med_435_d04eeda2fd51.jpg",
+    "sintomas": [
+      "cansancio diurno",
+      "inquietud",
+      "nerviosismo",
+      "palpitaciones",
+      "sudoración",
+      "sueño no reparador",
+      "Temblores"
+    ]
+  },
+  {
+    "id": 436,
+    "nombre": "Naturflora Probiotico+ Prebiotico Naturfar Capsula Frasco X 60",
+    "fabricante": "Naturfar",
+    "precio": 39100.0,
+    "imagen": "med_436_8ef3cd94d3ef.jpg",
+    "sintomas": [
+      "acidez",
+      "ardor estomacal",
+      "cólicos",
+      "deshidratación",
+      "diarrea con sangre",
+      "Dolor abdominal",
+      "equilibrio intestinal",
+      "evacuaciones frecuentes",
+      "flora intestinal",
+      "inflamación intestinal",
+      "náusea",
+      "salud digestiva",
+      "vómito"
+    ]
+  },
+  {
+    "id": 437,
+    "nombre": "Fórmula infantil de seguimiento Similac 3 5 Hmos Kid Lata por 350Gr Vainilla",
+    "fabricante": "ABBOTT",
+    "precio": 62500.0,
+    "imagen": "med_437_ec0e4307419c.jpg",
+    "sintomas": [
+      "anemia ferropénica",
+      "carencia nutricional",
+      "Debilidad",
+      "dificultad respiratoria",
+      "digestión difícil",
+      "dispepsia",
+      "déficit vitamínico",
+      "equilibrio intestinal",
+      "falta de vitaminas",
+      "fatiga",
+      "flora intestinal",
+      "Indigestión",
+      "insuficiencia de vitamina d",
+      "malestar digestivo",
+      "malestar estomacal",
+      "osteopenia",
+      "palidez",
+      "pesadez estomacal",
+      "prevención de deficiencias",
+      "salud digestiva",
+      "sensación de llenura",
+      "suplementación de calcio",
+      "suplementación de hierro",
+      "suplementación de vitamina d",
+      "suplementación nutricional",
+      "suplementación vitamínica",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 439,
+    "nombre": "Fórmula para alergias hidrolizada No Lactea Monomerica Neocate Tarro X 400 G Lcp 0 - 12 Meses",
+    "fabricante": "Nutricia",
+    "precio": 268400.0,
+    "imagen": "med_439_404fe892f1d0.jpg",
+    "sintomas": [
+      "Comezón",
+      "cólicos del lactante",
+      "dolor abdominal en bebé",
+      "enrojecimiento",
+      "Esofagitis",
+      "estornudos",
+      "gases en bebé",
+      "hinchazón",
+      "irritación por pañal",
+      "pañalitis",
+      "reacción alérgica",
+      "reflujo gastroesofágico",
+      "regurgitación",
+      "rozadura de pañal",
+      "sarpullido de pañal",
+      "vómitos en lactante"
+    ]
+  },
+  {
+    "id": 442,
+    "nombre": "Vendajes adhesivos estériles (steri-strip) paquete",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 443,
+    "nombre": "Parche analgésico LIDOCAINA Versatis 0,05 Caja X 5 Parches Sistema TransdErmico",
+    "fabricante": "GRUNENTHAL",
+    "precio": 52000.0,
+    "imagen": "med_443_5950670cd807.jpg",
+    "sintomas": [
+      "ampollas",
+      "ardor",
+      "cicatrización",
+      "Comezón",
+      "debilidad muscular",
+      "dolor neuropático",
+      "Entumecimiento",
+      "fatiga",
+      "hambre extrema",
+      "hormigueo",
+      "inflamación local",
+      "marcas en piel",
+      "pérdida de peso",
+      "queloides",
+      "regeneración cutánea"
+    ]
+  },
+  {
+    "id": 444,
+    "nombre": "Solución para lentes de contacto Opti-Free Pure Moist Alcon Frasco X 300mL",
+    "fabricante": "Alcon",
+    "precio": 82000.0,
+    "imagen": "med_444_cd8e660dfe3c.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 448,
+    "nombre": "Pasta Dentifrica Blanqueadora Tubo X 100 mL",
+    "fabricante": "VITIS",
+    "precio": 27400.0,
+    "imagen": "med_448_55354b657ff7.jpg",
+    "sintomas": [
+      "aclarado de piel",
+      "cuidado dental",
+      "dientes sensibles",
+      "dolor dental al frío",
+      "enjuague bucal",
+      "hilo dental",
+      "hiperpigmentación",
+      "hipersensibilidad dental",
+      "limpieza dental",
+      "melasma",
+      "salud bucal",
+      "uniformidad del tono"
+    ]
+  },
+  {
+    "id": 450,
+    "nombre": "Hydroclor Emoliente Unguento Pharmaderm Pote X 500Gr",
+    "fabricante": "Pharmaderm Sa",
+    "precio": 87000.0,
+    "imagen": "Hydroclor_Emoliente_Unguento_Pharmaderm_Pote_X_500Gr_genérico.jpg",
+    "sintomas": [
+      "descamación",
+      "Irritación"
+    ]
+  },
+  {
+    "id": 459,
+    "nombre": "Tubos de ensayo y reactivos clínicos",
+    "fabricante": "(laboratorio)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 464,
+    "nombre": "Test de fertilidad (caja)",
+    "fabricante": "(genérico)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 466,
+    "nombre": "Cremas para recuperación muscular De Alto Rendimiento Inbike Amino Recovery X 200 Ml",
+    "fabricante": "inbike",
+    "precio": 99000.0,
+    "imagen": "Cremas_para_recuperación_muscular_De_Alto_Rendimiento_Inbike_Amino_Recovery_X_200_Ml_inbike.jpg",
+    "sintomas": [
+      "dolor muscular post-ejercicio",
+      "fatiga",
+      "recuperación deportiva",
+      "recuperación muscular",
+      "recuperación post-ejercicio",
+      "tensión",
+      "Dolor muscular (mialgia)",
+      "agotamiento muscular cansancio o fatiga"
+    ]
+  },
+  {
+    "id": 468,
+    "nombre": "Botiquin Hogar Caja X 1Kit Nexcare Azul",
+    "fabricante": "Nexcare",
+    "precio": 60100.0,
+    "imagen": "med_468_c2cd1887d082.jpg",
+    "sintomas": [
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "desinfección",
+      "desinfectar la piel",
+      "electrolitos",
+      "eliminación de gérmenes",
+      "limpieza de heridas",
+      "prevención de infección",
+      "pérdida de líquidos",
+      "rasguños",
+      "regeneración de tejido",
+      "reposición de líquidos",
+      "sales de rehidratación",
+      "suero oral"
+    ]
+  },
+  {
+    "id": 469,
+    "nombre": "Termómetros digitales para oído",
+    "fabricante": "(marcas varias)",
+    "precio": 0,
+    "imagen": "",
+    "sintomas": []
+  },
+  {
+    "id": 476,
+    "nombre": "Sistema Monitoreo Continuo De Glucosa Sobre 1 Accu-Chek",
+    "fabricante": "Roche",
+    "precio": 258800.0,
+    "imagen": "Sistema_Monitoreo_Continuo_De_Glucosa_Sobre_1_Accu-Chek_Roche.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 489,
+    "nombre": "factor de crecimiento Omnitrope Somatropina 10mg/1.5ml Sandoz Caja X 1 Cartucho",
+    "fabricante": "Sandoz",
+    "precio": 371300.0,
+    "imagen": "factor_de_crecimiento_Omnitrope_Somatropina_10mg15ml_Sandoz_Caja_X_1_Cartucho_Sandoz.jpg",
+    "sintomas": []
+  },
+  {
+    "id": 502,
+    "nombre": "Acetaminofén 500 mg tableta caja x20",
+    "fabricante": "AG",
+    "precio": 5000.0,
+    "imagen": "Acetaminofén_500_mg_tableta_caja_x20_AG.jpg",
+    "sintomas": [
+      "Congestión nasal",
+      "Dolor de cabeza",
+      "Dolor de garganta",
+      "Dolor muscular (mialgia)",
+      "Fiebre",
+      "Dolor en las articulaciones (artralgia)",
+      "dolor"
+    ]
+  },
+  {
+    "id": 503,
+    "nombre": "Acetaminofén 500 mg tableta caja x20",
+    "fabricante": "MK",
+    "precio": 3500.0,
+    "imagen": "Acetaminofén_500_mg_tableta_caja_x20_MK.jpg",
+    "sintomas": [
+      "Congestión nasal",
+      "Dolor de cabeza",
+      "Dolor de garganta",
+      "Dolor muscular (mialgia)",
+      "Fiebre",
+      "Dolor en las articulaciones (artralgia)",
+      "dolor"
+    ]
+  },
+  {
+    "id": 504,
+    "nombre": "Acetaminofén 500 mg tableta caja x20",
+    "fabricante": "BEST",
+    "precio": 4000.0,
+    "imagen": "Acetaminofén_500_mg_tableta_caja_x20_BEST.jpg",
+    "sintomas": [
+      "Congestión nasal",
+      "Dolor de cabeza",
+      "Dolor de garganta",
+      "Dolor muscular (mialgia)",
+      "Fiebre",
+      "Dolor en las articulaciones (artralgia)",
+      "dolor"
+    ]
+  },
+  {
+    "id": 505,
+    "nombre": "Tiras reactivas glucosa paquete X 100",
+    "fabricante": "ABBOTT",
+    "precio": 60000.0,
+    "imagen": "Accu-Chek_tiras_reactivas_glucosa_paquete_X_100_ABBOTT.jpg",
+    "sintomas": [
+      "medir glucosa"
+    ]
+  },
+  {
+    "id": 506,
+    "nombre": "Aciclovir 200 mg caja x24(25)",
+    "fabricante": "Genfar",
+    "precio": 16000.0,
+    "imagen": "Aciclovir_200_mg_caja_x2425_Genfar.jpg",
+    "sintomas": [
+      "infeccion Clamidia"
+    ]
+  },
+  {
+    "id": 507,
+    "nombre": "Azitromicina 500 mg Tableta Caja x 3",
+    "fabricante": "AG",
+    "precio": 13800.0,
+    "imagen": "Azitromicina_500_mg_Tableta_Caja_x_3_AG.jpg",
+    "sintomas": [
+      "infeccion con Sinusitis",
+      "Dolor de garganta",
+      "Fiebre",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 508,
+    "nombre": "Azitromicina 500 mg Tableta Caja x 3",
+    "fabricante": "memphis",
+    "precio": 12000.0,
+    "imagen": "Azitromicina_500_mg_Tableta_Caja_x_3_memphis.jpg",
+    "sintomas": [
+      "infeccion con Sinusitis",
+      "Dolor de garganta",
+      "Fiebre",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 509,
+    "nombre": "Ambroxol 30 mg",
+    "fabricante": "MK",
+    "precio": 19000.0,
+    "imagen": "Ambroxol_30_mg_MK.jpg",
+    "sintomas": [
+      "Fiebre",
+      "tos"
+    ]
+  },
+  {
+    "id": 510,
+    "nombre": "Amoxicilina 500 mg Cápsula blister x 10",
+    "fabricante": "LA SANTE",
+    "precio": 6500.0,
+    "imagen": "Amoxicilina_500_mg_Cápsula_Caja_x_10_LA_SANTE.jpg",
+    "sintomas": [
+      "infeccion Clamidia",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 511,
+    "nombre": "Alopurinol 100 MG caja x 30",
+    "fabricante": "mamphis",
+    "precio": 35000.0,
+    "imagen": "Alopurinol_100_MG_caja_x_30_mamphis.jpg",
+    "sintomas": [
+      "Linfedema",
+      "Gota",
+      "Urticaria",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 512,
+    "nombre": "Amoxicilina 500 mg Cápsula blister x 10",
+    "fabricante": "Genfar",
+    "precio": 5100.0,
+    "imagen": "Amoxicilina_500_mg_Cápsula_Caja_x_10_Genfar.jpg",
+    "sintomas": [
+      "infeccion Clamidia",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 513,
+    "nombre": "Amoxicilina 500 mg Cápsula blister x 10",
+    "fabricante": "AG",
+    "precio": 6500.0,
+    "imagen": "Amoxicilina_500_mg_Cápsula_Caja_x_10_AG.jpg",
+    "sintomas": [
+      "infeccion Clamidia",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 514,
+    "nombre": "Amoxicilina 500 mg caja x 50 capsulas",
+    "fabricante": "AG",
+    "precio": 30000.0,
+    "imagen": "Amoxicilina_500_mg_caja_x_50_capsulas_AG.jpg",
+    "sintomas": [
+      "infeccion Clamidia",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 515,
+    "nombre": "Amoxicilina 500 mg caja x 50 capsulas",
+    "fabricante": "LA SANTE",
+    "precio": 32000.0,
+    "imagen": "Amoxicilina_500_mg_caja_x_50_capsulas_LA_SANTE.jpg",
+    "sintomas": [
+      "infeccion Clamidia",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 516,
+    "nombre": "Zitromax 500 mg x 3 tabletas",
+    "fabricante": "Pfizer",
+    "precio": 138000.0,
+    "imagen": "Zitromax_500_mg_x_3_tabletas_Pfizer.jpg",
+    "sintomas": [
+      "Fiebre",
+      "infeccion con Sinusitis",
+      "Dolor de garganta",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 517,
+    "nombre": "Ibuprofeno 400mg x 100 tabletas",
+    "fabricante": "Genfar",
+    "precio": 28000.0,
+    "imagen": "Ibuprofeno_400mg_Genfar.jpg",
+    "sintomas": [
+      "Calambres musculares",
+      "Cansancio",
+      "Dolor de cabeza",
+      "Dolor de espalda",
+      "Dolor de garganta",
+      "Dolor en las articulaciones (artralgia)",
+      "Escalofríos",
+      "Fiebre",
+      "sintoma de prueba",
+      "Dolor muscular (mialgia)"
+    ]
+  },
+  {
+    "id": 520,
+    "nombre": "Omeprazol 20mg x 10",
+    "fabricante": "Genfar",
+    "precio": 5000.0,
+    "imagen": "Omeprazol_20mg_Genfar.jpg",
+    "sintomas": [
+      "Acidez estomacal",
+      "Esofagitis",
+      "Indigestión"
+    ]
+  },
+  {
+    "id": 522,
+    "nombre": "Loperamida 2mg X 3",
+    "fabricante": "ECAR",
+    "precio": 6000.0,
+    "imagen": "Loperamida_2mg_ECAR.jpg",
+    "sintomas": [
+      "Diarrea",
+      "Vómitos",
+      "Dolor abdominal",
+      "Náuseas",
+      "Debilidad",
+      "reducir el gasto de las ostomías"
+    ]
+  },
+  {
+    "id": 523,
+    "nombre": "Sales de Rehidratación Oral X UNIDAD",
+    "fabricante": "COASPHARMA",
+    "precio": 1700.0,
+    "imagen": "Sales_de_Rehidratación_Oral_COASPHARMA.jpg",
+    "sintomas": [
+      "Diarrea",
+      "Vómitos",
+      "Dolor abdominal",
+      "Náuseas",
+      "Debilidad"
+    ]
+  },
+  {
+    "id": 524,
+    "nombre": "bisolvon jarabe frasco x 120",
+    "fabricante": "Sanofi",
+    "precio": 39000.0,
+    "imagen": "bisolvon_ajrabe_frasco_x_120_Sanofi.jpg",
+    "sintomas": [
+      "Congestión nasal",
+      "Dolor de garganta",
+      "Secreción nasal",
+      "Tos seca",
+      "Malestar general",
+      "tos"
+    ]
+  },
+  {
+    "id": 525,
+    "nombre": "hioscina Butil Bromuro 10Mg Caja X 20",
+    "fabricante": "expofarma",
+    "precio": 13200.0,
+    "imagen": "hioscina_Butil_Bromuro_10Mg_Caja_X_20_expofarma.jpg",
+    "sintomas": [
+      "Diarrea",
+      "Vómitos",
+      "Dolor abdominal",
+      "Náuseas",
+      "Debilidad",
+      "colico menstrual",
+      "espasmos",
+      "Contracciones abdominales",
+      "Dolor por periodo"
+    ]
+  },
+  {
+    "id": 526,
+    "nombre": "Hidrocortisona 1% crema tubo 15mg",
+    "fabricante": "memphis",
+    "precio": 6000.0,
+    "imagen": "Crema_Hidrocortisona_1_memphis.jpg",
+    "sintomas": [
+      "Picazón Piel",
+      "pie de atleta",
+      "afecciones cutáneas",
+      "dermatitis de contacto",
+      "picaduras de insectos",
+      "sarpullido"
+    ]
+  },
+  {
+    "id": 527,
+    "nombre": "Bisacodilo laxante 5mg x 10",
+    "fabricante": "huma",
+    "precio": 4000.0,
+    "imagen": "Bisacodilo_laxante_5mg_x_10_huma.jpg",
+    "sintomas": [
+      "Estreñimiento",
+      "transito lento o pesado"
+    ]
+  },
+  {
+    "id": 528,
+    "nombre": "Acetato de medroxiprogesterona inyección 150 mg/ml",
+    "fabricante": "Pfizer",
+    "precio": 29000.0,
+    "imagen": "Acetato_de_medroxiprogesterona_inyección_150_mgml_Pfizer.jpg",
+    "sintomas": [
+      "anticoncepción",
+      "hemorragias irregulares",
+      "hemorragias abundantes",
+      "prevención del cáncer de endometrio",
+      "endometriosis",
+      "inducir un ciclo menstrual",
+      "prevención de embarazo no deseado"
+    ]
+  },
+  {
+    "id": 529,
+    "nombre": "Dimenhidrinato 50mg x 36",
+    "fabricante": "Genfar",
+    "precio": 17000.0,
+    "imagen": "Dimenhidrinato_50mg_Genfar.jpg",
+    "sintomas": [
+      "Náuseas",
+      "Vómitos",
+      "Vahído",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 530,
+    "nombre": "Melatonina 3mg x 60",
+    "fabricante": "milenium",
+    "precio": 35000.0,
+    "imagen": "Melatonina_3mg_milenium.jpg",
+    "sintomas": [
+      "Ansiedad",
+      "Insomnio",
+      "Dolor de cabeza"
+    ]
+  },
+  {
+    "id": 531,
+    "nombre": "Guayacolato de Glicerilo",
+    "fabricante": "laproff",
+    "precio": 6000.0,
+    "imagen": "Guayacolato_de_Glicerilo_laproff.jpg",
+    "sintomas": [
+      "Tos con flema",
+      "Sibilancias",
+      "aflojar y fluidificar la mucosidad",
+      "flema en vias respiratorias",
+      "tos"
+    ]
+  },
+  {
+    "id": 532,
+    "nombre": "Leche de Magnesia 8.5gr/100ml x120ml",
+    "fabricante": "MK",
+    "precio": 10000.0,
+    "imagen": "Leche_de_Magnesia_MK.jpg",
+    "sintomas": [
+      "aliviar la acidez",
+      "Acidez estomacal",
+      "Estreñimiento"
+    ]
+  },
+  {
+    "id": 533,
+    "nombre": "Leche de Magnesia 8.5gr/100ml x120ml",
+    "fabricante": "aspen",
+    "precio": 16000.0,
+    "imagen": "Leche_de_Magnesia_85gr100ml_x120ml_aspen.jpg",
+    "sintomas": [
+      "aliviar la acidez",
+      "Acidez estomacal",
+      "Estreñimiento"
+    ]
+  },
+  {
+    "id": 534,
+    "nombre": "Ibuprofeno 400 mg tableta caja x 10",
+    "fabricante": "Genfar",
+    "precio": 3500.0,
+    "imagen": "Ibuprofeno_400_mg_tableta_caja_x20_Genfar.jpg",
+    "sintomas": [
+      "Dolor de cabeza",
+      "Dolor de espalda",
+      "Dolor de garganta",
+      "Dolor en las articulaciones (artralgia)",
+      "Dolor muscular (mialgia)",
+      "Fiebre",
+      "Calambres musculares",
+      "Fatiga/Cansancio",
+      "Escalofríos"
+    ]
+  },
+  {
+    "id": 535,
+    "nombre": "Cefalexina 500 mg cápsula caja x10",
+    "fabricante": "AG",
+    "precio": 10500.0,
+    "imagen": "Cefalexina_500_mg_cápsula_caja_x10_AG.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "rinorrea",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 536,
+    "nombre": "Cefalexina 500 mg cápsula caja x10",
+    "fabricante": "MK",
+    "precio": 11000.0,
+    "imagen": "Cefalexina_500_mg_cápsula_caja_x10_MK.jpg",
+    "sintomas": [
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "rinorrea",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 537,
+    "nombre": "hioscina Butil Bromuro 10Mg x 10 tabletas",
+    "fabricante": "laproff",
+    "precio": 3800.0,
+    "imagen": "hioscina_Butil_Bromuro_10Mg_x_10_tabletas_laproff.jpg",
+    "sintomas": [
+      "Debilidad",
+      "Náuseas",
+      "Vómitos",
+      "Diarrea",
+      "colico menstrual",
+      "Dolor abdominal",
+      "espasmos",
+      "Contracciones abdominales",
+      "Dolor por periodo"
+    ]
+  },
+  {
+    "id": 538,
+    "nombre": "Diclofenaco 50 mg cápsula caja x 20",
+    "fabricante": "MK",
+    "precio": 5100.0,
+    "imagen": "Diclofenaco_50_mg_cápsula_caja_x_20_MK.jpg",
+    "sintomas": [
+      "Dolor por periodo",
+      "Dolor muscular (mialgia)",
+      "Dolor en las articulaciones (artralgia)",
+      "Dolor de espalda",
+      "Dolor de cabeza"
+    ]
+  },
+  {
+    "id": 540,
+    "nombre": "Loratadina 10 mg x10",
+    "fabricante": "LA SANTE",
+    "precio": 4000.0,
+    "imagen": "Loratadina_10_mg_x10_LA_SANTE.jpg",
+    "sintomas": [
+      "Comezón",
+      "Congestión nasal",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "lagrimeo",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "sarpullido"
+    ]
+  },
+  {
+    "id": 542,
+    "nombre": "Desloratadina 5 mg tableta caja x10",
+    "fabricante": "Genfar",
+    "precio": 32860.0,
+    "imagen": "Desloratadina_5_mg_tableta_caja_x10_Genfar.jpg",
+    "sintomas": [
+      "Comezón",
+      "Congestión nasal",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "habones",
+      "hinchazón",
+      "obstrucción nasal",
+      "picazón nasal",
+      "reacción alérgica",
+      "rinorrea",
+      "Secreción nasal"
+    ]
+  },
+  {
+    "id": 543,
+    "nombre": "Omeprazol 20 mg cápsula caja x 30",
+    "fabricante": "MK",
+    "precio": 21200.0,
+    "imagen": "Omeprazol_20_mg_cápsula_caja_x_30_MK.jpg",
+    "sintomas": [
+      "Acidez estomacal",
+      "Esofagitis",
+      "Indigestión"
+    ]
+  },
+  {
+    "id": 544,
+    "nombre": "Pantoprazol 40 mg tableta caja x28",
+    "fabricante": "momenta",
+    "precio": 76500.0,
+    "imagen": "Pantoprazol_40_mg_tableta_caja_x28_momenta.jpg",
+    "sintomas": [
+      "acidez",
+      "Acidez estomacal",
+      "antiinflamatorio",
+      "ardor",
+      "escaras",
+      "heridas crónicas",
+      "llagas por presión",
+      "llagas vasculares",
+      "úlceras de decúbito",
+      "úlceras en piernas"
+    ]
+  },
+  {
+    "id": 545,
+    "nombre": "Naproxeno 500 mg caja x 10",
+    "fabricante": "Genfar",
+    "precio": 9400.0,
+    "imagen": "Naproxeno_500_mg_caja_x_10_Genfar.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "Congestión nasal",
+      "crisis gotosa",
+      "cólicos",
+      "debilidad muscular",
+      "depositos de urato",
+      "Dolor de garganta",
+      "dolor en tendón",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "hinchazón",
+      "limitación de movimiento",
+      "primer dedo del pie",
+      "rigidez",
+      "rigidez matutina",
+      "rinorrea",
+      "tofáceos",
+      "Infección Bacterial",
+      "tos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 546,
+    "nombre": "Naproxeno 500 mg caja x 10",
+    "fabricante": "LA SANTE",
+    "precio": 12600.0,
+    "imagen": "Naproxeno_500_mg_caja_x_10_LA_SANTE.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "calor local",
+      "Congestión nasal",
+      "crisis gotosa",
+      "cólicos",
+      "debilidad muscular",
+      "depositos de urato",
+      "Dolor de garganta",
+      "dolor en tendón",
+      "enrojecimiento",
+      "estornudos",
+      "Fiebre",
+      "hinchazón",
+      "limitación de movimiento",
+      "primer dedo del pie",
+      "rigidez",
+      "rigidez matutina",
+      "rinorrea",
+      "tofáceos",
+      "Infección Bacterial",
+      "tos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 547,
+    "nombre": "novalgina 500 mg blister x10",
+    "fabricante": "Sanofi",
+    "precio": 22500.0,
+    "imagen": "novalgina_500_mg_blister_x10_Sanofi.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "Dolor de cabeza",
+      "fatiga",
+      "Fiebre",
+      "tensión",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 548,
+    "nombre": "Azitromicina 500 mg tableta caja x 3",
+    "fabricante": "MK",
+    "precio": 16200.0,
+    "imagen": "Azitromicina_500_mg_tableta_caja_x_3_MK.jpg",
+    "sintomas": [
+      "Fiebre",
+      "infeccion con Sinusitis",
+      "Dolor de garganta",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 549,
+    "nombre": "Levofloxacino 500 mg tableta caja x 7",
+    "fabricante": "Genfar",
+    "precio": 40643.0,
+    "imagen": "Levofloxacino_500_mg_tableta_caja_x_7_Genfar.jpg",
+    "sintomas": [
+      "Cansancio",
+      "cefalea sinusal",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "dificultad para orinar",
+      "dificultad respiratoria",
+      "Dolor abdominal",
+      "Dolor de garganta",
+      "dolor facial",
+      "dolor pélvico",
+      "enrojecimiento",
+      "Escalofríos",
+      "estornudos",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "lipodistrofia",
+      "maceramiento",
+      "mucosidad",
+      "mucosidad nasal espesa",
+      "olor característico",
+      "piel de naranja",
+      "presión sinusal",
+      "Producción De Flema",
+      "pus",
+      "rinorrea",
+      "Sibilancias",
+      "taquicardia",
+      "tos",
+      "tratamiento de celulitis",
+      "Dolor al orinar (disuria)",
+      "Dolor muscular (mialgia)",
+      "dolor torácico o dolor en el pecho",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 550,
+    "nombre": "Metronidazol 500 mg tableta blister x 10",
+    "fabricante": "MK",
+    "precio": 3600.0,
+    "imagen": "Metronidazol_500_mg_tableta_blister_x_10_MK.jpg",
+    "sintomas": [
+      "Amebiasis",
+      "antiparasitario",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "Giardiasis",
+      "hipotensión",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Tricomoniasis",
+      "Vaginosis bacteriana",
+      "Úlceras",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 551,
+    "nombre": "Nistatina suspensión 100,000 UI/ml frasco 60 ml",
+    "fabricante": "promarcas",
+    "precio": 40000.0,
+    "imagen": "Nistatina_suspensión_100000_UIml_frasco_60_ml_promarcas.jpg",
+    "sintomas": [
+      "candidiasis vaginal",
+      "Cansancio",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "hongos vaginales",
+      "inestabilidad",
+      "maceramiento",
+      "olor característico",
+      "pus",
+      "taquicardia",
+      "tos",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "Vaginosis bacteriana",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 552,
+    "nombre": "Insulina humana regular 100 UI/ml 10 ml",
+    "fabricante": "Novo Nordisk",
+    "precio": 34850.0,
+    "imagen": "Insulina_humana_regular_100_UIml_10_ml_Novo_Nordisk.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 560,
+    "nombre": "Metformina 850 mg tableta caja x 30",
+    "fabricante": "Genfar",
+    "precio": 27893.0,
+    "imagen": "Metformina_850_mg_tableta_caja_x_30_Genfar.jpg",
+    "sintomas": [
+      "fatiga",
+      "hambre extrema",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "sobrepeso",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 561,
+    "nombre": "Glibenclamida 5 mg tableta caja x30",
+    "fabricante": "MK",
+    "precio": 28200.0,
+    "imagen": "Glibenclamida_5_mg_tableta_caja_x30_MK.jpg",
+    "sintomas": [
+      "debilidad muscular",
+      "dolor neuropático",
+      "Entumecimiento",
+      "fatiga",
+      "hambre extrema",
+      "hormigueo",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa"
+    ]
+  },
+  {
+    "id": 562,
+    "nombre": "Simvastatina 20 mg tableta caja x30",
+    "fabricante": "Genfar",
+    "precio": 47000.0,
+    "imagen": "Simvastatina_20_mg_tableta_caja_x30_Genfar.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "derrame cerebral",
+      "dificultad respiratoria",
+      "Entumecimiento",
+      "evento cardiovascular",
+      "evento cerebrovascular isquémico",
+      "fatiga",
+      "hambre extrema",
+      "ictus",
+      "infarto al corazón",
+      "infarto cerebral",
+      "orina frecuente",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "dolor torácico o dolor en el pecho",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 563,
+    "nombre": "Rosuvastatina 10 mg tableta caja x 28",
+    "fabricante": "AG",
+    "precio": 188800.0,
+    "imagen": "Rosuvastatina_10_mg_tableta_caja_x_28_AG.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "evento cardiovascular",
+      "eventos cardiovasculares",
+      "infarto al corazón",
+      "prevención cardiovascular",
+      "protección cardíaca",
+      "dolor torácico o dolor en el pecho"
+    ]
+  },
+  {
+    "id": 564,
+    "nombre": "Losartán 50 mg tableta caja x30",
+    "fabricante": "NovaMed",
+    "precio": 20400.0,
+    "imagen": "Losartán_50_mg_tableta_caja_x30_NovaMed.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "derrame cerebral",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "evento cerebrovascular isquémico",
+      "fatiga",
+      "hambre extrema",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "ictus",
+      "infarto cerebral",
+      "orina frecuente",
+      "presión arterial elevada",
+      "pérdida de peso",
+      "sed excesiva",
+      "Visión borrosa",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 565,
+    "nombre": "Metoprolol 50 mg tableta caja x30",
+    "fabricante": "Genfar",
+    "precio": 10043.0,
+    "imagen": "Metoprolol_50_mg_tableta_caja_x30_Genfar.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor de cabeza severo",
+      "evento cardiovascular",
+      "fatiga",
+      "Hipertensión Arterial",
+      "infarto al corazón",
+      "opresión torácica",
+      "palpitaciones",
+      "presión arterial elevada",
+      "sudoración",
+      "síncope",
+      "Visión borrosa",
+      "dolor torácico o dolor en el pecho",
+      "Vómitos",
+      "Sensibilidad a la luz (fotofobia)",
+      "Náuseas",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 566,
+    "nombre": "Metoprolol 50 mg tableta caja x30",
+    "fabricante": "MK",
+    "precio": 15200.0,
+    "imagen": "Metoprolol_50_mg_tableta_caja_x30_MK.jpg",
+    "sintomas": [
+      "ataque cardíaco",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "dolor de cabeza severo",
+      "evento cardiovascular",
+      "fatiga",
+      "Hipertensión Arterial",
+      "infarto al corazón",
+      "opresión torácica",
+      "palpitaciones",
+      "presión arterial elevada",
+      "sudoración",
+      "síncope",
+      "Visión borrosa",
+      "dolor torácico o dolor en el pecho",
+      "Vómitos",
+      "Sensibilidad a la luz (fotofobia)",
+      "Náuseas",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 567,
+    "nombre": "Carvedilol 25 mg tableta caja x 30",
+    "fabricante": "MK",
+    "precio": 34200.0,
+    "imagen": "Carvedilol_25_mg_tableta_caja_x_30_LA_SANTE.jpg",
+    "sintomas": [
+      "arritmia",
+      "Cansancio",
+      "dificultad respiratoria",
+      "Dolor de cabeza",
+      "fatiga",
+      "hinchazón de pies",
+      "Hipertensión Arterial",
+      "opresión torácica",
+      "presión arterial elevada",
+      "sudoración",
+      "dolor torácico o dolor en el pecho",
+      "Mareos/Vértigo"
+    ]
+  },
+  {
+    "id": 568,
+    "nombre": "Alendronato 70 mg tableta caja x 4",
+    "fabricante": "LA SANTE",
+    "precio": 43080.0,
+    "imagen": "Alendronato_70_mg_tableta_caja_x_4_LA_SANTE.jpg",
+    "sintomas": [
+      "dolor óseo",
+      "fracturas frecuentes",
+      "fragilidad ósea",
+      "pérdida de altura"
+    ]
+  },
+  {
+    "id": 569,
+    "nombre": "Analgésico tópico capsaicina crema 0.025% tubo 20 g",
+    "fabricante": "idefar",
+    "precio": 105000.0,
+    "imagen": "Analgésico_tópico_capsaicina_crema_0025_tubo_20_g_idefar.jpg",
+    "sintomas": [
+      "ampollas",
+      "debilidad muscular",
+      "dolor neuropático",
+      "hormigueo",
+      "inflamación local",
+      "calor local",
+      "Comezón",
+      "descamación plateada",
+      "enrojecimiento",
+      "Entumecimiento",
+      "hinchazón",
+      "limitación de movimiento",
+      "placas gruesas",
+      "rigidez matutina"
+    ]
+  },
+  {
+    "id": 570,
+    "nombre": "Analgésico tópico diclofenaco gel 1% tubo 50 g",
+    "fabricante": "MK",
+    "precio": 32568.0,
+    "imagen": "Analgésico_tópico_diclofenaco_gel_1_tubo_50_g_MK.jpg",
+    "sintomas": [
+      "articulación metatarsofalángica",
+      "ataque agudo de gota",
+      "crisis gotosa",
+      "crujidos",
+      "deformidad",
+      "depositos de urato",
+      "limitación de movimiento",
+      "primer dedo del pie",
+      "rigidez",
+      "rigidez matutina",
+      "tofáceos",
+      "niveles altos de ácido úrico"
+    ]
+  },
+  {
+    "id": 572,
+    "nombre": "Celecoxib 200Mg Cápsulas Caja X 10",
+    "fabricante": "MK",
+    "precio": 16100.0,
+    "imagen": "Celecoxib_200Mg_Cápsulas_Caja_X_10_MK.jpg",
+    "sintomas": [
+      "antiinflamatorio",
+      "calor local",
+      "crujidos",
+      "deformidad",
+      "enrojecimiento",
+      "Fiebre",
+      "hinchazón",
+      "limitación de movimiento",
+      "rigidez",
+      "rigidez matutina"
+    ]
+  },
+  {
+    "id": 573,
+    "nombre": "Crema No 4 Anti Pañalitis Con Nistatina X 60 Gr",
+    "fabricante": "TQ",
+    "precio": 28000.0,
+    "imagen": "Crema_No_4_Anti_Pañalitis_Con_Nistatina_X_60_Gr_TQ.jpg",
+    "sintomas": [
+      "alivio de picazón por picadura",
+      "Cansancio",
+      "cicatrización",
+      "cierre de heridas",
+      "Comezón",
+      "confusión",
+      "Congestión nasal",
+      "debilitamiento",
+      "descamación",
+      "Diarrea",
+      "Dolor abdominal",
+      "enrojecimiento",
+      "Fiebre",
+      "Fiebre Alta",
+      "hipotensión",
+      "Irritación",
+      "irritación por pañal",
+      "maceramiento",
+      "mordeduras",
+      "nicturia",
+      "olor característico",
+      "pañalitis",
+      "pus",
+      "pérdida involuntaria de orina",
+      "Quemadura",
+      "Quemazón",
+      "reacción a picadura",
+      "regeneración de tejido",
+      "rozadura de pañal",
+      "sarpullido de pañal",
+      "taquicardia",
+      "tos",
+      "urgencia urinaria",
+      "Dolor muscular (mialgia)",
+      "Infección Bacterial",
+      "inflamación local"
+    ]
+  },
+  {
+    "id": 574,
+    "nombre": "Shot B Suplemento Dietario Cápsulas Blandas Caja 30",
+    "fabricante": "Gennoma Lab",
+    "precio": 46000.0,
+    "imagen": "med_574_57c3981f39f4.jpg",
+    "sintomas": [
+      "antisepsia",
+      "cicatrización",
+      "cierre de heridas",
+      "cuidado dental",
+      "dientes sensibles",
+      "dolor dental al frío",
+      "enjuague bucal",
+      "fatiga",
+      "hilo dental",
+      "hipersensibilidad dental",
+      "limpieza dental",
+      "osteopenia",
+      "prevención de infección",
+      "regeneración de tejido",
+      "suplementación de calcio",
+      "limpiar y desinfectar heridas superficiales"
+    ]
+  },
+  {
+    "id": 575,
+    "nombre": "micofix",
+    "fabricante": "TQ",
+    "precio": 57000.0,
+    "imagen": "med_575_5ef2e6cef03c.jpg",
+    "sintomas": [
+      "Comezón",
+      "Irritación",
+      "comedones",
+      "descamación",
+      "enrojecimiento",
+      "hinchazón",
+      "pie de atleta",
+      "pápulas",
+      "pústulas",
+      "hongos en las uñas",
+      "Picazón Piel",
+      "Infección De Piel",
+      "desinfectar la piel",
+      "uñas encarnadas",
+      "sabañones",
+      "candelilla",
+      "Infección Bacterial"
+    ]
+  },
+  {
+    "id": 576,
+    "nombre": "Tukol-D Jarabe Para La Tos Adultos Y Niños Solución Oral Frasco X 125 mL",
+    "fabricante": "TUKOL",
+    "precio": 40000.0,
+    "imagen": "med_576_7800f76c3096.jpg",
+    "sintomas": [
+      "tos"
+    ]
+  },
+  {
+    "id": 577,
+    "nombre": "Tadalafilo Mk 5Mg Caja X 30 Tabletas Recubiertas",
+    "fabricante": "Genfar",
+    "precio": 97000.0,
+    "imagen": "med_577_1aed972debc3.jpg",
+    "sintomas": []
+  }
+];
+
+    function normalize(str) {
+      return str.toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim();
+    }
+
+    function buscar(termino) {
+      const t = normalize(termino);
+      if (!t) {
+        document.getElementById('results').innerHTML = '';
+        return;
+      }
+
+      const resultados = productos.filter(p => {
+        const texto = `${p.nombre} ${p.fabricante} ${p.sintomas.join(' ')}`;
+        return normalize(texto).includes(t);
+      });
+
+      mostrarResultados(resultados);
+    }
+
+    function mostrarResultados(lista) {
+      const div = document.getElementById('results');
+      if (lista.length === 0) {
+        div.innerHTML = '<div class="no-results">No se encontraron resultados para "<strong>' + 
+                        document.getElementById("search").value + 
+                        '</strong>".</div>';
+        return;
+      }
+
+      div.innerHTML = lista.map(p => `
+        <div class="product">
+          <div class="name">${p.nombre} <small>(${p.fabricante})</small></div>
+          <div class="price">$${p.precio.toLocaleString('es-CO')}</div>
+          <div class="symptoms"><strong>Síntomas:</strong> ${p.sintomas.length ? p.sintomas.join(', ') : '—'}</div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('search').addEventListener('input', (e) => {
+      buscar(e.target.value);
+    });
+  </script>
+</body>
+</html>

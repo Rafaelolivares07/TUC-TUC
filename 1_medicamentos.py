@@ -315,9 +315,9 @@ def check_device_access():
 
 @app.route('/')
 def index():
-    """Punto de entrada principal para el Rol Paciente."""
-    session['rol_temporal'] = 'Paciente'
-    return render_template('1_index.html') 
+    """Página principal: muestra directamente la tienda de medicamentos."""
+    # Redirigir directamente a la tienda
+    return redirect(url_for('tienda_home')) 
 
 @app.route('/admin')
 def admin_login():

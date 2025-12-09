@@ -29,9 +29,12 @@ reporte*.html
 comparativa*.html
 test*.html
 debug*.html
-*.png
+# Ignorar PNGs temporales pero NO los de productos
+debug*.png
 *.exe
 *.lnk
+*.crdownload
+*.msi
 
 # Git
 .git/
@@ -39,6 +42,3 @@ debug*.html
 # VS Code
 .vscode/
 *.code-workspace
-
-# Uploads locales
-uploads/

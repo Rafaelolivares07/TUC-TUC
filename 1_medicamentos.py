@@ -314,6 +314,15 @@ def check_device_access():
     if request.path.startswith('/static'):
         return  # Ignorar peticiones a recursos estáticos
 
+    # RUTAS PÚBLICAS: permitir acceso sin registro a la tienda
+    rutas_publicas = ['/tienda', '/favicon.ico', '/']
+    for ruta in rutas_publicas:
+        if request.path.startswith(ruta) or request.path == ruta:
+            # Para rutas públicas, solo crear dispositivo_id si no existe
+            if 'dispositivo_id' not in session:
+                session['dispositivo_id'] = str(uuid.uuid4())
+            return  # Permitir acceso sin verificar usuario
+
     device_id = session.get('dispositivo_id')
     if not device_id:
         device_id = str(uuid.uuid4())

@@ -1154,870 +1154,877 @@ def obtener_productos():
        - Interfaz mejorada con tipos de detección
     """
     from datetime import datetime
-    print(f"\n{'='*70}")
-    print(f"🔖 API /api/productos - VERSIÓN: 2025-11-09 07:30 FINAL")
-    print(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"   Funcionalidad: Substring + Levenshtein ACTIVOS")
-    print(f"{'='*70}\n")
-    
-    # Parámetros de búsqueda
-    busqueda = request.args.get('q', '').strip()
-    sintoma_id = request.args.get('sintoma_id', '')
-    precio_min = request.args.get('precio_min', '')
-    precio_max = request.args.get('precio_max', '')
-    busqueda_sintomas = request.args.get('sintomas_busqueda', '').strip()
-
     try:
-        conn = get_db_connection()
+        print(f"\n{'='*70}")
+        print(f"🔖 API /api/productos - VERSIÓN: 2025-11-09 07:30 FINAL")
+        print(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"   Funcionalidad: Substring + Levenshtein ACTIVOS")
+        print(f"{'='*70}\n")
+    
+        # Parámetros de búsqueda
+        busqueda = request.args.get('q', '').strip()
+        sintoma_id = request.args.get('sintoma_id', '')
+        precio_min = request.args.get('precio_min', '')
+        precio_max = request.args.get('precio_max', '')
+        busqueda_sintomas = request.args.get('sintomas_busqueda', '').strip()
 
-        # Cargar configuración de publicación
-        config_row = conn.execute("SELECT permitir_publicar_sin_cotizaciones FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
-        permitir_sin_cotizaciones = config_row['permitir_publicar_sin_cotizaciones'] if config_row else 0
-    except Exception as e:
-        print(f"ERROR en obtener_productos al inicio: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e), 'productos': []}), 500
+        try:
+            conn = get_db_connection()
 
-    # DETECCIÓN INTELIGENTE: DIAGNÓSTICOS + SÍNTOMAS
-    sintomas_detectados = []
-    sintomas_detectados_ids = []
-    diagnosticos_detectados_directo = []
-    diagnosticos_detectados_directo_ids = []
-    diagnosticos_posibles = {}
-    sintomas_faltantes_por_diagnostico = {}  # 🆕 NUEVO
-    busqueda_parcial_aplicada = False  # 🆕 Declarar al inicio
+            # Cargar configuración de publicación
+            config_row = conn.execute("SELECT permitir_publicar_sin_cotizaciones FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
+            permitir_sin_cotizaciones = config_row['permitir_publicar_sin_cotizaciones'] if config_row else 0
+        except Exception as e:
+            print(f"ERROR en obtener_productos al inicio: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'ok': False, 'error': str(e), 'productos': []}), 500
 
-    if busqueda_sintomas:
-        # ============================================
-        # PARTE 1: NORMALIZACIÓN (SIN CAMBIOS)
-        # ============================================
-        normalizaciones_diagnosticos = {
-            'gripa': 'gripe',
-            'resfriado': 'gripe',
-            'resfrio': 'gripe',
-            'gripal': 'gripe',
-            'resfrío': 'gripe',
-            'catarro': 'gripe',
-            'jaqueca': 'migraña',
-            'migrania': 'migraña',
-            'migrana': 'migraña',
-            'cefalea': 'migraña',
-            'acidez': 'gastritis',
-            'agruras': 'gastritis',
-            'reflujo': 'gastritis',
-            'alergia': 'alergia estacional',
-            'alergico': 'alergia estacional',
-            'alergica': 'alergia estacional',
-            'rinitis': 'alergia estacional',
-            'colitis': 'gastroenteritis',
-            'diarrea': 'gastroenteritis',
-            'angina': 'amigdalitis',
-            'anginas': 'amigdalitis',
-            'cistitis': 'infección urinaria'
-        }
+        # DETECCIÓN INTELIGENTE: DIAGNÓSTICOS + SÍNTOMAS
+        sintomas_detectados = []
+        sintomas_detectados_ids = []
+        diagnosticos_detectados_directo = []
+        diagnosticos_detectados_directo_ids = []
+        diagnosticos_posibles = {}
+        sintomas_faltantes_por_diagnostico = {}  # 🆕 NUEVO
+        busqueda_parcial_aplicada = False  # 🆕 Declarar al inicio
+
+        if busqueda_sintomas:
+            # ============================================
+            # PARTE 1: NORMALIZACIÓN (SIN CAMBIOS)
+            # ============================================
+            normalizaciones_diagnosticos = {
+                'gripa': 'gripe',
+                'resfriado': 'gripe',
+                'resfrio': 'gripe',
+                'gripal': 'gripe',
+                'resfrío': 'gripe',
+                'catarro': 'gripe',
+                'jaqueca': 'migraña',
+                'migrania': 'migraña',
+                'migrana': 'migraña',
+                'cefalea': 'migraña',
+                'acidez': 'gastritis',
+                'agruras': 'gastritis',
+                'reflujo': 'gastritis',
+                'alergia': 'alergia estacional',
+                'alergico': 'alergia estacional',
+                'alergica': 'alergia estacional',
+                'rinitis': 'alergia estacional',
+                'colitis': 'gastroenteritis',
+                'diarrea': 'gastroenteritis',
+                'angina': 'amigdalitis',
+                'anginas': 'amigdalitis',
+                'cistitis': 'infección urinaria'
+            }
         
-        normalizaciones_sintomas = {
-            'toso': 'tos', 'tosiendo': 'tos', 'toser': 'tos',
-            'duele': 'dolor', 'doliendo': 'dolor', 'doler': 'dolor',
-            'arde': 'ardor', 'ardiendo': 'ardor', 'arder': 'ardor',
-            'pica': 'picazón', 'picando': 'picazón', 'picar': 'picazón',
-            'vomito': 'vómito', 'vomitando': 'vómito', 'vomitar': 'vómito',
-            'mareo': 'mareo', 'mareando': 'mareo', 'marear': 'mareo',
-            'estornudo': 'estornudo', 'estornudando': 'estornudo', 'estornudar': 'estornudo',
-            'orino': 'orinar', 'orinando': 'orinar',
-            'sudo': 'sudor', 'sudando': 'sudor', 'sudar': 'sudor'
-        }
+            normalizaciones_sintomas = {
+                'toso': 'tos', 'tosiendo': 'tos', 'toser': 'tos',
+                'duele': 'dolor', 'doliendo': 'dolor', 'doler': 'dolor',
+                'arde': 'ardor', 'ardiendo': 'ardor', 'arder': 'ardor',
+                'pica': 'picazón', 'picando': 'picazón', 'picar': 'picazón',
+                'vomito': 'vómito', 'vomitando': 'vómito', 'vomitar': 'vómito',
+                'mareo': 'mareo', 'mareando': 'mareo', 'marear': 'mareo',
+                'estornudo': 'estornudo', 'estornudando': 'estornudo', 'estornudar': 'estornudo',
+                'orino': 'orinar', 'orinando': 'orinar',
+                'sudo': 'sudor', 'sudando': 'sudor', 'sudar': 'sudor'
+            }
         
-        texto_normalizado = normalizar_texto(busqueda_sintomas)
+            texto_normalizado = normalizar_texto(busqueda_sintomas)
         
-        for forma_verbal, sustantivo in normalizaciones_sintomas.items():
-            texto_normalizado = texto_normalizado.replace(forma_verbal, sustantivo)
+            for forma_verbal, sustantivo in normalizaciones_sintomas.items():
+                texto_normalizado = texto_normalizado.replace(forma_verbal, sustantivo)
         
-        palabras = texto_normalizado.split()
+            palabras = texto_normalizado.split()
         
-        # ============================================
-        # 🆕 FILTRO PREVIO: Eliminar palabras inútiles
-        # ============================================
-        palabras_ignorar_busqueda = {
-            'es', 'que', 'me', 'la', 'el', 'en', 'de', 'y', 'a', 'un', 'una',
-            'mi', 'tu', 'su', 'lo', 'le', 'se', 'si', 'no', 'con', 'por',
-            'para', 'como', 'pero', 'muy', 'mas', 'o', 'del', 'al', 'las',
-            'los', 'esta', 'este', 'son', 'hay', 'fue', 'ser', 'estar', 'tengo',
-            'tiene', 'siento'
-        }
+            # ============================================
+            # 🆕 FILTRO PREVIO: Eliminar palabras inútiles
+            # ============================================
+            palabras_ignorar_busqueda = {
+                'es', 'que', 'me', 'la', 'el', 'en', 'de', 'y', 'a', 'un', 'una',
+                'mi', 'tu', 'su', 'lo', 'le', 'se', 'si', 'no', 'con', 'por',
+                'para', 'como', 'pero', 'muy', 'mas', 'o', 'del', 'al', 'las',
+                'los', 'esta', 'este', 'son', 'hay', 'fue', 'ser', 'estar', 'tengo',
+                'tiene', 'siento'
+            }
         
-        # Filtrar palabras ignorables (mínimo 3 letras)
-        palabras_filtradas = [p for p in palabras if p not in palabras_ignorar_busqueda and len(p) >= 3]
+            # Filtrar palabras ignorables (mínimo 3 letras)
+            palabras_filtradas = [p for p in palabras if p not in palabras_ignorar_busqueda and len(p) >= 3]
         
-        # 🆕 REGLA CRÍTICA: Verificar si hay palabras significativas (5+ letras)
-        palabras_significativas = [p for p in palabras_filtradas if len(p) >= 5]
+            # 🆕 REGLA CRÍTICA: Verificar si hay palabras significativas (5+ letras)
+            palabras_significativas = [p for p in palabras_filtradas if len(p) >= 5]
         
-        print(f"   Palabras originales: {palabras}")
-        print(f"   Palabras filtradas: {palabras_filtradas}")
-        print(f"   Palabras significativas (5+ letras): {palabras_significativas}")
+            print(f"   Palabras originales: {palabras}")
+            print(f"   Palabras filtradas: {palabras_filtradas}")
+            print(f"   Palabras significativas (5+ letras): {palabras_significativas}")
         
-        # ============================================
-        # PARTE 2: BUSCAR DIAGNÓSTICOS DIRECTAMENTE (🆕 MEJORADO CON 80% Y FILTROS)
-        # ============================================
+            # ============================================
+            # PARTE 2: BUSCAR DIAGNÓSTICOS DIRECTAMENTE (🆕 MEJORADO CON 80% Y FILTROS)
+            # ============================================
         
-        # 🆕 SOLO buscar diagnósticos si hay palabras significativas
-        if palabras_significativas:
-            print("\n🔍 PARTE 2: Buscando diagnósticos directamente...")
+            # 🆕 SOLO buscar diagnósticos si hay palabras significativas
+            if palabras_significativas:
+                print("\n🔍 PARTE 2: Buscando diagnósticos directamente...")
             
-            # Primero buscar con trigramas/bigramas en el diccionario
-            for i in range(len(palabras_filtradas) - 2):
-                trigrama = f"{palabras_filtradas[i]} {palabras_filtradas[i+1]} {palabras_filtradas[i+2]}"
-                if trigrama in normalizaciones_diagnosticos:
-                    diagnostico_normalizado = normalizaciones_diagnosticos[trigrama]
-                    try:
-                        query_diag = """
-                            SELECT DISTINCT id, descripcion
-                            FROM diagnosticos
-                            WHERE LOWER(descripcion) LIKE ?
-                            LIMIT 1
-                        """
-                        resultado = conn.execute(query_diag, [f'%{diagnostico_normalizado}%']).fetchone()
-                        if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
-                            diagnosticos_detectados_directo.append(resultado['descripcion'])
-                            diagnosticos_detectados_directo_ids.append(resultado['id'])
-                            print(f"   ✅ Diagnóstico directo (trigrama): {resultado['descripcion']}")
-                    except Exception as e:
-                        print(f"Error buscando diagnóstico trigrama: {e}")
+                # Primero buscar con trigramas/bigramas en el diccionario
+                for i in range(len(palabras_filtradas) - 2):
+                    trigrama = f"{palabras_filtradas[i]} {palabras_filtradas[i+1]} {palabras_filtradas[i+2]}"
+                    if trigrama in normalizaciones_diagnosticos:
+                        diagnostico_normalizado = normalizaciones_diagnosticos[trigrama]
+                        try:
+                            query_diag = """
+                                SELECT DISTINCT id, descripcion
+                                FROM diagnosticos
+                                WHERE LOWER(descripcion) LIKE ?
+                                LIMIT 1
+                            """
+                            resultado = conn.execute(query_diag, [f'%{diagnostico_normalizado}%']).fetchone()
+                            if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
+                                diagnosticos_detectados_directo.append(resultado['descripcion'])
+                                diagnosticos_detectados_directo_ids.append(resultado['id'])
+                                print(f"   ✅ Diagnóstico directo (trigrama): {resultado['descripcion']}")
+                        except Exception as e:
+                            print(f"Error buscando diagnóstico trigrama: {e}")
             
-            for i in range(len(palabras_filtradas) - 1):
-                bigrama = f"{palabras_filtradas[i]} {palabras_filtradas[i+1]}"
-                if bigrama in normalizaciones_diagnosticos:
-                    diagnostico_normalizado = normalizaciones_diagnosticos[bigrama]
-                    try:
-                        query_diag = """
-                            SELECT DISTINCT id, descripcion
-                            FROM diagnosticos
-                            WHERE LOWER(descripcion) LIKE ?
-                            LIMIT 1
-                        """
-                        resultado = conn.execute(query_diag, [f'%{diagnostico_normalizado}%']).fetchone()
-                        if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
-                            diagnosticos_detectados_directo.append(resultado['descripcion'])
-                            diagnosticos_detectados_directo_ids.append(resultado['id'])
-                            print(f"   ✅ Diagnóstico directo (bigrama): {resultado['descripcion']}")
-                    except Exception as e:
-                        print(f"Error buscando diagnóstico bigrama: {e}")
+                for i in range(len(palabras_filtradas) - 1):
+                    bigrama = f"{palabras_filtradas[i]} {palabras_filtradas[i+1]}"
+                    if bigrama in normalizaciones_diagnosticos:
+                        diagnostico_normalizado = normalizaciones_diagnosticos[bigrama]
+                        try:
+                            query_diag = """
+                                SELECT DISTINCT id, descripcion
+                                FROM diagnosticos
+                                WHERE LOWER(descripcion) LIKE ?
+                                LIMIT 1
+                            """
+                            resultado = conn.execute(query_diag, [f'%{diagnostico_normalizado}%']).fetchone()
+                            if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
+                                diagnosticos_detectados_directo.append(resultado['descripcion'])
+                                diagnosticos_detectados_directo_ids.append(resultado['id'])
+                                print(f"   ✅ Diagnóstico directo (bigrama): {resultado['descripcion']}")
+                        except Exception as e:
+                            print(f"Error buscando diagnóstico bigrama: {e}")
             
-            for palabra in palabras_filtradas:
-                if len(palabra) >= 5 and palabra in normalizaciones_diagnosticos:
-                    diagnostico_normalizado = normalizaciones_diagnosticos[palabra]
-                    try:
-                        query_diag = """
-                            SELECT DISTINCT id, descripcion
-                            FROM diagnosticos
-                            WHERE LOWER(descripcion) LIKE ?
-                            LIMIT 1
-                        """
-                        resultado = conn.execute(query_diag, [f'%{diagnostico_normalizado}%']).fetchone()
-                        if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
-                            diagnosticos_detectados_directo.append(resultado['descripcion'])
-                            diagnosticos_detectados_directo_ids.append(resultado['id'])
-                            print(f"   ✅ Diagnóstico directo (palabra normalizada): {resultado['descripcion']}")
-                    except Exception as e:
-                        print(f"Error buscando diagnóstico palabra: {e}")
+                for palabra in palabras_filtradas:
+                    if len(palabra) >= 5 and palabra in normalizaciones_diagnosticos:
+                        diagnostico_normalizado = normalizaciones_diagnosticos[palabra]
+                        try:
+                            query_diag = """
+                                SELECT DISTINCT id, descripcion
+                                FROM diagnosticos
+                                WHERE LOWER(descripcion) LIKE ?
+                                LIMIT 1
+                            """
+                            resultado = conn.execute(query_diag, [f'%{diagnostico_normalizado}%']).fetchone()
+                            if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
+                                diagnosticos_detectados_directo.append(resultado['descripcion'])
+                                diagnosticos_detectados_directo_ids.append(resultado['id'])
+                                print(f"   ✅ Diagnóstico directo (palabra normalizada): {resultado['descripcion']}")
+                        except Exception as e:
+                            print(f"Error buscando diagnóstico palabra: {e}")
             
-            # 🆕 BÚSQUEDA CON REGLA 80% (antes era 60%)
-            print("\n   🆕 Buscando con normalización de plurales y regla 80%...")
-            try:
-                # Obtener TODOS los diagnósticos
-                query_todos_diag = "SELECT id, descripcion FROM diagnosticos"
-                todos_diagnosticos = conn.execute(query_todos_diag).fetchall()
-                
-                for diag in todos_diagnosticos:
-                    if diag['id'] not in diagnosticos_detectados_directo_ids:
-                        # Verificar si cumple regla 80% con palabras continuas
-                        if detectar_diagnostico_por_palabras(diag['descripcion'], palabras_filtradas, umbral=0.8):
-                            diagnosticos_detectados_directo.append(diag['descripcion'])
-                            diagnosticos_detectados_directo_ids.append(diag['id'])
-                            print(f"   ✅ Diagnóstico directo (80% match): {diag['descripcion']}")
-            except Exception as e:
-                print(f"Error buscando diagnósticos con regla 80%: {e}")
-        else:
-            print("\n⚠️ No hay palabras significativas (5+ letras), saltando búsqueda de diagnósticos")
-        
-        # ============================================
-        # PARTE 3: BUSCAR SÍNTOMAS (🆕 CON PLURALES)
-        # ============================================
-        
-        print("\n🔍 PARTE 3: Buscando síntomas...")
-        
-        sintomas_encontrados = {}
-        
-        # 🆕 PASO 1: BUSCAR PALABRAS EXACTAS CON VARIANTES DE PLURAL/SINGULAR
-        for palabra in palabras:
-            if len(palabra) >= 3:  # Permitir palabras de 3+ letras (ej: "tos")
+                # 🆕 BÚSQUEDA CON REGLA 80% (antes era 60%)
+                print("\n   🆕 Buscando con normalización de plurales y regla 80%...")
                 try:
-                    # 🆕 Generar variantes (singular/plural)
+                    # Obtener TODOS los diagnósticos
+                    query_todos_diag = "SELECT id, descripcion FROM diagnosticos"
+                    todos_diagnosticos = conn.execute(query_todos_diag).fetchall()
+                
+                    for diag in todos_diagnosticos:
+                        if diag['id'] not in diagnosticos_detectados_directo_ids:
+                            # Verificar si cumple regla 80% con palabras continuas
+                            if detectar_diagnostico_por_palabras(diag['descripcion'], palabras_filtradas, umbral=0.8):
+                                diagnosticos_detectados_directo.append(diag['descripcion'])
+                                diagnosticos_detectados_directo_ids.append(diag['id'])
+                                print(f"   ✅ Diagnóstico directo (80% match): {diag['descripcion']}")
+                except Exception as e:
+                    print(f"Error buscando diagnósticos con regla 80%: {e}")
+            else:
+                print("\n⚠️ No hay palabras significativas (5+ letras), saltando búsqueda de diagnósticos")
+        
+            # ============================================
+            # PARTE 3: BUSCAR SÍNTOMAS (🆕 CON PLURALES)
+            # ============================================
+        
+            print("\n🔍 PARTE 3: Buscando síntomas...")
+        
+            sintomas_encontrados = {}
+        
+            # 🆕 PASO 1: BUSCAR PALABRAS EXACTAS CON VARIANTES DE PLURAL/SINGULAR
+            for palabra in palabras:
+                if len(palabra) >= 3:  # Permitir palabras de 3+ letras (ej: "tos")
+                    try:
+                        # 🆕 Generar variantes (singular/plural)
+                        variantes = normalizar_palabra_busqueda(palabra)
+                        placeholders = ','.join(['?' for _ in variantes])
+                    
+                        print(f"   🔍 Buscando síntoma exacto con variantes: {variantes}")
+                    
+                        query_exacta = f"""
+                            SELECT DISTINCT id, nombre
+                            FROM sintomas
+                            WHERE LOWER(nombre) IN ({placeholders})
+                            LIMIT 1
+                        """
+                        resultado = conn.execute(query_exacta, variantes).fetchone()
+                        if resultado:
+                            sintomas_encontrados[resultado['id']] = resultado['nombre']
+                            print(f"   ✅ Síntoma encontrado: '{resultado['nombre']}' (ID: {resultado['id']})")
+                        else:
+                            print(f"   ❌ No se encontró síntoma con variantes: {variantes}")
+                    except Exception as e:
+                        print(f"Error buscando síntoma exacto: {e}")
+        
+            # PASO 2: BUSCAR CON CONTEXTO (lógica existente, SIN CAMBIOS)
+            palabras_contextuales = {
+                'dolor': ['cabeza', 'espalda', 'pecho', 'abdominal', 'estomago', 'garganta', 
+                         'oido', 'ojo', 'ocular', 'muscular', 'articular', 'lumbar', 'cervical',
+                         'pierna', 'brazo', 'muela', 'dental', 'rodilla', 'baja', 'cuello'],
+                'tos': ['frecuencia', 'seca', 'flema', 'productiva'],
+                'orinar': ['frecuencia', 'dolor', 'ardor'],
+                'sudor': ['excesivo', 'nocturno', 'frio']
+            }
+        
+            palabras_muy_cortas = ['dolo', 'dol', 'do']
+        
+            contextos_detectados = {}
+            for i, palabra in enumerate(palabras):
+                if palabra in palabras_muy_cortas:
+                    continue
+                
+                if palabra in palabras_contextuales:
+                    contexto_encontrado = []
+                    for j in range(i+1, min(i+4, len(palabras))):
+                        if palabras[j] in palabras_contextuales[palabra]:
+                            contexto_encontrado.append(palabras[j])
+                
+                    if contexto_encontrado:
+                        contextos_detectados[palabra] = contexto_encontrado
+        
+            for palabra_clave, contextos in contextos_detectados.items():
+                for contexto in contextos:
+                    try:
+                        query = """
+                            SELECT DISTINCT id, nombre
+                            FROM sintomas
+                            WHERE (LOWER(nombre) LIKE ? AND LOWER(nombre) LIKE ?)
+                               OR LOWER(nombre) LIKE ?
+                            ORDER BY LENGTH(nombre) ASC
+                            LIMIT 2
+                        """
+                        frase_completa = f'%{palabra_clave}%{contexto}%'
+                        resultados = conn.execute(query, [
+                            f'%{palabra_clave}%', 
+                            f'%{contexto}%',
+                            frase_completa
+                        ]).fetchall()
+                    
+                        for r in resultados:
+                            if r['id'] not in sintomas_encontrados:  # No duplicar
+                                sintomas_encontrados[r['id']] = r['nombre']
+                    except Exception as e:
+                        print(f"Error buscando síntoma con contexto: {e}")
+        
+            # PASO 3: BUSCAR PALABRAS SIMPLES CON LIKE Y VERIFICACIÓN ESTRICTA
+            palabras_simples = [p for p in palabras_filtradas  # 🆕 Usar palabras_filtradas
+                               if len(p) >= 5
+                               and p not in palabras_contextuales.keys()
+                               and p not in palabras_muy_cortas
+                               and p not in ['mucho', 'poco', 'muy', 'esta', 'tengo', 'siento', 'baja', 'alta']]
+        
+            for palabra in palabras_simples:
+                try:
+                    # Generar variantes para buscar con LIKE
                     variantes = normalizar_palabra_busqueda(palabra)
-                    placeholders = ','.join(['?' for _ in variantes])
+                
+                    # Buscar cada variante
+                    for variante in variantes:
+                        query = """
+                            SELECT DISTINCT id, nombre
+                            FROM sintomas
+                            WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                    nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                                ) LIKE ?
+                               OR LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                    descripcion_lower, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                                ) LIKE ?
+                            ORDER BY LENGTH(nombre) ASC
+                            LIMIT 10
+                        """
+                        resultados = conn.execute(query, [f'%{variante}%', f'%{variante}%']).fetchall()
                     
-                    print(f"   🔍 Buscando síntoma exacto con variantes: {variantes}")
-                    
-                    query_exacta = f"""
-                        SELECT DISTINCT id, nombre
-                        FROM sintomas
-                        WHERE LOWER(nombre) IN ({placeholders})
-                        LIMIT 1
-                    """
-                    resultado = conn.execute(query_exacta, variantes).fetchone()
-                    if resultado:
-                        sintomas_encontrados[resultado['id']] = resultado['nombre']
-                        print(f"   ✅ Síntoma encontrado: '{resultado['nombre']}' (ID: {resultado['id']})")
-                    else:
-                        print(f"   ❌ No se encontró síntoma con variantes: {variantes}")
+                        for r in resultados:
+                            if r['id'] not in sintomas_encontrados:  # No duplicar
+                                # 🆕 VERIFICACIÓN ESTRICTA: ¿Realmente hace match?
+                                if verificar_match_sintoma(r['nombre'], palabras_filtradas):
+                                    sintomas_encontrados[r['id']] = r['nombre']
+                                    print(f"   ✅ Síntoma verificado: '{r['nombre']}'")
+                                else:
+                                    print(f"   ❌ Síntoma rechazado (match parcial): '{r['nombre']}'")
                 except Exception as e:
-                    print(f"Error buscando síntoma exacto: {e}")
+                    print(f"Error buscando síntoma simple: {e}")
         
-        # PASO 2: BUSCAR CON CONTEXTO (lógica existente, SIN CAMBIOS)
-        palabras_contextuales = {
-            'dolor': ['cabeza', 'espalda', 'pecho', 'abdominal', 'estomago', 'garganta', 
-                     'oido', 'ojo', 'ocular', 'muscular', 'articular', 'lumbar', 'cervical',
-                     'pierna', 'brazo', 'muela', 'dental', 'rodilla', 'baja', 'cuello'],
-            'tos': ['frecuencia', 'seca', 'flema', 'productiva'],
-            'orinar': ['frecuencia', 'dolor', 'ardor'],
-            'sudor': ['excesivo', 'nocturno', 'frio']
-        }
+            for sid, nombre in sintomas_encontrados.items():
+                sintomas_detectados.append(nombre)
+                sintomas_detectados_ids.append(sid)
         
-        palabras_muy_cortas = ['dolo', 'dol', 'do']
+            print(f"\n📊 RESUMEN - Síntomas detectados: {len(sintomas_detectados)}")
+            for i, (sid, nombre) in enumerate(zip(sintomas_detectados_ids, sintomas_detectados)):
+                print(f"   {i+1}. ID {sid}: {nombre}")
+            print("")
         
-        contextos_detectados = {}
-        for i, palabra in enumerate(palabras):
-            if palabra in palabras_muy_cortas:
-                continue
-                
-            if palabra in palabras_contextuales:
-                contexto_encontrado = []
-                for j in range(i+1, min(i+4, len(palabras))):
-                    if palabras[j] in palabras_contextuales[palabra]:
-                        contexto_encontrado.append(palabras[j])
-                
-                if contexto_encontrado:
-                    contextos_detectados[palabra] = contexto_encontrado
+
+            # ============================================
+            # 🆕 BÚSQUEDA PARCIAL (último recurso - una sola palabra sin resultados)
+            # ============================================
+            busqueda_parcial_aplicada = False
         
-        for palabra_clave, contextos in contextos_detectados.items():
-            for contexto in contextos:
+            if len(sintomas_detectados) == 0 and len(palabras_filtradas) == 1:
+                palabra_busqueda = palabras_filtradas[0]
+                print(f"\n🔍 BÚSQUEDA PARCIAL: No se encontraron síntomas exactos para '{palabra_busqueda}'")
+                print(f"   Buscando síntomas que contengan esta palabra...")
+            
                 try:
-                    query = """
-                        SELECT DISTINCT id, nombre
-                        FROM sintomas
-                        WHERE (LOWER(nombre) LIKE ? AND LOWER(nombre) LIKE ?)
-                           OR LOWER(nombre) LIKE ?
-                        ORDER BY LENGTH(nombre) ASC
-                        LIMIT 2
-                    """
-                    frase_completa = f'%{palabra_clave}%{contexto}%'
-                    resultados = conn.execute(query, [
-                        f'%{palabra_clave}%', 
-                        f'%{contexto}%',
-                        frase_completa
-                    ]).fetchall()
-                    
-                    for r in resultados:
-                        if r['id'] not in sintomas_encontrados:  # No duplicar
-                            sintomas_encontrados[r['id']] = r['nombre']
-                except Exception as e:
-                    print(f"Error buscando síntoma con contexto: {e}")
-        
-        # PASO 3: BUSCAR PALABRAS SIMPLES CON LIKE Y VERIFICACIÓN ESTRICTA
-        palabras_simples = [p for p in palabras_filtradas  # 🆕 Usar palabras_filtradas
-                           if len(p) >= 5
-                           and p not in palabras_contextuales.keys()
-                           and p not in palabras_muy_cortas
-                           and p not in ['mucho', 'poco', 'muy', 'esta', 'tengo', 'siento', 'baja', 'alta']]
-        
-        for palabra in palabras_simples:
-            try:
-                # Generar variantes para buscar con LIKE
-                variantes = normalizar_palabra_busqueda(palabra)
-                
-                # Buscar cada variante
-                for variante in variantes:
-                    query = """
+                    # Buscar síntomas que contengan la palabra (normalizado)
+                    query_parcial = """
                         SELECT DISTINCT id, nombre
                         FROM sintomas
                         WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
                                 nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
                             ) LIKE ?
-                           OR LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                                descripcion_lower, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
-                            ) LIKE ?
                         ORDER BY LENGTH(nombre) ASC
                         LIMIT 10
                     """
-                    resultados = conn.execute(query, [f'%{variante}%', f'%{variante}%']).fetchall()
-                    
-                    for r in resultados:
-                        if r['id'] not in sintomas_encontrados:  # No duplicar
-                            # 🆕 VERIFICACIÓN ESTRICTA: ¿Realmente hace match?
-                            if verificar_match_sintoma(r['nombre'], palabras_filtradas):
-                                sintomas_encontrados[r['id']] = r['nombre']
-                                print(f"   ✅ Síntoma verificado: '{r['nombre']}'")
-                            else:
-                                print(f"   ❌ Síntoma rechazado (match parcial): '{r['nombre']}'")
-            except Exception as e:
-                print(f"Error buscando síntoma simple: {e}")
-        
-        for sid, nombre in sintomas_encontrados.items():
-            sintomas_detectados.append(nombre)
-            sintomas_detectados_ids.append(sid)
-        
-        print(f"\n📊 RESUMEN - Síntomas detectados: {len(sintomas_detectados)}")
-        for i, (sid, nombre) in enumerate(zip(sintomas_detectados_ids, sintomas_detectados)):
-            print(f"   {i+1}. ID {sid}: {nombre}")
-        print("")
-        
-
-        # ============================================
-        # 🆕 BÚSQUEDA PARCIAL (último recurso - una sola palabra sin resultados)
-        # ============================================
-        busqueda_parcial_aplicada = False
-        
-        if len(sintomas_detectados) == 0 and len(palabras_filtradas) == 1:
-            palabra_busqueda = palabras_filtradas[0]
-            print(f"\n🔍 BÚSQUEDA PARCIAL: No se encontraron síntomas exactos para '{palabra_busqueda}'")
-            print(f"   Buscando síntomas que contengan esta palabra...")
-            
-            try:
-                # Buscar síntomas que contengan la palabra (normalizado)
-                query_parcial = """
-                    SELECT DISTINCT id, nombre
-                    FROM sintomas
-                    WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                            nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
-                        ) LIKE ?
-                    ORDER BY LENGTH(nombre) ASC
-                    LIMIT 10
-                """
                 
-                sintomas_parciales = conn.execute(query_parcial, [f'%{palabra_busqueda}%']).fetchall()
+                    sintomas_parciales = conn.execute(query_parcial, [f'%{palabra_busqueda}%']).fetchall()
                 
-                if sintomas_parciales:
-                    print(f"   ✅ Encontrados {len(sintomas_parciales)} síntomas que contienen '{palabra_busqueda}':")
-                    for s in sintomas_parciales:
-                        sintomas_detectados.append(s['nombre'])
-                        sintomas_detectados_ids.append(s['id'])
-                        print(f"      - {s['nombre']}")
+                    if sintomas_parciales:
+                        print(f"   ✅ Encontrados {len(sintomas_parciales)} síntomas que contienen '{palabra_busqueda}':")
+                        for s in sintomas_parciales:
+                            sintomas_detectados.append(s['nombre'])
+                            sintomas_detectados_ids.append(s['id'])
+                            print(f"      - {s['nombre']}")
                     
-                    busqueda_parcial_aplicada = True
-                else:
-                    print(f"   ❌ No se encontraron síntomas que contengan '{palabra_busqueda}'")
+                        busqueda_parcial_aplicada = True
+                    else:
+                        print(f"   ❌ No se encontraron síntomas que contengan '{palabra_busqueda}'")
                     
-            except Exception as e:
-                print(f"   ❌ Error en búsqueda parcial: {e}")
+                except Exception as e:
+                    print(f"   ❌ Error en búsqueda parcial: {e}")
 
 
-        # ============================================
-        # PARTE 4: DIAGNÓSTICOS POR SÍNTOMAS (SIN CAMBIOS)
-        # ============================================
+            # ============================================
+            # PARTE 4: DIAGNÓSTICOS POR SÍNTOMAS (SIN CAMBIOS)
+            # ============================================
         
-        if sintomas_detectados_ids:
-            try:
-                placeholders_ids = ','.join(['?' for _ in sintomas_detectados_ids])
-                query_diagnosticos = f"""
-                    SELECT 
-                        d.id,
-                        d.descripcion,
-                        COUNT(DISTINCT ds.sintoma_id) as sintomas_coincidentes,
-                        (SELECT COUNT(*) FROM diagnostico_sintoma WHERE diagnostico_id = d.id) as sintomas_totales
-                    FROM diagnosticos d
-                    INNER JOIN diagnostico_sintoma ds ON d.id = ds.diagnostico_id
-                    WHERE ds.sintoma_id IN ({placeholders_ids})
-                    GROUP BY d.id
-                    HAVING sintomas_coincidentes > 0
-                    ORDER BY sintomas_coincidentes DESC
-                    LIMIT 10
-                """
+            if sintomas_detectados_ids:
+                try:
+                    placeholders_ids = ','.join(['?' for _ in sintomas_detectados_ids])
+                    query_diagnosticos = f"""
+                        SELECT 
+                            d.id,
+                            d.descripcion,
+                            COUNT(DISTINCT ds.sintoma_id) as sintomas_coincidentes,
+                            (SELECT COUNT(*) FROM diagnostico_sintoma WHERE diagnostico_id = d.id) as sintomas_totales
+                        FROM diagnosticos d
+                        INNER JOIN diagnostico_sintoma ds ON d.id = ds.diagnostico_id
+                        WHERE ds.sintoma_id IN ({placeholders_ids})
+                        GROUP BY d.id
+                        HAVING sintomas_coincidentes > 0
+                        ORDER BY sintomas_coincidentes DESC
+                        LIMIT 10
+                    """
                 
-                diagnosticos = conn.execute(query_diagnosticos, sintomas_detectados_ids).fetchall()
+                    diagnosticos = conn.execute(query_diagnosticos, sintomas_detectados_ids).fetchall()
                 
-                for diag in diagnosticos:
-                    porcentaje_match = (diag['sintomas_coincidentes'] / diag['sintomas_totales']) * 100
+                    for diag in diagnosticos:
+                        porcentaje_match = (diag['sintomas_coincidentes'] / diag['sintomas_totales']) * 100
                     
-                    print(f"   📊 Diagnóstico evaluado: {diag['descripcion']}")
-                    print(f"      Coincidencias: {diag['sintomas_coincidentes']}/{diag['sintomas_totales']} = {porcentaje_match:.1f}%")
-                    print(f"      ¿Pasa filtro 80%? {porcentaje_match > 80}")
-                    print(f"      ¿Ya está en directos? {diag['id'] in diagnosticos_detectados_directo_ids}")
+                        print(f"   📊 Diagnóstico evaluado: {diag['descripcion']}")
+                        print(f"      Coincidencias: {diag['sintomas_coincidentes']}/{diag['sintomas_totales']} = {porcentaje_match:.1f}%")
+                        print(f"      ¿Pasa filtro 80%? {porcentaje_match > 80}")
+                        print(f"      ¿Ya está en directos? {diag['id'] in diagnosticos_detectados_directo_ids}")
                     
-                    # 🆕 FILTRO 80%: Solo agregar si porcentaje > 80%
-                    if porcentaje_match > 80 and diag['id'] not in diagnosticos_detectados_directo_ids:
-                        diagnosticos_posibles[diag['id']] = {
-                            'nombre': diag['descripcion'],
-                            'coincidencias': diag['sintomas_coincidentes'],
-                            'total_sintomas': diag['sintomas_totales'],
-                            'porcentaje': porcentaje_match,
-                            'tipo': 'por_sintomas'
-                        }
-            except Exception as e:
-                print(f"Error buscando diagnósticos por síntomas: {e}")
+                        # 🆕 FILTRO 80%: Solo agregar si porcentaje > 80%
+                        if porcentaje_match > 80 and diag['id'] not in diagnosticos_detectados_directo_ids:
+                            diagnosticos_posibles[diag['id']] = {
+                                'nombre': diag['descripcion'],
+                                'coincidencias': diag['sintomas_coincidentes'],
+                                'total_sintomas': diag['sintomas_totales'],
+                                'porcentaje': porcentaje_match,
+                                'tipo': 'por_sintomas'
+                            }
+                except Exception as e:
+                    print(f"Error buscando diagnósticos por síntomas: {e}")
         
-        # Agregar diagnósticos detectados directamente (siempre 100%)
-        for i, diag_id in enumerate(diagnosticos_detectados_directo_ids):
-            try:
-                total_sintomas_query = """
-                    SELECT COUNT(*) as total
-                    FROM diagnostico_sintoma
-                    WHERE diagnostico_id = ?
-                """
-                total_result = conn.execute(total_sintomas_query, [diag_id]).fetchone()
-                total_sintomas = total_result['total'] if total_result else 1
+            # Agregar diagnósticos detectados directamente (siempre 100%)
+            for i, diag_id in enumerate(diagnosticos_detectados_directo_ids):
+                try:
+                    total_sintomas_query = """
+                        SELECT COUNT(*) as total
+                        FROM diagnostico_sintoma
+                        WHERE diagnostico_id = ?
+                    """
+                    total_result = conn.execute(total_sintomas_query, [diag_id]).fetchone()
+                    total_sintomas = total_result['total'] if total_result else 1
                 
-                diagnosticos_posibles[diag_id] = {
-                    'nombre': diagnosticos_detectados_directo[i],
-                    'coincidencias': total_sintomas,
-                    'total_sintomas': total_sintomas,
-                    'porcentaje': 100,
-                    'tipo': 'directo'
-                }
+                    diagnosticos_posibles[diag_id] = {
+                        'nombre': diagnosticos_detectados_directo[i],
+                        'coincidencias': total_sintomas,
+                        'total_sintomas': total_sintomas,
+                        'porcentaje': 100,
+                        'tipo': 'directo'
+                    }
                 
-                # 🆕 DETECTAR SÍNTOMAS FALTANTES PARA DIAGNÓSTICOS DIRECTOS
+                    # 🆕 DETECTAR SÍNTOMAS FALTANTES PARA DIAGNÓSTICOS DIRECTOS
+                    try:
+                        query_sintomas_diag = """
+                            SELECT s.id, s.nombre
+                            FROM diagnostico_sintoma ds
+                            INNER JOIN sintomas s ON ds.sintoma_id = s.id
+                            WHERE ds.diagnostico_id = ?
+                        """
+                        sintomas_del_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
+                    
+                        faltantes = []
+                        for sint in sintomas_del_diag:
+                            if sint['id'] not in sintomas_detectados_ids:
+                                faltantes.append({
+                                    'id': sint['id'],
+                                    'nombre': sint['nombre']
+                                })
+                    
+                        if faltantes:
+                            sintomas_faltantes_por_diagnostico[diag_id] = faltantes
+                            print(f"   ❓ Síntomas faltantes para '{diagnosticos_detectados_directo[i]}':")
+                            for f in faltantes:
+                                print(f"      - {f['nombre']} (ID: {f['id']})")
+                    except Exception as e:
+                        print(f"Error detectando síntomas faltantes: {e}")
+                
+                except Exception as e:
+                    print(f"Error agregando diagnóstico directo: {e}")
+    
+        # ============================================
+        # QUERY DE PRODUCTOS (SIN CAMBIOS)
+        # ============================================
+    
+        query = """
+            SELECT DISTINCT
+                p.id as precio_id,
+                p.medicamento_id,
+                p.fabricante_id,
+                p.precio,
+                p.imagen as imagen_precio,
+                m.nombre as medicamento_nombre,
+                m.presentacion,
+                m.concentracion,
+                m.imagen as imagen_medicamento,
+                m.componente_activo_id,
+                ca.nombre as componente_activo_nombre,
+                f.nombre as fabricante_nombre,
+                s.nombre as sintoma_nombre,
+                ms.sintoma_id
+            FROM precios p
+            INNER JOIN medicamentos m ON p.medicamento_id = m.id
+            INNER JOIN fabricantes f ON p.fabricante_id = f.id
+            LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
+            LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            LEFT JOIN sintomas s ON ms.sintoma_id = s.id
+            LEFT JOIN (
+                SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
+                FROM precios_competencia
+                GROUP BY medicamento_id, fabricante_id
+            ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
+            WHERE m.activo = 1
+        """
+
+        params = []
+
+        if busqueda:
+            query += " AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)"
+            params.extend([f'%{busqueda.lower()}%', f'%{busqueda.lower()}%'])
+    
+        if busqueda_sintomas:
+            todos_sintomas_ids = list(sintomas_detectados_ids)
+        
+            for diag_id in diagnosticos_detectados_directo_ids:
                 try:
                     query_sintomas_diag = """
-                        SELECT s.id, s.nombre
-                        FROM diagnostico_sintoma ds
-                        INNER JOIN sintomas s ON ds.sintoma_id = s.id
-                        WHERE ds.diagnostico_id = ?
+                        SELECT DISTINCT sintoma_id
+                        FROM diagnostico_sintoma
+                        WHERE diagnostico_id = ?
                     """
-                    sintomas_del_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
-                    
-                    faltantes = []
-                    for sint in sintomas_del_diag:
-                        if sint['id'] not in sintomas_detectados_ids:
-                            faltantes.append({
-                                'id': sint['id'],
-                                'nombre': sint['nombre']
-                            })
-                    
-                    if faltantes:
-                        sintomas_faltantes_por_diagnostico[diag_id] = faltantes
-                        print(f"   ❓ Síntomas faltantes para '{diagnosticos_detectados_directo[i]}':")
-                        for f in faltantes:
-                            print(f"      - {f['nombre']} (ID: {f['id']})")
+                    sintomas_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
+                    for s in sintomas_diag:
+                        if s['sintoma_id'] not in todos_sintomas_ids:
+                            todos_sintomas_ids.append(s['sintoma_id'])
                 except Exception as e:
-                    print(f"Error detectando síntomas faltantes: {e}")
-                
-            except Exception as e:
-                print(f"Error agregando diagnóstico directo: {e}")
-    
-    # ============================================
-    # QUERY DE PRODUCTOS (SIN CAMBIOS)
-    # ============================================
-    
-    query = """
-        SELECT DISTINCT
-            p.id as precio_id,
-            p.medicamento_id,
-            p.fabricante_id,
-            p.precio,
-            p.imagen as imagen_precio,
-            m.nombre as medicamento_nombre,
-            m.presentacion,
-            m.concentracion,
-            m.imagen as imagen_medicamento,
-            m.componente_activo_id,
-            ca.nombre as componente_activo_nombre,
-            f.nombre as fabricante_nombre,
-            s.nombre as sintoma_nombre,
-            ms.sintoma_id
-        FROM precios p
-        INNER JOIN medicamentos m ON p.medicamento_id = m.id
-        INNER JOIN fabricantes f ON p.fabricante_id = f.id
-        LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
-        LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
-        LEFT JOIN sintomas s ON ms.sintoma_id = s.id
-        LEFT JOIN (
-            SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
-            FROM precios_competencia
-            GROUP BY medicamento_id, fabricante_id
-        ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
-        WHERE m.activo = 1
-    """
-
-    params = []
-
-    if busqueda:
-        query += " AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)"
-        params.extend([f'%{busqueda.lower()}%', f'%{busqueda.lower()}%'])
-    
-    if busqueda_sintomas:
-        todos_sintomas_ids = list(sintomas_detectados_ids)
+                    print(f"Error obteniendo síntomas de diagnóstico: {e}")
         
-        for diag_id in diagnosticos_detectados_directo_ids:
-            try:
-                query_sintomas_diag = """
-                    SELECT DISTINCT sintoma_id
-                    FROM diagnostico_sintoma
-                    WHERE diagnostico_id = ?
-                """
-                sintomas_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
-                for s in sintomas_diag:
-                    if s['sintoma_id'] not in todos_sintomas_ids:
-                        todos_sintomas_ids.append(s['sintoma_id'])
-            except Exception as e:
-                print(f"Error obteniendo síntomas de diagnóstico: {e}")
-        
-        if todos_sintomas_ids:
-            placeholders = ','.join(['?' for _ in todos_sintomas_ids])
+            if todos_sintomas_ids:
+                placeholders = ','.join(['?' for _ in todos_sintomas_ids])
             
-            # 🆕 LÓGICA MEJORADA: Si hay búsqueda por nombre, usar OR en lugar de AND
-            if busqueda:
-                # Caso 1: Búsqueda por nombre Y síntomas → mostrar AMBOS resultados
-                # Modificar el WHERE anterior para incluir síntomas con OR
-                # La query actual ya tiene: AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)
-                # Necesitamos cambiar esa condición para que sea un OR con los síntomas
+                # 🆕 LÓGICA MEJORADA: Si hay búsqueda por nombre, usar OR en lugar de AND
+                if busqueda:
+                    # Caso 1: Búsqueda por nombre Y síntomas → mostrar AMBOS resultados
+                    # Modificar el WHERE anterior para incluir síntomas con OR
+                    # La query actual ya tiene: AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)
+                    # Necesitamos cambiar esa condición para que sea un OR con los síntomas
                 
-                # Remover el último AND que agregamos para el nombre
-                # y reconstruir con OR
-                query = query.replace(
-                    " AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)",
-                    f""" AND (
-                        (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)
-                        OR 
-                        m.id IN (
+                    # Remover el último AND que agregamos para el nombre
+                    # y reconstruir con OR
+                    query = query.replace(
+                        " AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)",
+                        f""" AND (
+                            (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)
+                            OR 
+                            m.id IN (
+                                SELECT DISTINCT medicamento_id 
+                                FROM medicamento_sintoma 
+                                WHERE sintoma_id IN ({placeholders})
+                            )
+                        )"""
+                    )
+                    params.extend(todos_sintomas_ids)
+                else:
+                    # Caso 2: Solo síntomas (sin búsqueda por nombre) → filtrar solo por síntomas
+                    query += f"""
+                        AND m.id IN (
                             SELECT DISTINCT medicamento_id 
                             FROM medicamento_sintoma 
                             WHERE sintoma_id IN ({placeholders})
                         )
-                    )"""
-                )
-                params.extend(todos_sintomas_ids)
+                    """
+                    params.extend(todos_sintomas_ids)
+            elif not todos_sintomas_ids and not busqueda:
+                # Solo retornar vacío si NO hay búsqueda por nombre tampoco
+                conn.close()
+                return jsonify({
+                    'ok': True, 
+                    'productos': [], 
+                    'total': 0,
+                    'sintomas_detectados': [],
+                    'diagnosticos_posibles': [],
+                    'mensaje': 'No se detectaron síntomas ni diagnósticos válidos.'
+                })
+            # Si no hay síntomas PERO sí hay búsqueda por nombre, continuar con la query normal
+
+        if precio_min:
+            try:
+                query += " AND p.precio >= ?"
+                params.append(float(precio_min))
+            except ValueError:
+                pass
+    
+        if precio_max:
+            try:
+                query += " AND p.precio <= ?"
+                params.append(float(precio_max))
+            except ValueError:
+                pass
+
+        # Filtrar productos sin cotizaciones según configuración
+        query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0)"
+        params.append(permitir_sin_cotizaciones)
+
+        query += " AND p.precio > 0"
+        query += " ORDER BY m.nombre, f.nombre"
+
+        productos = conn.execute(query, params).fetchall()
+
+        productos_agrupados = {}
+        for p in productos:
+            clave = p['precio_id']
+            if clave not in productos_agrupados:
+                productos_agrupados[clave] = {
+                    'precio': p,
+                    'sintomas': [],
+                    'sintomas_ids': []
+                }
+            if p['sintoma_nombre']:
+                productos_agrupados[clave]['sintomas'].append(p['sintoma_nombre'])
+                if p['sintoma_id']:
+                    productos_agrupados[clave]['sintomas_ids'].append(p['sintoma_id'])
+    
+        productos = [v['precio'] for v in productos_agrupados.values()]
+        sintomas_por_precio = {k: v['sintomas'] for k, v in productos_agrupados.items()}
+        sintomas_ids_por_precio = {k: v['sintomas_ids'] for k, v in productos_agrupados.items()}
+    
+        sintomas_filtrados_por_precio = {}
+        if busqueda_sintomas and sintomas_detectados:
+            for precio_id, sintomas_lista in sintomas_por_precio.items():
+                sintomas_filtrados = [s for s in sintomas_lista if s in sintomas_detectados]
+                sintomas_filtrados_por_precio[precio_id] = sintomas_filtrados
+        else:
+            sintomas_filtrados_por_precio = {precio_id: [] for precio_id in sintomas_por_precio.keys()}
+
+        # 🆕 CALCULAR SÍNTOMAS SOBRANTES
+        sintomas_sobrantes = []
+        sintomas_sobrantes_ids = []
+    
+        if diagnosticos_posibles:
+            # Obtener síntomas del mejor diagnóstico
+            mejor_diagnostico = max(diagnosticos_posibles.values(), key=lambda x: x['porcentaje'])
+            mejor_diagnostico_id = [k for k, v in diagnosticos_posibles.items() if v == mejor_diagnostico][0]
+        
+            try:
+                query_sintomas_diagnostico = """
+                    SELECT DISTINCT sintoma_id
+                    FROM diagnostico_sintoma
+                    WHERE diagnostico_id = ?
+                """
+                sintomas_del_diagnostico = conn.execute(query_sintomas_diagnostico, [mejor_diagnostico_id]).fetchall()
+                sintomas_del_diagnostico_ids = [s['sintoma_id'] for s in sintomas_del_diagnostico]
+            
+                # Calcular sobrantes
+                for i, sid in enumerate(sintomas_detectados_ids):
+                    if sid not in sintomas_del_diagnostico_ids:
+                        sintomas_sobrantes_ids.append(sid)
+                        sintomas_sobrantes.append(sintomas_detectados[i])
+            except Exception as e:
+                print(f"Error calculando síntomas sobrantes: {e}")
+    
+        conn.close()
+    
+        # ============================================
+        # CALCULAR SCORE (SIN CAMBIOS)
+        # ============================================
+    
+        productos_con_score = []
+        for p in productos:
+            imagen = p['imagen_precio'] if p['imagen_precio'] else p['imagen_medicamento']
+            sintomas_medicamento_ids = sintomas_ids_por_precio.get(p['precio_id'], [])
+        
+            coincidencias_sintomas = len(set(sintomas_medicamento_ids) & set(sintomas_detectados_ids))
+        
+            coincidencias_diagnosticos_directos = 0
+            conn2 = get_db_connection()
+            for diag_id in diagnosticos_detectados_directo_ids:
+                try:
+                    query_sintomas_diag = """
+                        SELECT DISTINCT sintoma_id
+                        FROM diagnostico_sintoma
+                        WHERE diagnostico_id = ?
+                    """
+                    sintomas_diag = conn2.execute(query_sintomas_diag, [diag_id]).fetchall()
+                    sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_diag]
+                
+                    match = len(set(sintomas_medicamento_ids) & set(sintomas_diag_ids))
+                    if match > 0:
+                        coincidencias_diagnosticos_directos += match
+                except Exception as e:
+                    print(f"Error calculando coincidencias diagnóstico: {e}")
+            conn2.close()
+        
+            score = 0
+            mejor_diagnostico = None
+            tipo_deteccion = None
+        
+            if coincidencias_diagnosticos_directos > 0:
+                score = 100 + (coincidencias_diagnosticos_directos * 10)
+                for diag_id, diag_info in diagnosticos_posibles.items():
+                    if diag_info.get('tipo') == 'directo':
+                        mejor_diagnostico = diag_info['nombre']
+                        tipo_deteccion = 'directo'
+                        break
+            elif diagnosticos_posibles:
+                mejor_porcentaje = 0
+                for diag_id, diag_info in diagnosticos_posibles.items():
+                    if diag_info.get('tipo') == 'por_sintomas':
+                        if coincidencias_sintomas >= diag_info['coincidencias'] * 0.5:
+                            if diag_info['porcentaje'] > mejor_porcentaje:
+                                mejor_porcentaje = diag_info['porcentaje']
+                                mejor_diagnostico = diag_info['nombre']
+                                tipo_deteccion = 'por_sintomas'
+                                score = (coincidencias_sintomas * 10) + 20
             else:
-                # Caso 2: Solo síntomas (sin búsqueda por nombre) → filtrar solo por síntomas
-                query += f"""
-                    AND m.id IN (
-                        SELECT DISTINCT medicamento_id 
-                        FROM medicamento_sintoma 
-                        WHERE sintoma_id IN ({placeholders})
-                    )
-                """
-                params.extend(todos_sintomas_ids)
-        elif not todos_sintomas_ids and not busqueda:
-            # Solo retornar vacío si NO hay búsqueda por nombre tampoco
-            conn.close()
-            return jsonify({
-                'ok': True, 
-                'productos': [], 
-                'total': 0,
-                'sintomas_detectados': [],
-                'diagnosticos_posibles': [],
-                'mensaje': 'No se detectaron síntomas ni diagnósticos válidos.'
+                score = coincidencias_sintomas * 10
+        
+            productos_con_score.append({
+                'precio_id': p['precio_id'],
+                'medicamento_id': p['medicamento_id'],
+                'fabricante_id': p['fabricante_id'],
+                'nombre': p['medicamento_nombre'],
+                'presentacion': p['presentacion'] or '',
+                'concentracion': p['concentracion'] or '',
+                'fabricante': p['fabricante_nombre'],
+                'precio': p['precio'],
+                'imagen': imagen,
+                'componente_activo': p['componente_activo_nombre'] if p['componente_activo_nombre'] else None,
+                'sintomas_filtrados': sintomas_filtrados_por_precio.get(p['precio_id'], []),
+                'sintomas_totales': sintomas_por_precio.get(p['precio_id'], []),
+                'score': score,
+                'diagnostico_detectado': mejor_diagnostico,
+                'tipo_deteccion': tipo_deteccion,
+                'coincidencias': coincidencias_sintomas
             })
-        # Si no hay síntomas PERO sí hay búsqueda por nombre, continuar con la query normal
-
-    if precio_min:
-        try:
-            query += " AND p.precio >= ?"
-            params.append(float(precio_min))
-        except ValueError:
-            pass
     
-    if precio_max:
-        try:
-            query += " AND p.precio <= ?"
-            params.append(float(precio_max))
-        except ValueError:
-            pass
-
-    # Filtrar productos sin cotizaciones según configuración
-    query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0)"
-    params.append(permitir_sin_cotizaciones)
-
-    query += " AND p.precio > 0"
-    query += " ORDER BY m.nombre, f.nombre"
-
-    productos = conn.execute(query, params).fetchall()
-
-    productos_agrupados = {}
-    for p in productos:
-        clave = p['precio_id']
-        if clave not in productos_agrupados:
-            productos_agrupados[clave] = {
-                'precio': p,
-                'sintomas': [],
-                'sintomas_ids': []
-            }
-        if p['sintoma_nombre']:
-            productos_agrupados[clave]['sintomas'].append(p['sintoma_nombre'])
-            if p['sintoma_id']:
-                productos_agrupados[clave]['sintomas_ids'].append(p['sintoma_id'])
+        # ============================================
+        # 🆕 ORDENAMIENTO INTELIGENTE
+        # ============================================
     
-    productos = [v['precio'] for v in productos_agrupados.values()]
-    sintomas_por_precio = {k: v['sintomas'] for k, v in productos_agrupados.items()}
-    sintomas_ids_por_precio = {k: v['sintomas_ids'] for k, v in productos_agrupados.items()}
-    
-    sintomas_filtrados_por_precio = {}
-    if busqueda_sintomas and sintomas_detectados:
-        for precio_id, sintomas_lista in sintomas_por_precio.items():
-            sintomas_filtrados = [s for s in sintomas_lista if s in sintomas_detectados]
-            sintomas_filtrados_por_precio[precio_id] = sintomas_filtrados
-    else:
-        sintomas_filtrados_por_precio = {precio_id: [] for precio_id in sintomas_por_precio.keys()}
-
-    # 🆕 CALCULAR SÍNTOMAS SOBRANTES
-    sintomas_sobrantes = []
-    sintomas_sobrantes_ids = []
-    
-    if diagnosticos_posibles:
-        # Obtener síntomas del mejor diagnóstico
-        mejor_diagnostico = max(diagnosticos_posibles.values(), key=lambda x: x['porcentaje'])
-        mejor_diagnostico_id = [k for k, v in diagnosticos_posibles.items() if v == mejor_diagnostico][0]
+        if busqueda_sintomas and (sintomas_detectados_ids or diagnosticos_detectados_directo_ids):
         
-        try:
-            query_sintomas_diagnostico = """
-                SELECT DISTINCT sintoma_id
-                FROM diagnostico_sintoma
-                WHERE diagnostico_id = ?
-            """
-            sintomas_del_diagnostico = conn.execute(query_sintomas_diagnostico, [mejor_diagnostico_id]).fetchall()
-            sintomas_del_diagnostico_ids = [s['sintoma_id'] for s in sintomas_del_diagnostico]
+            # DETECTAR TIPO DE BÚSQUEDA
+            es_busqueda_diagnostico = len(diagnosticos_detectados_directo_ids) > 0
+        
+            if es_busqueda_diagnostico:
+                # ═══════════════════════════════════════
+                # REGLA 2: BÚSQUEDA POR DIAGNÓSTICO
+                # Prioridad: MÁS cobertura del diagnóstico
+                # ═══════════════════════════════════════
             
-            # Calcular sobrantes
-            for i, sid in enumerate(sintomas_detectados_ids):
-                if sid not in sintomas_del_diagnostico_ids:
-                    sintomas_sobrantes_ids.append(sid)
-                    sintomas_sobrantes.append(sintomas_detectados[i])
-        except Exception as e:
-            print(f"Error calculando síntomas sobrantes: {e}")
-    
-    conn.close()
-    
-    # ============================================
-    # CALCULAR SCORE (SIN CAMBIOS)
-    # ============================================
-    
-    productos_con_score = []
-    for p in productos:
-        imagen = p['imagen_precio'] if p['imagen_precio'] else p['imagen_medicamento']
-        sintomas_medicamento_ids = sintomas_ids_por_precio.get(p['precio_id'], [])
-        
-        coincidencias_sintomas = len(set(sintomas_medicamento_ids) & set(sintomas_detectados_ids))
-        
-        coincidencias_diagnosticos_directos = 0
-        conn2 = get_db_connection()
-        for diag_id in diagnosticos_detectados_directo_ids:
-            try:
-                query_sintomas_diag = """
-                    SELECT DISTINCT sintoma_id
-                    FROM diagnostico_sintoma
-                    WHERE diagnostico_id = ?
-                """
-                sintomas_diag = conn2.execute(query_sintomas_diag, [diag_id]).fetchall()
-                sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_diag]
-                
-                match = len(set(sintomas_medicamento_ids) & set(sintomas_diag_ids))
-                if match > 0:
-                    coincidencias_diagnosticos_directos += match
-            except Exception as e:
-                print(f"Error calculando coincidencias diagnóstico: {e}")
-        conn2.close()
-        
-        score = 0
-        mejor_diagnostico = None
-        tipo_deteccion = None
-        
-        if coincidencias_diagnosticos_directos > 0:
-            score = 100 + (coincidencias_diagnosticos_directos * 10)
-            for diag_id, diag_info in diagnosticos_posibles.items():
-                if diag_info.get('tipo') == 'directo':
-                    mejor_diagnostico = diag_info['nombre']
-                    tipo_deteccion = 'directo'
-                    break
-        elif diagnosticos_posibles:
-            mejor_porcentaje = 0
-            for diag_id, diag_info in diagnosticos_posibles.items():
-                if diag_info.get('tipo') == 'por_sintomas':
-                    if coincidencias_sintomas >= diag_info['coincidencias'] * 0.5:
-                        if diag_info['porcentaje'] > mejor_porcentaje:
-                            mejor_porcentaje = diag_info['porcentaje']
-                            mejor_diagnostico = diag_info['nombre']
-                            tipo_deteccion = 'por_sintomas'
-                            score = (coincidencias_sintomas * 10) + 20
-        else:
-            score = coincidencias_sintomas * 10
-        
-        productos_con_score.append({
-            'precio_id': p['precio_id'],
-            'medicamento_id': p['medicamento_id'],
-            'fabricante_id': p['fabricante_id'],
-            'nombre': p['medicamento_nombre'],
-            'presentacion': p['presentacion'] or '',
-            'concentracion': p['concentracion'] or '',
-            'fabricante': p['fabricante_nombre'],
-            'precio': p['precio'],
-            'imagen': imagen,
-            'componente_activo': p['componente_activo_nombre'] if p['componente_activo_nombre'] else None,
-            'sintomas_filtrados': sintomas_filtrados_por_precio.get(p['precio_id'], []),
-            'sintomas_totales': sintomas_por_precio.get(p['precio_id'], []),
-            'score': score,
-            'diagnostico_detectado': mejor_diagnostico,
-            'tipo_deteccion': tipo_deteccion,
-            'coincidencias': coincidencias_sintomas
-        })
-    
-    # ============================================
-    # 🆕 ORDENAMIENTO INTELIGENTE
-    # ============================================
-    
-    if busqueda_sintomas and (sintomas_detectados_ids or diagnosticos_detectados_directo_ids):
-        
-        # DETECTAR TIPO DE BÚSQUEDA
-        es_busqueda_diagnostico = len(diagnosticos_detectados_directo_ids) > 0
-        
-        if es_busqueda_diagnostico:
-            # ═══════════════════════════════════════
-            # REGLA 2: BÚSQUEDA POR DIAGNÓSTICO
-            # Prioridad: MÁS cobertura del diagnóstico
-            # ═══════════════════════════════════════
+                print(f"\n🔍 ORDENAMIENTO: Búsqueda por DIAGNÓSTICO")
             
-            print(f"\n🔍 ORDENAMIENTO: Búsqueda por DIAGNÓSTICO")
+                # Obtener síntomas del diagnóstico principal
+                diagnostico_principal_id = diagnosticos_detectados_directo_ids[0]
             
-            # Obtener síntomas del diagnóstico principal
-            diagnostico_principal_id = diagnosticos_detectados_directo_ids[0]
+                try:
+                    conn_ordenamiento = get_db_connection()  # 🆕 Nueva conexión
+                
+                    query_sintomas_diag = """
+                        SELECT DISTINCT sintoma_id
+                        FROM diagnostico_sintoma
+                        WHERE diagnostico_id = ?
+                    """
+                    sintomas_del_diagnostico = conn_ordenamiento.execute(query_sintomas_diag, [diagnostico_principal_id]).fetchall()
+                    sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_del_diagnostico]
+                    total_sintomas_diagnostico = len(sintomas_diag_ids)
+                
+                    print(f"   Diagnóstico tiene {total_sintomas_diagnostico} síntomas")
+                
+                    # Calcular cobertura de cada producto
+                    for producto in productos_con_score:
+                        sintomas_producto = sintomas_ids_por_precio.get(producto['precio_id'], [])
+                    
+                        # Contar cuántos síntomas del diagnóstico cubre este producto
+                        cobertura = len([s for s in sintomas_producto if s in sintomas_diag_ids])
+                    
+                        # 🆕 Contar síntomas EXTRA (que NO están en el diagnóstico)
+                        sintomas_extra = len([s for s in sintomas_producto if s not in sintomas_diag_ids])
+                    
+                        producto['cobertura_diagnostico'] = cobertura
+                        producto['sintomas_extra'] = sintomas_extra
+                        producto['sintomas_totales_count'] = len(sintomas_producto)
+                        producto['porcentaje_cobertura'] = (cobertura / total_sintomas_diagnostico * 100) if total_sintomas_diagnostico > 0 else 0
+                    
+                        print(f"      {producto['nombre'][:30]:30} → Cubre {cobertura}/{total_sintomas_diagnostico} ({producto['porcentaje_cobertura']:.0f}%) | Extras: {sintomas_extra} | Total: {len(sintomas_producto)}")
+                
+                    # 🆕 Ordenar: MENOS extras primero, luego MÁS cobertura
+                    productos_con_score.sort(key=lambda x: (x['sintomas_extra'], -x['cobertura_diagnostico']))
+                
+                    print(f"   ✅ Orden: Menos extras → Más cobertura del diagnóstico")
+                
+                    conn_ordenamiento.close()  # 🆕 Cerrar conexión
+                
+                except Exception as e:
+                    print(f"   ❌ Error calculando cobertura: {e}")
+                    productos_con_score.sort(key=lambda x: x['score'], reverse=True)
+        
+            else:
+                # ═══════════════════════════════════════
+                # REGLA 1: BÚSQUEDA POR SÍNTOMAS
+                # Prioridad: MENOS síntomas totales (específico)
+                # ═══════════════════════════════════════
             
-            try:
-                conn_ordenamiento = get_db_connection()  # 🆕 Nueva conexión
-                
-                query_sintomas_diag = """
-                    SELECT DISTINCT sintoma_id
-                    FROM diagnostico_sintoma
-                    WHERE diagnostico_id = ?
-                """
-                sintomas_del_diagnostico = conn_ordenamiento.execute(query_sintomas_diag, [diagnostico_principal_id]).fetchall()
-                sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_del_diagnostico]
-                total_sintomas_diagnostico = len(sintomas_diag_ids)
-                
-                print(f"   Diagnóstico tiene {total_sintomas_diagnostico} síntomas")
-                
-                # Calcular cobertura de cada producto
+                print(f"\n🔍 ORDENAMIENTO: Búsqueda por SÍNTOMAS")
+            
                 for producto in productos_con_score:
-                    sintomas_producto = sintomas_ids_por_precio.get(producto['precio_id'], [])
+                    sintomas_totales = len(sintomas_ids_por_precio.get(producto['precio_id'], []))
+                
+                    # Score inverso: menos síntomas = más score
+                    # Fórmula: 1000 / síntomas_totales
+                    if sintomas_totales > 0:
+                        producto['especificidad_score'] = 1000 / sintomas_totales
+                    else:
+                        producto['especificidad_score'] = 0
+                
+                    producto['sintomas_totales_count'] = sintomas_totales
+                
+                    print(f"      {producto['nombre'][:30]:30} → {sintomas_totales} síntomas (score: {producto['especificidad_score']:.1f})")
+            
+                # Ordenar: MENOS síntomas primero (más específico)
+                productos_con_score.sort(key=lambda x: (x['especificidad_score'], x['coincidencias']), reverse=True)
+            
+                print(f"   ✅ Orden: Más específico → Más genérico")
+            
+                # AHORA aplicar el ordenamiento por síntomas (alternar)
+                # PASO 1: Agrupar por síntoma principal
+                productos_por_sintoma = {}
+            
+                for producto in productos_con_score:
+                    sintomas_del_producto = sintomas_ids_por_precio.get(producto['precio_id'], [])
+                    sintomas_coincidentes = [s for s in sintomas_detectados_ids if s in sintomas_del_producto]
+                
+                    if sintomas_coincidentes:
+                        sintoma_principal = sintomas_coincidentes[0]
                     
-                    # Contar cuántos síntomas del diagnóstico cubre este producto
-                    cobertura = len([s for s in sintomas_producto if s in sintomas_diag_ids])
+                        if sintoma_principal not in productos_por_sintoma:
+                            productos_por_sintoma[sintoma_principal] = []
                     
-                    # 🆕 Contar síntomas EXTRA (que NO están en el diagnóstico)
-                    sintomas_extra = len([s for s in sintomas_producto if s not in sintomas_diag_ids])
-                    
-                    producto['cobertura_diagnostico'] = cobertura
-                    producto['sintomas_extra'] = sintomas_extra
-                    producto['sintomas_totales_count'] = len(sintomas_producto)
-                    producto['porcentaje_cobertura'] = (cobertura / total_sintomas_diagnostico * 100) if total_sintomas_diagnostico > 0 else 0
-                    
-                    print(f"      {producto['nombre'][:30]:30} → Cubre {cobertura}/{total_sintomas_diagnostico} ({producto['porcentaje_cobertura']:.0f}%) | Extras: {sintomas_extra} | Total: {len(sintomas_producto)}")
-                
-                # 🆕 Ordenar: MENOS extras primero, luego MÁS cobertura
-                productos_con_score.sort(key=lambda x: (x['sintomas_extra'], -x['cobertura_diagnostico']))
-                
-                print(f"   ✅ Orden: Menos extras → Más cobertura del diagnóstico")
-                
-                conn_ordenamiento.close()  # 🆕 Cerrar conexión
-                
-            except Exception as e:
-                print(f"   ❌ Error calculando cobertura: {e}")
-                productos_con_score.sort(key=lambda x: x['score'], reverse=True)
-        
-        else:
-            # ═══════════════════════════════════════
-            # REGLA 1: BÚSQUEDA POR SÍNTOMAS
-            # Prioridad: MENOS síntomas totales (específico)
-            # ═══════════════════════════════════════
+                        productos_por_sintoma[sintoma_principal].append(producto)
             
-            print(f"\n🔍 ORDENAMIENTO: Búsqueda por SÍNTOMAS")
+                # PASO 2: Extraer el MEJOR de cada síntoma (ya ordenados por especificidad)
+                mejores_por_sintoma = []
             
-            for producto in productos_con_score:
-                sintomas_totales = len(sintomas_ids_por_precio.get(producto['precio_id'], []))
-                
-                # Score inverso: menos síntomas = más score
-                # Fórmula: 1000 / síntomas_totales
-                if sintomas_totales > 0:
-                    producto['especificidad_score'] = 1000 / sintomas_totales
-                else:
-                    producto['especificidad_score'] = 0
-                
-                producto['sintomas_totales_count'] = sintomas_totales
-                
-                print(f"      {producto['nombre'][:30]:30} → {sintomas_totales} síntomas (score: {producto['especificidad_score']:.1f})")
-            
-            # Ordenar: MENOS síntomas primero (más específico)
-            productos_con_score.sort(key=lambda x: (x['especificidad_score'], x['coincidencias']), reverse=True)
-            
-            print(f"   ✅ Orden: Más específico → Más genérico")
-            
-            # AHORA aplicar el ordenamiento por síntomas (alternar)
-            # PASO 1: Agrupar por síntoma principal
-            productos_por_sintoma = {}
-            
-            for producto in productos_con_score:
-                sintomas_del_producto = sintomas_ids_por_precio.get(producto['precio_id'], [])
-                sintomas_coincidentes = [s for s in sintomas_detectados_ids if s in sintomas_del_producto]
-                
-                if sintomas_coincidentes:
-                    sintoma_principal = sintomas_coincidentes[0]
-                    
-                    if sintoma_principal not in productos_por_sintoma:
-                        productos_por_sintoma[sintoma_principal] = []
-                    
-                    productos_por_sintoma[sintoma_principal].append(producto)
-            
-            # PASO 2: Extraer el MEJOR de cada síntoma (ya ordenados por especificidad)
-            mejores_por_sintoma = []
-            
-            for sintoma_id in sintomas_detectados_ids:
-                if sintoma_id in productos_por_sintoma and productos_por_sintoma[sintoma_id]:
-                    mejor = productos_por_sintoma[sintoma_id][0]
-                    mejores_por_sintoma.append(mejor)
-                    productos_por_sintoma[sintoma_id] = productos_por_sintoma[sintoma_id][1:]
-            
-            # PASO 3: Alternar el RESTO
-            resto_productos = []
-            tiene_productos = True
-            
-            while tiene_productos:
-                tiene_productos = False
                 for sintoma_id in sintomas_detectados_ids:
                     if sintoma_id in productos_por_sintoma and productos_por_sintoma[sintoma_id]:
-                        resto_productos.append(productos_por_sintoma[sintoma_id].pop(0))
-                        tiene_productos = True
+                        mejor = productos_por_sintoma[sintoma_id][0]
+                        mejores_por_sintoma.append(mejor)
+                        productos_por_sintoma[sintoma_id] = productos_por_sintoma[sintoma_id][1:]
             
-            # PASO 4: Resultado final
-            productos_con_score = mejores_por_sintoma + resto_productos
+                # PASO 3: Alternar el RESTO
+                resto_productos = []
+                tiene_productos = True
             
-            print(f"   🎯 Mejores por síntoma: {len(mejores_por_sintoma)}")
-            print(f"   🎯 Resto alternado: {len(resto_productos)}")
+                while tiene_productos:
+                    tiene_productos = False
+                    for sintoma_id in sintomas_detectados_ids:
+                        if sintoma_id in productos_por_sintoma and productos_por_sintoma[sintoma_id]:
+                            resto_productos.append(productos_por_sintoma[sintoma_id].pop(0))
+                            tiene_productos = True
+            
+                # PASO 4: Resultado final
+                productos_con_score = mejores_por_sintoma + resto_productos
+            
+                print(f"   🎯 Mejores por síntoma: {len(mejores_por_sintoma)}")
+                print(f"   🎯 Resto alternado: {len(resto_productos)}")
     
-    else:
-        # Sin síntomas ni diagnósticos: orden normal
-        productos_con_score.sort(key=lambda x: x['score'], reverse=True)
+        else:
+            # Sin síntomas ni diagnósticos: orden normal
+            productos_con_score.sort(key=lambda x: x['score'], reverse=True)
 
     
-    diagnosticos_response = []
-    for diag_id, diag_info in diagnosticos_posibles.items():
-        diag_response = {
-            **diag_info,
-            'es_directo': diag_info.get('tipo') == 'directo'
-        }
+        diagnosticos_response = []
+        for diag_id, diag_info in diagnosticos_posibles.items():
+            diag_response = {
+                **diag_info,
+                'es_directo': diag_info.get('tipo') == 'directo'
+            }
         
-        # 🆕 Agregar síntomas faltantes si es diagnóstico directo
-        if diag_id in sintomas_faltantes_por_diagnostico:
-            diag_response['sintomas_faltantes'] = sintomas_faltantes_por_diagnostico[diag_id]
+            # 🆕 Agregar síntomas faltantes si es diagnóstico directo
+            if diag_id in sintomas_faltantes_por_diagnostico:
+                diag_response['sintomas_faltantes'] = sintomas_faltantes_por_diagnostico[diag_id]
         
-        diagnosticos_response.append(diag_response)
+            diagnosticos_response.append(diag_response)
     
-    return jsonify({
-        'ok': True, 
-        'productos': productos_con_score, 
-        'total': len(productos_con_score),
-        'sintomas_detectados': sintomas_detectados,
-        'diagnosticos_posibles': diagnosticos_response,
-        'diagnosticos_directos': diagnosticos_detectados_directo,
-        'sintomas_sobrantes': sintomas_sobrantes,  # 🆕 Síntomas que no están en el diagnóstico
-        'busqueda_parcial': busqueda_parcial_aplicada  # 🆕 Flag para mostrar mensaje especial en frontend
-    })
+        return jsonify({
+            'ok': True, 
+            'productos': productos_con_score, 
+            'total': len(productos_con_score),
+            'sintomas_detectados': sintomas_detectados,
+            'diagnosticos_posibles': diagnosticos_response,
+            'diagnosticos_directos': diagnosticos_detectados_directo,
+            'sintomas_sobrantes': sintomas_sobrantes,  # 🆕 Síntomas que no están en el diagnóstico
+            'busqueda_parcial': busqueda_parcial_aplicada  # 🆕 Flag para mostrar mensaje especial en frontend
+        })
+    except Exception as e:
+        print(f"\nERROR CRITICO en /api/productos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e), 'productos': []}), 500
+
 
 # -------------------------------------------------------------------
 # --- ZONA 4: FLUJO DE REGISTRO CONVERSACIONAL (ETAPAS 1 a 5) ---

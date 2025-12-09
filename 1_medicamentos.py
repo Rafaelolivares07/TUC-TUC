@@ -1530,7 +1530,7 @@ def obtener_productos():
                 try:
                     placeholders_ids = ','.join(['?' for _ in sintomas_detectados_ids])
                     query_diagnosticos = f"""
-                        SELECT 
+                        SELECT
                             d.id,
                             d.descripcion,
                             COUNT(DISTINCT ds.sintoma_id) as sintomas_coincidentes,
@@ -1539,8 +1539,8 @@ def obtener_productos():
                         INNER JOIN diagnostico_sintoma ds ON d.id = ds.diagnostico_id
                         WHERE ds.sintoma_id IN ({placeholders_ids})
                         GROUP BY d.id
-                        HAVING sintomas_coincidentes > 0
-                        ORDER BY sintomas_coincidentes DESC
+                        HAVING COUNT(DISTINCT ds.sintoma_id) > 0
+                        ORDER BY COUNT(DISTINCT ds.sintoma_id) DESC
                         LIMIT 10
                     """
                 

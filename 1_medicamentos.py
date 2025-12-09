@@ -1806,9 +1806,8 @@ def obtener_productos():
             sintomas_medicamento_ids = sintomas_ids_por_precio.get(p['precio_id'], [])
         
             coincidencias_sintomas = len(set(sintomas_medicamento_ids) & set(sintomas_detectados_ids))
-        
+
             coincidencias_diagnosticos_directos = 0
-            conn2 = get_db_connection()
             for diag_id in diagnosticos_detectados_directo_ids:
                 try:
                     query_sintomas_diag = """
@@ -1816,15 +1815,14 @@ def obtener_productos():
                         FROM diagnostico_sintoma
                         WHERE diagnostico_id = ?
                     """
-                    sintomas_diag = conn2.execute(query_sintomas_diag, [diag_id]).fetchall()
+                    sintomas_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
                     sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_diag]
-                
+
                     match = len(set(sintomas_medicamento_ids) & set(sintomas_diag_ids))
                     if match > 0:
                         coincidencias_diagnosticos_directos += match
                 except Exception as e:
                     print(f"Error calculando coincidencias diagnóstico: {e}")
-            conn2.close()
         
             score = 0
             mejor_diagnostico = None

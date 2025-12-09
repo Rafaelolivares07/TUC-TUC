@@ -1645,7 +1645,7 @@ def obtener_productos():
                 FROM precios_competencia
                 GROUP BY medicamento_id, fabricante_id
             ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
-            WHERE m.activo = 1
+            WHERE m.activo = '1'
         """
 
         params = []
@@ -6400,7 +6400,7 @@ def obtener_lista_medicamentos_top():
         medicamentos = cursor.execute("""
             SELECT id, componente_activo, descripcion, laboratorio, orden, activo
             FROM medicamentos_top
-            WHERE activo = 1
+            WHERE activo = '1'
             ORDER BY orden ASC
         """).fetchall()
         
@@ -7573,7 +7573,7 @@ def obtener_medicamentos_por_sintomas_ids():
             -- JOIN para obtener los síntomas asociados al medicamento
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
-            WHERE m.activo = 1
+            WHERE m.activo = '1'
         """
 
         params = []
@@ -7877,7 +7877,7 @@ def obtener_medicamentos_economicos():
             -- JOIN para obtener los síntomas asociados al medicamento
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
-            WHERE m.activo = 1
+            WHERE m.activo = '1'
         """
 
         params = []
@@ -9929,7 +9929,7 @@ def get_navegacion_activas():
     navegacion = conn.execute('''
         SELECT id, nombre_corto, url, descripcion, orden
         FROM NAVEGACION_MENU
-        WHERE activo = 1
+        WHERE activo = '1'
         ORDER BY orden ASC, nombre_corto ASC
     ''').fetchall()
     conn.close()
@@ -10543,7 +10543,7 @@ def buscar_productos_simple():
             WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
                 m.nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
             ) LIKE ?
-            AND m.activo = 1
+            AND m.activo = '1'
             AND p.precio > 0
             ORDER BY m.nombre, p.precio ASC
         ''', (f'%{query_normalizado}%',)).fetchall()

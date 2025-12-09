@@ -202,9 +202,8 @@ def get_db_connection():
 
         import psycopg2
         import psycopg2.extras
-        conn = psycopg2.connect(database_url)
-        # Para que funcione igual que SQLite con conn.Row
-        conn.row_factory = psycopg2.extras.RealDictCursor
+        # Usar RealDictConnection para que los resultados sean diccionarios (como SQLite Row)
+        conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.RealDictCursor)
         return conn
     else:
         # LOCAL: SQLite

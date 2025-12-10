@@ -199,7 +199,7 @@ class PostgreSQLConnectionWrapper:
         # Tablas que están en MAYÚSCULAS en PostgreSQL
         tablas_mayusculas = [
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
-            'existencias', 'diagnosticos', 'recetas', 'pedidos', 'configuracion_precios',
+            'diagnosticos', 'recetas', 'pedidos', 'configuracion_precios',
             'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
             'navegacion_menu', 'requerimientos',
             'requerimiento_referencias', 'usuario_dispositivo'
@@ -208,7 +208,7 @@ class PostgreSQLConnectionWrapper:
         # Tablas que están en minúsculas en PostgreSQL (excepciones)
         tablas_minusculas = [
             'precios_competencia', 'precios_competencia_new',
-            'terceros', 'terceros_competidores', 'alertas_admin', 'archivos',
+            'existencias', 'terceros', 'terceros_competidores', 'alertas_admin', 'archivos',
             'componentes_activos_sugerencias', 'indicaciones_rechazadas',
             'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
             'sugerir_sintomas'
@@ -8475,45 +8475,45 @@ def precios_dinamicos_data():
         ORDER BY nombre, fabricante_nombre
         """
         medicamentos = [dict(row) for row in db.execute(query).fetchall()]
+
+        primer_med = medicamentos[0] if medicamentos else None
+        competencias_primer = []
+        precio_sugerido = 0
+
+        if primer_med:
+            competencias_primer = [dict(row) for row in db.execute("""
+                SELECT pc.id, t.nombre, pc.precio, pc.fecha_actualizacion, t.id as tercero_id,
+                       t.telefono, t.direccion
+                FROM precios_competencia pc
+                JOIN terceros t ON pc.competidor_id = t.id
+                WHERE pc.medicamento_id = ? AND pc.fabricante_id = ?
+                ORDER BY pc.precio ASC
+            """, (primer_med['medicamento_id'], primer_med['fabricante_id'])).fetchall()]
+
+            if competencias_primer:
+                precio_base = min([c['precio'] for c in competencias_primer], default=0)
+                if precio_base == 0:
+                    precio_base = primer_med['precio_actual']
+            else:
+                precio_base = primer_med['precio_actual']
+
+            precio_sugerido = calcular_precio_sugerido(precio_base, config)
+
+        db.close()
+
+        return jsonify({
+            'config': config,
+            'medicamentos': medicamentos,
+            'primer_med_id': primer_med['medicamento_id'] if primer_med else None,
+            'primer_fab_id': primer_med['fabricante_id'] if primer_med else None,
+            'competencias_primer': competencias_primer,
+            'precio_sugerido': precio_sugerido
+        })
     except Exception as e:
         print(f"❌ Error en /admin/precios-dinamicos/data: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'medicamentos': [], 'config': {}}), 500
-
-    primer_med = medicamentos[0] if medicamentos else None
-    competencias_primer = []
-    precio_sugerido = 0
-
-    if primer_med:
-        competencias_primer = [dict(row) for row in db.execute("""
-            SELECT pc.id, t.nombre, pc.precio, pc.fecha_actualizacion, t.id as tercero_id,
-                   t.telefono, t.direccion
-            FROM precios_competencia pc
-            JOIN terceros t ON pc.competidor_id = t.id
-            WHERE pc.medicamento_id = ? AND pc.fabricante_id = ?
-            ORDER BY pc.precio ASC
-        """, (primer_med['medicamento_id'], primer_med['fabricante_id'])).fetchall()]
-
-        if competencias_primer:
-            precio_base = min([c['precio'] for c in competencias_primer], default=0)
-            if precio_base == 0:
-                precio_base = primer_med['precio_actual']
-        else:
-            precio_base = primer_med['precio_actual']
-        
-        precio_sugerido = calcular_precio_sugerido(precio_base, config)
-
-    db.close()
-
-    return jsonify({
-        'config': config,
-        'medicamentos': medicamentos,
-        'primer_med_id': primer_med['medicamento_id'] if primer_med else None,
-        'primer_fab_id': primer_med['fabricante_id'] if primer_med else None,
-        'competencias_primer': competencias_primer,
-        'precio_sugerido': precio_sugerido
-    })
 
 @app.route('/admin/fabricantes/buscar', methods=['GET'])
 def buscar_fabricantes():

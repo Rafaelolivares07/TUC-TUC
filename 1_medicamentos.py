@@ -10060,44 +10060,54 @@ def get_navegacion_activas():
 @app.route('/api/navegacion', methods=['POST'])
 def crear_navegacion():
     """Crear una nueva entrada de navegación"""
-    data = request.get_json()
-    
-    nombre_corto = data.get('nombre_corto', '').strip()
-    url = data.get('url', '').strip()
-    descripcion = data.get('descripcion', '').strip()
-    orden = data.get('orden', 0)
-    
-    # Validaciones
-    if not nombre_corto:
-        return jsonify({'error': 'El nombre corto es obligatorio'}), 400
-    
-    if len(nombre_corto.split()) > 3:
-        return jsonify({'error': 'El nombre debe tener máximo 3 palabras'}), 400
-    
-    if not url:
-        return jsonify({'error': 'La URL es obligatoria'}), 400
-    
-    # Asegurar que la URL comience con /
-    if not url.startswith('http://') and not url.startswith('https://') and not url.startswith('/'):
-        url = '/' + url
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO NAVEGACION_MENU (nombre_corto, url, descripcion, orden)
-        VALUES (?, ?, ?, ?)
-    ''', (nombre_corto, url, descripcion, orden))
-    
-    conn.commit()
-    nueva_id = cursor.lastrowid
-    conn.close()
-    
-    return jsonify({
-        'success': True,
-        'id': nueva_id,
-        'mensaje': 'URL agregada correctamente'
-    }), 201
+    try:
+        data = request.get_json()
+
+        nombre_corto = data.get('nombre_corto', '').strip()
+        url = data.get('url', '').strip()
+        descripcion = data.get('descripcion', '').strip()
+        orden = data.get('orden', 0)
+
+        # Validaciones
+        if not nombre_corto:
+            return jsonify({'error': 'El nombre corto es obligatorio'}), 400
+
+        if len(nombre_corto.split()) > 3:
+            return jsonify({'error': 'El nombre debe tener máximo 3 palabras'}), 400
+
+        if not url:
+            return jsonify({'error': 'La URL es obligatoria'}), 400
+
+        # Asegurar que la URL comience con /
+        if not url.startswith('http://') and not url.startswith('https://') and not url.startswith('/'):
+            url = '/' + url
+
+        conn = get_db_connection()
+
+        # Obtener el próximo ID
+        cursor = conn.execute('SELECT COALESCE(MAX(id), 0) + 1 FROM NAVEGACION_MENU')
+        nueva_id = cursor.fetchone()[0]
+
+        conn.execute('''
+            INSERT INTO NAVEGACION_MENU (id, nombre_corto, url, descripcion, orden)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (nueva_id, nombre_corto, url, descripcion, orden))
+
+        conn.commit()
+        conn.close()
+
+        print(f"✅ URL guardada: {nombre_corto} -> {url}")
+
+        return jsonify({
+            'success': True,
+            'id': nueva_id,
+            'mensaje': 'URL agregada correctamente'
+        }), 201
+    except Exception as e:
+        print(f"❌ Error al guardar URL: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Error al guardar: {str(e)}'}), 500
 
 @app.route('/api/navegacion/<int:id>', methods=['PUT'])
 def actualizar_navegacion(id):

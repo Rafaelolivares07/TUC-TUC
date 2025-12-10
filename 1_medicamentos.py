@@ -279,6 +279,56 @@ ALLOWED_EXT = {"png", "jpg", "jpeg", "gif"}
 
 
 # -------------------------------------------------------------------
+# --- FUNCIÓN HELPER: NOTIFICACIONES TELEGRAM ---
+# -------------------------------------------------------------------
+
+def enviar_notificacion_telegram(mensaje):
+    """
+    Envía una notificación a Telegram usando el bot configurado.
+    Retorna True si se envió correctamente, False si falló.
+    """
+    try:
+        # Obtener configuración desde la base de datos
+        conn = get_db_connection()
+        config = conn.execute('SELECT telegram_token, telegram_chat_id, notificaciones_activas FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
+        conn.close()
+
+        if not config or not config['notificaciones_activas']:
+            print("⚠️ Notificaciones Telegram desactivadas")
+            return False
+
+        token = config['telegram_token']
+        chat_id = config['telegram_chat_id']
+
+        if not token or not chat_id:
+            print("⚠️ Token o Chat ID de Telegram no configurado")
+            return False
+
+        # Enviar mensaje a Telegram
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': mensaje,
+            'parse_mode': 'HTML'
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"✅ Notificación Telegram enviada correctamente")
+            return True
+        else:
+            print(f"⚠️ Error enviando Telegram: {response.status_code} - {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Excepción enviando Telegram: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+# -------------------------------------------------------------------
 # --- ZONA 2: MIDDLEWARE Y LÓGICA DE AUTENTICACIÓN (before_request) ---
 # -------------------------------------------------------------------
 
@@ -628,62 +678,45 @@ def procesar_pedido():
         
         conn.commit()
         conn.close()
-        
-        # 5. ENVIAR WHATSAPP AL ADMIN
+
+        # 5. ENVIAR NOTIFICACIÓN TELEGRAM AL ADMIN
         try:
             # Construir lista de productos
             items_texto = "\n".join([
                 f"• {item['nombre']} ({item['fabricante']}) x{item['cantidad']} = ${item['precio'] * item['cantidad']:,}"
                 for item in items
             ])
-            
+
             # Link a Google Maps
             maps_link = f"https://www.google.com/maps?q={latitud},{longitud}" if latitud and longitud else "Sin coordenadas"
-            
-            # Mensaje WhatsApp
-            mensaje = f"""🔔 *NUEVO PEDIDO #{pedido_id}*
 
-👤 *Cliente:* {nombre}
-📱 *Teléfono:* {telefono}
-📍 *Dirección:* {direccion}
+            # Mensaje Telegram (con formato HTML)
+            mensaje = f"""🔔 <b>NUEVO PEDIDO #{pedido_id}</b>
 
-🛒 *Productos:*
+👤 <b>Cliente:</b> {nombre}
+📱 <b>Teléfono:</b> {telefono}
+📍 <b>Dirección:</b> {direccion}
+
+🛒 <b>Productos:</b>
 {items_texto}
 
-💰 *Subtotal:* ${subtotal:,}
-🚚 *Domicilio:* ${costo_domicilio:,}
-💵 *TOTAL:* ${total:,}
+💰 <b>Subtotal:</b> ${subtotal:,}
+🚚 <b>Domicilio:</b> ${costo_domicilio:,}
+💵 <b>TOTAL:</b> ${total:,}
 
-💳 *Método de pago:* {metodo_pago.upper()}
+💳 <b>Método de pago:</b> {metodo_pago.upper()}
 
-📍 *Ver ubicación:*
+📍 <b>Ver ubicación:</b>
 {maps_link}
 
-⏱️ *Tiempo estimado:* 30 minutos"""
+⏱️ <b>Tiempo estimado:</b> 30 minutos"""
 
-            # Número del admin (TU NÚMERO)
-            admin_phone = '+573175718658'  # 👈 CAMBIA ESTO POR TU NÚMERO
-            
-            # Enviar con Twilio
-            from twilio.rest import Client
+            # Enviar notificación a Telegram
+            enviar_notificacion_telegram(mensaje)
 
-            account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-            auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-            twilio_whatsapp = os.getenv('TWILIO_WHATSAPP')
-            
-            client = Client(account_sid, auth_token)
-            
-            message = client.messages.create(
-                from_=twilio_whatsapp,
-                body=mensaje,
-                to=f'whatsapp:{admin_phone}'
-            )
-            
-            print(f"✅ WhatsApp enviado al admin - SID: {message.sid}")
-            
         except Exception as e:
-            print(f"⚠️ Error enviando WhatsApp: {e}")
-            # No fallar el pedido si WhatsApp falla
+            print(f"⚠️ Error enviando notificación Telegram: {e}")
+            # No fallar el pedido si la notificación falla
         
         return jsonify({
             'ok': True,

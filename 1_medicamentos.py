@@ -253,10 +253,16 @@ class PostgreSQLConnectionWrapper:
         if is_insert and 'RETURNING' not in query.upper():
             # Agregar RETURNING id al final del INSERT
             query = query.rstrip(';').rstrip() + ' RETURNING id'
+            print(f"🔍 DEBUG INSERT Query: {query[:200]}...")  # DEBUG
+            print(f"🔍 DEBUG Params: {params}")  # DEBUG
             cursor.execute(query, params)
             result = cursor.fetchone()
+            print(f"🔍 DEBUG Result: {result}")  # DEBUG
             if result:
                 last_insert_id = result[0]
+                print(f"✅ DEBUG lastrowid capturado: {last_insert_id}")  # DEBUG
+            else:
+                print(f"⚠️ DEBUG No se obtuvo result del RETURNING")  # DEBUG
         else:
             cursor.execute(query, params)
 

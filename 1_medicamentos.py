@@ -1414,11 +1414,11 @@ def obtener_productos():
                 for contexto in contextos:
                     try:
                         query = """
-                            SELECT DISTINCT id, nombre
+                            SELECT DISTINCT id, nombre, LENGTH(nombre) as len
                             FROM sintomas
                             WHERE (LOWER(nombre) LIKE ? AND LOWER(nombre) LIKE ?)
                                OR LOWER(nombre) LIKE ?
-                            ORDER BY LENGTH(nombre) ASC
+                            ORDER BY len ASC
                             LIMIT 2
                         """
                         frase_completa = f'%{palabra_clave}%{contexto}%'
@@ -1449,7 +1449,7 @@ def obtener_productos():
                     # Buscar cada variante
                     for variante in variantes:
                         query = """
-                            SELECT DISTINCT id, nombre
+                            SELECT DISTINCT id, nombre, LENGTH(nombre) as len
                             FROM sintomas
                             WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
                                     nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
@@ -1457,7 +1457,7 @@ def obtener_productos():
                                OR LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
                                     descripcion_lower, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
                                 ) LIKE ?
-                            ORDER BY LENGTH(nombre) ASC
+                            ORDER BY len ASC
                             LIMIT 10
                         """
                         resultados = conn.execute(query, [f'%{variante}%', f'%{variante}%']).fetchall()
@@ -1496,12 +1496,12 @@ def obtener_productos():
                 try:
                     # Buscar síntomas que contengan la palabra (normalizado)
                     query_parcial = """
-                        SELECT DISTINCT id, nombre
+                        SELECT DISTINCT id, nombre, LENGTH(nombre) as len
                         FROM sintomas
                         WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
                                 nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
                             ) LIKE ?
-                        ORDER BY LENGTH(nombre) ASC
+                        ORDER BY len ASC
                         LIMIT 10
                     """
                 
@@ -1739,6 +1739,10 @@ def obtener_productos():
 
         query += " AND p.precio > 0"
         query += " ORDER BY m.nombre, f.nombre"
+
+        # Limitar resultados iniciales si no hay búsqueda (para mejor rendimiento)
+        if not busqueda and not busqueda_sintomas:
+            query += " LIMIT 50"
 
         productos = conn.execute(query, params).fetchall()
 

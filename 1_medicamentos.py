@@ -8387,89 +8387,98 @@ def calcular_precio_sugerido(precio_base, config):
     return int(sugerido)
 
 @app.route('/admin/precios-dinamicos')
+@admin_required
 def precios_dinamicos():
     return render_template('precios_dinamicos.html')
 
 @app.route('/admin/fusionar-fabricantes')
+@admin_required
 def fusionar_fabricantes_page():
     return render_template('fusionar_fabricantes.html')
 
 @app.route('/admin/precios-dinamicos/data')
+@admin_required
 def precios_dinamicos_data():
-    db = get_db_connection()
-    
-    config_row = db.execute("SELECT * FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
-    if config_row:
-        config = dict(config_row)
-    else:
-        config = {
-            'usar_precio': 'minimo',
-            'recargo_escaso': 30,
-            'ganancia_min_escaso': 2000,
-            'ganancia_max_escaso': 10000,
-            'redondeo_superior': 100
-        }
+    try:
+        db = get_db_connection()
 
-    query = """
-    SELECT
-        m.id as medicamento_id,
-        m.nombre,
-        f.id as fabricante_id,
-        f.nombre as fabricante_nombre,
-        COALESCE(p.precio, 0) AS precio_actual,
-        CASE
-            WHEN EXISTS (
-                SELECT 1 FROM existencias e
-                WHERE e.medicamento_id = m.id
-                AND e.fabricante_id = f.id
-                AND e.estado = 'pendiente'
-            ) THEN 'Pendiente' ELSE '' END AS estado_existencia,
-        t.nombre AS competencia_nombre,
-        pc.precio AS competencia_precio,
-        pc.fecha_actualizacion AS competencia_fecha,
-        '' AS origen,
-        (SELECT COUNT(*) FROM precios_competencia WHERE medicamento_id = m.id AND fabricante_id = f.id AND url IS NOT NULL AND url != '') AS cotizaciones_con_url,
-        (SELECT COUNT(*) FROM precios_competencia WHERE medicamento_id = m.id AND fabricante_id = f.id) AS cotizaciones_total
-    FROM precios p
-    LEFT JOIN medicamentos m ON p.medicamento_id = m.id
-    LEFT JOIN fabricantes f ON p.fabricante_id = f.id
-    LEFT JOIN (
+        config_row = db.execute("SELECT * FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
+        if config_row:
+            config = dict(config_row)
+        else:
+            config = {
+                'usar_precio': 'minimo',
+                'recargo_escaso': 30,
+                'ganancia_min_escaso': 2000,
+                'ganancia_max_escaso': 10000,
+                'redondeo_superior': 100
+            }
+
+        query = """
         SELECT
-            medicamento_id,
-            fabricante_id,
-            competidor_id,
-            precio,
-            fecha_actualizacion,
-            ROW_NUMBER() OVER (
-                PARTITION BY medicamento_id, fabricante_id
-                ORDER BY precio ASC, fecha_actualizacion DESC
-            ) as rn
-        FROM precios_competencia
-    ) pc ON m.id = pc.medicamento_id AND f.id = pc.fabricante_id AND pc.rn = 1
-    LEFT JOIN terceros t ON pc.competidor_id = t.id
+            m.id as medicamento_id,
+            m.nombre,
+            f.id as fabricante_id,
+            f.nombre as fabricante_nombre,
+            COALESCE(p.precio, 0) AS precio_actual,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM existencias e
+                    WHERE e.medicamento_id = m.id
+                    AND e.fabricante_id = f.id
+                    AND e.estado = 'pendiente'
+                ) THEN 'Pendiente' ELSE '' END AS estado_existencia,
+            t.nombre AS competencia_nombre,
+            pc.precio AS competencia_precio,
+            pc.fecha_actualizacion AS competencia_fecha,
+            '' AS origen,
+            (SELECT COUNT(*) FROM precios_competencia WHERE medicamento_id = m.id AND fabricante_id = f.id AND url IS NOT NULL AND url != '') AS cotizaciones_con_url,
+            (SELECT COUNT(*) FROM precios_competencia WHERE medicamento_id = m.id AND fabricante_id = f.id) AS cotizaciones_total
+        FROM precios p
+        LEFT JOIN medicamentos m ON p.medicamento_id = m.id
+        LEFT JOIN fabricantes f ON p.fabricante_id = f.id
+        LEFT JOIN (
+            SELECT
+                medicamento_id,
+                fabricante_id,
+                competidor_id,
+                precio,
+                fecha_actualizacion,
+                ROW_NUMBER() OVER (
+                    PARTITION BY medicamento_id, fabricante_id
+                    ORDER BY precio ASC, fecha_actualizacion DESC
+                ) as rn
+            FROM precios_competencia
+        ) pc ON m.id = pc.medicamento_id AND f.id = pc.fabricante_id AND pc.rn = 1
+        LEFT JOIN terceros t ON pc.competidor_id = t.id
 
-    UNION ALL
+        UNION ALL
 
-    SELECT
-        NULL as medicamento_id,
-        pu.nombre,
-        NULL as fabricante_id,
-        '' as fabricante_nombre,
-        0 AS precio_actual,
-        '' AS estado_existencia,
-        '' AS competencia_nombre,
-        NULL AS competencia_precio,
-        '' AS competencia_fecha,
-        'PASTILLERO' AS origen,
-        0 AS cotizaciones_con_url,
-        0 AS cotizaciones_total
-    FROM pastillero_usuarios pu
-    WHERE pu.medicamento_id IS NULL OR pu.medicamento_id = 0
-    GROUP BY pu.nombre
+        SELECT
+            NULL as medicamento_id,
+            pu.nombre,
+            NULL as fabricante_id,
+            '' as fabricante_nombre,
+            0 AS precio_actual,
+            '' AS estado_existencia,
+            '' AS competencia_nombre,
+            NULL AS competencia_precio,
+            '' AS competencia_fecha,
+            'PASTILLERO' AS origen,
+            0 AS cotizaciones_con_url,
+            0 AS cotizaciones_total
+        FROM pastillero_usuarios pu
+        WHERE pu.medicamento_id IS NULL OR pu.medicamento_id = 0
+        GROUP BY pu.nombre
 
-    ORDER BY nombre, fabricante_nombre
-    """
-    medicamentos = [dict(row) for row in db.execute(query).fetchall()]
+        ORDER BY nombre, fabricante_nombre
+        """
+        medicamentos = [dict(row) for row in db.execute(query).fetchall()]
+    except Exception as e:
+        print(f"❌ Error en /admin/precios-dinamicos/data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'medicamentos': [], 'config': {}}), 500
 
     primer_med = medicamentos[0] if medicamentos else None
     competencias_primer = []

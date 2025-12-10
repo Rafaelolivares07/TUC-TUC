@@ -187,6 +187,22 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Protección CSRF
 # 📁 Nombre de la base de datos
 DB_NAME = 'medicamentos.db'
 
+class PostgreSQLCursorWrapper:
+    """Wrapper para cursor de PostgreSQL que simula lastrowid de SQLite"""
+    def __init__(self, pg_cursor, last_insert_id=None):
+        self._cursor = pg_cursor
+        self.lastrowid = last_insert_id
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
 class PostgreSQLConnectionWrapper:
     """Wrapper para que PostgreSQL funcione como SQLite con conn.execute()"""
     def __init__(self, pg_conn):
@@ -229,8 +245,22 @@ class PostgreSQLConnectionWrapper:
             query = re.sub(pattern, f'"{tabla}"', query, flags=re.IGNORECASE)
 
         cursor = self._conn.cursor()
-        cursor.execute(query, params)
-        return cursor
+
+        # Detectar INSERT para agregar RETURNING id
+        is_insert = re.match(r'^\s*INSERT\s+INTO', query, re.IGNORECASE)
+        last_insert_id = None
+
+        if is_insert and 'RETURNING' not in query.upper():
+            # Agregar RETURNING id al final del INSERT
+            query = query.rstrip(';').rstrip() + ' RETURNING id'
+            cursor.execute(query, params)
+            result = cursor.fetchone()
+            if result:
+                last_insert_id = result[0]
+        else:
+            cursor.execute(query, params)
+
+        return PostgreSQLCursorWrapper(cursor, last_insert_id)
 
     def commit(self):
         self._conn.commit()

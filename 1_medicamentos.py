@@ -9,7 +9,7 @@ import re
 from werkzeug.utils import secure_filename
 import hashlib
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from io import BytesIO
@@ -426,15 +426,71 @@ def admin_acceso_directo(codigo):
         return redirect(url_for('index'))
 
 @app.route('/admin')
+def admin_redirect():
+    """Redirige a la página de login o al área admin si ya está logueado."""
+    if session.get('rol') == 'Administrador':
+        return redirect(url_for('admin_area'))
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/login', methods=['GET'])
 def admin_login():
-    """Punto de entrada para el Rol Administrador."""
-    # Si ya está logueado como admin, redirige al área admin
+    """Muestra el formulario de login para administradores."""
+    # Si ya está logueado, redirigir al área admin
     if session.get('rol') == 'Administrador':
         return redirect(url_for('admin_area'))
 
-    # Si no, es un usuario nuevo → prepara rol temporal
-    session['rol_temporal'] = 'Administrador'
-    return render_template('1_index.html')
+    return render_template('admin_login.html')
+
+@app.route('/admin/login', methods=['POST'])
+def admin_login_post():
+    """Procesa el login de administradores."""
+    usuario = request.form.get('usuario', '').strip()
+    password = request.form.get('password', '').strip()
+    recordar = request.form.get('recordar') == '1'
+
+    print(f"🔐 Intento de login: usuario={usuario}, recordar={recordar}")
+
+    if not usuario or not password:
+        flash('Por favor completa todos los campos', 'danger')
+        return redirect(url_for('admin_login'))
+
+    # Buscar usuario admin en la base de datos
+    conn = get_db_connection()
+    try:
+        admin = conn.execute("""
+            SELECT * FROM usuarios
+            WHERE usuario = ? AND password = ? AND rol = 'Administrador'
+        """, (usuario, password)).fetchone()
+
+        if admin:
+            # Login exitoso
+            session.clear()
+            session['dispositivo_id'] = admin['dispositivo_id']
+            session['usuario_id'] = admin['id']
+            session['nombre'] = admin['nombre']
+            session['rol'] = 'Administrador'
+            session.modified = True
+
+            # Configurar duración de sesión según checkbox
+            if recordar:
+                session.permanent = True
+                app.permanent_session_lifetime = timedelta(days=30)
+                print(f"✅ Login exitoso - Sesión de 30 días")
+            else:
+                session.permanent = True
+                app.permanent_session_lifetime = timedelta(hours=24)
+                print(f"✅ Login exitoso - Sesión de 24 horas")
+
+            flash('¡Bienvenido! Has iniciado sesión correctamente', 'success')
+            return redirect(url_for('admin_area'))
+        else:
+            # Login fallido
+            print(f"❌ Login fallido - Usuario o contraseña incorrectos")
+            flash('Usuario o contraseña incorrectos', 'danger')
+            return redirect(url_for('admin_login'))
+
+    finally:
+        conn.close()
 
 @app.route('/paciente_saludo_continuar')
 def paciente_saludo_continuar():

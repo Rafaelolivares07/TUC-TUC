@@ -15,7 +15,6 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from io import BytesIO
 # 🎯 IMPORTAR EL INICIALIZADOR DE DATOS EXTERNO
 from data_initializer import initialize_full_db
-from flask_session import Session
 from bs4 import BeautifulSoup
 import time
 import math
@@ -176,12 +175,14 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.logger.debug(f"Upload folder: {app.config['UPLOAD_FOLDER']} (exist or created)")
 
 
-# 📦 Configuración para que la sesión se guarde en el sistema de archivos (no solo en memoria)
+# 📦 Configuración de sesiones para producción en Render
+# Usar sesiones del lado del cliente (cookies firmadas) para compatibilidad con múltiples workers
 app.config['SESSION_PERMANENT'] = True
-app.config['SESSION_TYPE'] = 'filesystem'  # guarda las sesiones temporalmente en disco
-
-# 🧠 Inicializar la gestión de sesiones
-Session(app)
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 horas en segundos
+# SESSION_COOKIE_SECURE solo en producción (HTTPS). En desarrollo local usar HTTP.
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('RENDER', None) is not None
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevenir XSS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Protección CSRF
 
 # 📁 Nombre de la base de datos
 DB_NAME = 'medicamentos.db'
@@ -393,6 +394,8 @@ def admin_acceso_directo(codigo):
     # Código secreto para acceso rápido
     CODIGO_ADMIN = 'tuctuc2025'
 
+    print(f"🔑 Intento de acceso admin con código: {codigo}")
+
     if codigo == CODIGO_ADMIN:
         # Buscar el usuario administrador
         conn = get_db_connection()
@@ -401,17 +404,23 @@ def admin_acceso_directo(codigo):
 
         if admin:
             # Establecer sesión como administrador
+            session.clear()  # Limpiar sesión anterior
             session['dispositivo_id'] = admin['dispositivo_id']
             session['usuario_id'] = admin['id']
             session['nombre'] = admin['nombre']
             session['rol'] = 'Administrador'
+            session.modified = True  # Forzar guardado de sesión
+
+            print(f"✅ Sesión admin establecida: {dict(session)}")
 
             flash('Acceso administrativo concedido', 'success')
             return redirect(url_for('admin_area'))
         else:
+            print(f"❌ No se encontró usuario administrador en la BD")
             flash('No se encontró usuario administrador', 'danger')
             return redirect(url_for('index'))
     else:
+        print(f"❌ Código inválido: {codigo}")
         flash('Código de acceso inválido', 'danger')
         return redirect(url_for('index'))
 

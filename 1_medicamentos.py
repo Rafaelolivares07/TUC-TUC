@@ -811,36 +811,26 @@ def solicitud_especial():
         print(f"   Búsqueda: {busqueda}")
         print(f"   Teléfono: {telefono}")
         
-        # 4. OPCIONAL: Enviar WhatsApp al admin
+        # 4. ENVIAR NOTIFICACIÓN TELEGRAM AL ADMIN
         try:
-            from twilio.rest import Client
-
-            account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-            auth_token = os.getenv('TWILIO_AUTH_TOKEN')
-            twilio_whatsapp = os.getenv('TWILIO_WHATSAPP')
-            admin_phone = '+573175718658'
-            
             emoji = "💊" if tipo_solicitud == 'producto' else "🩺"
-            mensaje = f"""🔔 *SOLICITUD ESPECIAL #{pedido_id}*
+            mensaje = f"""🔔 <b>SOLICITUD ESPECIAL #{pedido_id}</b>
 
-{emoji} *Tipo:* {etiqueta}
-📱 *Teléfono:* {telefono}
-🔍 *Búsqueda:* {busqueda}
+{emoji} <b>Tipo:</b> {etiqueta}
+📱 <b>Teléfono:</b> {telefono}
+🔍 <b>Búsqueda:</b> {busqueda}
 
-⏱️ *Requiere contacto inmediato*"""
+⏱️ <b>Requiere contacto inmediato</b>
 
-            client = Client(account_sid, auth_token)
-            message = client.messages.create(
-                from_=twilio_whatsapp,
-                body=mensaje,
-                to=f'whatsapp:{admin_phone}'
-            )
-            
-            print(f"✅ WhatsApp enviado al admin - SID: {message.sid}")
-            
+📋 Ver pedido:
+https://tuc-tuc.onrender.com/admin/pedidos"""
+
+            # Enviar notificación a Telegram
+            enviar_notificacion_telegram(mensaje)
+
         except Exception as e:
-            print(f"⚠️ Error enviando WhatsApp: {e}")
-            # No fallar la solicitud si WhatsApp falla
+            print(f"⚠️ Error enviando notificación Telegram: {e}")
+            # No fallar la solicitud si la notificación falla
         
         return jsonify({
             'ok': True,

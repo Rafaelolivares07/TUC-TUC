@@ -1442,7 +1442,7 @@
                         </div>
                         
                         <div style="margin-bottom: 2.5rem;"></div>
-                        <button class="btn-agregar" onclick='agregarAlCarrito(${JSON.stringify(p)})'>
+                        <button class="btn-agregar" data-producto='${JSON.stringify(p).replace(/'/g, "&#39;")}' onclick='agregarAlCarritoFromButton(this)'>
                             Agregar al Carrito
                         </button>
                     </div>
@@ -1454,14 +1454,25 @@
             return new Intl.NumberFormat('es-CO').format(precio);
         }
         
+        function agregarAlCarritoFromButton(button) {
+            try {
+                const productoJSON = button.getAttribute('data-producto');
+                const producto = JSON.parse(productoJSON);
+                agregarAlCarrito(producto);
+            } catch (e) {
+                console.error('Error al agregar producto:', e);
+                alert('Error al agregar el producto. Por favor intenta nuevamente.');
+            }
+        }
+
         function agregarAlCarrito(producto) {
             if (!producto.precio || producto.precio <= 0) {
                 alert('Este producto no tiene precio disponible');
                 return;
             }
-            
+
             const index = carrito.findIndex(item => item.precio_id === producto.precio_id);
-            
+
             if (index >= 0) {
                 carrito[index].cantidad++;
             } else {
@@ -1470,10 +1481,10 @@
                     cantidad: 1
                 });
             }
-            
+
             localStorage.setItem('carrito', JSON.stringify(carrito));
             actualizarBadgeCarrito();
-            
+
             alert(`${producto.nombre} (${producto.fabricante}) agregado al carrito`);
         }
         
@@ -2366,7 +2377,7 @@
                     <div style="font-size: 2rem; font-weight: 700;">$${formatearPrecio(producto.precio)}</div>
                 </div>
                 
-                <button class="btn-agregar" onclick='agregarAlCarrito(${JSON.stringify(producto)})' style="position: relative !important; bottom: auto !important; left: auto !important; right: auto !important; width: 100% !important; box-sizing: border-box; padding: 1.2rem; font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; line-height: 1.4;">
+                <button class="btn-agregar" data-producto='${JSON.stringify(producto).replace(/'/g, "&#39;")}' onclick='agregarAlCarritoFromButton(this)' style="position: relative !important; bottom: auto !important; left: auto !important; right: auto !important; width: 100% !important; box-sizing: border-box; padding: 1.2rem; font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; line-height: 1.4;">
                     ✅ Agregar al Carrito
                 </button>
                 

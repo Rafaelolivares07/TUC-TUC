@@ -253,16 +253,10 @@ class PostgreSQLConnectionWrapper:
         if is_insert and 'RETURNING' not in query.upper():
             # Agregar RETURNING id al final del INSERT
             query = query.rstrip(';').rstrip() + ' RETURNING id'
-            print(f"🔍 DEBUG INSERT Query: {query[:200]}...")  # DEBUG
-            print(f"🔍 DEBUG Params: {params}")  # DEBUG
             cursor.execute(query, params)
             result = cursor.fetchone()
-            print(f"🔍 DEBUG Result: {result}")  # DEBUG
             if result:
                 last_insert_id = result[0]
-                print(f"✅ DEBUG lastrowid capturado: {last_insert_id}")  # DEBUG
-            else:
-                print(f"⚠️ DEBUG No se obtuvo result del RETURNING")  # DEBUG
         else:
             cursor.execute(query, params)
 
@@ -685,8 +679,8 @@ def procesar_pedido():
         
         # 1. Crear TERCERO (cliente)
         cursor = conn.execute("""
-            INSERT INTO terceros (nombre, telefono, direccion, latitud, longitud, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO terceros (id, nombre, telefono, direccion, latitud, longitud, fecha_creacion)
+            VALUES (DEFAULT, ?, ?, ?, ?, ?, datetime('now'))
         """, (nombre, telefono, direccion, latitud, longitud))
         tercero_id = cursor.lastrowid
         
@@ -698,10 +692,10 @@ def procesar_pedido():
         # 3. Crear PEDIDO
         cursor = conn.execute("""
             INSERT INTO pedidos (
-                id_tercero, fecha, total, metodo_pago, costo_domicilio,
+                id, id_tercero, fecha, total, metodo_pago, costo_domicilio,
                 direccion_entrega, latitud_entrega, longitud_entrega,
                 estado, tiempo_estimado_entrega
-            ) VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
+            ) VALUES (DEFAULT, ?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
         """, (tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
         pedido_id = cursor.lastrowid
         

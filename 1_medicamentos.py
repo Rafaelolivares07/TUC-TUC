@@ -201,16 +201,17 @@ class PostgreSQLConnectionWrapper:
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
             'existencias', 'diagnosticos', 'recetas', 'pedidos', 'configuracion_precios',
             'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
-            'navegacion_menu', 'terceros', 'terceros_competidores', 'requerimientos',
-            'requerimiento_referencias', 'alertas_admin', 'archivos',
-            'componentes_activos_sugerencias', 'indicaciones_rechazadas',
-            'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
-            'sugerir_sintomas', 'usuario_dispositivo'
+            'navegacion_menu', 'requerimientos',
+            'requerimiento_referencias', 'usuario_dispositivo'
         ]
 
         # Tablas que están en minúsculas en PostgreSQL (excepciones)
         tablas_minusculas = [
-            'precios_competencia', 'precios_competencia_new'
+            'precios_competencia', 'precios_competencia_new',
+            'terceros', 'terceros_competidores', 'alertas_admin', 'archivos',
+            'componentes_activos_sugerencias', 'indicaciones_rechazadas',
+            'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
+            'sugerir_sintomas'
         ]
 
         import re

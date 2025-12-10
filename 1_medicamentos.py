@@ -196,6 +196,10 @@ class PostgreSQLConnectionWrapper:
         # Convertir ? a %s para PostgreSQL
         query = query.replace('?', '%s')
 
+        # Convertir datetime('now') de SQLite a CURRENT_TIMESTAMP de PostgreSQL
+        import re
+        query = re.sub(r"datetime\(['\"]now['\"]\)", "CURRENT_TIMESTAMP", query, flags=re.IGNORECASE)
+
         # Tablas que están en MAYÚSCULAS en PostgreSQL
         tablas_mayusculas = [
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
@@ -213,8 +217,6 @@ class PostgreSQLConnectionWrapper:
             'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
             'sugerir_sintomas', 'pedidos'
         ]
-
-        import re
 
         # Convertir tablas que deben ir en MAYÚSCULAS
         for tabla in tablas_mayusculas:

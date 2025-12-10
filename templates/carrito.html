@@ -328,10 +328,10 @@
             const listaItems = document.getElementById('listaItems');
             listaItems.innerHTML = carrito.map((item, index) => `
                 <div class="item">
-                    <img src="${item.imagen ? '/static/uploads/' + item.imagen : '/static/placeholder.png'}" 
-                         alt="${item.nombre}" 
+                    <img src="${item.imagen && item.imagen.trim() !== '' ? '/static/uploads/' + item.imagen : 'https://placehold.co/100x100?text=Sin+imagen'}"
+                         alt="${item.nombre}"
                          class="item-imagen"
-                         onerror="this.style.display='none'">
+                         onerror="this.src='https://placehold.co/100x100?text=Sin+imagen'">
                     
                     <div class="item-info">
                         <div class="item-nombre">${item.nombre}</div>

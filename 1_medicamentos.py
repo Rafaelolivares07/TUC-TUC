@@ -387,13 +387,41 @@ def index():
     # Redirigir directamente a la tienda
     return redirect(url_for('tienda_home'))
 
+@app.route('/admin/acceso/<codigo>')
+def admin_acceso_directo(codigo):
+    """Acceso directo al panel admin con código secreto."""
+    # Código secreto para acceso rápido
+    CODIGO_ADMIN = 'tuctuc2025'
+
+    if codigo == CODIGO_ADMIN:
+        # Buscar el usuario administrador
+        conn = get_db_connection()
+        admin = conn.execute('SELECT * FROM usuarios WHERE rol = ? LIMIT 1', ['Administrador']).fetchone()
+        conn.close()
+
+        if admin:
+            # Establecer sesión como administrador
+            session['dispositivo_id'] = admin['dispositivo_id']
+            session['usuario_id'] = admin['id']
+            session['nombre'] = admin['nombre']
+            session['rol'] = 'Administrador'
+
+            flash('Acceso administrativo concedido', 'success')
+            return redirect(url_for('admin_area'))
+        else:
+            flash('No se encontró usuario administrador', 'danger')
+            return redirect(url_for('index'))
+    else:
+        flash('Código de acceso inválido', 'danger')
+        return redirect(url_for('index'))
+
 @app.route('/admin')
 def admin_login():
     """Punto de entrada para el Rol Administrador."""
     # Si ya está logueado como admin, redirige al área admin
     if session.get('rol') == 'Administrador':
         return redirect(url_for('admin_area'))
-    
+
     # Si no, es un usuario nuevo → prepara rol temporal
     session['rol_temporal'] = 'Administrador'
     return render_template('1_index.html')

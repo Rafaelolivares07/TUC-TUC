@@ -9059,7 +9059,8 @@ def buscar_o_crear_tercero():
 
     db = get_db_connection()
     # Buscar tercero existente (insensible a mayúsculas/minúsculas)
-    tercero = db.execute("SELECT id FROM terceros WHERE nombre = ? COLLATE NOCASE", (nombre,)).fetchone()
+    # PostgreSQL: usar LOWER() en lugar de COLLATE NOCASE
+    tercero = db.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(?)", (nombre,)).fetchone()
     if tercero:
         # Actualizar fecha_actualizacion al usarlo
         db.execute(
@@ -9755,34 +9756,49 @@ def buscar_terceros():
 
 
 @app.route('/admin/terceros/ultimos', methods=['GET'])
+@admin_required
 def ultimos_terceros():
     """Obtiene los últimos N terceros usados ordenados por fecha de actualización"""
-    limit = request.args.get('limit', 4, type=int)
+    try:
+        limit = request.args.get('limit', 4, type=int)
 
-    db = get_db_connection()
-    terceros = db.execute("""
-        SELECT id, nombre, telefono, direccion, url_busqueda_base
-        FROM terceros
-        ORDER BY fecha_actualizacion DESC
-        LIMIT ?
-    """, (limit,)).fetchall()
-    db.close()
+        db = get_db_connection()
+        terceros = db.execute("""
+            SELECT id, nombre, telefono, direccion, url_busqueda_base
+            FROM terceros
+            ORDER BY fecha_actualizacion DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        db.close()
 
-    return jsonify({'terceros': [dict(t) for t in terceros]})
+        return jsonify({'terceros': [dict(t) for t in terceros]})
+    except Exception as e:
+        print(f"❌ Error en /admin/terceros/ultimos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'terceros': []}), 500
 
 
 @app.route('/admin/terceros/todos', methods=['GET'])
+@admin_required
 def todos_terceros():
     """Obtiene todos los terceros con sus URLs de búsqueda"""
-    db = get_db_connection()
-    terceros = db.execute("""
-        SELECT id, nombre, telefono, direccion, url_busqueda_base
-        FROM terceros
-        ORDER BY nombre COLLATE NOCASE ASC
-    """).fetchall()
-    db.close()
+    try:
+        db = get_db_connection()
+        # PostgreSQL usa LOWER() en lugar de COLLATE NOCASE
+        terceros = db.execute("""
+            SELECT id, nombre, telefono, direccion, url_busqueda_base
+            FROM terceros
+            ORDER BY LOWER(nombre) ASC
+        """).fetchall()
+        db.close()
 
-    return jsonify({'terceros': [dict(t) for t in terceros]})
+        return jsonify({'terceros': [dict(t) for t in terceros]})
+    except Exception as e:
+        print(f"❌ Error en /admin/terceros/todos: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'terceros': []}), 500
 
 
 @app.route('/admin/precio-competencia/editar', methods=['POST'])
@@ -10153,7 +10169,8 @@ def api_pastillero():
         
         # Determinar ORDER BY según el parámetro
         if orden == 'alfabetico':
-            order_by = 'ORDER BY p.nombre COLLATE NOCASE ASC'
+            # PostgreSQL: usar LOWER() en lugar de COLLATE NOCASE
+            order_by = 'ORDER BY LOWER(p.nombre) ASC'
         else:  # recientes (por defecto)
             order_by = 'ORDER BY p.fecha_actualizado DESC'
         

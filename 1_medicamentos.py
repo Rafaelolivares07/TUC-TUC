@@ -8685,6 +8685,50 @@ def actualizar_estado_pedido(conn, pedido_id):
 # --- FIN RUTAS PARA COMPRAS A PROVEEDORES ---
 
 
+@app.route('/api/run-migration-now')
+@admin_required
+def run_migration_endpoint():
+    """Endpoint temporal para ejecutar migraciones manualmente"""
+    try:
+        import psycopg2
+        database_url = os.environ.get('DATABASE_URL')
+
+        if not database_url:
+            return "ERROR: DATABASE_URL no configurada", 500
+
+        conn = psycopg2.connect(database_url)
+        cur = conn.cursor()
+
+        mensajes = []
+        mensajes.append("Ejecutando migraciones...")
+
+        # Migración 1
+        cur.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+        mensajes.append("✓ existencias.costo_unitario")
+
+        # Migración 2
+        cur.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+        mensajes.append("✓ precios.costo_unitario")
+
+        # Migración 3
+        cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE")
+        mensajes.append("✓ precios_competencia.activo")
+
+        # Migración 4
+        cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
+        mensajes.append("✓ precios_competencia.inactivo_hasta")
+
+        conn.commit()
+        conn.close()
+
+        mensajes.append("<br><strong>MIGRACIONES COMPLETADAS EXITOSAMENTE</strong>")
+        return "<br>".join(mensajes)
+
+    except Exception as e:
+        import traceback
+        return f"ERROR: {str(e)}<br><pre>{traceback.format_exc()}</pre>", 500
+
+
 @app.route('/api/existencias/browse')
 @admin_required
 def browse_existencias():

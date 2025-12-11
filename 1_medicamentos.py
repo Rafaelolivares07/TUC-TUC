@@ -40,27 +40,8 @@ ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = app.config.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
 
-# Ejecutar migración automática al iniciar
-def run_migration():
-    try:
-        database_url = os.environ.get('DATABASE_URL')
-        if database_url:
-            import psycopg2
-            conn = psycopg2.connect(database_url)
-            cur = conn.cursor()
-            cur.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
-            cur.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
-            cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE")
-            cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
-            conn.commit()
-            conn.close()
-            print("✓ Migraciones completadas")
-    except Exception as e:
-        print(f"⚠ Error en migración: {e}")
-        import traceback
-        traceback.print_exc()
-
-run_migration()
+# La migración automática se ejecutará manualmente vía endpoint /api/run-migration-now
+# porque necesita que get_db_connection() esté definida primero
 
 
 
@@ -8690,32 +8671,24 @@ def actualizar_estado_pedido(conn, pedido_id):
 def run_migration_endpoint():
     """Endpoint temporal para ejecutar migraciones manualmente"""
     try:
-        import psycopg2
-        database_url = os.environ.get('DATABASE_URL')
-
-        if not database_url:
-            return "ERROR: DATABASE_URL no configurada", 500
-
-        conn = psycopg2.connect(database_url)
-        cur = conn.cursor()
-
+        conn = get_db_connection()
         mensajes = []
         mensajes.append("Ejecutando migraciones...")
 
         # Migración 1
-        cur.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+        conn.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
         mensajes.append("✓ existencias.costo_unitario")
 
         # Migración 2
-        cur.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+        conn.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
         mensajes.append("✓ precios.costo_unitario")
 
         # Migración 3
-        cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE")
+        conn.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE")
         mensajes.append("✓ precios_competencia.activo")
 
         # Migración 4
-        cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
+        conn.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
         mensajes.append("✓ precios_competencia.inactivo_hasta")
 
         conn.commit()

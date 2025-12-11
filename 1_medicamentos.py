@@ -680,10 +680,14 @@ def procesar_pedido():
         # 1. Crear TERCERO (cliente)
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
         print("🔢 Obteniendo siguiente ID para terceros...")
-        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
+        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM terceros")
         result = cursor_seq.fetchone()
         print(f"🔢 Resultado de MAX query: {result}")
-        next_tercero_id = result[0] if result else 1
+        # Manejar RealDictRow (diccionario) o tupla
+        if isinstance(result, dict):
+            next_tercero_id = result.get('next_id', 1)
+        else:
+            next_tercero_id = result[0] if result else 1
         print(f"🔢 Próximo tercero_id: {next_tercero_id}")
 
         print(f"➕ Insertando tercero con ID {next_tercero_id}...")
@@ -702,10 +706,14 @@ def procesar_pedido():
         # 3. Crear PEDIDO
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
         print("🔢 Obteniendo siguiente ID para pedidos...")
-        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
+        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM pedidos")
         result = cursor_seq.fetchone()
         print(f"🔢 Resultado de MAX query pedidos: {result}")
-        next_pedido_id = result[0] if result else 1
+        # Manejar RealDictRow (diccionario) o tupla
+        if isinstance(result, dict):
+            next_pedido_id = result.get('next_id', 1)
+        else:
+            next_pedido_id = result[0] if result else 1
         print(f"🔢 Próximo pedido_id: {next_pedido_id}")
 
         print(f"➕ Insertando pedido con ID {next_pedido_id}...")

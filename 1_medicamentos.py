@@ -8466,40 +8466,71 @@ def registrar_compra():
             cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
             next_existencia_id = cursor_seq.fetchone()[0]
 
+            # Insertar entrada con costo_unitario
             conn.execute("""
                 INSERT INTO existencias
-                (id, medicamento_id, fabricante_id, tipo_movimiento, cantidad, fecha, id_tercero, numero_documento, pedido_id)
-                VALUES (?, ?, ?, 'entrada', ?, datetime('now'), ?, ?, NULL)
+                (id, medicamento_id, fabricante_id, tipo_movimiento, cantidad, fecha, id_tercero, numero_documento, pedido_id, costo_unitario)
+                VALUES (?, ?, ?, 'entrada', ?, CURRENT_TIMESTAMP, ?, ?, NULL, ?)
             """, [
                 next_existencia_id,
                 item[1],  # medicamento_id
                 item[2],  # fabricante_id
                 item[3],  # cantidad
                 drogueria_id,
-                numero_documento
+                numero_documento,
+                precio_compra
             ])
 
-            # Actualizar precio en precios_competencia si hay precio de compra
+            # Actualizar stock y costo_unitario en tabla precios con promedio ponderado
             if precio_compra > 0:
-                # Verificar si ya existe el precio
+                # Obtener stock y costo actual
+                precio_actual = conn.execute("""
+                    SELECT stock_fabricante, costo_unitario
+                    FROM precios
+                    WHERE medicamento_id = ? AND fabricante_id = ?
+                """, [item[1], item[2]]).fetchone()
+
+                if precio_actual:
+                    stock_actual = precio_actual[0] or 0
+                    costo_actual = precio_actual[1] or 0
+
+                    # Calcular promedio ponderado
+                    costo_total_anterior = stock_actual * costo_actual
+                    costo_entrada = item[3] * precio_compra
+                    nuevo_costo_total = costo_total_anterior + costo_entrada
+                    nueva_cantidad = stock_actual + item[3]
+                    nuevo_costo_unitario = nuevo_costo_total / nueva_cantidad if nueva_cantidad > 0 else precio_compra
+
+                    # Actualizar stock y costo en precios
+                    conn.execute("""
+                        UPDATE precios
+                        SET stock_fabricante = ?, costo_unitario = ?
+                        WHERE medicamento_id = ? AND fabricante_id = ?
+                    """, [nueva_cantidad, nuevo_costo_unitario, item[1], item[2]])
+                else:
+                    # Si no existe en precios, insertar
+                    conn.execute("""
+                        INSERT INTO precios (medicamento_id, fabricante_id, stock_fabricante, costo_unitario, precio)
+                        VALUES (?, ?, ?, ?, 0)
+                    """, [item[1], item[2], item[3], precio_compra])
+
+                # Actualizar precio en precios_competencia
                 existe = conn.execute("""
                     SELECT id FROM precios_competencia
                     WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
                 """, [item[1], item[2], drogueria_id]).fetchone()
 
                 if existe:
-                    # UPDATE si existe
                     conn.execute("""
                         UPDATE precios_competencia
-                        SET precio = ?, fecha_actualizacion = datetime('now')
+                        SET precio = ?, fecha_actualizacion = CURRENT_TIMESTAMP
                         WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
                     """, [precio_compra, item[1], item[2], drogueria_id])
                 else:
-                    # INSERT si no existe
                     conn.execute("""
                         INSERT INTO precios_competencia
                         (medicamento_id, fabricante_id, competidor_id, precio, fecha_actualizacion)
-                        VALUES (?, ?, ?, ?, datetime('now'))
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """, [item[1], item[2], drogueria_id, precio_compra])
 
         # 3. Actualizar SALIDAS a estado 'comprado'
@@ -8560,7 +8591,7 @@ def browse_existencias():
         conn = get_db_connection()
         cursor = conn.execute("""
             SELECT e.id, e.medicamento_id, m.nombre, e.fabricante_id, e.tipo_movimiento,
-                   e.cantidad, e.fecha, e.id_tercero, e.pedido_id, e.estado, e.numero_documento
+                   e.cantidad, e.fecha, e.id_tercero, e.pedido_id, e.estado, e.numero_documento, e.costo_unitario
             FROM existencias e
             LEFT JOIN medicamentos m ON e.medicamento_id = m.id
             ORDER BY e.id DESC
@@ -8571,9 +8602,9 @@ def browse_existencias():
         total = total_cursor.fetchone()[0]
         conn.close()
 
-        html = '<table border="1"><tr><th>ID</th><th>Med ID</th><th>Medicamento</th><th>Fab ID</th><th>Tipo</th><th>Cant</th><th>Fecha</th><th>Tercero</th><th>Pedido</th><th>Estado</th><th>Doc</th></tr>'
+        html = '<table border="1"><tr><th>ID</th><th>Med ID</th><th>Medicamento</th><th>Fab ID</th><th>Tipo</th><th>Cant</th><th>Fecha</th><th>Tercero</th><th>Pedido</th><th>Estado</th><th>Doc</th><th>Costo Unit</th></tr>'
         for row in rows:
-            html += f'<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td><td>{row[5]}</td><td>{row[6]}</td><td>{row[7]}</td><td>{row[8]}</td><td>{row[9]}</td><td>{row[10]}</td></tr>'
+            html += f'<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td><td>{row[5]}</td><td>{row[6]}</td><td>{row[7]}</td><td>{row[8]}</td><td>{row[9]}</td><td>{row[10]}</td><td>{row[11]}</td></tr>'
         html += f'</table><p>Total: {total}</p>'
         return html
     except Exception as e:

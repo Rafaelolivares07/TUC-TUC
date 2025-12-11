@@ -701,9 +701,14 @@ def procesar_pedido():
         
         # 3. Crear PEDIDO
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
+        print("🔢 Obteniendo siguiente ID para pedidos...")
         cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
-        next_pedido_id = cursor_seq.fetchone()[0]
+        result = cursor_seq.fetchone()
+        print(f"🔢 Resultado de MAX query pedidos: {result}")
+        next_pedido_id = result[0] if result else 1
+        print(f"🔢 Próximo pedido_id: {next_pedido_id}")
 
+        print(f"➕ Insertando pedido con ID {next_pedido_id}...")
         cursor = conn.execute("""
             INSERT INTO pedidos (
                 id, id_tercero, fecha, total, metodo_pago, costo_domicilio,
@@ -712,6 +717,7 @@ def procesar_pedido():
             ) VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
         """, (next_pedido_id, tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
         pedido_id = next_pedido_id
+        print(f"✅ Pedido creado con ID: {pedido_id}")
         
         # 4. Crear EXISTENCIAS (salidas) para cada item
         for item in items:

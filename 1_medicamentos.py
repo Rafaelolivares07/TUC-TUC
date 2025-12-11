@@ -8297,6 +8297,7 @@ def obtener_lista_compras():
     Obtiene la lista de productos pendientes agrupados por droguería
     """
     try:
+        print("🔍 DEBUG: Iniciando obtener_lista_compras")
         conn = get_db_connection()
 
         # 1. Obtener todos los productos pendientes con sus cantidades AGRUPADAS
@@ -8319,7 +8320,9 @@ def obtener_lista_compras():
             GROUP BY m.id, m.nombre, e.fabricante_id, f.nombre
         """
 
+        print("🔍 DEBUG: Ejecutando query productos pendientes")
         productos_pendientes = conn.execute(query_productos).fetchall()
+        print(f"🔍 DEBUG: Encontrados {len(productos_pendientes)} productos pendientes")
 
         # 2. Para cada producto, encontrar el MEJOR precio (más bajo) de todos los proveedores
         proveedores = {}
@@ -8394,13 +8397,17 @@ def obtener_lista_compras():
 
         conn.close()
 
+        print(f"🔍 DEBUG: Proveedores: {len(proveedores)}, Sin precios: {len(sin_precios)}")
         return jsonify({
             'success': True,
             'proveedores': list(proveedores.values()),
             'sin_precios': sin_precios
         })
-        
+
     except Exception as e:
+        print(f"❌ ERROR en obtener_lista_compras: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

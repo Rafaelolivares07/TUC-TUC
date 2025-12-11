@@ -8311,8 +8311,8 @@ def obtener_lista_compras():
                 STRING_AGG(CAST(e.id AS TEXT), ',') as existencias_ids
             FROM existencias e
             INNER JOIN pedidos p ON e.pedido_id = p.id
-            INNER JOIN "MEDICAMENTOS" m ON e.medicamento_id = m.id
-            LEFT JOIN "FABRICANTES" f ON e.fabricante_id = f.id
+            INNER JOIN medicamentos m ON e.medicamento_id = m.id
+            LEFT JOIN fabricantes f ON e.fabricante_id = f.id
             WHERE
                 e.tipo_movimiento = 'salida'
                 AND (e.estado = 'pendiente' OR e.estado IS NULL)

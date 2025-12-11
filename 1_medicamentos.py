@@ -8481,21 +8481,26 @@ def registrar_compra():
 
             # Actualizar precio en precios_competencia si hay precio de compra
             if precio_compra > 0:
-                # PostgreSQL: INSERT ... ON CONFLICT DO UPDATE en vez de INSERT OR REPLACE
-                conn.execute("""
-                    INSERT INTO precios_competencia
-                    (medicamento_id, fabricante_id, competidor_id, precio, fecha_actualizacion)
-                    VALUES (?, ?, ?, ?, datetime('now'))
-                    ON CONFLICT (medicamento_id, fabricante_id, competidor_id)
-                    DO UPDATE SET
-                        precio = EXCLUDED.precio,
-                        fecha_actualizacion = EXCLUDED.fecha_actualizacion
-                """, [
-                    item[1],  # medicamento_id
-                    item[2],  # fabricante_id
-                    drogueria_id,
-                    precio_compra
-                ])
+                # Verificar si ya existe el precio
+                existe = conn.execute("""
+                    SELECT id FROM precios_competencia
+                    WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
+                """, [item[1], item[2], drogueria_id]).fetchone()
+
+                if existe:
+                    # UPDATE si existe
+                    conn.execute("""
+                        UPDATE precios_competencia
+                        SET precio = ?, fecha_actualizacion = datetime('now')
+                        WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
+                    """, [precio_compra, item[1], item[2], drogueria_id])
+                else:
+                    # INSERT si no existe
+                    conn.execute("""
+                        INSERT INTO precios_competencia
+                        (medicamento_id, fabricante_id, competidor_id, precio, fecha_actualizacion)
+                        VALUES (?, ?, ?, ?, datetime('now'))
+                    """, [item[1], item[2], drogueria_id, precio_compra])
 
         # 3. Actualizar SALIDAS a estado 'comprado'
         placeholders_update = ','.join(['%s'] * len(existencias_ids))

@@ -8352,7 +8352,7 @@ def obtener_lista_compras():
             medicamento_id = producto[0]  # medicamento_id
             fabricante_id = producto[2]   # fabricante_id
 
-            # Buscar el mejor precio para este producto
+            # Buscar el mejor precio para este producto (solo cotizaciones activas)
             query_mejor_precio = """
                 SELECT
                     t.id as drogueria_id,
@@ -8362,6 +8362,8 @@ def obtener_lista_compras():
                 FROM precios_competencia pc
                 INNER JOIN terceros t ON pc.competidor_id = t.id
                 WHERE pc.medicamento_id = ? AND pc.fabricante_id = ?
+                  AND pc.activo = TRUE
+                  AND (pc.inactivo_hasta IS NULL OR pc.inactivo_hasta < CURRENT_TIMESTAMP)
                 ORDER BY pc.precio ASC
                 LIMIT 1
             """
@@ -8426,6 +8428,81 @@ def obtener_lista_compras():
 
     except Exception as e:
         print(f"❌ ERROR en obtener_lista_compras: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/compras/gestionar_cotizacion', methods=['POST'])
+@admin_required
+def gestionar_cotizacion():
+    """
+    Gestiona la cotización cuando un proveedor no tiene el producto
+    Opciones: inactivar temporalmente, eliminar, o buscar siguiente proveedor
+    """
+    try:
+        data = request.json
+        medicamento_id = data.get('medicamento_id')
+        fabricante_id = data.get('fabricante_id')
+        proveedor_actual_id = data.get('proveedor_id')
+        accion = data.get('accion')  # 'temporal', 'eliminar', 'ninguna'
+        dias_inactivo = data.get('dias_inactivo', 0)  # 1, 7, 30
+
+        conn = get_db_connection()
+
+        # Aplicar acción según lo elegido
+        if accion == 'temporal':
+            # Inactivar temporalmente
+            conn.execute("""
+                UPDATE precios_competencia
+                SET inactivo_hasta = CURRENT_TIMESTAMP + INTERVAL '%s days'
+                WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
+            """ % dias_inactivo, [medicamento_id, fabricante_id, proveedor_actual_id])
+
+        elif accion == 'eliminar':
+            # Eliminar cotización permanentemente
+            conn.execute("""
+                DELETE FROM precios_competencia
+                WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
+            """, [medicamento_id, fabricante_id, proveedor_actual_id])
+
+        # Buscar siguiente mejor proveedor (solo si la acción fue temporal o eliminar)
+        siguiente_proveedor = None
+        if accion in ['temporal', 'eliminar']:
+            query_siguiente = """
+                SELECT
+                    t.id as drogueria_id,
+                    t.nombre as drogueria,
+                    pc.precio as precio_unitario
+                FROM precios_competencia pc
+                INNER JOIN terceros t ON pc.competidor_id = t.id
+                WHERE pc.medicamento_id = ? AND pc.fabricante_id = ?
+                  AND pc.activo = TRUE
+                  AND (pc.inactivo_hasta IS NULL OR pc.inactivo_hasta < CURRENT_TIMESTAMP)
+                  AND pc.competidor_id != ?
+                ORDER BY pc.precio ASC
+                LIMIT 1
+            """
+            resultado = conn.execute(query_siguiente, [medicamento_id, fabricante_id, proveedor_actual_id]).fetchone()
+
+            if resultado:
+                siguiente_proveedor = {
+                    'id': resultado[0],
+                    'nombre': resultado[1],
+                    'precio': resultado[2]
+                }
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'siguiente_proveedor': siguiente_proveedor,
+            'mensaje': 'Cotización actualizada'
+        })
+
+    except Exception as e:
+        print(f"❌ ERROR en gestionar_cotizacion: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500

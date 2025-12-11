@@ -466,6 +466,57 @@
         </div>
     </div>
 
+    <!-- Modal Gestión de Cotización -->
+    <div class="modal" id="modalGestion" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>¿Por qué desmarcas este producto?</h2>
+            </div>
+            <div class="modal-body">
+                <div style="background: #f0f0f0; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; text-align: center;">
+                    <strong id="modalGestionNombreProducto" style="font-size: 1.1rem; color: #667eea;"></strong>
+                </div>
+
+                <!-- Opción A: Lo recogeré después -->
+                <button onclick="aplicarOpcionGestion('recoger_despues')"
+                        style="width: 100%; padding: 1rem; margin-bottom: 1rem; background: #17a2b8; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; text-align: left;">
+                    <div style="font-weight: bold; margin-bottom: 0.25rem;">A) Lo recogeré después</div>
+                    <div style="font-size: 0.85rem; opacity: 0.9;">Está en otra sede o lo recogeré en otro momento</div>
+                </button>
+
+                <!-- Opción B: No lo tiene temporalmente -->
+                <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <div style="font-weight: bold; margin-bottom: 0.5rem; color: #856404;">B) No lo tiene temporalmente</div>
+                    <div style="font-size: 0.85rem; color: #856404; margin-bottom: 0.75rem;">¿Por cuánto tiempo?</div>
+                    <select id="selectDiasInactivo"
+                            style="width: 100%; padding: 0.75rem; border: 2px solid #ffc107; border-radius: 5px; margin-bottom: 0.75rem; font-size: 1rem;">
+                        <option value="">Selecciona...</option>
+                        <option value="1">1 día</option>
+                        <option value="7">1 semana</option>
+                        <option value="30">1 mes</option>
+                    </select>
+                    <button onclick="aplicarOpcionGestion('temporal')"
+                            style="width: 100%; padding: 0.75rem; background: #ffc107; color: #333; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        Aplicar
+                    </button>
+                </div>
+
+                <!-- Opción C: Ya no vende este producto -->
+                <button onclick="aplicarOpcionGestion('eliminar')"
+                        style="width: 100%; padding: 1rem; margin-bottom: 1rem; background: #dc3545; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; text-align: left;">
+                    <div style="font-weight: bold; margin-bottom: 0.25rem;">C) Ya no vende este producto</div>
+                    <div style="font-size: 0.85rem; opacity: 0.9;">Eliminar esta cotización permanentemente</div>
+                </button>
+
+                <!-- Opción D: Cancelar -->
+                <button onclick="aplicarOpcionGestion('cancelar')"
+                        style="width: 100%; padding: 1rem; background: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold;">
+                    D) Cancelar (volver a marcar)
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let pedidos = [];
         
@@ -819,9 +870,13 @@ function mostrarModal(pedido, productos) {
                             <td style="padding: 0.75rem;">
                                 <input type="checkbox"
                                     class="check-producto"
+                                    id="check_${proveedor.id}_${idx}"
                                     data-proveedor="${proveedor.id}"
                                     data-existencias="${prod.existencias_ids}"
-                                    onchange="recalcularTotalesProveedor(${proveedor.id})"
+                                    data-medicamento-id="${prod.medicamento_id}"
+                                    data-fabricante-id="${prod.fabricante_id}"
+                                    data-medicamento-nombre="${prod.medicamento}"
+                                    onchange="manejarCambioCheckbox(${proveedor.id}, ${idx}, '${prod.medicamento.replace(/'/g, "\\'")}')"
                                     checked>
                             </td>
                             <td style="padding: 0.75rem;">
@@ -1017,6 +1072,100 @@ function mostrarModal(pedido, productos) {
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error al registrar la compra');
+            }
+        }
+
+        // Variables globales para el modal de gestión
+        let checkboxActual = null;
+        let proveedorIdActual = null;
+        let productoIdxActual = null;
+
+        function manejarCambioCheckbox(proveedorId, idx, nombreProducto) {
+            const checkbox = document.getElementById(`check_${proveedorId}_${idx}`);
+
+            // Si se desmarcó, mostrar modal de opciones
+            if (!checkbox.checked) {
+                checkboxActual = checkbox;
+                proveedorIdActual = proveedorId;
+                productoIdxActual = idx;
+
+                document.getElementById('modalGestionNombreProducto').textContent = nombreProducto;
+                document.getElementById('modalGestion').style.display = 'flex';
+            } else {
+                // Si se marcó, recalcular normalmente
+                recalcularTotalesProveedor(proveedorId);
+            }
+        }
+
+        function cerrarModalGestion() {
+            document.getElementById('modalGestion').style.display = 'none';
+            checkboxActual = null;
+        }
+
+        function aplicarOpcionGestion(opcion) {
+            if (!checkboxActual) return;
+
+            if (opcion === 'recoger_despues') {
+                // Opción A: Solo recalcular totales, mantener desmarcado
+                recalcularTotalesProveedor(proveedorIdActual);
+                cerrarModalGestion();
+
+            } else if (opcion === 'temporal') {
+                // Opción B: Inactivar temporalmente
+                const dias = document.getElementById('selectDiasInactivo').value;
+                if (!dias) {
+                    alert('Selecciona por cuánto tiempo no lo tendrá');
+                    return;
+                }
+                gestionarCotizacionYReasignar('temporal', parseInt(dias));
+
+            } else if (opcion === 'eliminar') {
+                // Opción C: Eliminar cotización permanentemente
+                if (confirm('¿Estás seguro? Esta acción eliminará la cotización de este proveedor')) {
+                    gestionarCotizacionYReasignar('eliminar', 0);
+                }
+
+            } else if (opcion === 'cancelar') {
+                // Opción D: Cancelar - volver a marcar
+                checkboxActual.checked = true;
+                recalcularTotalesProveedor(proveedorIdActual);
+                cerrarModalGestion();
+            }
+        }
+
+        async function gestionarCotizacionYReasignar(accion, dias) {
+            const medicamentoId = checkboxActual.dataset.medicamentoId;
+            const fabricanteId = checkboxActual.dataset.fabricanteId;
+            const existenciasIds = checkboxActual.dataset.existencias;
+
+            try {
+                const response = await fetch('/api/compras/gestionar_cotizacion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        medicamento_id: medicamentoId,
+                        fabricante_id: fabricanteId,
+                        proveedor_id: proveedorIdActual,
+                        accion: accion,
+                        dias_inactivo: dias
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    cerrarModalGestion();
+
+                    // Recargar la lista completa para ver los cambios
+                    alert('Producto reasignado. Recargando lista...');
+                    await cargarListaCompras();
+
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al procesar la solicitud');
             }
         }
 

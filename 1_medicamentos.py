@@ -357,12 +357,12 @@ def enviar_notificacion_telegram(mensaje):
         config = conn.execute('SELECT telegram_token, telegram_chat_id, notificaciones_activas FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
         conn.close()
 
-        if not config or not config['notificaciones_activas']:
+        if not config or not config[2]:  # notificaciones_activas es el índice 2
             print("⚠️ Notificaciones Telegram desactivadas")
             return False
 
-        token = config['telegram_token']
-        chat_id = config['telegram_chat_id']
+        token = config[0]  # telegram_token
+        chat_id = config[1]  # telegram_chat_id
 
         if not token or not chat_id:
             print("⚠️ Token o Chat ID de Telegram no configurado")

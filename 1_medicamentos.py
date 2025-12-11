@@ -8559,10 +8559,11 @@ def browse_existencias():
     try:
         conn = get_db_connection()
         cursor = conn.execute("""
-            SELECT id, medicamento_id, fabricante_id, tipo_movimiento,
-                   cantidad, fecha, id_tercero, pedido_id, estado, numero_documento
-            FROM existencias
-            ORDER BY id DESC
+            SELECT e.id, e.medicamento_id, m.nombre, e.fabricante_id, e.tipo_movimiento,
+                   e.cantidad, e.fecha, e.id_tercero, e.pedido_id, e.estado, e.numero_documento
+            FROM existencias e
+            LEFT JOIN medicamentos m ON e.medicamento_id = m.id
+            ORDER BY e.id DESC
             LIMIT 50
         """)
         rows = cursor.fetchall()
@@ -8570,9 +8571,9 @@ def browse_existencias():
         total = total_cursor.fetchone()[0]
         conn.close()
 
-        html = '<table border="1"><tr><th>ID</th><th>Medicamento ID</th><th>Fabricante ID</th><th>Tipo Movimiento</th><th>Cantidad</th><th>Fecha</th><th>Tercero ID</th><th>Pedido ID</th><th>Estado</th><th>Num Documento</th></tr>'
+        html = '<table border="1"><tr><th>ID</th><th>Med ID</th><th>Medicamento</th><th>Fab ID</th><th>Tipo</th><th>Cant</th><th>Fecha</th><th>Tercero</th><th>Pedido</th><th>Estado</th><th>Doc</th></tr>'
         for row in rows:
-            html += f'<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td><td>{row[5]}</td><td>{row[6]}</td><td>{row[7]}</td><td>{row[8]}</td><td>{row[9]}</td></tr>'
+            html += f'<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td><td>{row[5]}</td><td>{row[6]}</td><td>{row[7]}</td><td>{row[8]}</td><td>{row[9]}</td><td>{row[10]}</td></tr>'
         html += f'</table><p>Total: {total}</p>'
         return html
     except Exception as e:

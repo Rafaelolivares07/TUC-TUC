@@ -39,6 +39,23 @@ ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = app.config.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
 
+# Ejecutar migración automática al iniciar
+def run_migration():
+    try:
+        database_url = os.environ.get('DATABASE_URL')
+        if database_url:
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor()
+            cur.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+            cur.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+            conn.commit()
+            conn.close()
+            print("✓ Migración costo_unitario completada")
+    except Exception as e:
+        print(f"⚠ Error en migración: {e}")
+
+run_migration()
+
 
 
 def calcular_precio_segun_politica(medicamento_id, fabricante_id, conn):

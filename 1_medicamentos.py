@@ -8316,7 +8316,7 @@ def obtener_lista_compras():
                 e.tipo_movimiento = 'salida'
                 AND (e.estado = 'pendiente' OR e.estado IS NULL)
                 AND p.estado = 'pendiente'
-            GROUP BY m.id, e.fabricante_id
+            GROUP BY m.id, m.nombre, e.fabricante_id, f.nombre
         """
 
         productos_pendientes = conn.execute(query_productos).fetchall()
@@ -8437,7 +8437,7 @@ def registrar_compra():
                 precios_map[prod] = 0
 
         # 1. Obtener información de los productos a comprar
-        placeholders = ','.join('?' * len(existencias_ids))
+        placeholders = ','.join(['%s'] * len(existencias_ids))
         query = f"""
             SELECT
                 e.id,
@@ -8453,16 +8453,21 @@ def registrar_compra():
 
         # 2. Crear ENTRADAS en inventario (compras al proveedor)
         for item in existencias:
-            precio_compra = precios_map.get(item['id'], 0)
+            precio_compra = precios_map.get(item[0], 0)  # item[0] es id
+
+            # Obtener siguiente ID para existencias
+            cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
+            next_existencia_id = cursor_seq.fetchone()[0]
 
             conn.execute("""
                 INSERT INTO existencias
-                (medicamento_id, fabricante_id, tipo_movimiento, cantidad, fecha, id_tercero, numero_documento, pedido_id, precio_compra)
-                VALUES (?, ?, 'entrada', ?, datetime('now'), ?, ?, NULL, ?)
+                (id, medicamento_id, fabricante_id, tipo_movimiento, cantidad, fecha, id_tercero, numero_documento, pedido_id, precio_compra)
+                VALUES (?, ?, ?, 'entrada', ?, datetime('now'), ?, ?, NULL, ?)
             """, [
-                item['medicamento_id'],
-                item['fabricante_id'],
-                item['cantidad'],
+                next_existencia_id,
+                item[1],  # medicamento_id
+                item[2],  # fabricante_id
+                item[3],  # cantidad
                 drogueria_id,
                 numero_documento,
                 precio_compra
@@ -8470,27 +8475,33 @@ def registrar_compra():
 
             # Actualizar precio en precios_competencia si hay precio de compra
             if precio_compra > 0:
+                # PostgreSQL: INSERT ... ON CONFLICT DO UPDATE en vez de INSERT OR REPLACE
                 conn.execute("""
-                    INSERT OR REPLACE INTO precios_competencia
+                    INSERT INTO precios_competencia
                     (medicamento_id, fabricante_id, competidor_id, precio, fecha_actualizacion)
                     VALUES (?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT (medicamento_id, fabricante_id, competidor_id)
+                    DO UPDATE SET
+                        precio = EXCLUDED.precio,
+                        fecha_actualizacion = EXCLUDED.fecha_actualizacion
                 """, [
-                    item['medicamento_id'],
-                    item['fabricante_id'],
+                    item[1],  # medicamento_id
+                    item[2],  # fabricante_id
                     drogueria_id,
                     precio_compra
                 ])
 
         # 3. Actualizar SALIDAS a estado 'comprado'
+        placeholders_update = ','.join(['%s'] * len(existencias_ids))
         query_actualizar = f"""
             UPDATE existencias
             SET estado = 'comprado'
-            WHERE id IN ({placeholders})
+            WHERE id IN ({placeholders_update})
         """
         conn.execute(query_actualizar, existencias_ids)
 
         # 4. Verificar y actualizar estados de pedidos
-        pedidos_afectados = list(set([item['pedido_id'] for item in existencias]))
+        pedidos_afectados = list(set([item[4] for item in existencias]))  # item[4] es pedido_id
 
         for pedido_id in pedidos_afectados:
             actualizar_estado_pedido(conn, pedido_id)
@@ -8519,12 +8530,12 @@ def actualizar_estado_pedido(conn, pedido_id):
         FROM existencias
         WHERE pedido_id = ? AND tipo_movimiento = 'salida'
     """, [pedido_id]).fetchone()
-    
-    if resultado['total'] > 0 and resultado['total'] == resultado['comprados']:
+
+    if resultado and resultado[0] > 0 and resultado[0] == resultado[1]:  # total y comprados
         # Todos los productos están comprados -> Cambiar pedido a "en_camino"
         conn.execute("""
-            UPDATE pedidos 
-            SET estado = 'en_camino' 
+            UPDATE pedidos
+            SET estado = 'en_camino'
             WHERE id = ?
         """, [pedido_id])
 

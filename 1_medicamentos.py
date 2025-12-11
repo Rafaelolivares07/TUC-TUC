@@ -256,7 +256,11 @@ class PostgreSQLConnectionWrapper:
             cursor.execute(query, params)
             result = cursor.fetchone()
             if result:
-                last_insert_id = result[0]
+                # Manejar RealDictRow (diccionario) o tupla
+                if isinstance(result, dict):
+                    last_insert_id = result.get('id')
+                else:
+                    last_insert_id = result[0]
         else:
             cursor.execute(query, params)
 

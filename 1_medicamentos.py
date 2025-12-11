@@ -256,11 +256,7 @@ class PostgreSQLConnectionWrapper:
             cursor.execute(query, params)
             result = cursor.fetchone()
             if result:
-                # Manejar RealDictRow (diccionario) o tupla
-                if isinstance(result, dict):
-                    last_insert_id = result.get('id')
-                else:
-                    last_insert_id = result[0]
+                last_insert_id = result[0]
         else:
             cursor.execute(query, params)
 
@@ -298,9 +294,8 @@ def get_db_connection():
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
 
         import psycopg2
-        import psycopg2.extras
-        # Usar RealDictCursor para que los resultados sean diccionarios (como SQLite Row)
-        pg_conn = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.RealDictCursor)
+        # Conectar sin RealDictCursor para compatibilidad con el wrapper
+        pg_conn = psycopg2.connect(database_url)
         # Envolver la conexión para que funcione como SQLite
         return PostgreSQLConnectionWrapper(pg_conn)
     else:
@@ -683,16 +678,8 @@ def procesar_pedido():
 
         # 1. Crear TERCERO (cliente)
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
-        print("🔢 Obteniendo siguiente ID para terceros...")
-        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM terceros")
-        result = cursor_seq.fetchone()
-        print(f"🔢 Resultado de MAX query: {result}")
-        # Manejar RealDictRow (diccionario) o tupla
-        if isinstance(result, dict):
-            next_tercero_id = result.get('next_id', 1)
-        else:
-            next_tercero_id = result[0] if result else 1
-        print(f"🔢 Próximo tercero_id: {next_tercero_id}")
+        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
+        next_tercero_id = cursor_seq.fetchone()[0]
 
         print(f"➕ Insertando tercero con ID {next_tercero_id}...")
         cursor = conn.execute("""
@@ -709,16 +696,8 @@ def procesar_pedido():
         
         # 3. Crear PEDIDO
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
-        print("🔢 Obteniendo siguiente ID para pedidos...")
-        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM pedidos")
-        result = cursor_seq.fetchone()
-        print(f"🔢 Resultado de MAX query pedidos: {result}")
-        # Manejar RealDictRow (diccionario) o tupla
-        if isinstance(result, dict):
-            next_pedido_id = result.get('next_id', 1)
-        else:
-            next_pedido_id = result[0] if result else 1
-        print(f"🔢 Próximo pedido_id: {next_pedido_id}")
+        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
+        next_pedido_id = cursor_seq.fetchone()[0]
 
         print(f"➕ Insertando pedido con ID {next_pedido_id}...")
         cursor = conn.execute("""

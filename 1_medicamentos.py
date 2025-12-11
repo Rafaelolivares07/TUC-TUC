@@ -2,6 +2,7 @@ from flask import Flask, request, redirect, url_for,send_from_directory, jsonify
 import sqlalchemy
 import pandas
 import sqlite3
+import psycopg2
 import uuid
 import json
 import os

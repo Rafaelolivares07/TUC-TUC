@@ -45,6 +45,7 @@ def run_migration():
     try:
         database_url = os.environ.get('DATABASE_URL')
         if database_url:
+            import psycopg2
             conn = psycopg2.connect(database_url)
             cur = conn.cursor()
             cur.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
@@ -56,6 +57,8 @@ def run_migration():
             print("✓ Migraciones completadas")
     except Exception as e:
         print(f"⚠ Error en migración: {e}")
+        import traceback
+        traceback.print_exc()
 
 run_migration()
 

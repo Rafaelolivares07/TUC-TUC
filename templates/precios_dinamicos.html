@@ -1018,14 +1018,39 @@
                 const urlDisplay = c.url
                     ? `<a href="javascript:void(0)" onclick="abrirURLCotizacion('${urlEscapada}')" title="Ver cotización" style="margin-left: 8px; color: #667eea; text-decoration: none; font-size: 1.1em; cursor: pointer;">🔗</a>`
                     : '';
+
+                // Verificar si está inactiva
+                const ahora = new Date();
+                const inactivaHasta = c.inactivo_hasta ? new Date(c.inactivo_hasta) : null;
+                const estaInactiva = !c.activo || (inactivaHasta && inactivaHasta > ahora);
+
+                // Estilo para filas inactivas
+                const estiloFila = estaInactiva ? 'background: #f5f5f5; opacity: 0.7;' : '';
+
+                // Badge de inactiva
+                let badgeInactiva = '';
+                if (estaInactiva && inactivaHasta) {
+                    const fechaFormateada = inactivaHasta.toLocaleDateString('es-CO', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                    });
+                    badgeInactiva = `<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; margin-left: 8px;">⏸ Inactiva hasta ${fechaFormateada}</span>`;
+                }
+
+                // Botones de acción
+                const botonesAccion = estaInactiva
+                    ? `<button class="btn-accion" onclick="reactivarCotizacion(${c.id})" title="Reactivar" style="background: #28a745; color: white;">✓ Reactivar</button>`
+                    : `<button class="btn-accion" onclick="editarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.telefono || ''}', '${c.direccion || ''}', ${c.precio}, ${c.tercero_id}, '${urlEscapada}')" title="Editar">✏️</button>
+                       <button class="btn-accion" onclick="eliminarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', event)" title="Eliminar">🗑️</button>`;
+
                 return `
-                    <tr>
-                        <td>${c.nombre}${urlDisplay}</td>
+                    <tr style="${estiloFila}">
+                        <td>${c.nombre}${urlDisplay}${badgeInactiva}</td>
                         <td style="text-align: right;">${Math.round(c.precio).toLocaleString('es-CO')}</td>
                         <td>${c.fecha_actualizacion || ''}</td>
                         <td>
-                            <button class="btn-accion" onclick="editarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.telefono || ''}', '${c.direccion || ''}', ${c.precio}, ${c.tercero_id}, '${urlEscapada}')" title="Editar">✏️</button>
-                            <button class="btn-accion" onclick="eliminarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', event)" title="Eliminar">🗑️</button>
+                            ${botonesAccion}
                         </td>
                     </tr>
                 `;
@@ -1093,6 +1118,36 @@
                 await fetchCompetencia(medId, fabId);
                 // Actualizar el listado principal
                 await actualizarListadoPrincipal(medId, fabId);
+            }
+        }
+
+        async function reactivarCotizacion(cotizacionId) {
+            if (!confirm('¿Reactivar esta cotización?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/cotizacion/reactivar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cotizacion_id: cotizacionId })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Recargar lista de cotizaciones
+                    const medId = document.getElementById('medicamento-activo').value;
+                    const fabId = document.getElementById('fabricante-activo').value;
+                    await fetchCompetencia(medId, fabId);
+                    await actualizarListadoPrincipal(medId, fabId);
+                    alert('✓ Cotización reactivada exitosamente');
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al reactivar la cotización');
             }
         }
 

@@ -9534,17 +9534,48 @@ def listar_precios_competencia():
     db = get_db_connection()
     rows = db.execute("""
         SELECT pc.id, t.nombre, pc.precio, pc.fecha_actualizacion,
-               t.id as tercero_id, t.telefono, t.direccion, pc.url
+               t.id as tercero_id, t.telefono, t.direccion, pc.url,
+               pc.activo, pc.inactivo_hasta
         FROM precios_competencia pc
         JOIN terceros t ON pc.competidor_id = t.id
         WHERE pc.medicamento_id = ? AND pc.fabricante_id = ?
-        ORDER BY pc.precio ASC
+        ORDER BY pc.activo DESC, pc.precio ASC
     """, (med_id, fab_id)).fetchall()
     db.close()
 
     return jsonify({'competencias': [dict(row) for row in rows]})
 
 
+@app.route('/api/cotizacion/reactivar', methods=['POST'])
+@admin_required
+def reactivar_cotizacion():
+    """Reactivar una cotización que estaba marcada como inactiva temporalmente"""
+    try:
+        data = request.json
+        cotizacion_id = data.get('cotizacion_id')
+
+        if not cotizacion_id:
+            return jsonify({'success': False, 'message': 'ID de cotización requerido'}), 400
+
+        conn = get_db_connection()
+
+        # Reactivar: poner inactivo_hasta = NULL y activo = TRUE
+        conn.execute("""
+            UPDATE precios_competencia
+            SET inactivo_hasta = NULL, activo = TRUE
+            WHERE id = ?
+        """, [cotizacion_id])
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True, 'message': 'Cotización reactivada'})
+
+    except Exception as e:
+        print(f"❌ ERROR en reactivar_cotizacion: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/admin/configuracion-precios/guardar', methods=['POST'])

@@ -8468,16 +8468,15 @@ def registrar_compra():
 
             conn.execute("""
                 INSERT INTO existencias
-                (id, medicamento_id, fabricante_id, tipo_movimiento, cantidad, fecha, id_tercero, numero_documento, pedido_id, precio_compra)
-                VALUES (?, ?, ?, 'entrada', ?, datetime('now'), ?, ?, NULL, ?)
+                (id, medicamento_id, fabricante_id, tipo_movimiento, cantidad, fecha, id_tercero, numero_documento, pedido_id)
+                VALUES (?, ?, ?, 'entrada', ?, datetime('now'), ?, ?, NULL)
             """, [
                 next_existencia_id,
                 item[1],  # medicamento_id
                 item[2],  # fabricante_id
                 item[3],  # cantidad
                 drogueria_id,
-                numero_documento,
-                precio_compra
+                numero_documento
             ])
 
             # Actualizar precio en precios_competencia si hay precio de compra

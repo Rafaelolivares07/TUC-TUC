@@ -676,13 +676,17 @@ def procesar_pedido():
             direccion_completa = direccion
         
         conn = get_db_connection()
-        
+
         # 1. Crear TERCERO (cliente)
+        # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
+        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
+        next_tercero_id = cursor_seq.fetchone()[0]
+
         cursor = conn.execute("""
             INSERT INTO terceros (id, nombre, telefono, direccion, latitud, longitud, fecha_creacion)
-            VALUES (DEFAULT, ?, ?, ?, ?, ?, datetime('now'))
-        """, (nombre, telefono, direccion, latitud, longitud))
-        tercero_id = cursor.lastrowid
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (next_tercero_id, nombre, telefono, direccion, latitud, longitud))
+        tercero_id = next_tercero_id
         
         # 2. Calcular totales
         subtotal = sum(item['precio'] * item['cantidad'] for item in items)
@@ -690,14 +694,18 @@ def procesar_pedido():
         total = subtotal + costo_domicilio
         
         # 3. Crear PEDIDO
+        # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
+        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
+        next_pedido_id = cursor_seq.fetchone()[0]
+
         cursor = conn.execute("""
             INSERT INTO pedidos (
                 id, id_tercero, fecha, total, metodo_pago, costo_domicilio,
                 direccion_entrega, latitud_entrega, longitud_entrega,
                 estado, tiempo_estimado_entrega
-            ) VALUES (DEFAULT, ?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
-        """, (tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
-        pedido_id = cursor.lastrowid
+            ) VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
+        """, (next_pedido_id, tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
+        pedido_id = next_pedido_id
         
         # 4. Crear EXISTENCIAS (salidas) para cada item
         for item in items:

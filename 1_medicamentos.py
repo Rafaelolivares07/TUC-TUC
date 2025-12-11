@@ -8307,11 +8307,11 @@ def obtener_lista_compras():
                 e.fabricante_id,
                 f.nombre as fabricante,
                 SUM(e.cantidad) as cantidad_total,
-                GROUP_CONCAT(e.id) as existencias_ids
+                STRING_AGG(CAST(e.id AS TEXT), ',') as existencias_ids
             FROM existencias e
             INNER JOIN pedidos p ON e.pedido_id = p.id
-            INNER JOIN medicamentos m ON e.medicamento_id = m.id
-            LEFT JOIN fabricantes f ON e.fabricante_id = f.id
+            INNER JOIN "MEDICAMENTOS" m ON e.medicamento_id = m.id
+            LEFT JOIN "FABRICANTES" f ON e.fabricante_id = f.id
             WHERE
                 e.tipo_movimiento = 'salida'
                 AND (e.estado = 'pendiente' OR e.estado IS NULL)
@@ -8326,8 +8326,8 @@ def obtener_lista_compras():
         sin_precios = []
 
         for producto in productos_pendientes:
-            medicamento_id = producto['medicamento_id']
-            fabricante_id = producto['fabricante_id']
+            medicamento_id = producto[0]  # medicamento_id
+            fabricante_id = producto[2]   # fabricante_id
 
             # Buscar el mejor precio para este producto
             query_mejor_precio = """
@@ -8347,28 +8347,28 @@ def obtener_lista_compras():
 
             if mejor_proveedor:
                 # Hay precio de competencia - asignar al proveedor con mejor precio
-                drogueria_id = mejor_proveedor['drogueria_id']
-                precio_unitario = mejor_proveedor['precio_unitario']
-                url = mejor_proveedor['url']
-                cantidad_total = producto['cantidad_total']
+                drogueria_id = mejor_proveedor[0]    # drogueria_id
+                precio_unitario = mejor_proveedor[2] # precio_unitario
+                url = mejor_proveedor[3]             # url
+                cantidad_total = producto[4]         # cantidad_total
                 subtotal = cantidad_total * precio_unitario
 
                 # Crear proveedor si no existe
                 if drogueria_id not in proveedores:
                     proveedores[drogueria_id] = {
                         'id': drogueria_id,
-                        'nombre': mejor_proveedor['drogueria'],
+                        'nombre': mejor_proveedor[1],  # drogueria nombre
                         'total': 0,
                         'productos': []
                     }
 
                 # Agregar producto al proveedor
-                nombre_completo = producto['medicamento']
-                if producto['fabricante']:
-                    nombre_completo += f" - {producto['fabricante']}"
+                nombre_completo = producto[1]  # medicamento
+                if producto[3]:                # fabricante
+                    nombre_completo += f" - {producto[3]}"
 
                 proveedores[drogueria_id]['productos'].append({
-                    'existencias_ids': producto['existencias_ids'],  # IDs separados por comas
+                    'existencias_ids': producto[5],  # existencias_ids - IDs separados por comas
                     'medicamento_id': medicamento_id,
                     'medicamento': nombre_completo,
                     'url': url,  # URL de la cotización
@@ -8381,15 +8381,15 @@ def obtener_lista_compras():
                 proveedores[drogueria_id]['total'] += subtotal
             else:
                 # No hay precio de competencia - agregar a lista de sin precios
-                nombre_completo = producto['medicamento']
-                if producto['fabricante']:
-                    nombre_completo += f" - {producto['fabricante']}"
+                nombre_completo = producto[1]  # medicamento
+                if producto[3]:                # fabricante
+                    nombre_completo += f" - {producto[3]}"
 
                 sin_precios.append({
                     'medicamento_id': medicamento_id,
                     'medicamento': nombre_completo,
-                    'cantidad': producto['cantidad_total'],
-                    'existencias_ids': producto['existencias_ids']
+                    'cantidad': producto[4],  # cantidad_total
+                    'existencias_ids': producto[5]  # existencias_ids
                 })
 
         conn.close()

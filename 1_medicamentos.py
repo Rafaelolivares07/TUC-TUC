@@ -679,14 +679,20 @@ def procesar_pedido():
 
         # 1. Crear TERCERO (cliente)
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
+        print("🔢 Obteniendo siguiente ID para terceros...")
         cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
-        next_tercero_id = cursor_seq.fetchone()[0]
+        result = cursor_seq.fetchone()
+        print(f"🔢 Resultado de MAX query: {result}")
+        next_tercero_id = result[0] if result else 1
+        print(f"🔢 Próximo tercero_id: {next_tercero_id}")
 
+        print(f"➕ Insertando tercero con ID {next_tercero_id}...")
         cursor = conn.execute("""
             INSERT INTO terceros (id, nombre, telefono, direccion, latitud, longitud, fecha_creacion)
             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
         """, (next_tercero_id, nombre, telefono, direccion, latitud, longitud))
         tercero_id = next_tercero_id
+        print(f"✅ Tercero creado con ID: {tercero_id}")
         
         # 2. Calcular totales
         subtotal = sum(item['precio'] * item['cantidad'] for item in items)

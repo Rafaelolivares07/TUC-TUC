@@ -252,10 +252,11 @@ class PostgreSQLConnectionWrapper:
         # Tablas que están en MAYÚSCULAS en PostgreSQL
         tablas_mayusculas = [
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
-            'diagnosticos', 'recetas', 'configuracion_precios',
+            'diagnosticos', 'recetas', 'configuracion_precios', 'configuracion_sistema',
             'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
-            'navegacion_menu', 'requerimientos',
-            'requerimiento_referencias', 'usuario_dispositivo'
+            'navegacion_menu', 'requerimientos', 'notificaciones',
+            'requerimiento_referencias', 'usuario_dispositivo', 'categorias',
+            'pedidos_productos', 'usuarios_direcciones', 'usuarios_favoritos'
         ]
 
         # Tablas que están en minúsculas en PostgreSQL (excepciones)

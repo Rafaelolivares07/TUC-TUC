@@ -347,6 +347,7 @@ def get_db_connection():
         import psycopg2
         # Conectar sin RealDictCursor para compatibilidad con el wrapper
         pg_conn = psycopg2.connect(database_url)
+        pg_conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
         # Envolver la conexión para que funcione como SQLite
         return PostgreSQLConnectionWrapper(pg_conn)
     else:

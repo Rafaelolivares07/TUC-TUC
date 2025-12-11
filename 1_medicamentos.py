@@ -187,6 +187,35 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Protección CSRF
 # 📁 Nombre de la base de datos
 DB_NAME = 'medicamentos.db'
 
+class PostgreSQLRow:
+    """Row object que simula sqlite3.Row - soporta acceso por índice y por nombre"""
+    def __init__(self, cursor, values):
+        self._cursor = cursor
+        self._values = values
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        # Acceso por nombre de columna
+        if self._cursor.description:
+            for i, col in enumerate(self._cursor.description):
+                if col[0] == key:
+                    return self._values[i]
+        raise KeyError(f"No such column: {key}")
+
+    def keys(self):
+        if self._cursor.description:
+            return [col[0] for col in self._cursor.description]
+        return []
+
+    def __iter__(self):
+        # Retornar iterator sobre las keys para que dict(row) funcione
+        return iter(self.keys())
+
+    def __len__(self):
+        return len(self._values)
+
+
 class PostgreSQLCursorWrapper:
     """Wrapper para cursor de PostgreSQL que simula lastrowid de SQLite"""
     def __init__(self, pg_cursor, last_insert_id=None):
@@ -194,10 +223,14 @@ class PostgreSQLCursorWrapper:
         self.lastrowid = last_insert_id
 
     def fetchone(self):
-        return self._cursor.fetchone()
+        row = self._cursor.fetchone()
+        if row is None:
+            return None
+        return PostgreSQLRow(self._cursor, row)
 
     def fetchall(self):
-        return self._cursor.fetchall()
+        rows = self._cursor.fetchall()
+        return [PostgreSQLRow(self._cursor, row) for row in rows]
 
     def __getattr__(self, name):
         return getattr(self._cursor, name)

@@ -48,9 +48,11 @@ def run_migration():
             cur = conn.cursor()
             cur.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
             cur.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
+            cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE")
+            cur.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
             conn.commit()
             conn.close()
-            print("✓ Migración costo_unitario completada")
+            print("✓ Migraciones completadas")
     except Exception as e:
         print(f"⚠ Error en migración: {e}")
 

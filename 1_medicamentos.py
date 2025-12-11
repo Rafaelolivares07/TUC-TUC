@@ -8556,13 +8556,8 @@ def actualizar_estado_pedido(conn, pedido_id):
 @app.route('/api/existencias/browse')
 @admin_required
 def browse_existencias():
-    """
-    Endpoint para navegar por la tabla existencias
-    """
     try:
         conn = get_db_connection()
-
-        # Obtener últimos 50 registros ordenados por ID descendente
         cursor = conn.execute("""
             SELECT id, medicamento_id, fabricante_id, tipo_movimiento,
                    cantidad, fecha, id_tercero, pedido_id, estado, numero_documento
@@ -8570,40 +8565,18 @@ def browse_existencias():
             ORDER BY id DESC
             LIMIT 50
         """)
-
         rows = cursor.fetchall()
-
-        # Convertir a lista de diccionarios para mejor lectura en JSON
-        registros = []
-        for row in rows:
-            registros.append({
-                'id': row[0],
-                'medicamento_id': row[1],
-                'fabricante_id': row[2],
-                'tipo_movimiento': row[3],
-                'cantidad': row[4],
-                'fecha': str(row[5]) if row[5] else None,
-                'id_tercero': row[6],
-                'pedido_id': row[7],
-                'estado': row[8],
-                'numero_documento': row[9]
-            })
-
-        # Obtener total de registros
         total_cursor = conn.execute("SELECT COUNT(*) FROM existencias")
         total = total_cursor.fetchone()[0]
-
         conn.close()
 
-        return jsonify({
-            'success': True,
-            'registros': registros,
-            'total_mostrados': len(registros),
-            'total_tabla': total
-        })
-
+        html = '<table border="1"><tr><th>ID</th><th>Medicamento ID</th><th>Fabricante ID</th><th>Tipo Movimiento</th><th>Cantidad</th><th>Fecha</th><th>Tercero ID</th><th>Pedido ID</th><th>Estado</th><th>Num Documento</th></tr>'
+        for row in rows:
+            html += f'<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td><td>{row[5]}</td><td>{row[6]}</td><td>{row[7]}</td><td>{row[8]}</td><td>{row[9]}</td></tr>'
+        html += f'</table><p>Total: {total}</p>'
+        return html
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return f'Error: {str(e)}', 500
 
 
 # --- RUTAS PARA PRecios actualizador con listado ---

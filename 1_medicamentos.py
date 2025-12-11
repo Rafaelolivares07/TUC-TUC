@@ -8554,7 +8554,7 @@ def actualizar_estado_pedido(conn, pedido_id):
 
 
 @app.route('/api/existencias/browse')
-@login_required
+@admin_required
 def browse_existencias():
     """
     Endpoint para navegar por la tabla existencias

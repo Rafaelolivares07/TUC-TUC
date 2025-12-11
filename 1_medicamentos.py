@@ -745,12 +745,16 @@ def procesar_pedido():
         
         # 4. Crear EXISTENCIAS (salidas) para cada item
         for item in items:
+            # Obtener siguiente ID para existencias
+            cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
+            next_existencia_id = cursor_seq.fetchone()[0]
+
             conn.execute("""
                 INSERT INTO existencias (
-                    medicamento_id, fabricante_id, tipo_movimiento,
+                    id, medicamento_id, fabricante_id, tipo_movimiento,
                     cantidad, fecha, id_tercero, pedido_id
-                ) VALUES (?, ?, 'salida', ?, datetime('now'), ?, ?)
-            """, (item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
+                ) VALUES (?, ?, ?, 'salida', ?, datetime('now'), ?, ?)
+            """, (next_existencia_id, item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
         
         conn.commit()
         conn.close()
@@ -1375,7 +1379,7 @@ def obtener_productos():
 
             # Cargar configuración de publicación
             config_row = conn.execute("SELECT permitir_publicar_sin_cotizaciones FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
-            permitir_sin_cotizaciones = config_row['permitir_publicar_sin_cotizaciones'] if config_row else 0
+            permitir_sin_cotizaciones = config_row[0] if config_row else 0
         except Exception as e:
             print(f"ERROR en obtener_productos al inicio: {e}")
             import traceback

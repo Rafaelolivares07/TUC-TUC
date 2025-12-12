@@ -1190,6 +1190,15 @@
         const inputTercero = document.getElementById('tercero-nombre');
         const dropdown = document.getElementById('autocomplete-dropdown');
         let timeoutId;
+
+        // 🔹 MOSTRAR dropdown al hacer focus en tercero
+        inputTercero.addEventListener('focus', function() {
+            // Si el dropdown está oculto, volver a mostrar últimos terceros
+            if (dropdown.style.display === 'none' || dropdown.innerHTML === '') {
+                cargarUltimosTerceros();
+            }
+        });
+
         // Input para buscar terceros
         inputTercero.addEventListener('input', function() {
             const query = this.value.trim();
@@ -1261,6 +1270,9 @@
                 const urlBusqueda = tercero.url_busqueda_base.replace('{producto}', encodeURIComponent(MEDICAMENTO_ACTIVO.nombre));
                 const w = window.open(urlBusqueda, '_blank');
                 if (w) pestañasCompetencia.push(w);
+
+                // 🔹 OCULTAR DROPDOWN al abrir URL del competidor
+                ocultarDropdown();
             }
 
             // 🔹 ✅ REEMPLAZAR PORTAPAPELES CON EL NOMBRE DEL MEDICAMENTO + FABRICANTE

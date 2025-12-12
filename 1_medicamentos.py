@@ -10153,6 +10153,7 @@ def editar_medicamento():
 
 
 @app.route('/admin/terceros/buscar', methods=['GET'])
+@admin_required
 def buscar_terceros():
     query = request.args.get('q', '').strip()
 

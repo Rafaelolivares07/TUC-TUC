@@ -10152,6 +10152,9 @@ def editar_medicamento():
         return jsonify({'ok': False, 'error': str(e)})
 
 
+# Última revisión: 2025-12-12 15:30
+# Usado en: templates/precios_dinamicos.html (evento input en tercero-nombre)
+# Busca terceros por nombre con normalización case-insensitive cuando usuario escribe
 @app.route('/admin/terceros/buscar', methods=['GET'])
 @admin_required
 def buscar_terceros():
@@ -10173,6 +10176,9 @@ def buscar_terceros():
     return jsonify({'terceros': [dict(t) for t in terceros]})
 
 
+# Última revisión: 2025-12-12 15:30
+# Usado en: templates/precios_dinamicos.html (función cargarUltimosTerceros)
+# Muestra últimos 4 terceros por fecha de actualización para acceso rápido
 @app.route('/admin/terceros/ultimos', methods=['GET'])
 @admin_required
 def ultimos_terceros():

@@ -10163,8 +10163,8 @@ def buscar_terceros():
     terceros = db.execute("""
         SELECT id, nombre, telefono, direccion, url_busqueda_base
         FROM terceros
-        WHERE nombre LIKE ?
-        ORDER BY nombre
+        WHERE nombre LIKE ? COLLATE NOCASE
+        ORDER BY nombre COLLATE NOCASE
         LIMIT 10
     """, (f'%{query}%',)).fetchall()
     db.close()
@@ -10175,15 +10175,15 @@ def buscar_terceros():
 @app.route('/admin/terceros/ultimos', methods=['GET'])
 @admin_required
 def ultimos_terceros():
-    """Obtiene los últimos N terceros usados ordenados por fecha de actualización"""
+    """Obtiene los terceros ordenados alfabéticamente para facilitar búsqueda"""
     try:
-        limit = request.args.get('limit', 4, type=int)
+        limit = request.args.get('limit', 10, type=int)
 
         db = get_db_connection()
         terceros = db.execute("""
             SELECT id, nombre, telefono, direccion, url_busqueda_base
             FROM terceros
-            ORDER BY fecha_actualizacion DESC
+            ORDER BY nombre COLLATE NOCASE
             LIMIT ?
         """, (limit,)).fetchall()
         db.close()

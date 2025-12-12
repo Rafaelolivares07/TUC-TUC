@@ -802,7 +802,7 @@
                     document.getElementById('precio-sugerido-cotizacion').value = data.precio_sugerido || '';
                     resaltarFilaActiva();
                 }
-                // Cargar últimos 4 terceros al inicio
+                // Cargar terceros alfabéticamente al inicio
                 cargarUltimosTerceros();
             });
 
@@ -814,15 +814,15 @@
             pestañasCompetencia = [];
         }
 
-        // Función para cargar últimos terceros
+        // Función para cargar terceros ordenados alfabéticamente
         function cargarUltimosTerceros() {
-            fetch('/admin/terceros/ultimos?limit=4')
+            fetch('/admin/terceros/ultimos?limit=10')
                 .then(r => r.json())
                 .then(data => {
                     mostrarDropdown(data.terceros);
                 })
                 .catch(err => {
-                    console.log('Error al cargar últimos terceros:', err);
+                    console.log('Error al cargar terceros:', err);
                 });
         }
 

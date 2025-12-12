@@ -10175,15 +10175,15 @@ def buscar_terceros():
 @app.route('/admin/terceros/ultimos', methods=['GET'])
 @admin_required
 def ultimos_terceros():
-    """Obtiene los terceros ordenados alfabéticamente para facilitar búsqueda"""
+    """Obtiene los últimos N terceros usados ordenados por fecha de actualización"""
     try:
-        limit = request.args.get('limit', 10, type=int)
+        limit = request.args.get('limit', 4, type=int)
 
         db = get_db_connection()
         terceros = db.execute("""
             SELECT id, nombre, telefono, direccion, url_busqueda_base
             FROM terceros
-            ORDER BY nombre COLLATE NOCASE
+            ORDER BY fecha_actualizacion DESC
             LIMIT ?
         """, (limit,)).fetchall()
         db.close()

@@ -10167,8 +10167,8 @@ def buscar_terceros():
     terceros = db.execute("""
         SELECT id, nombre, telefono, direccion, url_busqueda_base
         FROM terceros
-        WHERE nombre LIKE ? COLLATE NOCASE
-        ORDER BY nombre COLLATE NOCASE
+        WHERE LOWER(nombre) LIKE LOWER(?)
+        ORDER BY LOWER(nombre)
         LIMIT 10
     """, (f'%{query}%',)).fetchall()
     db.close()

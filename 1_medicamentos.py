@@ -8691,6 +8691,33 @@ def run_migration_endpoint():
         conn.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
         mensajes.append("✓ precios_competencia.inactivo_hasta")
 
+        # Migración 5: Arreglar secuencia del id en precios_competencia
+        try:
+            # Crear secuencia si no existe
+            conn.execute("""
+                CREATE SEQUENCE IF NOT EXISTS precios_competencia_id_seq
+                OWNED BY precios_competencia.id
+            """)
+            mensajes.append("✓ Secuencia precios_competencia_id_seq creada")
+
+            # Obtener el valor máximo actual del id
+            max_id_row = conn.execute("SELECT COALESCE(MAX(id), 0) as max_id FROM precios_competencia").fetchone()
+            max_id = max_id_row[0] if max_id_row else 0
+
+            # Setear el valor de la secuencia
+            conn.execute(f"SELECT setval('precios_competencia_id_seq', {max_id + 1})")
+            mensajes.append(f"✓ Secuencia inicializada en {max_id + 1}")
+
+            # Asignar la secuencia como default al campo id
+            conn.execute("""
+                ALTER TABLE precios_competencia
+                ALTER COLUMN id SET DEFAULT nextval('precios_competencia_id_seq')
+            """)
+            mensajes.append("✓ DEFAULT asignado a precios_competencia.id")
+
+        except Exception as e:
+            mensajes.append(f"⚠ Error en secuencia: {str(e)}")
+
         conn.commit()
         conn.close()
 

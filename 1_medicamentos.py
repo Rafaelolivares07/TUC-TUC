@@ -9477,14 +9477,14 @@ def guardar_precio_competencia_dinamico():
     if url:
         db.execute("""
             INSERT INTO precios_competencia
-            (medicamento_id, fabricante_id, competidor_id, precio, url, fecha_actualizacion)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (medicamento_id, fabricante_id, competidor_id, precio, url, fecha_actualizacion, activo, inactivo_hasta)
+            VALUES (?, ?, ?, ?, ?, ?, TRUE, NULL)
         """, (med_id, fab_id, comp_id, float(precio), url, fecha_actual))
     else:
         db.execute("""
             INSERT INTO precios_competencia
-            (medicamento_id, fabricante_id, competidor_id, precio, fecha_actualizacion)
-            VALUES (?, ?, ?, ?, ?)
+            (medicamento_id, fabricante_id, competidor_id, precio, fecha_actualizacion, activo, inactivo_hasta)
+            VALUES (?, ?, ?, ?, ?, TRUE, NULL)
         """, (med_id, fab_id, comp_id, float(precio), fecha_actual))
 
     # Actualizar fecha_actualizacion del tercero para que aparezca en "recientemente usado"

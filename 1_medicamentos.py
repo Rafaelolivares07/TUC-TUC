@@ -10686,7 +10686,7 @@ def api_pastillero():
                 p.cantidad,
                 p.unidad,
                 p.medicamento_id,
-                STRING_AGG(DISTINCT s.nombre, ',') as sintomas
+                STRING_AGG(DISTINCT s.nombre, ',') as "sintomas_str"
             FROM pastillero_usuarios p
             LEFT JOIN medicamentos m ON p.medicamento_id = m.id
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
@@ -10707,7 +10707,7 @@ def api_pastillero():
                 'cantidad': med['cantidad'],
                 'unidad': med['unidad'],
                 'medicamento_id': med['medicamento_id'],
-                'sintomas': med['sintomas'].split(',') if med['sintomas'] else []
+                'sintomas': med['sintomas_str'].split(',') if med['sintomas_str'] else []
             })
         
         conn.close()

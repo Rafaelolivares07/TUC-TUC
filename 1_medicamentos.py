@@ -182,7 +182,7 @@ app.logger.debug(f"Upload folder: {app.config['UPLOAD_FOLDER']} (exist or create
 # 📦 Configuración de sesiones para producción en Render
 # Usar sesiones del lado del cliente (cookies firmadas) para compatibilidad con múltiples workers
 app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 horas en segundos
+app.config['PERMANENT_SESSION_LIFETIME'] = 30 * 24 * 60 * 60  # 30 días en segundos
 # SESSION_COOKIE_SECURE solo en producción (HTTPS). En desarrollo local usar HTTP.
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('RENDER', None) is not None
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevenir XSS

@@ -8718,6 +8718,58 @@ def run_migration_endpoint():
         except Exception as e:
             mensajes.append(f"⚠ Error en secuencia: {str(e)}")
 
+        # Migración 6: Migrar datos del pastillero desde SQLite a PostgreSQL
+        try:
+            import sqlite3
+            import os
+
+            sqlite_path = os.path.join(os.path.dirname(__file__), 'medicamentos.db')
+
+            if os.path.exists(sqlite_path):
+                mensajes.append("📋 Iniciando migración de pastillero desde SQLite...")
+
+                # Conectar a SQLite
+                sqlite_conn = sqlite3.connect(sqlite_path)
+                sqlite_conn.row_factory = sqlite3.Row
+                sqlite_cursor = sqlite_conn.cursor()
+
+                # Leer datos del pastillero
+                sqlite_cursor.execute("""
+                    SELECT usuario_id, medicamento_id, nombre, cantidad, unidad
+                    FROM pastillero_usuarios
+                """)
+
+                pastillero_rows = sqlite_cursor.fetchall()
+                count = 0
+
+                if pastillero_rows:
+                    for row in pastillero_rows:
+                        # Verificar si ya existe para evitar duplicados
+                        exists = conn.execute("""
+                            SELECT id FROM pastillero_usuarios
+                            WHERE usuario_id = ? AND medicamento_id IS NOT DISTINCT FROM ?
+                            AND nombre = ?
+                        """, (row['usuario_id'], row['medicamento_id'], row['nombre'])).fetchone()
+
+                        if not exists:
+                            conn.execute("""
+                                INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (row['usuario_id'], row['medicamento_id'], row['nombre'],
+                                  row['cantidad'], row['unidad']))
+                            count += 1
+
+                    mensajes.append(f"✓ Migrados {count} medicamentos al pastillero (de {len(pastillero_rows)} encontrados)")
+                else:
+                    mensajes.append("ℹ No hay medicamentos en el pastillero de SQLite")
+
+                sqlite_conn.close()
+            else:
+                mensajes.append("ℹ Archivo medicamentos.db no encontrado, saltando migración de pastillero")
+
+        except Exception as e:
+            mensajes.append(f"⚠ Error en migración de pastillero: {str(e)}")
+
         conn.commit()
         conn.close()
 

@@ -10680,20 +10680,20 @@ def api_pastillero():
                 params.append(f'%{sintoma}%')
         
         query = f'''
-            SELECT 
+            SELECT
                 p.id,
                 p.nombre,
                 p.cantidad,
                 p.unidad,
                 p.medicamento_id,
-                GROUP_CONCAT(DISTINCT s.nombre) as sintomas
+                STRING_AGG(DISTINCT s.nombre, ',') as sintomas
             FROM pastillero_usuarios p
             LEFT JOIN medicamentos m ON p.medicamento_id = m.id
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
             WHERE p.usuario_id = ?
             {where_sintomas}
-            GROUP BY p.id
+            GROUP BY p.id, p.nombre, p.cantidad, p.unidad, p.medicamento_id
             {order_by}
         '''
         

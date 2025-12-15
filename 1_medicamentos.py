@@ -3327,14 +3327,14 @@ def lista_medicamentos_json():
         (SELECT COUNT(*) FROM precios WHERE medicamento_id = m.id AND precio > 0) as cantidad_precios,
         (SELECT COUNT(*) FROM precios WHERE medicamento_id = m.id AND imagen IS NOT NULL AND imagen != '') as tiene_imagen_oferta,
         (SELECT COUNT(*) FROM medicamento_sintoma WHERE medicamento_id = m.id) as cantidad_sintomas,
-        (SELECT GROUP_CONCAT(DISTINCT f.nombre)
+        (SELECT STRING_AGG(DISTINCT f.nombre, ',')
         FROM precios p
         INNER JOIN fabricantes f ON p.fabricante_id = f.id
-        WHERE p.medicamento_id = m.id AND p.precio > 0) as fabricantes_con_precio,
-        (SELECT GROUP_CONCAT(DISTINCT s.nombre)
+        WHERE p.medicamento_id = m.id AND p.precio > 0) as "fabricantes_str",
+        (SELECT STRING_AGG(DISTINCT s.nombre, ',')
         FROM medicamento_sintoma ms
         INNER JOIN sintomas s ON ms.sintoma_id = s.id
-        WHERE ms.medicamento_id = m.id) as sintomas_nombres,
+        WHERE ms.medicamento_id = m.id) as "sintomas_str_list",
         (SELECT p.imagen FROM precios p WHERE p.medicamento_id = m.id AND p.imagen IS NOT NULL AND p.imagen != '' LIMIT 1) as primera_imagen_precio
         FROM medicamentos m
         WHERE 1=1
@@ -9433,13 +9433,13 @@ def auditoria_dispersion():
                 MIN(pc.precio) as precio_min,
                 MAX(pc.precio) as precio_max,
                 AVG(pc.precio) as precio_promedio,
-                GROUP_CONCAT(t.nombre || ': $' || pc.precio, ' | ') as detalle_precios
+                STRING_AGG(t.nombre || ': $' || pc.precio, ' | ') as "detalle_precios_str"
             FROM precios_competencia pc
             INNER JOIN MEDICAMENTOS m ON pc.medicamento_id = m.id
             LEFT JOIN FABRICANTES f ON pc.fabricante_id = f.id
             LEFT JOIN terceros t ON t.id = pc.competidor_id
             WHERE pc.precio > 0
-            GROUP BY pc.medicamento_id, pc.fabricante_id
+            GROUP BY pc.medicamento_id, pc.fabricante_id, m.nombre, f.nombre
             HAVING num_cotizaciones >= 2
             ORDER BY num_cotizaciones DESC
         """
@@ -9472,7 +9472,7 @@ def auditoria_dispersion():
                     'precio_max': round(precio_max, 2),
                     'precio_promedio': round(row['precio_promedio'], 2),
                     'dispersion_pct': round(dispersion_pct, 1),
-                    'detalle_precios': row['detalle_precios']
+                    'detalle_precios': row['detalle_precios_str']
                 })
 
         db.close()

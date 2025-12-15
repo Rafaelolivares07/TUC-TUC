@@ -18,10 +18,11 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #2e89ff; /* azul limpio tipo logo */
             color: white;
-            padding: 0.75rem 1rem;  /* 🆕 Reducido de 1.5rem */
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 0.25rem 0.2rem;  /* 🆕 Reducido de 8rem 1rem 3rem 1rem */
+            align-items: flex-start;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
         }
 
         .header h1 {
@@ -50,6 +51,8 @@
             gap: 0.5rem;
         }
         
+
+
         .btn-header:hover {
             background: rgba(255, 255, 255, 0.3);
             transform: translateY(-2px);
@@ -84,7 +87,7 @@
         }
         
         .filtros {
-            background: white;
+            background: #2e89ff;
             padding: 1rem;  /* 🆕 Reducido de 1.5rem */
             border-radius: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -93,7 +96,7 @@
 
         .filtros h3 {
             margin-bottom: 0.5rem;  /* 🆕 Reducido de 1rem */
-            color: #667eea;
+            color: #fcfcfd;
             font-size: 1rem;  /* 🆕 Reducido de 1.1rem */
         }
         
@@ -105,7 +108,7 @@
             display: block;
             font-weight: 600;
             margin-bottom: 0.5rem;
-            color: #555;
+            color: #fcf9f9;
         }
         
         .filtro-grupo input, .filtro-grupo select, .filtro-grupo textarea {
@@ -356,23 +359,29 @@
         
         .carrito-flotante {
             position: fixed;
-            bottom: 8rem;
-            right: 2rem;
+            top: 10px;
+            right: 20px;
             background: #667eea;
             color: white;
-            width: 80px;  /* 🆕 Aumentado de 60px */
-            height: 80px; /* 🆕 Aumentado de 60px */
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
-            display: flex;
+            display: none; /* Oculto por defecto, aparece cuando header desaparece */
             align-items: center;
             justify-content: center;
-            font-size: 2rem;  /* 🆕 Aumentado de 1.5rem */
+            font-size: 1.8rem;
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
             cursor: pointer;
-            transition: transform 0.3s;
+            transition: all 0.3s ease;
             z-index: 1000;
+            opacity: 0;
         }
-        
+
+        .carrito-flotante.visible {
+            display: flex;
+            opacity: 1;
+        }
+
         .carrito-flotante:hover {
             transform: scale(1.1);
         }
@@ -733,16 +742,104 @@
                 font-size: 1.4rem;
             }
         }
+
+
+
+
+        /* CONTENEDOR DEL LOGO — tú mandas aquí */
+        .logo-tuc {
+            width: 450px;          /* 👈 aquí juegas */
+            height: 450px;         /* 👈 aquí juegas */
+            position: relative;
+            display: flex;
+            align-items: flex-start; /* pegado arriba */
+            justify-content: center;
+            overflow: hidden;     /* nada se sale */
+        }
+
+        /* LOGOS (base, navidad, promo) */
+        .logo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;     /* siempre dentro del contenedor */
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: block;          /* mata espacios fantasmas */
+            opacity: 0;
+            transform: scale(0.97);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        /* LOGO ACTIVO */
+        .logo.active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+
+
+
+        /* 🔧 LIMPIEZA DE ESPACIOS FANTASMA EN EL HEADER */
+        .header h1,
+        .header p {
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Separación controlada entre título y subtítulo */
+        .header p {
+            margin-top: 0.25rem;
+        }
+
+
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
+
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="container" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-            <div>
-                <h1>🏥 Medicamentos a Domicilio</h1>
-                <p>Entrega en 30 minutos - Zona Norte de Cali</p>
+        <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            
+            <div class="logo-tuc">
+                <img 
+                    src="{{ url_for('static', filename='logo1.png') }}" 
+                    alt="Tuc Tuc"
+                    class="logo state-0 active"
+                >
+
+                <img 
+                    src="{{ url_for('static', filename='logo_navidad.png') }}" 
+                    alt="Tuc Tuc Navidad"
+                    class="logo state-1"
+                >
+
+                <img 
+                    src="{{ url_for('static', filename='logo_promo.png') }}" 
+                    alt="Promo Tuc Tuc"
+                    class="logo state-2"
+                >
             </div>
-            <div style="display: flex; gap: 1rem; align-items: center;">
+
+
+        </div>
+    </div>
+    
+    <div class="header">
+        <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        
+           <div>
+               <h1>MAS QUE MEDICAMENTOS</h1>
+               <p>Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>    
+           </div>
+
+
+           <div style="display: flex; gap: 1rem; align-items: center;">
+
                 <button id="btn-pastillero-header" class="btn-header" onclick="abrirPastillero()">
                     <span style="font-size: 1.3rem;">💊</span>
                     <span>Mi Pastillero</span>
@@ -754,58 +851,71 @@
                     <span>Carrito</span>
                     <span id="cart-count-header" class="badge-header">0</span>
                 </button>
-            </div>
+
+           </div>
+
+
         </div>
     </div>
-    
-    <div class="container">
-        <!-- Filtros UNIFICADOS -->
-        <div class="filtros">
-            <h3>🔍 BUSCA POR NOMBRE DE MEDICAMENTO Y/O DESCRIBE TUS SINTOMAS,AFECCIONES O NECESIDADES</h3>
-            
-            <div class="filtro-grupo" style="margin-bottom: 1rem;">
-                <textarea 
-                    id="busqueda_unificada" 
-                    placeholder="Escribe aqui el nombre del medicamento o describe brevemente lo que sientes (necesidades, afecciones o sintomas)"
-                    rows="1"
-                    style="
-                        width: 100%;
-                        padding: 1rem;
-                        border: 2px solid #e0e0e0;
-                        border-radius: 8px;
-                        font-size: 1.1rem;
-                        font-family: inherit;
-                        resize: none;
-                        overflow: hidden;
-                        transition: border-color 0.3s;
-                        min-height: 42px;  /* 🆕 Más pequeño */
-                    "
-                    oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
-                    onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
-                ></textarea>
-                <small style="color: #666; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-                    💡 Escribe libremente lo que necesitas. Presiona Enter para buscar o espera 0.8s.
-                </small>
-            </div>
-            
-            <!-- Filtros de precio (opcional, colapsados) -->
-            <details style="margin-top: 1rem;">
-                <summary style="cursor: pointer; color: #667eea; font-weight: 600; user-select: none;">
-                    ⚙️ Filtros avanzados (opcional)
-                </summary>
-                <div class="filtros-grid" style="margin-top: 1rem;">
-                    <div class="filtro-grupo">
-                        <label>Precio Mínimo</label>
-                        <input type="number" id="precioMin" placeholder="0">
-                    </div>
-                    
-                    <div class="filtro-grupo">
-                        <label>Precio Máximo</label>
-                        <input type="number" id="precioMax" placeholder="50000">
-                    </div>
+
+
+    <div class="header">
+        <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        
+           <!-- Filtros UNIFICADOS -->
+            <div class="filtros" >
+                <h3>BUSCA POR NOMBRE DE MEDICAMENTO Ó DESCRIBE TUS NECESIDADES Ó AFECCIONES</h3>
+                
+                <div class="filtro-grupo" style="margin-bottom: 1rem;display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                    <textarea 
+                        id="busqueda_unificada" 
+                        placeholder="Escribe aqui"
+                        rows="1"
+                        style="
+                            width: 100%;
+                            padding: 1rem;
+                            border: 2px solid #e0e0e0;
+                            border-radius: 8px;
+                            font-size: 1.1rem;
+                            font-family: inherit;
+                            resize: none;
+                            overflow: hidden;
+                            transition: border-color 0.3s;
+                            min-height: 42px;  /* 🆕 Más pequeño */
+                        "
+                        oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
+                        onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
+                    ></textarea>
+                    <small style="color: #666; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                        
+                    </small>
                 </div>
-            </details>
+                
+                <!-- Filtros de precio (opcional, colapsados) -->
+                <details style="margin-top: 1rem;">
+                    <summary style="cursor: pointer; color: #667eea; font-weight: 600; user-select: none;">
+                        ⚙️ Filtros avanzados (opcional)
+                    </summary>
+                    <div class="filtros-grid" style="margin-top: 1rem;">
+                        <div class="filtro-grupo">
+                            <label>Precio Mínimo</label>
+                            <input type="number" id="precioMin" placeholder="0">
+                        </div>
+                        
+                        <div class="filtro-grupo">
+                            <label>Precio Máximo</label>
+                            <input type="number" id="precioMax" placeholder="50000">
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+
         </div>
+    </div>
+
+
+    <div class="container">
         
         <!-- 🆕 Diagnósticos Detectados -->
         <div id="diagnosticosDetectados" style="display: none;" class="diagnosticos-detectados">
@@ -2495,11 +2605,27 @@
         
         document.body.appendChild(scrollButton);
         
+        // Control de visibilidad del carrito flotante según header
+        const carritoFlotante = document.querySelector('.carrito-flotante');
+        const header = document.querySelector('.header');
+
         window.addEventListener('scroll', function() {
+            // Botón scroll to top
             if (window.scrollY > 300) {
                 scrollButton.style.display = 'block';
             } else {
                 scrollButton.style.display = 'none';
+            }
+
+            // Carrito flotante: mostrar cuando header desaparece
+            if (header) {
+                const headerRect = header.getBoundingClientRect();
+                // Si el header está fuera de la vista (arriba)
+                if (headerRect.bottom < 0) {
+                    carritoFlotante.classList.add('visible');
+                } else {
+                    carritoFlotante.classList.remove('visible');
+                }
             }
         });
 
@@ -3035,6 +3161,17 @@
 
 
 
+        const logos = document.querySelectorAll('.logo');
+        let current = 0;
+
+        logos[current].classList.add('active'); // mostrar el primero
+
+        setInterval(() => {
+            logos[current].classList.remove('active');
+            current = (current + 1) % logos.length;
+            logos[current].classList.add('active');
+        }, 4000);
+
 
 
     </script>
@@ -3142,5 +3279,6 @@
             }
         }
     </style>
+
 </body>
 </html>

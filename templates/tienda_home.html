@@ -3227,14 +3227,20 @@
             currentPromo = 0;
             logos[currentPromo].classList.add('active');
 
-            // Usar el intervalo de la primera promo activa (o 5 segundos por defecto)
-            const intervalo = (promosCarousel[0]?.intervalo_carousel || 5) * 1000;
+            // Función para rotar con intervalo individual por promo
+            function rotarPromo() {
+                const intervaloActual = (promosCarousel[currentPromo]?.intervalo_carousel || 5) * 1000;
 
-            setInterval(() => {
-                logos[currentPromo].classList.remove('active');
-                currentPromo = (currentPromo + 1) % logos.length;
-                logos[currentPromo].classList.add('active');
-            }, intervalo);
+                setTimeout(() => {
+                    logos[currentPromo].classList.remove('active');
+                    currentPromo = (currentPromo + 1) % logos.length;
+                    logos[currentPromo].classList.add('active');
+                    rotarPromo(); // Llamar recursivamente para la siguiente promo
+                }, intervaloActual);
+            }
+
+            // Iniciar la rotación
+            rotarPromo();
         }
 
         async function handlePromoClick(medicamentoId) {

@@ -1048,7 +1048,7 @@
 
                 // Botones de acción
                 const botonesAccion = estaInactiva
-                    ? `<button class="btn-accion" onclick="reactivarCotizacion(${c.id})" title="Reactivar" style="background: #28a745; color: white;">✓ Reactivar</button>`
+                    ? `<button class="btn-accion" onclick="reactivarCotizacion(${c.id})" title="Reactivar">▶️</button>`
                     : `<button class="btn-accion" onclick="editarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${c.telefono || ''}', '${c.direccion || ''}', ${c.precio}, ${c.tercero_id}, '${urlEscapada}')" title="Editar">✏️</button>
                        <button class="btn-accion" onclick="eliminarCotizacion(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', event)" title="Eliminar">🗑️</button>`;
 

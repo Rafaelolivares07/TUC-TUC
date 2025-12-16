@@ -323,25 +323,16 @@
 
         async function cargarMedicamentos() {
             try {
-                const res = await fetch('/productos');
-                const html = await res.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-
-                // Extraer medicamentos del HTML (esto es una aproximación)
-                // Idealmente deberíamos tener un endpoint /api/medicamentos
-                medicamentos = [];
-
-                // Por ahora, cargar desde un endpoint dedicado
-                const resApi = await fetch('/api/buscar?q=');
+                // Cargar medicamentos desde el endpoint de búsqueda
+                const resApi = await fetch('/api/productos/buscar?q=');
                 const data = await resApi.json();
-                if (data.productos) {
+                if (data.ok && data.productos) {
                     medicamentos = data.productos;
                     const select = document.getElementById('medicamentoId');
                     select.innerHTML = '<option value="">Sin enlace a producto</option>';
                     medicamentos.forEach(med => {
                         const option = document.createElement('option');
-                        option.value = med.id;
+                        option.value = med.medicamento_id || med.id;
                         option.textContent = med.nombre;
                         select.appendChild(option);
                     });

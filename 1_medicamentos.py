@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from io import BytesIO
+import traceback
 # 🎯 IMPORTAR EL INICIALIZADOR DE DATOS EXTERNO
 from data_initializer import initialize_full_db
 from bs4 import BeautifulSoup
@@ -1020,7 +1021,7 @@ def get_promos_admin():
         promos = conn.execute("""
             SELECT p.*, m.nombre as medicamento_nombre
             FROM promos_carousel p
-            LEFT JOIN "MEDICAMENTOS" m ON p.medicamento_id = m.id
+            LEFT JOIN MEDICAMENTOS m ON p.medicamento_id = m.id
             ORDER BY p.orden ASC, p.id DESC
         """).fetchall()
 
@@ -9360,6 +9361,14 @@ def fusionar_fabricantes_page():
 def precios_dinamicos_data():
     try:
         db = get_db_connection()
+
+        # Reactivar automáticamente cotizaciones cuya fecha de inactividad ya expiró
+        db.execute("""
+            UPDATE precios_competencia
+            SET inactivo_hasta = NULL, activo = TRUE
+            WHERE inactivo_hasta IS NOT NULL AND inactivo_hasta < CURRENT_TIMESTAMP
+        """)
+        db.commit()
 
         config_row = db.execute("SELECT * FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
         if config_row:

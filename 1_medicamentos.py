@@ -1094,11 +1094,11 @@ def actualizar_promo(promo_id):
 
             if orden_actual is not None and nuevo_orden != orden_actual:
                 if nuevo_orden < orden_actual:
-                    # Moviendo hacia arriba: incrementar órdenes entre nuevo y actual
+                    # Moviendo hacia arriba: incrementar órdenes entre nuevo y actual (inclusive)
                     conn.execute("""
                         UPDATE promos_carousel
                         SET orden = orden + 1
-                        WHERE orden >= ? AND orden < ? AND id != ?
+                        WHERE orden >= ? AND orden <= ? AND id != ?
                     """, (nuevo_orden, orden_actual, promo_id))
                 else:
                     # Moviendo hacia abajo: decrementar órdenes entre actual y nuevo

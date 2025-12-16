@@ -1051,6 +1051,14 @@ def crear_promo():
             return jsonify({'ok': False, 'error': 'Imagen y título son requeridos'}), 400
 
         conn = get_db_connection()
+
+        # Push: incrementar orden de todas las promos >= al nuevo orden
+        conn.execute("""
+            UPDATE promos_carousel
+            SET orden = orden + 1
+            WHERE orden >= ?
+        """, (orden,))
+
         cursor = conn.execute("""
             INSERT INTO promos_carousel
             (imagen_url, titulo, medicamento_id, orden, fecha_fin, activa, intervalo_carousel)
@@ -1075,6 +1083,30 @@ def actualizar_promo(promo_id):
         data = request.get_json()
 
         conn = get_db_connection()
+
+        # Si se está cambiando el orden, hacer push de otros órdenes
+        if 'orden' in data:
+            nuevo_orden = data['orden']
+
+            # Obtener orden actual de esta promo
+            promo_actual = conn.execute("SELECT orden FROM promos_carousel WHERE id = ?", (promo_id,)).fetchone()
+            orden_actual = promo_actual['orden'] if promo_actual else None
+
+            if orden_actual is not None and nuevo_orden != orden_actual:
+                if nuevo_orden < orden_actual:
+                    # Moviendo hacia arriba: incrementar órdenes entre nuevo y actual
+                    conn.execute("""
+                        UPDATE promos_carousel
+                        SET orden = orden + 1
+                        WHERE orden >= ? AND orden < ? AND id != ?
+                    """, (nuevo_orden, orden_actual, promo_id))
+                else:
+                    # Moviendo hacia abajo: decrementar órdenes entre actual y nuevo
+                    conn.execute("""
+                        UPDATE promos_carousel
+                        SET orden = orden - 1
+                        WHERE orden > ? AND orden <= ? AND id != ?
+                    """, (orden_actual, nuevo_orden, promo_id))
 
         # Construir query dinámicamente según campos presentes
         updates = []

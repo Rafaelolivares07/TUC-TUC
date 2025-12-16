@@ -517,6 +517,13 @@
                         <input type="number" id="config-pedido-min-domicilio" data-campo="pedido_min_domicilio_gratis" step="1000">
                     </div>
                     <div class="input-group">
+                        <label>Monto Validación WhatsApp</label>
+                        <input type="number" id="config-monto-whatsapp" data-campo="monto_validacion_whatsapp" step="10000">
+                        <small style="color: #666; font-size: 0.85em; margin-top: 3px; display: block;">
+                            Pedidos mayores a este monto requieren código WhatsApp
+                        </small>
+                    </div>
+                    <div class="input-group">
                         <label>Brecha 2 Cot Baja ($)</label>
                         <input type="number" id="config-brecha-2cot-baja" data-campo="umbral_brecha_2cot_baja" step="100">
                     </div>
@@ -784,6 +791,7 @@
                 document.getElementById('config-ganancia-max').value = CONFIG.ganancia_max_escaso;
                 document.getElementById('config-precio-domicilio').value = CONFIG.precio_domicilio || 5000;
                 document.getElementById('config-pedido-min-domicilio').value = CONFIG.pedido_min_domicilio_gratis || 50000;
+                document.getElementById('config-monto-whatsapp').value = CONFIG.monto_validacion_whatsapp || 100000;
                 document.getElementById('config-brecha-2cot-baja').value = CONFIG.umbral_brecha_2cot_baja || 2000;
                 document.getElementById('config-brecha-2cot-alta').value = CONFIG.umbral_brecha_2cot_alta || 5000;
                 document.getElementById('config-costo-operario').value = CONFIG.costo_operario_domicilio || 3333;
@@ -1833,6 +1841,7 @@
         document.getElementById('config-ganancia-max').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-precio-domicilio').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-pedido-min-domicilio').addEventListener('blur', guardarCampoConfiguracion);
+        document.getElementById('config-monto-whatsapp').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-brecha-2cot-baja').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-brecha-2cot-alta').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-costo-operario').addEventListener('blur', guardarCampoConfiguracion);
@@ -1864,6 +1873,8 @@
                 CONFIG.precio_domicilio = parseFloat(valor);
             } else if (campo === 'pedido_min_domicilio_gratis') {
                 CONFIG.pedido_min_domicilio_gratis = parseFloat(valor);
+            } else if (campo === 'monto_validacion_whatsapp') {
+                CONFIG.monto_validacion_whatsapp = parseFloat(valor);
             } else if (campo === 'umbral_brecha_2cot_baja') {
                 CONFIG.umbral_brecha_2cot_baja = parseFloat(valor);
             } else if (campo === 'umbral_brecha_2cot_alta') {

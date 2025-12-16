@@ -10,30 +10,30 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             background: #f5f5f5;
             color: #333;
         }
-        
+
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 1.5rem;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        
+
         .header h1 {
             font-size: 1.8rem;
         }
-        
+
         .container {
             max-width: 800px;
             margin: 0 auto;
             padding: 1.5rem;
         }
-        
+
         .formulario {
             background: white;
             border-radius: 10px;
@@ -41,23 +41,23 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             margin-bottom: 1.5rem;
         }
-        
+
         .formulario h2 {
             margin-bottom: 1.5rem;
             color: #333;
         }
-        
+
         .form-group {
             margin-bottom: 1.5rem;
         }
-        
+
         .form-group label {
             display: block;
             font-weight: 600;
             margin-bottom: 0.5rem;
             color: #555;
         }
-        
+
         .form-group input, .form-group select, .form-group textarea {
             width: 100%;
             padding: 0.75rem;
@@ -66,23 +66,28 @@
             font-size: 1rem;
             transition: border-color 0.3s;
         }
-        
+
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
         .form-group textarea {
             resize: vertical;
             min-height: 80px;
         }
-        
+
+        .form-group input:disabled, .form-group select:disabled, .form-group textarea:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
         .metodo-pago {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
         }
-        
+
         .metodo-opcion {
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -91,83 +96,226 @@
             text-align: center;
             transition: all 0.3s;
         }
-        
+
         .metodo-opcion:hover {
             border-color: #667eea;
         }
-        
+
         .metodo-opcion input[type="radio"] {
             display: none;
         }
-        
-        .metodo-opcion input[type="radio"]:checked + label {
-            color: #667eea;
-        }
-        
+
         .metodo-opcion.selected {
             border-color: #667eea;
-            background: #f0f0ff;
+            background: #f0f4ff;
         }
-        
+
         .resumen {
             background: white;
             border-radius: 10px;
-            padding: 1.5rem;
+            padding: 2rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
         }
-        
+
         .resumen h3 {
             margin-bottom: 1rem;
+            color: #333;
         }
-        
+
         .resumen-item {
             display: flex;
             justify-content: space-between;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #eee;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f0f0f0;
         }
-        
+
         .resumen-total {
             display: flex;
             justify-content: space-between;
             padding: 1rem 0;
             font-size: 1.3rem;
-            font-weight: bold;
+            font-weight: 700;
             color: #667eea;
-            border-top: 2px solid #333;
-            margin-top: 0.5rem;
         }
-        
+
         .btn-confirmar {
             width: 100%;
-            background: #2ecc71;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 1rem;
             border-radius: 8px;
             font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: transform 0.2s;
+            margin-top: 1rem;
         }
-        
+
         .btn-confirmar:hover {
-            background: #27ae60;
+            transform: translateY(-2px);
         }
-        
+
         .btn-confirmar:disabled {
-            background: #95a5a6;
+            opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
-        
+
         .nota {
             font-size: 0.85rem;
-            color: #666;
-            margin-top: 0.5rem;
-            text-align: center;
+            color: #888;
+            margin-top: 0.25rem;
         }
-        
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .alert-warning {
+            background: #fff3e0;
+            color: #f57c00;
+            border-left: 4px solid #f57c00;
+        }
+
+        .alert-success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .codigo-input {
+            text-align: center;
+            font-size: 2rem;
+            letter-spacing: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            padding: 0.75rem;
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 0.5rem;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .direcciones-list {
+            margin: 1rem 0;
+        }
+
+        .direccion-item {
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .direccion-item:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .direccion-item.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .direccion-item h4 {
+            margin-bottom: 0.25rem;
+            color: #667eea;
+        }
+
+        .direccion-item p {
+            margin: 0.25rem 0;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .btn-nueva-direccion {
+            width: 100%;
+            padding: 0.75rem;
+            background: white;
+            color: #667eea;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-nueva-direccion:hover {
+            background: #f0f4ff;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         @media (max-width: 768px) {
             .metodo-pago {
                 grid-template-columns: 1fr;
@@ -177,31 +325,52 @@
 </head>
 <body>
     <div class="header">
-        <div class="container">
-            <h1>📦 Finalizar Compra</h1>
-        </div>
+        <h1>Checkout</h1>
     </div>
-    
+
     <div class="container">
         <div class="formulario">
             <h2>Datos de Entrega</h2>
-            
-            <div class="form-group">
-                <label for="nombre">Nombre Completo *</label>
-                <input type="text" id="nombre" required placeholder="Ej: Juan Pérez">
-            </div>
-            
+
+            <div id="alertContainer"></div>
+
             <div class="form-group">
                 <label for="telefono">Teléfono *</label>
                 <input type="tel" id="telefono" required placeholder="Ej: 3001234567">
+                <p class="nota">Ingresa tu número para verificar si ya tienes direcciones guardadas</p>
             </div>
-            
-            <div class="form-group">
-                <label for="direccion">Dirección Completa *</label>
-                <textarea id="direccion" required placeholder="Ej: Calle 5 #10-20, Barrio Granada, Norte de Cali"></textarea>
-                <p class="nota">Incluye barrio y puntos de referencia</p>
+
+            <!-- Direcciones guardadas (oculto por defecto) -->
+            <div id="direccionesGuardadas" class="hidden">
+                <div class="form-group">
+                    <label>Selecciona una dirección:</label>
+                    <div id="direccionesList" class="direcciones-list"></div>
+                    <button type="button" class="btn-nueva-direccion" onclick="mostrarFormularioNuevo()">
+                        ➕ Agregar nueva dirección
+                    </button>
+                </div>
             </div>
-            
+
+            <!-- Formulario de datos (visible por defecto) -->
+            <div id="formularioDatos">
+                <div class="form-group">
+                    <label for="nombre">Nombre Completo *</label>
+                    <input type="text" id="nombre" required placeholder="Ej: Juan Pérez">
+                </div>
+
+                <div class="form-group">
+                    <label for="direccion">Dirección Completa *</label>
+                    <textarea id="direccion" required placeholder="Ej: Calle 5 #10-20, Barrio Granada, Norte de Cali"></textarea>
+                    <p class="nota">Incluye barrio y puntos de referencia</p>
+                </div>
+
+                <div class="form-group">
+                    <label for="aliasDireccion">Alias (Opcional)</label>
+                    <input type="text" id="aliasDireccion" placeholder="Ej: Casa, Trabajo, Casa de mamá">
+                    <p class="nota">Para recordar fácilmente esta dirección</p>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label>Método de Pago *</label>
                 <div class="metodo-pago">
@@ -213,7 +382,7 @@
                             <small>Paga al recibir</small>
                         </label>
                     </div>
-                    
+
                     <div class="metodo-opcion" onclick="seleccionarMetodo('transferencia')">
                         <input type="radio" name="metodo" value="transferencia" id="transferencia">
                         <label for="transferencia">
@@ -225,7 +394,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="resumen">
             <h3>Resumen del Pedido</h3>
             <div id="itemsResumen"></div>
@@ -241,34 +410,159 @@
                 <span>Total</span>
                 <span id="total">$0</span>
             </div>
-            
-            <button class="btn-confirmar" onclick="confirmarPedido()">
+
+            <button class="btn-confirmar" onclick="confirmarPedido()" id="btnConfirmar">
                 Confirmar Pedido
             </button>
             <p class="nota">⏱️ Tiempo estimado de entrega: 30 minutos</p>
         </div>
     </div>
-    
+
+    <!-- Modal código WhatsApp -->
+    <div id="modalCodigo" class="modal">
+        <div class="modal-content">
+            <h3>Verificación por WhatsApp</h3>
+            <p>Ingresa el código de 6 dígitos que te enviamos por WhatsApp:</p>
+            <input type="text" id="codigoInput" class="codigo-input" maxlength="6" placeholder="000000">
+            <button class="btn-confirmar" onclick="verificarCodigo()">Verificar</button>
+            <button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
+            <p class="nota" style="text-align: center; margin-top: 1rem;">
+                ¿No recibiste el código?
+                <a href="#" onclick="reenviarCodigo(); return false;" style="color: #667eea;">Reenviar</a>
+            </p>
+        </div>
+    </div>
+
     <script>
         let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
         let metodoSeleccionado = null;
-        
+        let telefonoGuardado = localStorage.getItem('telefono_usuario');
+        let direccionesGuardadas = [];
+        let direccionSeleccionada = null;
+        let terceroExistente = null;
+        let requiereVerificacion = false;
+
         if (carrito.length === 0) {
             alert('El carrito está vacío');
             window.location.href = '/tienda';
         }
-        
+
+        // Auto-rellenar teléfono si existe en localStorage
+        if (telefonoGuardado) {
+            document.getElementById('telefono').value = telefonoGuardado;
+            verificarTelefono(telefonoGuardado);
+        }
+
+        // Verificar teléfono cuando el usuario termine de escribir
+        let timeoutTelefono;
+        document.getElementById('telefono').addEventListener('input', function(e) {
+            clearTimeout(timeoutTelefono);
+            const telefono = e.target.value.trim();
+
+            if (telefono.length >= 10) {
+                timeoutTelefono = setTimeout(() => verificarTelefono(telefono), 500);
+            } else {
+                // Ocultar direcciones guardadas si borra el teléfono
+                document.getElementById('direccionesGuardadas').classList.add('hidden');
+                document.getElementById('formularioDatos').classList.remove('hidden');
+            }
+        });
+
+        async function verificarTelefono(telefono) {
+            try {
+                const resp = await fetch(`/api/verificar-telefono?telefono=${encodeURIComponent(telefono)}`);
+                const data = await resp.json();
+
+                if (data.ok && data.existe) {
+                    // Teléfono existe - mostrar direcciones
+                    terceroExistente = data;
+                    direccionesGuardadas = data.direcciones || [];
+
+                    if (direccionesGuardadas.length > 0) {
+                        mostrarDireccionesGuardadas();
+                    } else {
+                        // Tiene cuenta pero sin direcciones guardadas
+                        mostrarAlerta('Bienvenido de nuevo! Agrega tus datos de entrega.', 'info');
+                    }
+                } else {
+                    // Teléfono nuevo
+                    document.getElementById('direccionesGuardadas').classList.add('hidden');
+                    document.getElementById('formularioDatos').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error verificando teléfono:', error);
+            }
+        }
+
+        function mostrarDireccionesGuardadas() {
+            const container = document.getElementById('direccionesList');
+            container.innerHTML = '';
+
+            direccionesGuardadas.forEach(dir => {
+                const div = document.createElement('div');
+                div.className = 'direccion-item';
+                div.onclick = () => seleccionarDireccion(dir);
+
+                div.innerHTML = `
+                    <h4>${dir.alias}${dir.es_principal ? ' ⭐' : ''}</h4>
+                    <p><strong>${dir.nombre_completo}</strong></p>
+                    <p>${dir.direccion}</p>
+                `;
+
+                container.appendChild(div);
+            });
+
+            document.getElementById('direccionesGuardadas').classList.remove('hidden');
+            document.getElementById('formularioDatos').classList.add('hidden');
+
+            mostrarAlerta('¡Bienvenido de nuevo! Selecciona una dirección o agrega una nueva.', 'success');
+        }
+
+        function seleccionarDireccion(direccion) {
+            // Marcar como seleccionada visualmente
+            document.querySelectorAll('.direccion-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+
+            // Guardar selección
+            direccionSeleccionada = direccion;
+
+            // Auto-rellenar datos (ocultos)
+            document.getElementById('nombre').value = direccion.nombre_completo;
+            document.getElementById('direccion').value = direccion.direccion;
+        }
+
+        function mostrarFormularioNuevo() {
+            document.getElementById('formularioDatos').classList.remove('hidden');
+            direccionSeleccionada = null;
+
+            // Limpiar campos
+            document.getElementById('nombre').value = '';
+            document.getElementById('direccion').value = '';
+            document.getElementById('aliasDireccion').value = '';
+        }
+
+        function mostrarAlerta(mensaje, tipo) {
+            const container = document.getElementById('alertContainer');
+            container.innerHTML = `<div class="alert alert-${tipo}">${mensaje}</div>`;
+
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+
         function formatearPrecio(precio) {
             return new Intl.NumberFormat('es-CO').format(precio);
         }
-        
+
         function seleccionarMetodo(metodo) {
             metodoSeleccionado = metodo;
             document.querySelectorAll('.metodo-opcion').forEach(el => el.classList.remove('selected'));
             event.currentTarget.classList.add('selected');
             document.getElementById(metodo).checked = true;
         }
-        
+
         function actualizarResumen() {
             const itemsResumen = document.getElementById('itemsResumen');
             itemsResumen.innerHTML = carrito.map(item => `
@@ -277,71 +571,202 @@
                     <span>$${formatearPrecio(item.precio * item.cantidad)}</span>
                 </div>
             `).join('');
-            
+
             const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
             const domicilio = subtotal >= 50000 ? 0 : 5000;
             const total = subtotal + domicilio;
-            
+
             document.getElementById('subtotal').textContent = '$' + formatearPrecio(subtotal);
             document.getElementById('domicilio').textContent = domicilio === 0 ? 'GRATIS' : '$' + formatearPrecio(domicilio);
             document.getElementById('total').textContent = '$' + formatearPrecio(total);
         }
-        
+
         async function confirmarPedido() {
+            const btnConfirmar = document.getElementById('btnConfirmar');
+
             // Validar campos
-            const nombre = document.getElementById('nombre').value.trim();
             const telefono = document.getElementById('telefono').value.trim();
-            const direccion = document.getElementById('direccion').value.trim();
-            
-            if (!nombre || !telefono || !direccion) {
-                alert('Por favor completa todos los campos');
+
+            if (!telefono) {
+                mostrarAlerta('Por favor ingresa tu teléfono', 'warning');
                 return;
             }
-            
+
+            let nombre, direccion, aliasDireccion;
+
+            if (direccionSeleccionada) {
+                // Usando dirección guardada
+                nombre = direccionSeleccionada.nombre_completo;
+                direccion = direccionSeleccionada.direccion;
+                aliasDireccion = direccionSeleccionada.alias;
+            } else {
+                // Formulario nuevo
+                nombre = document.getElementById('nombre').value.trim();
+                direccion = document.getElementById('direccion').value.trim();
+                aliasDireccion = document.getElementById('aliasDireccion').value.trim() || 'Principal';
+
+                if (!nombre || !direccion) {
+                    mostrarAlerta('Por favor completa todos los campos', 'warning');
+                    return;
+                }
+            }
+
             if (!metodoSeleccionado) {
-                alert('Por favor selecciona un método de pago');
+                mostrarAlerta('Por favor selecciona un método de pago', 'warning');
                 return;
             }
-            
+
             // Deshabilitar botón
-            const btn = document.querySelector('.btn-confirmar');
-            btn.disabled = true;
-            btn.textContent = 'Procesando...';
-            
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '<span class="spinner"></span> Procesando...';
+
             try {
+                // Verificar si necesita código WhatsApp
+                const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+                const domicilio = total >= 50000 ? 0 : 5000;
+                const totalFinal = total + domicilio;
+
+                // Si el total es mayor a $100,000 o si es un tercero existente accediendo desde nuevo dispositivo
+                const necesitaCodigo = totalFinal >= 100000 || (terceroExistente && !localStorage.getItem('telefono_usuario'));
+
+                if (necesitaCodigo && !requiereVerificacion) {
+                    // Enviar código WhatsApp
+                    await enviarCodigoWhatsApp(telefono);
+                    requiereVerificacion = true;
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.textContent = 'Confirmar Pedido';
+                    return;
+                }
+
+                // Procesar pedido
                 const response = await fetch('/tienda/procesar_pedido', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         nombre,
                         telefono,
                         direccion,
+                        alias_direccion: aliasDireccion,
                         metodo_pago: metodoSeleccionado,
-                        items: carrito
+                        items: carrito.map(item => ({
+                            medicamento_id: item.medicamento_id,
+                            fabricante_id: item.fabricante_id,
+                            nombre: item.nombre,
+                            fabricante: item.fabricante,
+                            cantidad: item.cantidad,
+                            precio: item.precio
+                        }))
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.ok) {
+                    // Guardar teléfono en localStorage
+                    localStorage.setItem('telefono_usuario', telefono);
+
                     // Limpiar carrito
                     localStorage.removeItem('carrito');
-                    
-                    // Redirigir a página de confirmación
-                    window.location.href = `/tienda/confirmacion?pedido=${data.pedido_id}`;
+
+                    // Redirigir a confirmación
+                    window.location.href = '/tienda/confirmacion';
                 } else {
-                    alert('Error: ' + data.error);
-                    btn.disabled = false;
-                    btn.textContent = 'Confirmar Pedido';
+                    mostrarAlerta('Error: ' + (data.error || 'No se pudo procesar el pedido'), 'warning');
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.textContent = 'Confirmar Pedido';
                 }
+
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error al procesar el pedido');
-                btn.disabled = false;
-                btn.textContent = 'Confirmar Pedido';
+                mostrarAlerta('Error al procesar el pedido. Intenta de nuevo.', 'warning');
+                btnConfirmar.disabled = false;
+                btnConfirmar.textContent = 'Confirmar Pedido';
             }
         }
-        
+
+        async function enviarCodigoWhatsApp(telefono) {
+            try {
+                const resp = await fetch('/api/enviar-codigo-whatsapp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telefono })
+                });
+
+                const data = await resp.json();
+
+                if (data.ok) {
+                    // Mostrar modal
+                    document.getElementById('modalCodigo').classList.add('active');
+                    document.getElementById('codigoInput').value = '';
+                    document.getElementById('codigoInput').focus();
+                } else {
+                    mostrarAlerta('Error al enviar código: ' + data.error, 'warning');
+                }
+            } catch (error) {
+                console.error('Error enviando código:', error);
+                mostrarAlerta('Error al enviar código WhatsApp', 'warning');
+            }
+        }
+
+        async function verificarCodigo() {
+            const codigo = document.getElementById('codigoInput').value.trim();
+            const telefono = document.getElementById('telefono').value.trim();
+
+            if (codigo.length !== 6) {
+                mostrarAlerta('Ingresa el código de 6 dígitos', 'warning');
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/verificar-codigo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigo, telefono })
+                });
+
+                const data = await resp.json();
+
+                if (data.ok) {
+                    // Código correcto
+                    cerrarModal();
+                    mostrarAlerta('Código verificado correctamente ✅', 'success');
+                    requiereVerificacion = false;
+
+                    // Continuar con el pedido
+                    setTimeout(() => confirmarPedido(), 1000);
+                } else {
+                    mostrarAlerta('Código incorrecto: ' + data.error, 'warning');
+                }
+            } catch (error) {
+                console.error('Error verificando código:', error);
+                mostrarAlerta('Error al verificar código', 'warning');
+            }
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalCodigo').classList.remove('active');
+        }
+
+        async function reenviarCodigo() {
+            const telefono = document.getElementById('telefono').value.trim();
+            await enviarCodigoWhatsApp(telefono);
+            mostrarAlerta('Código reenviado ✅', 'success');
+        }
+
+        // Enter en código
+        document.getElementById('codigoInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                verificarCodigo();
+            }
+        });
+
+        // Cerrar modal con ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                cerrarModal();
+            }
+        });
+
         // Inicializar
         actualizarResumen();
     </script>

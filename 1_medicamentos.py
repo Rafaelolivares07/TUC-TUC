@@ -10876,21 +10876,23 @@ def buscar_terceros():
     return jsonify({'terceros': [dict(t) for t in terceros]})
 
 
-# Última revisión: 2025-12-12 15:30
+# Última revisión: 2025-12-16
 # Usado en: templates/precios_dinamicos.html (función cargarUltimosTerceros)
-# Muestra últimos 4 terceros por fecha de actualización para acceso rápido
+# Muestra últimos 4 terceros distintos usados en cotizaciones
 @app.route('/admin/terceros/ultimos', methods=['GET'])
 @admin_required
 def ultimos_terceros():
-    """Obtiene los últimos N terceros usados ordenados por fecha de actualización"""
+    """Obtiene los últimos N terceros distintos usados en cotizaciones (precios_competencia)"""
     try:
         limit = request.args.get('limit', 4, type=int)
 
         db = get_db_connection()
         terceros = db.execute("""
-            SELECT id, nombre, telefono, direccion, url_busqueda_base
-            FROM terceros
-            ORDER BY fecha_actualizacion DESC
+            SELECT t.id, t.nombre, t.telefono, t.direccion, t.url_busqueda_base
+            FROM terceros t
+            INNER JOIN precios_competencia pc ON t.id = pc.competidor_id
+            GROUP BY t.id, t.nombre, t.telefono, t.direccion, t.url_busqueda_base
+            ORDER BY MAX(pc.fecha_actualizacion) DESC
             LIMIT ?
         """, (limit,)).fetchall()
         db.close()

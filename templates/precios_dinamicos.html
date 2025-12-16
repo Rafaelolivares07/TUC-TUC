@@ -1704,7 +1704,7 @@
                         MEDICAMENTOS_DATA[idx].nombre = nuevoNombre;
                     }
                     // Actualizar UI
-                    renderizarTabla();
+                    renderizarMedicamentos(MEDICAMENTOS_DATA);
                     alert('Nombre actualizado correctamente');
                 } else {
                     alert(data.error || 'Error al actualizar nombre');

@@ -410,7 +410,10 @@
     </div>
     <div id="panel-medicamento" class="panel" style="display:none;">
         <div>
-            <h3 style="margin:0; display:inline;">Medicamento: <span id="nombre-medicamento"></span> <span class="fabricante">- <span id="nombre-fabricante"></span></span>
+            <h3 style="margin:0; display:inline;">Medicamento:
+                <input type="text" id="nombre-medicamento-editable" style="font-size:1.1em; font-weight:bold; border:1px solid #ccc; padding:2px 6px; border-radius:4px; width:400px;" placeholder="Nombre del medicamento">
+                <span class="fabricante">- <span id="nombre-fabricante"></span></span>
+                <button id="btn-guardar-nombre" class="btn-accion" style="background:#5cb85c; color:white; border-radius:6px; padding:4px 8px; margin-left:6px; vertical-align:middle; font-size:0.95em;">💾</button>
                 <button id="btn-eliminar-medicamento" class="btn-accion" style="background:#d9534f; color:white; border-radius:6px; padding:4px 8px; margin-left:6px; vertical-align:middle; font-size:0.95em;">🗑️</button>
             </h3>
         </div>
@@ -870,7 +873,7 @@
                 return;
             }
             // Si es medicamento normal, continuar con flujo normal
-            document.getElementById('nombre-medicamento').textContent = med.nombre;
+            document.getElementById('nombre-medicamento-editable').value = med.nombre;
             document.getElementById('nombre-fabricante').textContent = med.fabricante_nombre;
             document.getElementById('medicamento-activo').value = med.medicamento_id;
             document.getElementById('fabricante-activo').value = med.fabricante_id;
@@ -1671,6 +1674,47 @@
 
         // === ELIMINAR MEDICAMENTO (AJAX) ===
         // === ELIMINAR MEDICAMENTO CON LÓGICA INTELIGENTE ===
+        // Guardar nombre modificado del medicamento
+        document.getElementById('btn-guardar-nombre').addEventListener('click', async function(e) {
+            e.stopPropagation();
+            if (!MEDICAMENTO_ACTIVO || !MEDICAMENTO_ACTIVO.medicamento_id) {
+                alert('Seleccione un medicamento primero.');
+                return;
+            }
+            const nuevoNombre = document.getElementById('nombre-medicamento-editable').value.trim();
+            if (!nuevoNombre) {
+                alert('El nombre no puede estar vacío.');
+                return;
+            }
+            const confirmar = confirm(`¿Cambiar nombre a "${nuevoNombre}"?`);
+            if (!confirmar) return;
+
+            try {
+                const res = await fetch(`/medicamentos/actualizar-nombre/${MEDICAMENTO_ACTIVO.medicamento_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre: nuevoNombre })
+                });
+                const data = await res.json();
+                if (data && data.ok) {
+                    // Actualizar en memoria
+                    MEDICAMENTO_ACTIVO.nombre = nuevoNombre;
+                    const idx = MEDICAMENTOS_DATA.findIndex(m => m.medicamento_id === MEDICAMENTO_ACTIVO.medicamento_id);
+                    if (idx !== -1) {
+                        MEDICAMENTOS_DATA[idx].nombre = nuevoNombre;
+                    }
+                    // Actualizar UI
+                    renderizarTabla();
+                    alert('Nombre actualizado correctamente');
+                } else {
+                    alert(data.error || 'Error al actualizar nombre');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al actualizar nombre');
+            }
+        });
+
         document.getElementById('btn-eliminar-medicamento').addEventListener('click', async function(e) {
             e.stopPropagation();
             if (!MEDICAMENTO_ACTIVO || !MEDICAMENTO_ACTIVO.medicamento_id) {

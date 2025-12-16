@@ -4711,6 +4711,38 @@ def validar_eliminacion_medicamento(medicamento_id):
 
 
 
+@app.route("/medicamentos/actualizar-nombre/<int:medicamento_id>", methods=["POST"])
+@admin_required
+def actualizar_nombre_medicamento(medicamento_id):
+    """Actualiza el nombre de un medicamento"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        data = request.get_json()
+        nuevo_nombre = data.get('nombre', '').strip()
+
+        if not nuevo_nombre:
+            return jsonify({'ok': False, 'error': 'El nombre no puede estar vacío'}), 400
+
+        # Actualizar en tabla MEDICAMENTOS
+        conn.execute(
+            "UPDATE MEDICAMENTOS SET nombre = ? WHERE id = ?",
+            (nuevo_nombre, medicamento_id)
+        )
+        conn.commit()
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error al actualizar nombre: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
 @app.route("/medicamentos/eliminar/<int:medicamento_id>", methods=["POST"])
 @admin_required
 def eliminar_medicamento(medicamento_id):

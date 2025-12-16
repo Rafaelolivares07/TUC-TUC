@@ -299,6 +299,12 @@
                     <small>Deja vacío si no tiene fecha de expiración</small>
                 </div>
 
+                <div class="form-group">
+                    <label>Intervalo del Carousel (segundos)</label>
+                    <input type="number" id="intervaloCarousel" value="5" min="1" max="60">
+                    <small>Tiempo que se muestra cada imagen en el carousel (1-60 segundos)</small>
+                </div>
+
                 <div class="form-group" id="activaGroup" style="display: none;">
                     <label>
                         <input type="checkbox" id="activa" checked>
@@ -427,6 +433,7 @@
             document.getElementById('medicamentoId').value = promo.medicamento_id || '';
             document.getElementById('orden').value = promo.orden;
             document.getElementById('fechaFin').value = promo.fecha_fin ? promo.fecha_fin.substring(0, 16) : '';
+            document.getElementById('intervaloCarousel').value = promo.intervalo_carousel || 5;
             document.getElementById('activa').checked = promo.activa;
             document.getElementById('activaGroup').style.display = 'block';
 
@@ -447,6 +454,7 @@
                 medicamento_id: document.getElementById('medicamentoId').value || null,
                 orden: parseInt(document.getElementById('orden').value),
                 fecha_fin: document.getElementById('fechaFin').value || null,
+                intervalo_carousel: parseInt(document.getElementById('intervaloCarousel').value) || 5,
                 activa: id ? document.getElementById('activa').checked : true
             };
 

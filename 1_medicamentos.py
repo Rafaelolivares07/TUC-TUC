@@ -999,7 +999,7 @@ def get_promos():
             SELECT p.*, m.nombre as medicamento_nombre
             FROM promos_carousel p
             LEFT JOIN MEDICAMENTOS m ON p.medicamento_id = m.id
-            WHERE p.activa = true
+            WHERE p.activa IS TRUE
             AND (p.fecha_fin IS NULL OR p.fecha_fin > CURRENT_TIMESTAMP)
             ORDER BY p.orden ASC
         """).fetchall()
@@ -1045,6 +1045,7 @@ def crear_promo():
         medicamento_id = data.get('medicamento_id')
         orden = data.get('orden', 0)
         fecha_fin = data.get('fecha_fin')
+        intervalo_carousel = data.get('intervalo_carousel', 5)
 
         if not imagen_url or not titulo:
             return jsonify({'ok': False, 'error': 'Imagen y título son requeridos'}), 400
@@ -1052,9 +1053,9 @@ def crear_promo():
         conn = get_db_connection()
         cursor = conn.execute("""
             INSERT INTO promos_carousel
-            (imagen_url, titulo, medicamento_id, orden, fecha_fin, activa)
-            VALUES (?, ?, ?, ?, ?, true)
-        """, (imagen_url, titulo, medicamento_id, orden, fecha_fin))
+            (imagen_url, titulo, medicamento_id, orden, fecha_fin, activa, intervalo_carousel)
+            VALUES (?, ?, ?, ?, ?, true, ?)
+        """, (imagen_url, titulo, medicamento_id, orden, fecha_fin, intervalo_carousel))
 
         conn.commit()
 
@@ -1097,6 +1098,9 @@ def actualizar_promo(promo_id):
         if 'fecha_fin' in data:
             updates.append('fecha_fin = ?')
             params.append(data['fecha_fin'])
+        if 'intervalo_carousel' in data:
+            updates.append('intervalo_carousel = ?')
+            params.append(data['intervalo_carousel'])
 
         updates.append('fecha_actualizacion = CURRENT_TIMESTAMP')
         params.append(promo_id)

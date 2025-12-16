@@ -3227,11 +3227,14 @@
             currentPromo = 0;
             logos[currentPromo].classList.add('active');
 
+            // Usar el intervalo de la primera promo activa (o 5 segundos por defecto)
+            const intervalo = (promosCarousel[0]?.intervalo_carousel || 5) * 1000;
+
             setInterval(() => {
                 logos[currentPromo].classList.remove('active');
                 currentPromo = (currentPromo + 1) % logos.length;
                 logos[currentPromo].classList.add('active');
-            }, 4000);
+            }, intervalo);
         }
 
         async function handlePromoClick(medicamentoId) {

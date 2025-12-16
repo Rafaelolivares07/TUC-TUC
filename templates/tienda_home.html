@@ -817,24 +817,8 @@
     <div class="header">
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
             
-            <div class="logo-tuc">
-                <img 
-                    src="{{ url_for('static', filename='logo1.png') }}" 
-                    alt="Tuc Tuc"
-                    class="logo state-0 active"
-                >
-
-                <img 
-                    src="{{ url_for('static', filename='logo_navidad.png') }}" 
-                    alt="Tuc Tuc Navidad"
-                    class="logo state-1"
-                >
-
-                <img 
-                    src="{{ url_for('static', filename='logo_promo.png') }}" 
-                    alt="Promo Tuc Tuc"
-                    class="logo state-2"
-                >
+            <div class="logo-tuc" id="logoContainer">
+                <!-- Promos se cargarán dinámicamente desde la BD -->
             </div>
 
 
@@ -844,9 +828,9 @@
     <div class="header">
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
         
-           <div>
+           <div style="text-align: center; width: 100%;">
                <h1>MAS QUE MEDICAMENTOS</h1>
-               <p>Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>    
+               <p>Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
            </div>
 
 
@@ -885,7 +869,7 @@
                 
                 <!-- Filtros de precio (opcional, colapsados) -->
                 <details style="margin-top: 1rem;">
-                    <summary style="cursor: pointer; color: #667eea; font-weight: 600; user-select: none;">
+                    <summary style="cursor: pointer; color: #f8f9fa; font-weight: 600; user-select: none;">
                         ⚙️ Filtros avanzados (opcional)
                     </summary>
                     <div class="filtros-grid" style="margin-top: 1rem;">
@@ -1539,7 +1523,7 @@
             container.innerHTML = productos.map(p => `
             
             
-                <div class="producto-card" onclick="abrirModalProducto(${JSON.stringify(p).replace(/"/g, '&quot;')})" style="cursor: pointer;">
+                <div class="producto-card" data-producto-id="${p.id}" onclick="abrirModalProducto(${JSON.stringify(p).replace(/"/g, '&quot;')})" style="cursor: pointer;">
                     
                     <img src="${obtenerUrlImagen(p.imagen)}"
                         alt="${p.nombre}"
@@ -3189,16 +3173,110 @@
 
 
 
-        const logos = document.querySelectorAll('.logo');
-        let current = 0;
+        // Cargar y gestionar carousel de promos desde BD
+        let promosCarousel = [];
+        let currentPromo = 0;
 
-        logos[current].classList.add('active'); // mostrar el primero
+        async function cargarPromos() {
+            try {
+                const res = await fetch('/api/promos');
+                const data = await res.json();
 
-        setInterval(() => {
-            logos[current].classList.remove('active');
-            current = (current + 1) % logos.length;
-            logos[current].classList.add('active');
-        }, 4000);
+                if (data.ok && data.promos.length > 0) {
+                    promosCarousel = data.promos;
+                    renderizarPromos();
+                    iniciarCarousel();
+                } else {
+                    // Fallback: mostrar logo por defecto
+                    document.getElementById('logoContainer').innerHTML = `
+                        <img src="{{ url_for('static', filename='logo1.png') }}"
+                             alt="TUC-TUC"
+                             class="logo active">
+                    `;
+                }
+            } catch (e) {
+                console.error('Error cargando promos:', e);
+                // Fallback
+                document.getElementById('logoContainer').innerHTML = `
+                    <img src="{{ url_for('static', filename='logo1.png') }}"
+                         alt="TUC-TUC"
+                         class="logo active">
+                `;
+            }
+        }
+
+        function renderizarPromos() {
+            const container = document.getElementById('logoContainer');
+            container.innerHTML = promosCarousel.map((promo, index) => `
+                <img
+                    src="{{ url_for('static', filename='') }}${promo.imagen_url}"
+                    alt="${promo.titulo}"
+                    class="logo state-${index} ${index === 0 ? 'active' : ''}"
+                    data-promo-id="${promo.id}"
+                    data-medicamento-id="${promo.medicamento_id || ''}"
+                    onclick="handlePromoClick(${promo.medicamento_id || 'null'})"
+                    style="${promo.medicamento_id ? 'cursor: pointer;' : ''}"
+                >
+            `).join('');
+        }
+
+        function iniciarCarousel() {
+            const logos = document.querySelectorAll('.logo');
+            if (logos.length === 0) return;
+
+            currentPromo = 0;
+            logos[currentPromo].classList.add('active');
+
+            setInterval(() => {
+                logos[currentPromo].classList.remove('active');
+                currentPromo = (currentPromo + 1) % logos.length;
+                logos[currentPromo].classList.add('active');
+            }, 4000);
+        }
+
+        async function handlePromoClick(medicamentoId) {
+            if (!medicamentoId) return;
+
+            try {
+                // Buscar el producto
+                const busqueda = document.getElementById('busqueda_unificada');
+                busqueda.value = '';
+                await buscarProductos();
+
+                // Esperar a que se carguen los productos
+                setTimeout(() => {
+                    // Buscar la tarjeta del producto por ID
+                    const productCard = document.querySelector(`[data-producto-id="${medicamentoId}"]`);
+
+                    if (productCard) {
+                        // Hacer scroll suave al producto
+                        productCard.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+
+                        // Resaltar el producto brevemente
+                        productCard.style.transition = 'all 0.3s';
+                        productCard.style.boxShadow = '0 0 20px rgba(33, 150, 243, 0.8)';
+                        productCard.style.transform = 'scale(1.05)';
+
+                        setTimeout(() => {
+                            productCard.style.boxShadow = '';
+                            productCard.style.transform = '';
+                        }, 2000);
+                    } else {
+                        // Si no se encuentra, buscar por ID directamente
+                        console.log('Producto no encontrado en vista actual, buscando...');
+                        // Aquí podríamos hacer una búsqueda específica del medicamento
+                    }
+                }, 500);
+            } catch (e) {
+                console.error('Error al navegar al producto:', e);
+            }
+        }
+
+        // Cargar promos al iniciar
+        cargarPromos();
 
 
 

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrar Promos - TUC-TUC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-success {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ff9800;
+            color: white;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .promos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .promo-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 1rem;
+            transition: all 0.3s;
+        }
+
+        .promo-card:hover {
+            border-color: #2196F3;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+        }
+
+        .promo-card.inactiva {
+            opacity: 0.6;
+            background: #f5f5f5;
+        }
+
+        .promo-image {
+            width: 100%;
+            height: 150px;
+            object-fit: contain;
+            background: #f9f9f9;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .promo-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .promo-info {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .promo-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .promo-actions button {
+            flex: 1;
+            font-size: 0.85rem;
+            padding: 0.5rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .form-group small {
+            display: block;
+            color: #666;
+            margin-top: 0.25rem;
+            font-size: 0.85rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .badge-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-actions">
+            <div>
+                <h1>🎨 Gestión de Promos del Carousel</h1>
+                <p class="subtitle">Administra las imágenes promocionales que rotan en la tienda</p>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="abrirModalNuevaPromo()">
+                    ➕ Nueva Promo
+                </button>
+                <a href="/precios_dinamicos" class="btn" style="background: #666; color: white; margin-left: 0.5rem;">
+                    ← Volver al Admin
+                </a>
+            </div>
+        </div>
+
+        <div id="promosContainer" class="promos-grid">
+            <!-- Promos se cargarán aquí -->
+        </div>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <h3>No hay promos creadas</h3>
+            <p>Crea tu primera promo haciendo click en "Nueva Promo"</p>
+        </div>
+    </div>
+
+    <!-- Modal Nueva/Editar Promo -->
+    <div id="modalPromo" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Nueva Promo</h2>
+            <form id="formPromo" onsubmit="guardarPromo(event)">
+                <input type="hidden" id="promoId">
+
+                <div class="form-group">
+                    <label>Imagen URL</label>
+                    <input type="text" id="imagenUrl" required placeholder="logo_promo.png">
+                    <small>Nombre del archivo en la carpeta /static (ej: logo_promo.png)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Título</label>
+                    <input type="text" id="titulo" required placeholder="Promoción de...">
+                    <small>Texto alternativo y título de la promo</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Medicamento (opcional)</label>
+                    <select id="medicamentoId">
+                        <option value="">Sin enlace a producto</option>
+                    </select>
+                    <small>Si seleccionas un medicamento, al hacer click se hará scroll al producto</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Orden</label>
+                    <input type="number" id="orden" value="0" min="0">
+                    <small>Orden de aparición (menor número = primero)</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Fecha de finalización (opcional)</label>
+                    <input type="datetime-local" id="fechaFin">
+                    <small>Deja vacío si no tiene fecha de expiración</small>
+                </div>
+
+                <div class="form-group" id="activaGroup" style="display: none;">
+                    <label>
+                        <input type="checkbox" id="activa" checked>
+                        Activa (se muestra en la tienda)
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="submit" class="btn btn-success" style="flex: 1;">
+                        💾 Guardar
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="cerrarModal()">
+                        ✖ Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let medicamentos = [];
+
+        async function cargarMedicamentos() {
+            try {
+                const res = await fetch('/productos');
+                const html = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // Extraer medicamentos del HTML (esto es una aproximación)
+                // Idealmente deberíamos tener un endpoint /api/medicamentos
+                medicamentos = [];
+
+                // Por ahora, cargar desde un endpoint dedicado
+                const resApi = await fetch('/api/buscar?q=');
+                const data = await resApi.json();
+                if (data.productos) {
+                    medicamentos = data.productos;
+                    const select = document.getElementById('medicamentoId');
+                    select.innerHTML = '<option value="">Sin enlace a producto</option>';
+                    medicamentos.forEach(med => {
+                        const option = document.createElement('option');
+                        option.value = med.id;
+                        option.textContent = med.nombre;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Error cargando medicamentos:', e);
+            }
+        }
+
+        async function cargarPromos() {
+            try {
+                const res = await fetch('/api/promos/admin');
+                const data = await res.json();
+
+                const container = document.getElementById('promosContainer');
+                const emptyState = document.getElementById('emptyState');
+
+                if (!data.ok || data.promos.length === 0) {
+                    container.innerHTML = '';
+                    emptyState.style.display = 'block';
+                    return;
+                }
+
+                emptyState.style.display = 'none';
+                container.innerHTML = data.promos.map(promo => `
+                    <div class="promo-card ${!promo.activa ? 'inactiva' : ''}">
+                        <img src="/static/${promo.imagen_url}" alt="${promo.titulo}" class="promo-image" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 100%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22200%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 font-family=%22Arial%22 font-size=%2214%22 fill=%22%23999%22 text-anchor=%22middle%22%3EImagen no encontrada%3C/text%3E%3C/svg%3E'">
+
+                        <div class="promo-title">${promo.titulo}</div>
+
+                        <div class="promo-info">
+                            <strong>Orden:</strong> ${promo.orden}
+                        </div>
+
+                        ${promo.medicamento_nombre ? `
+                            <div class="promo-info">
+                                <strong>Enlazado a:</strong> ${promo.medicamento_nombre}
+                            </div>
+                        ` : ''}
+
+                        ${promo.fecha_fin ? `
+                            <div class="promo-info">
+                                <strong>Expira:</strong> ${new Date(promo.fecha_fin).toLocaleDateString()}
+                            </div>
+                        ` : ''}
+
+                        <div style="margin-top: 0.5rem;">
+                            ${promo.activa ?
+                                '<span class="badge badge-success">Activa</span>' :
+                                '<span class="badge badge-danger">Inactiva</span>'
+                            }
+                        </div>
+
+                        <div class="promo-actions">
+                            <button class="btn btn-primary" onclick="editarPromo(${promo.id})">
+                                ✏️ Editar
+                            </button>
+                            <button class="btn btn-warning" onclick="toggleActiva(${promo.id}, ${!promo.activa})">
+                                ${promo.activa ? '⏸️' : '▶️'}
+                            </button>
+                            <button class="btn btn-danger" onclick="eliminarPromo(${promo.id})">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Error cargando promos:', e);
+                alert('Error al cargar las promos');
+            }
+        }
+
+        function abrirModalNuevaPromo() {
+            document.getElementById('modalTitle').textContent = 'Nueva Promo';
+            document.getElementById('formPromo').reset();
+            document.getElementById('promoId').value = '';
+            document.getElementById('activaGroup').style.display = 'none';
+            document.getElementById('modalPromo').classList.add('active');
+        }
+
+        async function editarPromo(id) {
+            const res = await fetch('/api/promos/admin');
+            const data = await res.json();
+            const promo = data.promos.find(p => p.id === id);
+
+            if (!promo) return;
+
+            document.getElementById('modalTitle').textContent = 'Editar Promo';
+            document.getElementById('promoId').value = promo.id;
+            document.getElementById('imagenUrl').value = promo.imagen_url;
+            document.getElementById('titulo').value = promo.titulo;
+            document.getElementById('medicamentoId').value = promo.medicamento_id || '';
+            document.getElementById('orden').value = promo.orden;
+            document.getElementById('fechaFin').value = promo.fecha_fin ? promo.fecha_fin.substring(0, 16) : '';
+            document.getElementById('activa').checked = promo.activa;
+            document.getElementById('activaGroup').style.display = 'block';
+
+            document.getElementById('modalPromo').classList.add('active');
+        }
+
+        function cerrarModal() {
+            document.getElementById('modalPromo').classList.remove('active');
+        }
+
+        async function guardarPromo(e) {
+            e.preventDefault();
+
+            const id = document.getElementById('promoId').value;
+            const data = {
+                imagen_url: document.getElementById('imagenUrl').value,
+                titulo: document.getElementById('titulo').value,
+                medicamento_id: document.getElementById('medicamentoId').value || null,
+                orden: parseInt(document.getElementById('orden').value),
+                fecha_fin: document.getElementById('fechaFin').value || null,
+                activa: id ? document.getElementById('activa').checked : true
+            };
+
+            try {
+                const url = id ? `/api/promos/${id}` : '/api/promos';
+                const method = id ? 'PUT' : 'POST';
+
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (result.ok) {
+                    cerrarModal();
+                    cargarPromos();
+                    alert('Promo guardada exitosamente');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (e) {
+                console.error('Error guardando promo:', e);
+                alert('Error al guardar la promo');
+            }
+        }
+
+        async function toggleActiva(id, activa) {
+            try {
+                const res = await fetch(`/api/promos/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activa })
+                });
+
+                const result = await res.json();
+
+                if (result.ok) {
+                    cargarPromos();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (e) {
+                console.error('Error actualizando promo:', e);
+                alert('Error al actualizar la promo');
+            }
+        }
+
+        async function eliminarPromo(id) {
+            if (!confirm('¿Estás seguro de eliminar esta promo?')) return;
+
+            try {
+                const res = await fetch(`/api/promos/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await res.json();
+
+                if (result.ok) {
+                    cargarPromos();
+                    alert('Promo eliminada exitosamente');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (e) {
+                console.error('Error eliminando promo:', e);
+                alert('Error al eliminar la promo');
+            }
+        }
+
+        // Cargar datos al iniciar
+        cargarMedicamentos();
+        cargarPromos();
+    </script>
+</body>
+</html>

@@ -269,7 +269,7 @@ class PostgreSQLConnectionWrapper:
             'existencias', 'terceros', 'terceros_competidores', 'terceros_direcciones', 'alertas_admin', 'archivos',
             'componentes_activos_sugerencias', 'indicaciones_rechazadas',
             'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
-            'sugerir_sintomas', 'pedidos'
+            'sugerir_sintomas', 'pedidos', 'promos_carousel'
         ]
 
         # Convertir tablas que deben ir en MAYÚSCULAS
@@ -612,6 +612,12 @@ def admin_login_post():
     finally:
         conn.close()
 
+@app.route('/admin/promos')
+@admin_required
+def admin_promos():
+    """Página de administración de promos del carousel"""
+    return render_template('admin_promos.html')
+
 @app.route('/paciente_saludo_continuar')
 def paciente_saludo_continuar():
     """Muestra un saludo personalizado y redirecciona a la siguiente etapa de registro."""
@@ -922,6 +928,149 @@ def agregar_direccion_tercero():
 
 # ==========================================
 # FIN ENDPOINTS DIRECCIONES
+# ==========================================
+
+# ==========================================
+# ENDPOINTS PROMOS CAROUSEL
+# ==========================================
+
+@app.route('/api/promos', methods=['GET'])
+def get_promos():
+    """Obtiene todas las promos activas ordenadas"""
+    try:
+        conn = get_db_connection()
+        promos = conn.execute("""
+            SELECT p.*, m.nombre as medicamento_nombre
+            FROM promos_carousel p
+            LEFT JOIN "MEDICAMENTOS" m ON p.medicamento_id = m.id
+            WHERE p.activa = true
+            AND (p.fecha_fin IS NULL OR p.fecha_fin > CURRENT_TIMESTAMP)
+            ORDER BY p.orden ASC
+        """).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'promos': [dict(p) for p in promos]
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/promos/admin', methods=['GET'])
+@admin_required
+def get_promos_admin():
+    """Obtiene todas las promos (admin)"""
+    try:
+        conn = get_db_connection()
+        promos = conn.execute("""
+            SELECT p.*, m.nombre as medicamento_nombre
+            FROM promos_carousel p
+            LEFT JOIN "MEDICAMENTOS" m ON p.medicamento_id = m.id
+            ORDER BY p.orden ASC, p.id DESC
+        """).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'promos': [dict(p) for p in promos]
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/promos', methods=['POST'])
+@admin_required
+def crear_promo():
+    """Crea una nueva promo"""
+    try:
+        data = request.get_json()
+
+        imagen_url = data.get('imagen_url', '').strip()
+        titulo = data.get('titulo', '').strip()
+        medicamento_id = data.get('medicamento_id')
+        orden = data.get('orden', 0)
+        fecha_fin = data.get('fecha_fin')
+
+        if not imagen_url or not titulo:
+            return jsonify({'ok': False, 'error': 'Imagen y título son requeridos'}), 400
+
+        conn = get_db_connection()
+        cursor = conn.execute("""
+            INSERT INTO promos_carousel
+            (imagen_url, titulo, medicamento_id, orden, fecha_fin, activa)
+            VALUES (?, ?, ?, ?, ?, true)
+        """, (imagen_url, titulo, medicamento_id, orden, fecha_fin))
+
+        conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'promo_id': cursor.lastrowid
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/promos/<int:promo_id>', methods=['PUT'])
+@admin_required
+def actualizar_promo(promo_id):
+    """Actualiza una promo existente"""
+    try:
+        data = request.get_json()
+
+        conn = get_db_connection()
+
+        # Construir query dinámicamente según campos presentes
+        updates = []
+        params = []
+
+        if 'imagen_url' in data:
+            updates.append('imagen_url = ?')
+            params.append(data['imagen_url'])
+        if 'titulo' in data:
+            updates.append('titulo = ?')
+            params.append(data['titulo'])
+        if 'medicamento_id' in data:
+            updates.append('medicamento_id = ?')
+            params.append(data['medicamento_id'])
+        if 'orden' in data:
+            updates.append('orden = ?')
+            params.append(data['orden'])
+        if 'activa' in data:
+            updates.append('activa = ?')
+            params.append(data['activa'])
+        if 'fecha_fin' in data:
+            updates.append('fecha_fin = ?')
+            params.append(data['fecha_fin'])
+
+        updates.append('fecha_actualizacion = CURRENT_TIMESTAMP')
+        params.append(promo_id)
+
+        query = f"UPDATE promos_carousel SET {', '.join(updates)} WHERE id = ?"
+
+        conn.execute(query, params)
+        conn.commit()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/promos/<int:promo_id>', methods=['DELETE'])
+@admin_required
+def eliminar_promo(promo_id):
+    """Elimina una promo"""
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM promos_carousel WHERE id = ?", (promo_id,))
+        conn.commit()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ==========================================
+# FIN ENDPOINTS PROMOS CAROUSEL
 # ==========================================
 
 @app.route('/tienda/checkout')

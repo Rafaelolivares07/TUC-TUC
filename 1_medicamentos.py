@@ -998,7 +998,7 @@ def get_promos():
         promos = conn.execute("""
             SELECT p.*, m.nombre as medicamento_nombre
             FROM promos_carousel p
-            LEFT JOIN "MEDICAMENTOS" m ON p.medicamento_id = m.id
+            LEFT JOIN MEDICAMENTOS m ON p.medicamento_id = m.id
             WHERE p.activa = true
             AND (p.fecha_fin IS NULL OR p.fecha_fin > CURRENT_TIMESTAMP)
             ORDER BY p.orden ASC

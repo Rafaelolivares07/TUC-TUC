@@ -2551,11 +2551,35 @@ def obtener_productos():
         params.append(permitir_sin_cotizaciones)
 
         query += " AND p.precio > 0"
+
+        # Obtener el total de productos disponibles (antes del LIMIT)
+        query_count = query.replace(
+            """SELECT DISTINCT
+                p.id as precio_id,
+                p.medicamento_id,
+                p.fabricante_id,
+                p.precio,
+                p.imagen as imagen_precio,
+                m.nombre as medicamento_nombre,
+                m.presentacion,
+                m.concentracion,
+                m.imagen as imagen_medicamento,
+                m.componente_activo_id,
+                ca.nombre as componente_activo_nombre,
+                f.nombre as fabricante_nombre,
+                s.nombre as sintoma_nombre,
+                ms.sintoma_id""",
+            "SELECT COUNT(DISTINCT p.id)"
+        )
+        total_disponible = conn.execute(query_count, params).fetchone()[0]
+
         query += " ORDER BY m.nombre, f.nombre"
 
         # Limitar resultados iniciales si no hay búsqueda (para mejor rendimiento)
+        hay_limite = False
         if not busqueda and not busqueda_sintomas:
             query += " LIMIT 50"
+            hay_limite = True
 
         productos = conn.execute(query, params).fetchall()
 
@@ -2834,9 +2858,11 @@ def obtener_productos():
             diagnosticos_response.append(diag_response)
     
         return jsonify({
-            'ok': True, 
-            'productos': productos_con_score, 
+            'ok': True,
+            'productos': productos_con_score,
             'total': len(productos_con_score),
+            'total_disponible': total_disponible,  # Total de productos sin LIMIT
+            'hay_limite': hay_limite,  # Indica si se aplicó LIMIT 50
             'sintomas_detectados': sintomas_detectados,
             'diagnosticos_posibles': diagnosticos_response,
             'diagnosticos_directos': diagnosticos_detectados_directo,

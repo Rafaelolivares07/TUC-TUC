@@ -3084,11 +3084,21 @@
         function mostrarReporteInterno() {
             // Buscar datos ya cargados (asumiendo que ya se llamó a buscarProductos)
             const productos = window.ultimosProductos || [];
+            const data = window.ultimosProductosData || {};
 
             const total = productos.length;
-            const sinSintomas = productos.filter(p => 
+            const sinSintomas = productos.filter(p =>
                 !p.sintomas_totales || p.sintomas_totales.length === 0
             ).length;
+
+            const totalDisponible = data.total_disponible || total;
+            const hayLimite = data.hay_limite || false;
+
+            const mensajeLimite = hayLimite
+                ? `<p style="color: #e67e22; margin-top: 1rem;"><strong>⚠️ Límite aplicado:</strong> Se limitó a 50 productos de ${totalDisponible} disponibles</p>`
+                : totalDisponible > total
+                ? `<p style="color: #3498db; margin-top: 1rem;"><strong>ℹ️ Total disponible:</strong> ${totalDisponible} productos (mostrando ${total} por filtros)</p>`
+                : '';
 
             const modal = document.createElement('div');
             modal.style.cssText = `
@@ -3112,12 +3122,14 @@
                 ">
                     <h3 style="color: #e74c3c; margin-bottom: 1.5rem;">🔒 Reporte Interno (Solo Admin)</h3>
                     <p><strong>🕗 Fecha/hora:</strong> ${new Date().toLocaleString('es-CO')}</p>
-                    <p><strong>📦 Total productos montados:</strong> ${total}</p>
+                    <p><strong>📦 Productos mostrados:</strong> ${total}</p>
+                    <p><strong>📊 Total disponibles:</strong> ${totalDisponible}</p>
                     <p><strong>⚠️ Productos sin síntomas:</strong> ${sinSintomas}</p>
+                    ${mensajeLimite}
                     <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #666;">
                         Este reporte se basa en la última carga de productos.
                     </p>
-                    <button onclick="this.parentElement.parentElement.remove()" 
+                    <button onclick="this.parentElement.parentElement.remove()"
                             style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer;">
                         Cerrar
                     </button>
@@ -3148,9 +3160,10 @@
                 .then(data => {
                     if (data.ok) {
                         window.ultimosProductos = data.productos; // ✅ Guardar para el reporte
+                        window.ultimosProductosData = data; // ✅ Guardar data completa con totales
                         productosMostradosEnTienda = data.productos || []; // 🎯 CRÍTICO: Guardar aquí también
                         console.log('💾💾💾 PRODUCTOS GUARDADOS (desde función sobrescrita):', productosMostradosEnTienda.length);
-                        
+
                         mostrarDiagnosticos(data.sintomas_detectados || [], data.diagnosticos_posibles || [], data.busqueda_parcial || false);
                         mostrarProductos(data.productos, data);
                         

@@ -3062,18 +3062,19 @@
             });
             
             console.groupEnd();
-            
-            // 1. Añadir listener al título para activar autenticación
-            const titulo = document.querySelector('.header h1');
-            if (titulo) {
+
+            // 1. Añadir listener al h1 "MAS QUE MEDICAMENTOS" para activar reporte (solo para usuario admin)
+            const usuarioId = {{ usuario_id if usuario_id else 'null' }};
+            const tituloTienda = document.querySelector('.container h1');
+            if (tituloTienda && usuarioId === 1) { // Solo para usuario ID 1 (admin principal)
                 let intentos = 0;
-                titulo.addEventListener('click', () => {
+                tituloTienda.addEventListener('click', () => {
                     intentos++;
-                    if (intentos < 3) return; // Requiere 3 clics rápidos (opcional para más secreto)
+                    if (intentos < 3) return; // Requiere 3 clics rápidos
                     intentos = 0;
 
-                    const claveSecreta = prompt("🔐 Clave de acceso (invisible):");
-                    if (claveSecreta === "admin123") { // 🔑 Cambia esta clave si lo deseas
+                    const claveSecreta = prompt("🔐 Clave de acceso:");
+                    if (claveSecreta === "admin123") {
                         mostrarReporteInterno();
                     }
                 });

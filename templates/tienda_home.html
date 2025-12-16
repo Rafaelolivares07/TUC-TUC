@@ -361,7 +361,7 @@
             position: fixed;
             top: 10px;
             right: 20px;
-            background: #667eea;
+            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
             color: white;
             width: 60px;
             height: 60px;
@@ -370,7 +370,7 @@
             align-items: center;
             justify-content: center;
             font-size: 1.8rem;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.5);
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 1000;
@@ -384,6 +384,13 @@
 
         .carrito-flotante:hover {
             transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(33, 150, 243, 0.6);
+        }
+
+        .carrito-flotante svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
         }
         
         .carrito-badge {
@@ -947,7 +954,9 @@
     
     <!-- BOTÓN FLOTANTE CARRITO (lado derecho) -->
     <div class="carrito-flotante" onclick="verCarrito()">
-        🛒
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-9.8-3.2v-.1l.9-1.7h7.4c.7 0 1.4-.4 1.7-1l3.9-7-1.7-1-3.9 7h-7l-4.4-9.5H1v2h2l3.6 7.6L5.2 14c-.1.3-.2.6-.2 1 0 1.1.9 2 2 2h12v-2H7.4c-.1 0-.2-.1-.2-.2z"/>
+        </svg>
         <span class="carrito-badge" id="carritoCount">0</span>
     </div>
     

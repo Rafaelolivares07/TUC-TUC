@@ -1553,14 +1553,14 @@
                         
                         ${p.sintomas_filtrados && p.sintomas_filtrados.length > 0 ? `<div style="font-size: 0.85rem; color: #667eea; font-weight: 500; margin-bottom: 0.5rem;">✅ Trata: ${p.sintomas_filtrados.join(', ')}</div>` : ''}
                         
-                        <button type="button" id="btn-sintomas-${p.precio_id}" style="font-size: 0.8rem; color: #667eea; background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; margin-top: 2rem;" onclick="toggleSintomas(${p.precio_id})">
+                        <button type="button" id="btn-sintomas-${p.precio_id}" style="font-size: 0.8rem; color: #667eea; background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; margin-top: 1rem;" onclick="toggleSintomas(${p.precio_id})">
                             ${esBusquedaInteligente ? '🔼' : '🔽'} ${esBusquedaInteligente ? 'Ocultar' : 'Ver'} síntomas y/o indicaciones
                         </button>
                         <div id="sintomas-${p.precio_id}" style="display: ${esBusquedaInteligente ? 'block' : 'none'}; font-size: 0.85rem; color: #667eea; font-weight: 500; margin: 0.5rem 0;">
                             ✅ Trata: ${p.sintomas_totales.join(', ')}
                         </div>
-                        
-                        <div style="margin-bottom: 2.5rem;"></div>
+
+                        <div style="margin-bottom: 5.5rem;"></div>
                         <button class="btn-agregar" data-producto='${JSON.stringify(p).replace(/'/g, "&#39;")}' onclick='agregarAlCarritoFromButton(this)'>
                             Comprar
                         </button>

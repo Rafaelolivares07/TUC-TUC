@@ -173,6 +173,61 @@ def normalizar_texto(texto):
 def test_simple():
     return "Funciona!"
 
+@app.route('/admin/setup_promos_table')
+@admin_required
+def setup_promos_table():
+    """Crea la tabla promos_carousel si no existe (solo para setup inicial)"""
+    try:
+        conn = get_db_connection()
+
+        # Crear tabla
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS promos_carousel (
+                id SERIAL PRIMARY KEY,
+                imagen_url VARCHAR(255) NOT NULL,
+                titulo VARCHAR(255) NOT NULL,
+                activa BOOLEAN DEFAULT TRUE,
+                medicamento_id INTEGER REFERENCES "MEDICAMENTOS"(id) ON DELETE SET NULL,
+                orden INTEGER DEFAULT 0,
+                fecha_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_fin TIMESTAMP,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # Crear índices
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_promos_activa ON promos_carousel(activa);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_promos_orden ON promos_carousel(orden);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_promos_medicamento ON promos_carousel(medicamento_id);")
+
+        # Insertar promos iniciales si la tabla está vacía
+        count = conn.execute("SELECT COUNT(*) as cnt FROM promos_carousel").fetchone()['cnt']
+
+        if count == 0:
+            conn.execute("""
+                INSERT INTO promos_carousel (imagen_url, titulo, activa, orden)
+                VALUES
+                    ('logo1.png', 'Logo TUC-TUC', TRUE, 1),
+                    ('logo_navidad.png', 'Promo Navidad', TRUE, 2),
+                    ('logo_promo.png', 'Promoción Especial', TRUE, 3)
+            """)
+
+        conn.commit()
+
+        return f"""
+        <h1>✅ Tabla promos_carousel configurada</h1>
+        <p>Tabla creada correctamente</p>
+        <p>Índices creados</p>
+        <p>Promos iniciales: {count} existentes antes del setup</p>
+        <br>
+        <a href="/admin/promos">Ir a Gestión de Promos</a>
+        """
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<h1>❌ Error:</h1><pre>{str(e)}</pre>", 500
+
 
 # Asegurar que la carpeta exista
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)

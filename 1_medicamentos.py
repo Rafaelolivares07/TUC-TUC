@@ -671,14 +671,14 @@ def setup_promos_table():
     try:
         conn = get_db_connection()
 
-        # Crear tabla
+        # Crear tabla (sin foreign key por ahora, la agregamos después)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS promos_carousel (
                 id SERIAL PRIMARY KEY,
                 imagen_url VARCHAR(255) NOT NULL,
                 titulo VARCHAR(255) NOT NULL,
                 activa BOOLEAN DEFAULT TRUE,
-                medicamento_id INTEGER REFERENCES "MEDICAMENTOS"(id) ON DELETE SET NULL,
+                medicamento_id INTEGER,
                 orden INTEGER DEFAULT 0,
                 fecha_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 fecha_fin TIMESTAMP,

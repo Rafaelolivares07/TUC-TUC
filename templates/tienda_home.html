@@ -3209,7 +3209,7 @@
             const container = document.getElementById('logoContainer');
             container.innerHTML = promosCarousel.map((promo, index) => `
                 <img
-                    src="{{ url_for('static', filename='') }}${promo.imagen_url}"
+                    src="/static/${promo.imagen_url}"
                     alt="${promo.titulo}"
                     class="logo state-${index} ${index === 0 ? 'active' : ''}"
                     data-promo-id="${promo.id}"

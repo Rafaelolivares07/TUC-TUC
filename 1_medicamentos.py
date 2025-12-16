@@ -660,15 +660,15 @@ def tienda_home():
         sintomas = conn.execute("SELECT id, nombre FROM sintomas ORDER BY nombre").fetchall()
         conn.close()
 
-        # Pasar usuario_id si está en sesión (para funcionalidades especiales)
-        usuario_id = session.get('usuario_id')
-        return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas], usuario_id=usuario_id)
+        # Pasar rol si está en sesión (para funcionalidades especiales de admin)
+        es_admin = session.get('rol') == 'Administrador'
+        return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas], es_admin=es_admin)
     except Exception as e:
         print(f"ERROR en tienda_home: {e}")
         import traceback
         traceback.print_exc()
         # Devolver página sin síntomas si hay error
-        return render_template('tienda_home.html', sintomas=[], usuario_id=None)
+        return render_template('tienda_home.html', sintomas=[], es_admin=False)
 
 
 @app.route('/tienda/carrito')

@@ -3063,10 +3063,10 @@
             
             console.groupEnd();
 
-            // 1. Añadir listener al h1 "MAS QUE MEDICAMENTOS" para activar reporte (solo para usuario admin)
-            const usuarioId = {{ usuario_id if usuario_id else 'null' }};
+            // 1. Añadir listener al h1 "MAS QUE MEDICAMENTOS" para activar reporte (solo para administradores)
+            const esAdmin = {{ 'true' if es_admin else 'false' }};
             const tituloTienda = document.querySelector('.container h1');
-            if (tituloTienda && usuarioId === 1) { // Solo para usuario ID 1 (admin principal)
+            if (tituloTienda && esAdmin) { // Solo para usuarios con rol Administrador
                 let intentos = 0;
                 tituloTienda.addEventListener('click', () => {
                     intentos++;

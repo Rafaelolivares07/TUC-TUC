@@ -1129,6 +1129,47 @@ def eliminar_promo(promo_id):
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+@app.route('/api/promos/upload', methods=['POST'])
+@admin_required
+def upload_promo_image():
+    """Sube una imagen para promo"""
+    try:
+        if 'imagen' not in request.files:
+            return jsonify({'ok': False, 'error': 'No se envió archivo'}), 400
+
+        file = request.files['imagen']
+
+        if file.filename == '':
+            return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+
+        # Validar extensión
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+
+        if file_ext not in allowed_extensions:
+            return jsonify({'ok': False, 'error': 'Formato no permitido. Use: png, jpg, jpeg, gif, webp'}), 400
+
+        # Guardar en static/promos/
+        promos_folder = os.path.join(app.root_path, 'static', 'promos')
+        os.makedirs(promos_folder, exist_ok=True)
+
+        # Nombre seguro con timestamp para evitar colisiones
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename_final = f"{timestamp}_{filename}"
+        filepath = os.path.join(promos_folder, filename_final)
+
+        file.save(filepath)
+
+        # Devolver ruta relativa para guardar en BD
+        return jsonify({
+            'ok': True,
+            'imagen_url': f'promos/{filename_final}'
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 # ==========================================
 # FIN ENDPOINTS PROMOS CAROUSEL
 # ==========================================

@@ -269,8 +269,14 @@
 
                 <div class="form-group">
                     <label>Imagen URL</label>
-                    <input type="text" id="imagenUrl" required placeholder="logo_promo.png">
-                    <small>Nombre del archivo en la carpeta /static (ej: logo_promo.png)</small>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="imagenUrl" required placeholder="logo_promo.png" style="flex: 1;">
+                        <input type="file" id="fileUpload" accept="image/*" style="display: none;" onchange="subirImagen()">
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('fileUpload').click()">
+                            📁 Subir
+                        </button>
+                    </div>
+                    <small>Sube una imagen o escribe la ruta (ej: logo_promo.png)</small>
                 </div>
 
                 <div class="form-group">
@@ -501,6 +507,35 @@
             } catch (e) {
                 console.error('Error actualizando promo:', e);
                 alert('Error al actualizar la promo');
+            }
+        }
+
+        async function subirImagen() {
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('imagen', file);
+
+            try {
+                const res = await fetch('/api/promos/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await res.json();
+
+                if (result.ok) {
+                    document.getElementById('imagenUrl').value = result.imagen_url;
+                    alert('✓ Imagen subida exitosamente');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (e) {
+                console.error('Error subiendo imagen:', e);
+                alert('Error al subir la imagen');
             }
         }
 

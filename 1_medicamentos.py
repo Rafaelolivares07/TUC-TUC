@@ -23,9 +23,18 @@ import math
 import unicodedata
 import re
 from dotenv import load_dotenv
+import cloudinary
+import cloudinary.uploader
 
 # Cargar variables de entorno
 load_dotenv()
+
+# Configurar Cloudinary
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
+)
 
 # -------------------------------------------------------------------
 # --- ZONA 1: CONFIGURACIÓN INICIAL Y CONEXIÓN A LA BASE DE DATOS ---
@@ -1181,22 +1190,22 @@ def upload_promo_image():
         if file_ext not in allowed_extensions:
             return jsonify({'ok': False, 'error': 'Formato no permitido. Use: png, jpg, jpeg, gif, webp'}), 400
 
-        # Guardar en static/promos/
-        promos_folder = os.path.join(app.root_path, 'static', 'promos')
-        os.makedirs(promos_folder, exist_ok=True)
-
-        # Nombre seguro con timestamp para evitar colisiones
+        # Subir a Cloudinary
         filename = secure_filename(file.filename)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename_final = f"{timestamp}_{filename}"
-        filepath = os.path.join(promos_folder, filename_final)
+        public_id = f"tuctuc/promos/{timestamp}_{filename.rsplit('.', 1)[0]}"
 
-        file.save(filepath)
+        upload_result = cloudinary.uploader.upload(
+            file,
+            public_id=public_id,
+            folder="tuctuc/promos",
+            resource_type="image"
+        )
 
-        # Devolver ruta relativa para guardar en BD
+        # Devolver URL completa de Cloudinary
         return jsonify({
             'ok': True,
-            'imagen_url': f'promos/{filename_final}'
+            'imagen_url': upload_result['secure_url']
         })
     except Exception as e:
         traceback.print_exc()

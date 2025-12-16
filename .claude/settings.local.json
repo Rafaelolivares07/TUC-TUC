@@ -15,7 +15,15 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(git reset:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(gh api:*)",
+      "Bash(git rm:*)",
+      "Bash(git checkout:*)",
+      "Bash(del fix_indent_productos.py fix_try_except.py)",
+      "Bash(timeout 60 python:*)",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []

@@ -266,7 +266,7 @@ class PostgreSQLConnectionWrapper:
         # Tablas que están en minúsculas en PostgreSQL (excepciones)
         tablas_minusculas = [
             'precios_competencia', 'precios_competencia_new',
-            'existencias', 'terceros', 'terceros_competidores', 'alertas_admin', 'archivos',
+            'existencias', 'terceros', 'terceros_competidores', 'terceros_direcciones', 'alertas_admin', 'archivos',
             'componentes_activos_sugerencias', 'indicaciones_rechazadas',
             'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
             'sugerir_sintomas', 'pedidos'
@@ -658,6 +658,272 @@ def carrito():
     """Página del carrito de compras"""
     return render_template('carrito.html')
 
+# ==========================================
+# ENDPOINTS PARA SISTEMA DE DIRECCIONES
+# ==========================================
+
+@app.route('/api/verificar-telefono', methods=['GET'])
+def verificar_telefono():
+    """
+    Última revisión: 2025-12-15 20:00
+    Usado en: templates/checkout.html
+    Verifica si un teléfono ya existe en terceros y devuelve sus datos
+    """
+    telefono = request.args.get('telefono', '').strip()
+
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Buscar tercero por teléfono
+        tercero = conn.execute("""
+            SELECT id, nombre, telefono, id_usuario
+            FROM terceros
+            WHERE telefono = ?
+            LIMIT 1
+        """, (telefono,)).fetchone()
+
+        if tercero:
+            tercero_id = tercero['id']
+
+            # Obtener direcciones del tercero
+            direcciones = conn.execute("""
+                SELECT id, alias, nombre_completo, telefono, direccion,
+                       latitud, longitud, es_principal
+                FROM terceros_direcciones
+                WHERE tercero_id = ?
+                ORDER BY es_principal DESC, fecha_actualizacion DESC
+            """, (tercero_id,)).fetchall()
+
+            conn.close()
+
+            return jsonify({
+                'ok': True,
+                'existe': True,
+                'tercero_id': tercero_id,
+                'nombre': tercero['nombre'],
+                'direcciones': [dict(d) for d in direcciones]
+            })
+        else:
+            conn.close()
+            return jsonify({
+                'ok': True,
+                'existe': False
+            })
+
+    except Exception as e:
+        print(f"Error verificar-telefono: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/enviar-codigo-whatsapp', methods=['POST'])
+def enviar_codigo_whatsapp():
+    """
+    Última revisión: 2025-12-15 20:00
+    Usado en: templates/checkout.html
+    Genera y envía código de verificación por WhatsApp
+    """
+    try:
+        data = request.get_json()
+        telefono = data.get('telefono', '').strip()
+
+        if not telefono:
+            return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+
+        # Generar código de 6 dígitos
+        import random
+        codigo = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+
+        # Guardar código en session con timestamp
+        import time
+        session['codigo_verificacion'] = codigo
+        session['codigo_telefono'] = telefono
+        session['codigo_timestamp'] = time.time()
+
+        # Enviar por WhatsApp
+        conn = get_db_connection()
+        config = conn.execute('SELECT whatsapp_numero FROM "CONFIGURACION_SISTEMA" LIMIT 1').fetchone()
+        conn.close()
+
+        numero_destino = telefono if not telefono.startswith('+') else telefono[1:]
+        mensaje = f"🔐 Tu código de verificación TUC-TUC es: *{codigo}*\n\nVálido por 10 minutos."
+
+        # Enviar WhatsApp
+        enviar_whatsapp(numero_destino, mensaje)
+
+        return jsonify({'ok': True, 'mensaje': 'Código enviado por WhatsApp'})
+
+    except Exception as e:
+        print(f"Error enviar-codigo-whatsapp: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/verificar-codigo', methods=['POST'])
+def verificar_codigo():
+    """
+    Última revisión: 2025-12-15 20:00
+    Usado en: templates/checkout.html
+    Verifica el código ingresado por el usuario
+    """
+    try:
+        data = request.get_json()
+        codigo = data.get('codigo', '').strip()
+        telefono = data.get('telefono', '').strip()
+
+        if not codigo or not telefono:
+            return jsonify({'ok': False, 'error': 'Código y teléfono requeridos'}), 400
+
+        # Verificar código de session
+        codigo_guardado = session.get('codigo_verificacion')
+        telefono_guardado = session.get('codigo_telefono')
+        timestamp = session.get('codigo_timestamp', 0)
+
+        import time
+        tiempo_transcurrido = time.time() - timestamp
+
+        # Validar
+        if not codigo_guardado:
+            return jsonify({'ok': False, 'error': 'No hay código pendiente'}), 400
+
+        if tiempo_transcurrido > 600:  # 10 minutos
+            return jsonify({'ok': False, 'error': 'Código expirado'}), 400
+
+        if codigo != codigo_guardado or telefono != telefono_guardado:
+            return jsonify({'ok': False, 'error': 'Código incorrecto'}), 400
+
+        # Código válido - limpiar session y marcar como verificado
+        session.pop('codigo_verificacion', None)
+        session.pop('codigo_telefono', None)
+        session.pop('codigo_timestamp', None)
+        session['telefono_verificado'] = telefono
+        session['telefono_verificado_timestamp'] = time.time()
+
+        return jsonify({'ok': True, 'mensaje': 'Código verificado'})
+
+    except Exception as e:
+        print(f"Error verificar-codigo: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/tercero/direcciones', methods=['GET'])
+def obtener_direcciones_tercero():
+    """
+    Última revisión: 2025-12-15 20:00
+    Usado en: templates/checkout.html
+    Obtiene las direcciones de un tercero por teléfono
+    """
+    telefono = request.args.get('telefono', '').strip()
+
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Buscar tercero
+        tercero = conn.execute("""
+            SELECT id FROM terceros WHERE telefono = ? LIMIT 1
+        """, (telefono,)).fetchone()
+
+        if not tercero:
+            conn.close()
+            return jsonify({'ok': True, 'direcciones': []})
+
+        # Obtener direcciones
+        direcciones = conn.execute("""
+            SELECT id, alias, nombre_completo, telefono, direccion,
+                   latitud, longitud, es_principal
+            FROM terceros_direcciones
+            WHERE tercero_id = ?
+            ORDER BY es_principal DESC, fecha_actualizacion DESC
+        """, (tercero['id'],)).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'direcciones': [dict(d) for d in direcciones]
+        })
+
+    except Exception as e:
+        print(f"Error obtener direcciones: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/tercero/direcciones', methods=['POST'])
+def agregar_direccion_tercero():
+    """
+    Última revisión: 2025-12-15 20:00
+    Usado en: templates/checkout.html
+    Agrega una nueva dirección a un tercero
+    """
+    try:
+        data = request.get_json()
+
+        telefono = data.get('telefono', '').strip()
+        alias = data.get('alias', '').strip()
+        nombre_completo = data.get('nombre_completo', '').strip()
+        direccion = data.get('direccion', '').strip()
+        latitud = data.get('latitud')
+        longitud = data.get('longitud')
+        es_principal = data.get('es_principal', False)
+
+        if not all([telefono, alias, nombre_completo, direccion]):
+            return jsonify({'ok': False, 'error': 'Datos incompletos'}), 400
+
+        conn = get_db_connection()
+
+        # Buscar o crear tercero
+        tercero = conn.execute("""
+            SELECT id FROM terceros WHERE telefono = ? LIMIT 1
+        """, (telefono,)).fetchone()
+
+        if tercero:
+            tercero_id = tercero['id']
+        else:
+            # Crear nuevo tercero
+            cursor = conn.execute("""
+                INSERT INTO terceros (nombre, telefono, fecha_creacion)
+                VALUES (?, ?, datetime('now'))
+            """, (nombre_completo, telefono))
+            tercero_id = cursor.lastrowid
+
+        # Si es principal, quitar principal de las demás
+        if es_principal:
+            conn.execute("""
+                UPDATE terceros_direcciones
+                SET es_principal = false
+                WHERE tercero_id = ?
+            """, (tercero_id,))
+
+        # Insertar dirección
+        cursor = conn.execute("""
+            INSERT INTO terceros_direcciones
+            (tercero_id, alias, nombre_completo, telefono, direccion, latitud, longitud, es_principal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tercero_id, alias, nombre_completo, telefono, direccion, latitud, longitud, es_principal))
+
+        direccion_id = cursor.lastrowid
+        conn.close()
+
+        return jsonify({'ok': True, 'direccion_id': direccion_id})
+
+    except Exception as e:
+        print(f"Error agregar dirección: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ==========================================
+# FIN ENDPOINTS DIRECCIONES
+# ==========================================
+
 @app.route('/tienda/checkout')
 def checkout():
     """Página de checkout"""
@@ -715,18 +981,69 @@ def procesar_pedido():
         
         conn = get_db_connection()
 
-        # 1. Crear TERCERO (cliente)
-        # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
-        cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
-        next_tercero_id = cursor_seq.fetchone()[0]
+        # 1. Buscar o crear TERCERO (cliente)
+        # Primero buscar si ya existe por teléfono
+        tercero_existente = conn.execute("""
+            SELECT id, nombre FROM terceros WHERE telefono = ? LIMIT 1
+        """, (telefono,)).fetchone()
 
-        print(f"➕ Insertando tercero con ID {next_tercero_id}...")
-        cursor = conn.execute("""
-            INSERT INTO terceros (id, nombre, telefono, direccion, latitud, longitud, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-        """, (next_tercero_id, nombre, telefono, direccion, latitud, longitud))
-        tercero_id = next_tercero_id
-        print(f"✅ Tercero creado con ID: {tercero_id}")
+        if tercero_existente:
+            tercero_id = tercero_existente['id']
+            print(f"✅ Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
+
+            # Actualizar nombre si cambió
+            if tercero_existente['nombre'] != nombre:
+                conn.execute("""
+                    UPDATE terceros
+                    SET nombre = ?, fecha_actualizacion = datetime('now')
+                    WHERE id = ?
+                """, (nombre, tercero_id))
+                print(f"  Nombre actualizado a: {nombre}")
+
+        else:
+            # Crear nuevo tercero
+            cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
+            next_tercero_id = cursor_seq.fetchone()[0]
+
+            print(f"➕ Insertando nuevo tercero con ID {next_tercero_id}...")
+            cursor = conn.execute("""
+                INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
+                VALUES (?, ?, ?, datetime('now'))
+            """, (next_tercero_id, nombre, telefono))
+            tercero_id = next_tercero_id
+            print(f"✅ Tercero creado con ID: {tercero_id}")
+
+        # 2. Buscar o crear DIRECCIÓN en terceros_direcciones
+        alias_direccion = data.get('alias_direccion', 'Principal')
+
+        # Buscar si existe esta dirección exacta para este tercero
+        direccion_existente = conn.execute("""
+            SELECT id FROM terceros_direcciones
+            WHERE tercero_id = ? AND direccion = ?
+            LIMIT 1
+        """, (tercero_id, direccion)).fetchone()
+
+        if direccion_existente:
+            direccion_id = direccion_existente['id']
+            print(f"✅ Dirección existente encontrada: ID {direccion_id}")
+
+            # Actualizar coordenadas si cambiaron
+            conn.execute("""
+                UPDATE terceros_direcciones
+                SET latitud = ?, longitud = ?, fecha_actualizacion = datetime('now')
+                WHERE id = ?
+            """, (latitud, longitud, direccion_id))
+
+        else:
+            # Crear nueva dirección
+            print(f"➕ Creando nueva dirección '{alias_direccion}'...")
+            cursor = conn.execute("""
+                INSERT INTO terceros_direcciones
+                (tercero_id, alias, nombre_completo, telefono, direccion, latitud, longitud, es_principal)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (tercero_id, alias_direccion, nombre, telefono, direccion, latitud, longitud, True))
+            direccion_id = cursor.lastrowid
+            print(f"✅ Dirección creada con ID: {direccion_id}")
         
         # 2. Calcular totales
         subtotal = sum(item['precio'] * item['cantidad'] for item in items)

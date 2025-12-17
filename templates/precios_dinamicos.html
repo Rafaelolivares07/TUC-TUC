@@ -1699,6 +1699,10 @@
                     }
                     // Actualizar UI
                     renderizarMedicamentos(MEDICAMENTOS_DATA);
+                    resaltarFilaActiva();
+
+                    // Actualizar portapapeles con nuevo nombre
+                    copiarAlPortapapeles(MEDICAMENTO_ACTIVO.nombre, MEDICAMENTO_ACTIVO.fabricante_nombre);
 
                     // Mostrar confirmación verde
                     const confirmacion = document.getElementById('nombre-confirmacion');
@@ -2035,23 +2039,20 @@
                             const base64 = e.target.result;
                             // Mostrar imagen inmediatamente
                             mostrarImagen(base64);
-                            // Guardar en base de datos
-                            const medId = document.getElementById('medicamento-activo').value;
-                            const fabId = document.getElementById('fabricante-activo').value;
-                            if (medId && fabId) {
+                            // Guardar en base de datos usando MEDICAMENTO_ACTIVO (actualizado)
+                            if (MEDICAMENTO_ACTIVO && MEDICAMENTO_ACTIVO.medicamento_id && MEDICAMENTO_ACTIVO.fabricante_id) {
                                 const res = await fetch('/admin/imagen-producto/guardar', {
                                     method: 'POST',
                                     headers: {'Content-Type': 'application/json'},
                                     body: JSON.stringify({
-                                        medicamento_id: medId,
-                                        fabricante_id: fabId,
+                                        medicamento_id: MEDICAMENTO_ACTIVO.medicamento_id,
+                                        fabricante_id: MEDICAMENTO_ACTIVO.fabricante_id,
                                         imagen_base64: base64
                                     })
                                 });
                                 const data = await res.json();
                                 if (!data.ok) {
-                                    alert('Error al guardar la imagen');
-                                    mostrarPlaceholder();
+                                    console.error('Error al guardar imagen:', data.error);
                                 }
                             }
                         };

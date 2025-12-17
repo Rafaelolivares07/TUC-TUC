@@ -11135,7 +11135,10 @@ def guardar_imagen_producto():
     fabricante_id = data.get('fabricante_id')
     imagen_base64 = data.get('imagen_base64')
 
+    print(f"🖼️ Guardando imagen - Med ID: {medicamento_id}, Fab ID: {fabricante_id}, Imagen length: {len(imagen_base64) if imagen_base64 else 0}")
+
     if not medicamento_id or not fabricante_id or not imagen_base64:
+        print(f"❌ Faltan datos - Med: {bool(medicamento_id)}, Fab: {bool(fabricante_id)}, Img: {bool(imagen_base64)}")
         return jsonify({'ok': False, 'error': 'Faltan datos requeridos'})
 
     try:
@@ -11147,6 +11150,7 @@ def guardar_imagen_producto():
         """, (medicamento_id, fabricante_id)).fetchone()
 
         if exists:
+            print(f"✅ Registro existe, actualizando imagen...")
             # Actualizar imagen
             db.execute("""
                 UPDATE precios
@@ -11154,14 +11158,18 @@ def guardar_imagen_producto():
                 WHERE medicamento_id = ? AND fabricante_id = ?
             """, (imagen_base64, medicamento_id, fabricante_id))
         else:
-            # Insertar nuevo registro con imagen (necesitamos todos los campos requeridos de precios)
+            print(f"❌ No existe registro de precio para Med {medicamento_id} + Fab {fabricante_id}")
             return jsonify({'ok': False, 'error': 'No existe registro de precio para este producto'})
 
         db.commit()
         db.close()
 
+        print(f"✅ Imagen guardada exitosamente")
         return jsonify({'ok': True})
     except Exception as e:
+        print(f"❌ Error al guardar imagen: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)})
 
 

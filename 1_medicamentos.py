@@ -4771,6 +4771,56 @@ def actualizar_nombre_medicamento(medicamento_id):
         if conn:
             conn.close()
 
+@app.route("/admin/medicamentos/actualizar-fabricante", methods=["POST"])
+@admin_required
+def actualizar_fabricante_medicamento():
+    """Actualiza el fabricante de un medicamento (cambia el precio de un fabricante a otro)"""
+    conn = None
+    try:
+        conn = get_db_connection()
+        data = request.get_json()
+        medicamento_id = data.get('medicamento_id')
+        fabricante_id_antiguo = data.get('fabricante_id_antiguo')
+        fabricante_id_nuevo = data.get('fabricante_id_nuevo')
+
+        if not medicamento_id or not fabricante_id_nuevo:
+            return jsonify({'ok': False, 'error': 'Datos incompletos'}), 400
+
+        # Verificar si ya existe un precio para este medicamento con el nuevo fabricante
+        existe = conn.execute(
+            "SELECT COUNT(*) as count FROM precios WHERE medicamento_id = ? AND fabricante_id = ?",
+            (medicamento_id, fabricante_id_nuevo)
+        ).fetchone()
+
+        if existe['count'] > 0:
+            return jsonify({'ok': False, 'error': 'Ya existe un precio para este medicamento con el fabricante seleccionado'}), 400
+
+        # Actualizar el fabricante en la tabla PRECIOS
+        conn.execute(
+            "UPDATE precios SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
+            (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
+        )
+
+        # Actualizar también en precios_competencia si existen
+        conn.execute(
+            "UPDATE precios_competencia SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
+            (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
+        )
+
+        conn.commit()
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error al actualizar fabricante: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
 @app.route("/medicamentos/eliminar/<int:medicamento_id>", methods=["POST"])
 @admin_required
 def eliminar_medicamento(medicamento_id):
@@ -9629,13 +9679,14 @@ def precios_dinamicos_data():
         return jsonify({'error': str(e), 'medicamentos': [], 'config': {}}), 500
 
 @app.route('/admin/fabricantes/buscar', methods=['GET'])
+@admin_required
 def buscar_fabricantes():
     query = request.args.get('q', '').strip()
     db = get_db_connection()
 
     if query:
         fabricantes = db.execute(
-            "SELECT id, nombre FROM FABRICANTES WHERE nombre LIKE ? ORDER BY nombre LIMIT 20",
+            "SELECT id, nombre FROM FABRICANTES WHERE LOWER(nombre) LIKE LOWER(?) ORDER BY LOWER(nombre) LIMIT 20",
             (f'%{query}%',)
         ).fetchall()
     else:
@@ -9647,6 +9698,7 @@ def buscar_fabricantes():
     return jsonify({'fabricantes': [dict(f) for f in fabricantes]})
 
 @app.route('/admin/fabricantes/crear', methods=['POST'])
+@admin_required
 def crear_fabricante():
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
@@ -10344,7 +10396,7 @@ def guardar_configuracion_precios():
     
     campos_validos = ['usar_precio', 'recargo_escaso', 'recargo_1_cotizacion', 'redondeo_superior',
                       'ganancia_min_escaso', 'ganancia_max_escaso', 'pedido_min_domicilio_gratis',
-                      'umbral_brecha_2cot_baja', 'umbral_brecha_2cot_alta', 'umbral_brecha_3cot', 'umbral_brecha_4cot',
+                      'umbral_brecha_3cot', 'umbral_brecha_4cot',
                       'permitir_publicar_sin_cotizaciones']
     
     if campo not in campos_validos:

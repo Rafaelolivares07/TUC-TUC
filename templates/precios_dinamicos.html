@@ -410,15 +410,23 @@
     </div>
     <div id="panel-medicamento" class="panel" style="display:none;">
         <div>
-            <h3 style="margin:0;">Medicamento:
+            <h3 style="margin:0;">
                 <input type="text" id="nombre-medicamento-editable" style="font-size:1.1em; font-weight:bold; border:1px solid #ccc; padding:2px 6px; border-radius:4px; width:720px; max-width:none;" placeholder="Nombre del medicamento">
-                <span class="fabricante">- <span id="nombre-fabricante"></span></span>
                 <button id="btn-guardar-nombre" class="btn-accion" style="background:#5cb85c; color:white; border-radius:6px; padding:4px 8px; margin-left:6px; vertical-align:middle; font-size:0.95em;">💾</button>
+                <span id="nombre-confirmacion" style="display:none; color: #5cb85c; font-weight: bold; margin-left: 10px; font-size: 0.9em;">✓ Actualizado</span>
                 <button id="btn-eliminar-medicamento" class="btn-accion" style="background:#d9534f; color:white; border-radius:6px; padding:4px 8px; margin-left:6px; vertical-align:middle; font-size:0.95em;">🗑️</button>
             </h3>
         </div>
         <div class="contenido-flex-superior">
             <div class="columna-config">
+                <div class="config-inputs">
+                    <div class="input-group config-full-width" style="position: relative;">
+                        <label>Fabricante</label>
+                        <input type="text" id="fabricante-nombre" placeholder="Escriba para buscar o crear fabricante" autocomplete="off" style="width: 100%;">
+                        <span id="fabricante-confirmacion" style="display:none; color: #5cb85c; font-weight: bold; margin-left: 10px; font-size: 0.9em;">✓ Actualizado</span>
+                        <div id="dropdown-fabricantes" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; max-height:200px; overflow-y:auto; z-index:1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+                    </div>
+                </div>
                 <h4>Configuración de Precios (1)</h4>
                 <div class="config-inputs">
                     <div class="input-group config-full-width">
@@ -429,6 +437,10 @@
                         </select>
                     </div>
                     <div class="input-group">
+                        <label>Redondeo Superior</label>
+                        <input type="number" id="config-redondeo" data-campo="redondeo_superior" step="100">
+                    </div>
+                    <div class="input-group">
                         <label>Recargo 1 Cotización (%)</label>
                         <input type="number" id="config-recargo-1" data-campo="recargo_1_cotizacion" step="1">
                     </div>
@@ -436,70 +448,54 @@
                         <label>Recargo 2 Cotizaciones (%)</label>
                         <input type="number" id="config-recargo" data-campo="recargo_escaso" step="1">
                     </div>
-                    <div class="input-group">
-                        <label>Redondeo Superior</label>
-                        <input type="number" id="config-redondeo" data-campo="redondeo_superior" step="100">
-                    </div>
-                    <div class="input-group">
-                        <label>Ganancia Mínima</label>
-                        <input type="number" id="config-ganancia-min" data-campo="ganancia_min_escaso" step="100">
-                    </div>
-                    <div class="input-group">
-                        <label>Costo Operario Domicilio</label>
-                        <input type="number" id="config-costo-operario" data-campo="costo_operario_domicilio" step="100" placeholder="3333">
-                    </div>
-                    <div class="input-group" style="border-top: 2px solid #3498db; padding-top: 10px; margin-top: 45px; background: #f8f9fa; padding: 10px; border-radius: 5px;">
-                        <label style="font-weight: bold; color: #2c3e50; font-size: 1em; margin-bottom: 8px; display: block;">Escenario 1: Comp. Barata</label>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                    <div class="input-group" style="border-top: 2px solid #34495e; padding-top: 10px; margin-top: -100px; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                        <!-- Título en 3 columnas -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                            <div style="font-weight: bold; color: #2c3e50; font-size: 1em; text-align: left;">Escenarios</div>
+                            <div style="font-weight: bold; color: #3498db; font-size: 1em; text-align: center;">Barata</div>
+                            <div style="font-weight: bold; color: #e67e22; font-size: 1em; text-align: center;">Cara</div>
+                        </div>
+
+                        <!-- Precio Venta -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.85em; margin-bottom: 3px;">
                             <span style="color: #666;">Precio Venta:</span>
-                            <span id="esc1-precio-venta" style="font-weight: bold;">-</span>
+                            <span id="esc1-precio-venta" style="font-weight: bold; text-align: center;">-</span>
+                            <span id="esc2-precio-venta" style="font-weight: bold; text-align: center;">-</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+
+                        <!-- Costo Compra -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.85em; margin-bottom: 3px;">
                             <span style="color: #666;">Costo Compra:</span>
-                            <span id="esc1-costo-compra" style="font-weight: bold;">-</span>
+                            <span id="esc1-costo-compra" style="font-weight: bold; text-align: center;">-</span>
+                            <span id="esc2-costo-compra" style="font-weight: bold; text-align: center;">-</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; padding-top: 3px; border-top: 1px dashed #ddd;">
+
+                        <!-- Margen Bruto -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.85em; margin-bottom: 3px; padding-top: 3px; border-top: 1px dashed #ddd;">
                             <span style="color: #666; font-weight: 600;">Margen Bruto:</span>
-                            <span id="esc1-margen-bruto" style="font-weight: bold;">-</span>
+                            <span id="esc1-margen-bruto" style="font-weight: bold; text-align: center;">-</span>
+                            <span id="esc2-margen-bruto" style="font-weight: bold; text-align: center;">-</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; margin-top: 8px;">
+
+                        <!-- Ingreso Domicilio -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.85em; margin-bottom: 3px; margin-top: 8px;">
                             <span style="color: #666;">Ingreso Domicilio:</span>
-                            <span id="esc1-ingreso-domicilio" style="font-weight: bold; color: #27ae60;">-</span>
+                            <span id="esc1-ingreso-domicilio" style="font-weight: bold; color: #27ae60; text-align: center;">-</span>
+                            <span id="esc2-ingreso-domicilio" style="font-weight: bold; color: #27ae60; text-align: center;">-</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+
+                        <!-- Costo Entrega -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.85em; margin-bottom: 3px;">
                             <span style="color: #666;">Costo Entrega:</span>
-                            <span id="esc1-costo-entrega" style="font-weight: bold; color: #e74c3c;">-</span>
+                            <span id="esc1-costo-entrega" style="font-weight: bold; color: #e74c3c; text-align: center;">-</span>
+                            <span id="esc2-costo-entrega" style="font-weight: bold; color: #e74c3c; text-align: center;">-</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-top: 8px; padding-top: 8px; border-top: 2px solid #3498db;">
+
+                        <!-- Margen Neto -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; font-size: 0.9em; margin-top: 8px; padding-top: 8px; border-top: 2px solid #34495e;">
                             <span style="color: #2c3e50; font-weight: bold;">Margen Neto:</span>
-                            <span id="esc1-margen-neto" style="font-weight: bold; font-size: 1.1em;">-</span>
-                        </div>
-                    </div>
-                    <div class="input-group" style="border-top: 2px solid #e67e22; padding-top: 10px; margin-top: -185px; background: #fef5e7; padding: 10px; border-radius: 5px;">
-                        <label style="font-weight: bold; color: #2c3e50; font-size: 1em; margin-bottom: 8px; display: block;">Escenario 2: Comp. Cara</label>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
-                            <span style="color: #666;">Precio Venta:</span>
-                            <span id="esc2-precio-venta" style="font-weight: bold;">-</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
-                            <span style="color: #666;">Costo Compra:</span>
-                            <span id="esc2-costo-compra" style="font-weight: bold;">-</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; padding-top: 3px; border-top: 1px dashed #ddd;">
-                            <span style="color: #666; font-weight: 600;">Margen Bruto:</span>
-                            <span id="esc2-margen-bruto" style="font-weight: bold;">-</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px; margin-top: 8px;">
-                            <span style="color: #666;">Ingreso Domicilio:</span>
-                            <span id="esc2-ingreso-domicilio" style="font-weight: bold; color: #27ae60;">-</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
-                            <span style="color: #666;">Costo Entrega:</span>
-                            <span id="esc2-costo-entrega" style="font-weight: bold; color: #e74c3c;">-</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-top: 8px; padding-top: 8px; border-top: 2px solid #e67e22;">
-                            <span style="color: #2c3e50; font-weight: bold;">Margen Neto:</span>
-                            <span id="esc2-margen-neto" style="font-weight: bold; font-size: 1.1em;">-</span>
+                            <span id="esc1-margen-neto" style="font-weight: bold; font-size: 1.1em; text-align: center;">-</span>
+                            <span id="esc2-margen-neto" style="font-weight: bold; font-size: 1.1em; text-align: center;">-</span>
                         </div>
                     </div>
                 </div>
@@ -512,12 +508,16 @@
                         <input type="number" id="config-ganancia-max" data-campo="ganancia_max_escaso" step="100">
                     </div>
                     <div class="input-group">
-                        <label>Precio Domicilio</label>
-                        <input type="number" id="config-precio-domicilio" data-campo="precio_domicilio" step="500">
-                    </div>
-                    <div class="input-group">
                         <label>Pedido Mín Domicilio Gratis</label>
                         <input type="number" id="config-pedido-min-domicilio" data-campo="pedido_min_domicilio_gratis" step="1000">
+                    </div>
+                    <div class="input-group">
+                        <label>Ganancia Mínima</label>
+                        <input type="number" id="config-ganancia-min" data-campo="ganancia_min_escaso" step="100">
+                    </div>
+                    <div class="input-group">
+                        <label>Precio Domicilio</label>
+                        <input type="number" id="config-precio-domicilio" data-campo="precio_domicilio" step="500">
                     </div>
                     <div class="input-group">
                         <label>Monto Validación WhatsApp</label>
@@ -527,12 +527,8 @@
                         </small>
                     </div>
                     <div class="input-group">
-                        <label>Brecha 2 Cot Baja ($)</label>
-                        <input type="number" id="config-brecha-2cot-baja" data-campo="umbral_brecha_2cot_baja" step="100">
-                    </div>
-                    <div class="input-group">
-                        <label>Brecha 2 Cot Alta ($)</label>
-                        <input type="number" id="config-brecha-2cot-alta" data-campo="umbral_brecha_2cot_alta" step="100">
+                        <label>Costo Operario Domicilio</label>
+                        <input type="number" id="config-costo-operario" data-campo="costo_operario_domicilio" step="100" placeholder="3333">
                     </div>
                     <div class="input-group config-full-width" style="margin-top: 15px;">
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
@@ -795,8 +791,6 @@
                 document.getElementById('config-precio-domicilio').value = CONFIG.precio_domicilio || 5000;
                 document.getElementById('config-pedido-min-domicilio').value = CONFIG.pedido_min_domicilio_gratis || 50000;
                 document.getElementById('config-monto-whatsapp').value = CONFIG.monto_validacion_whatsapp || 100000;
-                document.getElementById('config-brecha-2cot-baja').value = CONFIG.umbral_brecha_2cot_baja || 2000;
-                document.getElementById('config-brecha-2cot-alta').value = CONFIG.umbral_brecha_2cot_alta || 5000;
                 document.getElementById('config-costo-operario').value = CONFIG.costo_operario_domicilio || 3333;
 
                 // Cargar estado del toggle
@@ -874,7 +868,7 @@
             }
             // Si es medicamento normal, continuar con flujo normal
             document.getElementById('nombre-medicamento-editable').value = med.nombre;
-            document.getElementById('nombre-fabricante').textContent = med.fabricante_nombre;
+            document.getElementById('fabricante-nombre').value = med.fabricante_nombre || '';
             document.getElementById('medicamento-activo').value = med.medicamento_id;
             document.getElementById('fabricante-activo').value = med.fabricante_id;
             document.getElementById('panel-medicamento').style.display = 'block';
@@ -974,11 +968,15 @@
 
         function actualizarEscenariosCompetencia(competencias) {
             const costoOperario = parseFloat(document.getElementById('config-costo-operario').value) || 3333;
-            const precioDomicilio = parseFloat(document.getElementById('config-precio-domicilio').value) || 5000;
+            const precioDomicilioBase = parseFloat(document.getElementById('config-precio-domicilio').value) || 5000;
             const precioNuestro = MEDICAMENTO_ACTIVO ? MEDICAMENTO_ACTIVO.precio_actual : 0;
 
-            if (!competencias || competencias.length === 0) {
-                // Sin cotizaciones, limpiar todos los campos
+            // Aplicar regla: domicilio gratis si precio >= $50,000
+            const precioDomicilio = precioNuestro >= 50000 ? 0 : precioDomicilioBase;
+
+            // Limpiar escenarios si no hay competencias O si el producto no tiene precio
+            if (!competencias || competencias.length === 0 || !precioNuestro || precioNuestro <= 0) {
+                // Sin cotizaciones o sin precio, limpiar todos los campos
                 ['esc1', 'esc2'].forEach(esc => {
                     document.getElementById(`${esc}-precio-venta`).textContent = '-';
                     document.getElementById(`${esc}-costo-compra`).textContent = '-';
@@ -1678,16 +1676,12 @@
         document.getElementById('btn-guardar-nombre').addEventListener('click', async function(e) {
             e.stopPropagation();
             if (!MEDICAMENTO_ACTIVO || !MEDICAMENTO_ACTIVO.medicamento_id) {
-                alert('Seleccione un medicamento primero.');
                 return;
             }
             const nuevoNombre = document.getElementById('nombre-medicamento-editable').value.trim();
             if (!nuevoNombre) {
-                alert('El nombre no puede estar vacío.');
                 return;
             }
-            const confirmar = confirm(`¿Cambiar nombre a "${nuevoNombre}"?`);
-            if (!confirmar) return;
 
             try {
                 const res = await fetch(`/medicamentos/actualizar-nombre/${MEDICAMENTO_ACTIVO.medicamento_id}`, {
@@ -1705,13 +1699,16 @@
                     }
                     // Actualizar UI
                     renderizarMedicamentos(MEDICAMENTOS_DATA);
-                    alert('Nombre actualizado correctamente');
-                } else {
-                    alert(data.error || 'Error al actualizar nombre');
+
+                    // Mostrar confirmación verde
+                    const confirmacion = document.getElementById('nombre-confirmacion');
+                    confirmacion.style.display = 'inline';
+                    setTimeout(() => {
+                        confirmacion.style.display = 'none';
+                    }, 2000);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error al actualizar nombre');
             }
         });
 
@@ -1886,8 +1883,6 @@
         document.getElementById('config-precio-domicilio').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-pedido-min-domicilio').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-monto-whatsapp').addEventListener('blur', guardarCampoConfiguracion);
-        document.getElementById('config-brecha-2cot-baja').addEventListener('blur', guardarCampoConfiguracion);
-        document.getElementById('config-brecha-2cot-alta').addEventListener('blur', guardarCampoConfiguracion);
         document.getElementById('config-costo-operario').addEventListener('blur', guardarCampoConfiguracion);
 
         async function guardarCampoConfiguracion(e) {
@@ -1919,10 +1914,6 @@
                 CONFIG.pedido_min_domicilio_gratis = parseFloat(valor);
             } else if (campo === 'monto_validacion_whatsapp') {
                 CONFIG.monto_validacion_whatsapp = parseFloat(valor);
-            } else if (campo === 'umbral_brecha_2cot_baja') {
-                CONFIG.umbral_brecha_2cot_baja = parseFloat(valor);
-            } else if (campo === 'umbral_brecha_2cot_alta') {
-                CONFIG.umbral_brecha_2cot_alta = parseFloat(valor);
             } else if (campo === 'costo_operario_domicilio') {
                 CONFIG.costo_operario_domicilio = parseFloat(valor);
             }
@@ -3823,6 +3814,219 @@ window.addEventListener('focus', async () => {
         document.getElementById('precio-cotizacion').focus();
     }, 100);
 });
+
+// ===================================================================
+// AUTOCOMPLETE FABRICANTE PARA EDITAR MEDICAMENTO
+// ===================================================================
+const inputFabricante = document.getElementById('fabricante-nombre');
+    const dropdownFabricantes = document.getElementById('dropdown-fabricantes');
+
+    console.log('inputFabricante:', inputFabricante);
+    console.log('dropdownFabricantes:', dropdownFabricantes);
+
+    if (!inputFabricante || !dropdownFabricantes) {
+        console.error('Elementos de fabricante no encontrados!');
+    }
+
+    let fabricantesItems = [];
+    let fabricantesIndex = -1;
+    let timeoutFabricantes;
+
+    inputFabricante.addEventListener('input', function() {
+        const query = this.value.trim();
+        clearTimeout(timeoutFabricantes);
+        if (query.length < 2) {
+            ocultarDropdownFabricantes();
+            return;
+        }
+        timeoutFabricantes = setTimeout(() => {
+            fetch(`/admin/fabricantes/buscar?q=${encodeURIComponent(query)}`)
+                .then(r => r.json())
+                .then(data => {
+                    mostrarDropdownFabricantes(data.fabricantes || []);
+                });
+        }, 300);
+    });
+
+    function mostrarDropdownFabricantes(fabricantes) {
+        fabricantesItems = fabricantes;
+        fabricantesIndex = -1;
+        if (fabricantes.length === 0) {
+            ocultarDropdownFabricantes();
+            return;
+        }
+        dropdownFabricantes.innerHTML = fabricantes.map((f, idx) => `
+            <div class="autocomplete-item" data-index="${idx}" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #eee;">
+                <strong>${f.nombre}</strong>
+            </div>
+        `).join('');
+        dropdownFabricantes.style.display = 'block';
+        dropdownFabricantes.querySelectorAll('.autocomplete-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const idx = parseInt(this.dataset.index);
+                seleccionarFabricanteExistente(fabricantesItems[idx]);
+            });
+            item.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#f0f0f0';
+            });
+            item.addEventListener('mouseleave', function() {
+                if (!this.classList.contains('selected')) {
+                    this.style.backgroundColor = 'white';
+                }
+            });
+        });
+    }
+
+    function ocultarDropdownFabricantes() {
+        dropdownFabricantes.style.display = 'none';
+        dropdownFabricantes.innerHTML = '';
+        fabricantesItems = [];
+        fabricantesIndex = -1;
+    }
+
+    async function seleccionarFabricanteExistente(fabricante) {
+        inputFabricante.value = fabricante.nombre;
+        ocultarDropdownFabricantes();
+        await actualizarFabricanteMedicamento(fabricante.id, fabricante.nombre);
+    }
+
+    async function crearNuevoFabricante(nombre) {
+        const res = await fetch('/admin/fabricantes/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre})
+        });
+        const data = await res.json();
+        if (data.id) {
+            inputFabricante.value = nombre;
+            ocultarDropdownFabricantes();
+            await actualizarFabricanteMedicamento(data.id, nombre);
+        }
+    }
+
+    async function actualizarFabricanteMedicamento(fabricanteId, fabricanteNombre) {
+        if (!MEDICAMENTO_ACTIVO || !MEDICAMENTO_ACTIVO.medicamento_id) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/admin/medicamentos/actualizar-fabricante', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    medicamento_id: MEDICAMENTO_ACTIVO.medicamento_id,
+                    fabricante_id_antiguo: MEDICAMENTO_ACTIVO.fabricante_id,
+                    fabricante_id_nuevo: fabricanteId
+                })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                // Actualizar en memoria
+                MEDICAMENTO_ACTIVO.fabricante_id = fabricanteId;
+                MEDICAMENTO_ACTIVO.fabricante_nombre = fabricanteNombre;
+                const idx = MEDICAMENTOS_DATA.findIndex(m =>
+                    m.medicamento_id === MEDICAMENTO_ACTIVO.medicamento_id &&
+                    m.fabricante_id === MEDICAMENTO_ACTIVO.fabricante_id
+                );
+                if (idx !== -1) {
+                    MEDICAMENTOS_DATA[idx].fabricante_id = fabricanteId;
+                    MEDICAMENTOS_DATA[idx].fabricante_nombre = fabricanteNombre;
+                }
+                // Actualizar UI
+                renderizarMedicamentos(MEDICAMENTOS_DATA);
+
+                // Mostrar confirmación verde
+                const confirmacion = document.getElementById('fabricante-confirmacion');
+                confirmacion.style.display = 'inline';
+                setTimeout(() => {
+                    confirmacion.style.display = 'none';
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    // Navegación con teclado en input fabricante
+    inputFabricante.addEventListener('keydown', function(e) {
+        const dropdownVisible = dropdownFabricantes.style.display === 'block';
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (dropdownVisible && fabricantesItems.length > 0) {
+                fabricantesIndex = 0;
+                actualizarSeleccionFabricantes();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.stopPropagation();
+        } else if (e.key === 'Escape') {
+            e.stopPropagation();
+            ocultarDropdownFabricantes();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            const nombre = this.value.trim();
+            if (!nombre) return;
+
+            // Si hay un item seleccionado en el dropdown, seleccionarlo
+            if (dropdownVisible && fabricantesIndex >= 0 && fabricantesItems[fabricantesIndex]) {
+                seleccionarFabricanteExistente(fabricantesItems[fabricantesIndex]);
+            } else {
+                // Si no hay dropdown visible o no hay selección, crear nuevo fabricante
+                crearNuevoFabricante(nombre);
+            }
+        }
+    });
+
+    // Navegación con teclado en dropdown
+    dropdownFabricantes.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (fabricantesIndex < fabricantesItems.length - 1) {
+                fabricantesIndex++;
+                actualizarSeleccionFabricantes();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (fabricantesIndex > 0) {
+                fabricantesIndex--;
+                actualizarSeleccionFabricantes();
+            } else {
+                inputFabricante.focus();
+                fabricantesIndex = -1;
+                actualizarSeleccionFabricantes();
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (fabricantesIndex >= 0) {
+                seleccionarFabricanteExistente(fabricantesItems[fabricantesIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            e.stopPropagation();
+            inputFabricante.focus();
+            ocultarDropdownFabricantes();
+        }
+    });
+
+    function actualizarSeleccionFabricantes() {
+        const items = dropdownFabricantes.querySelectorAll('.autocomplete-item');
+        items.forEach((item, idx) => {
+            if (idx === fabricantesIndex) {
+                item.classList.add('selected');
+                item.style.backgroundColor = '#e3f2fd';
+                item.scrollIntoView({ block: 'nearest' });
+                dropdownFabricantes.setAttribute('tabindex', '-1');
+                dropdownFabricantes.focus();
+            } else {
+                item.classList.remove('selected');
+                item.style.backgroundColor = 'white';
+            }
+        });
+    }
 
 
 </script>

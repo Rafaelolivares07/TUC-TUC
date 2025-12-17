@@ -397,12 +397,13 @@
                     <th onclick="ordenarTabla(0)">Nombre</th>
                     <th onclick="ordenarTabla(1)">Fabricante</th>
                     <th onclick="ordenarTabla(2)">Precio</th>
-                    <th onclick="ordenarTabla(3)">Exist.</th>
-                    <th onclick="ordenarTabla(4)">Origen</th>
-                    <th onclick="ordenarTabla(5)">Competidor</th>
-                    <th onclick="ordenarTabla(6)">Costo</th>
-                    <th onclick="ordenarTabla(7)">Fecha</th>
-                    <th onclick="ordenarTabla(8)">URLs</th>
+                    <th onclick="ordenarTabla(3)">Img</th>
+                    <th onclick="ordenarTabla(4)">Exist.</th>
+                    <th onclick="ordenarTabla(5)">Origen</th>
+                    <th onclick="ordenarTabla(6)">Competidor</th>
+                    <th onclick="ordenarTabla(7)">Costo</th>
+                    <th onclick="ordenarTabla(8)">Fecha</th>
+                    <th onclick="ordenarTabla(9)">URLs</th>
                 </tr>
             </thead>
             <tbody id="tbody-medicamentos"></tbody>
@@ -833,11 +834,14 @@
 
         function renderizarMedicamentos(meds) {
             const tbody = document.getElementById('tbody-medicamentos');
-            tbody.innerHTML = meds.map((m, idx) => `
+            tbody.innerHTML = meds.map((m, idx) => {
+                const iconoImagen = m.tiene_imagen === 'S' ? '<span style="color: #5cb85c;">✓</span>' : '<span style="color: #ccc;">✗</span>';
+                return `
                 <tr onclick="seleccionarMedicamento(${JSON.stringify(m).replace(/"/g, '&quot;')}); indiceMedicamentoActual = ${idx}; resaltarFilaActiva();">
                     <td>${m.nombre}</td>
                     <td>${m.fabricante_nombre}</td>
                     <td style="text-align: right;">${Math.round(m.precio_actual).toLocaleString('es-CO')}</td>
+                    <td style="text-align: center;">${iconoImagen}</td>
                     <td>${m.estado_existencia}</td>
                     <td>${m.origen || ''}</td>
                     <td>${m.competencia_nombre || ''}</td>
@@ -845,7 +849,8 @@
                     <td>${m.competencia_fecha || ''}</td>
                     <td>${(m.cotizaciones_con_url > 0 || m.cotizaciones_total > 0) ? `🔗 ${m.cotizaciones_con_url}/${m.cotizaciones_total}` : ''}</td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             // Actualizar contador de productos
             const contador = document.getElementById('contador-medicamentos');
             if (contador) contador.textContent = `Total productos: ${meds.length}`;
@@ -1962,27 +1967,31 @@
                         valorA = parseFloat(a.precio_actual) || 0;
                         valorB = parseFloat(b.precio_actual) || 0;
                         break;
-                    case 3: // Existencia
+                    case 3: // Imagen
+                        valorA = a.tiene_imagen || '';
+                        valorB = b.tiene_imagen || '';
+                        break;
+                    case 4: // Existencia
                         valorA = a.estado_existencia || '';
                         valorB = b.estado_existencia || '';
                         break;
-                    case 4: // Origen
+                    case 5: // Origen
                         valorA = a.origen || '';
                         valorB = b.origen || '';
                         break;
-                    case 5: // Competidor (nombre)
+                    case 6: // Competidor (nombre)
                         valorA = normalizarTexto(a.competencia_nombre || '');
                         valorB = normalizarTexto(b.competencia_nombre || '');
                         break;
-                    case 6: // Precio Competencia
+                    case 7: // Precio Competencia
                         valorA = parseFloat(a.competencia_precio) || 0;
                         valorB = parseFloat(b.competencia_precio) || 0;
                         break;
-                    case 7: // Fecha Competencia
+                    case 8: // Fecha Competencia
                         valorA = a.competencia_fecha || '';
                         valorB = b.competencia_fecha || '';
                         break;
-                    case 8: // URLs (cotizaciones con URL)
+                    case 9: // URLs (cotizaciones con URL)
                         valorA = parseInt(a.cotizaciones_con_url) || 0;
                         valorB = parseInt(b.cotizaciones_con_url) || 0;
                         break;
@@ -1993,6 +2002,20 @@
             });
             ORDEN_ASCENDENTE[columna] = !ascendente;
             renderizarMedicamentos(MEDICAMENTOS_DATA);
+
+            // Actualizar indicadores visuales en encabezados
+            const headers = document.querySelectorAll('#listado-medicamentos thead th');
+            headers.forEach((th, idx) => {
+                th.style.backgroundColor = '';
+                // Remover flechas anteriores del texto
+                th.textContent = th.textContent.replace(/⬆️|⬇️/g, '').trim();
+            });
+
+            // Aplicar estilo al encabezado activo
+            const headerActivo = headers[columna];
+            headerActivo.style.backgroundColor = '#d4edda';
+            const flecha = ascendente ? '⬇️' : '⬆️';
+            headerActivo.textContent = headerActivo.textContent.trim() + ' ' + flecha;
         }
 
         // === MANEJO DE IMAGEN DEL PRODUCTO ===
@@ -3922,12 +3945,15 @@ const inputFabricante = document.getElementById('fabricante-nombre');
             });
             const data = await res.json();
             if (data.ok) {
+                // Guardar el fabricante_id antiguo antes de actualizarlo
+                const fabricanteIdAntiguo = MEDICAMENTO_ACTIVO.fabricante_id;
+
                 // Actualizar en memoria
                 MEDICAMENTO_ACTIVO.fabricante_id = fabricanteId;
                 MEDICAMENTO_ACTIVO.fabricante_nombre = fabricanteNombre;
                 const idx = MEDICAMENTOS_DATA.findIndex(m =>
                     m.medicamento_id === MEDICAMENTO_ACTIVO.medicamento_id &&
-                    m.fabricante_id === MEDICAMENTO_ACTIVO.fabricante_id
+                    m.fabricante_id === fabricanteIdAntiguo
                 );
                 if (idx !== -1) {
                     MEDICAMENTOS_DATA[idx].fabricante_id = fabricanteId;
@@ -3935,6 +3961,10 @@ const inputFabricante = document.getElementById('fabricante-nombre');
                 }
                 // Actualizar UI
                 renderizarMedicamentos(MEDICAMENTOS_DATA);
+                resaltarFilaActiva();
+
+                // Actualizar portapapeles con nuevo fabricante
+                copiarAlPortapapeles(MEDICAMENTO_ACTIVO.nombre, fabricanteNombre);
 
                 // Mostrar confirmación verde
                 const confirmacion = document.getElementById('fabricante-confirmacion');

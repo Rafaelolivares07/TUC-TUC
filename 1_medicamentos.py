@@ -9555,6 +9555,8 @@ def fusionar_fabricantes_page():
 @app.route('/admin/precios-dinamicos/data')
 @admin_required
 def precios_dinamicos_data():
+    import time
+    inicio = time.time()
     try:
         db = get_db_connection()
 
@@ -9585,6 +9587,7 @@ def precios_dinamicos_data():
             f.id as fabricante_id,
             f.nombre as fabricante_nombre,
             COALESCE(p.precio, 0) AS precio_actual,
+            CASE WHEN p.imagen IS NOT NULL AND p.imagen != '' THEN 'S' ELSE 'N' END AS tiene_imagen,
             CASE
                 WHEN EXISTS (
                     SELECT 1 FROM existencias e
@@ -9624,6 +9627,7 @@ def precios_dinamicos_data():
             NULL as fabricante_id,
             '' as fabricante_nombre,
             0 AS precio_actual,
+            'N' AS tiene_imagen,
             '' AS estado_existencia,
             '' AS competencia_nombre,
             NULL AS competencia_precio,
@@ -9663,6 +9667,9 @@ def precios_dinamicos_data():
             precio_sugerido = calcular_precio_sugerido(precio_base, config)
 
         db.close()
+
+        tiempo_total = time.time() - inicio
+        print(f"⏱️ /admin/precios-dinamicos/data ejecutado en {tiempo_total:.2f}s - {len(medicamentos)} medicamentos")
 
         return jsonify({
             'config': config,
@@ -9706,21 +9713,22 @@ def crear_fabricante():
     if not nombre:
         return jsonify({'error': 'Nombre requerido'}), 400
 
-    db = get_db_connection()
+    conn = get_db_connection()
 
     # Verificar si ya existe
-    existe = db.execute("SELECT id FROM FABRICANTES WHERE nombre = ?", (nombre,)).fetchone()
+    existe = conn.execute("SELECT id FROM fabricantes WHERE nombre = ?", (nombre,)).fetchone()
     if existe:
-        db.close()
+        conn.close()
         return jsonify({'id': existe['id'], 'nombre': nombre, 'existia': True})
 
-    # Crear nuevo
-    cursor = db.execute("INSERT INTO FABRICANTES (nombre) VALUES (?)", (nombre,))
-    fabricante_id = cursor.lastrowid
-    db.commit()
-    db.close()
+    # Crear nuevo - obtener el siguiente ID de la secuencia
+    next_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM fabricantes").fetchone()[0]
+    conn.execute("INSERT INTO fabricantes (id, nombre) VALUES (?, ?)", (next_id, nombre))
+    conn.commit()
 
-    return jsonify({'id': fabricante_id, 'nombre': nombre, 'existia': False})
+    conn.close()
+
+    return jsonify({'id': next_id, 'nombre': nombre, 'existia': False})
 
 @app.route('/admin/huerfano/fusionar', methods=['POST'])
 def fusionar_huerfano():

@@ -814,9 +814,9 @@
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="header" id="header-carousel" style="transition: all 0.5s ease; overflow: hidden;">
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
-            
+
             <div class="logo-tuc" id="logoContainer">
                 <!-- Promos se cargarán dinámicamente desde la BD -->
             </div>
@@ -824,13 +824,13 @@
 
         </div>
     </div>
-    
-    <div class="header">
+
+    <div class="header" id="header-principal" style="transition: all 0.5s ease;">
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
-        
-           <div style="text-align: center; width: 100%;">
-               <h1>MAS QUE MEDICAMENTOS</h1>
-               <p>Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
+
+           <div id="titulo-principal" style="text-align: center; width: 100%; transition: all 0.5s ease;">
+               <h1 id="titulo-h1">MAS QUE MEDICAMENTOS</h1>
+               <p id="subtitulo-p">Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
            </div>
 
 
@@ -843,8 +843,8 @@
                 <h3>BUSCA POR NOMBRE DE MEDICAMENTO Ó DESCRIBE TUS NECESIDADES Ó AFECCIONES</h3>
                 
                 <div class="filtro-grupo" style="margin-bottom: 1rem;display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
-                    <textarea 
-                        id="busqueda_unificada" 
+                    <textarea
+                        id="busqueda_unificada"
                         placeholder="Escribe aqui"
                         rows="1"
                         style="
@@ -859,6 +859,7 @@
                             transition: border-color 0.3s;
                             min-height: 42px;  /* 🆕 Más pequeño */
                         "
+                        onfocus="activarModoInteraccion()"
                         oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
                         onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
                     ></textarea>
@@ -891,21 +892,7 @@
 
 
 
-           <div style="display: flex; gap: 1rem; align-items: center;">
-
-                <button id="btn-pastillero-header" class="btn-header" onclick="abrirPastillero()">
-                    <span style="font-size: 1.3rem;">💊</span>
-                    <span>Mi Pastillero</span>
-                    <span id="pastillero-count-header" class="badge-header">0</span>
-                </button>
-
-                <button id="btn-carrito-header" class="btn-header btn-carrito-grande" onclick="window.location.href='{{ url_for('carrito') }}'">
-                    <span style="font-size: 1.8rem;">🛒</span>
-                    <span>Carrito</span>
-                    <span id="cart-count-header" class="badge-header">0</span>
-                </button>
-
-           </div>
+           <!-- Botones del header eliminados - ahora solo se usan los flotantes -->
 
 
         </div>
@@ -972,14 +959,14 @@
         // Función para auto-expandir el textarea
         function autoExpand(field) {
             field.style.height = 'inherit';
-            
+
             const computed = window.getComputedStyle(field);
             const height = field.scrollHeight
                 + parseInt(computed.getPropertyValue('border-top-width'), 10)
                 + parseInt(computed.getPropertyValue('border-bottom-width'), 10);
-            
+
             const maxHeight = 200;
-            
+
             if (height > maxHeight) {
                 field.style.height = maxHeight + 'px';
                 field.style.overflowY = 'auto';
@@ -987,6 +974,36 @@
                 field.style.height = height + 'px';
                 field.style.overflowY = 'hidden';
             }
+        }
+
+        // 🆕 Activar modo interacción cuando el usuario hace clic en el textarea
+        let modoInteraccionActivo = false;
+
+        function activarModoInteraccion() {
+            if (modoInteraccionActivo) return; // Ya está activado
+            modoInteraccionActivo = true;
+
+            const headerCarousel = document.getElementById('header-carousel');
+            const tituloH1 = document.getElementById('titulo-h1');
+            const subtituloP = document.getElementById('subtitulo-p');
+
+            // Ocultar el carrusel con deslizamiento hacia arriba
+            headerCarousel.style.maxHeight = headerCarousel.offsetHeight + 'px';
+            setTimeout(() => {
+                headerCarousel.style.maxHeight = '0';
+                headerCarousel.style.opacity = '0';
+                headerCarousel.style.marginBottom = '0';
+                headerCarousel.style.paddingTop = '0';
+                headerCarousel.style.paddingBottom = '0';
+            }, 10);
+
+            // Transformar título y subtítulo en franja pequeña
+            setTimeout(() => {
+                tituloH1.textContent = 'TUC TUC siempre a tu lado!';
+                tituloH1.style.fontSize = '1.2rem';
+                tituloH1.style.margin = '0.5rem 0';
+                subtituloP.style.display = 'none';
+            }, 300);
         }
 
         // 🆕 Variable global para síntomas actuales
@@ -1182,13 +1199,13 @@
                         console.log('   Medicamentos:', coincidencias.map(c => c.nombre));
                     }
                     
-                    const btnPastillero = document.getElementById('btn-pastillero-header');
-                    
+                    const btnPastillero = document.getElementById('pastillero-flotante');
+
                     if (!btnPastillero) {
                         console.warn('⚠️ Botón pastillero no encontrado');
                         return;
                     }
-                    
+
                     if (coincidencias.length > 0) {
                         console.log(`🎯 ACTIVANDO ANIMACIÓN: ${coincidencias.length} de los productos mostrados están en tu pastillero`);
                         btnPastillero.style.animation = 'pulse 1.5s ease-in-out infinite';
@@ -1208,13 +1225,13 @@
         // 🆕 Desactivar animación del pastillero
         function desactivarAnimacionPastillero() {
             console.log('🔇 desactivarAnimacionPastillero llamada');
-            const btnPastillero = document.getElementById('btn-pastillero-header');
-            
+            const btnPastillero = document.getElementById('pastillero-flotante');
+
             if (!btnPastillero) {
                 console.warn('⚠️ Botón no encontrado al desactivar');
                 return;
             }
-            
+
             btnPastillero.style.animation = '';
             btnPastillero.style.boxShadow = '';
             btnPastillero.title = 'Mi Pastillero';
@@ -1610,8 +1627,6 @@
         function actualizarBadgeCarrito() {
             const total = carrito.reduce((sum, item) => sum + item.cantidad, 0);
             document.getElementById('carritoCount').textContent = total;
-            // 🆕 Actualizar también el badge del header
-            document.getElementById('cart-count-header').textContent = total;
         }
         
         // 🆕 FUNCIONES DEL PASTILLERO
@@ -2267,16 +2282,6 @@
                     const count = data.count || 0;
                     totalMedicamentosPastillero = count;  // 🆕 Guardar total global
                     document.getElementById('pastilleroCount').textContent = count;
-                    // 🆕 Actualizar también el badge del header
-                    document.getElementById('pastillero-count-header').textContent = count;
-                    
-                    // Mostrar/ocultar botón flotante según si tiene medicamentos
-                    const flotante = document.getElementById('pastillero-flotante');
-                    if (count > 0) {
-                        flotante.classList.add('visible');
-                    } else {
-                        flotante.classList.remove('visible');
-                    }
                 })
                 .catch(err => console.error('Error al actualizar pastillero:', err));
         }
@@ -3038,15 +3043,15 @@
         document.addEventListener('DOMContentLoaded', () => {
             // 🔍 DEBUGGING: Verificar sistema de pastillero
             console.group('🚀 INICIALIZACIÓN SISTEMA PASTILLERO');
-            
-            const btnPastillero = document.getElementById('btn-pastillero-header');
+
+            const btnPastillero = document.getElementById('pastillero-flotante');
             console.log('🎯 Botón pastillero encontrado:', btnPastillero);
-            
+
             if (!btnPastillero) {
-                console.error('❌ CRÍTICO: Botón btn-pastillero-header NO encontrado');
-                console.log('Botones disponibles con "pastillero":', 
-                    Array.from(document.querySelectorAll('button, a'))
-                        .filter(el => el.textContent.toLowerCase().includes('pastillero'))
+                console.error('❌ CRÍTICO: Botón pastillero-flotante NO encontrado');
+                console.log('Botones disponibles con "pastillero":',
+                    Array.from(document.querySelectorAll('button, div'))
+                        .filter(el => el.id && el.id.includes('pastillero'))
                         .map(el => ({ id: el.id, text: el.textContent.trim() }))
                 );
             } else {

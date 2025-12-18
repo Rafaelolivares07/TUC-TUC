@@ -987,23 +987,42 @@
             const tituloH1 = document.getElementById('titulo-h1');
             const subtituloP = document.getElementById('subtitulo-p');
 
-            // Ocultar el carrusel con deslizamiento hacia arriba
-            headerCarousel.style.maxHeight = headerCarousel.offsetHeight + 'px';
-            setTimeout(() => {
-                headerCarousel.style.maxHeight = '0';
-                headerCarousel.style.opacity = '0';
-                headerCarousel.style.marginBottom = '0';
-                headerCarousel.style.paddingTop = '0';
-                headerCarousel.style.paddingBottom = '0';
-            }, 10);
+            // Transformar título inmediatamente
+            tituloH1.textContent = 'TUC TUC siempre a tu lado!';
+            tituloH1.style.fontSize = '1.2rem';
+            tituloH1.style.margin = '0.5rem 0';
+            subtituloP.style.display = 'none';
 
-            // Transformar título y subtítulo en franja pequeña
+            // Esperar a que el navegador termine su scroll automático del teclado
             setTimeout(() => {
-                tituloH1.textContent = 'TUC TUC siempre a tu lado!';
-                tituloH1.style.fontSize = '1.2rem';
-                tituloH1.style.margin = '0.5rem 0';
-                subtituloP.style.display = 'none';
-            }, 300);
+                // Guardar altura del carrusel y posición de scroll ANTES de ocultar
+                const alturaCarrusel = headerCarousel.offsetHeight;
+                const scrollAntes = window.pageYOffset || document.documentElement.scrollTop;
+
+                // Configurar transición del carrusel
+                headerCarousel.style.maxHeight = alturaCarrusel + 'px';
+
+                // Iniciar ocultamiento del carrusel
+                setTimeout(() => {
+                    headerCarousel.style.maxHeight = '0';
+                    headerCarousel.style.opacity = '0';
+                    headerCarousel.style.marginBottom = '0';
+                    headerCarousel.style.paddingTop = '0';
+                    headerCarousel.style.paddingBottom = '0';
+
+                    // Ajustar scroll INMEDIATAMENTE junto con la animación para evitar saltos
+                    // Usar requestAnimationFrame para sincronizar con el render
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            const scrollActual = window.pageYOffset || document.documentElement.scrollTop;
+                            window.scrollTo({
+                                top: scrollActual - alturaCarrusel,
+                                behavior: 'auto' // Instantáneo, sin animación
+                            });
+                        });
+                    });
+                }, 10);
+            }, 100);
         }
 
         // 🆕 Variable global para síntomas actuales

@@ -825,12 +825,12 @@
         </div>
     </div>
 
-    <div class="header" id="header-principal" style="transition: all 0.5s ease;">
+    <div class="header" id="header-principal" style="transition: all 0.5s ease; position: sticky; top: 0; z-index: 999; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
 
-           <div id="titulo-principal" style="text-align: center; width: 100%; transition: all 0.5s ease;">
-               <h1 id="titulo-h1">MAS QUE MEDICAMENTOS</h1>
-               <p id="subtitulo-p">Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
+           <div id="titulo-principal" style="text-align: center; width: 100%; transition: all 0.5s ease; margin: 0.5rem 0;">
+               <h1 id="titulo-h1" style="margin: 0;">MAS QUE MEDICAMENTOS</h1>
+               <p id="subtitulo-p" style="margin: 0.3rem 0;">Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
            </div>
 
 
@@ -839,10 +839,9 @@
 
 
            <!-- Filtros UNIFICADOS -->
-            <div class="filtros" >
-                <h3>BUSCA POR NOMBRE DE MEDICAMENTO Ó DESCRIBE TUS NECESIDADES Ó AFECCIONES</h3>
-                
-                <div class="filtro-grupo" style="margin-bottom: 1rem;display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div class="filtros" style="margin-top: 0.5rem;">
+
+                <div class="filtro-grupo" style="margin-bottom: 0.5rem;display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
                     <textarea
                         id="busqueda_unificada"
                         placeholder="Escribe aqui"
@@ -868,11 +867,12 @@
                     </small>
                 </div>
                 
-                <!-- Filtros de precio (opcional, colapsados) -->
-                <details style="margin-top: 1rem;">
-                    <summary style="cursor: pointer; color: #f8f9fa; font-weight: 600; user-select: none;">
-                        ⚙️ Filtros avanzados (opcional)
-                    </summary>
+                <!-- Filtros de precio (interactivos con contador) -->
+                <div id="filtros-container" style="display: none; margin-top: 0.5rem;">
+                    <div style="cursor: pointer; color: #f8f9fa; font-weight: 600; user-select: none; padding: 0.5rem; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center;" onclick="toggleFiltrosAvanzados()">
+                        <span id="contador-resultados">0 resultados</span> • <span>Filtros ⚙️</span>
+                    </div>
+                    <div id="filtros-avanzados-content" style="display: none; margin-top: 0.5rem;">
                     <div class="filtros-grid" style="margin-top: 1rem;">
                         <div class="filtro-grupo">
                             <label>Precio Mínimo</label>
@@ -884,7 +884,8 @@
                             <input type="number" id="precioMax" placeholder="50000">
                         </div>
                     </div>
-                </details>
+                    </div>
+                </div>
             </div>
 
 
@@ -978,6 +979,13 @@
 
         // 🆕 Activar modo interacción cuando el usuario hace clic en el textarea
         let modoInteraccionActivo = false;
+        const leyendasRotativas = [
+            'TUC TUC siempre a tu lado!',
+            'Tu salud es nuestra prioridad',
+            'Medicamentos seguros y confiables',
+            'Cuidando tu bienestar'
+        ];
+        let leyendaIndex = 0;
 
         function activarModoInteraccion() {
             if (modoInteraccionActivo) return; // Ya está activado
@@ -986,12 +994,30 @@
             const headerCarousel = document.getElementById('header-carousel');
             const tituloH1 = document.getElementById('titulo-h1');
             const subtituloP = document.getElementById('subtitulo-p');
+            const filtrosContainer = document.getElementById('filtros-container');
 
-            // Transformar título inmediatamente
-            tituloH1.textContent = 'TUC TUC siempre a tu lado!';
+            // Mostrar filtros interactivos
+            filtrosContainer.style.display = 'block';
+
+            // Iniciar rotación de leyendas
+            tituloH1.textContent = leyendasRotativas[0];
             tituloH1.style.fontSize = '1.2rem';
-            tituloH1.style.margin = '0.5rem 0';
+            tituloH1.style.margin = '0';
             subtituloP.style.display = 'none';
+
+            setInterval(() => {
+                leyendaIndex = (leyendaIndex + 1) % leyendasRotativas.length;
+                tituloH1.style.opacity = '0';
+                setTimeout(() => {
+                    tituloH1.textContent = leyendasRotativas[leyendaIndex];
+                    tituloH1.style.opacity = '1';
+                }, 300);
+            }, 5000);
+
+            // Esperar 3 segundos y hacer animación electrocardiograma
+            setTimeout(() => {
+                animacionElectrocardiograma();
+            }, 3000);
 
             // Esperar a que el navegador termine su scroll automático del teclado
             setTimeout(() => {
@@ -1011,18 +1037,57 @@
                     headerCarousel.style.paddingBottom = '0';
 
                     // Ajustar scroll INMEDIATAMENTE junto con la animación para evitar saltos
-                    // Usar requestAnimationFrame para sincronizar con el render
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
                             const scrollActual = window.pageYOffset || document.documentElement.scrollTop;
                             window.scrollTo({
                                 top: scrollActual - alturaCarrusel,
-                                behavior: 'auto' // Instantáneo, sin animación
+                                behavior: 'auto'
                             });
                         });
                     });
                 }, 10);
             }, 100);
+        }
+
+        function animacionElectrocardiograma() {
+            const tituloH1 = document.getElementById('titulo-h1');
+            const fontSizeOriginal = parseFloat(window.getComputedStyle(tituloH1).fontSize);
+            const fontSizeNuevo = fontSizeOriginal + 2;
+
+            // Crear animación de latido tipo electrocardiograma
+            tituloH1.style.transition = 'font-size 0.1s ease';
+
+            // Latido 1
+            setTimeout(() => { tituloH1.style.fontSize = fontSizeNuevo + 'px'; }, 0);
+            setTimeout(() => { tituloH1.style.fontSize = fontSizeOriginal + 'px'; }, 100);
+
+            // Latido 2 (más fuerte)
+            setTimeout(() => { tituloH1.style.fontSize = (fontSizeNuevo + 2) + 'px'; }, 200);
+            setTimeout(() => { tituloH1.style.fontSize = fontSizeOriginal + 'px'; }, 300);
+
+            // Latido 3
+            setTimeout(() => { tituloH1.style.fontSize = fontSizeNuevo + 'px'; }, 400);
+            setTimeout(() => { tituloH1.style.fontSize = fontSizeOriginal + 'px'; }, 500);
+
+            // Transformar a texto final
+            setTimeout(() => {
+                tituloH1.style.fontSize = fontSizeNuevo + 'px';
+                tituloH1.style.transition = 'all 0.5s ease';
+                tituloH1.textContent = 'TUC TUC';
+            }, 800);
+
+            // Después de 2 segundos más, transformar al texto de búsqueda
+            setTimeout(() => {
+                tituloH1.textContent = 'Busca medicamentos o describe tus necesidades o afecciones';
+                tituloH1.style.fontSize = (fontSizeOriginal - 2) + 'px';
+                tituloH1.style.textTransform = 'capitalize';
+            }, 2800);
+        }
+
+        function toggleFiltrosAvanzados() {
+            const content = document.getElementById('filtros-avanzados-content');
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
         }
 
         // 🆕 Variable global para síntomas actuales
@@ -1603,8 +1668,14 @@
                     </div>
                 </div>
             `).join('');
+
+            // Actualizar contador de resultados en filtros
+            const contadorResultados = document.getElementById('contador-resultados');
+            if (contadorResultados) {
+                contadorResultados.textContent = `${productos.length} resultado${productos.length !== 1 ? 's' : ''}`;
+            }
         }
-        
+
         function formatearPrecio(precio) {
             return new Intl.NumberFormat('es-CO').format(precio);
         }

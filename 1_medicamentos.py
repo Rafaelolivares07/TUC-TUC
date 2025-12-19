@@ -1963,11 +1963,32 @@ def verificar_match_sintoma(nombre_sintoma, palabras_usuario, umbral=0.8):
 # ============================================
 
 def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', permitir_sin_cotizaciones=0):
-    """Busca medicamentos por nombre/fabricante/componente activo. Retorna (productos, palabras_sin_match, porcentaje_exito)"""
+    """
+    Busca medicamentos por nombre/fabricante/componente activo.
+
+    Args:
+        busqueda: Texto de búsqueda
+        conn: Conexión a BD
+        precio_min: Precio mínimo (opcional)
+        precio_max: Precio máximo (opcional)
+        permitir_sin_cotizaciones: Flag para permitir productos sin cotizaciones
+
+    Returns:
+        tuple: (productos, palabras_sin_match, porcentaje_exito)
+    """
     from utils import normalizar_texto, normalizar_palabra_busqueda
 
+    # Validar entrada
+    if not busqueda or not busqueda.strip():
+        return [], [], 0
+
     palabras_busqueda = normalizar_texto(busqueda).split()
+    if not palabras_busqueda:
+        return [], [], 0
+
     print(f"\n🔍 Búsqueda directa: {palabras_busqueda}")
+
+    CAMPOS_BUSQUEDA = 3  # nombre, fabricante, componente_activo
 
     query = """SELECT DISTINCT p.id as precio_id, p.medicamento_id, p.fabricante_id, p.precio, p.imagen as imagen_precio,
         m.nombre as medicamento_nombre, m.presentacion, m.concentracion, m.imagen as imagen_medicamento,
@@ -1979,6 +2000,11 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
         LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
         LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
         LEFT JOIN sintomas s ON ms.sintoma_id = s.id
+        LEFT JOIN (
+            SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
+            FROM precios_competencia
+            GROUP BY medicamento_id, fabricante_id
+        ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
         WHERE m.activo = '1'"""
 
     params = []
@@ -1988,27 +2014,37 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
         for variante in normalizar_palabra_busqueda(palabra):
             sql_norm = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({}, 'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'ñ','n'))"
             condiciones.extend([f"{sql_norm.format('m.nombre')} LIKE ?", f"{sql_norm.format('f.nombre')} LIKE ?", f"{sql_norm.format('ca.nombre')} LIKE ?"])
-            params.extend([f'%{variante}%'] * 3)
+            params.extend([f'%{variante}%'] * CAMPOS_BUSQUEDA)
 
     if condiciones:
         query += f" AND ({' OR '.join(condiciones)})"
 
     if precio_min:
-        try: query += " AND p.precio >= ?"; params.append(float(precio_min))
-        except: pass
+        try:
+            query += " AND p.precio >= ?"
+            params.append(float(precio_min))
+        except ValueError:
+            pass
     if precio_max:
-        try: query += " AND p.precio <= ?"; params.append(float(precio_max))
-        except: pass
+        try:
+            query += " AND p.precio <= ?"
+            params.append(float(precio_max))
+        except ValueError:
+            pass
 
-    query += " AND (? = 1 OR COALESCE((SELECT COUNT(*) FROM precios_competencia pc WHERE pc.medicamento_id=p.medicamento_id AND pc.fabricante_id=p.fabricante_id),0) > 0) AND p.precio > 0"
+    query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
     params.append(permitir_sin_cotizaciones)
 
     productos = conn.execute(query, params).fetchall()
 
     palabras_con_match = set()
     for p in productos:
+        med_nombre = p['medicamento_nombre'].lower() if p['medicamento_nombre'] else ''
+        fab_nombre = p['fabricante_nombre'].lower() if p['fabricante_nombre'] else ''
+        comp_nombre = p['componente_activo_nombre'].lower() if p['componente_activo_nombre'] else ''
+
         for palabra in palabras_busqueda:
-            if palabra in p['medicamento_nombre'].lower() or palabra in p['fabricante_nombre'].lower() or (p['componente_activo_nombre'] and palabra in p['componente_activo_nombre'].lower()):
+            if palabra in med_nombre or palabra in fab_nombre or palabra in comp_nombre:
                 palabras_con_match.add(palabra)
 
     palabras_sin_match = [p for p in palabras_busqueda if p not in palabras_con_match]

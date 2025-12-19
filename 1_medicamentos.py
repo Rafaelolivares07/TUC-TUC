@@ -1976,8 +1976,6 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
     Returns:
         tuple: (productos, palabras_sin_match, porcentaje_exito)
     """
-    from utils import normalizar_texto, normalizar_palabra_busqueda
-
     # Validar entrada
     if not busqueda or not busqueda.strip():
         return [], [], 0
@@ -2608,6 +2606,7 @@ def obtener_productos():
                 print(f"   🔍 Productos por síntomas: {len(productos_sintomas)}")
 
         # ✅ PASO 4: Combinar resultados (directos primero, luego síntomas sin duplicados)
+        hay_limite = False
         if busqueda and productos_directos:
             ids_directos = {p['precio_id'] for p in productos_directos}
             productos_sintomas_unicos = [p for p in productos_sintomas if p['precio_id'] not in ids_directos]
@@ -2619,6 +2618,7 @@ def obtener_productos():
             productos = list(productos_sintomas)
         else:
             # Sin búsqueda, mostrar primeros 50
+            hay_limite = True
             query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
             params.append(permitir_sin_cotizaciones)
             productos = conn.execute(query, params).fetchall()

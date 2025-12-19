@@ -15,7 +15,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from io import BytesIO
 import traceback
-# 🎯 IMPORTAR EL INICIALIZADOR DE DATOS EXTERNO
+#  IMPORTAR EL INICIALIZADOR DE DATOS EXTERNO
 from data_initializer import initialize_full_db
 from bs4 import BeautifulSoup
 import time
@@ -37,31 +37,31 @@ cloudinary.config(
 )
 
 # -------------------------------------------------------------------
-# --- ZONA 1: CONFIGURACIÓN INICIAL Y CONEXIÓN A LA BASE DE DATOS ---
+# --- ZONA 1: CONFIGURACIN INICIAL Y CONEXIN A LA BASE DE DATOS ---
 # -------------------------------------------------------------------
 app = Flask(__name__)
 
-# 🔐 Clave secreta requerida para firmar las cookies de sesión
+#  Clave secreta requerida para firmar las cookies de sesin
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'mi_clave_secreta_para_probar_el_acceso_temporal')
 
-# 📁 Configurar carpeta de subidas
+#  Configurar carpeta de subidas
 UPLOAD_FOLDER = os.path.join(app.root_path, 'static', 'uploads')
 ALLOWED_EXT = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = app.config.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
 
-# La migración automática se ejecutará manualmente vía endpoint /api/run-migration-now
-# porque necesita que get_db_connection() esté definida primero
+# La migracin automtica se ejecutar manualmente va endpoint /api/run-migration-now
+# porque necesita que get_db_connection() est definida primero
 
 
 
 def calcular_precio_segun_politica(medicamento_id, fabricante_id, conn):
     """
-    Calcula el precio de venta según políticas configuradas basándose en cotizaciones.
+    Calcula el precio de venta segn polticas configuradas basndose en cotizaciones.
 
     Retorna: precio_nuevo (float) o None si no se puede calcular
     """
-    # Cargar configuración
+    # Cargar configuracin
     config_row = conn.execute("SELECT * FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
     if not config_row:
         return None
@@ -84,7 +84,7 @@ def calcular_precio_segun_politica(medicamento_id, fabricante_id, conn):
     precio_nuevo = 0
 
     if num_cot == 1:
-        # 1 cotización: aplicar recargo_1_cotizacion
+        # 1 cotizacin: aplicar recargo_1_cotizacion
         precio_base = precios_cot[0]
         recargo = precio_base * (CONFIG['recargo_1_cotizacion'] / 100)
         precio_nuevo = precio_base + max(recargo, CONFIG['ganancia_min_escaso'])
@@ -97,12 +97,12 @@ def calcular_precio_segun_politica(medicamento_id, fabricante_id, conn):
         precio_nuevo = precio_base + max(recargo, CONFIG['ganancia_min_escaso'])
         precio_nuevo = min(precio_nuevo, precio_base + CONFIG['ganancia_max_escaso'])
 
-    else:  # 3 o más cotizaciones - FÓRMULA UNIFICADA
+    else:  # 3 o ms cotizaciones - FRMULA UNIFICADA
         # Ordenadas: [cot1, cot2, cot3, ...]
-        # Índices:    [0,    1,    2,   ...]
+        # ndices:    [0,    1,    2,   ...]
 
-        cotizacion_2 = precios_cot[1]  # Segunda cotización (índice 1)
-        cotizacion_3 = precios_cot[2]  # Tercera cotización (índice 2)
+        cotizacion_2 = precios_cot[1]  # Segunda cotizacin (ndice 1)
+        cotizacion_3 = precios_cot[2]  # Tercera cotizacin (ndice 2)
 
         descuento_competencia = CONFIG.get('descuento_competencia', 200)
         precio_domicilio = CONFIG.get('precio_domicilio', 5000)
@@ -136,10 +136,10 @@ def calcular_precio_segun_politica(medicamento_id, fabricante_id, conn):
 
         precio_nuevo = min(precio_nuevo, precio_base + ganancia_max_escaso)
 
-    # Aplicar redondeo superior si está configurado
+    # Aplicar redondeo superior si est configurado
     redondeo_superior = CONFIG.get('redondeo_superior', 0)
     if redondeo_superior > 0:
-        # Redondear hacia arriba al múltiplo de redondeo_superior
+        # Redondear hacia arriba al mltiplo de redondeo_superior
         import math
         precio_nuevo = math.ceil(precio_nuevo / redondeo_superior) * redondeo_superior
 
@@ -148,16 +148,16 @@ def calcular_precio_segun_politica(medicamento_id, fabricante_id, conn):
 
 def normalizar_texto(texto):
     """
-    Normaliza texto: quita tildes, convierte a minúsculas, quita caracteres especiales
+    Normaliza texto: quita tildes, convierte a minsculas, quita caracteres especiales
     Ejemplos:
-    - "Ibuprofén" → "ibuprofeno"
-    - "Acetaminofén" → "acetaminofen"
-    - "Diclofenaco-Sódico" → "diclofenaco sodico"
+    - "Ibuprofn" -> "ibuprofeno"
+    - "Acetaminofn" -> "acetaminofen"
+    - "Diclofenaco-Sdico" -> "diclofenaco sodico"
     """
     if not texto:
         return ""
 
-    # Convertir a minúsculas
+    # Convertir a minsculas
     texto = texto.lower()
     
     # Quitar tildes usando unicodedata
@@ -169,10 +169,10 @@ def normalizar_texto(texto):
     # Reemplazar guiones y caracteres especiales por espacios
     texto = texto.replace('-', ' ').replace('_', ' ')
     
-    # Quitar caracteres especiales excepto letras, números y espacios
+    # Quitar caracteres especiales excepto letras, nmeros y espacios
     texto = ''.join(c if c.isalnum() or c.isspace() else ' ' for c in texto)
     
-    # Normalizar espacios múltiples
+    # Normalizar espacios mltiples
     texto = ' '.join(texto.split())
     
     return texto
@@ -189,20 +189,20 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.logger.debug(f"Upload folder: {app.config['UPLOAD_FOLDER']} (exist or created)")
 
 
-# 📦 Configuración de sesiones para producción en Render
-# Usar sesiones del lado del cliente (cookies firmadas) para compatibilidad con múltiples workers
+#  Configuracin de sesiones para produccin en Render
+# Usar sesiones del lado del cliente (cookies firmadas) para compatibilidad con mltiples workers
 app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = 30 * 24 * 60 * 60  # 30 días en segundos
-# SESSION_COOKIE_SECURE solo en producción (HTTPS). En desarrollo local usar HTTP.
+app.config['PERMANENT_SESSION_LIFETIME'] = 30 * 24 * 60 * 60  # 30 das en segundos
+# SESSION_COOKIE_SECURE solo en produccin (HTTPS). En desarrollo local usar HTTP.
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('RENDER', None) is not None
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevenir XSS
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Protección CSRF
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Proteccin CSRF
 
-# 📁 Nombre de la base de datos
+#  Nombre de la base de datos
 DB_NAME = 'medicamentos.db'
 
 class PostgreSQLRow:
-    """Row object que simula sqlite3.Row - soporta acceso por índice y por nombre"""
+    """Row object que simula sqlite3.Row - soporta acceso por ndice y por nombre"""
     def __init__(self, cursor, values):
         self._cursor = cursor
         self._values = values
@@ -263,7 +263,7 @@ class PostgreSQLConnectionWrapper:
         import re
         query = re.sub(r"datetime\(['\"]now['\"]\)", "CURRENT_TIMESTAMP", query, flags=re.IGNORECASE)
 
-        # Tablas que están en MAYÚSCULAS en PostgreSQL
+        # Tablas que estn en MAYSCULAS en PostgreSQL
         tablas_mayusculas = [
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
             'diagnosticos', 'recetas', 'configuracion_precios', 'configuracion_sistema',
@@ -273,7 +273,7 @@ class PostgreSQLConnectionWrapper:
             'pedidos_productos', 'usuarios_direcciones', 'usuarios_favoritos'
         ]
 
-        # Tablas que están en minúsculas en PostgreSQL (excepciones)
+        # Tablas que estn en minsculas en PostgreSQL (excepciones)
         tablas_minusculas = [
             'precios_competencia', 'precios_competencia_new',
             'existencias', 'terceros', 'terceros_competidores', 'terceros_direcciones', 'alertas_admin', 'archivos',
@@ -282,12 +282,12 @@ class PostgreSQLConnectionWrapper:
             'sugerir_sintomas', 'pedidos', 'promos_carousel'
         ]
 
-        # Convertir tablas que deben ir en MAYÚSCULAS
+        # Convertir tablas que deben ir en MAYSCULAS
         for tabla in tablas_mayusculas:
             pattern = r'\b' + tabla + r'\b'
             query = re.sub(pattern, f'"{tabla.upper()}"', query, flags=re.IGNORECASE)
 
-        # Convertir tablas que deben permanecer en minúsculas
+        # Convertir tablas que deben permanecer en minsculas
         for tabla in tablas_minusculas:
             pattern = r'\b' + tabla + r'\b'
             query = re.sub(pattern, f'"{tabla}"', query, flags=re.IGNORECASE)
@@ -329,59 +329,54 @@ class PostgreSQLConnectionWrapper:
 
 def get_db_connection():
     """
-    Conexión a base de datos.
-    - En producción (Render): usa PostgreSQL
-    - En local: usa SQLite
+    Conexin a base de datos PostgreSQL.
+    - En produccin (Render): usa DATABASE_URL del entorno
+    - En local: usa conexion PostgreSQL local
     """
     database_url = os.getenv('DATABASE_URL')
 
-    if database_url:
-        # PRODUCCIÓN: PostgreSQL en Render
-        # Render usa postgres://, pero psycopg2 necesita postgresql://
-        if database_url.startswith('postgres://'):
-            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    if not database_url:
+        # LOCAL: PostgreSQL local
+        database_url = os.getenv('LOCAL_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/medicamentos')
 
-        import psycopg2
-        # Conectar sin RealDictCursor para compatibilidad con el wrapper
-        pg_conn = psycopg2.connect(database_url)
-        pg_conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
-        # Envolver la conexión para que funcione como SQLite
-        return PostgreSQLConnectionWrapper(pg_conn)
-    else:
-        # LOCAL: SQLite
-        conn = sqlite3.connect(DB_NAME, timeout=10)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA journal_mode=WAL')
-        conn.execute('PRAGMA busy_timeout=5000')
-    return conn
+    # Render usa postgres://, pero psycopg2 necesita postgresql://
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+    import psycopg2
+    # Conectar sin RealDictCursor para compatibilidad con el wrapper
+    pg_conn = psycopg2.connect(database_url)
+    pg_conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
+    # Envolver la conexin para que funcione como SQLite
+    return PostgreSQLConnectionWrapper(pg_conn)
 
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif"}
 
 
 # -------------------------------------------------------------------
-# --- FUNCIÓN HELPER: NOTIFICACIONES TELEGRAM ---
+# --- FUNCIN HELPER: NOTIFICACIONES TELEGRAM ---
 # -------------------------------------------------------------------
 
 def enviar_notificacion_telegram(mensaje):
     """
-    Envía una notificación a Telegram usando el bot configurado.
-    Retorna True si se envió correctamente, False si falló.
+    Enva una notificacin a Telegram usando el bot configurado.
+    Retorna True si se envi correctamente, False si fall.
     """
     try:
-        # Obtener configuración desde la base de datos
+        # Obtener configuracin desde la base de datos
         conn = get_db_connection()
         config = conn.execute('SELECT telegram_token, telegram_chat_id, notificaciones_activas FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
         conn.close()
 
-        if not config or not config[2]:  # notificaciones_activas es el índice 2
-            print("⚠️ Notificaciones Telegram desactivadas")
+        if not config or not config[2]:  # notificaciones_activas es el ndice 2
+            print(" Notificaciones Telegram desactivadas")
             return False
 
         token = config[0]  # telegram_token
         chat_id = config[1]  # telegram_chat_id
 
         if not token or not chat_id:
-            print("⚠️ Token o Chat ID de Telegram no configurado")
+            print(" Token o Chat ID de Telegram no configurado")
             return False
 
         # Enviar mensaje a Telegram
@@ -395,27 +390,27 @@ def enviar_notificacion_telegram(mensaje):
         response = requests.post(url, json=data, timeout=10)
 
         if response.status_code == 200:
-            print(f"✅ Notificación Telegram enviada correctamente")
+            print(f" Notificacin Telegram enviada correctamente")
             return True
         else:
-            print(f"⚠️ Error enviando Telegram: {response.status_code} - {response.text}")
+            print(f" Error enviando Telegram: {response.status_code} - {response.text}")
             return False
 
     except Exception as e:
-        print(f"❌ Excepción enviando Telegram: {e}")
+        print(f" Excepcin enviando Telegram: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 # -------------------------------------------------------------------
-# --- ZONA 2: MIDDLEWARE Y LÓGICA DE AUTENTICACIÓN (before_request) ---
+# --- ZONA 2: MIDDLEWARE Y LGICA DE AUTENTICACIN (before_request) ---
 # -------------------------------------------------------------------
 
 def admin_required(f):
     """
     Decorador para proteger rutas que requieren rol de Administrador.
-    Compatible con peticiones AJAX (devuelve JSON) y navegación normal (redirige).
+    Compatible con peticiones AJAX (devuelve JSON) y navegacin normal (redirige).
     """
     def wrapper(*args, **kwargs):
 
@@ -425,7 +420,7 @@ def admin_required(f):
 
         if 'rol' not in session or session['rol'] != 'Administrador':
             print(f"   ACCESO DENEGADO - Redirigiendo...")
-            # Detectar si es una petición AJAX
+            # Detectar si es una peticin AJAX
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
                       request.headers.get('Accept', '').find('application/json') != -1 or \
                       request.path.startswith('/admin/') and (
@@ -442,7 +437,7 @@ def admin_required(f):
                     'error': 'Acceso denegado. Se requiere ser Administrador.'
                 }), 403
             else:
-                # Si es navegación normal, redirigir
+                # Si es navegacin normal, redirigir
                 flash("Acceso denegado. Se requiere ser Administrador.", 'danger')
                 return redirect(url_for('index'))
           
@@ -457,13 +452,13 @@ def admin_required(f):
 @app.before_request
 def check_device_access():
     if request.path.startswith('/static'):
-        return  # Ignorar peticiones a recursos estáticos
+        return  # Ignorar peticiones a recursos estticos
 
-    # RUTAS PÚBLICAS: permitir acceso sin registro a la tienda
+    # RUTAS PBLICAS: permitir acceso sin registro a la tienda
     rutas_publicas = ['/tienda', '/favicon.ico', '/']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
-            # Para rutas públicas, solo crear dispositivo_id si no existe
+            # Para rutas pblicas, solo crear dispositivo_id si no existe
             if 'dispositivo_id' not in session:
                 session['dispositivo_id'] = str(uuid.uuid4())
             return  # Permitir acceso sin verificar usuario
@@ -499,33 +494,33 @@ def check_device_access():
         session['usuario_id'] = usuario['id']
         app.logger.debug(f"Usuario existente: {usuario['nombre']} con rol: {usuario['rol']}")
 
-        # Protección de rutas admin
+        # Proteccin de rutas admin
         if request.path.startswith('/admin') and usuario['rol'] != 'Administrador':
             flash("Acceso denegado: No eres administrador.", "danger")
             app.logger.debug(f"Intento de acceso a /admin denegado para {usuario['nombre']}")
             return redirect(url_for('index'))
 
     # Log final del before_request
-    app.logger.debug(f"📦 Sesión actual después de check_device_access: {dict(session)}")
+    app.logger.debug(f" Sesin actual despus de check_device_access: {dict(session)}")
 
 
 # -------------------------------------------------------------------
-# --- ZONA 3: RUTAS PÚBLICAS Y REDIRECCIÓN INICIAL ---
+# --- ZONA 3: RUTAS PBLICAS Y REDIRECCIN INICIAL ---
 # -------------------------------------------------------------------
 
 @app.route('/')
 def index():
-    """Página principal: muestra directamente la tienda de medicamentos."""
+    """Pgina principal: muestra directamente la tienda de medicamentos."""
     # Redirigir directamente a la tienda
     return redirect(url_for('tienda_home'))
 
 @app.route('/admin/acceso/<codigo>')
 def admin_acceso_directo(codigo):
-    """Acceso directo al panel admin con código secreto."""
-    # Código secreto para acceso rápido
+    """Acceso directo al panel admin con cdigo secreto."""
+    # Cdigo secreto para acceso rpido
     CODIGO_ADMIN = 'tuctuc2025'
 
-    print(f"🔑 Intento de acceso admin con código: {codigo}")
+    print(f" Intento de acceso admin con cdigo: {codigo}")
 
     if codigo == CODIGO_ADMIN:
         # Buscar el usuario administrador
@@ -534,30 +529,30 @@ def admin_acceso_directo(codigo):
         conn.close()
 
         if admin:
-            # Establecer sesión como administrador
-            session.clear()  # Limpiar sesión anterior
+            # Establecer sesin como administrador
+            session.clear()  # Limpiar sesin anterior
             session['dispositivo_id'] = admin['dispositivo_id']
             session['usuario_id'] = admin['id']
             session['nombre'] = admin['nombre']
             session['rol'] = 'Administrador'
-            session.modified = True  # Forzar guardado de sesión
+            session.modified = True  # Forzar guardado de sesin
 
-            print(f"✅ Sesión admin establecida: {dict(session)}")
+            print(f" Sesin admin establecida: {dict(session)}")
 
             flash('Acceso administrativo concedido', 'success')
             return redirect(url_for('admin_area'))
         else:
-            print(f"❌ No se encontró usuario administrador en la BD")
-            flash('No se encontró usuario administrador', 'danger')
+            print(f" No se encontr usuario administrador en la BD")
+            flash('No se encontr usuario administrador', 'danger')
             return redirect(url_for('index'))
     else:
-        print(f"❌ Código inválido: {codigo}")
-        flash('Código de acceso inválido', 'danger')
+        print(f" Cdigo invlido: {codigo}")
+        flash('Cdigo de acceso invlido', 'danger')
         return redirect(url_for('index'))
 
 @app.route('/admin')
 def admin_redirect():
-    """Redirige a la página de login o al área admin si ya está logueado."""
+    """Redirige a la pgina de login o al rea admin si ya est logueado."""
     if session.get('rol') == 'Administrador':
         return redirect(url_for('admin_area'))
     return redirect(url_for('admin_login'))
@@ -565,7 +560,7 @@ def admin_redirect():
 @app.route('/admin/login', methods=['GET'])
 def admin_login():
     """Muestra el formulario de login para administradores."""
-    # Si ya está logueado, redirigir al área admin
+    # Si ya est logueado, redirigir al rea admin
     if session.get('rol') == 'Administrador':
         return redirect(url_for('admin_area'))
 
@@ -578,7 +573,7 @@ def admin_login_post():
     password = request.form.get('password', '').strip()
     recordar = request.form.get('recordar') == '1'
 
-    print(f"🔐 Intento de login: usuario={usuario}, recordar={recordar}")
+    print(f" Intento de login: usuario={usuario}, recordar={recordar}")
 
     if not usuario or not password:
         flash('Por favor completa todos los campos', 'danger')
@@ -601,22 +596,22 @@ def admin_login_post():
             session['rol'] = 'Administrador'
             session.modified = True
 
-            # Configurar duración de sesión según checkbox
+            # Configurar duracin de sesin segn checkbox
             if recordar:
                 session.permanent = True
                 app.permanent_session_lifetime = timedelta(days=30)
-                print(f"✅ Login exitoso - Sesión de 30 días")
+                print(f" Login exitoso - Sesin de 30 das")
             else:
                 session.permanent = True
                 app.permanent_session_lifetime = timedelta(hours=24)
-                print(f"✅ Login exitoso - Sesión de 24 horas")
+                print(f" Login exitoso - Sesin de 24 horas")
 
-            flash('¡Bienvenido! Has iniciado sesión correctamente', 'success')
+            flash('Bienvenido! Has iniciado sesin correctamente', 'success')
             return redirect(url_for('admin_area'))
         else:
             # Login fallido
-            print(f"❌ Login fallido - Usuario o contraseña incorrectos")
-            flash('Usuario o contraseña incorrectos', 'danger')
+            print(f" Login fallido - Usuario o contrasea incorrectos")
+            flash('Usuario o contrasea incorrectos', 'danger')
             return redirect(url_for('admin_login'))
 
     finally:
@@ -625,7 +620,7 @@ def admin_login_post():
 @app.route('/admin/promos')
 @admin_required
 def admin_promos():
-    """Página de administración de promos del carousel"""
+    """Pgina de administracin de promos del carousel"""
     return render_template('admin_promos.html')
 
 @app.route('/paciente_saludo_continuar')
@@ -643,7 +638,7 @@ def paciente_saludo_continuar():
 
 @app.route('/inicio')
 def inicio():
-    """Ruta para 'Volver a la Página de Inicio'."""
+    """Ruta para 'Volver a la Pgina de Inicio'."""
     return redirect(url_for('index'))
 
 
@@ -653,27 +648,27 @@ def inicio():
 
 @app.route('/tienda')
 def tienda_home():
-    """Catálogo de productos ecommerce"""
+    """Catlogo de productos ecommerce"""
     try:
-        # Obtener todos los síntomas para filtros
+        # Obtener todos los sntomas para filtros
         conn = get_db_connection()
         sintomas = conn.execute("SELECT id, nombre FROM sintomas ORDER BY nombre").fetchall()
         conn.close()
 
-        # Pasar rol si está en sesión (para funcionalidades especiales de admin)
+        # Pasar rol si est en sesin (para funcionalidades especiales de admin)
         es_admin = session.get('rol') == 'Administrador'
         return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas], es_admin=es_admin)
     except Exception as e:
         print(f"ERROR en tienda_home: {e}")
         import traceback
         traceback.print_exc()
-        # Devolver página sin síntomas si hay error
+        # Devolver pgina sin sntomas si hay error
         return render_template('tienda_home.html', sintomas=[], es_admin=False)
 
 
 @app.route('/tienda/carrito')
 def carrito():
-    """Página del carrito de compras"""
+    """Pgina del carrito de compras"""
     return render_template('carrito.html')
 
 @app.route('/admin/setup_promos_table')
@@ -683,7 +678,7 @@ def setup_promos_table():
     try:
         conn = get_db_connection()
 
-        # Crear tabla (sin foreign key por ahora, la agregamos después)
+        # Crear tabla (sin foreign key por ahora, la agregamos despus)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS promos_carousel (
                 id SERIAL PRIMARY KEY,
@@ -699,12 +694,12 @@ def setup_promos_table():
             );
         """)
 
-        # Crear índices
+        # Crear ndices
         conn.execute("CREATE INDEX IF NOT EXISTS idx_promos_activa ON promos_carousel(activa);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_promos_orden ON promos_carousel(orden);")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_promos_medicamento ON promos_carousel(medicamento_id);")
 
-        # Insertar promos iniciales si la tabla está vacía
+        # Insertar promos iniciales si la tabla est vaca
         count = conn.execute("SELECT COUNT(*) as cnt FROM promos_carousel").fetchone()['cnt']
 
         if count == 0:
@@ -713,23 +708,23 @@ def setup_promos_table():
                 VALUES
                     ('logo1.png', 'Logo TUC-TUC', TRUE, 1),
                     ('logo_navidad.png', 'Promo Navidad', TRUE, 2),
-                    ('logo_promo.png', 'Promoción Especial', TRUE, 3)
+                    ('logo_promo.png', 'Promocin Especial', TRUE, 3)
             """)
 
         conn.commit()
 
         return f"""
-        <h1>✅ Tabla promos_carousel configurada</h1>
+        <h1> Tabla promos_carousel configurada</h1>
         <p>Tabla creada correctamente</p>
-        <p>Índices creados</p>
+        <p>ndices creados</p>
         <p>Promos iniciales: {count} existentes antes del setup</p>
         <br>
-        <a href="/admin/promos">Ir a Gestión de Promos</a>
+        <a href="/admin/promos">Ir a Gestin de Promos</a>
         """
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return f"<h1>❌ Error:</h1><pre>{str(e)}</pre>", 500
+        return f"<h1> Error:</h1><pre>{str(e)}</pre>", 500
 
 # ==========================================
 # ENDPOINTS PARA SISTEMA DE DIRECCIONES
@@ -738,19 +733,19 @@ def setup_promos_table():
 @app.route('/api/verificar-telefono', methods=['GET'])
 def verificar_telefono():
     """
-    Última revisión: 2025-12-15 20:00
+    ltima revisin: 2025-12-15 20:00
     Usado en: templates/checkout.html
-    Verifica si un teléfono ya existe en terceros y devuelve sus datos
+    Verifica si un telfono ya existe en terceros y devuelve sus datos
     """
     telefono = request.args.get('telefono', '').strip()
 
     if not telefono:
-        return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+        return jsonify({'ok': False, 'error': 'Telfono requerido'}), 400
 
     try:
         conn = get_db_connection()
 
-        # Buscar tercero por teléfono
+        # Buscar tercero por telfono
         tercero = conn.execute("""
             SELECT id, nombre, telefono, id_usuario
             FROM terceros
@@ -795,22 +790,22 @@ def verificar_telefono():
 @app.route('/api/enviar-codigo-whatsapp', methods=['POST'])
 def enviar_codigo_whatsapp():
     """
-    Última revisión: 2025-12-15 20:00
+    ltima revisin: 2025-12-15 20:00
     Usado en: templates/checkout.html
-    Genera y envía código de verificación por WhatsApp
+    Genera y enva cdigo de verificacin por WhatsApp
     """
     try:
         data = request.get_json()
         telefono = data.get('telefono', '').strip()
 
         if not telefono:
-            return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+            return jsonify({'ok': False, 'error': 'Telfono requerido'}), 400
 
-        # Generar código de 6 dígitos
+        # Generar cdigo de 6 dgitos
         import random
         codigo = ''.join([str(random.randint(0, 9)) for _ in range(6)])
 
-        # Guardar código en session con timestamp
+        # Guardar cdigo en session con timestamp
         import time
         session['codigo_verificacion'] = codigo
         session['codigo_telefono'] = telefono
@@ -822,12 +817,12 @@ def enviar_codigo_whatsapp():
         conn.close()
 
         numero_destino = telefono if not telefono.startswith('+') else telefono[1:]
-        mensaje = f"🔐 Tu código de verificación TUC-TUC es: *{codigo}*\n\nVálido por 10 minutos."
+        mensaje = f" Tu cdigo de verificacin TUC-TUC es: *{codigo}*\n\nVlido por 10 minutos."
 
         # Enviar WhatsApp
         enviar_whatsapp(numero_destino, mensaje)
 
-        return jsonify({'ok': True, 'mensaje': 'Código enviado por WhatsApp'})
+        return jsonify({'ok': True, 'mensaje': 'Cdigo enviado por WhatsApp'})
 
     except Exception as e:
         print(f"Error enviar-codigo-whatsapp: {e}")
@@ -838,9 +833,9 @@ def enviar_codigo_whatsapp():
 @app.route('/api/verificar-codigo', methods=['POST'])
 def verificar_codigo():
     """
-    Última revisión: 2025-12-15 20:00
+    ltima revisin: 2025-12-15 20:00
     Usado en: templates/checkout.html
-    Verifica el código ingresado por el usuario
+    Verifica el cdigo ingresado por el usuario
     """
     try:
         data = request.get_json()
@@ -848,9 +843,9 @@ def verificar_codigo():
         telefono = data.get('telefono', '').strip()
 
         if not codigo or not telefono:
-            return jsonify({'ok': False, 'error': 'Código y teléfono requeridos'}), 400
+            return jsonify({'ok': False, 'error': 'Cdigo y telfono requeridos'}), 400
 
-        # Verificar código de session
+        # Verificar cdigo de session
         codigo_guardado = session.get('codigo_verificacion')
         telefono_guardado = session.get('codigo_telefono')
         timestamp = session.get('codigo_timestamp', 0)
@@ -860,22 +855,22 @@ def verificar_codigo():
 
         # Validar
         if not codigo_guardado:
-            return jsonify({'ok': False, 'error': 'No hay código pendiente'}), 400
+            return jsonify({'ok': False, 'error': 'No hay cdigo pendiente'}), 400
 
         if tiempo_transcurrido > 600:  # 10 minutos
-            return jsonify({'ok': False, 'error': 'Código expirado'}), 400
+            return jsonify({'ok': False, 'error': 'Cdigo expirado'}), 400
 
         if codigo != codigo_guardado or telefono != telefono_guardado:
-            return jsonify({'ok': False, 'error': 'Código incorrecto'}), 400
+            return jsonify({'ok': False, 'error': 'Cdigo incorrecto'}), 400
 
-        # Código válido - limpiar session y marcar como verificado
+        # Cdigo vlido - limpiar session y marcar como verificado
         session.pop('codigo_verificacion', None)
         session.pop('codigo_telefono', None)
         session.pop('codigo_timestamp', None)
         session['telefono_verificado'] = telefono
         session['telefono_verificado_timestamp'] = time.time()
 
-        return jsonify({'ok': True, 'mensaje': 'Código verificado'})
+        return jsonify({'ok': True, 'mensaje': 'Cdigo verificado'})
 
     except Exception as e:
         print(f"Error verificar-codigo: {e}")
@@ -886,14 +881,14 @@ def verificar_codigo():
 @app.route('/api/tercero/direcciones', methods=['GET'])
 def obtener_direcciones_tercero():
     """
-    Última revisión: 2025-12-15 20:00
+    ltima revisin: 2025-12-15 20:00
     Usado en: templates/checkout.html
-    Obtiene las direcciones de un tercero por teléfono
+    Obtiene las direcciones de un tercero por telfono
     """
     telefono = request.args.get('telefono', '').strip()
 
     if not telefono:
-        return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+        return jsonify({'ok': False, 'error': 'Telfono requerido'}), 400
 
     try:
         conn = get_db_connection()
@@ -932,9 +927,9 @@ def obtener_direcciones_tercero():
 @app.route('/api/tercero/direcciones', methods=['POST'])
 def agregar_direccion_tercero():
     """
-    Última revisión: 2025-12-15 20:00
+    ltima revisin: 2025-12-15 20:00
     Usado en: templates/checkout.html
-    Agrega una nueva dirección a un tercero
+    Agrega una nueva direccin a un tercero
     """
     try:
         data = request.get_json()
@@ -967,7 +962,7 @@ def agregar_direccion_tercero():
             """, (nombre_completo, telefono))
             tercero_id = cursor.lastrowid
 
-        # Si es principal, quitar principal de las demás
+        # Si es principal, quitar principal de las dems
         if es_principal:
             conn.execute("""
                 UPDATE terceros_direcciones
@@ -975,7 +970,7 @@ def agregar_direccion_tercero():
                 WHERE tercero_id = ?
             """, (tercero_id,))
 
-        # Insertar dirección
+        # Insertar direccin
         cursor = conn.execute("""
             INSERT INTO terceros_direcciones
             (tercero_id, alias, nombre_completo, telefono, direccion, latitud, longitud, es_principal)
@@ -988,7 +983,7 @@ def agregar_direccion_tercero():
         return jsonify({'ok': True, 'direccion_id': direccion_id})
 
     except Exception as e:
-        print(f"Error agregar dirección: {e}")
+        print(f"Error agregar direccin: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1059,7 +1054,7 @@ def crear_promo():
         intervalo_carousel = data.get('intervalo_carousel', 5)
 
         if not imagen_url or not titulo:
-            return jsonify({'ok': False, 'error': 'Imagen y título son requeridos'}), 400
+            return jsonify({'ok': False, 'error': 'Imagen y ttulo son requeridos'}), 400
 
         conn = get_db_connection()
 
@@ -1095,7 +1090,7 @@ def actualizar_promo(promo_id):
 
         conn = get_db_connection()
 
-        # Si se está cambiando el orden, hacer push de otros órdenes
+        # Si se est cambiando el orden, hacer push de otros rdenes
         if 'orden' in data:
             nuevo_orden = data['orden']
 
@@ -1105,21 +1100,21 @@ def actualizar_promo(promo_id):
 
             if orden_actual is not None and nuevo_orden != orden_actual:
                 if nuevo_orden < orden_actual:
-                    # Moviendo hacia arriba: incrementar órdenes entre nuevo y actual (inclusive)
+                    # Moviendo hacia arriba: incrementar rdenes entre nuevo y actual (inclusive)
                     conn.execute("""
                         UPDATE promos_carousel
                         SET orden = orden + 1
                         WHERE orden >= ? AND orden <= ? AND id != ?
                     """, (nuevo_orden, orden_actual, promo_id))
                 else:
-                    # Moviendo hacia abajo: decrementar órdenes entre actual y nuevo
+                    # Moviendo hacia abajo: decrementar rdenes entre actual y nuevo
                     conn.execute("""
                         UPDATE promos_carousel
                         SET orden = orden - 1
                         WHERE orden > ? AND orden <= ? AND id != ?
                     """, (orden_actual, nuevo_orden, promo_id))
 
-        # Construir query dinámicamente según campos presentes
+        # Construir query dinmicamente segn campos presentes
         updates = []
         params = []
 
@@ -1178,14 +1173,14 @@ def upload_promo_image():
     """Sube una imagen para promo"""
     try:
         if 'imagen' not in request.files:
-            return jsonify({'ok': False, 'error': 'No se envió archivo'}), 400
+            return jsonify({'ok': False, 'error': 'No se envi archivo'}), 400
 
         file = request.files['imagen']
 
         if file.filename == '':
-            return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+            return jsonify({'ok': False, 'error': 'Archivo vaco'}), 400
 
-        # Validar extensión
+        # Validar extensin
         allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
 
@@ -1219,12 +1214,12 @@ def upload_promo_image():
 
 @app.route('/tienda/checkout')
 def checkout():
-    """Página de checkout"""
+    """Pgina de checkout"""
     return render_template('checkout.html')
 
 @app.route('/tienda/procesar_pedido', methods=['POST'])
 def procesar_pedido():
-    """Procesa el pedido y crea el registro en BD + envía WhatsApp"""
+    """Procesa el pedido y crea el registro en BD + enva WhatsApp"""
     try:
         data = request.get_json()
         
@@ -1240,17 +1235,17 @@ def procesar_pedido():
         
         # Geocoding - obtener coordenadas
         GOOGLE_API_KEY = 'AIzaSyCiAtNFl95bJJFuqiNsiYynBS3LuDisq9g'
-        # Mejorar formato de dirección
+        # Mejorar formato de direccin
         direccion_completa = f"{direccion}, Cali, Valle del Cauca, Colombia"
         geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json?address={direccion_completa}&key={GOOGLE_API_KEY}"
 
-        print(f"🌍 Intentando geocoding para: {direccion_completa}")  # ← AGREGAR
+        print(f" Intentando geocoding para: {direccion_completa}")  #  AGREGAR
 
         try:
             geo_resp = requests.get(geocode_url, timeout=5)
             geo_data = geo_resp.json()
             
-            print(f"🌍 Respuesta Google: {geo_data.get('status')}")  # ← AGREGAR
+            print(f" Respuesta Google: {geo_data.get('status')}")  #  AGREGAR
 
 
             if geo_data.get('status') == 'OK' and len(geo_data.get('results', [])) > 0:
@@ -1258,16 +1253,16 @@ def procesar_pedido():
                 latitud = location['lat']
                 longitud = location['lng']
                 direccion_completa = geo_data['results'][0]['formatted_address']
-                print(f"✅ Coordenadas: {latitud}, {longitud}")  # ← AGREGAR
+                print(f" Coordenadas: {latitud}, {longitud}")  #  AGREGAR
 
             else:
-                print(f"⚠️ Google no encontró la dirección. Status: {geo_data.get('status')}")  # ← AGREGAR
+                print(f" Google no encontr la direccin. Status: {geo_data.get('status')}")  #  AGREGAR
                 latitud = None
                 longitud = None
                 direccion_completa = direccion
                 
         except Exception as e:
-            print(f"⚠️ Error en geocoding: {e}")
+            print(f" Error en geocoding: {e}")
             latitud = None
             longitud = None
             direccion_completa = direccion
@@ -1275,16 +1270,16 @@ def procesar_pedido():
         conn = get_db_connection()
 
         # 1. Buscar o crear TERCERO (cliente)
-        # Primero buscar si ya existe por teléfono
+        # Primero buscar si ya existe por telfono
         tercero_existente = conn.execute("""
             SELECT id, nombre FROM terceros WHERE telefono = ? LIMIT 1
         """, (telefono,)).fetchone()
 
         if tercero_existente:
             tercero_id = tercero_existente['id']
-            print(f"✅ Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
+            print(f" Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
 
-            # Actualizar nombre si cambió
+            # Actualizar nombre si cambi
             if tercero_existente['nombre'] != nombre:
                 conn.execute("""
                     UPDATE terceros
@@ -1298,18 +1293,18 @@ def procesar_pedido():
             cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
             next_tercero_id = cursor_seq.fetchone()[0]
 
-            print(f"➕ Insertando nuevo tercero con ID {next_tercero_id}...")
+            print(f" Insertando nuevo tercero con ID {next_tercero_id}...")
             cursor = conn.execute("""
                 INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
                 VALUES (?, ?, ?, datetime('now'))
             """, (next_tercero_id, nombre, telefono))
             tercero_id = next_tercero_id
-            print(f"✅ Tercero creado con ID: {tercero_id}")
+            print(f" Tercero creado con ID: {tercero_id}")
 
-        # 2. Buscar o crear DIRECCIÓN en terceros_direcciones
+        # 2. Buscar o crear DIRECCIN en terceros_direcciones
         alias_direccion = data.get('alias_direccion', 'Principal')
 
-        # Buscar si existe esta dirección exacta para este tercero
+        # Buscar si existe esta direccin exacta para este tercero
         direccion_existente = conn.execute("""
             SELECT id FROM terceros_direcciones
             WHERE tercero_id = ? AND direccion = ?
@@ -1318,7 +1313,7 @@ def procesar_pedido():
 
         if direccion_existente:
             direccion_id = direccion_existente['id']
-            print(f"✅ Dirección existente encontrada: ID {direccion_id}")
+            print(f" Direccin existente encontrada: ID {direccion_id}")
 
             # Actualizar coordenadas si cambiaron
             conn.execute("""
@@ -1328,15 +1323,15 @@ def procesar_pedido():
             """, (latitud, longitud, direccion_id))
 
         else:
-            # Crear nueva dirección
-            print(f"➕ Creando nueva dirección '{alias_direccion}'...")
+            # Crear nueva direccin
+            print(f" Creando nueva direccin '{alias_direccion}'...")
             cursor = conn.execute("""
                 INSERT INTO terceros_direcciones
                 (tercero_id, alias, nombre_completo, telefono, direccion, latitud, longitud, es_principal)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (tercero_id, alias_direccion, nombre, telefono, direccion, latitud, longitud, True))
             direccion_id = cursor.lastrowid
-            print(f"✅ Dirección creada con ID: {direccion_id}")
+            print(f" Direccin creada con ID: {direccion_id}")
         
         # 2. Calcular totales
         subtotal = sum(item['precio'] * item['cantidad'] for item in items)
@@ -1348,7 +1343,7 @@ def procesar_pedido():
         cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
         next_pedido_id = cursor_seq.fetchone()[0]
 
-        print(f"➕ Insertando pedido con ID {next_pedido_id}...")
+        print(f" Insertando pedido con ID {next_pedido_id}...")
         cursor = conn.execute("""
             INSERT INTO pedidos (
                 id, id_tercero, fecha, total, metodo_pago, costo_domicilio,
@@ -1357,7 +1352,7 @@ def procesar_pedido():
             ) VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
         """, (next_pedido_id, tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
         pedido_id = next_pedido_id
-        print(f"✅ Pedido creado con ID: {pedido_id}")
+        print(f" Pedido creado con ID: {pedido_id}")
         
         # 4. Crear EXISTENCIAS (salidas) para cada item
         for item in items:
@@ -1375,11 +1370,11 @@ def procesar_pedido():
         conn.commit()
         conn.close()
 
-        # 5. ENVIAR NOTIFICACIÓN TELEGRAM AL ADMIN
+        # 5. ENVIAR NOTIFICACIN TELEGRAM AL ADMIN
         try:
             # Construir lista de productos
             items_texto = "\n".join([
-                f"• {item['nombre']} ({item['fabricante']}) x{item['cantidad']} = ${item['precio'] * item['cantidad']:,}"
+                f" {item['nombre']} ({item['fabricante']}) x{item['cantidad']} = ${item['precio'] * item['cantidad']:,}"
                 for item in items
             ])
 
@@ -1387,32 +1382,32 @@ def procesar_pedido():
             maps_link = f"https://www.google.com/maps?q={latitud},{longitud}" if latitud and longitud else "Sin coordenadas"
 
             # Mensaje Telegram (con formato HTML)
-            mensaje = f"""🔔 <b>NUEVO PEDIDO #{pedido_id}</b>
+            mensaje = f""" <b>NUEVO PEDIDO #{pedido_id}</b>
 
-👤 <b>Cliente:</b> {nombre}
-📱 <b>Teléfono:</b> {telefono}
-📍 <b>Dirección:</b> {direccion}
+ <b>Cliente:</b> {nombre}
+ <b>Telfono:</b> {telefono}
+ <b>Direccin:</b> {direccion}
 
-🛒 <b>Productos:</b>
+ <b>Productos:</b>
 {items_texto}
 
-💰 <b>Subtotal:</b> ${subtotal:,}
-🚚 <b>Domicilio:</b> ${costo_domicilio:,}
-💵 <b>TOTAL:</b> ${total:,}
+ <b>Subtotal:</b> ${subtotal:,}
+ <b>Domicilio:</b> ${costo_domicilio:,}
+ <b>TOTAL:</b> ${total:,}
 
-💳 <b>Método de pago:</b> {metodo_pago.upper()}
+ <b>Mtodo de pago:</b> {metodo_pago.upper()}
 
-📍 <b>Ver ubicación:</b>
+ <b>Ver ubicacin:</b>
 {maps_link}
 
-⏱️ <b>Tiempo estimado:</b> 30 minutos"""
+ <b>Tiempo estimado:</b> 30 minutos"""
 
-            # Enviar notificación a Telegram
+            # Enviar notificacin a Telegram
             enviar_notificacion_telegram(mensaje)
 
         except Exception as e:
-            print(f"⚠️ Error enviando notificación Telegram: {e}")
-            # No fallar el pedido si la notificación falla
+            print(f" Error enviando notificacin Telegram: {e}")
+            # No fallar el pedido si la notificacin falla
         
         return jsonify({
             'ok': True,
@@ -1421,7 +1416,7 @@ def procesar_pedido():
         })
         
     except Exception as e:
-        print(f"❌ Error procesando pedido: {e}")
+        print(f" Error procesando pedido: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1439,17 +1434,17 @@ def solicitud_especial():
         busqueda = data.get('busqueda', '').strip()
         tipo_solicitud = data.get('tipo', 'producto')  # 'producto' o 'sintoma'
         
-        # Validar teléfono
+        # Validar telfono
         if not telefono or len(telefono) != 10 or not telefono.startswith('3'):
-            return jsonify({'ok': False, 'error': 'Teléfono inválido'}), 400
+            return jsonify({'ok': False, 'error': 'Telfono invlido'}), 400
         
         if not busqueda:
-            return jsonify({'ok': False, 'error': 'Búsqueda vacía'}), 400
+            return jsonify({'ok': False, 'error': 'Bsqueda vaca'}), 400
         
-        # Obtener dispositivo_id de la sesión
+        # Obtener dispositivo_id de la sesin
         dispositivo_id = session.get('dispositivo_id')
         if not dispositivo_id:
-            return jsonify({'ok': False, 'error': 'Sesión no válida'}), 400
+            return jsonify({'ok': False, 'error': 'Sesin no vlida'}), 400
         
         conn = get_db_connection()
         
@@ -1466,21 +1461,21 @@ def solicitud_especial():
                 VALUES (?, 'Cliente sin nombre', datetime('now'), 'Paciente')
             """, (dispositivo_id,))
             usuario_id = cursor.lastrowid
-            print(f"✅ Usuario creado: ID={usuario_id}, dispositivo={dispositivo_id}")
+            print(f" Usuario creado: ID={usuario_id}, dispositivo={dispositivo_id}")
         else:
             usuario_id = usuario['id']
-            print(f"✅ Usuario existente: ID={usuario_id}")
+            print(f" Usuario existente: ID={usuario_id}")
         
-        # 2. CREAR TERCERO (con teléfono, nombre temporal)
+        # 2. CREAR TERCERO (con telfono, nombre temporal)
         cursor = conn.execute("""
             INSERT INTO terceros (nombre, telefono, id_usuario, fecha_creacion)
             VALUES ('Cliente sin nombre', ?, ?, datetime('now'))
         """, (telefono, usuario_id))
         tercero_id = cursor.lastrowid
-        print(f"✅ Tercero creado: ID={tercero_id}, teléfono={telefono}")
+        print(f" Tercero creado: ID={tercero_id}, telfono={telefono}")
         
         # 3. CREAR PEDIDO con estado especial
-        etiqueta = "Producto" if tipo_solicitud == 'producto' else "Síntomas"
+        etiqueta = "Producto" if tipo_solicitud == 'producto' else "Sntomas"
         notas = f"{etiqueta}: {busqueda}"
         
         cursor = conn.execute("""
@@ -1502,31 +1497,31 @@ def solicitud_especial():
         conn.commit()
         conn.close()
         
-        print(f"✅ Pedido especial creado: ID={pedido_id}")
+        print(f" Pedido especial creado: ID={pedido_id}")
         print(f"   Tipo: {tipo_solicitud}")
-        print(f"   Búsqueda: {busqueda}")
-        print(f"   Teléfono: {telefono}")
+        print(f"   Bsqueda: {busqueda}")
+        print(f"   Telfono: {telefono}")
         
-        # 4. ENVIAR NOTIFICACIÓN TELEGRAM AL ADMIN
+        # 4. ENVIAR NOTIFICACIN TELEGRAM AL ADMIN
         try:
-            emoji = "💊" if tipo_solicitud == 'producto' else "🩺"
-            mensaje = f"""🔔 <b>SOLICITUD ESPECIAL #{pedido_id}</b>
+            emoji = "" if tipo_solicitud == 'producto' else ""
+            mensaje = f""" <b>SOLICITUD ESPECIAL #{pedido_id}</b>
 
 {emoji} <b>Tipo:</b> {etiqueta}
-📱 <b>Teléfono:</b> {telefono}
-🔍 <b>Búsqueda:</b> {busqueda}
+ <b>Telfono:</b> {telefono}
+ <b>Bsqueda:</b> {busqueda}
 
-⏱️ <b>Requiere contacto inmediato</b>
+ <b>Requiere contacto inmediato</b>
 
-📋 Ver pedido:
+ Ver pedido:
 https://tuc-tuc.onrender.com/admin/pedidos"""
 
-            # Enviar notificación a Telegram
+            # Enviar notificacin a Telegram
             enviar_notificacion_telegram(mensaje)
 
         except Exception as e:
-            print(f"⚠️ Error enviando notificación Telegram: {e}")
-            # No fallar la solicitud si la notificación falla
+            print(f" Error enviando notificacin Telegram: {e}")
+            # No fallar la solicitud si la notificacin falla
         
         return jsonify({
             'ok': True,
@@ -1535,7 +1530,7 @@ https://tuc-tuc.onrender.com/admin/pedidos"""
         })
         
     except Exception as e:
-        print(f"❌ Error en solicitud_especial: {e}")
+        print(f" Error en solicitud_especial: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1544,7 +1539,7 @@ https://tuc-tuc.onrender.com/admin/pedidos"""
 
 @app.route('/tienda/confirmacion')
 def confirmacion():
-    """Página de confirmación del pedido"""
+    """Pgina de confirmacin del pedido"""
     pedido_id = request.args.get('pedido')
     
     if not pedido_id:
@@ -1569,7 +1564,7 @@ def confirmacion():
 @app.route('/admin/pedidos')
 @admin_required
 def admin_pedidos():
-    """Panel de administración de pedidos"""
+    """Panel de administracin de pedidos"""
     return render_template('admin_pedidos.html')
 
 @app.route('/admin/pedidos/lista')
@@ -1678,7 +1673,7 @@ def admin_cambiar_estado_pedido(pedido_id):
         nuevo_estado = data.get('estado')
         
         if nuevo_estado not in ['pendiente', 'en_camino', 'entregado', 'cancelado']:
-            return jsonify({'ok': False, 'error': 'Estado inválido'}), 400
+            return jsonify({'ok': False, 'error': 'Estado invlido'}), 400
         
         conn = get_db_connection()
         conn.execute("""
@@ -1700,46 +1695,46 @@ def admin_cambiar_estado_pedido(pedido_id):
     
 
 # ============================================
-# FUNCIÓN HELPER 1: NORMALIZAR PALABRAS (SINGULAR/PLURAL)
-# 🔖 VERSIÓN: 2025-11-08 18:30 - Detección flexible de plurales
+# FUNCIN HELPER 1: NORMALIZAR PALABRAS (SINGULAR/PLURAL)
+#  VERSIN: 2025-11-08 18:30 - Deteccin flexible de plurales
 # ============================================
 
 def normalizar_palabra_busqueda(palabra):
     """
-    Genera variantes de búsqueda (singular y plural).
+    Genera variantes de bsqueda (singular y plural).
     
     Ejemplos:
-    - "hormonas" → ["hormonas", "hormona"]
-    - "hormona" → ["hormona", "hormonas"]
-    - "dolor" → ["dolor", "dolores"]
-    - "dolores" → ["dolores", "dolor"]
-    - "infecciones" → ["infecciones", "infeccion"]
+    - "hormonas" -> ["hormonas", "hormona"]
+    - "hormona" -> ["hormona", "hormonas"]
+    - "dolor" -> ["dolor", "dolores"]
+    - "dolores" -> ["dolores", "dolor"]
+    - "infecciones" -> ["infecciones", "infeccion"]
     
-    Retorna: lista de variantes únicas
+    Retorna: lista de variantes nicas
     
-    🔖 HUELLA: 2025-11-08 18:30
+     HUELLA: 2025-11-08 18:30
     """
     from datetime import datetime
     
     variantes = [palabra]  # Siempre incluir la original
     
-    # 🔖 DEBUG: Print de entrada
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🔍 normalizar_palabra_busqueda('{palabra}')")
+    # DEBUG: Print de entrada
+    # print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] normalizar_palabra_busqueda('{palabra}')")
     
-    # Caso 1: Termina en "es" (plural de palabras con -ón, -or, consonante)
-    # Ejemplos: "infecciones" → "infeccion", "dolores" → "dolor"
+    # Caso 1: Termina en "es" (plural de palabras con -n, -or, consonante)
+    # Ejemplos: "infecciones" -> "infeccion", "dolores" -> "dolor"
     if len(palabra) > 3 and palabra.endswith('es'):
         # Quitar "es"
         singular = palabra[:-2]
         variantes.append(singular)
         
-        # Si la palabra sin "es" termina en vocal, también agregamos sin la vocal final
-        # Ejemplo: "infecciones" → "infeccion" y también podría ser "infección" en BD
+        # Si la palabra sin "es" termina en vocal, tambin agregamos sin la vocal final
+        # Ejemplo: "infecciones" -> "infeccion" y tambin podra ser "infeccin" en BD
         if singular and singular[-1] in 'aeiou':
             variantes.append(singular)
     
     # Caso 2: Termina en "s" simple (plural regular)
-    # Ejemplos: "hormonas" → "hormona", "síntomas" → "síntoma"
+    # Ejemplos: "hormonas" -> "hormona", "sntomas" -> "sntoma"
     elif len(palabra) > 2 and palabra.endswith('s') and not palabra.endswith('es'):
         singular = palabra[:-1]
         variantes.append(singular)
@@ -1748,7 +1743,7 @@ def normalizar_palabra_busqueda(palabra):
     # Agregar variante plural
     else:
         # Si termina en vocal, agregar solo "s"
-        if palabra[-1] in 'aeiouáéíóú':
+        if palabra[-1] in 'aeiou':
             variantes.append(palabra + 's')
         # Si termina en consonante (excepto 's'), agregar "es"
         else:
@@ -1756,19 +1751,19 @@ def normalizar_palabra_busqueda(palabra):
     
     # Retornar lista sin duplicados
     resultado = list(set(variantes))
-    print(f"   → Variantes generadas: {resultado}")
+    print(f"   -> Variantes generadas: {resultado}")
     return resultado
 
 
 # ============================================
-# FUNCIÓN HELPER 2: DISTANCIA DE LEVENSHTEIN
-# 🔖 VERSIÓN: 2025-11-09 07:30
+# FUNCIN HELPER 2: DISTANCIA DE LEVENSHTEIN
+#  VERSIN: 2025-11-09 07:30
 # ============================================
 
 def distancia_levenshtein(s1, s2):
     """
-    Calcula la distancia de edición entre dos strings.
-    Retorna: número de operaciones (inserción, eliminación, sustitución) necesarias.
+    Calcula la distancia de edicin entre dos strings.
+    Retorna: nmero de operaciones (insercin, eliminacin, sustitucin) necesarias.
     
     Ejemplos:
     - distancia_levenshtein("hormona", "hormonal") = 1
@@ -1790,23 +1785,23 @@ def distancia_levenshtein(s1, s2):
 
 
 # ============================================
-# FUNCIÓN HELPER 3: DETECTAR DIAGNÓSTICO POR PALABRAS CONTINUAS
-# 🔖 VERSIÓN: 2025-11-09 07:30 - CON SUBSTRING + LEVENSHTEIN
+# FUNCIN HELPER 3: DETECTAR DIAGNSTICO POR PALABRAS CONTINUAS
+#  VERSIN: 2025-11-09 07:30 - CON SUBSTRING + LEVENSHTEIN
 # ============================================
 
 def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbral=0.8):
     """
-    Detecta si el diagnóstico está presente en las palabras del usuario.
+    Detecta si el diagnstico est presente en las palabras del usuario.
     
     Reglas:
-    - Para diagnósticos de 1 palabra: requiere 100% (la palabra completa)
-    - Para diagnósticos multi-palabra: requiere 80% de las palabras (umbral configurable)
+    - Para diagnsticos de 1 palabra: requiere 100% (la palabra completa)
+    - Para diagnsticos multi-palabra: requiere 80% de las palabras (umbral configurable)
     - Las palabras pueden estar en desorden
-    - Usa SUBSTRING + DISTANCIA DE LEVENSHTEIN MÁS ESTRICTO
+    - Usa SUBSTRING + DISTANCIA DE LEVENSHTEIN MS ESTRICTO
     
     Retorna: True si cumple las reglas, False si no
     
-    🔖 HUELLA: 2025-11-16 - Refinado para evitar falsos positivos
+     HUELLA: 2025-11-16 - Refinado para evitar falsos positivos
     """
     palabras_diag = nombre_diagnostico.lower().split()
     num_palabras_diag = len(palabras_diag)
@@ -1819,11 +1814,11 @@ def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbr
     if not palabras_diag_filtradas:
         return False
     
-    # Calcular cuántas palabras necesitamos (mínimo según umbral)
+    # Calcular cuntas palabras necesitamos (mnimo segn umbral)
     
     palabras_requeridas = max(1, math.ceil(len(palabras_diag_filtradas) * umbral))
     
-    # Buscar secuencias continuas de palabras del diagnóstico
+    # Buscar secuencias continuas de palabras del diagnstico
     palabras_encontradas = []
     
     for palabra_diag in palabras_diag_filtradas:
@@ -1833,16 +1828,16 @@ def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbr
             if encontrada:
                 break
             
-            # Método 1: Normalización de plurales (exacto)
+            # Mtodo 1: Normalizacin de plurales (exacto)
             variantes_diag = normalizar_palabra_busqueda(palabra_diag)
             variantes_usuario = normalizar_palabra_busqueda(palabra_usuario)
             
-            # Comparación exacta con variantes
+            # Comparacin exacta con variantes
             for var_diag in variantes_diag:
                 for var_user in variantes_usuario:
                     if var_diag == var_user:
                         encontrada = True
-                        print(f"      ✅ Match exacto: '{palabra_usuario}' ~ '{palabra_diag}'")
+                        print(f"       Match exacto: '{palabra_usuario}' ~ '{palabra_diag}'")
                         break
                 if encontrada:
                     break
@@ -1850,14 +1845,14 @@ def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbr
             if encontrada:
                 continue
             
-            # Método 2: SUBSTRING (una palabra contiene a la otra)
+            # Mtodo 2: SUBSTRING (una palabra contiene a la otra)
             for var_diag in variantes_diag:
                 for var_user in variantes_usuario:
-                    # Si una está contenida en la otra
-                    if len(var_diag) >= 6 and len(var_user) >= 6:  # 🆕 Aumentado de 5 a 6 letras
+                    # Si una est contenida en la otra
+                    if len(var_diag) >= 6 and len(var_user) >= 6:  #  Aumentado de 5 a 6 letras
                         if var_diag in var_user or var_user in var_diag:
                             encontrada = True
-                            print(f"      ✅ Match substring: '{palabra_usuario}' contiene '{palabra_diag}'")
+                            print(f"       Match substring: '{palabra_usuario}' contiene '{palabra_diag}'")
                             break
                 if encontrada:
                     break
@@ -1865,17 +1860,17 @@ def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbr
             if encontrada:
                 continue
             
-            # Método 3: DISTANCIA DE LEVENSHTEIN (similar) - MÁS ESTRICTO
+            # Mtodo 3: DISTANCIA DE LEVENSHTEIN (similar) - MS ESTRICTO
             for var_diag in variantes_diag:
                 for var_user in variantes_usuario:
-                    # 🆕 Solo si ambas palabras son LARGAS (7+ letras) para evitar "duel"~"piel"
+                    #  Solo si ambas palabras son LARGAS (7+ letras) para evitar "duel"~"piel"
                     if len(var_diag) >= 7 and len(var_user) >= 7:
                         distancia = distancia_levenshtein(var_diag, var_user)
-                        # 🆕 Distancia MÁS ESTRICTA: máximo 20% de la palabra
+                        #  Distancia MS ESTRICTA: mximo 20% de la palabra
                         max_distancia = max(1, int(min(len(var_diag), len(var_user)) * 0.2))
                         if distancia <= max_distancia:
                             encontrada = True
-                            print(f"      ✅ Match Levenshtein: '{palabra_usuario}' ~ '{palabra_diag}' (distancia={distancia}, max={max_distancia})")
+                            print(f"       Match Levenshtein: '{palabra_usuario}' ~ '{palabra_diag}' (distancia={distancia}, max={max_distancia})")
                             break
                 if encontrada:
                     break
@@ -1886,7 +1881,7 @@ def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbr
     porcentaje = len(palabras_encontradas) / len(palabras_diag_filtradas)
     cumple = len(palabras_encontradas) >= palabras_requeridas
     
-    print(f"   🔍 Diagnóstico '{nombre_diagnostico}': {len(palabras_encontradas)}/{len(palabras_diag_filtradas)} palabras = {porcentaje*100:.0f}% (requiere {palabras_requeridas} = {umbral*100:.0f}%) → {'✅' if cumple else '❌'}")
+    print(f"    Diagnstico '{nombre_diagnostico}': {len(palabras_encontradas)}/{len(palabras_diag_filtradas)} palabras = {porcentaje*100:.0f}% (requiere {palabras_requeridas} = {umbral*100:.0f}%) -> {'' if cumple else ''}")
     
     return cumple
 
@@ -1894,15 +1889,15 @@ def detectar_diagnostico_por_palabras(nombre_diagnostico, palabras_usuario, umbr
 
 def verificar_match_sintoma(nombre_sintoma, palabras_usuario, umbral=0.8):
     """
-    Verifica si el síntoma hace match con las palabras del usuario.
-    Similar a detectar_diagnostico_por_palabras pero para síntomas.
+    Verifica si el sntoma hace match con las palabras del usuario.
+    Similar a detectar_diagnostico_por_palabras pero para sntomas.
     
     Reglas:
-    - Match exacto (completo) → siempre True
+    - Match exacto (completo) -> siempre True
     - Multi-palabra: requiere 80% de coincidencia
-    - Evita matches parciales como "infeccion" → "infeccion Clamidia"
+    - Evita matches parciales como "infeccion" -> "infeccion Clamidia"
     
-    🔖 VERSIÓN: 2025-11-16 - Match estricto de síntomas (BUGFIX breaks)
+     VERSIN: 2025-11-16 - Match estricto de sntomas (BUGFIX breaks)
     """
     palabras_sintoma = normalizar_texto(nombre_sintoma).split()
     
@@ -1930,18 +1925,23 @@ def verificar_match_sintoma(nombre_sintoma, palabras_usuario, umbral=0.8):
     import math
     palabras_requeridas = math.ceil(len(palabras_sintoma_filtradas) * umbral)
     palabras_encontradas = 0
-    
-    # 🆕 BUGFIX: Contar TODAS las palabras que hacen match
+
+    # Palabras calificadoras que pueden ser opcionales
+    calificadores = {'intensa', 'leve', 'aguda', 'cronica', 'severa', 'moderada',
+                     'persistente', 'temporal', 'ocasional', 'frecuente', 'constante',
+                     'nasal', 'estomacal', 'abdominal', 'muscular', 'articular'}
+
+    #  BUGFIX: Contar TODAS las palabras que hacen match
     for palabra_sintoma in palabras_sintoma_filtradas:
         encontrada_esta_palabra = False
         variantes_sintoma = normalizar_palabra_busqueda(palabra_sintoma)
-        
+
         for palabra_usuario in palabras_usuario:
-            if encontrada_esta_palabra:  # Ya encontramos esta palabra del síntoma
+            if encontrada_esta_palabra:  # Ya encontramos esta palabra del sntoma
                 break
-                
+
             variantes_usuario = normalizar_palabra_busqueda(palabra_usuario)
-            
+
             # Match exacto de variantes
             for var_sint in variantes_sintoma:
                 for var_user in variantes_usuario:
@@ -1951,15 +1951,22 @@ def verificar_match_sintoma(nombre_sintoma, palabras_usuario, umbral=0.8):
                         break
                 if encontrada_esta_palabra:
                     break
-    
+
+    # Regla especial: si el sintoma tiene 2 palabras y una es calificador,
+    # aceptar match con solo la palabra principal
+    if len(palabras_sintoma_filtradas) == 2:
+        tiene_calificador = any(p in calificadores for p in palabras_sintoma_filtradas)
+        if tiene_calificador and palabras_encontradas >= 1:
+            return True
+
     cumple = palabras_encontradas >= palabras_requeridas
     return cumple
 
 
 
 # ============================================
-# FUNCIÓN PRINCIPAL: OBTENER PRODUCTOS
-# 🔖 VERSIÓN: 2025-11-08 18:30 - COMPLETA CON TODAS LAS MEJORAS
+# FUNCIN PRINCIPAL: OBTENER PRODUCTOS
+#  VERSIN: 2025-11-08 18:30 - COMPLETA CON TODAS LAS MEJORAS
 # ============================================
 
 def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', permitir_sin_cotizaciones=0):
@@ -1967,10 +1974,10 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
     Busca medicamentos por nombre/fabricante/componente activo.
 
     Args:
-        busqueda: Texto de búsqueda
-        conn: Conexión a BD
-        precio_min: Precio mínimo (opcional)
-        precio_max: Precio máximo (opcional)
+        busqueda: Texto de bsqueda
+        conn: Conexin a BD
+        precio_min: Precio mnimo (opcional)
+        precio_max: Precio mximo (opcional)
         permitir_sin_cotizaciones: Flag para permitir productos sin cotizaciones
 
     Returns:
@@ -1984,7 +1991,7 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
     if not palabras_busqueda:
         return [], [], 0
 
-    print(f"\n🔍 Búsqueda directa: {palabras_busqueda}")
+    print(f"\nBUSQUEDA DIRECTA: {palabras_busqueda}")
 
     CAMPOS_BUSQUEDA = 3  # nombre, fabricante, componente_activo
 
@@ -2010,7 +2017,7 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
 
     for palabra in palabras_busqueda:
         for variante in normalizar_palabra_busqueda(palabra):
-            sql_norm = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({}, 'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'ñ','n'))"
+            sql_norm = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({}, '','a'),'','e'),'','i'),'','o'),'','u'),'','n'))"
             condiciones.extend([f"{sql_norm.format('m.nombre')} LIKE ?", f"{sql_norm.format('f.nombre')} LIKE ?", f"{sql_norm.format('ca.nombre')} LIKE ?"])
             params.extend([f'%{variante}%'] * CAMPOS_BUSQUEDA)
 
@@ -2047,7 +2054,7 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
 
     palabras_sin_match = [p for p in palabras_busqueda if p not in palabras_con_match]
     porcentaje = (len(palabras_con_match) / len(palabras_busqueda)) * 100 if palabras_busqueda else 0
-    print(f"   📊 Éxito: {porcentaje:.0f}% | Sin match: {palabras_sin_match}")
+    print(f"   Exito: {porcentaje:.0f}% | Sin match: {palabras_sin_match}")
 
     return productos, palabras_sin_match, porcentaje
 
@@ -2055,25 +2062,25 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """
-    API para obtener productos con filtros + detección inteligente de diagnósticos y síntomas
+    API para obtener productos con filtros + deteccin inteligente de diagnsticos y sntomas
     
-    🔖 VERSIÓN: 2025-11-09 07:30 - FINAL CON SUBSTRING + LEVENSHTEIN
-    🔖 MEJORAS:
-       - Detección flexible de plurales en síntomas Y diagnósticos
-       - Diagnósticos multi-palabra con substring + distancia Levenshtein
-       - Regla 60% para diagnósticos multi-palabra
-       - Detecta síntomas faltantes en diagnósticos directos
-       - Interfaz mejorada con tipos de detección
+     VERSIN: 2025-11-09 07:30 - FINAL CON SUBSTRING + LEVENSHTEIN
+     MEJORAS:
+       - Deteccin flexible de plurales en sntomas Y diagnsticos
+       - Diagnsticos multi-palabra con substring + distancia Levenshtein
+       - Regla 60% para diagnsticos multi-palabra
+       - Detecta sntomas faltantes en diagnsticos directos
+       - Interfaz mejorada con tipos de deteccin
     """
     from datetime import datetime
     try:
         print(f"\n{'='*70}")
-        print(f"🔖 API /api/productos - VERSIÓN: 2025-11-09 07:30 FINAL")
+        print(f" API /api/productos - VERSIN: 2025-11-09 07:30 FINAL")
         print(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"   Funcionalidad: Substring + Levenshtein ACTIVOS")
         print(f"{'='*70}\n")
     
-        # Parámetros de búsqueda
+        # Parmetros de bsqueda
         busqueda = request.args.get('q', '').strip()
         sintoma_id = request.args.get('sintoma_id', '')
         precio_min = request.args.get('precio_min', '')
@@ -2083,7 +2090,7 @@ def obtener_productos():
         try:
             conn = get_db_connection()
 
-            # Cargar configuración de publicación
+            # Cargar configuracin de publicacin
             config_row = conn.execute("SELECT permitir_publicar_sin_cotizaciones FROM CONFIGURACION_PRECIOS LIMIT 1").fetchone()
             permitir_sin_cotizaciones = config_row[0] if config_row else 0
         except Exception as e:
@@ -2092,15 +2099,15 @@ def obtener_productos():
             traceback.print_exc()
             return jsonify({'ok': False, 'error': str(e), 'productos': []}), 500
 
-        # ✅ PASO 1: Buscar medicamentos directos
+        #  PASO 1: Buscar medicamentos directos
         productos_directos = []
         if busqueda:
             productos_directos, palabras_sin_match, porcentaje_exito = buscar_medicamentos_directos(busqueda, conn, precio_min, precio_max, permitir_sin_cotizaciones)
             if porcentaje_exito <= 50 and palabras_sin_match:
                 busqueda_sintomas = ' '.join(palabras_sin_match)
-                print(f"   🔄 Activando búsqueda por síntomas: '{busqueda_sintomas}'")
+                print(f"   Activando busqueda por sintomas: '{busqueda_sintomas}'")
 
-        # DETECCIÓN INTELIGENTE: DIAGNÓSTICOS + SÍNTOMAS
+        # DETECCIN INTELIGENTE: DIAGNSTICOS + SNTOMAS
         sintomas_detectados = []
         sintomas_detectados_ids = []
         diagnosticos_detectados_directo = []
@@ -2109,22 +2116,22 @@ def obtener_productos():
         sintomas_faltantes_por_diagnostico = {}
         busqueda_parcial_aplicada = False
 
-        # ✅ PASO 2: Procesar síntomas (si aplica)
+        #  PASO 2: Procesar sntomas (si aplica)
         if busqueda_sintomas:
             # ============================================
-            # PARTE 1: NORMALIZACIÓN (SIN CAMBIOS)
+            # PARTE 1: NORMALIZACIN (SIN CAMBIOS)
             # ============================================
             normalizaciones_diagnosticos = {
                 'gripa': 'gripe',
                 'resfriado': 'gripe',
                 'resfrio': 'gripe',
                 'gripal': 'gripe',
-                'resfrío': 'gripe',
+                'resfro': 'gripe',
                 'catarro': 'gripe',
-                'jaqueca': 'migraña',
-                'migrania': 'migraña',
-                'migrana': 'migraña',
-                'cefalea': 'migraña',
+                'jaqueca': 'migraa',
+                'migrania': 'migraa',
+                'migrana': 'migraa',
+                'cefalea': 'migraa',
                 'acidez': 'gastritis',
                 'agruras': 'gastritis',
                 'reflujo': 'gastritis',
@@ -2136,15 +2143,15 @@ def obtener_productos():
                 'diarrea': 'gastroenteritis',
                 'angina': 'amigdalitis',
                 'anginas': 'amigdalitis',
-                'cistitis': 'infección urinaria'
+                'cistitis': 'infeccin urinaria'
             }
         
             normalizaciones_sintomas = {
                 'toso': 'tos', 'tosiendo': 'tos', 'toser': 'tos',
                 'duele': 'dolor', 'doliendo': 'dolor', 'doler': 'dolor',
                 'arde': 'ardor', 'ardiendo': 'ardor', 'arder': 'ardor',
-                'pica': 'picazón', 'picando': 'picazón', 'picar': 'picazón',
-                'vomito': 'vómito', 'vomitando': 'vómito', 'vomitar': 'vómito',
+                'pica': 'picazn', 'picando': 'picazn', 'picar': 'picazn',
+                'vomito': 'vmito', 'vomitando': 'vmito', 'vomitar': 'vmito',
                 'mareo': 'mareo', 'mareando': 'mareo', 'marear': 'mareo',
                 'estornudo': 'estornudo', 'estornudando': 'estornudo', 'estornudar': 'estornudo',
                 'orino': 'orinar', 'orinando': 'orinar',
@@ -2159,7 +2166,7 @@ def obtener_productos():
             palabras = texto_normalizado.split()
         
             # ============================================
-            # 🆕 FILTRO PREVIO: Eliminar palabras inútiles
+            #  FILTRO PREVIO: Eliminar palabras intiles
             # ============================================
             palabras_ignorar_busqueda = {
                 'es', 'que', 'me', 'la', 'el', 'en', 'de', 'y', 'a', 'un', 'una',
@@ -2169,10 +2176,10 @@ def obtener_productos():
                 'tiene', 'siento'
             }
         
-            # Filtrar palabras ignorables (mínimo 3 letras)
+            # Filtrar palabras ignorables (mnimo 3 letras)
             palabras_filtradas = [p for p in palabras if p not in palabras_ignorar_busqueda and len(p) >= 3]
         
-            # 🆕 REGLA CRÍTICA: Verificar si hay palabras significativas (5+ letras)
+            #  REGLA CRTICA: Verificar si hay palabras significativas (5+ letras)
             palabras_significativas = [p for p in palabras_filtradas if len(p) >= 5]
         
             print(f"   Palabras originales: {palabras}")
@@ -2180,12 +2187,12 @@ def obtener_productos():
             print(f"   Palabras significativas (5+ letras): {palabras_significativas}")
         
             # ============================================
-            # PARTE 2: BUSCAR DIAGNÓSTICOS DIRECTAMENTE (🆕 MEJORADO CON 80% Y FILTROS)
+            # PARTE 2: BUSCAR DIAGNSTICOS DIRECTAMENTE ( MEJORADO CON 80% Y FILTROS)
             # ============================================
         
-            # 🆕 SOLO buscar diagnósticos si hay palabras significativas
+            #  SOLO buscar diagnsticos si hay palabras significativas
             if palabras_significativas:
-                print("\n🔍 PARTE 2: Buscando diagnósticos directamente...")
+                print("\n PARTE 2: Buscando diagnsticos directamente...")
             
                 # Primero buscar con trigramas/bigramas en el diccionario
                 for i in range(len(palabras_filtradas) - 2):
@@ -2203,9 +2210,9 @@ def obtener_productos():
                             if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
                                 diagnosticos_detectados_directo.append(resultado['descripcion'])
                                 diagnosticos_detectados_directo_ids.append(resultado['id'])
-                                print(f"   ✅ Diagnóstico directo (trigrama): {resultado['descripcion']}")
+                                print(f"    Diagnstico directo (trigrama): {resultado['descripcion']}")
                         except Exception as e:
-                            print(f"Error buscando diagnóstico trigrama: {e}")
+                            print(f"Error buscando diagnstico trigrama: {e}")
             
                 for i in range(len(palabras_filtradas) - 1):
                     bigrama = f"{palabras_filtradas[i]} {palabras_filtradas[i+1]}"
@@ -2222,9 +2229,9 @@ def obtener_productos():
                             if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
                                 diagnosticos_detectados_directo.append(resultado['descripcion'])
                                 diagnosticos_detectados_directo_ids.append(resultado['id'])
-                                print(f"   ✅ Diagnóstico directo (bigrama): {resultado['descripcion']}")
+                                print(f"    Diagnstico directo (bigrama): {resultado['descripcion']}")
                         except Exception as e:
-                            print(f"Error buscando diagnóstico bigrama: {e}")
+                            print(f"Error buscando diagnstico bigrama: {e}")
             
                 for palabra in palabras_filtradas:
                     if len(palabra) >= 5 and palabra in normalizaciones_diagnosticos:
@@ -2240,14 +2247,14 @@ def obtener_productos():
                             if resultado and resultado['id'] not in diagnosticos_detectados_directo_ids:
                                 diagnosticos_detectados_directo.append(resultado['descripcion'])
                                 diagnosticos_detectados_directo_ids.append(resultado['id'])
-                                print(f"   ✅ Diagnóstico directo (palabra normalizada): {resultado['descripcion']}")
+                                print(f"    Diagnstico directo (palabra normalizada): {resultado['descripcion']}")
                         except Exception as e:
-                            print(f"Error buscando diagnóstico palabra: {e}")
+                            print(f"Error buscando diagnstico palabra: {e}")
             
-                # 🆕 BÚSQUEDA CON REGLA 80% (antes era 60%)
-                print("\n   🆕 Buscando con normalización de plurales y regla 80%...")
+                #  BSQUEDA CON REGLA 80% (antes era 60%)
+                print("\n    Buscando con normalizacin de plurales y regla 80%...")
                 try:
-                    # Obtener TODOS los diagnósticos
+                    # Obtener TODOS los diagnsticos
                     query_todos_diag = "SELECT id, descripcion FROM diagnosticos"
                     todos_diagnosticos = conn.execute(query_todos_diag).fetchall()
                 
@@ -2257,46 +2264,48 @@ def obtener_productos():
                             if detectar_diagnostico_por_palabras(diag['descripcion'], palabras_filtradas, umbral=0.8):
                                 diagnosticos_detectados_directo.append(diag['descripcion'])
                                 diagnosticos_detectados_directo_ids.append(diag['id'])
-                                print(f"   ✅ Diagnóstico directo (80% match): {diag['descripcion']}")
+                                print(f"    Diagnstico directo (80% match): {diag['descripcion']}")
                 except Exception as e:
-                    print(f"Error buscando diagnósticos con regla 80%: {e}")
+                    print(f"Error buscando diagnsticos con regla 80%: {e}")
             else:
-                print("\n⚠️ No hay palabras significativas (5+ letras), saltando búsqueda de diagnósticos")
+                print("\n No hay palabras significativas (5+ letras), saltando bsqueda de diagnsticos")
         
             # ============================================
-            # PARTE 3: BUSCAR SÍNTOMAS (🆕 CON PLURALES)
+            # PARTE 3: BUSCAR SNTOMAS ( CON PLURALES)
             # ============================================
         
-            print("\n🔍 PARTE 3: Buscando síntomas...")
+            print("\n PARTE 3: Buscando sntomas...")
         
             sintomas_encontrados = {}
         
-            # 🆕 PASO 1: BUSCAR PALABRAS EXACTAS CON VARIANTES DE PLURAL/SINGULAR
+            #  PASO 1: BUSCAR PALABRAS EXACTAS CON VARIANTES DE PLURAL/SINGULAR
             for palabra in palabras:
                 if len(palabra) >= 3:  # Permitir palabras de 3+ letras (ej: "tos")
                     try:
-                        # 🆕 Generar variantes (singular/plural)
+                        #  Generar variantes (singular/plural)
                         variantes = normalizar_palabra_busqueda(palabra)
                         placeholders = ','.join(['?' for _ in variantes])
                     
-                        print(f"   🔍 Buscando síntoma exacto con variantes: {variantes}")
-                    
+                        print(f"    Buscando sntoma exacto con variantes: {variantes}")
+
                         query_exacta = f"""
                             SELECT DISTINCT id, nombre
                             FROM sintomas
-                            WHERE LOWER(nombre) IN ({placeholders})
+                            WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                    nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                                ) IN ({placeholders})
                             LIMIT 1
                         """
                         resultado = conn.execute(query_exacta, variantes).fetchone()
                         if resultado:
                             sintomas_encontrados[resultado['id']] = resultado['nombre']
-                            print(f"   ✅ Síntoma encontrado: '{resultado['nombre']}' (ID: {resultado['id']})")
+                            print(f"    Sntoma encontrado: '{resultado['nombre']}' (ID: {resultado['id']})")
                         else:
-                            print(f"   ❌ No se encontró síntoma con variantes: {variantes}")
+                            print(f"    No se encontr sntoma con variantes: {variantes}")
                     except Exception as e:
-                        print(f"Error buscando síntoma exacto: {e}")
+                        print(f"Error buscando sntoma exacto: {e}")
         
-            # PASO 2: BUSCAR CON CONTEXTO (lógica existente, SIN CAMBIOS)
+            # PASO 2: BUSCAR CON CONTEXTO (lgica existente, SIN CAMBIOS)
             palabras_contextuales = {
                 'dolor': ['cabeza', 'espalda', 'pecho', 'abdominal', 'estomago', 'garganta', 
                          'oido', 'ojo', 'ocular', 'muscular', 'articular', 'lumbar', 'cervical',
@@ -2344,10 +2353,10 @@ def obtener_productos():
                             if r['id'] not in sintomas_encontrados:  # No duplicar
                                 sintomas_encontrados[r['id']] = r['nombre']
                     except Exception as e:
-                        print(f"Error buscando síntoma con contexto: {e}")
+                        print(f"Error buscando sntoma con contexto: {e}")
         
-            # PASO 3: BUSCAR PALABRAS SIMPLES CON LIKE Y VERIFICACIÓN ESTRICTA
-            palabras_simples = [p for p in palabras_filtradas  # 🆕 Usar palabras_filtradas
+            # PASO 3: BUSCAR PALABRAS SIMPLES CON LIKE Y VERIFICACIN ESTRICTA
+            palabras_simples = [p for p in palabras_filtradas  #  Usar palabras_filtradas
                                if len(p) >= 5
                                and p not in palabras_contextuales.keys()
                                and p not in palabras_muy_cortas
@@ -2364,10 +2373,10 @@ def obtener_productos():
                             SELECT DISTINCT id, nombre, LENGTH(nombre) as len
                             FROM sintomas
                             WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                                    nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                                    nombre, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')
                                 ) LIKE ?
                                OR LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                                    descripcion_lower, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                                    descripcion_lower, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')
                                 ) LIKE ?
                             ORDER BY len ASC
                             LIMIT 10
@@ -2376,42 +2385,42 @@ def obtener_productos():
                     
                         for r in resultados:
                             if r['id'] not in sintomas_encontrados:  # No duplicar
-                                # 🆕 VERIFICACIÓN ESTRICTA: ¿Realmente hace match?
+                                #  VERIFICACIN ESTRICTA: Realmente hace match?
                                 if verificar_match_sintoma(r['nombre'], palabras_filtradas):
                                     sintomas_encontrados[r['id']] = r['nombre']
-                                    print(f"   ✅ Síntoma verificado: '{r['nombre']}'")
+                                    print(f"    Sntoma verificado: '{r['nombre']}'")
                                 else:
-                                    print(f"   ❌ Síntoma rechazado (match parcial): '{r['nombre']}'")
+                                    print(f"    Sntoma rechazado (match parcial): '{r['nombre']}'")
                 except Exception as e:
-                    print(f"Error buscando síntoma simple: {e}")
+                    print(f"Error buscando sntoma simple: {e}")
         
             for sid, nombre in sintomas_encontrados.items():
                 sintomas_detectados.append(nombre)
                 sintomas_detectados_ids.append(sid)
         
-            print(f"\n📊 RESUMEN - Síntomas detectados: {len(sintomas_detectados)}")
+            print(f"\n RESUMEN - Sntomas detectados: {len(sintomas_detectados)}")
             for i, (sid, nombre) in enumerate(zip(sintomas_detectados_ids, sintomas_detectados)):
                 print(f"   {i+1}. ID {sid}: {nombre}")
             print("")
         
 
             # ============================================
-            # 🆕 BÚSQUEDA PARCIAL (último recurso - una sola palabra sin resultados)
+            #  BSQUEDA PARCIAL (ltimo recurso - una sola palabra sin resultados)
             # ============================================
             busqueda_parcial_aplicada = False
         
             if len(sintomas_detectados) == 0 and len(palabras_filtradas) == 1:
                 palabra_busqueda = palabras_filtradas[0]
-                print(f"\n🔍 BÚSQUEDA PARCIAL: No se encontraron síntomas exactos para '{palabra_busqueda}'")
-                print(f"   Buscando síntomas que contengan esta palabra...")
+                print(f"\n BSQUEDA PARCIAL: No se encontraron sntomas exactos para '{palabra_busqueda}'")
+                print(f"   Buscando sntomas que contengan esta palabra...")
             
                 try:
-                    # Buscar síntomas que contengan la palabra (normalizado)
+                    # Buscar sntomas que contengan la palabra (normalizado)
                     query_parcial = """
                         SELECT DISTINCT id, nombre, LENGTH(nombre) as len
                         FROM sintomas
                         WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                                nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                                nombre, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')
                             ) LIKE ?
                         ORDER BY len ASC
                         LIMIT 10
@@ -2420,7 +2429,7 @@ def obtener_productos():
                     sintomas_parciales = conn.execute(query_parcial, [f'%{palabra_busqueda}%']).fetchall()
                 
                     if sintomas_parciales:
-                        print(f"   ✅ Encontrados {len(sintomas_parciales)} síntomas que contienen '{palabra_busqueda}':")
+                        print(f"    Encontrados {len(sintomas_parciales)} sntomas que contienen '{palabra_busqueda}':")
                         for s in sintomas_parciales:
                             sintomas_detectados.append(s['nombre'])
                             sintomas_detectados_ids.append(s['id'])
@@ -2428,14 +2437,14 @@ def obtener_productos():
                     
                         busqueda_parcial_aplicada = True
                     else:
-                        print(f"   ❌ No se encontraron síntomas que contengan '{palabra_busqueda}'")
+                        print(f"    No se encontraron sntomas que contengan '{palabra_busqueda}'")
                     
                 except Exception as e:
-                    print(f"   ❌ Error en búsqueda parcial: {e}")
+                    print(f"    Error en bsqueda parcial: {e}")
 
 
             # ============================================
-            # PARTE 4: DIAGNÓSTICOS POR SÍNTOMAS (SIN CAMBIOS)
+            # PARTE 4: DIAGNSTICOS POR SNTOMAS (SIN CAMBIOS)
             # ============================================
         
             if sintomas_detectados_ids:
@@ -2461,12 +2470,12 @@ def obtener_productos():
                     for diag in diagnosticos:
                         porcentaje_match = (diag['sintomas_coincidentes'] / diag['sintomas_totales']) * 100
                     
-                        print(f"   📊 Diagnóstico evaluado: {diag['descripcion']}")
+                        print(f"    Diagnstico evaluado: {diag['descripcion']}")
                         print(f"      Coincidencias: {diag['sintomas_coincidentes']}/{diag['sintomas_totales']} = {porcentaje_match:.1f}%")
-                        print(f"      ¿Pasa filtro 80%? {porcentaje_match > 80}")
-                        print(f"      ¿Ya está en directos? {diag['id'] in diagnosticos_detectados_directo_ids}")
+                        print(f"      Pasa filtro 80%? {porcentaje_match > 80}")
+                        print(f"      Ya est en directos? {diag['id'] in diagnosticos_detectados_directo_ids}")
                     
-                        # 🆕 FILTRO 80%: Solo agregar si porcentaje > 80%
+                        #  FILTRO 80%: Solo agregar si porcentaje > 80%
                         if porcentaje_match > 80 and diag['id'] not in diagnosticos_detectados_directo_ids:
                             diagnosticos_posibles[diag['id']] = {
                                 'nombre': diag['descripcion'],
@@ -2476,9 +2485,9 @@ def obtener_productos():
                                 'tipo': 'por_sintomas'
                             }
                 except Exception as e:
-                    print(f"Error buscando diagnósticos por síntomas: {e}")
+                    print(f"Error buscando diagnsticos por sntomas: {e}")
         
-            # Agregar diagnósticos detectados directamente (siempre 100%)
+            # Agregar diagnsticos detectados directamente (siempre 100%)
             for i, diag_id in enumerate(diagnosticos_detectados_directo_ids):
                 try:
                     total_sintomas_query = """
@@ -2497,7 +2506,7 @@ def obtener_productos():
                         'tipo': 'directo'
                     }
                 
-                    # 🆕 DETECTAR SÍNTOMAS FALTANTES PARA DIAGNÓSTICOS DIRECTOS
+                    #  DETECTAR SNTOMAS FALTANTES PARA DIAGNSTICOS DIRECTOS
                     try:
                         query_sintomas_diag = """
                             SELECT s.id, s.nombre
@@ -2517,14 +2526,14 @@ def obtener_productos():
                     
                         if faltantes:
                             sintomas_faltantes_por_diagnostico[diag_id] = faltantes
-                            print(f"   ❓ Síntomas faltantes para '{diagnosticos_detectados_directo[i]}':")
+                            print(f"    Sntomas faltantes para '{diagnosticos_detectados_directo[i]}':")
                             for f in faltantes:
                                 print(f"      - {f['nombre']} (ID: {f['id']})")
                     except Exception as e:
-                        print(f"Error detectando síntomas faltantes: {e}")
+                        print(f"Error detectando sntomas faltantes: {e}")
                 
                 except Exception as e:
-                    print(f"Error agregando diagnóstico directo: {e}")
+                    print(f"Error agregando diagnstico directo: {e}")
     
         # ============================================
         # QUERY DE PRODUCTOS (SIN CAMBIOS)
@@ -2562,7 +2571,7 @@ def obtener_productos():
 
         params = []
 
-        # ✅ PASO 3: Buscar productos por síntomas (si se detectaron)
+        #  PASO 3: Buscar productos por sntomas (si se detectaron)
         productos_sintomas = []
         if sintomas_detectados_ids:
             todos_sintomas_ids = list(sintomas_detectados_ids)
@@ -2579,7 +2588,7 @@ def obtener_productos():
                         if s['sintoma_id'] not in todos_sintomas_ids:
                             todos_sintomas_ids.append(s['sintoma_id'])
                 except Exception as e:
-                    print(f"Error obteniendo síntomas de diagnóstico: {e}")
+                    print(f"Error obteniendo sntomas de diagnstico: {e}")
         
             if todos_sintomas_ids:
                 placeholders = ','.join(['?' for _ in todos_sintomas_ids])
@@ -2603,21 +2612,21 @@ def obtener_productos():
                 params_sintomas.append(permitir_sin_cotizaciones)
 
                 productos_sintomas = conn.execute(query_sintomas, params_sintomas).fetchall()
-                print(f"   🔍 Productos por síntomas: {len(productos_sintomas)}")
+                print(f"    Productos por sntomas: {len(productos_sintomas)}")
 
-        # ✅ PASO 4: Combinar resultados (directos primero, luego síntomas sin duplicados)
+        #  PASO 4: Combinar resultados (directos primero, luego sntomas sin duplicados)
         hay_limite = False
         if busqueda and productos_directos:
             ids_directos = {p['precio_id'] for p in productos_directos}
             productos_sintomas_unicos = [p for p in productos_sintomas if p['precio_id'] not in ids_directos]
             productos = list(productos_directos) + productos_sintomas_unicos
-            print(f"   📦 Combinado: {len(productos_directos)} directos + {len(productos_sintomas_unicos)} síntomas = {len(productos)}")
+            print(f"   Combinado: {len(productos_directos)} directos + {len(productos_sintomas_unicos)} sintomas = {len(productos)}")
         elif busqueda:
             productos = list(productos_directos)
         elif productos_sintomas:
             productos = list(productos_sintomas)
         else:
-            # Sin búsqueda, mostrar primeros 50
+            # Sin bsqueda, mostrar primeros 50
             hay_limite = True
             query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
             params.append(permitir_sin_cotizaciones)
@@ -2650,12 +2659,12 @@ def obtener_productos():
         else:
             sintomas_filtrados_por_precio = {precio_id: [] for precio_id in sintomas_por_precio.keys()}
 
-        # 🆕 CALCULAR SÍNTOMAS SOBRANTES
+        #  CALCULAR SNTOMAS SOBRANTES
         sintomas_sobrantes = []
         sintomas_sobrantes_ids = []
     
         if diagnosticos_posibles:
-            # Obtener síntomas del mejor diagnóstico
+            # Obtener sntomas del mejor diagnstico
             mejor_diagnostico = max(diagnosticos_posibles.values(), key=lambda x: x['porcentaje'])
             mejor_diagnostico_id = [k for k, v in diagnosticos_posibles.items() if v == mejor_diagnostico][0]
         
@@ -2674,7 +2683,7 @@ def obtener_productos():
                         sintomas_sobrantes_ids.append(sid)
                         sintomas_sobrantes.append(sintomas_detectados[i])
             except Exception as e:
-                print(f"Error calculando síntomas sobrantes: {e}")
+                print(f"Error calculando sntomas sobrantes: {e}")
     
         conn.close()
     
@@ -2704,7 +2713,7 @@ def obtener_productos():
                     if match > 0:
                         coincidencias_diagnosticos_directos += match
                 except Exception as e:
-                    print(f"Error calculando coincidencias diagnóstico: {e}")
+                    print(f"Error calculando coincidencias diagnstico: {e}")
         
             score = 0
             mejor_diagnostico = None
@@ -2750,27 +2759,27 @@ def obtener_productos():
             })
     
         # ============================================
-        # 🆕 ORDENAMIENTO INTELIGENTE
+        #  ORDENAMIENTO INTELIGENTE
         # ============================================
     
         if busqueda_sintomas and (sintomas_detectados_ids or diagnosticos_detectados_directo_ids):
         
-            # DETECTAR TIPO DE BÚSQUEDA
+            # DETECTAR TIPO DE BSQUEDA
             es_busqueda_diagnostico = len(diagnosticos_detectados_directo_ids) > 0
         
             if es_busqueda_diagnostico:
-                # ═══════════════════════════════════════
-                # REGLA 2: BÚSQUEDA POR DIAGNÓSTICO
-                # Prioridad: MÁS cobertura del diagnóstico
-                # ═══════════════════════════════════════
+                # 
+                # REGLA 2: BSQUEDA POR DIAGNSTICO
+                # Prioridad: MS cobertura del diagnstico
+                # 
             
-                print(f"\n🔍 ORDENAMIENTO: Búsqueda por DIAGNÓSTICO")
+                print(f"\n ORDENAMIENTO: Bsqueda por DIAGNSTICO")
             
-                # Obtener síntomas del diagnóstico principal
+                # Obtener sntomas del diagnstico principal
                 diagnostico_principal_id = diagnosticos_detectados_directo_ids[0]
             
                 try:
-                    conn_ordenamiento = get_db_connection()  # 🆕 Nueva conexión
+                    conn_ordenamiento = get_db_connection()  #  Nueva conexin
                 
                     query_sintomas_diag = """
                         SELECT DISTINCT sintoma_id
@@ -2781,16 +2790,16 @@ def obtener_productos():
                     sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_del_diagnostico]
                     total_sintomas_diagnostico = len(sintomas_diag_ids)
                 
-                    print(f"   Diagnóstico tiene {total_sintomas_diagnostico} síntomas")
+                    print(f"   Diagnstico tiene {total_sintomas_diagnostico} sntomas")
                 
                     # Calcular cobertura de cada producto
                     for producto in productos_con_score:
                         sintomas_producto = sintomas_ids_por_precio.get(producto['precio_id'], [])
                     
-                        # Contar cuántos síntomas del diagnóstico cubre este producto
+                        # Contar cuntos sntomas del diagnstico cubre este producto
                         cobertura = len([s for s in sintomas_producto if s in sintomas_diag_ids])
                     
-                        # 🆕 Contar síntomas EXTRA (que NO están en el diagnóstico)
+                        #  Contar sntomas EXTRA (que NO estn en el diagnstico)
                         sintomas_extra = len([s for s in sintomas_producto if s not in sintomas_diag_ids])
                     
                         producto['cobertura_diagnostico'] = cobertura
@@ -2798,32 +2807,32 @@ def obtener_productos():
                         producto['sintomas_totales_count'] = len(sintomas_producto)
                         producto['porcentaje_cobertura'] = (cobertura / total_sintomas_diagnostico * 100) if total_sintomas_diagnostico > 0 else 0
                     
-                        print(f"      {producto['nombre'][:30]:30} → Cubre {cobertura}/{total_sintomas_diagnostico} ({producto['porcentaje_cobertura']:.0f}%) | Extras: {sintomas_extra} | Total: {len(sintomas_producto)}")
+                        print(f"      {producto['nombre'][:30]:30} -> Cubre {cobertura}/{total_sintomas_diagnostico} ({producto['porcentaje_cobertura']:.0f}%) | Extras: {sintomas_extra} | Total: {len(sintomas_producto)}")
                 
-                    # 🆕 Ordenar: MENOS extras primero, luego MÁS cobertura
+                    #  Ordenar: MENOS extras primero, luego MS cobertura
                     productos_con_score.sort(key=lambda x: (x['sintomas_extra'], -x['cobertura_diagnostico']))
                 
-                    print(f"   ✅ Orden: Menos extras → Más cobertura del diagnóstico")
+                    print(f"    Orden: Menos extras -> Ms cobertura del diagnstico")
                 
-                    conn_ordenamiento.close()  # 🆕 Cerrar conexión
+                    conn_ordenamiento.close()  #  Cerrar conexin
                 
                 except Exception as e:
-                    print(f"   ❌ Error calculando cobertura: {e}")
+                    print(f"    Error calculando cobertura: {e}")
                     productos_con_score.sort(key=lambda x: x['score'], reverse=True)
         
             else:
-                # ═══════════════════════════════════════
-                # REGLA 1: BÚSQUEDA POR SÍNTOMAS
-                # Prioridad: MENOS síntomas totales (específico)
-                # ═══════════════════════════════════════
+                # 
+                # REGLA 1: BSQUEDA POR SNTOMAS
+                # Prioridad: MENOS sntomas totales (especfico)
+                # 
             
-                print(f"\n🔍 ORDENAMIENTO: Búsqueda por SÍNTOMAS")
+                print(f"\n ORDENAMIENTO: Bsqueda por SNTOMAS")
             
                 for producto in productos_con_score:
                     sintomas_totales = len(sintomas_ids_por_precio.get(producto['precio_id'], []))
                 
-                    # Score inverso: menos síntomas = más score
-                    # Fórmula: 1000 / síntomas_totales
+                    # Score inverso: menos sntomas = ms score
+                    # Frmula: 1000 / sntomas_totales
                     if sintomas_totales > 0:
                         producto['especificidad_score'] = 1000 / sintomas_totales
                     else:
@@ -2831,15 +2840,15 @@ def obtener_productos():
                 
                     producto['sintomas_totales_count'] = sintomas_totales
                 
-                    print(f"      {producto['nombre'][:30]:30} → {sintomas_totales} síntomas (score: {producto['especificidad_score']:.1f})")
+                    print(f"      {producto['nombre'][:30]:30} -> {sintomas_totales} sntomas (score: {producto['especificidad_score']:.1f})")
             
-                # Ordenar: MENOS síntomas primero (más específico)
+                # Ordenar: MENOS sntomas primero (ms especfico)
                 productos_con_score.sort(key=lambda x: (x['especificidad_score'], x['coincidencias']), reverse=True)
             
-                print(f"   ✅ Orden: Más específico → Más genérico")
+                print(f"    Orden: Ms especfico -> Ms genrico")
             
-                # AHORA aplicar el ordenamiento por síntomas (alternar)
-                # PASO 1: Agrupar por síntoma principal
+                # AHORA aplicar el ordenamiento por sntomas (alternar)
+                # PASO 1: Agrupar por sntoma principal
                 productos_por_sintoma = {}
             
                 for producto in productos_con_score:
@@ -2854,7 +2863,7 @@ def obtener_productos():
                     
                         productos_por_sintoma[sintoma_principal].append(producto)
             
-                # PASO 2: Extraer el MEJOR de cada síntoma (ya ordenados por especificidad)
+                # PASO 2: Extraer el MEJOR de cada sntoma (ya ordenados por especificidad)
                 mejores_por_sintoma = []
             
                 for sintoma_id in sintomas_detectados_ids:
@@ -2877,11 +2886,11 @@ def obtener_productos():
                 # PASO 4: Resultado final
                 productos_con_score = mejores_por_sintoma + resto_productos
             
-                print(f"   🎯 Mejores por síntoma: {len(mejores_por_sintoma)}")
-                print(f"   🎯 Resto alternado: {len(resto_productos)}")
+                print(f"    Mejores por sntoma: {len(mejores_por_sintoma)}")
+                print(f"    Resto alternado: {len(resto_productos)}")
     
         else:
-            # Sin síntomas ni diagnósticos: orden normal
+            # Sin sntomas ni diagnsticos: orden normal
             productos_con_score.sort(key=lambda x: x['score'], reverse=True)
 
     
@@ -2892,7 +2901,7 @@ def obtener_productos():
                 'es_directo': diag_info.get('tipo') == 'directo'
             }
         
-            # 🆕 Agregar síntomas faltantes si es diagnóstico directo
+            #  Agregar sntomas faltantes si es diagnstico directo
             if diag_id in sintomas_faltantes_por_diagnostico:
                 diag_response['sintomas_faltantes'] = sintomas_faltantes_por_diagnostico[diag_id]
         
@@ -2903,12 +2912,12 @@ def obtener_productos():
             'productos': productos_con_score,
             'total': len(productos_con_score),
             'total_disponible': total_disponible,  # Total de productos sin LIMIT
-            'hay_limite': hay_limite,  # Indica si se aplicó LIMIT 50
+            'hay_limite': hay_limite,  # Indica si se aplic LIMIT 50
             'sintomas_detectados': sintomas_detectados,
             'diagnosticos_posibles': diagnosticos_response,
             'diagnosticos_directos': diagnosticos_detectados_directo,
-            'sintomas_sobrantes': sintomas_sobrantes,  # 🆕 Síntomas que no están en el diagnóstico
-            'busqueda_parcial': busqueda_parcial_aplicada  # 🆕 Flag para mostrar mensaje especial en frontend
+            'sintomas_sobrantes': sintomas_sobrantes,  #  Sntomas que no estn en el diagnstico
+            'busqueda_parcial': busqueda_parcial_aplicada  #  Flag para mostrar mensaje especial en frontend
         })
     except Exception as e:
         print(f"\nERROR CRITICO en /api/productos: {e}")
@@ -2923,7 +2932,7 @@ def obtener_productos():
 
 @app.route('/verificar_progreso_paciente')
 def verificar_progreso_paciente():
-    """Verifica qué datos faltan en el perfil del paciente y redirige a la etapa pendiente."""
+    """Verifica qu datos faltan en el perfil del paciente y redirige a la etapa pendiente."""
     device_id = session.get('dispositivo_id')
     
     if session.get('rol') != 'Paciente' or not device_id:
@@ -2935,7 +2944,7 @@ def verificar_progreso_paciente():
     conn.close()
 
     if not usuario:
-        flash("Error: No se encontró el registro del usuario.", 'danger')
+        flash("Error: No se encontr el registro del usuario.", 'danger')
         return redirect(url_for('logout')) 
 
     if usuario['edad'] is None:
@@ -2956,46 +2965,46 @@ def verificar_progreso_paciente():
 def etapa1_nuevo_registro():
     """Muestra el formulario de registro de nombre, con plantillas distintas por rol."""
 
-    # 🧠 Log de sesión al entrar
-    app.logger.debug(f"📦 Sesión al entrar en etapa1_nuevo_registro: {dict(session)}")
+    #  Log de sesin al entrar
+    app.logger.debug(f" Sesin al entrar en etapa1_nuevo_registro: {dict(session)}")
 
-    # 🧠 Forzar persistencia del rol si viene desde /admin
+    #  Forzar persistencia del rol si viene desde /admin
     if not session.get('rol_temporal'):
         if request.referrer and '/admin' in request.referrer:
             session['rol_temporal'] = 'Administrador'
-            app.logger.debug("👑 Rol temporal asignado automáticamente como 'Administrador' (referrer /admin)")
+            app.logger.debug(" Rol temporal asignado automticamente como 'Administrador' (referrer /admin)")
         else:
             session['rol_temporal'] = 'Paciente'
-            app.logger.debug("🩺 Rol temporal asignado automáticamente como 'Paciente' (referrer sin /admin)")
+            app.logger.debug(" Rol temporal asignado automticamente como 'Paciente' (referrer sin /admin)")
     else:
-        app.logger.debug(f"✅ Rol temporal ya existente en sesión: {session['rol_temporal']}")
+        app.logger.debug(f" Rol temporal ya existente en sesin: {session['rol_temporal']}")
 
     # Determinar rol y plantilla
     rol_temp = session.get('rol_temporal')
     template_name = '1_registro_admin.html' if rol_temp == 'Administrador' else '1_registro_paciente.html'
 
-    # 🔍 Log de verificación antes de mostrar plantilla
-    app.logger.debug(f"🧩 Rol temporal activo: {rol_temp}, Plantilla: {template_name}")
-    app.logger.debug(f"📦 Sesión antes de procesar método {request.method}: {dict(session)}")
+    #  Log de verificacin antes de mostrar plantilla
+    app.logger.debug(f" Rol temporal activo: {rol_temp}, Plantilla: {template_name}")
+    app.logger.debug(f" Sesin antes de procesar mtodo {request.method}: {dict(session)}")
 
     if request.method == 'POST':
-        app.logger.debug(f"📥 POST recibido en etapa1_nuevo_registro: {request.form}")  # 🔍 Verifica que llegue el nombre
+        app.logger.debug(f" POST recibido en etapa1_nuevo_registro: {request.form}")  #  Verifica que llegue el nombre
         nombre = request.form.get('nombre')
 
         if not nombre:
             flash("El nombre es requerido.", 'warning')
-            app.logger.warning("⚠️ Intento de registro sin nombre")
+            app.logger.warning(" Intento de registro sin nombre")
             return render_template(template_name, rol=rol_temp)
 
-        # 🧾 Log previo a la redirección
-        app.logger.debug(f"➡️ Redirigiendo a etapa1_registro_completo con nombre={nombre}")
-        app.logger.debug(f"📦 Sesión justo antes de redirigir: {dict(session)}")
+        #  Log previo a la redireccin
+        app.logger.debug(f" Redirigiendo a etapa1_registro_completo con nombre={nombre}")
+        app.logger.debug(f" Sesin justo antes de redirigir: {dict(session)}")
 
         return redirect(url_for('etapa1_registro_completo', nombre=nombre))
         
     # Si es GET, simplemente renderizamos la plantilla
-    app.logger.debug(f"🖼️ Renderizando plantilla: {template_name} con rol={rol_temp}")
-    app.logger.debug(f"📦 Sesión al final del GET: {dict(session)}")
+    app.logger.debug(f" Renderizando plantilla: {template_name} con rol={rol_temp}")
+    app.logger.debug(f" Sesin al final del GET: {dict(session)}")
 
     return render_template(template_name, rol=rol_temp)
 
@@ -3003,23 +3012,23 @@ def etapa1_nuevo_registro():
 
 @app.route('/etapa1_registro_completo', methods=['GET', 'POST'])
 def etapa1_registro_completo():
-    """Guarda el usuario en la base de datos y establece la sesión de acceso."""
+    """Guarda el usuario en la base de datos y establece la sesin de acceso."""
     
-    # 🔍 Log inicial
-    app.logger.debug(f"📥 Llamada a etapa1_registro_completo - Método: {request.method}")
-    app.logger.debug(f"📦 Estado completo de la sesión al entrar: {dict(session)}")
+    #  Log inicial
+    app.logger.debug(f" Llamada a etapa1_registro_completo - Mtodo: {request.method}")
+    app.logger.debug(f" Estado completo de la sesin al entrar: {dict(session)}")
 
     # Obtener datos
     nombre = request.form.get('nombre') if request.method == 'POST' else request.args.get('nombre')
     device_id = session.get('dispositivo_id')
     rol = session.get('rol_temporal')
 
-    app.logger.debug(f"🧩 Datos recibidos -> nombre={nombre}, device_id={device_id}, rol={rol}")
+    app.logger.debug(f" Datos recibidos -> nombre={nombre}, device_id={device_id}, rol={rol}")
 
-    # Validación básica
+    # Validacin bsica
     if not all([nombre, device_id, rol]):
-        app.logger.error(f"🚨 Datos faltantes -> nombre={nombre}, device_id={device_id}, rol={rol}")
-        flash("Error en el registro. Información incompleta.", 'danger')
+        app.logger.error(f" Datos faltantes -> nombre={nombre}, device_id={device_id}, rol={rol}")
+        flash("Error en el registro. Informacin incompleta.", 'danger')
         return redirect(url_for('etapa1_nuevo_registro'))
 
     # Guardar en base de datos
@@ -3032,7 +3041,7 @@ def etapa1_registro_completo():
 
         if existente:
             usuario_id = existente['id']
-            app.logger.warning(f"⚠️ Usuario con device_id {device_id} ya existente (ID={usuario_id}).")
+            app.logger.warning(f" Usuario con device_id {device_id} ya existente (ID={usuario_id}).")
         else:
             conn.execute("""
                 INSERT INTO usuarios (dispositivo_id, nombre, fecha_registro, rol)
@@ -3044,46 +3053,46 @@ def etapa1_registro_completo():
                 "SELECT id FROM usuarios WHERE dispositivo_id = ?", (device_id,)
             ).fetchone()['id']
 
-            app.logger.debug(f"✅ Usuario insertado con ID {usuario_id}")
+            app.logger.debug(f" Usuario insertado con ID {usuario_id}")
 
-        # Verificación del registro
+        # Verificacin del registro
         usuario_verif = conn.execute(
             "SELECT id, nombre, rol, fecha_registro FROM usuarios WHERE id = ?", 
             (usuario_id,)
         ).fetchone()
         app.logger.debug(
-            f"🧾 Verificación DB -> ID: {usuario_verif['id']}, Nombre: {usuario_verif['nombre']}, Rol: {usuario_verif['rol']}"
+            f" Verificacin DB -> ID: {usuario_verif['id']}, Nombre: {usuario_verif['nombre']}, Rol: {usuario_verif['rol']}"
         )
 
     except Exception as e:
         conn.close()
-        app.logger.error(f"💥 Error durante el registro: {e}")
-        flash("Ocurrió un error guardando el registro.", 'danger')
+        app.logger.error(f" Error durante el registro: {e}")
+        flash("Ocurri un error guardando el registro.", 'danger')
         return redirect(url_for('etapa1_nuevo_registro'))
     finally:
         conn.close()
 
-    # Actualizar sesión
+    # Actualizar sesin
     session['rol'] = rol
     session['nombre'] = nombre
     session['usuario_id'] = usuario_id
     session.pop('rol_temporal', None)
 
-    app.logger.debug(f"💾 Sesión actualizada tras registro: {dict(session)}")
+    app.logger.debug(f" Sesin actualizada tras registro: {dict(session)}")
 
-    flash(f"¡Bienvenido/a, {nombre}! Tu registro como {rol} ha sido exitoso.", 'success')
+    flash(f"Bienvenido/a, {nombre}! Tu registro como {rol} ha sido exitoso.", 'success')
 
-    # Redirigir según el rol
+    # Redirigir segn el rol
     try:
         if rol == 'Administrador':
-            app.logger.debug("➡️ Redirigiendo al área de administrador (admin_area)")
+            app.logger.debug(" Redirigiendo al rea de administrador (admin_area)")
             return redirect(url_for('admin_area'))
         else:
-            app.logger.debug("➡️ Redirigiendo al flujo de paciente (verificar_progreso_paciente)")
+            app.logger.debug(" Redirigiendo al flujo de paciente (verificar_progreso_paciente)")
             return redirect(url_for('verificar_progreso_paciente'))
     except Exception as e:
-        app.logger.error(f"❌ Error redirigiendo después del registro: {e}")
-        flash("Registro completado, pero no se pudo redirigir automáticamente.", 'warning')
+        app.logger.error(f" Error redirigiendo despus del registro: {e}")
+        flash("Registro completado, pero no se pudo redirigir automticamente.", 'warning')
         return redirect(url_for('index'))
 
 
@@ -3094,10 +3103,10 @@ def etapa2_edad():
         return redirect(url_for('index'))
         
     opciones = [
-        ('18-30 años', '18-30'), 
-        ('31-50 años', '31-50'), 
-        ('51-70 años', '51-70'), 
-        ('Más de 70 años', '+70')
+        ('18-30 aos', '18-30'), 
+        ('31-50 aos', '31-50'), 
+        ('51-70 aos', '51-70'), 
+        ('Ms de 70 aos', '+70')
     ]
 
     if request.method == 'POST':
@@ -3105,7 +3114,7 @@ def etapa2_edad():
         device_id = session.get('dispositivo_id')
         
         if not rango_edad or not device_id:
-            flash("Selección inválida.", 'warning')
+            flash("Seleccin invlida.", 'warning')
             return redirect(url_for('etapa2_edad'))
 
         conn = get_db_connection()
@@ -3117,7 +3126,7 @@ def etapa2_edad():
         return redirect(url_for('verificar_progreso_paciente'))
         
     return render_template('2_etapa_conversacional.html', 
-                           pregunta="Para empezar, ¿en qué rango de edad te encuentras?",
+                           pregunta="Para empezar, en qu rango de edad te encuentras?",
                            opciones=opciones,
                            nombre_campo="rango_edad")
 
@@ -3131,7 +3140,7 @@ def etapa3_peso():
         ('Menos de 60 kg', '0-60'), 
         ('60 - 80 kg', '60-80'), 
         ('81 - 100 kg', '81-100'), 
-        ('Más de 100 kg', '+100')
+        ('Ms de 100 kg', '+100')
     ]
 
     if request.method == 'POST':
@@ -3139,7 +3148,7 @@ def etapa3_peso():
         device_id = session.get('dispositivo_id')
         
         if not rango_peso or not device_id:
-            flash("Selección inválida.", 'warning')
+            flash("Seleccin invlida.", 'warning')
             return redirect(url_for('etapa3_peso'))
 
         conn = get_db_connection()
@@ -3151,13 +3160,13 @@ def etapa3_peso():
         return redirect(url_for('verificar_progreso_paciente'))
         
     return render_template('2_etapa_conversacional.html', 
-                           pregunta="Para un cálculo preciso, ¿cuál es tu rango de peso aproximado?",
+                           pregunta="Para un clculo preciso, cul es tu rango de peso aproximado?",
                            opciones=opciones,
                            nombre_campo="rango_peso")
 
 @app.route('/etapa4_genero', methods=['GET', 'POST'])
 def etapa4_genero():
-    """Pregunta por el género y guarda el dato en la DB."""
+    """Pregunta por el gnero y guarda el dato en la DB."""
     if session.get('rol') != 'Paciente':
         return redirect(url_for('index'))
         
@@ -3172,7 +3181,7 @@ def etapa4_genero():
         device_id = session.get('dispositivo_id')
         
         if not genero or not device_id:
-            flash("Selección inválida.", 'warning')
+            flash("Seleccin invlida.", 'warning')
             return redirect(url_for('etapa4_genero'))
 
         conn = get_db_connection()
@@ -3184,20 +3193,20 @@ def etapa4_genero():
         return redirect(url_for('verificar_progreso_paciente'))
         
     return render_template('2_etapa_conversacional.html', 
-                           pregunta=f"{session.get('nombre')}, ¿cuál es tu género?",
+                           pregunta=f"{session.get('nombre')}, cul es tu gnero?",
                            opciones=opciones,
                            nombre_campo="genero")
 
 @app.route('/etapa5_organos', methods=['GET', 'POST'])
 def etapa5_organos():
-    """Pregunta por el estado de órganos y guarda el dato en la DB."""
+    """Pregunta por el estado de rganos y guarda el dato en la DB."""
     if session.get('rol') != 'Paciente':
         return redirect(url_for('index'))
         
     opciones = [
         ('Sanos (Sin problemas conocidos)', 'Sanos'), 
         ('Problemas leves (Insuficiencia leve, grasa)', 'Leve'), 
-        ('Problemas moderados a graves (Diálisis, Cirrosis)', 'Grave')
+        ('Problemas moderados a graves (Dilisis, Cirrosis)', 'Grave')
     ]
 
     if request.method == 'POST':
@@ -3205,7 +3214,7 @@ def etapa5_organos():
         device_id = session.get('dispositivo_id')
         
         if not estado or not device_id:
-            flash("Selección inválida.", 'warning')
+            flash("Seleccin invlida.", 'warning')
             return redirect(url_for('etapa5_organos'))
 
         conn = get_db_connection()
@@ -3217,17 +3226,17 @@ def etapa5_organos():
         return redirect(url_for('verificar_progreso_paciente'))
         
     return render_template('2_etapa_conversacional.html', 
-                           pregunta="Finalmente, ¿cuál es el estado de salud de tus órganos (Hígado/Riñón)?",
+                           pregunta="Finalmente, cul es el estado de salud de tus rganos (Hgado/Rin)?",
                            opciones=opciones,
                            nombre_campo="estado_organos")
 
 # -------------------------------------------------------------------
-# --- ZONA 5: ÁREA DE PACIENTE Y LÓGICA DE SUGERENCIAS ---
+# --- ZONA 5: REA DE PACIENTE Y LGICA DE SUGERENCIAS ---
 # -------------------------------------------------------------------
 
 @app.route('/paciente_area')
 def paciente_area():
-    """Muestra la interfaz principal de consulta de síntomas."""
+    """Muestra la interfaz principal de consulta de sntomas."""
     if session.get('rol') != 'Paciente':
         flash("Acceso no autorizado.", 'danger')
         return redirect(url_for('index'))
@@ -3236,12 +3245,12 @@ def paciente_area():
     conn = get_db_connection()
     usuario = conn.execute("SELECT estado_organos FROM usuarios WHERE dispositivo_id = ?", (device_id,)).fetchone()
 
-    # 1. Verifica si el registro está completo
+    # 1. Verifica si el registro est completo
     if usuario['estado_organos'] is None:
-        flash("Aún debes completar tu registro clínico.", 'warning')
+        flash("An debes completar tu registro clnico.", 'warning')
         return redirect(url_for('verificar_progreso_paciente'))
 
-    # 2. Obtiene la base de datos de síntomas
+    # 2. Obtiene la base de datos de sntomas
     sintomas_db = conn.execute("SELECT id, nombre, descripcion_lower FROM sintomas").fetchall()
     conn.close()
 
@@ -3253,7 +3262,7 @@ def paciente_area():
 @app.route('/mostrar_sugerencias', methods=['POST'])
 def mostrar_sugerencias():
     """
-    Ruta que recibe la lista de síntomas, consulta la base de datos, 
+    Ruta que recibe la lista de sntomas, consulta la base de datos, 
     filtra los medicamentos y renderiza los resultados.
     """
     if session.get('rol') != 'Paciente':
@@ -3263,16 +3272,16 @@ def mostrar_sugerencias():
     sintomas_seleccionados_ids_str = request.form.getlist('sintomas_id')
     
     if not sintomas_seleccionados_ids_str:
-        flash("No seleccionaste ningún síntoma. Por favor, inténtalo de nuevo.", 'warning')
+        flash("No seleccionaste ningn sntoma. Por favor, intntalo de nuevo.", 'warning')
         return redirect(url_for('paciente_area'))
 
     placeholders = ','.join(['?'] * len(sintomas_seleccionados_ids_str))
     
     conn = get_db_connection()
     
-    # 2. Consulta de medicamentos usando la tabla de asociación MEDICAMENTO_SINTOMA
+    # 2. Consulta de medicamentos usando la tabla de asociacin MEDICAMENTO_SINTOMA
     # Nota: Tu tabla de medicamentos en el data_initializer NO tiene stock_actual. 
-    # Lo he quitado de la consulta para evitar errores, pero si lo necesitas, debes agregarlo en la inicialización.
+    # Lo he quitado de la consulta para evitar errores, pero si lo necesitas, debes agregarlo en la inicializacin.
     sql_query = f"""
     SELECT 
         m.id, m.nombre, m.presentacion, m.concentracion, 
@@ -3292,10 +3301,10 @@ def mostrar_sugerencias():
     
     medicamentos_sugeridos = [dict(row) for row in sugerencias_db]
 
-    # --- Simulación de Diagnóstico Principal (Opcional) ---
+    # --- Simulacin de Diagnstico Principal (Opcional) ---
     diagnostico = None
     if len(sintomas_seleccionados_ids_str) >= 2 and '1' in sintomas_seleccionados_ids_str and '2' in sintomas_seleccionados_ids_str:
-        diagnostico = "Síndrome General de Resfriado/Gripe Leve"
+        diagnostico = "Sndrome General de Resfriado/Gripe Leve"
     
     return render_template('sugerencias_resultado.html', 
                            medicamentos=medicamentos_sugeridos,
@@ -3338,7 +3347,7 @@ def crear_requerimiento():
         descripcion = data.get('descripcion', '').strip()
         modulo = data.get('modulo', '').strip()
         prioridad = data.get('prioridad', '').strip()
-        estado = data.get('estado', 'Planificación').strip()
+        estado = data.get('estado', 'Planificacin').strip()
         
         if not all([descripcion, modulo, prioridad]):
             return jsonify({'ok': False, 'error': 'Faltan campos requeridos'}), 400
@@ -3391,7 +3400,7 @@ def actualizar_requerimiento(requerimiento_id):
 @app.route('/admin/requerimientos')
 @admin_required
 def admin_requerimientos():
-    """Página de gestión de requerimientos"""
+    """Pgina de gestin de requerimientos"""
     return render_template('admin_requerimientos.html')
 
 
@@ -3399,13 +3408,13 @@ def admin_requerimientos():
 @app.route('/api/requerimientos/buscar_codigo', methods=['GET'])
 @admin_required
 def buscar_codigo_seccion():
-    """Busca una sección específica en un archivo HTML/JS"""
+    """Busca una seccin especfica en un archivo HTML/JS"""
     try:
         archivo = request.args.get('archivo', '').strip()
         identificador = request.args.get('identificador', '').strip()
         
         if not archivo or not identificador:
-            return jsonify({'ok': False, 'error': 'Faltan parámetros'}), 400
+            return jsonify({'ok': False, 'error': 'Faltan parmetros'}), 400
         
         # Construir ruta del archivo
         ruta_archivo = os.path.join(app.root_path, 'templates', archivo)
@@ -3419,17 +3428,17 @@ def buscar_codigo_seccion():
         
         lineas = contenido.split('\n')
         
-        # BUSCAR POR FUNCIÓN JAVASCRIPT
+        # BUSCAR POR FUNCIN JAVASCRIPT
         patron_func = f'(async\\s+)?function\\s+{re.escape(identificador)}\\s*\\('
         for i, linea in enumerate(lineas):
             if re.search(patron_func, linea, re.IGNORECASE):
-                # Encontrada la función, extraer completa
+                # Encontrada la funcin, extraer completa
                 inicio = i
                 fin = extraer_funcion_completa(lineas, i)
                 codigo = '\n'.join(lineas[inicio:fin+1])
                 return jsonify({
                     'ok': True,
-                    'tipo': 'Función JavaScript',
+                    'tipo': 'Funcin JavaScript',
                     'identificador': identificador,
                     'codigo': codigo,
                     'linea': i + 1
@@ -3465,14 +3474,14 @@ def buscar_codigo_seccion():
                     'linea': i + 1
                 })
         
-        return jsonify({'ok': False, 'error': f'No se encontró: {identificador}'}), 404
+        return jsonify({'ok': False, 'error': f'No se encontr: {identificador}'}), 404
         
     except Exception as e:
-        print(f"Error buscando código: {e}")
+        print(f"Error buscando cdigo: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 def extraer_funcion_completa(lineas, inicio):
-    """Extrae una función completa contando llaves"""
+    """Extrae una funcin completa contando llaves"""
     contador_llaves = 0
     dentro_funcion = False
     
@@ -3499,7 +3508,7 @@ def extraer_funcion_completa(lineas, inicio):
                 elif char == '}':
                     contador_llaves -= 1
         
-        # Si cerramos todas las llaves, fin de función
+        # Si cerramos todas las llaves, fin de funcin
         if dentro_funcion and contador_llaves == 0:
             return i
     
@@ -3738,7 +3747,7 @@ def eliminar_archivo(archivo_id):
 @app.route('/api/archivos/poblar', methods=['POST'])
 @admin_required
 def poblar_archivos():
-    """Escanea templates y agrega archivos automáticamente"""
+    """Escanea templates y agrega archivos automticamente"""
     try:
         extensiones = request.get_json().get('extensiones', ['.html', '.js', '.py', '.css']) if request.is_json else ['.html', '.js', '.py', '.css']
         templates_path = os.path.join(app.root_path, 'templates')
@@ -3782,7 +3791,7 @@ def poblar_archivos():
 
 
 # -------------------------------------------------------------------
-# --- ZONA 6: ÁREA DE ADMINISTRADOR Y UTILERÍAS ---
+# --- ZONA 6: REA DE ADMINISTRADOR Y UTILERAS ---
 # -------------------------------------------------------------------
 
 def require_role(target_role):
@@ -3802,27 +3811,27 @@ def require_role(target_role):
 @app.route('/area_admin')
 @admin_required
 def admin_area():
-    """Ruta principal para el Administrador. Muestra el menú."""
-    # 🎯 Renderizamos la plantilla admin_menu.html
+    """Ruta principal para el Administrador. Muestra el men."""
+    #  Renderizamos la plantilla admin_menu.html
     return render_template('admin_menu.html', 
                            nombre=session['nombre'],
                            device_id=session['dispositivo_id'])
 
-# --- RUTAS DEL MENÚ ADMINISTRADOR ---
+# --- RUTAS DEL MEN ADMINISTRADOR ---
 @app.route('/admin_menu')
 @admin_required
 def admin_menu():
-    """Muestra el menú principal de administración."""
+    """Muestra el men principal de administracin."""
     return render_template('admin_menu.html')
 
 @app.route('/admin/nuevo_admin')
 @admin_required
 def registro_admin_form_protegido():
-    """Muestra el menú del administrador con un mensaje de acción (para que la plantilla sea reutilizable)."""
+    """Muestra el men del administrador con un mensaje de accin (para que la plantilla sea reutilizable)."""
     return render_template('admin_menu.html', 
                            nombre=session['nombre'],
                            device_id=session['dispositivo_id'],
-                           mensaje_accion="Aquí se gestionará el registro de nuevos administradores.")
+                           mensaje_accion="Aqu se gestionar el registro de nuevos administradores.")
 
 @app.route('/admin/medicamentos')
 @admin_required
@@ -3833,9 +3842,9 @@ def lista_medicamentos():
 @app.route('/admin/gestor_medicamentos_top')
 @admin_required
 def gestor_medicamentos_top():
-    """Página para gestionar los medicamentos top vendidos"""
+    """Pgina para gestionar los medicamentos top vendidos"""
     conn = get_db_connection()
-    # Obtener síntomas existentes
+    # Obtener sntomas existentes
     sintomas = conn.execute("SELECT id, nombre FROM sintomas ORDER BY nombre").fetchall()
     conn.close()
     
@@ -3847,7 +3856,7 @@ def gestor_medicamentos_top():
 @app.route('/admin/medicamentos/verificar_top', methods=['POST'])
 @admin_required
 def verificar_medicamentos_top():
-    """Verifica si los medicamentos TOP existen en la BD y retorna sus IDs únicos"""
+    """Verifica si los medicamentos TOP existen en la BD y retorna sus IDs nicos"""
     try:
         data = request.get_json()
         medicamentos = data.get('medicamentos', [])
@@ -3855,20 +3864,20 @@ def verificar_medicamentos_top():
         resultados = []
         
         for med in medicamentos:
-            # 🎯 CAMBIO CLAVE #1: Usar 'descripcion' que SÍ viene del frontend
+            #  CAMBIO CLAVE #1: Usar 'descripcion' que S viene del frontend
             descripcion_completa = med.get('descripcion', '').strip()
             laboratorio_nombre = med.get('laboratorio', '').strip()
             
             if not descripcion_completa:
-                print(f"⚠️ Medicamento sin descripción: {med}")
+                print(f" Medicamento sin descripcin: {med}")
                 continue
             
-            print(f"🔍 Buscando: {descripcion_completa} | Laboratorio: {laboratorio_nombre}")
+            print(f" Buscando: {descripcion_completa} | Laboratorio: {laboratorio_nombre}")
             
-            # 🎯 CAMBIO CLAVE #2: Buscar por NOMBRE EXACTO (no LIKE)
+            #  CAMBIO CLAVE #2: Buscar por NOMBRE EXACTO (no LIKE)
             medicamento_bd = conn.execute(
                 "SELECT id, nombre, presentacion FROM medicamentos WHERE LOWER(nombre) = LOWER(?)",
-                (descripcion_completa,)  # Búsqueda exacta
+                (descripcion_completa,)  # Bsqueda exacta
             ).fetchone()
             
             if medicamento_bd:
@@ -3877,24 +3886,24 @@ def verificar_medicamentos_top():
                 presentacion_frontend = med.get('presentacion', '').lower()
                 misma_presentacion = presentacion_frontend == presentacion_bd
                 
-                print(f"✅ ENCONTRADO - ID: {medicamento_bd['id']}")
+                print(f" ENCONTRADO - ID: {medicamento_bd['id']}")
                 
                 resultados.append({
-                    'nombre': descripcion_completa,  # 🎯 CAMBIO #3: Usar descripcion completa
+                    'nombre': descripcion_completa,  #  CAMBIO #3: Usar descripcion completa
                     'presentacion': med.get('presentacion'),
                     'concentracion': med.get('concentracion'),
                     'laboratorio': laboratorio_nombre,
                     'existe': True,
                     'misma_presentacion': misma_presentacion,
-                    'id': medicamento_bd['id'],  # ✅ ID ÚNICO Y CORRECTO
+                    'id': medicamento_bd['id'],  #  ID NICO Y CORRECTO
                     'presentacion_bd': medicamento_bd['presentacion']
                 })
             else:
                 # No existe en BD
-                print(f"❌ NO ENCONTRADO")
+                print(f" NO ENCONTRADO")
                 
                 resultados.append({
-                    'nombre': descripcion_completa,  # 🎯 CAMBIO #3: Usar descripcion completa
+                    'nombre': descripcion_completa,  #  CAMBIO #3: Usar descripcion completa
                     'presentacion': med.get('presentacion'),
                     'concentracion': med.get('concentracion'),
                     'laboratorio': laboratorio_nombre,
@@ -3911,7 +3920,7 @@ def verificar_medicamentos_top():
         })
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -3920,21 +3929,21 @@ def verificar_medicamentos_top():
 @app.route('/admin/medicamentos/buscar_por_sintoma', methods=['POST'])
 @admin_required
 def buscar_medicamentos_por_sintoma():
-    """Busca medicamentos que traten un síntoma específico"""
+    """Busca medicamentos que traten un sntoma especfico"""
     try:
         data = request.get_json()
         sintoma = data.get('sintoma', '').strip()
         
         if not sintoma:
-            return jsonify({'ok': False, 'error': 'Síntoma requerido'}), 400
+            return jsonify({'ok': False, 'error': 'Sntoma requerido'}), 400
         
         conn = get_db_connection()
         
-        # Buscar si el síntoma existe en la BD
+        # Buscar si el sntoma existe en la BD
         sintoma_normalizado = normalizar_texto(sintoma)
         sintoma_bd = conn.execute(
             """SELECT id FROM sintomas WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                nombre, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')
             ) LIKE ?""",
             (f'%{sintoma_normalizado}%',)
         ).fetchone()
@@ -3942,7 +3951,7 @@ def buscar_medicamentos_por_sintoma():
         resultados = []
         
         if sintoma_bd:
-            # Síntoma existe: buscar medicamentos asociados
+            # Sntoma existe: buscar medicamentos asociados
             medicamentos = conn.execute("""
                 SELECT m.id, m.nombre, m.presentacion, m.concentracion
                 FROM medicamentos m
@@ -3951,8 +3960,8 @@ def buscar_medicamentos_por_sintoma():
                 ORDER BY m.nombre
             """, (sintoma_bd['id'],)).fetchall()
         else:
-            # Síntoma no existe: buscar por búsqueda en Google (placeholder)
-            # Por ahora devolvemos vacío, en futuro integraríamos búsqueda en Google
+            # Sntoma no existe: buscar por bsqueda en Google (placeholder)
+            # Por ahora devolvemos vaco, en futuro integraramos bsqueda en Google
             medicamentos = []
         
         # Procesar resultados
@@ -3963,7 +3972,7 @@ def buscar_medicamentos_por_sintoma():
                 'concentracion': med['concentracion'] or 'N/A',
                 'laboratorio': 'Por definir',
                 'existe': True,
-                'misma_presentacion': True,  # Ya está en BD, se considera OK
+                'misma_presentacion': True,  # Ya est en BD, se considera OK
                 'id': med['id']
             })
         
@@ -3976,7 +3985,7 @@ def buscar_medicamentos_por_sintoma():
         })
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -4032,9 +4041,9 @@ def lista_medicamentos_json():
             tiene_sintomas = med_dict['cantidad_sintomas'] > 0
             tiene_imagen = med_dict['tiene_imagen_oferta'] > 0
             
-            med_dict['indicador_precio'] = '✅' if tiene_precio else '❌'
-            med_dict['indicador_sintomas'] = '✅' if tiene_sintomas else '❌'
-            med_dict['indicador_imagen'] = '✅' if tiene_imagen else '❌'
+            med_dict['indicador_precio'] = '' if tiene_precio else ''
+            med_dict['indicador_sintomas'] = '' if tiene_sintomas else ''
+            med_dict['indicador_imagen'] = '' if tiene_imagen else ''
             med_dict['es_completo'] = tiene_precio and tiene_sintomas and tiene_imagen
             med_dict['completitud'] = {
                 'precio': tiene_precio,
@@ -4076,24 +4085,24 @@ def lista_medicamentos_json():
         })
     
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 def allowed_file(filename: str) -> bool:
-    """Devuelve True si la extensión del archivo está permitida."""
+    """Devuelve True si la extensin del archivo est permitida."""
     return bool(filename and '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT)
 
 
 def hash_image_content(file_stream) -> str:
     """
-    Calcula un hash SHA1 del contenido del stream para nombre único.
+    Calcula un hash SHA1 del contenido del stream para nombre nico.
     Asegura volver al inicio del stream si es posible.
     """
     try:
-        # Guardar posición actual
+        # Guardar posicin actual
         pos = file_stream.tell()
     except Exception:
         pos = None
@@ -4112,7 +4121,7 @@ def hash_image_content(file_stream) -> str:
     except Exception:
         pass
 
-    # Restaurar posición anterior si existía
+    # Restaurar posicin anterior si exista
     try:
         if pos is not None:
             file_stream.seek(pos)
@@ -4154,7 +4163,7 @@ def editar_medicamento_admin(medicamento_id):
             'imagen': None,
             'uso': '',
             'stock_actual': 0,
-            'laboratorio_sugerido': laboratorio_precar  # ✅ Solo pasar, no guardar
+            'laboratorio_sugerido': laboratorio_precar  #  Solo pasar, no guardar
         }
         
         if request.method == 'GET':
@@ -4177,7 +4186,7 @@ def editar_medicamento_admin(medicamento_id):
         concentracion = request.form.get('concentracion', '').strip()  # Opcional
         codigo_atc_puro = request.form.get('codigo_atc_puro', '').upper().strip()
         descripcion_tecnica_atc = request.form.get('descripcion_tecnica_atc', '')
-        # 🆕 Componente activo
+        #  Componente activo
         componente_activo_id = request.form.get('componente_activo_id', '')
         if componente_activo_id and componente_activo_id.strip():
             componente_activo_id = int(componente_activo_id)
@@ -4187,7 +4196,7 @@ def editar_medicamento_admin(medicamento_id):
         # Mantenemos el nombre de la imagen actual por defecto
         imagen_filename = medicamento_dict.get('imagen')
 
-        # --- Lógica de Subida de Nueva Imagen ---
+        # --- Lgica de Subida de Nueva Imagen ---
         if 'imagen' in request.files:
             file = request.files['imagen']
             if file.filename != '' and allowed_file(file.filename):
@@ -4233,7 +4242,7 @@ def editar_medicamento_admin(medicamento_id):
         # Si hay error, mostrar formulario nuevamente
         return render_template('editar_medicamento.html', medicamento=medicamento_dict, es_nuevo=es_nuevo)
 
-    # Si es GET, mostramos el formulario de edición
+    # Si es GET, mostramos el formulario de edicin
     conn.close()
     return render_template('editar_medicamento.html', medicamento=medicamento_dict, es_nuevo=es_nuevo)
 
@@ -4242,7 +4251,7 @@ def editar_medicamento_admin(medicamento_id):
 @app.route('/admin/precios/<int:medicamento_id>', methods=['GET'])
 def obtener_precios_medicamento(medicamento_id):
     """
-    Devuelve todos los precios registrados para un medicamento específico,
+    Devuelve todos los precios registrados para un medicamento especfico,
     incluyendo fabricante, valor, imagen y fecha.
     """
     try:
@@ -4371,7 +4380,7 @@ def obtener_o_crear_fabricante():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Buscar si ya existe (insensible a mayúsculas/minúsculas)
+        # Buscar si ya existe (insensible a maysculas/minsculas)
         row = cur.execute(
             "SELECT id, nombre FROM fabricantes WHERE lower(nombre)=?",
             (nombre.lower(),)
@@ -4436,7 +4445,7 @@ def guardar_precio():
 
         fecha = datetime.now().strftime("%Y-%m-%d")
 
-        if precio_id:  # 🔄 actualizar existente
+        if precio_id:  #  actualizar existente
             cur.execute("""
                 UPDATE precios
                 SET fabricante_id = ?, precio = ?, fecha_actualizacion = ?
@@ -4444,20 +4453,20 @@ def guardar_precio():
             """, (fab_id, precio, fecha, precio_id))
             conn.commit()
             nuevo_id = precio_id
-        else:  # ➕ insertar nuevo
+        else:  #  insertar nuevo
             cur.execute("""
                 INSERT INTO precios (medicamento_id, fabricante_id, precio, fecha_actualizacion)
                 VALUES (?, ?, ?, ?)
             """, (med_id, fab_id, precio, fecha))
             conn.commit()
-            nuevo_id = cur.lastrowid  # 🆕 CAPTURA EL ID GENERADO
+            nuevo_id = cur.lastrowid  #  CAPTURA EL ID GENERADO
 
         conn.close()
 
         return jsonify({
             "ok": True, 
             "mensaje": "Precio guardado correctamente",
-            "precio_id": nuevo_id  # 🆕 RETORNA EL ID
+            "precio_id": nuevo_id  #  RETORNA EL ID
         })
 
     except Exception as e:
@@ -4467,20 +4476,20 @@ def guardar_precio():
 @app.route('/admin/precios/<int:precio_id>/imagen', methods=['POST'])
 @admin_required
 def subir_imagen_precio(precio_id):
-    """Sube/actualiza imagen para un precio específico"""
-    print(f"🔵 INICIO - Subir imagen para precio_id: {precio_id}")
+    """Sube/actualiza imagen para un precio especfico"""
+    print(f" INICIO - Subir imagen para precio_id: {precio_id}")
     
     try:
         if 'imagen' not in request.files:
-            print("❌ No se envió imagen")
-            return jsonify({'ok': False, 'error': 'No se envió imagen'}), 400
+            print(" No se envi imagen")
+            return jsonify({'ok': False, 'error': 'No se envi imagen'}), 400
         
         file = request.files['imagen']
         if not file or file.filename == '':
-            print("❌ Archivo vacío")
-            return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+            print(" Archivo vaco")
+            return jsonify({'ok': False, 'error': 'Archivo vaco'}), 400
         
-        print(f"📁 Archivo recibido: {file.filename}")
+        print(f" Archivo recibido: {file.filename}")
         
         # Obtener info del precio
         conn = get_db_connection()
@@ -4494,49 +4503,49 @@ def subir_imagen_precio(precio_id):
         
         if not precio:
             conn.close()
-            print(f"❌ Precio {precio_id} no encontrado")
+            print(f" Precio {precio_id} no encontrado")
             return jsonify({'ok': False, 'error': 'Precio no encontrado'}), 404
         
-        print(f"✅ Precio encontrado: {precio['med_nombre']} - {precio['fab_nombre']}")
+        print(f" Precio encontrado: {precio['med_nombre']} - {precio['fab_nombre']}")
         
-        # === ✅ NUEVA LÓGICA SEGURA PARA NOMBRE DE ARCHIVO ===
+        # ===  NUEVA LGICA SEGURA PARA NOMBRE DE ARCHIVO ===
         import hashlib
         from werkzeug.utils import secure_filename
 
-        # Usar solo un hash del nombre + fabricante + timestamp para evitar conflictos y límites
+        # Usar solo un hash del nombre + fabricante + timestamp para evitar conflictos y lmites
         nombre_base = f"{precio['med_nombre']}_{precio['fab_nombre']}_{precio_id}".encode('utf-8')
         hash_corto = hashlib.md5(nombre_base).hexdigest()[:12]  # 12 caracteres = suficiente unicidad
         ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
         if ext not in ALLOWED_EXT:
             conn.close()
-            print(f"❌ Extensión no permitida: {ext}")
-            return jsonify({'ok': False, 'error': f'Extensión no permitida: {ext}'}), 400
+            print(f" Extensin no permitida: {ext}")
+            return jsonify({'ok': False, 'error': f'Extensin no permitida: {ext}'}), 400
 
-        # Nombre final: corto, seguro, sin tildes, sin espacios, sin límite de longitud
+        # Nombre final: corto, seguro, sin tildes, sin espacios, sin lmite de longitud
         filename_to_save = f"med_{precio_id}_{hash_corto}.{ext}"
         # =====================================================
 
-        print(f"💾 Nombre generado: {filename_to_save}")
+        print(f" Nombre generado: {filename_to_save}")
         
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename_to_save)
         
         # Guardar archivo
         file.stream.seek(0)
         file.save(filepath)
-        print(f"✅ Archivo guardado en: {filepath}")
+        print(f" Archivo guardado en: {filepath}")
         
         # Actualizar BD
-        print(f"🔄 Actualizando BD - precio_id: {precio_id}, imagen: {filename_to_save}")
+        print(f" Actualizando BD - precio_id: {precio_id}, imagen: {filename_to_save}")
         cursor = conn.execute("UPDATE precios SET imagen = ? WHERE id = ?", 
                      (filename_to_save, precio_id))
-        print(f"📊 Filas afectadas: {cursor.rowcount}")
+        print(f" Filas afectadas: {cursor.rowcount}")
         
         conn.commit()
-        print("✅ COMMIT exitoso")
+        print(" COMMIT exitoso")
         
         # Verificar
         verificar = conn.execute("SELECT imagen FROM precios WHERE id = ?", (precio_id,)).fetchone()
-        print(f"🔍 Verificación - imagen en BD: {verificar['imagen'] if verificar else 'NULL'}")
+        print(f" Verificacin - imagen en BD: {verificar['imagen'] if verificar else 'NULL'}")
         
         conn.close()
         
@@ -4547,7 +4556,7 @@ def subir_imagen_precio(precio_id):
         }), 200
         
     except Exception as e:
-        print(f"❌ ERROR: {e}")
+        print(f" ERROR: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -4572,10 +4581,10 @@ def nuevo_medicamento():
             if cantidad_inicial < 0:
                 raise ValueError()
         except ValueError:
-            flash("La cantidad inicial debe ser un número entero válido (>=0).", "danger")
+            flash("La cantidad inicial debe ser un nmero entero vlido (>=0).", "danger")
             return redirect(url_for('nuevo_medicamento'))
 
-        # Validaciones mínimas
+        # Validaciones mnimas
         if not nombre or not fabricante_nombre:
             flash("Nombre y fabricante son requeridos.", "warning")
             return redirect(url_for('nuevo_medicamento'))
@@ -4604,15 +4613,15 @@ def nuevo_medicamento():
                         except Exception:
                             pass
                         file.save(filepath)
-                        app.logger.debug(f"📁 Imagen guardada en: {filepath}")
+                        app.logger.debug(f" Imagen guardada en: {filepath}")
                     else:
-                        app.logger.debug(f"📁 Imagen ya existe: {filepath}")
+                        app.logger.debug(f" Imagen ya existe: {filepath}")
 
                     imagen_filename = filename_to_save
                 else:
-                    app.logger.debug("🛑 No se pudo generar filename para la imagen; se omitirá.")
+                    app.logger.debug(" No se pudo generar filename para la imagen; se omitir.")
             else:
-                app.logger.debug(f"🛑 Archivo con extensión no permitida: {file.filename}")
+                app.logger.debug(f" Archivo con extensin no permitida: {file.filename}")
                 flash("Tipo de archivo no permitido. Usa png/jpg/jpeg/gif.", "warning")
                 return redirect(url_for('nuevo_medicamento'))
 
@@ -4626,7 +4635,7 @@ def nuevo_medicamento():
             else:
                 fabricante_id = fabricante['id']
 
-            # Insertar medicamento (stock_actual inicializar en 0; se actualizará más abajo)
+            # Insertar medicamento (stock_actual inicializar en 0; se actualizar ms abajo)
             cur = conn.execute(
                 "INSERT INTO medicamentos (nombre, presentacion, concentracion, codigo_atc_puro, descripcion_tecnica_atc, uso, imagen, stock_actual) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (nombre, presentacion, concentracion, codigo_atc_puro, descripcion_tecnica_atc, '', imagen_filename, 0)
@@ -4643,11 +4652,11 @@ def nuevo_medicamento():
 
             conn.commit()
             flash(f"Medicamento '{nombre}' creado exitosamente.", "success")
-            app.logger.debug(f"✅ Medicamento creado ID={medicamento_id}, imagen={imagen_filename}, stock={cantidad_inicial}")
+            app.logger.debug(f" Medicamento creado ID={medicamento_id}, imagen={imagen_filename}, stock={cantidad_inicial}")
         except Exception as e:
             conn.rollback()
-            app.logger.error(f"💥 Error al guardar medicamento o existencia: {e}")
-            flash("Ocurrió un error guardando el medicamento.", "danger")
+            app.logger.error(f" Error al guardar medicamento o existencia: {e}")
+            flash("Ocurri un error guardando el medicamento.", "danger")
             return redirect(url_for('nuevo_medicamento'))
         finally:
             conn.close()
@@ -4665,12 +4674,12 @@ def guardar_imagen_pegada(medicamento_id):
     try:
         # Obtener la imagen del request (viene como archivo)
         if 'imagen' not in request.files:
-            return {'error': 'No se envió imagen'}, 400
+            return {'error': 'No se envi imagen'}, 400
         
         file = request.files['imagen']
         
         if not file or file.filename == '':
-            return {'error': 'Archivo vacío'}, 400
+            return {'error': 'Archivo vaco'}, 400
         
         # Obtener el nombre del medicamento
         conn = get_db_connection()
@@ -4682,11 +4691,11 @@ def guardar_imagen_pegada(medicamento_id):
         
         nombre = medicamento['nombre']
         
-        # Obtener extensión
+        # Obtener extensin
         ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else 'jpg'
         
         if ext not in ALLOWED_EXT:
-            return {'error': f'Extensión no permitida: {ext}'}, 400
+            return {'error': f'Extensin no permitida: {ext}'}, 400
         
         # Generar nombre del archivo
         filename_to_save = f"{nombre}.{ext}"
@@ -4717,7 +4726,7 @@ def validar_eliminacion_medicamento(medicamento_id):
     try:
         conn = get_db_connection()
         
-        # Validación 1: Existencias
+        # Validacin 1: Existencias
         existencias = conn.execute(
             "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=?", 
             (medicamento_id,)
@@ -4730,7 +4739,7 @@ def validar_eliminacion_medicamento(medicamento_id):
                 'error': f'No se puede eliminar: Existen {existencias["total"]} registro(s) en existencias'
             })
         
-        # Validación 2: Componente activo (otros medicamentos lo usan)
+        # Validacin 2: Componente activo (otros medicamentos lo usan)
         medicamentos_dependientes = conn.execute(
             "SELECT COUNT(*) as total FROM medicamentos WHERE componente_activo_id=?", 
             (medicamento_id,)
@@ -4743,7 +4752,7 @@ def validar_eliminacion_medicamento(medicamento_id):
                 'error': f'No se puede eliminar: Este medicamento es componente activo de {medicamentos_dependientes["total"]} otro(s) medicamento(s)'
             })
         
-        # ✅ NUEVO: Mostrar cuántos registros relacionados se eliminarán
+        #  NUEVO: Mostrar cuntos registros relacionados se eliminarn
         registros_relacionados = {}
         
         tablas_dependientes = [
@@ -4791,7 +4800,7 @@ def actualizar_nombre_medicamento(medicamento_id):
         nuevo_nombre = data.get('nombre', '').strip()
 
         if not nuevo_nombre:
-            return jsonify({'ok': False, 'error': 'El nombre no puede estar vacío'}), 400
+            return jsonify({'ok': False, 'error': 'El nombre no puede estar vaco'}), 400
 
         # Actualizar en tabla MEDICAMENTOS
         conn.execute(
@@ -4842,7 +4851,7 @@ def actualizar_fabricante_medicamento():
             (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
         )
 
-        # Actualizar también en precios_competencia si existen
+        # Actualizar tambin en precios_competencia si existen
         conn.execute(
             "UPDATE precios_competencia SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
             (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
@@ -4868,20 +4877,20 @@ def eliminar_medicamento(medicamento_id):
     """
     Ruta POST para eliminar un medicamento (completo o solo un fabricante).
     
-    Lógica:
-    - Si tiene 1 solo fabricante → elimina medicamento completo
-    - Si tiene múltiples fabricantes → requiere fabricante_id para eliminar solo esa combinación
+    Lgica:
+    - Si tiene 1 solo fabricante -> elimina medicamento completo
+    - Si tiene mltiples fabricantes -> requiere fabricante_id para eliminar solo esa combinacin
     """
     conn = None
     try:
         conn = get_db_connection()
         
-        # ✅ Leer fabricante_id del body (opcional)
+        #  Leer fabricante_id del body (opcional)
         data = request.get_json() or {}
         fabricante_id = data.get('fabricante_id')
         forzar_completo = data.get('forzar_completo', False)
         
-        # ✅ Contar cuántos fabricantes tiene este medicamento
+        #  Contar cuntos fabricantes tiene este medicamento
         fabricantes = conn.execute(
             "SELECT COUNT(DISTINCT fabricante_id) as total FROM precios WHERE medicamento_id=?",
             (medicamento_id,)
@@ -4889,24 +4898,24 @@ def eliminar_medicamento(medicamento_id):
         
         total_fabricantes = fabricantes['total'] if fabricantes else 0
         
-        # ✅ CASO 1: Usuario fuerza eliminación completa
+        #  CASO 1: Usuario fuerza eliminacin completa
         if forzar_completo:
             return eliminar_medicamento_completo(conn, medicamento_id)
         
-        # ✅ CASO 2: Múltiples fabricantes
+        #  CASO 2: Mltiples fabricantes
         if total_fabricantes > 1:
             if not fabricante_id:
                 return jsonify({
                     'ok': False,
-                    'error': f'Este medicamento tiene {total_fabricantes} fabricantes. Debe especificar cuál eliminar.',
+                    'error': f'Este medicamento tiene {total_fabricantes} fabricantes. Debe especificar cul eliminar.',
                     'requiere_fabricante': True,
                     'total_fabricantes': total_fabricantes
                 }), 400
             
-            # Eliminar solo la combinación medicamento + fabricante específico
+            # Eliminar solo la combinacin medicamento + fabricante especfico
             return eliminar_medicamento_fabricante(conn, medicamento_id, fabricante_id)
         
-        # ✅ CASO 2: Solo 1 fabricante o ninguno → eliminar medicamento completo
+        #  CASO 2: Solo 1 fabricante o ninguno -> eliminar medicamento completo
         return eliminar_medicamento_completo(conn, medicamento_id)
         
     except (sqlite3.Error, Exception) as e:
@@ -4916,7 +4925,7 @@ def eliminar_medicamento(medicamento_id):
             except:
                 pass
         
-        print(f"❌ Error al eliminar medicamento: {e}")
+        print(f" Error al eliminar medicamento: {e}")
         return jsonify({
             'ok': False,
             'error': f'Error: {str(e)}'
@@ -4931,9 +4940,9 @@ def eliminar_medicamento(medicamento_id):
 
 
 def eliminar_medicamento_fabricante(conn, medicamento_id, fabricante_id):
-    """Elimina solo la combinación medicamento + fabricante específico"""
+    """Elimina solo la combinacin medicamento + fabricante especfico"""
     
-    # ✅ VALIDACIÓN: Verificar si existen registros en existencias para esta combinación
+    #  VALIDACIN: Verificar si existen registros en existencias para esta combinacin
     existencias = conn.execute(
         "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=? AND fabricante_id=?", 
         (medicamento_id, fabricante_id)
@@ -4945,30 +4954,30 @@ def eliminar_medicamento_fabricante(conn, medicamento_id, fabricante_id):
             'error': f'No se puede eliminar: Existen {existencias["total"]} registro(s) en existencias para este medicamento con este fabricante'
         }), 400
     
-    # ✅ Iniciar transacción
+    #  Iniciar transaccin
     conn.execute("BEGIN TRANSACTION")
     
-    # ✅ Obtener nombre del medicamento para el mensaje
+    #  Obtener nombre del medicamento para el mensaje
     med = conn.execute("SELECT nombre FROM medicamentos WHERE id=?", (medicamento_id,)).fetchone()
     nombre_med = med['nombre'] if med else f"ID {medicamento_id}"
     
-    # ✅ Eliminar de PRECIOS
+    #  Eliminar de PRECIOS
     conn.execute(
         "DELETE FROM precios WHERE medicamento_id=? AND fabricante_id=?",
         (medicamento_id, fabricante_id)
     )
-    print(f"🗑️ Eliminado precio de medicamento {medicamento_id} con fabricante {fabricante_id}")
+    print(f" Eliminado precio de medicamento {medicamento_id} con fabricante {fabricante_id}")
     
-    # ✅ Eliminar de PRECIOS_COMPETENCIA
+    #  Eliminar de PRECIOS_COMPETENCIA
     result = conn.execute(
         "DELETE FROM precios_competencia WHERE medicamento_id=? AND fabricante_id=?",
         (medicamento_id, fabricante_id)
     )
     eliminados_comp = result.rowcount
     if eliminados_comp > 0:
-        print(f"🗑️ Eliminados {eliminados_comp} precio(s) de competencia")
+        print(f" Eliminados {eliminados_comp} precio(s) de competencia")
     
-    # ✅ Confirmar transacción
+    #  Confirmar transaccin
     conn.commit()
     
     return jsonify({
@@ -4981,7 +4990,7 @@ def eliminar_medicamento_fabricante(conn, medicamento_id, fabricante_id):
 def eliminar_medicamento_completo(conn, medicamento_id):
     """Elimina el medicamento completo y todas sus dependencias"""
     
-    # ✅ VALIDACIÓN: Verificar si existen registros en existencias
+    #  VALIDACIN: Verificar si existen registros en existencias
     existencias = conn.execute(
         "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=?", 
         (medicamento_id,)
@@ -4993,14 +5002,14 @@ def eliminar_medicamento_completo(conn, medicamento_id):
             'error': f'No se puede eliminar: Existen {existencias["total"]} registro(s) en existencias para este medicamento'
         }), 400
     
-    # ✅ Iniciar transacción
+    #  Iniciar transaccin
     conn.execute("BEGIN TRANSACTION")
     
-    # ✅ Obtener imagen antes de eliminar
+    #  Obtener imagen antes de eliminar
     cur = conn.execute("SELECT imagen FROM medicamentos WHERE id=?", (medicamento_id,)).fetchone()
     imagen_filename = cur['imagen'] if cur and 'imagen' in cur else None
     
-    # ✅ ELIMINAR DE TODAS LAS TABLAS RELACIONADAS (en orden)
+    #  ELIMINAR DE TODAS LAS TABLAS RELACIONADAS (en orden)
     tablas_a_limpiar = [
         ('MEDICAMENTO_SINTOMA', 'medicamento_id'),
         ('DIAGNOSTICO_MEDICAMENTO', 'medicamento_id'),
@@ -5018,13 +5027,13 @@ def eliminar_medicamento_completo(conn, medicamento_id):
         eliminados = result.rowcount
         if eliminados > 0:
             total_eliminados += eliminados
-            print(f"🗑️ Eliminados {eliminados} registro(s) de {tabla}")
+            print(f" Eliminados {eliminados} registro(s) de {tabla}")
     
-    # ✅ Eliminar el medicamento principal
+    #  Eliminar el medicamento principal
     conn.execute("DELETE FROM medicamentos WHERE id=?", (medicamento_id,))
-    print(f"🗑️ Medicamento ID {medicamento_id} eliminado")
+    print(f" Medicamento ID {medicamento_id} eliminado")
     
-    # ✅ Eliminar imagen si existe y no la usan otros medicamentos
+    #  Eliminar imagen si existe y no la usan otros medicamentos
     if imagen_filename:
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], imagen_filename)
         if os.path.exists(file_path):
@@ -5035,11 +5044,11 @@ def eliminar_medicamento_completo(conn, medicamento_id):
             
             if count_refs == 0:
                 os.remove(file_path)
-                print(f"🗑️ Imagen {imagen_filename} eliminada del disco")
+                print(f" Imagen {imagen_filename} eliminada del disco")
             else:
-                print(f"⚠️ Imagen {imagen_filename} mantenida: usada por {count_refs} medicamento(s)")
+                print(f" Imagen {imagen_filename} mantenida: usada por {count_refs} medicamento(s)")
     
-    # ✅ Confirmar transacción
+    #  Confirmar transaccin
     conn.commit()
     
     return jsonify({
@@ -5051,29 +5060,29 @@ def eliminar_medicamento_completo(conn, medicamento_id):
 @app.route('/admin/diagnosticos')
 @admin_required
 def lista_diagnosticos():
-    """Muestra el menú del administrador con un mensaje de acción (para que la plantilla sea reutilizable)."""
+    """Muestra el men del administrador con un mensaje de accin (para que la plantilla sea reutilizable)."""
     return render_template('lista_diagnosticos.html', 
                            nombre=session['nombre'],
                            device_id=session['dispositivo_id'],
-                           mensaje_accion="Aquí se gestionará la lógica de Diagnósticos.")
+                           mensaje_accion="Aqu se gestionar la lgica de Diagnsticos.")
 
 @app.route('/admin/sintomas')
 @admin_required
 def lista_sintomas():
-    """Muestra el menú del administrador con un mensaje de acción (para que la plantilla sea reutilizable)."""
+    """Muestra el men del administrador con un mensaje de accin (para que la plantilla sea reutilizable)."""
     return render_template('lista_sintomas.html',
                            nombre=session['nombre'],
                            device_id=session['dispositivo_id'],
-                           mensaje_accion="Aquí se gestionarán los Síntomas y sus relaciones.")
+                           mensaje_accion="Aqu se gestionarn los Sntomas y sus relaciones.")
 
-# --- FIN RUTAS DEL MENÚ ADMINISTRADOR ---
+# --- FIN RUTAS DEL MEN ADMINISTRADOR ---
 
 
 
 @app.route('/admin/sintomas/fusionar', methods=['POST'])
 @admin_required
 def fusionar_sintomas():
-    """Fusiona varios síntomas en uno solo, migrando todos los medicamentos y diagnósticos"""
+    """Fusiona varios sntomas en uno solo, migrando todos los medicamentos y diagnsticos"""
     conn = None
     try:
         data = request.get_json()
@@ -5083,20 +5092,20 @@ def fusionar_sintomas():
         if not sintoma_principal_id or not sintomas_secundarios_ids:
             return jsonify({'ok': False, 'error': 'Datos incompletos'}), 400
         
-        print(f"🔀 Iniciando fusión de síntomas:")
+        print(f" Iniciando fusin de sntomas:")
         print(f"   Principal: {sintoma_principal_id}")
         print(f"   Secundarios: {sintomas_secundarios_ids}")
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Iniciar transacción
+        # Iniciar transaccin
         conn.execute("BEGIN TRANSACTION")
         
         # ========================================
         # MIGRAR MEDICAMENTOS
         # ========================================
-        # Obtener todos los medicamentos únicos de los síntomas secundarios
+        # Obtener todos los medicamentos nicos de los sntomas secundarios
         medicamentos_ids = set()
         for sintoma_id in sintomas_secundarios_ids:
             cursor.execute("""
@@ -5107,7 +5116,7 @@ def fusionar_sintomas():
             for row in cursor.fetchall():
                 medicamentos_ids.add(row['medicamento_id'])
         
-        print(f"   📦 Medicamentos encontrados en secundarios: {len(medicamentos_ids)}")
+        print(f"    Medicamentos encontrados en secundarios: {len(medicamentos_ids)}")
         
         # Obtener medicamentos del principal
         cursor.execute("""
@@ -5116,11 +5125,11 @@ def fusionar_sintomas():
         """, (sintoma_principal_id,))
         
         medicamentos_principal = {row['medicamento_id'] for row in cursor.fetchall()}
-        print(f"   📦 Medicamentos ya en principal: {len(medicamentos_principal)}")
+        print(f"    Medicamentos ya en principal: {len(medicamentos_principal)}")
         
-        # Agregar solo medicamentos que no estén ya en el principal
+        # Agregar solo medicamentos que no estn ya en el principal
         medicamentos_nuevos = medicamentos_ids - medicamentos_principal
-        print(f"   ➕ Medicamentos a agregar: {len(medicamentos_nuevos)}")
+        print(f"    Medicamentos a agregar: {len(medicamentos_nuevos)}")
         
         for med_id in medicamentos_nuevos:
             cursor.execute("""
@@ -5129,9 +5138,9 @@ def fusionar_sintomas():
             """, (med_id, sintoma_principal_id))
         
         # ========================================
-        # 🆕 MIGRAR DIAGNÓSTICOS
+        #  MIGRAR DIAGNSTICOS
         # ========================================
-        # Obtener todos los diagnósticos únicos de los síntomas secundarios
+        # Obtener todos los diagnsticos nicos de los sntomas secundarios
         diagnosticos_ids = set()
         for sintoma_id in sintomas_secundarios_ids:
             cursor.execute("""
@@ -5142,20 +5151,20 @@ def fusionar_sintomas():
             for row in cursor.fetchall():
                 diagnosticos_ids.add(row['diagnostico_id'])
         
-        print(f"   🩺 Diagnósticos encontrados en secundarios: {len(diagnosticos_ids)}")
+        print(f"    Diagnsticos encontrados en secundarios: {len(diagnosticos_ids)}")
         
-        # Obtener diagnósticos del principal
+        # Obtener diagnsticos del principal
         cursor.execute("""
             SELECT diagnostico_id FROM diagnostico_sintoma
             WHERE sintoma_id = ?
         """, (sintoma_principal_id,))
         
         diagnosticos_principal = {row['diagnostico_id'] for row in cursor.fetchall()}
-        print(f"   🩺 Diagnósticos ya en principal: {len(diagnosticos_principal)}")
+        print(f"    Diagnsticos ya en principal: {len(diagnosticos_principal)}")
         
-        # Agregar solo diagnósticos que no estén ya en el principal
+        # Agregar solo diagnsticos que no estn ya en el principal
         diagnosticos_nuevos = diagnosticos_ids - diagnosticos_principal
-        print(f"   ➕ Diagnósticos a agregar: {len(diagnosticos_nuevos)}")
+        print(f"    Diagnsticos a agregar: {len(diagnosticos_nuevos)}")
         
         for diag_id in diagnosticos_nuevos:
             cursor.execute("""
@@ -5173,14 +5182,14 @@ def fusionar_sintomas():
                 WHERE sintoma_id = ?
             """, (sintoma_id,))
         
-        # 🆕 Eliminar asociaciones de diagnósticos
+        #  Eliminar asociaciones de diagnsticos
         for sintoma_id in sintomas_secundarios_ids:
             cursor.execute("""
                 DELETE FROM diagnostico_sintoma
                 WHERE sintoma_id = ?
             """, (sintoma_id,))
         
-        # Eliminar los síntomas secundarios
+        # Eliminar los sntomas secundarios
         for sintoma_id in sintomas_secundarios_ids:
             cursor.execute("""
                 DELETE FROM sintomas
@@ -5190,12 +5199,12 @@ def fusionar_sintomas():
         conn.commit()
         conn.close()
         
-        print(f"   ✅ Fusión completada exitosamente")
-        print(f"   📊 Resumen: +{len(medicamentos_nuevos)} medicamentos, +{len(diagnosticos_nuevos)} diagnósticos")
+        print(f"    Fusin completada exitosamente")
+        print(f"    Resumen: +{len(medicamentos_nuevos)} medicamentos, +{len(diagnosticos_nuevos)} diagnsticos")
         
         return jsonify({
             'ok': True,
-            'mensaje': f'✅ Síntomas fusionados exitosamente. Se agregaron {len(medicamentos_nuevos)} medicamentos y {len(diagnosticos_nuevos)} diagnósticos.'
+            'mensaje': f' Sntomas fusionados exitosamente. Se agregaron {len(medicamentos_nuevos)} medicamentos y {len(diagnosticos_nuevos)} diagnsticos.'
         })
         
     except Exception as e:
@@ -5206,7 +5215,7 @@ def fusionar_sintomas():
             except:
                 pass
         
-        print(f"   ❌ ERROR en fusión: {str(e)}")
+        print(f"    ERROR en fusin: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -5216,16 +5225,16 @@ def fusionar_sintomas():
 @app.route('/logout')
 def logout():
     session.clear()
-    flash("Has cerrado la sesión.", 'info')
+    flash("Has cerrado la sesin.", 'info')
     return redirect(url_for('index'))
 
 
 def calcular_dosis_automatica(medicamento_id, peso_paciente=70):
     """
-    Función PLACEHOLDER: Simula el cálculo de la dosis y el tiempo máximo.
+    Funcin PLACEHOLDER: Simula el clculo de la dosis y el tiempo mximo.
     
-    NOTA: En un proyecto real, esto usaría la concentración del medicamento,
-    la edad/peso del paciente y tablas médicas.
+    NOTA: En un proyecto real, esto usara la concentracin del medicamento,
+    la edad/peso del paciente y tablas mdicas.
     """
     # Usamos los IDs como strings porque vienen de request.args.get()
     if medicamento_id == '1': # Ejemplo para Ibuprofeno
@@ -5237,8 +5246,8 @@ def calcular_dosis_automatica(medicamento_id, peso_paciente=70):
         frecuencia = "Cada 6 horas"
         duracion_dias = 5
     else:
-        dosis = "Dosis Estándar"
-        frecuencia = "Según indicación"
+        dosis = "Dosis Estndar"
+        frecuencia = "Segn indicacin"
         duracion_dias = 7
         
     return dosis, frecuencia, duracion_dias
@@ -5246,11 +5255,11 @@ def calcular_dosis_automatica(medicamento_id, peso_paciente=70):
 
 def guardar_receta(paciente_id, medicamento_id, dosis, frecuencia, duracion_dias, sintomas_str):
     """
-    Función PLACEHOLDER: Simula el guardado de la receta en la tabla 'recetas'.
+    Funcin PLACEHOLDER: Simula el guardado de la receta en la tabla 'recetas'.
     """
     conn = get_db_connection()
-    # ⚠️ CORRECCIÓN CLAVE: La columna fecha_emision usa SQL function datetime('now')
-    # Por lo tanto, el número de placeholders (?) debe coincidir con la tupla (6 vs 6).
+    #  CORRECCIN CLAVE: La columna fecha_emision usa SQL function datetime('now')
+    # Por lo tanto, el nmero de placeholders (?) debe coincidir con la tupla (6 vs 6).
     try:
         conn.execute("""
             INSERT INTO recetas 
@@ -5271,12 +5280,12 @@ def guardar_receta(paciente_id, medicamento_id, dosis, frecuencia, duracion_dias
 
 
 @app.route('/nueva_receta', methods=['GET'])
-# ⚠️ Mantenemos el rol de Administrador por si es el único que puede 'emitir' la receta.
+#  Mantenemos el rol de Administrador por si es el nico que puede 'emitir' la receta.
 # Si el paciente puede auto-recetarse, cambia a require_role('Paciente')
 @admin_required
 def nueva_receta():
     """
-    Genera automáticamente la receta con dosis calculada y la guarda en la DB.
+    Genera automticamente la receta con dosis calculada y la guarda en la DB.
     """
     # 1. Obtener datos de la URL y del usuario
     paciente_id = session.get('usuario_id') # ID del usuario logueado
@@ -5292,10 +5301,10 @@ def nueva_receta():
     sintomas_ids_str = request.args.get('sintomas_ids')
     
     if not medicamento_id:
-        flash("Error: No se seleccionó un medicamento.", 'danger')
+        flash("Error: No se seleccion un medicamento.", 'danger')
         return redirect(url_for('paciente_area'))
 
-    # 2. Calcular dosis automáticamente (usando la función placeholder)
+    # 2. Calcular dosis automticamente (usando la funcin placeholder)
     dosis_calc, frecuencia_calc, duracion_calc = calcular_dosis_automatica(medicamento_id)
     
     # 3. Guardar la receta en la base de datos
@@ -5309,9 +5318,9 @@ def nueva_receta():
     )
 
     if receta_id:
-        # Aquí puedes reducir el stock si es necesario (lógica futura)
+        # Aqu puedes reducir el stock si es necesario (lgica futura)
         
-        flash(f"Receta #{receta_id} generada automáticamente y guardada.", 'success')
+        flash(f"Receta #{receta_id} generada automticamente y guardada.", 'success')
         
         # 4. Mostrar el resultado al usuario (renderizar una nueva plantilla)
         return render_template('receta_final.html',
@@ -5332,7 +5341,7 @@ def nueva_receta():
 @app.route('/admin/medicamentos/siguiente_incompleto')
 @admin_required
 def siguiente_medicamento_incompleto():
-    """Obtiene el próximo medicamento que falta completar"""
+    """Obtiene el prximo medicamento que falta completar"""
     try:
         conn = get_db_connection()
         
@@ -5363,9 +5372,9 @@ def siguiente_medicamento_incompleto():
 
 
 # ========================================
-# ENDPOINTS PARA GESTIÓN DE SÍNTOMAS - SQLite
+# ENDPOINTS PARA GESTIN DE SNTOMAS - SQLite
 # Copiar y pegar en tu archivo 1_medicamentos.py
-# Usa tu función existente get_db_connection()
+# Usa tu funcin existente get_db_connection()
 # ========================================
 
 # No necesitas importar nada nuevo, ya tienes:
@@ -5374,12 +5383,12 @@ def siguiente_medicamento_incompleto():
 
 
 # ========================================
-# ASOCIAR MEDICAMENTO A SÍNTOMA
+# ASOCIAR MEDICAMENTO A SNTOMA
 # ========================================
 @app.route('/admin/sintomas/<int:sintoma_id>/asociar-medicamento', methods=['POST'])
 @admin_required
 def asociar_medicamento_sintoma(sintoma_id):
-    """Asocia un medicamento a un síntoma"""
+    """Asocia un medicamento a un sntoma"""
     try:
         data = request.get_json()
         medicamento_id = data.get('medicamento_id')
@@ -5387,17 +5396,17 @@ def asociar_medicamento_sintoma(sintoma_id):
         if not medicamento_id:
             return jsonify({'ok': False, 'error': 'Falta el ID del medicamento'}), 400
         
-        print(f"🔗 Asociando medicamento {medicamento_id} a síntoma {sintoma_id}")
+        print(f" Asociando medicamento {medicamento_id} a sntoma {sintoma_id}")
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Verificar que el síntoma existe
+        # Verificar que el sntoma existe
         cursor.execute("SELECT nombre FROM sintomas WHERE id = ?", (sintoma_id,))
         sintoma = cursor.fetchone()
         if not sintoma:
             conn.close()
-            return jsonify({'ok': False, 'error': 'Síntoma no encontrado'}), 404
+            return jsonify({'ok': False, 'error': 'Sntoma no encontrado'}), 404
         
         # Verificar que el medicamento existe
         cursor.execute("SELECT nombre FROM medicamentos WHERE id = ?", (medicamento_id,))
@@ -5406,7 +5415,7 @@ def asociar_medicamento_sintoma(sintoma_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Medicamento no encontrado'}), 404
         
-        # Verificar si ya está asociado
+        # Verificar si ya est asociado
         cursor.execute("""
             SELECT COUNT(*) as count FROM medicamento_sintoma
             WHERE medicamento_id = ? AND sintoma_id = ?
@@ -5414,9 +5423,9 @@ def asociar_medicamento_sintoma(sintoma_id):
         
         if cursor.fetchone()['count'] > 0:
             conn.close()
-            return jsonify({'ok': False, 'error': 'El medicamento ya está asociado a este síntoma'}), 400
+            return jsonify({'ok': False, 'error': 'El medicamento ya est asociado a este sntoma'}), 400
         
-        # Crear la asociación
+        # Crear la asociacin
         cursor.execute("""
             INSERT INTO medicamento_sintoma (medicamento_id, sintoma_id)
             VALUES (?, ?)
@@ -5425,26 +5434,26 @@ def asociar_medicamento_sintoma(sintoma_id):
         conn.commit()
         conn.close()
         
-        print(f"   ✅ Medicamento '{medicamento['nombre']}' asociado a síntoma '{sintoma['nombre']}'")
+        print(f"    Medicamento '{medicamento['nombre']}' asociado a sntoma '{sintoma['nombre']}'")
         return jsonify({
             'ok': True,
             'mensaje': f"Medicamento '{medicamento['nombre']}' asociado correctamente"
         })
         
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ========================================
-# DESASOCIAR MEDICAMENTO DE SÍNTOMA
+# DESASOCIAR MEDICAMENTO DE SNTOMA
 # ========================================
 @app.route('/admin/sintomas/<int:sintoma_id>/desasociar-medicamento', methods=['POST'])
 @admin_required
 def desasociar_medicamento_sintoma(sintoma_id):
-    """Desasocia un medicamento de un síntoma"""
+    """Desasocia un medicamento de un sntoma"""
     try:
         data = request.get_json()
         medicamento_id = data.get('medicamento_id')
@@ -5452,7 +5461,7 @@ def desasociar_medicamento_sintoma(sintoma_id):
         if not medicamento_id:
             return jsonify({'ok': False, 'error': 'Falta el ID del medicamento'}), 400
         
-        print(f"❌ Desasociando medicamento {medicamento_id} de síntoma {sintoma_id}")
+        print(f" Desasociando medicamento {medicamento_id} de sntoma {sintoma_id}")
         
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -5464,7 +5473,7 @@ def desasociar_medicamento_sintoma(sintoma_id):
         cursor.execute("SELECT nombre FROM medicamentos WHERE id = ?", (medicamento_id,))
         medicamento = cursor.fetchone()
         
-        # Verificar si existe la asociación
+        # Verificar si existe la asociacin
         cursor.execute("""
             SELECT COUNT(*) as count FROM medicamento_sintoma
             WHERE medicamento_id = ? AND sintoma_id = ?
@@ -5472,9 +5481,9 @@ def desasociar_medicamento_sintoma(sintoma_id):
         
         if cursor.fetchone()['count'] == 0:
             conn.close()
-            return jsonify({'ok': False, 'error': 'El medicamento no está asociado a este síntoma'}), 400
+            return jsonify({'ok': False, 'error': 'El medicamento no est asociado a este sntoma'}), 400
         
-        # Eliminar la asociación
+        # Eliminar la asociacin
         cursor.execute("""
             DELETE FROM medicamento_sintoma
             WHERE medicamento_id = ? AND sintoma_id = ?
@@ -5486,14 +5495,14 @@ def desasociar_medicamento_sintoma(sintoma_id):
         nombre_med = medicamento['nombre'] if medicamento else 'Desconocido'
         nombre_sint = sintoma['nombre'] if sintoma else 'Desconocido'
         
-        print(f"   ✅ Medicamento '{nombre_med}' desasociado de síntoma '{nombre_sint}'")
+        print(f"    Medicamento '{nombre_med}' desasociado de sntoma '{nombre_sint}'")
         return jsonify({
             'ok': True,
             'mensaje': f"Medicamento '{nombre_med}' desasociado correctamente"
         })
         
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -5501,21 +5510,21 @@ def desasociar_medicamento_sintoma(sintoma_id):
 
 
 # ========================================
-# NUEVA: OBTENER SÍNTOMAS CON MEDICAMENTOS
+# NUEVA: OBTENER SNTOMAS CON MEDICAMENTOS
 # ========================================
 # ========================================
-# OBTENER SÍNTOMAS CON MEDICAMENTOS Y DIAGNÓSTICOS
+# OBTENER SNTOMAS CON MEDICAMENTOS Y DIAGNSTICOS
 # ========================================
 @app.route('/admin/sintomas/completo/json', methods=['GET'])
 @admin_required
 def obtener_sintomas_completo():
-    """Devuelve todos los síntomas con sus medicamentos y diagnósticos asociados"""
+    """Devuelve todos los sntomas con sus medicamentos y diagnsticos asociados"""
     try:
-        print("🟢 FUNCIÓN obtener_sintomas_completo() INICIADA")
+        print(" FUNCIN obtener_sintomas_completo() INICIADA")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Obtener todos los síntomas
+        # Obtener todos los sntomas
         cursor.execute("""
             SELECT id, nombre, descripcion_lower 
             FROM sintomas 
@@ -5536,7 +5545,7 @@ def obtener_sintomas_completo():
             """, (s['id'],))
             medicamentos = cursor.fetchall()
 
-            # 2. Diagnósticos asociados (usando la tabla diagnostico_sintoma + diagnosticos.descripcion)
+            # 2. Diagnsticos asociados (usando la tabla diagnostico_sintoma + diagnosticos.descripcion)
             cursor.execute("""
                 SELECT d.id, d.descripcion
                 FROM diagnostico_sintoma ds
@@ -5568,26 +5577,26 @@ def obtener_sintomas_completo():
             })
         
         conn.close()
-        print(f"   ✅ Devolviendo {len(resultado)} síntomas con medicamentos y diagnósticos")
+        print(f"    Devolviendo {len(resultado)} sntomas con medicamentos y diagnsticos")
         return jsonify({'ok': True, 'sintomas': resultado})
     
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 
 
 # ========================================
-# 1. OBTENER TODOS LOS SÍNTOMAS
+# 1. OBTENER TODOS LOS SNTOMAS
 # ========================================
 @app.route('/admin/sintomas/json', methods=['GET'])
 #@admin_required#
 def obtener_sintomas():
-    print("🟢 FUNCIÓN obtener_sintomas() INICIADA")
-    """Devuelve todos los síntomas disponibles en la BD"""
+    print(" FUNCIN obtener_sintomas() INICIADA")
+    """Devuelve todos los sntomas disponibles en la BD"""
     try:
-        print("   🔹 Conectando a BD...")
+        print("    Conectando a BD...")
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -5596,7 +5605,7 @@ def obtener_sintomas():
             ORDER BY nombre
         """)
         sintomas = cursor.fetchall()
-        print(f"   🔹 Síntomas obtenidos: {len(sintomas)}")
+        print(f"    Sntomas obtenidos: {len(sintomas)}")
 
         conn.close()
         
@@ -5609,25 +5618,25 @@ def obtener_sintomas():
             for s in sintomas
         ]
 
-        print(f"   ✅ Devolviendo {len(resultado)} síntomas")
+        print(f"    Devolviendo {len(resultado)} sntomas")
         return jsonify({'ok': True, 'sintomas': resultado})
     
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ========================================
-# 2. OBTENER SÍNTOMAS DE UN MEDICAMENTO
+# 2. OBTENER SNTOMAS DE UN MEDICAMENTO
 # ========================================
 @app.route('/admin/medicamentos/<int:medicamento_id>/sintomas', methods=['GET'])
 #@admin_required#
 def obtener_sintomas_medicamento(medicamento_id):
-    print(f"🟢 FUNCIÓN obtener_sintomas_medicamento() INICIADA - ID: {medicamento_id}")
+    print(f" FUNCIN obtener_sintomas_medicamento() INICIADA - ID: {medicamento_id}")
 
-    """Devuelve los síntomas asociados a un medicamento específico"""
+    """Devuelve los sntomas asociados a un medicamento especfico"""
     try:
-        print(f"   🔹 Buscando síntomas para medicamento {medicamento_id}...")
+        print(f"    Buscando sntomas para medicamento {medicamento_id}...")
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -5639,7 +5648,7 @@ def obtener_sintomas_medicamento(medicamento_id):
         """, (medicamento_id,))
         
         sintomas = cursor.fetchall()
-        print(f"   🔹 Síntomas encontrados: {len(sintomas)}")
+        print(f"    Sntomas encontrados: {len(sintomas)}")
         conn.close()
         
         resultado = [
@@ -5651,11 +5660,11 @@ def obtener_sintomas_medicamento(medicamento_id):
             for s in sintomas
         ]
 
-        print(f"   ✅ Devolviendo {len(resultado)} síntomas asociados")
+        print(f"    Devolviendo {len(resultado)} sntomas asociados")
         return jsonify({'ok': True, 'sintomas': resultado})
     
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -5664,13 +5673,13 @@ def obtener_sintomas_medicamento(medicamento_id):
 @admin_required
 def obtener_hermanos_componente(medicamento_id):
     """
-    Devuelve medicamentos hermanos (mismo componente activo) con sus síntomas.
+    Devuelve medicamentos hermanos (mismo componente activo) con sus sntomas.
     Puede recibir ?componente_activo_id=X para usar un valor diferente al guardado
     """
     try:
         conn = get_db_connection()
         
-        # 🆕 Obtener el componente_activo_id: primero del parámetro, luego de BD
+        #  Obtener el componente_activo_id: primero del parmetro, luego de BD
         componente_id = request.args.get('componente_activo_id', type=int)
         
         if not componente_id:
@@ -5708,7 +5717,7 @@ def obtener_hermanos_componente(medicamento_id):
             ORDER BY nombre
         """, (componente_id, medicamento_id)).fetchall()
         
-        # 4. Para cada hermano, obtener sus síntomas
+        # 4. Para cada hermano, obtener sus sntomas
         medicamentos_hermanos = []
         for hermano in hermanos:
             sintomas = conn.execute("""
@@ -5726,7 +5735,7 @@ def obtener_hermanos_componente(medicamento_id):
                 'cantidad_sintomas': len(sintomas)
             })
         
-        # 5. Obtener síntomas actuales del medicamento
+        # 5. Obtener sntomas actuales del medicamento
         sintomas_actuales_ids = conn.execute("""
             SELECT sintoma_id
             FROM medicamento_sintoma
@@ -5746,48 +5755,48 @@ def obtener_hermanos_componente(medicamento_id):
         })
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ========================================
-# 3. GUARDAR SÍNTOMAS DE UN MEDICAMENTO
+# 3. GUARDAR SNTOMAS DE UN MEDICAMENTO
 # ========================================
 @app.route('/admin/medicamentos/<int:medicamento_id>/sintomas', methods=['POST'])
 #@admin_required#
 def guardar_sintomas_medicamento(medicamento_id):
-    print(f"💾 FUNCIÓN guardar_sintomas_medicamento() INICIADA - ID: {medicamento_id}")
+    print(f" FUNCIN guardar_sintomas_medicamento() INICIADA - ID: {medicamento_id}")
     """
-    Guarda los síntomas asociados a un medicamento.
+    Guarda los sntomas asociados a un medicamento.
     Recibe: {"sintomas": [1, 2, 3, 4]}
     """
     try:
         data = request.get_json()
-        print(f"   📦 Datos recibidos: {data}")
+        print(f"    Datos recibidos: {data}")
 
         sintomas_ids = data.get('sintomas', [])
-        print(f"   📋 IDs de síntomas a guardar: {sintomas_ids}")
-        print(f"   📊 Total de síntomas: {len(sintomas_ids)}")
+        print(f"    IDs de sntomas a guardar: {sintomas_ids}")
+        print(f"    Total de sntomas: {len(sintomas_ids)}")
 
         conn = get_db_connection()
         cursor = conn.cursor()
         
         # Eliminar relaciones anteriores
-        print(f"   🗑️ Eliminando relaciones anteriores...")
+        print(f"    Eliminando relaciones anteriores...")
         cursor.execute("""
             DELETE FROM medicamento_sintoma 
             WHERE medicamento_id = ?
         """, (medicamento_id,))
-        deleted = cursor.rowcount  # 👈 AGREGAR ESTA LÍNEA
-        print(f"   🗑️ Relaciones eliminadas: {deleted}")
+        deleted = cursor.rowcount  #  AGREGAR ESTA LNEA
+        print(f"    Relaciones eliminadas: {deleted}")
 
         # Insertar nuevas relaciones
         if sintomas_ids:
-            print(f"   ➕ Insertando {len(sintomas_ids)} nuevas relaciones...")
+            print(f"    Insertando {len(sintomas_ids)} nuevas relaciones...")
             for sintoma_id in sintomas_ids:
-                print(f"      ➕ Insertando medicamento={medicamento_id}, sintoma={sintoma_id}")
+                print(f"       Insertando medicamento={medicamento_id}, sintoma={sintoma_id}")
     
                 cursor.execute("""
                     INSERT OR IGNORE INTO medicamento_sintoma (medicamento_id, sintoma_id)
@@ -5795,28 +5804,28 @@ def guardar_sintomas_medicamento(medicamento_id):
                 """, (medicamento_id, sintoma_id))
         
         conn.commit()
-        print(f"   ✅ COMMIT exitoso!")
+        print(f"    COMMIT exitoso!")
         conn.close()
         
         return jsonify({
             'ok': True, 
-            'mensaje': f'Se guardaron {len(sintomas_ids)} síntomas correctamente'
+            'mensaje': f'Se guardaron {len(sintomas_ids)} sntomas correctamente'
         })
     
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ========================================
-# ACTUALIZAR UN SÍNTOMA EXISTENTE
+# ACTUALIZAR UN SNTOMA EXISTENTE
 # ========================================
 @app.route('/admin/sintomas/<int:sintoma_id>/actualizar', methods=['POST'])
 @admin_required
 def actualizar_sintoma(sintoma_id):
-    """Actualiza el nombre y descripción de un síntoma existente"""
+    """Actualiza el nombre y descripcin de un sntoma existente"""
     try:
         data = request.get_json()
         nombre = data.get('nombre', '').strip()
@@ -5825,18 +5834,18 @@ def actualizar_sintoma(sintoma_id):
         if not nombre:
             return jsonify({'ok': False, 'error': 'El nombre es obligatorio'}), 400
         
-        print(f"🔄 Actualizando síntoma ID: {sintoma_id}")
+        print(f" Actualizando sntoma ID: {sintoma_id}")
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Verificar que el síntoma existe
+        # Verificar que el sntoma existe
         cursor.execute("SELECT id FROM sintomas WHERE id = ?", (sintoma_id,))
         if not cursor.fetchone():
             conn.close()
-            return jsonify({'ok': False, 'error': 'Síntoma no encontrado'}), 404
+            return jsonify({'ok': False, 'error': 'Sntoma no encontrado'}), 404
         
-        # Verificar que no exista otro síntoma con el mismo nombre
+        # Verificar que no exista otro sntoma con el mismo nombre
         cursor.execute("""
             SELECT id FROM sintomas 
             WHERE LOWER(nombre) = LOWER(?) AND id != ?
@@ -5845,7 +5854,7 @@ def actualizar_sintoma(sintoma_id):
         duplicado = cursor.fetchone()
         if duplicado:
             conn.close()
-            return jsonify({'ok': False, 'error': f'Ya existe otro síntoma con el nombre "{nombre}"'}), 400
+            return jsonify({'ok': False, 'error': f'Ya existe otro sntoma con el nombre "{nombre}"'}), 400
         
         # Actualizar
         cursor.execute("""
@@ -5857,47 +5866,47 @@ def actualizar_sintoma(sintoma_id):
         conn.commit()
         conn.close()
         
-        print(f"   ✅ Síntoma {sintoma_id} actualizado correctamente")
+        print(f"    Sntoma {sintoma_id} actualizado correctamente")
         return jsonify({
             'ok': True,
-            'mensaje': f'Síntoma "{nombre}" actualizado exitosamente'
+            'mensaje': f'Sntoma "{nombre}" actualizado exitosamente'
         })
         
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ========================================
-# ELIMINAR UN SÍNTOMA
+# ELIMINAR UN SNTOMA
 # ========================================
 @app.route('/admin/sintomas/<int:sintoma_id>/eliminar', methods=['POST'])
 @admin_required
 def eliminar_sintoma(sintoma_id):
-    """Elimina un síntoma y TODAS sus relaciones (medicamentos y diagnósticos)"""
+    """Elimina un sntoma y TODAS sus relaciones (medicamentos y diagnsticos)"""
     conn = None
     try:
-        print(f"🗑️ Eliminando síntoma ID: {sintoma_id}")
+        print(f" Eliminando sntoma ID: {sintoma_id}")
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # ✅ Verificar que el síntoma existe
+        #  Verificar que el sntoma existe
         cursor.execute("SELECT nombre FROM sintomas WHERE id = ?", (sintoma_id,))
         sintoma = cursor.fetchone()
         
         if not sintoma:
             conn.close()
-            return jsonify({'ok': False, 'error': 'Síntoma no encontrado'}), 404
+            return jsonify({'ok': False, 'error': 'Sntoma no encontrado'}), 404
         
         nombre_sintoma = sintoma['nombre']
         
-        # ✅ Iniciar transacción
+        #  Iniciar transaccin
         conn.execute("BEGIN TRANSACTION")
         
-        # ✅ Contar relaciones existentes
+        #  Contar relaciones existentes
         cursor.execute("""
             SELECT COUNT(*) as total 
             FROM medicamento_sintoma 
@@ -5912,38 +5921,38 @@ def eliminar_sintoma(sintoma_id):
         """, (sintoma_id,))
         total_diagnosticos = cursor.fetchone()['total']
         
-        print(f"   📊 Medicamentos asociados: {total_medicamentos}")
-        print(f"   📊 Diagnósticos asociados: {total_diagnosticos}")
+        print(f"    Medicamentos asociados: {total_medicamentos}")
+        print(f"    Diagnsticos asociados: {total_diagnosticos}")
         
-        # ✅ Eliminar relaciones con medicamentos
+        #  Eliminar relaciones con medicamentos
         cursor.execute("""
             DELETE FROM medicamento_sintoma 
             WHERE sintoma_id = ?
         """, (sintoma_id,))
         eliminados_med = cursor.rowcount
         if eliminados_med > 0:
-            print(f"   🗑️ Eliminadas {eliminados_med} relaciones con medicamentos")
+            print(f"    Eliminadas {eliminados_med} relaciones con medicamentos")
         
-        # ✅ Eliminar relaciones con diagnósticos
+        #  Eliminar relaciones con diagnsticos
         cursor.execute("""
             DELETE FROM diagnostico_sintoma 
             WHERE sintoma_id = ?
         """, (sintoma_id,))
         eliminados_diag = cursor.rowcount
         if eliminados_diag > 0:
-            print(f"   🗑️ Eliminadas {eliminados_diag} relaciones con diagnósticos")
+            print(f"    Eliminadas {eliminados_diag} relaciones con diagnsticos")
         
-        # ✅ Eliminar el síntoma
+        #  Eliminar el sntoma
         cursor.execute("DELETE FROM sintomas WHERE id = ?", (sintoma_id,))
-        print(f"   🗑️ Síntoma '{nombre_sintoma}' eliminado")
+        print(f"    Sntoma '{nombre_sintoma}' eliminado")
         
-        # ✅ Confirmar transacción
+        #  Confirmar transaccin
         conn.commit()
         
-        print(f"   ✅ Síntoma '{nombre_sintoma}' eliminado correctamente")
+        print(f"    Sntoma '{nombre_sintoma}' eliminado correctamente")
         return jsonify({
             'ok': True,
-            'mensaje': f'Síntoma "{nombre_sintoma}" eliminado exitosamente',
+            'mensaje': f'Sntoma "{nombre_sintoma}" eliminado exitosamente',
             'medicamentos_desasociados': eliminados_med,
             'diagnosticos_desasociados': eliminados_diag
         })
@@ -5952,11 +5961,11 @@ def eliminar_sintoma(sintoma_id):
         if conn:
             try:
                 conn.rollback()
-                print(f"   ⚠️ Rollback ejecutado por error")
+                print(f"    Rollback ejecutado por error")
             except:
                 pass
         
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -5969,80 +5978,80 @@ def eliminar_sintoma(sintoma_id):
                 pass
 
 
-# 🆕 FUNCIÓN PARA LIMPIAR NOMBRE
+#  FUNCIN PARA LIMPIAR NOMBRE
     def limpiar_nombre_medicamento(texto):
-        """Limpia el nombre removiendo presentación, unidades, formas, etc"""
+        """Limpia el nombre removiendo presentacin, unidades, formas, etc"""
         import re
         texto = texto.lower()
         
         palabras_remover = [
-            'inyección', 'inyeccion', 'comprimido', 'comprimidos', 'cápsula', 'cápsulas',
+            'inyeccin', 'inyeccion', 'comprimido', 'comprimidos', 'cpsula', 'cpsulas',
             'capsula', 'capsulas', 'gotas', 'gota', 'ampolla', 'ampollas', 'jarabe',
-            'solución', 'solucion', 'suspensión', 'suspension', 'crema', 'ungüento',
+            'solucin', 'solucion', 'suspensin', 'suspension', 'crema', 'ungento',
             'unguento', 'gel', 'polvo', 'tableta', 'pastilla', 'tabletas', 'pastillas',
-            'spray', 'aerosol', 'loción', 'pomada', 'supositorios', 'supositorio',
+            'spray', 'aerosol', 'locin', 'pomada', 'supositorios', 'supositorio',
             'parche', 'parches', 'paquete', 'pack', 'caja', 'frasco', 'botella'
         ]
         
         for palabra in palabras_remover:
             texto = re.sub(r'\b' + palabra + r'\b', '', texto)
         
-        texto = re.sub(r'\b\d+\s*(mg|ml|g|gr|%|ui|mcg|μg)\b', '', texto)
-        texto = re.sub(r'\b(paquete|pack)\s+[x×]\s+\d+\b', '', texto)
+        texto = re.sub(r'\b\d+\s*(mg|ml|g|gr|%|ui|mcg|g)\b', '', texto)
+        texto = re.sub(r'\b(paquete|pack)\s+[x]\s+\d+\b', '', texto)
         texto = re.sub(r'\s+', ' ', texto).strip()
         
         return texto if texto else "medicamento"
 
 
-# 🆕 PARA SÍNTOMAS (remueve TODO)
+#  PARA SNTOMAS (remueve TODO)
 def limpiar_nombre_para_sintomas(texto):
-    """Limpia removiendo presentación, unidades, formas - PARA SÍNTOMAS"""
+    """Limpia removiendo presentacin, unidades, formas - PARA SNTOMAS"""
     import re
     texto = texto.lower()
     
     palabras_remover = [
-        'inyección', 'inyeccion', 'comprimido', 'comprimidos', 'cápsula', 'cápsulas',
+        'inyeccin', 'inyeccion', 'comprimido', 'comprimidos', 'cpsula', 'cpsulas',
         'capsula', 'capsulas', 'gotas', 'gota', 'ampolla', 'ampollas', 'jarabe',
-        'solución', 'solucion', 'suspensión', 'suspension', 'crema', 'ungüento',
+        'solucin', 'solucion', 'suspensin', 'suspension', 'crema', 'ungento',
         'unguento', 'gel', 'polvo', 'tableta', 'pastilla', 'tabletas', 'pastillas',
-        'spray', 'aerosol', 'loción', 'pomada', 'supositorios', 'supositorio',
+        'spray', 'aerosol', 'locin', 'pomada', 'supositorios', 'supositorio',
         'parche', 'parches', 'paquete', 'pack', 'caja', 'frasco', 'botella'
     ]
     
     for palabra in palabras_remover:
         texto = re.sub(r'\b' + palabra + r'\b', '', texto)
     
-    # 🆕 REMUEVE TAMBIÉN concentración
-    texto = re.sub(r'\b\d+\s*(mg|ml|g|gr|%|ui|mcg|μg)\b', '', texto)
-    texto = re.sub(r'\/?\s*(mg|ml|g|gr|%|ui|mcg|μg)\b', '', texto)  # Remover /ml, mg sin número
-    texto = re.sub(r'\b(paquete|pack)\s+[x×]\s+\d+\b', '', texto)
+    #  REMUEVE TAMBIN concentracin
+    texto = re.sub(r'\b\d+\s*(mg|ml|g|gr|%|ui|mcg|g)\b', '', texto)
+    texto = re.sub(r'\/?\s*(mg|ml|g|gr|%|ui|mcg|g)\b', '', texto)  # Remover /ml, mg sin nmero
+    texto = re.sub(r'\b(paquete|pack)\s+[x]\s+\d+\b', '', texto)
     texto = re.sub(r'\s+', ' ', texto).strip()
     
     return texto if texto else "medicamento"
 
 
 # ========================================
-# 4. BUSCAR SÍNTOMAS EN LÍNEA
+# 4. BUSCAR SNTOMAS EN LNEA
 # ========================================
 @app.route('/admin/buscar_sintomas_medicamento', methods=['GET'])
 @admin_required
 def buscar_sintomas_medicamento():
     """
-    Busca síntomas usando Google Custom Search API.
-    Detecta síntomas EXISTENTES y síntomas NUEVOS con filtros inteligentes.
+    Busca sntomas usando Google Custom Search API.
+    Detecta sntomas EXISTENTES y sntomas NUEVOS con filtros inteligentes.
     """
     nombre = request.args.get('nombre', '')
     medicamento_id = request.args.get('medicamento_id', '')
     if not nombre:
         return jsonify({'ok': False, 'error': 'Falta el nombre del medicamento'})
     
-    # 🆕 LIMPIAR NOMBRE INMEDIATAMENTE
+    #  LIMPIAR NOMBRE INMEDIATAMENTE
     nombre = limpiar_nombre_para_sintomas(nombre)
-    print(f"🔍 Buscando síntomas para: {nombre}")
+    print(f" Buscando sntomas para: {nombre}")
     try:
         import re
         
-        # 🆕 OBTENER COMPONENTE ACTIVO (SI EXISTE)
+        #  OBTENER COMPONENTE ACTIVO (SI EXISTE)
         nombre_componente_activo = None
         if medicamento_id:
             conn = get_db_connection()
@@ -6060,50 +6069,50 @@ def buscar_sintomas_medicamento():
             conn.close()
             if resultado:
                 nombre_componente_activo = resultado['nombre'].split()[0]  # Simplificar
-                print(f" 🧬 Componente activo encontrado: {nombre_componente_activo}")
+                print(f"  Componente activo encontrado: {nombre_componente_activo}")
         
         # Google Custom Search API
         GOOGLE_API_KEY = 'AIzaSyCiAtNFl95bJJFuqiNsiYynBS3LuDisq9g'
         SEARCH_ENGINE_ID = '40c8305664a9147e9'
         
-        # 🆕 TEXTO COMBINADO
+        #  TEXTO COMBINADO
         texto_completo = ""
         
-        # BÚSQUEDA 1: Con el nombre del medicamento
-        print(f"🔵 BÚSQUEDA 1: Consultando '{nombre}'...")
-        query = f"{nombre} para qué sirve indicaciones síntomas trata alivia"
+        # BSQUEDA 1: Con el nombre del medicamento
+        print(f" BSQUEDA 1: Consultando '{nombre}'...")
+        query = f"{nombre} para qu sirve indicaciones sntomas trata alivia"
         url_api = f"https://www.googleapis.com/customsearch/v1?key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}&q={query}&num=10"
         resp = requests.get(url_api, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             items = data.get("items", [])
-            print(f"   ✅ Resultados: {len(items)}")
+            print(f"    Resultados: {len(items)}")
             for item in items:
                 texto_completo += f" {item.get('title', '')} {item.get('snippet', '')}"
         else:
-            print(f"   ❌ Error API: {resp.status_code}")
+            print(f"    Error API: {resp.status_code}")
         
-        # 🆕 BÚSQUEDA 2: Con el componente activo (SI EXISTE)
+        #  BSQUEDA 2: Con el componente activo (SI EXISTE)
         if nombre_componente_activo:
-            print(f"🔵 BÚSQUEDA 2: Consultando '{nombre_componente_activo}'...")
-            query = f"{nombre_componente_activo} para qué sirve indicaciones síntomas trata alivia"
+            print(f" BSQUEDA 2: Consultando '{nombre_componente_activo}'...")
+            query = f"{nombre_componente_activo} para qu sirve indicaciones sntomas trata alivia"
             url_api = f"https://www.googleapis.com/customsearch/v1?key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}&q={query}&num=10"
             resp = requests.get(url_api, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 items = data.get("items", [])
-                print(f"   ✅ Resultados: {len(items)}")
+                print(f"    Resultados: {len(items)}")
                 for item in items:
                     texto_completo += f" {item.get('title', '')} {item.get('snippet', '')}"
             else:
-                print(f"   ❌ Error API: {resp.status_code}")
+                print(f"    Error API: {resp.status_code}")
         
         if not texto_completo.strip():
             return jsonify({'ok': True, 'sintomas_encontrados': [], 'sintomas_nuevos_sugeridos': [], 'total': 0})
         
-        print(f" 📄 Texto combinado: {len(texto_completo)} caracteres")
+        print(f"  Texto combinado: {len(texto_completo)} caracteres")
         
-        # Cargar síntomas BD
+        # Cargar sntomas BD
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, nombre, descripcion_lower FROM sintomas")
@@ -6111,7 +6120,7 @@ def buscar_sintomas_medicamento():
         conn.close()
         
         # ==========================================
-        # PARTE 1: BUSCAR SÍNTOMAS EXISTENTES
+        # PARTE 1: BUSCAR SNTOMAS EXISTENTES
         # ==========================================
         sintomas_encontrados = []
         texto_lower = texto_completo.lower()
@@ -6131,10 +6140,10 @@ def buscar_sintomas_medicamento():
                     'motivo': f'Encontrado: "{nombre_sintoma}"',
                     'tipo': 'existente'
                 })
-                print(f"   ✅ {nombre_sintoma}")
+                print(f"    {nombre_sintoma}")
                 continue
             
-            # Buscar en sinónimos
+            # Buscar en sinnimos
             if descripcion:
                 terminos = [t.strip() for t in descripcion.split(',') if len(t.strip()) > 3]
                 for termino in terminos:
@@ -6144,34 +6153,34 @@ def buscar_sintomas_medicamento():
                             'id': sid,
                             'nombre': nombre_sintoma,
                             'confianza': 'media',
-                            'motivo': f'Término: "{termino}"',
+                            'motivo': f'Trmino: "{termino}"',
                             'tipo': 'existente'
                         })
-                        print(f"   💡 {nombre_sintoma} (término: {termino})")
+                        print(f"    {nombre_sintoma} (trmino: {termino})")
                         break
         
         # ==========================================
-        # PARTE 2: DETECTAR SÍNTOMAS NUEVOS
+        # PARTE 2: DETECTAR SNTOMAS NUEVOS
         # ==========================================
-        print(f"   🔍 Buscando síntomas nuevos...")
+        print(f"    Buscando sntomas nuevos...")
         
-        # Lista negra de palabras que NO son síntomas
+        # Lista negra de palabras que NO son sntomas
         palabras_prohibidas = {
-            'adultos', 'adulto', 'niños', 'niño', 'hijo', 'hijos', 'paciente', 'pacientes',
+            'adultos', 'adulto', 'nios', 'nio', 'hijo', 'hijos', 'paciente', 'pacientes',
             'persona', 'personas', 'indicaciones', 'tratamiento', 'medicamento', 'medicina',
             'dosis', 'tomar', 'usar', 'recibir', 'depende', 'muchos', 'algunos', 'estos',
-            'esos', 'aquellos', 'cir', 'antes', 'después', 'durante', 'siempre', 'nunca',
-            'síntomas', 'sintomas', 'causa', 'causas', 'cuidado', 'alivio', 'aliviar'
+            'esos', 'aquellos', 'cir', 'antes', 'despus', 'durante', 'siempre', 'nunca',
+            'sntomas', 'sintomas', 'causa', 'causas', 'cuidado', 'alivio', 'aliviar'
         }
         
-        # Patrones MÁS ESPECÍFICOS para síntomas médicos
+        # Patrones MS ESPECFICOS para sntomas mdicos
         patrones_sintomas = [
-            # Patrón: "alivia/trata/reduce + síntoma"
-            r'(?:alivia|trata|reduce|calma|combate)\s+(?:el|la)?\s*([a-záéíóúñ]{4,20}(?:\s+[a-záéíóúñ]{4,20})?)',
-            # Patrón: "dolor/fiebre/inflamación + especificador"
-            r'\b(dolor|fiebre|inflamación|picazón|náuseas|vómitos|tos|mareos|diarrea)\s+(?:de|en)?\s*([a-záéíóúñ\s]{0,20})',
-            # Patrón: "para la/el + síntoma"
-            r'para\s+(?:el|la)\s+([a-záéíóúñ]{4,20}(?:\s+[a-záéíóúñ]{4,20})?)\b',
+            # Patrn: "alivia/trata/reduce + sntoma"
+            r'(?:alivia|trata|reduce|calma|combate)\s+(?:el|la)?\s*([a-z]{4,20}(?:\s+[a-z]{4,20})?)',
+            # Patrn: "dolor/fiebre/inflamacin + especificador"
+            r'\b(dolor|fiebre|inflamacin|picazn|nuseas|vmitos|tos|mareos|diarrea)\s+(?:de|en)?\s*([a-z\s]{0,20})',
+            # Patrn: "para la/el + sntoma"
+            r'para\s+(?:el|la)\s+([a-z]{4,20}(?:\s+[a-z]{4,20})?)\b',
         ]
         
         candidatos_raw = set()
@@ -6189,24 +6198,24 @@ def buscar_sintomas_medicamento():
                     candidato = re.sub(r'\b(el|la|los|las|de|del|en|con|por|para|y|o|su|tu|mi)\b', '', candidato)
                     candidato = re.sub(r'\s+', ' ', candidato).strip()
                     
-                    # Validaciones básicas
+                    # Validaciones bsicas
                     if candidato and 4 <= len(candidato) <= 35:
                         # Contar palabras
                         palabras = candidato.split()
-                        if 1 <= len(palabras) <= 3:  # Máximo 3 palabras
+                        if 1 <= len(palabras) <= 3:  # Mximo 3 palabras
                             candidatos_raw.add(candidato)
         
-        print(f"   🔍 Candidatos detectados: {len(candidatos_raw)}")
+        print(f"    Candidatos detectados: {len(candidatos_raw)}")
         
         sintomas_nuevos = []
         
         for candidato in candidatos_raw:
-            # OPCIÓN 1: LIMPIAR palabras prohibidas (no descartar todo)
+            # OPCIN 1: LIMPIAR palabras prohibidas (no descartar todo)
             palabras_candidato = candidato.lower().split()
             palabras_limpias = [p for p in palabras_candidato if p not in palabras_prohibidas]
             candidato_limpio = ' '.join(palabras_limpias)
             
-            # Si después de limpiar queda algo válido
+            # Si despus de limpiar queda algo vlido
             if candidato_limpio and len(candidato_limpio) >= 4:
                 # Verificar que empiece con letra
                 if not candidato_limpio[0].isalpha():
@@ -6225,12 +6234,12 @@ def buscar_sintomas_medicamento():
                     })
                     
                     if candidato != candidato_limpio:
-                        print(f"   🆕 Nuevo: {nombre_cap} (limpiado de: '{candidato}')")
+                        print(f"    Nuevo: {nombre_cap} (limpiado de: '{candidato}')")
                     else:
-                        print(f"   🆕 Nuevo: {nombre_cap}")
+                        print(f"    Nuevo: {nombre_cap}")
             else:
                 if len(palabras_candidato) > 0:
-                    print(f"   ⛔ Descartado: '{candidato}' (solo palabras prohibidas)")
+                    print(f"    Descartado: '{candidato}' (solo palabras prohibidas)")
         
         # Limitar a 8 sugerencias nuevas
         sintomas_nuevos = sintomas_nuevos[:8]
@@ -6249,7 +6258,7 @@ def buscar_sintomas_medicamento():
         resultado_existentes = list(sintomas_unicos.values())
         resultado_existentes.sort(key=lambda x: 0 if x['confianza'] == 'alta' else 1)
         
-        print(f"   🎯 Existentes: {len(resultado_existentes)}, Nuevos: {len(sintomas_nuevos)}")
+        print(f"    Existentes: {len(resultado_existentes)}, Nuevos: {len(sintomas_nuevos)}")
         
         # ==========================================
         # FILTRAR INDICACIONES RECHAZADAS
@@ -6260,17 +6269,17 @@ def buscar_sintomas_medicamento():
         rechazadas = cursor.fetchall()
         conn.close()
         
-        # Convertir a set de nombres en lowercase para comparación exacta
+        # Convertir a set de nombres en lowercase para comparacin exacta
         rechazadas_set = {r['indicacion_nombre'].lower() for r in rechazadas}
         
-        # Filtrar síntomas nuevos (comparación EXACTA)
+        # Filtrar sntomas nuevos (comparacin EXACTA)
         sintomas_nuevos_filtrados = [
             s for s in sintomas_nuevos 
             if s['descripcion_sugerida'].lower() not in rechazadas_set
         ]
         
-        print(f"   🔍 Rechazadas totales: {len(rechazadas_set)}")
-        print(f"   📊 Nuevos antes: {len(sintomas_nuevos)}, después: {len(sintomas_nuevos_filtrados)}")
+        print(f"    Rechazadas totales: {len(rechazadas_set)}")
+        print(f"    Nuevos antes: {len(sintomas_nuevos)}, despus: {len(sintomas_nuevos_filtrados)}")
         
         return jsonify({
             'ok': True,
@@ -6282,27 +6291,27 @@ def buscar_sintomas_medicamento():
         })
     
     except Exception as e:
-        print(f"   ❌ ERROR: {str(e)}")
+        print(f"    ERROR: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': f'Error: {str(e)}'})
         
 # ========================================
 # NOTA ADICIONAL: Si tu tabla SINTOMAS usa descripcion_lower
-# y quieres ver mejor los sinónimos, considera actualizar
-# los datos para que descripcion_lower contenga los términos
+# y quieres ver mejor los sinnimos, considera actualizar
+# los datos para que descripcion_lower contenga los trminos
 # alternativos separados por comas
 # ========================================
 
 
 # ========================================
-# 5. RECHAZAR INDICACIÓN (NUEVA)
+# 5. RECHAZAR INDICACIN (NUEVA)
 # ========================================
 @app.route('/admin/indicaciones/rechazar', methods=['POST'])
 @admin_required
 def rechazar_indicacion():
     """
-    Rechaza una indicación para que no vuelva a sugerirse en NINGÚN medicamento.
+    Rechaza una indicacin para que no vuelva a sugerirse en NINGN medicamento.
     Guarda en tabla indicaciones_rechazadas.
     """
     try:
@@ -6310,14 +6319,14 @@ def rechazar_indicacion():
         indicacion_nombre = data.get('indicacion_nombre', '').strip().lower()
         
         if not indicacion_nombre:
-            return jsonify({'ok': False, 'error': 'Falta nombre de indicación'})
+            return jsonify({'ok': False, 'error': 'Falta nombre de indicacin'})
         
-        print(f"❌ Rechazando indicación: '{indicacion_nombre}'")
+        print(f" Rechazando indicacin: '{indicacion_nombre}'")
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Verificar si ya está rechazada
+        # Verificar si ya est rechazada
         cursor.execute(
             "SELECT id FROM indicaciones_rechazadas WHERE indicacion_nombre = ?",
             (indicacion_nombre,)
@@ -6329,7 +6338,7 @@ def rechazar_indicacion():
             return jsonify({'ok': True, 'mensaje': 'Ya estaba rechazada'})
         
         # Obtener admin_id (del usuario logueado)
-        admin_id = session.get('usuario_id', 1)  # Ajusta según tu variable de sesión
+        admin_id = session.get('usuario_id', 1)  # Ajusta segn tu variable de sesin
         
         # Insertar en tabla
         cursor.execute(
@@ -6342,11 +6351,11 @@ def rechazar_indicacion():
         conn.commit()
         conn.close()
         
-        print(f"✅ Indicación rechazada guardada")
-        return jsonify({'ok': True, 'mensaje': 'Indicación rechazada exitosamente'})
+        print(f" Indicacin rechazada guardada")
+        return jsonify({'ok': True, 'mensaje': 'Indicacin rechazada exitosamente'})
     
     except Exception as e:
-        print(f"❌ Error rechazando: {str(e)}")
+        print(f" Error rechazando: {str(e)}")
         return jsonify({'ok': False, 'error': str(e)})
 
 
@@ -6355,7 +6364,7 @@ def rechazar_indicacion():
 @admin_required
 def crear_sintoma():
     """
-    Crea un síntoma nuevo y lo asocia a un medicamento.
+    Crea un sntoma nuevo y lo asocia a un medicamento.
     """
     try:
         import time
@@ -6366,9 +6375,9 @@ def crear_sintoma():
         medicamento_id = data.get('medicamento_id')
         
         if not nombre:
-            return jsonify({'ok': False, 'error': 'Falta el nombre del síntoma'}), 400
+            return jsonify({'ok': False, 'error': 'Falta el nombre del sntoma'}), 400
         
-        print(f"🆕 Procesando síntoma: {nombre}")
+        print(f" Procesando sntoma: {nombre}")
         
         maxReintentos = 5
         for intento in range(1, maxReintentos + 1):
@@ -6377,7 +6386,7 @@ def crear_sintoma():
                 conn = get_db_connection()
                 cursor = conn.cursor()
                 
-                print(f"   🔄 Intento {intento}/{maxReintentos}")
+                print(f"    Intento {intento}/{maxReintentos}")
                 
                 # Verificar si ya existe
                 cursor.execute("""
@@ -6389,7 +6398,7 @@ def crear_sintoma():
                 
                 if existente:
                     sintoma_id = existente['id']
-                    print(f"   ℹ️ Síntoma ya existe con ID: {sintoma_id}")
+                    print(f"    Sntoma ya existe con ID: {sintoma_id}")
                     accion = 'encontrado'
                 else:
                     cursor.execute("""
@@ -6398,7 +6407,7 @@ def crear_sintoma():
                     """, (nombre, descripcion if descripcion else nombre))
                     
                     sintoma_id = cursor.lastrowid
-                    print(f"   ✅ Síntoma CREADO con ID: {sintoma_id}")
+                    print(f"    Sntoma CREADO con ID: {sintoma_id}")
                     accion = 'creado'
                 
                 # Asociar al medicamento
@@ -6416,18 +6425,18 @@ def crear_sintoma():
                             INSERT INTO medicamento_sintoma (medicamento_id, sintoma_id)
                             VALUES (?, ?)
                         """, (medicamento_id, sintoma_id))
-                        print(f"   🔗 Asociado al medicamento")
+                        print(f"    Asociado al medicamento")
                 
                 conn.commit()
                 conn.close()
-                print(f"   ✅ ÉXITO en intento {intento}")
+                print(f"    XITO en intento {intento}")
                                 
                 return jsonify({
                     'ok': True,
                     'sintoma_id': sintoma_id,
                     'accion': accion,
                     'ya_existia': existente is not None,
-                    'mensaje': f'✅ Síntoma "{nombre}" creado exitosamente'
+                    'mensaje': f' Sntoma "{nombre}" creado exitosamente'
                 })
                 
             except sqlite3.OperationalError as e:
@@ -6437,11 +6446,11 @@ def crear_sintoma():
                     except:
                         pass
                 
-                print(f"   ⚠️ Error intento {intento}: {e}")
+                print(f"    Error intento {intento}: {e}")
                 
                 if 'locked' in str(e) and intento < maxReintentos:
                     espera = intento * 0.5
-                    print(f"   ⏳ Esperando {espera}s antes de reintentar...")
+                    print(f"    Esperando {espera}s antes de reintentar...")
                     time.sleep(espera)
                     continue
                 else:
@@ -6453,13 +6462,13 @@ def crear_sintoma():
                         conn.close()
                     except:
                         pass
-                print(f"   ❌ Error: {e}")
+                print(f"    Error: {e}")
                 raise
         
-        return jsonify({'ok': False, 'error': 'BD bloqueada después de reintentos'}), 500
+        return jsonify({'ok': False, 'error': 'BD bloqueada despus de reintentos'}), 500
         
     except Exception as e:
-        print(f"   ❌ ERROR FINAL: {str(e)}")
+        print(f"    ERROR FINAL: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -6467,7 +6476,7 @@ def crear_sintoma():
 
 
 # ==========================================
-# RUTAS PARA GESTIÓN DE DIAGNÓSTICOS
+# RUTAS PARA GESTIN DE DIAGNSTICOS
 # ==========================================
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
@@ -6476,24 +6485,24 @@ from flask import Blueprint, render_template, request, jsonify, flash, redirect,
 # admin_bp = Blueprint('admin', __name__)
 
 # ==========================================
-# 1. PÁGINA PRINCIPAL DE DIAGNÓSTICOS
+# 1. PGINA PRINCIPAL DE DIAGNSTICOS
 # ==========================================
 @app.route('/admin/diagnosticos')
 def admin_diagnosticos():
-    """Renderiza la página de gestión de diagnósticos"""
+    """Renderiza la pgina de gestin de diagnsticos"""
     return render_template('lista_diagnosticos.html')
 
 # ==========================================
-# RUTAS ACTUALIZADAS PARA GESTIÓN DE DIAGNÓSTICOS
+# RUTAS ACTUALIZADAS PARA GESTIN DE DIAGNSTICOS
 # (Con campo descripcion_lower)
 # ==========================================
 
 # ==========================================
-# 2. LISTAR TODOS LOS DIAGNÓSTICOS (JSON)
+# 2. LISTAR TODOS LOS DIAGNSTICOS (JSON)
 # ==========================================
 @app.route('/admin/diagnosticos/json', methods=['GET'])
 def listar_diagnosticos_json():
-    """Devuelve todos los diagnósticos con conteo de síntomas"""
+    """Devuelve todos los diagnsticos con conteo de sntomas"""
     conn = get_db_connection()
     
     query = """
@@ -6517,14 +6526,14 @@ def listar_diagnosticos_json():
     })
 
 # ==========================================
-# 3. OBTENER UN DIAGNÓSTICO ESPECÍFICO (JSON)
+# 3. OBTENER UN DIAGNSTICO ESPECFICO (JSON)
 # ==========================================
 @app.route('/admin/diagnosticos/<int:diagnostico_id>/json', methods=['GET'])
 def obtener_diagnostico_json(diagnostico_id):
-    """Devuelve un diagnóstico con sus síntomas asociados"""
+    """Devuelve un diagnstico con sus sntomas asociados"""
     conn = get_db_connection()
     
-    # Obtener diagnóstico
+    # Obtener diagnstico
     diagnostico = conn.execute(
         'SELECT id, descripcion as nombre, descripcion_lower as sinonimos FROM diagnosticos WHERE id = ?',
         (diagnostico_id,)
@@ -6532,9 +6541,9 @@ def obtener_diagnostico_json(diagnostico_id):
     
     if not diagnostico:
         conn.close()
-        return jsonify({'ok': False, 'error': 'Diagnóstico no encontrado'}), 404
+        return jsonify({'ok': False, 'error': 'Diagnstico no encontrado'}), 404
     
-    # Obtener síntomas asociados
+    # Obtener sntomas asociados
     sintomas = conn.execute("""
         SELECT s.id, s.nombre, s.descripcion_lower as sinonimos
         FROM sintomas s
@@ -6554,11 +6563,11 @@ def obtener_diagnostico_json(diagnostico_id):
     })
 
 # ==========================================
-# 4. CREAR DIAGNÓSTICO
+# 4. CREAR DIAGNSTICO
 # ==========================================
 @app.route('/admin/diagnosticos/crear', methods=['POST'])
 def crear_diagnostico():
-    """Crea un nuevo diagnóstico"""
+    """Crea un nuevo diagnstico"""
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
     descripcion = data.get('descripcion', '').strip()
@@ -6576,9 +6585,9 @@ def crear_diagnostico():
     
     if existe:
         conn.close()
-        return jsonify({'ok': False, 'error': 'Ya existe un diagnóstico con ese nombre'}), 400
+        return jsonify({'ok': False, 'error': 'Ya existe un diagnstico con ese nombre'}), 400
     
-    # Crear diagnóstico
+    # Crear diagnstico
     try:
         conn.execute(
             'INSERT INTO diagnosticos (descripcion, descripcion_lower) VALUES (?, ?)',
@@ -6589,18 +6598,18 @@ def crear_diagnostico():
         
         return jsonify({
             'ok': True,
-            'mensaje': f'Diagnóstico "{nombre}" creado exitosamente'
+            'mensaje': f'Diagnstico "{nombre}" creado exitosamente'
         })
     except Exception as e:
         conn.close()
-        return jsonify({'ok': False, 'error': f'Error al crear diagnóstico: {str(e)}'}), 500
+        return jsonify({'ok': False, 'error': f'Error al crear diagnstico: {str(e)}'}), 500
 
 # ==========================================
-# 5. ACTUALIZAR DIAGNÓSTICO
+# 5. ACTUALIZAR DIAGNSTICO
 # ==========================================
 @app.route('/admin/diagnosticos/<int:diagnostico_id>/actualizar', methods=['POST'])
 def actualizar_diagnostico(diagnostico_id):
-    """Actualiza un diagnóstico existente"""
+    """Actualiza un diagnstico existente"""
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
     descripcion = data.get('descripcion', '').strip()
@@ -6618,7 +6627,7 @@ def actualizar_diagnostico(diagnostico_id):
     
     if not existe:
         conn.close()
-        return jsonify({'ok': False, 'error': 'Diagnóstico no encontrado'}), 404
+        return jsonify({'ok': False, 'error': 'Diagnstico no encontrado'}), 404
     
     # Verificar duplicados (excepto el actual)
     duplicado = conn.execute(
@@ -6628,7 +6637,7 @@ def actualizar_diagnostico(diagnostico_id):
     
     if duplicado:
         conn.close()
-        return jsonify({'ok': False, 'error': 'Ya existe otro diagnóstico con ese nombre'}), 400
+        return jsonify({'ok': False, 'error': 'Ya existe otro diagnstico con ese nombre'}), 400
     
     # Actualizar
     try:
@@ -6641,23 +6650,23 @@ def actualizar_diagnostico(diagnostico_id):
         
         return jsonify({
             'ok': True,
-            'mensaje': f'Diagnóstico "{nombre}" actualizado exitosamente'
+            'mensaje': f'Diagnstico "{nombre}" actualizado exitosamente'
         })
     except Exception as e:
         conn.close()
-        return jsonify({'ok': False, 'error': f'Error al actualizar diagnóstico: {str(e)}'}), 500
+        return jsonify({'ok': False, 'error': f'Error al actualizar diagnstico: {str(e)}'}), 500
 
 # ==========================================
-# 6. ELIMINAR DIAGNÓSTICO
+# 6. ELIMINAR DIAGNSTICO
 # ==========================================
 @app.route('/admin/diagnosticos/<int:diagnostico_id>/eliminar', methods=['POST'])
 def eliminar_diagnostico(diagnostico_id):
-    """Elimina un diagnóstico y TODAS sus relaciones (síntomas y medicamentos)"""
+    """Elimina un diagnstico y TODAS sus relaciones (sntomas y medicamentos)"""
     conn = None
     try:
         conn = get_db_connection()
         
-        # ✅ Verificar que existe
+        #  Verificar que existe
         diagnostico = conn.execute(
             'SELECT descripcion FROM diagnosticos WHERE id = ?',
             (diagnostico_id,)
@@ -6665,14 +6674,14 @@ def eliminar_diagnostico(diagnostico_id):
         
         if not diagnostico:
             conn.close()
-            return jsonify({'ok': False, 'error': 'Diagnóstico no encontrado'}), 404
+            return jsonify({'ok': False, 'error': 'Diagnstico no encontrado'}), 404
         
         nombre_diagnostico = diagnostico['descripcion']
         
-        # ✅ Iniciar transacción
+        #  Iniciar transaccin
         conn.execute("BEGIN TRANSACTION")
         
-        # ✅ Contar relaciones existentes
+        #  Contar relaciones existentes
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -6689,41 +6698,41 @@ def eliminar_diagnostico(diagnostico_id):
         """, (diagnostico_id,))
         total_medicamentos = cursor.fetchone()['total']
         
-        print(f"🗑️ Eliminando diagnóstico ID {diagnostico_id}: '{nombre_diagnostico}'")
-        print(f"   📊 Síntomas asociados: {total_sintomas}")
-        print(f"   📊 Medicamentos asociados: {total_medicamentos}")
+        print(f" Eliminando diagnstico ID {diagnostico_id}: '{nombre_diagnostico}'")
+        print(f"    Sntomas asociados: {total_sintomas}")
+        print(f"    Medicamentos asociados: {total_medicamentos}")
         
-        # ✅ Eliminar relaciones con síntomas
+        #  Eliminar relaciones con sntomas
         conn.execute(
             'DELETE FROM diagnostico_sintoma WHERE diagnostico_id = ?',
             (diagnostico_id,)
         )
         eliminados_sint = conn.total_changes
         if total_sintomas > 0:
-            print(f"   🗑️ Eliminadas {total_sintomas} relaciones con síntomas")
+            print(f"    Eliminadas {total_sintomas} relaciones con sntomas")
         
-        # ✅ Eliminar relaciones con medicamentos
+        #  Eliminar relaciones con medicamentos
         conn.execute(
             'DELETE FROM diagnostico_medicamento WHERE diagnostico_id = ?',
             (diagnostico_id,)
         )
         if total_medicamentos > 0:
-            print(f"   🗑️ Eliminadas {total_medicamentos} relaciones con medicamentos")
+            print(f"    Eliminadas {total_medicamentos} relaciones con medicamentos")
         
-        # ✅ Eliminar diagnóstico
+        #  Eliminar diagnstico
         conn.execute(
             'DELETE FROM diagnosticos WHERE id = ?',
             (diagnostico_id,)
         )
-        print(f"   🗑️ Diagnóstico '{nombre_diagnostico}' eliminado")
+        print(f"    Diagnstico '{nombre_diagnostico}' eliminado")
         
-        # ✅ Confirmar transacción
+        #  Confirmar transaccin
         conn.commit()
         
-        print(f"   ✅ Diagnóstico eliminado correctamente")
+        print(f"    Diagnstico eliminado correctamente")
         return jsonify({
             'ok': True,
-            'mensaje': f'Diagnóstico "{nombre_diagnostico}" eliminado exitosamente',
+            'mensaje': f'Diagnstico "{nombre_diagnostico}" eliminado exitosamente',
             'sintomas_desasociados': total_sintomas,
             'medicamentos_desasociados': total_medicamentos
         })
@@ -6732,12 +6741,12 @@ def eliminar_diagnostico(diagnostico_id):
         if conn:
             try:
                 conn.rollback()
-                print(f"   ⚠️ Rollback ejecutado por error")
+                print(f"    Rollback ejecutado por error")
             except:
                 pass
         
-        print(f"   ❌ ERROR: {str(e)}")
-        return jsonify({'ok': False, 'error': f'Error al eliminar diagnóstico: {str(e)}'}), 500
+        print(f"    ERROR: {str(e)}")
+        return jsonify({'ok': False, 'error': f'Error al eliminar diagnstico: {str(e)}'}), 500
     
     finally:
         if conn:
@@ -6747,16 +6756,16 @@ def eliminar_diagnostico(diagnostico_id):
                 pass
 
 # ==========================================
-# 7. AGREGAR SÍNTOMA AL DIAGNÓSTICO
+# 7. AGREGAR SNTOMA AL DIAGNSTICO
 # ==========================================
 @app.route('/admin/diagnosticos/<int:diagnostico_id>/sintomas/agregar', methods=['POST'])
 def agregar_sintoma_diagnostico(diagnostico_id):
-    """Asocia un síntoma a un diagnóstico"""
+    """Asocia un sntoma a un diagnstico"""
     data = request.get_json()
     sintoma_id = data.get('sintoma_id')
     
     if not sintoma_id:
-        return jsonify({'ok': False, 'error': 'ID de síntoma requerido'}), 400
+        return jsonify({'ok': False, 'error': 'ID de sntoma requerido'}), 400
     
     conn = get_db_connection()
     
@@ -6766,9 +6775,9 @@ def agregar_sintoma_diagnostico(diagnostico_id):
     
     if not diagnostico or not sintoma:
         conn.close()
-        return jsonify({'ok': False, 'error': 'Diagnóstico o síntoma no encontrado'}), 404
+        return jsonify({'ok': False, 'error': 'Diagnstico o sntoma no encontrado'}), 404
     
-    # Verificar si ya está asociado
+    # Verificar si ya est asociado
     existe = conn.execute(
         'SELECT 1 FROM diagnostico_sintoma WHERE diagnostico_id = ? AND sintoma_id = ?',
         (diagnostico_id, sintoma_id)
@@ -6776,9 +6785,9 @@ def agregar_sintoma_diagnostico(diagnostico_id):
     
     if existe:
         conn.close()
-        return jsonify({'ok': False, 'error': 'El síntoma ya está asociado a este diagnóstico'}), 400
+        return jsonify({'ok': False, 'error': 'El sntoma ya est asociado a este diagnstico'}), 400
     
-    # Agregar relación
+    # Agregar relacin
     try:
         conn.execute(
             'INSERT INTO diagnostico_sintoma (diagnostico_id, sintoma_id) VALUES (?, ?)',
@@ -6789,34 +6798,34 @@ def agregar_sintoma_diagnostico(diagnostico_id):
         
         return jsonify({
             'ok': True,
-            'mensaje': f'Síntoma "{sintoma["nombre"]}" agregado exitosamente'
+            'mensaje': f'Sntoma "{sintoma["nombre"]}" agregado exitosamente'
         })
     except Exception as e:
         conn.close()
-        return jsonify({'ok': False, 'error': f'Error al agregar síntoma: {str(e)}'}), 500
+        return jsonify({'ok': False, 'error': f'Error al agregar sntoma: {str(e)}'}), 500
 
 # ==========================================
-# 8. QUITAR SÍNTOMA DEL DIAGNÓSTICO
+# 8. QUITAR SNTOMA DEL DIAGNSTICO
 # ==========================================
 @app.route('/admin/diagnosticos/<int:diagnostico_id>/sintomas/quitar', methods=['POST'])
 def quitar_sintoma_diagnostico(diagnostico_id):
-    """Desasocia un síntoma de un diagnóstico"""
+    """Desasocia un sntoma de un diagnstico"""
     data = request.get_json()
     sintoma_id = data.get('sintoma_id')
     
     if not sintoma_id:
-        return jsonify({'ok': False, 'error': 'ID de síntoma requerido'}), 400
+        return jsonify({'ok': False, 'error': 'ID de sntoma requerido'}), 400
     
     conn = get_db_connection()
     
-    # Obtener nombre del síntoma
+    # Obtener nombre del sntoma
     sintoma = conn.execute('SELECT nombre FROM sintomas WHERE id = ?', (sintoma_id,)).fetchone()
     
     if not sintoma:
         conn.close()
-        return jsonify({'ok': False, 'error': 'Síntoma no encontrado'}), 404
+        return jsonify({'ok': False, 'error': 'Sntoma no encontrado'}), 404
     
-    # Eliminar relación
+    # Eliminar relacin
     try:
         conn.execute(
             'DELETE FROM diagnostico_sintoma WHERE diagnostico_id = ? AND sintoma_id = ?',
@@ -6827,22 +6836,22 @@ def quitar_sintoma_diagnostico(diagnostico_id):
         
         return jsonify({
             'ok': True,
-            'mensaje': f'Síntoma "{sintoma["nombre"]}" quitado exitosamente'
+            'mensaje': f'Sntoma "{sintoma["nombre"]}" quitado exitosamente'
         })
     except Exception as e:
         conn.close()
-        return jsonify({'ok': False, 'error': f'Error al quitar síntoma: {str(e)}'}), 500
+        return jsonify({'ok': False, 'error': f'Error al quitar sntoma: {str(e)}'}), 500
 
 # ==========================================
-# 9. BUSCAR SÍNTOMAS (para el buscador)
+# 9. BUSCAR SNTOMAS (para el buscador)
 # ==========================================
 @app.route('/admin/sintomas/buscar', methods=['GET'])
 def buscar_sintomas():
-    """Busca síntomas por nombre o sinónimos"""
+    """Busca sntomas por nombre o sinnimos"""
     termino = request.args.get('q', '').strip()
     
     if len(termino) < 2:
-        return jsonify({'ok': False, 'error': 'Término muy corto'}), 400
+        return jsonify({'ok': False, 'error': 'Trmino muy corto'}), 400
     
     conn = get_db_connection()
     
@@ -6868,7 +6877,7 @@ def buscar_sintomas():
 
 @app.route('/buscar_medicamentos')
 def buscar_medicamentos():
-    """Devuelve coincidencias de medicamentos según el texto buscado."""
+    """Devuelve coincidencias de medicamentos segn el texto buscado."""
     nombre = request.args.get('nombre', '').strip()
 
     if not nombre:
@@ -6895,15 +6904,15 @@ def buscar_medicamentos():
 
 
 
-# --- Crear medicamento rápido (sin recargar la página) ---
+# --- Crear medicamento rpido (sin recargar la pgina) ---
 @app.route('/crear_medicamento_rapido', methods=['POST'])
 def crear_medicamento_rapido():
     data = request.get_json()
     nombre = (data.get('nombre') or '').strip()
-    medicamento_id = data.get('medicamento_id')  # 🆕 ID del medicamento actual
+    medicamento_id = data.get('medicamento_id')  #  ID del medicamento actual
 
     if not nombre:
-        return jsonify({"ok": False, "error": "El nombre no puede estar vacío"}), 400
+        return jsonify({"ok": False, "error": "El nombre no puede estar vaco"}), 400
 
     conn = sqlite3.connect('medicamentos.db')
     c = conn.cursor()
@@ -6921,7 +6930,7 @@ def crear_medicamento_rapido():
             componente_id = c.lastrowid
             med_nombre = nombre
 
-        # 🆕 ASOCIAR como componente activo del medicamento actual
+        #  ASOCIAR como componente activo del medicamento actual
         if medicamento_id:
             c.execute("""
                 UPDATE MEDICAMENTOS 
@@ -6929,7 +6938,7 @@ def crear_medicamento_rapido():
                 WHERE id = ?
             """, (componente_id, medicamento_id))
             conn.commit()
-            print(f"✅ Medicamento {medicamento_id} ahora tiene componente activo {componente_id}")
+            print(f" Medicamento {medicamento_id} ahora tiene componente activo {componente_id}")
 
         conn.close()
         return jsonify({
@@ -6945,7 +6954,7 @@ def crear_medicamento_rapido():
 
 
 # ============================================================
-# FUNCIÓN AUXILIAR - SIMPLIFICAR NOMBRE
+# FUNCIN AUXILIAR - SIMPLIFICAR NOMBRE
 # ============================================================
 def simplificar_nombre_medicamento(nombre):
     """Simplifica el nombre eliminando descriptores innecesarios."""
@@ -6953,11 +6962,11 @@ def simplificar_nombre_medicamento(nombre):
     
     # Palabras a eliminar
     palabras_innecesarias = [
-        'analgésico', 'analgesico', 'antiinflamatorio', 'antibiótico', 'antibiotico',
-        'antifúngico', 'antifungico', 'antiviral', 'antihistamínico', 'antihistaminico',
-        'antipirético', 'antipiretico', 'antiespasmódico', 'antiespasmódico',
-        'tópico', 'topico', 'oral', 'nasal', 'oftálmico', 'oftalmica',
-        'parenteral', 'solución', 'solucion', 'suspensión', 'suspension'
+        'analgsico', 'analgesico', 'antiinflamatorio', 'antibitico', 'antibiotico',
+        'antifngico', 'antifungico', 'antiviral', 'antihistamnico', 'antihistaminico',
+        'antipirtico', 'antipiretico', 'antiespasmdico', 'antiespasmdico',
+        'tpico', 'topico', 'oral', 'nasal', 'oftlmico', 'oftalmica',
+        'parenteral', 'solucin', 'solucion', 'suspensin', 'suspension'
     ]
     
     nombre_limpio = nombre.lower()
@@ -6972,22 +6981,22 @@ def simplificar_nombre_medicamento(nombre):
 
 
 # ============================================================
-# BÚSQUEDA DE PRECIOS EN LÍNEA - CON FABRICANTES
+# BSQUEDA DE PRECIOS EN LNEA - CON FABRICANTES
 # ============================================================
 from collections import defaultdict
 @app.route('/admin/buscar_precios', methods=['GET'])
 def buscar_precios():
-    """Busca precios validando nombre, concentración, volumen y cantidad."""
+    """Busca precios validando nombre, concentracin, volumen y cantidad."""
     import re
     from statistics import median
     from collections import defaultdict
     
-    print("🔵 INICIO - Búsqueda de precios")
+    print(" INICIO - Bsqueda de precios")
     
     nombre_original = request.args.get('nombre', '').strip()
     nombre = simplificar_nombre_medicamento(nombre_original)
-    print(f"🔵 Medicamento original: '{nombre_original}'")
-    print(f"🔵 Medicamento simplificado: '{nombre}'")
+    print(f" Medicamento original: '{nombre_original}'")
+    print(f" Medicamento simplificado: '{nombre}'")
     
     if not nombre:
         return jsonify({"ok": False, "error": "Debe proporcionar un nombre"}), 400
@@ -6999,7 +7008,7 @@ def buscar_precios():
         fabricantes_db = [row[0].strip().upper() for row in cursor.fetchall()]
         conn.close()
         
-        print(f"🔍 Fabricantes en BD: {len(fabricantes_db)}")
+        print(f" Fabricantes en BD: {len(fabricantes_db)}")
         
         palabras_ignorar = {'tableta', 'capsula', 'frasco', 'caja', 'envase', 'blister', 'sobre', 
                            'solucion', 'jarabe', 'suspension', 'crema', 'gel', 'pomada', 'tubo',
@@ -7007,7 +7016,7 @@ def buscar_precios():
         
         palabras_nombre = []
         for palabra in nombre.lower().split():
-            palabra_limpia = re.sub(r'[^a-záéíóúñ]', '', palabra)
+            palabra_limpia = re.sub(r'[^a-z]', '', palabra)
             if (len(palabra_limpia) >= 4 and 
                 palabra_limpia not in palabras_ignorar and
                 not re.match(r'^\d+$', palabra_limpia)):
@@ -7016,7 +7025,7 @@ def buscar_precios():
                 break
         
         if palabras_nombre:
-            print(f"🔍 Palabras clave a buscar: {palabras_nombre}")
+            print(f" Palabras clave a buscar: {palabras_nombre}")
         
         patron_concentracion = re.compile(r'(\d+(?:[.,]\d+)?)\s*(mg|mcg|ui|%)\b', re.IGNORECASE)
         match_conc = patron_concentracion.search(nombre)
@@ -7026,7 +7035,7 @@ def buscar_precios():
             valor = match_conc.group(1).replace(',', '.')
             unidad = match_conc.group(2).lower()
             concentracion_buscada = f"{valor}{unidad}"
-            print(f"🔍 Concentración detectada: {concentracion_buscada}")
+            print(f" Concentracin detectada: {concentracion_buscada}")
         
         patron_volumen = re.compile(r'\b(\d+(?:[.,]\d+)?)\s*(ml|l|cc)\b', re.IGNORECASE)
         patron_peso = re.compile(r'\b(\d+(?:[.,]\d+)?)\s*(g|kg)\b', re.IGNORECASE)
@@ -7047,7 +7056,7 @@ def buscar_precios():
             
             volumen_min = valor_vol * 0.8
             volumen_max = valor_vol * 1.2
-            print(f"🔍 Volumen/Peso detectado: {volumen_buscado} (tolerancia: {volumen_min:.0f}-{volumen_max:.0f}{unidad_vol})")
+            print(f" Volumen/Peso detectado: {volumen_buscado} (tolerancia: {volumen_min:.0f}-{volumen_max:.0f}{unidad_vol})")
         
         patron_cantidad = re.compile(r'(?:caja|frasco|envase|blister|sobre)?\s*x\s*(\d+)', re.IGNORECASE)
         match_cant = patron_cantidad.search(nombre)
@@ -7056,12 +7065,12 @@ def buscar_precios():
             cantidad_exacta = int(match_cant.group(1))
             precio_minimo_caja = cantidad_exacta * 80
             tiene_cantidad = True
-            print(f"🔍 Presentación: x{cantidad_exacta} unidades (precio mínimo: ${precio_minimo_caja:,})")
+            print(f" Presentacin: x{cantidad_exacta} unidades (precio mnimo: ${precio_minimo_caja:,})")
         else:
             cantidad_exacta = None
             precio_minimo_caja = 1000
             tiene_cantidad = False
-            print(f"🔍 Presentación: unitaria (precio mínimo: ${precio_minimo_caja:,})")
+            print(f" Presentacin: unitaria (precio mnimo: ${precio_minimo_caja:,})")
         
         GOOGLE_API_KEY = 'AIzaSyCiAtNFl95bJJFuqiNsiYynBS3LuDisq9g'
         SEARCH_ENGINE_ID = '40c8305664a9147e9'
@@ -7078,16 +7087,16 @@ def buscar_precios():
         query = f"{nombre} precio " + " OR ".join([f"site:{s}" for s in sitios])
         url_api = f"https://www.googleapis.com/customsearch/v1?key={GOOGLE_API_KEY}&cx={SEARCH_ENGINE_ID}&q={query}&num=10"
         
-        print("🔵 Consultando Google API...")
+        print(" Consultando Google API...")
         resp = requests.get(url_api, timeout=15)
         
         if resp.status_code != 200:
-            print(f"❌ Error API: {resp.status_code}")
+            print(f" Error API: {resp.status_code}")
             return jsonify({"ok": False, "error": f"Error Google: {resp.status_code}"}), 500
 
         data = resp.json()
         items = data.get("items", [])
-        print(f"🔵 Resultados de Google: {len(items)}")
+        print(f" Resultados de Google: {len(items)}")
         
         if not items:
             return jsonify({"ok": False, "error": "No se encontraron resultados"}), 404
@@ -7112,21 +7121,21 @@ def buscar_precios():
             titulo = item.get("title", "")
             snippet = item.get("snippet", "")
             texto_completo = f"{titulo} {snippet}".lower()
-            # 🔍 DEBUG: Ver qué extrae del snippet
-            print(f"\n📋 TÍTULO: {titulo}")
-            print(f"📋 SNIPPET: {snippet[:200]}")
+            #  DEBUG: Ver qu extrae del snippet
+            print(f"\n TTULO: {titulo}")
+            print(f" SNIPPET: {snippet[:200]}")
 
-            # 🎯 VALIDACIÓN: Rechazar si el título NO contiene palabras clave
+            #  VALIDACIN: Rechazar si el ttulo NO contiene palabras clave
             if palabras_nombre:
                 titulo_lower = titulo.lower()
                 contiene_palabra_clave = any(palabra in titulo_lower for palabra in palabras_nombre)
                 
                 if not contiene_palabra_clave:
-                    print(f" ❌ DESCARTADO POR TÍTULO: {titulo[:60]}... (no tiene: {palabras_nombre})")
+                    print(f"  DESCARTADO POR TTULO: {titulo[:60]}... (no tiene: {palabras_nombre})")
                     continue
             
             if palabras_nombre:
-                texto_busqueda_palabras = re.sub(r'[^a-záéíóúñ\s]', '', texto_completo)
+                texto_busqueda_palabras = re.sub(r'[^a-z\s]', '', texto_completo)
                 encontro_palabra = False
                 for palabra in palabras_nombre:
                     if palabra in texto_busqueda_palabras:
@@ -7134,7 +7143,7 @@ def buscar_precios():
                         break
                 
                 if not encontro_palabra:
-                    print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (no contiene palabras clave: {palabras_nombre})")
+                    print(f"   DESCARTADO: {titulo[:60]}... (no contiene palabras clave: {palabras_nombre})")
                     continue
             
             if concentracion_buscada:
@@ -7146,10 +7155,10 @@ def buscar_precios():
                     concentracion_item = f"{valor_item}{unidad_item}"
                     
                     if concentracion_item != concentracion_buscada:
-                        print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (tiene {concentracion_item} vs {concentracion_buscada})")
+                        print(f"   DESCARTADO: {titulo[:60]}... (tiene {concentracion_item} vs {concentracion_buscada})")
                         continue
                 else:
-                    print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (sin concentración clara)")
+                    print(f"   DESCARTADO: {titulo[:60]}... (sin concentracin clara)")
                     continue
             
             if volumen_buscado:
@@ -7165,28 +7174,28 @@ def buscar_precios():
                         if volumen_min <= valor_vol_item <= volumen_max:
                             volumen_item = f"{valor_vol_item}{unidad_vol_item}"
                             if valor_vol_item != valor_vol:
-                                print(f"    📏 Volumen cercano aceptado: {volumen_item}")
+                                print(f"     Volumen cercano aceptado: {volumen_item}")
                         else:
-                            print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (tiene {valor_vol_item}{unidad_vol_item} fuera de rango {volumen_min:.0f}-{volumen_max:.0f}{unidad_vol})")
+                            print(f"   DESCARTADO: {titulo[:60]}... (tiene {valor_vol_item}{unidad_vol_item} fuera de rango {volumen_min:.0f}-{volumen_max:.0f}{unidad_vol})")
                             continue
                     else:
-                        print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (unidad diferente: {unidad_vol_item} vs {unidad_vol})")
+                        print(f"   DESCARTADO: {titulo[:60]}... (unidad diferente: {unidad_vol_item} vs {unidad_vol})")
                         continue
                 else:
-                    print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (sin volumen/peso claro)")
+                    print(f"   DESCARTADO: {titulo[:60]}... (sin volumen/peso claro)")
                     continue
             
             if tiene_cantidad:
                 match_cantidad_item = patron_cantidad.search(texto_completo)
                 
                 if not match_cantidad_item:
-                    print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (sin presentación x cantidad)")
+                    print(f"   DESCARTADO: {titulo[:60]}... (sin presentacin x cantidad)")
                     continue
                 
                 cantidad_item = int(match_cantidad_item.group(1))
                 
                 if cantidad_item != cantidad_exacta:
-                    print(f"  ⚠️ DESCARTADO: {titulo[:60]}... (tiene x{cantidad_item} vs x{cantidad_exacta})")
+                    print(f"   DESCARTADO: {titulo[:60]}... (tiene x{cantidad_item} vs x{cantidad_exacta})")
                     continue
             
             link_lower = link.lower()
@@ -7210,7 +7219,7 @@ def buscar_precios():
             for fab_bd in fabricantes_db:
                 if fab_bd in texto_busqueda:
                     fabricante = fab_bd.title()
-                    print(f"    🏭 Fabricante identificado: {fabricante}")
+                    print(f"     Fabricante identificado: {fabricante}")
                     break
             
             if fabricante == "Sin especificar":
@@ -7241,36 +7250,36 @@ def buscar_precios():
                 except ValueError:
                     continue
 
-            # 🎯 Si tiene cantidad, identificar cuál es de caja
+            #  Si tiene cantidad, identificar cul es de caja
             if tiene_cantidad and cantidad_exacta and len(precios_candidatos) >= 2:
                 precios_candidatos.sort()
                 precios_validados = []
                 
                 for precio in precios_candidatos:
-                    # Verificar si es múltiplo aproximado de otros
+                    # Verificar si es mltiplo aproximado de otros
                     es_multiplicado = False
                     for otro_precio in precios_candidatos:
                         if precio != otro_precio:
                             ratio = precio / otro_precio
-                            # Si la razón es cercana a cantidad_exacta (con tolerancia 10%)
+                            # Si la razn es cercana a cantidad_exacta (con tolerancia 10%)
                             if abs(ratio - cantidad_exacta) < cantidad_exacta * 0.1:
                                 es_multiplicado = True
-                                print(f" ✅ {precio:,} = {otro_precio:,} × {ratio:.1f} (multiplicado, correcto)")
+                                print(f"  {precio:,} = {otro_precio:,}  {ratio:.1f} (multiplicado, correcto)")
                                 break
                     
                     if es_multiplicado or precio >= precio_minimo_caja:
                         precios_validados.append(precio)
                     else:
-                        print(f" ⚠️ {precio:,} descartado (parece unitario, no multiplicado)")
+                        print(f"  {precio:,} descartado (parece unitario, no multiplicado)")
                 
                 precios_encontrados = precios_validados
             else:
-                # Sin cantidad, aceptar todos los que pasen validación
-                # 🎯 Si tiene cantidad pero solo encuentra 1 precio bajo, multiplicar
+                # Sin cantidad, aceptar todos los que pasen validacin
+                #  Si tiene cantidad pero solo encuentra 1 precio bajo, multiplicar
                 if tiene_cantidad and cantidad_exacta and len(precios_candidatos) == 1:
                     unico_precio = precios_candidatos[0]
-                    if 500 <= unico_precio <= 5000:  # Rango típico unitario
-                        print(f" 💡 Precio único detectado: ${unico_precio:,} → multiplicando por {cantidad_exacta}")
+                    if 500 <= unico_precio <= 5000:  # Rango tpico unitario
+                        print(f"  Precio nico detectado: ${unico_precio:,} -> multiplicando por {cantidad_exacta}")
                         precios_candidatos[0] = unico_precio * cantidad_exacta
 
                 precios_encontrados = [p for p in precios_candidatos 
@@ -7278,7 +7287,7 @@ def buscar_precios():
 
 
             if precios_encontrados:
-                # 🎯 Si tiene cantidad, usar el MAYOR (es la caja)
+                #  Si tiene cantidad, usar el MAYOR (es la caja)
                 if tiene_cantidad and cantidad_exacta:
                     precio = max(precios_encontrados)
                 else:
@@ -7299,10 +7308,10 @@ def buscar_precios():
                     detalles.append(volumen_buscado)
                 
                 detalle_str = f" ({', '.join(detalles)})" if detalles else ""
-                print(f"  ✅ {sitio} - {fabricante}: ${precio:,}{detalle_str}")
+                print(f"   {sitio} - {fabricante}: ${precio:,}{detalle_str}")
         
         if not resultados_raw:
-            print("❌ No se encontraron precios")
+            print(" No se encontraron precios")
             return jsonify({"ok": False, "error": "No se encontraron precios para este medicamento"}), 404
         
         por_fabricante = defaultdict(list)
@@ -7321,7 +7330,7 @@ def buscar_precios():
                 "total_precios": len(precios)
             })
         
-        print(f"🔵 SUCCESS! Fabricantes encontrados: {len(fabricantes_info)}")
+        print(f" SUCCESS! Fabricantes encontrados: {len(fabricantes_info)}")
         
         presentacion_parts = []
         if tiene_cantidad:
@@ -7342,17 +7351,17 @@ def buscar_precios():
         })
 
     except Exception as e:
-        print(f"❌ Error general: {e}")
+        print(f" Error general: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"ok": False, "error": "Error al procesar la búsqueda"}), 500
+        return jsonify({"ok": False, "error": "Error al procesar la bsqueda"}), 500
 
 
 # ========================================
-# ENDPOINTS PARA GESTIÓN DE MEDICAMENTOS TOP
+# ENDPOINTS PARA GESTIN DE MEDICAMENTOS TOP
 # ========================================
 
-# 1️⃣ OBTENER LISTA DE MEDICAMENTOS TOP
+# 1 OBTENER LISTA DE MEDICAMENTOS TOP
 @app.route('/admin/medicamentos_top/lista')
 @admin_required
 def obtener_lista_medicamentos_top():
@@ -7395,11 +7404,11 @@ def obtener_lista_medicamentos_top():
             'total': len(resultado)
         })
     except Exception as e:
-        print(f"❌ Error obteniendo lista: {e}")
+        print(f" Error obteniendo lista: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-# 2️⃣ ELIMINAR MEDICAMENTO DE TOP
+# 2 ELIMINAR MEDICAMENTO DE TOP
 @app.route('/admin/medicamentos_top/<int:medicamento_id>', methods=['DELETE'])
 @admin_required
 def eliminar_medicamento_top(medicamento_id):
@@ -7438,15 +7447,15 @@ def eliminar_medicamento_top(medicamento_id):
         
         return jsonify({
             'ok': True,
-            'mensaje': f'✅ Medicamento "{medicamento["descripcion"]}" eliminado de TOP',
+            'mensaje': f' Medicamento "{medicamento["descripcion"]}" eliminado de TOP',
             'medicamento_id': medicamento_id
         })
     except Exception as e:
-        print(f"❌ Error eliminando medicamento TOP: {e}")
+        print(f" Error eliminando medicamento TOP: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-# 3️⃣ AGREGAR MEDICAMENTO A TOP
+# 3 AGREGAR MEDICAMENTO A TOP
 @app.route('/admin/medicamentos_top/agregar', methods=['POST'])
 @admin_required
 def agregar_medicamento_top():
@@ -7456,7 +7465,7 @@ def agregar_medicamento_top():
     {
         "componente_activo": "Ibuprofeno",
         "descripcion": "Ibuprofeno 400 mg Tableta Caja x 20",
-        "laboratorio": "Genérico (Procaps)"
+        "laboratorio": "Genrico (Procaps)"
     }
     """
     try:
@@ -7488,7 +7497,7 @@ def agregar_medicamento_top():
                 'error': f'Este medicamento ya existe en la lista TOP'
             }), 400
         
-        # Obtener el nuevo orden (máximo actual + 1)
+        # Obtener el nuevo orden (mximo actual + 1)
         max_orden = cursor.execute(
             "SELECT MAX(orden) as max_orden FROM medicamentos_top"
         ).fetchone()
@@ -7510,13 +7519,13 @@ def agregar_medicamento_top():
         
         return jsonify({
             'ok': True,
-            'mensaje': f'✅ Medicamento "{descripcion}" agregado a TOP',
+            'mensaje': f' Medicamento "{descripcion}" agregado a TOP',
             'medicamento_id': nuevo_id,
             'orden': nuevo_orden
         }), 201
         
     except Exception as e:
-        print(f"❌ Error agregando medicamento TOP: {e}")
+        print(f" Error agregando medicamento TOP: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -7527,16 +7536,16 @@ def agregar_medicamento_top():
 
 
 # ============================================
-# ANÁLISIS DE COMPONENTES ACTIVOS
+# ANLISIS DE COMPONENTES ACTIVOS
 # ============================================
 
 @app.route('/admin/componentes_activos/analizar', methods=['GET'])
 @admin_required
 def analizar_componentes_activos():
-    """Obtiene medicamentos candidatos para análisis de componente activo"""
+    """Obtiene medicamentos candidatos para anlisis de componente activo"""
     conn = get_db_connection()
     
-    # 🆕 LIMPIAR TABLA TEMPORAL ANTES DE ANALIZAR (auto-limpieza)
+    #  LIMPIAR TABLA TEMPORAL ANTES DE ANALIZAR (auto-limpieza)
     conn.execute('DELETE FROM componentes_activos_sugerencias')
     conn.commit()
     
@@ -7615,7 +7624,7 @@ def ver_sugerencias():
 @app.route('/admin/componentes_activos')
 @admin_required
 def admin_componentes_activos():
-    """Página de análisis de componentes activos"""
+    """Pgina de anlisis de componentes activos"""
     return render_template('analizar_componentes.html')
 
 
@@ -7624,14 +7633,14 @@ def admin_componentes_activos():
 @app.route('/admin/componentes_activos/analizar_medicamento', methods=['POST'])
 @admin_required
 def analizar_medicamento_ia():
-    """Analiza un medicamento usando búsqueda web para determinar su componente activo"""
+    """Analiza un medicamento usando bsqueda web para determinar su componente activo"""
     data = request.json
     medicamento_id = data['medicamento_id']
     nombre_medicamento = data['nombre_medicamento']
     
     conn = get_db_connection()
     
-    # 1. Extraer nombre base (sin concentración ni presentación)
+    # 1. Extraer nombre base (sin concentracin ni presentacin)
     nombre_base = extraer_nombre_base(nombre_medicamento)
     
     # 2. Buscar en BD si ya existe un medicamento con ese nombre base
@@ -7679,9 +7688,9 @@ def extraer_nombre_base(nombre_completo):
     
     # 1. FILTRAR NO-MEDICAMENTOS
     no_medicamentos = [
-        'aguja', 'jeringa', 'catéter', 'sonda', 'bomba', 'bolsa', 'termómetro',
-        'tensiómetro', 'glucómetro', 'nebulizador', 'espaciador',
-        'guante', 'mascarilla', 'alcohol', 'algodón', 'gasa', 'venda', 'esparadrapo',
+        'aguja', 'jeringa', 'catter', 'sonda', 'bomba', 'bolsa', 'termmetro',
+        'tensimetro', 'glucmetro', 'nebulizador', 'espaciador',
+        'guante', 'mascarilla', 'alcohol', 'algodn', 'gasa', 'venda', 'esparadrapo',
         'lanceta', 'tira reactiva', 'suero', 'agua destilada',
         'almohada', 'almohadilla', 'faja', 'rodillera'
     ]
@@ -7690,12 +7699,12 @@ def extraer_nombre_base(nombre_completo):
         if item in nombre_lower:
             return None
     
-    # 2. CASOS SIN COMPONENTE ESPECÍFICO
-    if any(x in nombre_lower for x in ['combinaciones', 'varias', 'varios', 'citotóxicos', 'múltiple']):
+    # 2. CASOS SIN COMPONENTE ESPECFICO
+    if any(x in nombre_lower for x in ['combinaciones', 'varias', 'varios', 'citotxicos', 'mltiple']):
         return None
     
-    # 3. COMPUESTOS QUÍMICOS COMPLETOS
-    compuestos_patron = r'((?:bicarbonato|carbonato|cloruro|sulfato|fosfato|acetato|hidróxido|óxido)\s+de\s+\w+(?:\s*\+\s*\w+)?)'
+    # 3. COMPUESTOS QUMICOS COMPLETOS
+    compuestos_patron = r'((?:bicarbonato|carbonato|cloruro|sulfato|fosfato|acetato|hidrxido|xido)\s+de\s+\w+(?:\s*\+\s*\w+)?)'
     match_compuesto = re.search(compuestos_patron, nombre_lower)
     if match_compuesto:
         compuesto = match_compuesto.group(1).strip()
@@ -7709,9 +7718,9 @@ def extraer_nombre_base(nombre_completo):
     
     # A. Clasificadores al inicio
     clasificadores = [
-        'analgésico', 'anestésico', 'antibiótico', 'antiinflamatorio', 'antimicótico',
-        'antifúngico', 'antiemético', 'antiséptico', 'antiácido', 'anticonceptivo',
-        'antirretroviral', 'antineoplásico', 'antisépticos'
+        'analgsico', 'anestsico', 'antibitico', 'antiinflamatorio', 'antimictico',
+        'antifngico', 'antiemtico', 'antisptico', 'anticido', 'anticonceptivo',
+        'antirretroviral', 'antineoplsico', 'antispticos'
     ]
     for clasificador in clasificadores:
         nombre_limpio = re.sub(rf'^\s*{clasificador}\s+', '', nombre_limpio, flags=re.IGNORECASE)
@@ -7721,14 +7730,14 @@ def extraer_nombre_base(nombre_completo):
     
     # C. Concentraciones
     nombre_limpio = re.sub(r'\d+\.?\d*\s*%', '', nombre_limpio)
-    nombre_limpio = re.sub(r'\d+\.?\d*\s*(mg|mcg|µg|g|ml|UI|U|mEq|L|Gx\d+Mm)/?\d*', '', nombre_limpio, flags=re.IGNORECASE)
+    nombre_limpio = re.sub(r'\d+\.?\d*\s*(mg|mcg|g|g|ml|UI|U|mEq|L|Gx\d+Mm)/?\d*', '', nombre_limpio, flags=re.IGNORECASE)
     
-    # D. Formas farmacéuticas
+    # D. Formas farmacuticas
     formas = [
-        'tableta', 'tabletas', 'capsula', 'capsulas', 'cápsula', 'cápsulas',
-        'jarabe', 'crema', 'gel', 'pomada', 'ungüento',
-        'suspension', 'suspensión', 'solucion', 'solución',
-        'ampolla', 'ampollas', 'inyectable', 'inyección',
+        'tableta', 'tabletas', 'capsula', 'capsulas', 'cpsula', 'cpsulas',
+        'jarabe', 'crema', 'gel', 'pomada', 'ungento',
+        'suspension', 'suspensin', 'solucion', 'solucin',
+        'ampolla', 'ampollas', 'inyectable', 'inyeccin',
         'gotas', 'gota', 'spray', 'inhalador', 'supositorio', 'supositorios',
         'parche', 'sobre', 'sobres', 'polvo', 'granulado',
         'colirio', 'dosis', 'comprimidos?', 'efervescente'
@@ -7736,11 +7745,11 @@ def extraer_nombre_base(nombre_completo):
     for forma in formas:
         nombre_limpio = re.sub(rf'\b{forma}s?\b', '', nombre_limpio, flags=re.IGNORECASE)
     
-    # E. Vías y descriptores
+    # E. Vas y descriptores
     descriptores = [
-        'tópico', 'tópica', 'oral', 'oftálmico', 'oftálmica', 'ótico', 'ótica',
+        'tpico', 'tpica', 'oral', 'oftlmico', 'oftlmica', 'tico', 'tica',
         'nasal', 'rectal', 'vaginal', 'dental', 'bucal',
-        'local', 'hormonal', 'combinado', 'portátil', 'pediátrico', 'reutilizable'
+        'local', 'hormonal', 'combinado', 'porttil', 'peditrico', 'reutilizable'
     ]
     for desc in descriptores:
         nombre_limpio = re.sub(rf'\b{desc}\b', '', nombre_limpio, flags=re.IGNORECASE)
@@ -7749,7 +7758,7 @@ def extraer_nombre_base(nombre_completo):
     nombre_limpio = re.sub(r'\s*(?:caja|frasco|tubo|sobre|ampolla|blister|envase)\s*(?:x|de|con)?\s*\d*.*$', '', nombre_limpio, flags=re.IGNORECASE)
     nombre_limpio = re.sub(r'\s*x\s*\d+.*$', '', nombre_limpio, flags=re.IGNORECASE)
     
-    # G. Números sueltos
+    # G. Nmeros sueltos
     nombre_limpio = re.sub(r'\b\d+\b', '', nombre_limpio)
     
     # H. Palabras finales sobrantes: "tubo", "frasco" (por si quedaron)
@@ -7829,7 +7838,7 @@ def importar_corregidos():
                         necesita_crear_nuevo = ?,
                         confianza = ?,
                         observaciones = ?,
-                        fuente_validacion = 'Análisis manual con IA'
+                        fuente_validacion = 'Anlisis manual con IA'
                     WHERE medicamento_id = ?
                 ''', (componente_final, componente_activo_id, necesita_crear, confianza, observacion, medicamento_id))
                 actualizados += 1
@@ -7844,7 +7853,7 @@ def importar_corregidos():
                          necesita_crear_nuevo, confianza, fuente_validacion, observaciones)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (medicamento_id, med['nombre'], '', componente_final, componente_activo_id, 
-                          necesita_crear, confianza, 'Análisis manual con IA', observacion))
+                          necesita_crear, confianza, 'Anlisis manual con IA', observacion))
                     creados += 1
         
         conn.commit()
@@ -7947,7 +7956,7 @@ def aplicar_aprobados():
                 if existe:
                     componente_activo_id = existe['id']
                 else:
-                    # Crear nuevo componente activo base (sin concentración, genérico)
+                    # Crear nuevo componente activo base (sin concentracin, genrico)
                     conn.execute('''
                         INSERT INTO medicamentos (nombre)
                         VALUES (?)
@@ -7996,7 +8005,7 @@ def actualizar_precios():
         conn = sqlite3.connect('medicamentos.db')
         cursor = conn.cursor()
         
-        # Acción: Actualizar nombre del medicamento
+        # Accin: Actualizar nombre del medicamento
         if accion == 'actualizar_nombre':
             medicamento_id = request.form.get('medicamento_id')
             nuevo_nombre = request.form.get('nuevo_nombre')
@@ -8011,7 +8020,7 @@ def actualizar_precios():
             conn.close()
             return jsonify({"ok": True})
         
-        # Acción: Guardar precios
+        # Accin: Guardar precios
         elif accion == 'guardar_precios':
             medicamento_id = request.form.get('medicamento_id')
             precio_id = request.form.get('precio_id')
@@ -8025,7 +8034,7 @@ def actualizar_precios():
                 WHERE id = ?
             """, (precio_sugerido, fabricante_id, precio_id))
             
-            print(f"✅ Actualizado precio_id={precio_id}: precio={precio_sugerido}, fabricante={fabricante_id}")
+            print(f" Actualizado precio_id={precio_id}: precio={precio_sugerido}, fabricante={fabricante_id}")
             
             # Borrar precios antiguos de competencia para este medicamento
             cursor.execute("""
@@ -8048,7 +8057,7 @@ def actualizar_precios():
                         (medicamento_id, competidor_id, precio, fecha_actualizacion)
                         VALUES (?, ?, ?, DATE('now'))
                     """, (medicamento_id, comp_id, precio_comp))
-                    print(f"  💰 Guardado precio competidor {comp_id}: ${precio_comp}")
+                    print(f"   Guardado precio competidor {comp_id}: ${precio_comp}")
             
             conn.commit()
             conn.close()
@@ -8058,7 +8067,7 @@ def actualizar_precios():
     conn = sqlite3.connect('medicamentos.db')
     cursor = conn.cursor()
     
-    # 🔹 🔹 🔹 OBTENER CONFIGURACIÓN GLOBAL (NUEVO)
+    #    OBTENER CONFIGURACIN GLOBAL (NUEVO)
     config_row = cursor.execute("SELECT * FROM configuracion_precios WHERE id = 1").fetchone()
     if config_row:
         # Asumiendo que la tabla tiene columnas: id, descuento_competencia, recargo_escaso, redondeo_superior
@@ -8072,7 +8081,7 @@ def actualizar_precios():
             'usar_precio': config_row[7] if len(config_row) > 7 else config_row[6]  # Usar nuevo campo si existe
         }
     else:
-        # Valores por defecto si no existe la configuración
+        # Valores por defecto si no existe la configuracin
         config = {
             'descuento_competencia': 200,
             'recargo_escaso': 30,
@@ -8122,7 +8131,7 @@ def actualizar_precios():
                          medicamentos=medicamentos,
                          fabricantes=fabricantes,
                          competidores=competidores,
-                         config=config)  # 🔹 🔹 🔹 PASAR CONFIG AL TEMPLATE
+                         config=config)  #    PASAR CONFIG AL TEMPLATE
 
 
 
@@ -8176,7 +8185,7 @@ def guardar_fabricante():
         # Actualizar fabricante
         db.execute('UPDATE precios SET fabricante_id = ? WHERE id = ?', (fab_id, precio['id']))
     else:
-        # Crear nuevo registro (sin precio aún)
+        # Crear nuevo registro (sin precio an)
         db.execute('INSERT INTO precios (medicamento_id, fabricante_id, precio) VALUES (?, ?, 0)', (med_id, fab_id))
     db.commit()
     db.close()
@@ -8263,25 +8272,25 @@ def guardar_precio_competencia():
 
 
 
-# --- RUTAS PARA LA PRUEBA DE CONSULTA DE SÍNTOMAS ---
+# --- RUTAS PARA LA PRUEBA DE CONSULTA DE SNTOMAS ---
 
 @app.route('/api/sintomas/buscar', methods=['GET'])
 def buscar_sintomas_api():
     """
-    Busca síntomas en la base de datos que coincidan con un término parcial.
-    Utiliza la lógica existente de carga de síntomas.
-    Asume que get_db_connection está disponible globalmente en app.py.
+    Busca sntomas en la base de datos que coincidan con un trmino parcial.
+    Utiliza la lgica existente de carga de sntomas.
+    Asume que get_db_connection est disponible globalmente en app.py.
     """
-    # No importamos get_db_connection aquí, se asume disponible globalmente
+    # No importamos get_db_connection aqu, se asume disponible globalmente
     termino = request.args.get('q', '').strip().lower()
     if not termino:
         return jsonify({'ok': True, 'sintomas': []})
 
     try:
-        # Usamos directamente get_db_connection asumiendo que está definida en app.py
+        # Usamos directamente get_db_connection asumiendo que est definida en app.py
         conn = get_db_connection()
         # Buscar coincidencias en el nombre o descripcion_lower, similar a otras partes
-        # Usamos LOWER para búsqueda insensible a mayúsculas
+        # Usamos LOWER para bsqueda insensible a maysculas
         cursor = conn.execute("""
             SELECT id, nombre
             FROM sintomas
@@ -8296,7 +8305,7 @@ def buscar_sintomas_api():
         sintomas = [{'id': row['id'], 'nombre': row['nombre']} for row in resultados]
         return jsonify({'ok': True, 'sintomas': sintomas})
     except Exception as e:
-        print(f"Error buscando síntomas: {e}")
+        print(f"Error buscando sntomas: {e}")
         import traceback
         traceback.print_exc() # Agregar traceback para depurar
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -8309,13 +8318,13 @@ def crear_sintoma_api():
     nombre = data.get('nombre', '').strip()
 
     if not nombre:
-        return jsonify({'ok': False, 'error': 'El nombre del síntoma es obligatorio.'}), 400
+        return jsonify({'ok': False, 'error': 'El nombre del sntoma es obligatorio.'}), 400
 
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 🔹 Usa solo LOWER(nombre) en la consulta, SIN aplicar .lower() en Python
+        #  Usa solo LOWER(nombre) en la consulta, SIN aplicar .lower() en Python
         cursor.execute("SELECT id, nombre FROM sintomas WHERE LOWER(nombre) = LOWER(?)", (nombre,))
         existente = cursor.fetchone()
 
@@ -8323,12 +8332,12 @@ def crear_sintoma_api():
             conn.close()
             return jsonify({
                 'ok': True,
-                'mensaje': 'Síntoma ya existente.',
+                'mensaje': 'Sntoma ya existente.',
                 'id': existente['id'],
-                'nombre': existente['nombre']  # Usa el nombre tal como está en BD
+                'nombre': existente['nombre']  # Usa el nombre tal como est en BD
             })
 
-        # 🔹 Inserta el nombre original, y su versión normalizada
+        #  Inserta el nombre original, y su versin normalizada
         nombre_lower = nombre.lower().strip()
         cursor.execute(
             "INSERT INTO sintomas (nombre, descripcion_lower) VALUES (?, ?)",
@@ -8338,30 +8347,30 @@ def crear_sintoma_api():
         nuevo_id = cursor.lastrowid
         conn.close()
 
-        print(f"🆕 Síntoma creado: {nombre} (ID: {nuevo_id})")
+        print(f" Sntoma creado: {nombre} (ID: {nuevo_id})")
         return jsonify({
             'ok': True,
-            'mensaje': 'Síntoma creado exitosamente.',
+            'mensaje': 'Sntoma creado exitosamente.',
             'id': nuevo_id,
             'nombre': nombre
         })
     except Exception as e:
-        print(f"❌ Error creando síntoma: {e}")
-        traceback.print_exc()  # ← Esto imprime el traceback completo en la consola del servidor
+        print(f" Error creando sntoma: {e}")
+        traceback.print_exc()  #  Esto imprime el traceback completo en la consola del servidor
 
         if 'conn' in locals():
             conn.rollback()
             conn.close()
-        return jsonify({'ok': False, 'error': 'Error interno al crear el síntoma.'}), 500
+        return jsonify({'ok': False, 'error': 'Error interno al crear el sntoma.'}), 500
 
 
 
 @app.route('/api/diagnosticos/buscar_simple', methods=['POST'])
 def buscar_diagnosticos_simple_api():
     """
-    Versión corregida: Recibe IDs de síntomas seleccionados por el usuario.
-    Muestra diagnósticos que requieran *todos* los síntomas (por ID) ingresados.
-    Calcula y muestra los síntomas faltantes para completar cada diagnóstico.
+    Versin corregida: Recibe IDs de sntomas seleccionados por el usuario.
+    Muestra diagnsticos que requieran *todos* los sntomas (por ID) ingresados.
+    Calcula y muestra los sntomas faltantes para completar cada diagnstico.
     """
     data = request.get_json()
     # Ahora esperamos recibir 'ids_sintomas_usuario' en lugar de 'nombres_sintomas'
@@ -8369,14 +8378,14 @@ def buscar_diagnosticos_simple_api():
     ids_sintomas_usuario = set(ids_sintomas_usuario_lista) # Convertir a conjunto para operaciones eficientes
 
     if not ids_sintomas_usuario:
-        # Devolver lista vacía si no hay síntomas
-        print("🔍 No se proporcionaron IDs de síntomas.")
-        return jsonify({'ok': True, 'diagnosticos': [], 'mensaje': 'No se proporcionaron síntomas.'})
+        # Devolver lista vaca si no hay sntomas
+        print(" No se proporcionaron IDs de sntomas.")
+        return jsonify({'ok': True, 'diagnosticos': [], 'mensaje': 'No se proporcionaron sntomas.'})
 
-    print(f"🔍 IDs de síntomas ingresados por el usuario (directamente del frontend): {ids_sintomas_usuario}")
+    print(f" IDs de sntomas ingresados por el usuario (directamente del frontend): {ids_sintomas_usuario}")
 
     try:
-        # --- PASO 1: Obtener TODOS los diagnósticos y sus síntomas requeridos desde la tabla intermedia ---
+        # --- PASO 1: Obtener TODOS los diagnsticos y sus sntomas requeridos desde la tabla intermedia ---
         conn = get_db_connection()
         query_all_diags = """
             SELECT ds.diagnostico_id, d.descripcion, ds.sintoma_id
@@ -8388,7 +8397,7 @@ def buscar_diagnosticos_simple_api():
         filas_diag_sintoma = cursor_all.fetchall()
         conn.close()
 
-        # --- PASO 2: Agrupar síntomas por diagnóstico ---
+        # --- PASO 2: Agrupar sntomas por diagnstico ---
         diag_sintomas_map = {}
         for fila in filas_diag_sintoma:
             diag_id = fila['diagnostico_id']
@@ -8398,26 +8407,26 @@ def buscar_diagnosticos_simple_api():
                 diag_sintomas_map[diag_id] = {'descripcion': descripcion, 'sintomas_requeridos_ids': set()}
             diag_sintomas_map[diag_id]['sintomas_requeridos_ids'].add(sintoma_id)
 
-        print(f"🔍 Diagnosticos cargados desde la tabla 'diagnostico_sintoma': {len(diag_sintomas_map)}")
+        print(f" Diagnosticos cargados desde la tabla 'diagnostico_sintoma': {len(diag_sintomas_map)}")
 
-        # --- PASO 3: Filtrar diagnósticos. ---
-        # Un diagnóstico es válido si *todos* los IDs de síntomas que el usuario ingresó
-        # están *dentro* de los síntomas que *requiere* el diagnóstico.
-        # Es decir, el conjunto de IDs de síntomas del usuario (ids_sintomas_usuario)
-        # debe ser un SUBCONJUNTO del conjunto de síntomas requeridos por el diagnóstico.
+        # --- PASO 3: Filtrar diagnsticos. ---
+        # Un diagnstico es vlido si *todos* los IDs de sntomas que el usuario ingres
+        # estn *dentro* de los sntomas que *requiere* el diagnstico.
+        # Es decir, el conjunto de IDs de sntomas del usuario (ids_sintomas_usuario)
+        # debe ser un SUBCONJUNTO del conjunto de sntomas requeridos por el diagnstico.
         diagnosticos_filtrados = []
         for diag_id, info in diag_sintomas_map.items():
             ids_requeridos_diag = info['sintomas_requeridos_ids']
             descripcion_diag = info['descripcion']
 
-            # Verificamos si todos los IDs de síntomas del usuario están en los requeridos por este diagnóstico
+            # Verificamos si todos los IDs de sntomas del usuario estn en los requeridos por este diagnstico
             if ids_sintomas_usuario.issubset(ids_requeridos_diag):
-                print(f"   ✅ Diag {diag_id} ('{descripcion_diag}') contiene todos los IDs de sintomas del usuario.")
-                # Calculamos cuántos síntomas faltan para completar este diagnóstico
+                print(f"    Diag {diag_id} ('{descripcion_diag}') contiene todos los IDs de sintomas del usuario.")
+                # Calculamos cuntos sntomas faltan para completar este diagnstico
                 ids_faltantes_para_diag = ids_requeridos_diag - ids_sintomas_usuario
                 cantidad_faltantes = len(ids_faltantes_para_diag)
 
-                # Obtenemos los nombres de los síntomas faltantes para mostrarlos
+                # Obtenemos los nombres de los sntomas faltantes para mostrarlos
                 nombres_faltantes = []
                 if ids_faltantes_para_diag:
                     placeholders_faltantes = ','.join(['?' for _ in ids_faltantes_para_diag])
@@ -8428,7 +8437,7 @@ def buscar_diagnosticos_simple_api():
                         nombres_faltantes.append({'id': row_nombre['id'], 'nombre': row_nombre['nombre']})
                     conn.close()
 
-                # Añadimos el diagnóstico a la lista final
+                # Aadimos el diagnstico a la lista final
                 diagnosticos_filtrados.append({
                     'id': diag_id,
                     'descripcion': descripcion_diag,
@@ -8436,23 +8445,23 @@ def buscar_diagnosticos_simple_api():
                     'cantidad_faltantes': cantidad_faltantes
                 })
             # else:
-            #     print(f"   ❌ Diag {diag_id} ('{descripcion_diag}') NO contiene todos los IDs de sintomas del usuario.")
+            #     print(f"    Diag {diag_id} ('{descripcion_diag}') NO contiene todos los IDs de sintomas del usuario.")
 
-        # --- PASO 4: Ordenar los diagnóstomas filtrados por la cantidad de síntomas faltantes (menor primero) ---
+        # --- PASO 4: Ordenar los diagnstomas filtrados por la cantidad de sntomas faltantes (menor primero) ---
         diagnosticos_filtrados.sort(key=lambda x: x['cantidad_faltantes'])
 
-        print(f"✅ Diagnosticos finales (filtrados y ordenados): {len(diagnosticos_filtrados)} encontrados.")
+        print(f" Diagnosticos finales (filtrados y ordenados): {len(diagnosticos_filtrados)} encontrados.")
         for d in diagnosticos_filtrados:
             print(f"  - {d['descripcion']} (ID: {d['id']}) - Faltan: {d['cantidad_faltantes']}")
 
-        # Devolver la lista de diagnósticos filtrados
+        # Devolver la lista de diagnsticos filtrados
         return jsonify({'ok': True, 'diagnosticos': diagnosticos_filtrados})
 
     except Exception as e:
-        print(f"❌ Error en buscar_diagnosticos_simple_api: {e}")
+        print(f" Error en buscar_diagnosticos_simple_api: {e}")
         import traceback
         traceback.print_exc()
-        # Devolver lista vacía en caso de error
+        # Devolver lista vaca en caso de error
         return jsonify({'ok': False, 'error': str(e), 'diagnosticos': []}), 500
 
 
@@ -8461,58 +8470,58 @@ def buscar_diagnosticos_simple_api():
 @app.route('/api/medicamentos/por_sintomas_ids', methods=['POST'])
 def obtener_medicamentos_por_sintomas_ids():
     """
-    API para obtener medicamentos sugeridos basados en una lista de IDs de síntomas.
-    Reutiliza parte de la lógica de selección de medicamentos de la función original
-    'obtener_productos', pero adaptada para recibir directamente IDs de síntomas.
+    API para obtener medicamentos sugeridos basados en una lista de IDs de sntomas.
+    Reutiliza parte de la lgica de seleccin de medicamentos de la funcin original
+    'obtener_productos', pero adaptada para recibir directamente IDs de sntomas.
     Incorpora un algoritmo greedy para ordenar los medicamentos sugeridos de forma
-    que se cubran los síntomas objetivo de manera eficiente y menos redundante posible
-    antes de la línea divisoria de cobertura completa.
+    que se cubran los sntomas objetivo de manera eficiente y menos redundante posible
+    antes de la lnea divisoria de cobertura completa.
     """
     from datetime import datetime
     print(f"\n{'='*70}")
-    print(f"🔖 API /api/medicamentos/por_sintomas_ids - Iniciando")
+    print(f" API /api/medicamentos/por_sintomas_ids - Iniciando")
     print(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*70}\n")
 
     data = request.get_json()
     ids_sintomas_usuario = data.get('ids_sintomas_usuario', [])
-    # Opcional: Parámetros de filtro
+    # Opcional: Parmetros de filtro
     precio_min = data.get('precio_min', '')
     precio_max = data.get('precio_max', '')
 
     if not ids_sintomas_usuario:
-        print("   ❌ No se proporcionaron IDs de síntomas.")
+        print("    No se proporcionaron IDs de sntomas.")
         return jsonify({
             'ok': True,
             'productos': [],
             'total': 0,
-            'mensaje': 'No se proporcionaron IDs de síntomas.'
+            'mensaje': 'No se proporcionaron IDs de sntomas.'
         })
 
-    print(f"   ✅ IDs de síntomas recibidos: {ids_sintomas_usuario}")
+    print(f"    IDs de sntomas recibidos: {ids_sintomas_usuario}")
 
     try:
         conn = get_db_connection()
 
-        # --- PARTE CLAVE: Adaptación de la lógica de 'obtener_productos' ---
-        # Simulamos las variables que 'obtener_productos' calcula a partir del texto de búsqueda
+        # --- PARTE CLAVE: Adaptacin de la lgica de 'obtener_productos' ---
+        # Simulamos las variables que 'obtener_productos' calcula a partir del texto de bsqueda
         # pero ahora las tenemos como entrada (ids_sintomas_usuario).
-        sintomas_objetivo_ids = set(ids_sintomas_usuario) # Usamos un set para búsquedas rápidas
-        # Obtener nombres de los síntomas para mensajes o referencias
+        sintomas_objetivo_ids = set(ids_sintomas_usuario) # Usamos un set para bsquedas rpidas
+        # Obtener nombres de los sntomas para mensajes o referencias
         placeholders_ids = ','.join(['?' for _ in ids_sintomas_usuario])
         query_nombres_sint = f"""
             SELECT id, nombre FROM sintomas WHERE id IN ({placeholders_ids})
         """
         resultados_sint = conn.execute(query_nombres_sint, ids_sintomas_usuario).fetchall()
         sintomas_detectados = [row['nombre'] for row in resultados_sint]
-        diagnosticos_posibles = {} # En esta ruta, no se generan diagnósticos posibles a partir de IDs de síntomas
+        diagnosticos_posibles = {} # En esta ruta, no se generan diagnsticos posibles a partir de IDs de sntomas
                                    # (esto se hace en la otra parte de la consulta).
-                                   # Se podría integrar si se pasan también IDs de diagnósticos detectados.
+                                   # Se podra integrar si se pasan tambin IDs de diagnsticos detectados.
 
-        print(f"   📝 Síntomas detectados (nombres): {sintomas_detectados}")
+        print(f"    Sntomas detectados (nombres): {sintomas_detectados}")
 
-        # QUERY DE PRODUCTOS (similar a la de 'obtener_productos', pero filtrando por IDs de síntomas)
-        # Ahora incluimos los síntomas asociados al medicamento
+        # QUERY DE PRODUCTOS (similar a la de 'obtener_productos', pero filtrando por IDs de sntomas)
+        # Ahora incluimos los sntomas asociados al medicamento
         query = """
             SELECT DISTINCT
                 p.id as precio_id,
@@ -8527,14 +8536,14 @@ def obtener_medicamentos_por_sintomas_ids():
                 m.componente_activo_id,
                 ca.nombre as componente_activo_nombre,
                 f.nombre as fabricante_nombre,
-                -- Nuevos campos para los síntomas del medicamento
+                -- Nuevos campos para los sntomas del medicamento
                 ms.sintoma_id as sintoma_asociado_id,
                 s.nombre as sintoma_asociado_nombre
             FROM precios p
             INNER JOIN medicamentos m ON p.medicamento_id = m.id
             INNER JOIN fabricantes f ON p.fabricante_id = f.id
             LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
-            -- JOIN para obtener los síntomas asociados al medicamento
+            -- JOIN para obtener los sntomas asociados al medicamento
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
             WHERE m.activo = '1'
@@ -8542,9 +8551,9 @@ def obtener_medicamentos_por_sintomas_ids():
 
         params = []
 
-        # Filtro por IDs de síntomas
-        if sintomas_objetivo_ids: # <-- Verificar que no esté vacío antes de aplicar el filtro
-             # Filtrar precios cuyos medicamentos estén asociados a los síntomas ingresados
+        # Filtro por IDs de sntomas
+        if sintomas_objetivo_ids: # <-- Verificar que no est vaco antes de aplicar el filtro
+             # Filtrar precios cuyos medicamentos estn asociados a los sntomas ingresados
              query += f"""
                  AND m.id IN (
                      SELECT DISTINCT medicamento_id
@@ -8559,22 +8568,22 @@ def obtener_medicamentos_por_sintomas_ids():
                 query += " AND p.precio >= ?"
                 params.append(float(precio_min))
             except ValueError:
-                pass # Si no es un número válido, ignorar el filtro
+                pass # Si no es un nmero vlido, ignorar el filtro
 
         if precio_max:
             try:
                 query += " AND p.precio <= ?"
                 params.append(float(precio_max))
             except ValueError:
-                pass # Si no es un número válido, ignorar el filtro
+                pass # Si no es un nmero vlido, ignorar el filtro
 
         query += " AND p.precio > 0"
-        query += " ORDER BY m.nombre, f.nombre, p.id" # Orden inicial para agrupación
+        query += " ORDER BY m.nombre, f.nombre, p.id" # Orden inicial para agrupacin
 
         productos_raw = conn.execute(query, params).fetchall()
 
-        # --- AGRUPACIÓN DE RESULTADOS POR PRECIO_ID ---
-        # Agrupamos las filas crudas por precio_id, acumulando los síntomas asociados
+        # --- AGRUPACIN DE RESULTADOS POR PRECIO_ID ---
+        # Agrupamos las filas crudas por precio_id, acumulando los sntomas asociados
         productos_agrupados = {}
         for row in productos_raw:
             precio_id = row['precio_id']
@@ -8596,7 +8605,7 @@ def obtener_medicamentos_por_sintomas_ids():
                     },
                     'sintomas_asociados': [] # Lista para almacenar {'id': X, 'nombre': 'Y'}
                 }
-            # Agregar síntoma asociado si existe
+            # Agregar sntoma asociado si existe
             if row['sintoma_asociado_id']:
                 productos_agrupados[precio_id]['sintomas_asociados'].append({
                     'id': row['sintoma_asociado_id'],
@@ -8605,10 +8614,10 @@ def obtener_medicamentos_por_sintomas_ids():
 
         # Extraer la lista de productos ya agrupados
         productos = [v['precio'] for v in productos_agrupados.values()]
-        # Extraer la lista de síntomas asociados por precio_id
+        # Extraer la lista de sntomas asociados por precio_id
         sintomas_asociados_por_precio = {k: v['sintomas_asociados'] for k, v in productos_agrupados.items()}
 
-        # --- CÁLCULO DE DETALLES INICIALES PARA EL ALGORITMO GREEDY ---
+        # --- CLCULO DE DETALLES INICIALES PARA EL ALGORITMO GREEDY ---
         productos_con_detalle = []
         for p in productos:
             precio_id = p['precio_id']
@@ -8619,7 +8628,7 @@ def obtener_medicamentos_por_sintomas_ids():
             ids_coincidentes = sintomas_objetivo_ids.intersection(ids_sintomas_medicamento)
             coincidencias = len(ids_coincidentes)
 
-            # Calcular síntomas sobrantes (asociados al medicamento pero no objetivo)
+            # Calcular sntomas sobrantes (asociados al medicamento pero no objetivo)
             ids_sobrantes = ids_sintomas_medicamento - sintomas_objetivo_ids
             sintomas_sobrantes = [s for s in sintomas_medicamento if s['id'] in ids_sobrantes]
 
@@ -8649,9 +8658,9 @@ def obtener_medicamentos_por_sintomas_ids():
                 'especificidad_score': especificidad_score
             })
 
-        # --- ALGORITMO GREEDY PARA SELECCIÓN Y ORDENAMIENTO ---
-        print(f"\n🔍 APLICANDO ALGORITMO GREEDY...")
-        print(f"   Síntomas objetivo (IDs): {sintomas_objetivo_ids}")
+        # --- ALGORITMO GREEDY PARA SELECCIN Y ORDENAMIENTO ---
+        print(f"\n APLICANDO ALGORITMO GREEDY...")
+        print(f"   Sntomas objetivo (IDs): {sintomas_objetivo_ids}")
         sintomas_cubiertos_ids = set()
         productos_ordenados_greedy = []
         productos_restantes = productos_con_detalle[:] # Copia de la lista
@@ -8661,29 +8670,29 @@ def obtener_medicamentos_por_sintomas_ids():
             mejor_valor = -float('inf') # Usamos -inf para asegurar que cualquier valor positivo sea mejor
             indice_mejor = -1
 
-            print(f"   Iteración: Síntomas cubiertos: {sintomas_cubiertos_ids}, Objetivo: {sintomas_objetivo_ids}")
+            print(f"   Iteracin: Sntomas cubiertos: {sintomas_cubiertos_ids}, Objetivo: {sintomas_objetivo_ids}")
 
             for i, prod in enumerate(productos_restantes):
                 # Verificar que 'ids_coincidentes' exista y sea un conjunto
                 ids_coincidentes_prod = prod.get('ids_coincidentes', set())
                 if not isinstance(ids_coincidentes_prod, set):
-                     print(f"     ⚠️ Producto {prod['nombre']} tiene 'ids_coincidentes' inválido: {ids_coincidentes_prod}, tipo: {type(ids_coincidentes_prod)}. Saltando.")
+                     print(f"      Producto {prod['nombre']} tiene 'ids_coincidentes' invlido: {ids_coincidentes_prod}, tipo: {type(ids_coincidentes_prod)}. Saltando.")
                      continue
 
-                # Calcular cuántos *nuevos* síntomas objetivo cubriría este medicamento
+                # Calcular cuntos *nuevos* sntomas objetivo cubrira este medicamento
                 nuevos_sintomas = ids_coincidentes_prod - sintomas_cubiertos_ids
                 valor_nuevos = len(nuevos_sintomas)
 
                 if valor_nuevos == 0:
-                    # Si no aporta nuevos síntomas objetivo, su valor es muy bajo
+                    # Si no aporta nuevos sntomas objetivo, su valor es muy bajo
                     valor_actual = -1000
                 else:
-                    # Valorar positivamente la cobertura de nuevos síntomas objetivo
-                    # y negativamente los síntomas sobrantes (generalidad)
+                    # Valorar positivamente la cobertura de nuevos sntomas objetivo
+                    # y negativamente los sntomas sobrantes (generalidad)
                     # y ligeramente positivamente la especificidad
                     ids_sobrantes_prod = prod.get('ids_sobrantes', set())
                     if not isinstance(ids_sobrantes_prod, set):
-                         print(f"     ⚠️ Producto {prod['nombre']} tiene 'ids_sobrantes' inválido: {ids_sobrantes_prod}, tipo: {type(ids_sobrantes_prod)}. Saltando.")
+                         print(f"      Producto {prod['nombre']} tiene 'ids_sobrantes' invlido: {ids_sobrantes_prod}, tipo: {type(ids_sobrantes_prod)}. Saltando.")
                          continue
                     penalizacion_sobrantes = len(ids_sobrantes_prod)
                     valor_actual = (valor_nuevos * 100) - (penalizacion_sobrantes * 10) + (prod['especificidad_score'] * 0.1)
@@ -8696,42 +8705,42 @@ def obtener_medicamentos_por_sintomas_ids():
                     indice_mejor = i
 
             if mejor_producto is None:
-                # Si no hay ningún producto que aporte nuevos síntomas objetivo, salir del bucle
-                print("⚠️  No se encontró un medicamento que aportara nuevos síntomas objetivo. Deteniendo selección greedy.")
+                # Si no hay ningn producto que aporte nuevos sntomas objetivo, salir del bucle
+                print("  No se encontr un medicamento que aportara nuevos sntomas objetivo. Deteniendo seleccin greedy.")
                 break
 
-            # Marcar los síntomas objetivo de este producto como cubiertos
+            # Marcar los sntomas objetivo de este producto como cubiertos
             ids_coincidentes_final = mejor_producto.get('ids_coincidentes', set())
             if isinstance(ids_coincidentes_final, set):
                  sintomas_cubiertos_ids.update(ids_coincidentes_final)
             else:
-                 print(f"     ⚠️ Producto {mejor_producto['nombre']} tiene 'ids_coincidentes' inválido al intentar actualizar cubiertos: {ids_coincidentes_final}.")
+                 print(f"      Producto {mejor_producto['nombre']} tiene 'ids_coincidentes' invlido al intentar actualizar cubiertos: {ids_coincidentes_final}.")
                  # Opcional: Salir o manejar el error
                  break
 
             productos_ordenados_greedy.append(mejor_producto)
             productos_restantes.pop(indice_mejor) # Quitar el producto seleccionado
-            print(f"       ✓ Seleccionado: {mejor_producto['nombre'][:30]:30} (Aporta: {len(ids_coincidentes_final)}, Nuevos: {len(ids_coincidentes_final - (sintomas_cubiertos_ids - ids_coincidentes_final))})")
+            print(f"        Seleccionado: {mejor_producto['nombre'][:30]:30} (Aporta: {len(ids_coincidentes_final)}, Nuevos: {len(ids_coincidentes_final - (sintomas_cubiertos_ids - ids_coincidentes_final))})")
 
 
-        # Agregar los productos restantes (que no aportaron nuevos síntomas objetivo o se añaden después)
+        # Agregar los productos restantes (que no aportaron nuevos sntomas objetivo o se aaden despus)
         productos_ordenados_greedy.extend(productos_restantes)
-        print(f"   ✅ Selección Greedy completada. Total productos: {len(productos_ordenados_greedy)}")
+        print(f"    Seleccin Greedy completada. Total productos: {len(productos_ordenados_greedy)}")
 
-        # --- CÁLCULO DE SCORE FINAL (opcional, basado en el orden greedy) ---
+        # --- CLCULO DE SCORE FINAL (opcional, basado en el orden greedy) ---
         for i, p in enumerate(productos_ordenados_greedy):
-             # El score puede reflejar el orden greedy o mantener la lógica anterior
+             # El score puede reflejar el orden greedy o mantener la lgica anterior
              # Por ejemplo, basado en coincidencias y especificidad, o simplemente el orden
-             # Vamos con una métrica que combine la información útil
+             # Vamos con una mtrica que combine la informacin til
              ids_sobrantes_p = p.get('ids_sobrantes', set())
              penalizacion = len(ids_sobrantes_p) if isinstance(ids_sobrantes_p, set) else 0
              p['score'] = (p['coincidencias'] * 100) - (penalizacion * 10) + p['especificidad_score']
-             # Opcional: Añadir un campo para indicar si es parte de la "receta eficiente" o no
+             # Opcional: Aadir un campo para indicar si es parte de la "receta eficiente" o no
              # p['es_parte_de_receta_eficiente'] = i < len(productos_seleccionados_greedy) # Calculable si se desea
 
         productos_con_score = productos_ordenados_greedy
 
-        # --- CONVERSIÓN DE 'sets' A 'lists' PARA SERIALIZACIÓN JSON ---
+        # --- CONVERSIN DE 'sets' A 'lists' PARA SERIALIZACIN JSON ---
         # Flask no puede serializar objetos 'set' a JSON.
         # Convertimos los sets relevantes a listas antes de devolverlos.
         for producto in productos_con_score:
@@ -8739,15 +8748,15 @@ def obtener_medicamentos_por_sintomas_ids():
                 producto['ids_coincidentes'] = list(producto['ids_coincidentes'])
             if isinstance(producto.get('ids_sobrantes'), set):
                 producto['ids_sobrantes'] = list(producto['ids_sobrantes'])
-            # Asegurarse de que 'sintomas_ids_asociados' también sea una lista si se calcula como set en otro lado
-            # (Aunque en este código se construye como lista, es bueno verificar si se modifica más adelante)
+            # Asegurarse de que 'sintomas_ids_asociados' tambin sea una lista si se calcula como set en otro lado
+            # (Aunque en este cdigo se construye como lista, es bueno verificar si se modifica ms adelante)
             # if isinstance(producto.get('sintomas_ids_asociados'), set):
             #     producto['sintomas_ids_asociados'] = list(producto['sintomas_ids_asociados'])
 
 
         conn.close()
 
-        print(f"   ✅ Medicamentos encontrados y ordenados (Greedy): {len(productos_con_score)}")
+        print(f"    Medicamentos encontrados y ordenados (Greedy): {len(productos_con_score)}")
         return jsonify({
             'ok': True,
             'productos': productos_con_score,
@@ -8757,9 +8766,9 @@ def obtener_medicamentos_por_sintomas_ids():
         })
 
     except Exception as e:
-        print(f"❌ Error en obtener_medicamentos_por_sintomas_ids: {e}")
+        print(f" Error en obtener_medicamentos_por_sintomas_ids: {e}")
         import traceback
-        traceback.print_exc() # Imprimir el traceback completo para depuración
+        traceback.print_exc() # Imprimir el traceback completo para depuracin
         return jsonify({'ok': False, 'error': str(e), 'productos': [], 'total': 0}), 500
 
 
@@ -8769,54 +8778,54 @@ def obtener_medicamentos_por_sintomas_ids():
 @app.route('/api/medicamentos/economicos', methods=['POST'])
 def obtener_medicamentos_economicos():
     """
-    API para obtener medicamentos sugeridos basados en una lista de IDs de síntomas,
-    priorizando la minimización del costo total para cubrir todos los síntomas objetivo.
+    API para obtener medicamentos sugeridos basados en una lista de IDs de sntomas,
+    priorizando la minimizacin del costo total para cubrir todos los sntomas objetivo.
     """
     from datetime import datetime
     print(f"\n{'='*70}")
-    print(f"🔖 API /api/medicamentos/economicos - Iniciando")
+    print(f" API /api/medicamentos/economicos - Iniciando")
     print(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*70}\n")
 
     data = request.get_json()
     ids_sintomas_usuario = data.get('ids_sintomas_usuario', [])
-    # Opcional: Parámetros de filtro
+    # Opcional: Parmetros de filtro
     precio_min = data.get('precio_min', '')
     precio_max = data.get('precio_max', '')
 
     if not ids_sintomas_usuario:
-        print("   ❌ No se proporcionaron IDs de síntomas.")
+        print("    No se proporcionaron IDs de sntomas.")
         return jsonify({
             'ok': True,
             'productos': [],
             'total': 0,
-            'mensaje': 'No se proporcionaron IDs de síntomas.'
+            'mensaje': 'No se proporcionaron IDs de sntomas.'
         })
 
-    print(f"   ✅ IDs de síntomas recibidos: {ids_sintomas_usuario}")
+    print(f"    IDs de sntomas recibidos: {ids_sintomas_usuario}")
 
     try:
         conn = get_db_connection()
 
-        # --- PARTE CLAVE: Adaptación de la lógica de 'obtener_productos' ---
-        # Simulamos las variables que 'obtener_productos' calcula a partir del texto de búsqueda
+        # --- PARTE CLAVE: Adaptacin de la lgica de 'obtener_productos' ---
+        # Simulamos las variables que 'obtener_productos' calcula a partir del texto de bsqueda
         # pero ahora las tenemos como entrada (ids_sintomas_usuario).
-        sintomas_objetivo_ids = set(ids_sintomas_usuario) # Usamos un set para búsquedas rápidas
-        # Obtener nombres de los síntomas para mensajes o referencias
+        sintomas_objetivo_ids = set(ids_sintomas_usuario) # Usamos un set para bsquedas rpidas
+        # Obtener nombres de los sntomas para mensajes o referencias
         placeholders_ids = ','.join(['?' for _ in ids_sintomas_usuario])
         query_nombres_sint = f"""
             SELECT id, nombre FROM sintomas WHERE id IN ({placeholders_ids})
         """
         resultados_sint = conn.execute(query_nombres_sint, ids_sintomas_usuario).fetchall()
         sintomas_detectados = [row['nombre'] for row in resultados_sint]
-        diagnosticos_posibles = {} # En esta ruta, no se generan diagnósticos posibles a partir de IDs de síntomas
+        diagnosticos_posibles = {} # En esta ruta, no se generan diagnsticos posibles a partir de IDs de sntomas
                                    # (esto se hace en la otra parte de la consulta).
-                                   # Se podría integrar si se pasan también IDs de diagnósticos detectados.
+                                   # Se podra integrar si se pasan tambin IDs de diagnsticos detectados.
 
-        print(f"   📝 Síntomas detectados (nombres): {sintomas_detectados}")
+        print(f"    Sntomas detectados (nombres): {sintomas_detectados}")
 
-        # QUERY DE PRODUCTOS (similar a la de 'obtener_productos', pero filtrando por IDs de síntomas)
-        # Ahora incluimos los síntomas asociados al medicamento
+        # QUERY DE PRODUCTOS (similar a la de 'obtener_productos', pero filtrando por IDs de sntomas)
+        # Ahora incluimos los sntomas asociados al medicamento
         query = """
             SELECT DISTINCT
                 p.id as precio_id,
@@ -8831,14 +8840,14 @@ def obtener_medicamentos_economicos():
                 m.componente_activo_id,
                 ca.nombre as componente_activo_nombre,
                 f.nombre as fabricante_nombre,
-                -- Nuevos campos para los síntomas del medicamento
+                -- Nuevos campos para los sntomas del medicamento
                 ms.sintoma_id as sintoma_asociado_id,
                 s.nombre as sintoma_asociado_nombre
             FROM precios p
             INNER JOIN medicamentos m ON p.medicamento_id = m.id
             INNER JOIN fabricantes f ON p.fabricante_id = f.id
             LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
-            -- JOIN para obtener los síntomas asociados al medicamento
+            -- JOIN para obtener los sntomas asociados al medicamento
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
             WHERE m.activo = '1'
@@ -8846,9 +8855,9 @@ def obtener_medicamentos_economicos():
 
         params = []
 
-        # Filtro por IDs de síntomas
+        # Filtro por IDs de sntomas
         if sintomas_objetivo_ids:
-             # Filtrar precios cuyos medicamentos estén asociados a los síntomas ingresados
+             # Filtrar precios cuyos medicamentos estn asociados a los sntomas ingresados
              query += f"""
                  AND m.id IN (
                      SELECT DISTINCT medicamento_id
@@ -8863,22 +8872,22 @@ def obtener_medicamentos_economicos():
                 query += " AND p.precio >= ?"
                 params.append(float(precio_min))
             except ValueError:
-                pass # Si no es un número válido, ignorar el filtro
+                pass # Si no es un nmero vlido, ignorar el filtro
 
         if precio_max:
             try:
                 query += " AND p.precio <= ?"
                 params.append(float(precio_max))
             except ValueError:
-                pass # Si no es un número válido, ignorar el filtro
+                pass # Si no es un nmero vlido, ignorar el filtro
 
         query += " AND p.precio > 0"
-        query += " ORDER BY m.nombre, f.nombre, p.id" # Orden inicial para agrupación
+        query += " ORDER BY m.nombre, f.nombre, p.id" # Orden inicial para agrupacin
 
         productos_raw = conn.execute(query, params).fetchall()
 
-        # --- AGRUPACIÓN DE RESULTADOS POR PRECIO_ID ---
-        # Agrupamos las filas crudas por precio_id, acumulando los síntomas asociados
+        # --- AGRUPACIN DE RESULTADOS POR PRECIO_ID ---
+        # Agrupamos las filas crudas por precio_id, acumulando los sntomas asociados
         productos_agrupados = {}
         for row in productos_raw:
             precio_id = row['precio_id']
@@ -8900,7 +8909,7 @@ def obtener_medicamentos_economicos():
                     },
                     'sintomas_asociados': [] # Lista para almacenar {'id': X, 'nombre': 'Y'}
                 }
-            # Agregar síntoma asociado si existe
+            # Agregar sntoma asociado si existe
             if row['sintoma_asociado_id']:
                 productos_agrupados[precio_id]['sintomas_asociados'].append({
                     'id': row['sintoma_asociado_id'],
@@ -8909,10 +8918,10 @@ def obtener_medicamentos_economicos():
 
         # Extraer la lista de productos ya agrupados
         productos = [v['precio'] for v in productos_agrupados.values()]
-        # Extraer la lista de síntomas asociados por precio_id
+        # Extraer la lista de sntomas asociados por precio_id
         sintomas_asociados_por_precio = {k: v['sintomas_asociados'] for k, v in productos_agrupados.items()}
 
-        # --- CÁLCULO DE DETALLES INICIALES ---
+        # --- CLCULO DE DETALLES INICIALES ---
         productos_con_detalle = []
         for p in productos:
             precio_id = p['precio_id']
@@ -8923,7 +8932,7 @@ def obtener_medicamentos_economicos():
             ids_coincidentes = sintomas_objetivo_ids.intersection(ids_sintomas_medicamento)
             coincidencias = len(ids_coincidentes)
 
-            # Calcular síntomas sobrantes (asociados al medicamento pero no ingresados por el usuario)
+            # Calcular sntomas sobrantes (asociados al medicamento pero no ingresados por el usuario)
             ids_sobrantes = ids_sintomas_medicamento - sintomas_objetivo_ids
             sintomas_sobrantes = [s for s in sintomas_medicamento if s['id'] in ids_sobrantes]
 
@@ -8953,38 +8962,38 @@ def obtener_medicamentos_economicos():
                 'especificidad_score': especificidad_score
             })
 
-        # --- ALGORITMO DE SELECCIÓN ECONÓMICA ---
-        # Objetivo: Encontrar una combinación de medicamentos que cubra todos los sintomas_objetivo_ids
-        # al costo total más bajo posible.
+        # --- ALGORITMO DE SELECCIN ECONMICA ---
+        # Objetivo: Encontrar una combinacin de medicamentos que cubra todos los sintomas_objetivo_ids
+        # al costo total ms bajo posible.
         # Usaremos un enfoque greedy basado en el precio y la eficiencia de cobertura.
 
-        print(f"\n🔍 APLICANDO ALGORITMO ECONÓMICO...")
-        print(f"   Síntomas objetivo (IDs): {sintomas_objetivo_ids}")
+        print(f"\n APLICANDO ALGORITMO ECONMICO...")
+        print(f"   Sntomas objetivo (IDs): {sintomas_objetivo_ids}")
 
-        # Inicializar conjunto de síntomas cubiertos
+        # Inicializar conjunto de sntomas cubiertos
         sintomas_cubiertos_ids = set()
         productos_seleccionados = []
         productos_restantes = productos_con_detalle[:]
 
-        # Iterar hasta cubrir todos los síntomas objetivo o agotar opciones
+        # Iterar hasta cubrir todos los sntomas objetivo o agotar opciones
         while productos_restantes and len(sintomas_cubiertos_ids) < len(sintomas_objetivo_ids):
             mejor_producto = None
             mejor_valor = float('inf') # Minimizar el valor (precio ponderado)
             indice_mejor = -1
 
             for i, prod in enumerate(productos_restantes):
-                # Calcular cuántos *nuevos* síntomas objetivo cubriría este medicamento
+                # Calcular cuntos *nuevos* sntomas objetivo cubrira este medicamento
                 ids_nuevos = set(prod['ids_coincidentes']) - sintomas_cubiertos_ids
                 nuevos_sintomas = len(ids_nuevos)
 
                 if nuevos_sintomas == 0:
-                    # Si no aporta nuevos síntomas objetivo, su valor es muy alto (no lo queremos)
+                    # Si no aporta nuevos sntomas objetivo, su valor es muy alto (no lo queremos)
                     valor_actual = float('inf')
                 else:
-                    # Valorar el medicamento por su precio, ponderado por cuántos nuevos síntomas aporta
-                    # (menos síntomas nuevos = más caro por síntoma nuevo)
+                    # Valorar el medicamento por su precio, ponderado por cuntos nuevos sntomas aporta
+                    # (menos sntomas nuevos = ms caro por sntoma nuevo)
                     # Tambien se puede ponderar por especificidad si se desea
-                    valor_actual = prod['precio'] / nuevos_sintomas # Precio por nuevo síntoma cubierto
+                    valor_actual = prod['precio'] / nuevos_sintomas # Precio por nuevo sntoma cubierto
 
                 if valor_actual < mejor_valor:
                     mejor_valor = valor_actual
@@ -8992,41 +9001,41 @@ def obtener_medicamentos_economicos():
                     indice_mejor = i
 
             if mejor_producto is None:
-                # Si no hay ningún producto que aporte nuevos síntomas objetivo, salir del bucle
-                print("⚠️  No se encontró un medicamento que aportara nuevos síntomas objetivo. Deteniendo selección económica.")
+                # Si no hay ningn producto que aporte nuevos sntomas objetivo, salir del bucle
+                print("  No se encontr un medicamento que aportara nuevos sntomas objetivo. Deteniendo seleccin econmica.")
                 break
 
-            # Marcar los síntomas de este producto como cubiertos
+            # Marcar los sntomas de este producto como cubiertos
             for sid in mejor_producto['ids_coincidentes']:
                 sintomas_cubiertos_ids.add(sid)
 
-            # Añadir el producto a la lista de seleccionados
+            # Aadir el producto a la lista de seleccionados
             productos_seleccionados.append(mejor_producto)
             # Quitar el producto de la lista de restantes
             productos_restantes.pop(indice_mejor)
-            print(f"       ✓ Seleccionado: {mejor_producto['nombre'][:30]:30} (Precio: ${mejor_producto['precio']}, Nuevos Síntomas: {len(set(mejor_producto['ids_coincidentes']) - (sintomas_cubiertos_ids - set(mejor_producto['ids_coincidentes'])))})")
+            print(f"        Seleccionado: {mejor_producto['nombre'][:30]:30} (Precio: ${mejor_producto['precio']}, Nuevos Sntomas: {len(set(mejor_producto['ids_coincidentes']) - (sintomas_cubiertos_ids - set(mejor_producto['ids_coincidentes'])))})")
 
-        # Agregar los productos restantes si se desea mostrarlos también (aunque no sean parte de la "receta económica")
+        # Agregar los productos restantes si se desea mostrarlos tambin (aunque no sean parte de la "receta econmica")
         # productos_seleccionados.extend(productos_restantes) # Descomentar si se quiere mostrar todo
 
         productos_economicos = productos_seleccionados
 
-        # --- CÁLCULO DE SCORE FINAL (opcional, basado en el orden económico) ---
+        # --- CLCULO DE SCORE FINAL (opcional, basado en el orden econmico) ---
         for i, p in enumerate(productos_economicos):
-             # El score puede reflejar el orden económico o mantener la lógica anterior
+             # El score puede reflejar el orden econmico o mantener la lgica anterior
              # Por ejemplo, basado en coincidencias y especificidad, o simplemente el orden
-             # Vamos con una métrica que combine la información útil
+             # Vamos con una mtrica que combine la informacin til
              ids_sobrantes_p = set(p.get('ids_sobrantes', []))
              penalizacion = len(ids_sobrantes_p)
-             # El score aquí podría ser inversamente proporcional al precio y proporcional a la cobertura
-             # Por simplicidad, lo dejamos como el precio original o basado en el orden económico
+             # El score aqu podra ser inversamente proporcional al precio y proporcional a la cobertura
+             # Por simplicidad, lo dejamos como el precio original o basado en el orden econmico
              p['score'] = 1 / (p['precio'] + 1) # Ejemplo: score basado en inverso del precio
-             # Opcional: Añadir un campo para indicar si es parte de la "receta eficiente" o no
+             # Opcional: Aadir un campo para indicar si es parte de la "receta eficiente" o no
              # p['es_parte_de_receta_economica'] = i < len(productos_seleccionados) # Calculable si se desea
 
         conn.close()
 
-        print(f"   ✅ Medicamentos encontrados y ordenados (Económico): {len(productos_economicos)}")
+        print(f"    Medicamentos encontrados y ordenados (Econmico): {len(productos_economicos)}")
         return jsonify({
             'ok': True,
             'productos': productos_economicos,
@@ -9036,7 +9045,7 @@ def obtener_medicamentos_economicos():
         })
 
     except Exception as e:
-        print(f"❌ Error en obtener_medicamentos_economicos: {e}")
+        print(f" Error en obtener_medicamentos_economicos: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e), 'productos': [], 'total': 0}), 500
@@ -9058,10 +9067,10 @@ def prueba_consulta():
 @admin_required
 def obtener_lista_compras():
     """
-    Obtiene la lista de productos pendientes agrupados por droguería
+    Obtiene la lista de productos pendientes agrupados por droguera
     """
     try:
-        print("🔍 DEBUG: Iniciando obtener_lista_compras")
+        print(" DEBUG: Iniciando obtener_lista_compras")
         conn = get_db_connection()
 
         # 1. Obtener todos los productos pendientes con sus cantidades AGRUPADAS
@@ -9084,11 +9093,11 @@ def obtener_lista_compras():
             GROUP BY m.id, m.nombre, e.fabricante_id, f.nombre
         """
 
-        print("🔍 DEBUG: Ejecutando query productos pendientes")
+        print(" DEBUG: Ejecutando query productos pendientes")
         productos_pendientes = conn.execute(query_productos).fetchall()
-        print(f"🔍 DEBUG: Encontrados {len(productos_pendientes)} productos pendientes")
+        print(f" DEBUG: Encontrados {len(productos_pendientes)} productos pendientes")
 
-        # 2. Para cada producto, encontrar el MEJOR precio (más bajo) de todos los proveedores
+        # 2. Para cada producto, encontrar el MEJOR precio (ms bajo) de todos los proveedores
         proveedores = {}
         sin_precios = []
 
@@ -9140,7 +9149,7 @@ def obtener_lista_compras():
                     'existencias_ids': producto[5],  # existencias_ids - IDs separados por comas
                     'medicamento_id': medicamento_id,
                     'medicamento': nombre_completo,
-                    'url': url,  # URL de la cotización
+                    'url': url,  # URL de la cotizacin
                     'cantidad': cantidad_total,
                     'precio_unitario': precio_unitario,
                     'subtotal': subtotal,
@@ -9163,7 +9172,7 @@ def obtener_lista_compras():
 
         conn.close()
 
-        print(f"🔍 DEBUG: Proveedores: {len(proveedores)}, Sin precios: {len(sin_precios)}")
+        print(f" DEBUG: Proveedores: {len(proveedores)}, Sin precios: {len(sin_precios)}")
         return jsonify({
             'success': True,
             'proveedores': list(proveedores.values()),
@@ -9171,7 +9180,7 @@ def obtener_lista_compras():
         })
 
     except Exception as e:
-        print(f"❌ ERROR en obtener_lista_compras: {e}")
+        print(f" ERROR en obtener_lista_compras: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -9181,7 +9190,7 @@ def obtener_lista_compras():
 @admin_required
 def gestionar_cotizacion():
     """
-    Gestiona la cotización cuando un proveedor no tiene el producto
+    Gestiona la cotizacin cuando un proveedor no tiene el producto
     Opciones: inactivar temporalmente, eliminar, o buscar siguiente proveedor
     """
     try:
@@ -9194,7 +9203,7 @@ def gestionar_cotizacion():
 
         conn = get_db_connection()
 
-        # Aplicar acción según lo elegido
+        # Aplicar accin segn lo elegido
         if accion == 'temporal':
             # Inactivar temporalmente
             conn.execute("""
@@ -9204,13 +9213,13 @@ def gestionar_cotizacion():
             """ % dias_inactivo, [medicamento_id, fabricante_id, proveedor_actual_id])
 
         elif accion == 'eliminar':
-            # Eliminar cotización permanentemente
+            # Eliminar cotizacin permanentemente
             conn.execute("""
                 DELETE FROM precios_competencia
                 WHERE medicamento_id = ? AND fabricante_id = ? AND competidor_id = ?
             """, [medicamento_id, fabricante_id, proveedor_actual_id])
 
-        # Buscar siguiente mejor proveedor (solo si la acción fue temporal o eliminar)
+        # Buscar siguiente mejor proveedor (solo si la accin fue temporal o eliminar)
         siguiente_proveedor = None
         if accion in ['temporal', 'eliminar']:
             query_siguiente = """
@@ -9242,11 +9251,11 @@ def gestionar_cotizacion():
         return jsonify({
             'success': True,
             'siguiente_proveedor': siguiente_proveedor,
-            'mensaje': 'Cotización actualizada'
+            'mensaje': 'Cotizacin actualizada'
         })
 
     except Exception as e:
-        print(f"❌ ERROR en gestionar_cotizacion: {e}")
+        print(f" ERROR en gestionar_cotizacion: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -9284,7 +9293,7 @@ def registrar_compra():
                 existencias_ids.append(prod)
                 precios_map[prod] = 0
 
-        # 1. Obtener información de los productos a comprar
+        # 1. Obtener informacin de los productos a comprar
         placeholders = ','.join(['%s'] * len(existencias_ids))
         query = f"""
             SELECT
@@ -9404,9 +9413,9 @@ def registrar_compra():
 
 def actualizar_estado_pedido(conn, pedido_id):
     """
-    Actualiza el estado de un pedido según el estado de sus productos
+    Actualiza el estado de un pedido segn el estado de sus productos
     """
-    # Verificar si TODOS los productos del pedido están comprados
+    # Verificar si TODOS los productos del pedido estn comprados
     resultado = conn.execute("""
         SELECT COUNT(*) as total,
                SUM(CASE WHEN estado = 'comprado' THEN 1 ELSE 0 END) as comprados
@@ -9415,7 +9424,7 @@ def actualizar_estado_pedido(conn, pedido_id):
     """, [pedido_id]).fetchone()
 
     if resultado and resultado[0] > 0 and resultado[0] == resultado[1]:  # total y comprados
-        # Todos los productos están comprados -> Cambiar pedido a "en_camino"
+        # Todos los productos estn comprados -> Cambiar pedido a "en_camino"
         conn.execute("""
             UPDATE pedidos
             SET estado = 'en_camino'
@@ -9434,50 +9443,50 @@ def run_migration_endpoint():
         mensajes = []
         mensajes.append("Ejecutando migraciones...")
 
-        # Migración 1
+        # Migracin 1
         conn.execute("ALTER TABLE existencias ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
-        mensajes.append("✓ existencias.costo_unitario")
+        mensajes.append(" existencias.costo_unitario")
 
-        # Migración 2
+        # Migracin 2
         conn.execute("ALTER TABLE precios ADD COLUMN IF NOT EXISTS costo_unitario DECIMAL(10,2) DEFAULT 0")
-        mensajes.append("✓ precios.costo_unitario")
+        mensajes.append(" precios.costo_unitario")
 
-        # Migración 3
+        # Migracin 3
         conn.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE")
-        mensajes.append("✓ precios_competencia.activo")
+        mensajes.append(" precios_competencia.activo")
 
-        # Migración 4
+        # Migracin 4
         conn.execute("ALTER TABLE precios_competencia ADD COLUMN IF NOT EXISTS inactivo_hasta TIMESTAMP")
-        mensajes.append("✓ precios_competencia.inactivo_hasta")
+        mensajes.append(" precios_competencia.inactivo_hasta")
 
-        # Migración 5: Arreglar secuencia del id en precios_competencia
+        # Migracin 5: Arreglar secuencia del id en precios_competencia
         try:
             # Crear secuencia si no existe
             conn.execute("""
                 CREATE SEQUENCE IF NOT EXISTS precios_competencia_id_seq
                 OWNED BY precios_competencia.id
             """)
-            mensajes.append("✓ Secuencia precios_competencia_id_seq creada")
+            mensajes.append(" Secuencia precios_competencia_id_seq creada")
 
-            # Obtener el valor máximo actual del id
+            # Obtener el valor mximo actual del id
             max_id_row = conn.execute("SELECT COALESCE(MAX(id), 0) as max_id FROM precios_competencia").fetchone()
             max_id = max_id_row[0] if max_id_row else 0
 
             # Setear el valor de la secuencia
             conn.execute(f"SELECT setval('precios_competencia_id_seq', {max_id + 1})")
-            mensajes.append(f"✓ Secuencia inicializada en {max_id + 1}")
+            mensajes.append(f" Secuencia inicializada en {max_id + 1}")
 
             # Asignar la secuencia como default al campo id
             conn.execute("""
                 ALTER TABLE precios_competencia
                 ALTER COLUMN id SET DEFAULT nextval('precios_competencia_id_seq')
             """)
-            mensajes.append("✓ DEFAULT asignado a precios_competencia.id")
+            mensajes.append(" DEFAULT asignado a precios_competencia.id")
 
         except Exception as e:
-            mensajes.append(f"⚠ Error en secuencia: {str(e)}")
+            mensajes.append(f" Error en secuencia: {str(e)}")
 
-        # Migración 6: Migrar datos del pastillero desde SQLite a PostgreSQL
+        # Migracin 6: Migrar datos del pastillero desde SQLite a PostgreSQL
         try:
             import sqlite3
             import os
@@ -9485,7 +9494,7 @@ def run_migration_endpoint():
             sqlite_path = os.path.join(os.path.dirname(__file__), 'medicamentos.db')
 
             if os.path.exists(sqlite_path):
-                mensajes.append("📋 Iniciando migración de pastillero desde SQLite...")
+                mensajes.append(" Iniciando migracin de pastillero desde SQLite...")
 
                 # Conectar a SQLite
                 sqlite_conn = sqlite3.connect(sqlite_path)
@@ -9518,16 +9527,16 @@ def run_migration_endpoint():
                                   row['cantidad'], row['unidad']))
                             count += 1
 
-                    mensajes.append(f"✓ Migrados {count} medicamentos al pastillero (de {len(pastillero_rows)} encontrados)")
+                    mensajes.append(f" Migrados {count} medicamentos al pastillero (de {len(pastillero_rows)} encontrados)")
                 else:
-                    mensajes.append("ℹ No hay medicamentos en el pastillero de SQLite")
+                    mensajes.append(" No hay medicamentos en el pastillero de SQLite")
 
                 sqlite_conn.close()
             else:
-                mensajes.append("ℹ Archivo medicamentos.db no encontrado, saltando migración de pastillero")
+                mensajes.append(" Archivo medicamentos.db no encontrado, saltando migracin de pastillero")
 
         except Exception as e:
-            mensajes.append(f"⚠ Error en migración de pastillero: {str(e)}")
+            mensajes.append(f" Error en migracin de pastillero: {str(e)}")
 
         conn.commit()
         conn.close()
@@ -9601,7 +9610,7 @@ def precios_dinamicos_data():
     try:
         db = get_db_connection()
 
-        # Reactivar automáticamente cotizaciones cuya fecha de inactividad ya expiró
+        # Reactivar automticamente cotizaciones cuya fecha de inactividad ya expir
         db.execute("""
             UPDATE precios_competencia
             SET inactivo_hasta = NULL, activo = TRUE
@@ -9710,7 +9719,7 @@ def precios_dinamicos_data():
         db.close()
 
         tiempo_total = time.time() - inicio
-        print(f"⏱️ /admin/precios-dinamicos/data ejecutado en {tiempo_total:.2f}s - {len(medicamentos)} medicamentos")
+        print(f" /admin/precios-dinamicos/data ejecutado en {tiempo_total:.2f}s - {len(medicamentos)} medicamentos")
 
         return jsonify({
             'config': config,
@@ -9721,7 +9730,7 @@ def precios_dinamicos_data():
             'precio_sugerido': precio_sugerido
         })
     except Exception as e:
-        print(f"❌ Error en /admin/precios-dinamicos/data: {e}")
+        print(f" Error en /admin/precios-dinamicos/data: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'medicamentos': [], 'config': {}}), 500
@@ -9955,7 +9964,7 @@ def autocompletar_huerfano():
         titulo = primer_item.get('title', '')
         snippet = primer_item.get('snippet', '')
 
-        # Buscar fabricante en el título y snippet
+        # Buscar fabricante en el ttulo y snippet
         fabricantes_posibles = []
 
         # Patrones comunes de fabricantes
@@ -9973,10 +9982,10 @@ def autocompletar_huerfano():
         # Buscar nombre del medicamento mejorado
         nombre_completo = nombre.upper()
 
-        # Intentar extraer presentación del título
+        # Intentar extraer presentacin del ttulo
         match_presentacion = re.search(r'(TABLETAS?|CAPSULAS?|SOBRES?|ML|MG|G)\s*(X\s*\d+)?', titulo, re.IGNORECASE)
         if match_presentacion:
-            # Extraer parte relevante del título
+            # Extraer parte relevante del ttulo
             nombre_completo = titulo.split('|')[0].strip().upper()
 
         resultado = {
@@ -9995,7 +10004,7 @@ def autocompletar_huerfano():
 
 @app.route('/admin/competencia/obtener-dominio-tercero/<int:tercero_id>', methods=['GET'])
 def obtener_dominio_tercero(tercero_id):
-    """Obtiene el dominio típico de un tercero basado en sus URLs históricas"""
+    """Obtiene el dominio tpico de un tercero basado en sus URLs histricas"""
     from urllib.parse import urlparse
     from collections import Counter
 
@@ -10010,7 +10019,7 @@ def obtener_dominio_tercero(tercero_id):
 
         if not urls:
             db.close()
-            return jsonify({'dominio': None, 'mensaje': 'Sin URLs históricas'})
+            return jsonify({'dominio': None, 'mensaje': 'Sin URLs histricas'})
 
         # Extraer dominios
         dominios = []
@@ -10032,7 +10041,7 @@ def obtener_dominio_tercero(tercero_id):
         if not dominios:
             return jsonify({'dominio': None, 'mensaje': 'No se pudieron extraer dominios'})
 
-        # Encontrar el dominio más común
+        # Encontrar el dominio ms comn
         contador = Counter(dominios)
         dominio_comun = contador.most_common(1)[0][0]
         total_urls = len(dominios)
@@ -10105,7 +10114,7 @@ def auditar_urls():
                             'medicamento': row['medicamento_nombre']
                         })
                     else:
-                        # URL sin dominio válido (basura)
+                        # URL sin dominio vlido (basura)
                         problemas.append({
                             'tipo': 'url_invalida',
                             'tercero_id': tercero_id,
@@ -10113,7 +10122,7 @@ def auditar_urls():
                             'cotizacion_id': row['id'],
                             'url': url,
                             'medicamento': row['medicamento_nombre'],
-                            'mensaje': 'URL sin dominio válido (posible basura)'
+                            'mensaje': 'URL sin dominio vlido (posible basura)'
                         })
                 except Exception as e:
                     # Error al parsear URL (basura)
@@ -10124,14 +10133,14 @@ def auditar_urls():
                         'cotizacion_id': row['id'],
                         'url': url,
                         'medicamento': row['medicamento_nombre'],
-                        'mensaje': f'URL inválida: {str(e)}'
+                        'mensaje': f'URL invlida: {str(e)}'
                     })
 
-            # Si no hay dominios válidos, continuar
+            # Si no hay dominios vlidos, continuar
             if not dominios:
                 continue
 
-            # Encontrar el dominio más común (dominio esperado)
+            # Encontrar el dominio ms comn (dominio esperado)
             contador = Counter(dominios)
             dominio_esperado = contador.most_common(1)[0][0]
             frecuencia_esperado = contador[dominio_esperado]
@@ -10194,12 +10203,12 @@ def conteo_cotizaciones_por_tercero():
 
 @app.route('/admin/competencia/auditoria-dispersion', methods=['GET'])
 def auditoria_dispersion():
-    """Audita medicamentos con alta dispersión de precios para detectar posibles errores"""
+    """Audita medicamentos con alta dispersin de precios para detectar posibles errores"""
     umbral = request.args.get('umbral', default=30, type=float)
 
     db = get_db_connection()
     try:
-        # Obtener PRODUCTOS (medicamento + fabricante) con múltiples cotizaciones y calcular dispersión
+        # Obtener PRODUCTOS (medicamento + fabricante) con mltiples cotizaciones y calcular dispersin
         query = """
             SELECT
                 pc.medicamento_id,
@@ -10229,7 +10238,7 @@ def auditoria_dispersion():
             precio_min = row['precio_min']
             precio_max = row['precio_max']
 
-            # Calcular dispersión porcentual
+            # Calcular dispersin porcentual
             if precio_min > 0:
                 dispersion_pct = ((precio_max - precio_min) / precio_min) * 100
             else:
@@ -10273,7 +10282,7 @@ def buscar_o_crear_tercero():
         return jsonify({'error': 'Nombre requerido'}), 400
 
     db = get_db_connection()
-    # Buscar tercero existente (insensible a mayúsculas/minúsculas)
+    # Buscar tercero existente (insensible a maysculas/minsculas)
     # PostgreSQL: usar LOWER() en lugar de COLLATE NOCASE
     tercero = db.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(?)", (nombre,)).fetchone()
     if tercero:
@@ -10352,7 +10361,7 @@ def guardar_precio_competencia_dinamico():
 
     db.commit()
 
-    # Recalcular precio según políticas automáticamente
+    # Recalcular precio segn polticas automticamente
     precio_nuevo = calcular_precio_segun_politica(med_id, fab_id, db)
 
     if precio_nuevo is not None:
@@ -10405,13 +10414,13 @@ def listar_precios_competencia():
 @app.route('/api/cotizacion/reactivar', methods=['POST'])
 @admin_required
 def reactivar_cotizacion():
-    """Reactivar una cotización que estaba marcada como inactiva temporalmente"""
+    """Reactivar una cotizacin que estaba marcada como inactiva temporalmente"""
     try:
         data = request.json
         cotizacion_id = data.get('cotizacion_id')
 
         if not cotizacion_id:
-            return jsonify({'success': False, 'message': 'ID de cotización requerido'}), 400
+            return jsonify({'success': False, 'message': 'ID de cotizacin requerido'}), 400
 
         conn = get_db_connection()
 
@@ -10425,10 +10434,10 @@ def reactivar_cotizacion():
         conn.commit()
         conn.close()
 
-        return jsonify({'success': True, 'message': 'Cotización reactivada'})
+        return jsonify({'success': True, 'message': 'Cotizacin reactivada'})
 
     except Exception as e:
-        print(f"❌ ERROR en reactivar_cotizacion: {e}")
+        print(f" ERROR en reactivar_cotizacion: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -10449,15 +10458,15 @@ def guardar_configuracion_precios():
                       'permitir_publicar_sin_cotizaciones']
     
     if campo not in campos_validos:
-        return jsonify({'ok': False, 'error': 'Campo no válido'})
+        return jsonify({'ok': False, 'error': 'Campo no vlido'})
     
     db = get_db_connection()
     
-    # Verificar si existe configuración
+    # Verificar si existe configuracin
     config_existe = db.execute("SELECT COUNT(*) as count FROM CONFIGURACION_PRECIOS").fetchone()
     
     if config_existe['count'] == 0:
-        # Insertar nueva configuración
+        # Insertar nueva configuracin
         db.execute(f"""
             INSERT INTO CONFIGURACION_PRECIOS 
             (usar_precio, recargo_escaso, redondeo_superior, ganancia_min_escaso, ganancia_max_escaso)
@@ -10465,7 +10474,7 @@ def guardar_configuracion_precios():
         """, ('minimo', 30, 100, 2000, 10000))
         db.commit()
     
-    # Actualizar campo específico
+    # Actualizar campo especfico
     db.execute(f"UPDATE CONFIGURACION_PRECIOS SET {campo} = ?", (valor,))
     db.commit()
     db.close()
@@ -10476,14 +10485,14 @@ def guardar_configuracion_precios():
 @app.route('/admin/precios/calcular-precio-producto')
 def calcular_precio_producto():
     """
-    Calcula el precio de un solo producto según políticas.
-    Parámetros: medicamento_id, fabricante_id
+    Calcula el precio de un solo producto segn polticas.
+    Parmetros: medicamento_id, fabricante_id
     """
     medicamento_id = request.args.get('medicamento_id', type=int)
     fabricante_id = request.args.get('fabricante_id', type=int)
 
     if not medicamento_id or not fabricante_id:
-        return jsonify({'precio_calculado': None, 'error': 'Parámetros faltantes'}), 400
+        return jsonify({'precio_calculado': None, 'error': 'Parmetros faltantes'}), 400
 
     db = get_db_connection()
     precio_calculado = calcular_precio_segun_politica(medicamento_id, fabricante_id, db)
@@ -10495,7 +10504,7 @@ def calcular_precio_producto():
 @app.route('/admin/precios/calcular-politicas-masivo')
 def calcular_politicas_masivo():
     """
-    Retorna lista de productos con sus precios actuales y precios calculados según políticas.
+    Retorna lista de productos con sus precios actuales y precios calculados segn polticas.
     No modifica BD, solo retorna datos para review.
     """
     db = get_db_connection()
@@ -10523,11 +10532,11 @@ def calcular_politicas_masivo():
     resultados = []
 
     for prod in productos:
-        # Calcular precio según políticas
+        # Calcular precio segn polticas
         precio_nuevo = calcular_precio_segun_politica(prod['medicamento_id'], prod['fabricante_id'], db)
 
         if precio_nuevo is not None:
-            # Solo incluir si el precio es diferente (redondeo para comparación)
+            # Solo incluir si el precio es diferente (redondeo para comparacin)
             if round(prod['precio_actual']) != round(precio_nuevo):
                 # Obtener cotizaciones para mostrar
                 cotizaciones = db.execute("""
@@ -10557,7 +10566,7 @@ def calcular_politicas_masivo():
 @app.route('/admin/precios/aplicar-politica-producto', methods=['POST'])
 def aplicar_politica_producto():
     """
-    Aplica el nuevo precio a un producto específico.
+    Aplica el nuevo precio a un producto especfico.
     """
     data = request.get_json()
     med_id = data.get('medicamento_id')
@@ -10677,7 +10686,7 @@ def exportar_comparativa_excel():
         col_letter = ws.cell(row=1, column=i).column_letter
         ws.column_dimensions[col_letter].width = 15
 
-    # 8. Formato de números
+    # 8. Formato de nmeros
     for row in ws.iter_rows(min_row=2, min_col=3, max_col=len(headers)):
         for cell in row:
             if cell.value and isinstance(cell.value, (int, float)):
@@ -10701,7 +10710,7 @@ def exportar_comparativa_excel():
 @app.route('/admin/fabricantes/listar-con-stats')
 def listar_fabricantes_con_stats():
     """
-    Retorna todos los fabricantes con estadísticas de uso en BD
+    Retorna todos los fabricantes con estadsticas de uso en BD
     """
     db = get_db_connection()
 
@@ -10727,7 +10736,7 @@ def listar_fabricantes_con_stats():
 @app.route('/admin/fabricantes/estadisticas-fusion', methods=['POST'])
 def estadisticas_fusion_fabricantes():
     """
-    Retorna estadísticas de impacto de fusionar fabricantes
+    Retorna estadsticas de impacto de fusionar fabricantes
     """
     data = request.get_json()
     ids = data.get('ids', [])
@@ -10776,14 +10785,14 @@ def fusionar_fabricantes():
     if not maestro_id or not duplicados_ids:
         return jsonify({'ok': False, 'error': 'Datos incompletos'})
 
-    # Verificar que el maestro no esté en duplicados
+    # Verificar que el maestro no est en duplicados
     if maestro_id in duplicados_ids:
         return jsonify({'ok': False, 'error': 'El maestro no puede estar en la lista de duplicados'})
 
     db = get_db_connection()
 
     try:
-        # Estadísticas para retornar
+        # Estadsticas para retornar
         precios_actualizados = 0
         existencias_actualizadas = 0
         competencia_actualizada = 0
@@ -10807,7 +10816,7 @@ def fusionar_fabricantes():
                 """, (precio['medicamento_id'], maestro_id)).fetchone()
 
                 if existe:
-                    # Ya existe, actualizar si el duplicado tiene info más reciente
+                    # Ya existe, actualizar si el duplicado tiene info ms reciente
                     db.execute("""
                         UPDATE precios
                         SET precio = CASE WHEN ? > fecha_actualizacion THEN ? ELSE precio END,
@@ -10921,7 +10930,7 @@ def editar_medicamento():
             SELECT nombre FROM medicamentos WHERE id = ?
         """, (medicamento_id,)).fetchone()
 
-        # Solo actualizar nombre si realmente cambió
+        # Solo actualizar nombre si realmente cambi
         if medicamento_actual and medicamento_actual['nombre'] != nuevo_nombre:
             # Verificar si ya existe OTRO medicamento con ese nombre
             nombre_duplicado = db.execute("""
@@ -10933,7 +10942,7 @@ def editar_medicamento():
                 db.close()
                 return jsonify({
                     'ok': False,
-                    'error': f'⚠️ Ya existe otro medicamento con el nombre:\n"{nuevo_nombre}"\n\nDebes usar un nombre diferente.'
+                    'error': f' Ya existe otro medicamento con el nombre:\n"{nuevo_nombre}"\n\nDebes usar un nombre diferente.'
                 })
 
             # Si no hay duplicado, actualizar
@@ -10943,9 +10952,9 @@ def editar_medicamento():
                 WHERE id = ?
             """, (nuevo_nombre, medicamento_id))
 
-        # Si cambió el fabricante, necesitamos mover el registro de precios
+        # Si cambi el fabricante, necesitamos mover el registro de precios
         if str(fabricante_id_original) != str(nuevo_fabricante_id):
-            # Verificar si ya existe precio para la nueva combinación
+            # Verificar si ya existe precio para la nueva combinacin
             precio_existente = db.execute("""
                 SELECT precio FROM precios
                 WHERE medicamento_id = ? AND fabricante_id = ?
@@ -10981,9 +10990,9 @@ def editar_medicamento():
         return jsonify({'ok': False, 'error': str(e)})
 
 
-# Última revisión: 2025-12-12 15:30
+# ltima revisin: 2025-12-12 15:30
 # Usado en: templates/precios_dinamicos.html (evento input en tercero-nombre)
-# Busca terceros por nombre con normalización case-insensitive cuando usuario escribe
+# Busca terceros por nombre con normalizacin case-insensitive cuando usuario escribe
 @app.route('/admin/terceros/buscar', methods=['GET'])
 @admin_required
 def buscar_terceros():
@@ -11005,13 +11014,13 @@ def buscar_terceros():
     return jsonify({'terceros': [dict(t) for t in terceros]})
 
 
-# Última revisión: 2025-12-16
-# Usado en: templates/precios_dinamicos.html (función cargarUltimosTerceros)
-# Muestra últimos 4 terceros distintos usados en cotizaciones
+# ltima revisin: 2025-12-16
+# Usado en: templates/precios_dinamicos.html (funcin cargarUltimosTerceros)
+# Muestra ltimos 4 terceros distintos usados en cotizaciones
 @app.route('/admin/terceros/ultimos', methods=['GET'])
 @admin_required
 def ultimos_terceros():
-    """Obtiene los últimos N terceros distintos usados en cotizaciones (precios_competencia)"""
+    """Obtiene los ltimos N terceros distintos usados en cotizaciones (precios_competencia)"""
     try:
         limit = request.args.get('limit', 4, type=int)
 
@@ -11028,7 +11037,7 @@ def ultimos_terceros():
 
         return jsonify({'terceros': [dict(t) for t in terceros]})
     except Exception as e:
-        print(f"❌ Error en /admin/terceros/ultimos: {e}")
+        print(f" Error en /admin/terceros/ultimos: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'terceros': []}), 500
@@ -11037,7 +11046,7 @@ def ultimos_terceros():
 @app.route('/admin/terceros/todos', methods=['GET'])
 @admin_required
 def todos_terceros():
-    """Obtiene todos los terceros con sus URLs de búsqueda"""
+    """Obtiene todos los terceros con sus URLs de bsqueda"""
     try:
         db = get_db_connection()
         # PostgreSQL usa LOWER() en lugar de COLLATE NOCASE
@@ -11050,7 +11059,7 @@ def todos_terceros():
 
         return jsonify({'terceros': [dict(t) for t in terceros]})
     except Exception as e:
-        print(f"❌ Error en /admin/terceros/todos: {e}")
+        print(f" Error en /admin/terceros/todos: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'terceros': []}), 500
@@ -11110,11 +11119,11 @@ def eliminar_precio_competencia():
     med_id = cotizacion['medicamento_id']
     fab_id = cotizacion['fabricante_id']
 
-    # Eliminar la cotización
+    # Eliminar la cotizacin
     db.execute("DELETE FROM precios_competencia WHERE id = ?", (id_cotizacion,))
     db.commit()
 
-    # Recalcular precio según políticas
+    # Recalcular precio segn polticas
     precio_nuevo = calcular_precio_segun_politica(med_id, fab_id, db)
 
     if precio_nuevo is not None:
@@ -11184,10 +11193,10 @@ def guardar_imagen_producto():
     fabricante_id = data.get('fabricante_id')
     imagen_base64 = data.get('imagen_base64')
 
-    print(f"🖼️ Guardando imagen - Med ID: {medicamento_id}, Fab ID: {fabricante_id}, Imagen length: {len(imagen_base64) if imagen_base64 else 0}")
+    print(f" Guardando imagen - Med ID: {medicamento_id}, Fab ID: {fabricante_id}, Imagen length: {len(imagen_base64) if imagen_base64 else 0}")
 
     if not medicamento_id or not fabricante_id or not imagen_base64:
-        print(f"❌ Faltan datos - Med: {bool(medicamento_id)}, Fab: {bool(fabricante_id)}, Img: {bool(imagen_base64)}")
+        print(f" Faltan datos - Med: {bool(medicamento_id)}, Fab: {bool(fabricante_id)}, Img: {bool(imagen_base64)}")
         return jsonify({'ok': False, 'error': 'Faltan datos requeridos'})
 
     try:
@@ -11199,7 +11208,7 @@ def guardar_imagen_producto():
         """, (medicamento_id, fabricante_id)).fetchone()
 
         if exists:
-            print(f"✅ Registro existe, actualizando imagen...")
+            print(f" Registro existe, actualizando imagen...")
             # Actualizar imagen
             db.execute("""
                 UPDATE precios
@@ -11207,16 +11216,16 @@ def guardar_imagen_producto():
                 WHERE medicamento_id = ? AND fabricante_id = ?
             """, (imagen_base64, medicamento_id, fabricante_id))
         else:
-            print(f"❌ No existe registro de precio para Med {medicamento_id} + Fab {fabricante_id}")
+            print(f" No existe registro de precio para Med {medicamento_id} + Fab {fabricante_id}")
             return jsonify({'ok': False, 'error': 'No existe registro de precio para este producto'})
 
         db.commit()
         db.close()
 
-        print(f"✅ Imagen guardada exitosamente")
+        print(f" Imagen guardada exitosamente")
         return jsonify({'ok': True})
     except Exception as e:
-        print(f"❌ Error al guardar imagen: {e}")
+        print(f" Error al guardar imagen: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)})
@@ -11227,17 +11236,17 @@ def guardar_imagen_producto():
 
 
 # ============================================
-# RUTAS PARA GESTIÓN DE NAVEGACIÓN
+# RUTAS PARA GESTIN DE NAVEGACIN
 # ============================================
 
 @app.route('/admin/navegacion')
 def admin_navegacion():
-    """Página del administrador de navegación"""
+    """Pgina del administrador de navegacin"""
     return render_template('navegacion_admin.html')
 
 @app.route('/api/navegacion', methods=['GET'])
 def get_navegacion():
-    """Obtener todas las URLs del menú"""
+    """Obtener todas las URLs del men"""
     conn = get_db_connection()
     navegacion = conn.execute('''
         SELECT id, nombre_corto, url, descripcion, activo, orden,
@@ -11265,7 +11274,7 @@ def get_navegacion_activas():
 
 @app.route('/api/navegacion', methods=['POST'])
 def crear_navegacion():
-    """Crear una nueva entrada de navegación"""
+    """Crear una nueva entrada de navegacin"""
     try:
         data = request.get_json()
 
@@ -11279,7 +11288,7 @@ def crear_navegacion():
             return jsonify({'error': 'El nombre corto es obligatorio'}), 400
 
         if len(nombre_corto.split()) > 3:
-            return jsonify({'error': 'El nombre debe tener máximo 3 palabras'}), 400
+            return jsonify({'error': 'El nombre debe tener mximo 3 palabras'}), 400
 
         if not url:
             return jsonify({'error': 'La URL es obligatoria'}), 400
@@ -11290,7 +11299,7 @@ def crear_navegacion():
 
         conn = get_db_connection()
 
-        # Obtener el próximo ID
+        # Obtener el prximo ID
         cursor = conn.execute('SELECT COALESCE(MAX(id), 0) + 1 FROM NAVEGACION_MENU')
         nueva_id = cursor.fetchone()[0]
 
@@ -11302,7 +11311,7 @@ def crear_navegacion():
         conn.commit()
         conn.close()
 
-        print(f"✅ URL guardada: {nombre_corto} -> {url}")
+        print(f" URL guardada: {nombre_corto} -> {url}")
 
         return jsonify({
             'success': True,
@@ -11310,14 +11319,14 @@ def crear_navegacion():
             'mensaje': 'URL agregada correctamente'
         }), 201
     except Exception as e:
-        print(f"❌ Error al guardar URL: {e}")
+        print(f" Error al guardar URL: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Error al guardar: {str(e)}'}), 500
 
 @app.route('/api/navegacion/<int:id>', methods=['PUT'])
 def actualizar_navegacion(id):
-    """Actualizar una entrada de navegación"""
+    """Actualizar una entrada de navegacin"""
     data = request.get_json()
     
     nombre_corto = data.get('nombre_corto', '').strip()
@@ -11328,7 +11337,7 @@ def actualizar_navegacion(id):
     
     # Validaciones
     if nombre_corto and len(nombre_corto.split()) > 3:
-        return jsonify({'error': 'El nombre debe tener máximo 3 palabras'}), 400
+        return jsonify({'error': 'El nombre debe tener mximo 3 palabras'}), 400
     
     if url and not url.startswith('http://') and not url.startswith('https://') and not url.startswith('/'):
         url = '/' + url
@@ -11357,7 +11366,7 @@ def actualizar_navegacion(id):
 
 @app.route('/api/navegacion/<int:id>', methods=['DELETE'])
 def eliminar_navegacion(id):
-    """Eliminar una entrada de navegación"""
+    """Eliminar una entrada de navegacin"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -11373,7 +11382,7 @@ def eliminar_navegacion(id):
 
 @app.route('/api/navegacion/<int:id>/toggle', methods=['PUT'])
 def toggle_navegacion(id):
-    """Activar/desactivar una entrada de navegación"""
+    """Activar/desactivar una entrada de navegacin"""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -11394,7 +11403,7 @@ def toggle_navegacion(id):
 
 @app.route('/api/navegacion/<int:id>/uso', methods=['PUT'])
 def registrar_uso_navegacion(id):
-    """Registrar uso de una entrada de navegación"""
+    """Registrar uso de una entrada de navegacin"""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -11417,7 +11426,7 @@ def registrar_uso_navegacion(id):
 # -------------------------------------------------------------------
 
 # ============================================
-# 🆕 RUTAS API DEL PASTILLERO
+#  RUTAS API DEL PASTILLERO
 # ============================================
 
 @app.route('/api/pastillero', methods=['GET', 'POST'])
@@ -11428,7 +11437,7 @@ def api_pastillero():
     
     usuario_id = session['usuario_id']
     
-    # 🆕 Aceptar parámetros por GET o POST
+    #  Aceptar parmetros por GET o POST
     if request.method == 'POST':
         data = request.get_json() or {}
         orden = data.get('orden', 'recientes')
@@ -11440,29 +11449,29 @@ def api_pastillero():
     try:
         conn = get_db_connection()
         
-        # Determinar ORDER BY según el parámetro
+        # Determinar ORDER BY segn el parmetro
         if orden == 'alfabetico':
             # PostgreSQL: usar LOWER() en lugar de COLLATE NOCASE
             order_by = 'ORDER BY LOWER(p.nombre) ASC'
         else:  # recientes (por defecto)
             order_by = 'ORDER BY p.fecha_actualizado DESC'
         
-        # 🆕 Construir filtro WHERE para síntomas
+        #  Construir filtro WHERE para sntomas
         where_sintomas = ""
         params = [usuario_id]
         
         if sintomas_filtro:
-            # Convertir string de síntomas separados por coma en lista
+            # Convertir string de sntomas separados por coma en lista
             sintomas_list = [normalizar_texto(s.strip()) for s in sintomas_filtro.split(',')]
             
-            # Crear condiciones OR para cada síntoma
+            # Crear condiciones OR para cada sntoma
             sintomas_conditions = ' OR '.join([
-                "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(s.nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')) LIKE ?" 
+                "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(s.nombre, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')) LIKE ?" 
                 for _ in sintomas_list
             ])
             where_sintomas = f'AND ({sintomas_conditions})'
             
-            # Agregar parámetros para cada síntoma
+            # Agregar parmetros para cada sntoma
             for sintoma in sintomas_list:
                 params.append(f'%{sintoma}%')
         
@@ -11540,7 +11549,7 @@ def api_pastillero_verificar(medicamento_id):
     try:
         conn = get_db_connection()
         
-        # Si medicamento_id es 'null', buscar por nombre (parámetro adicional necesario)
+        # Si medicamento_id es 'null', buscar por nombre (parmetro adicional necesario)
         # Por ahora solo buscar por ID si no es null
         if medicamento_id == 'null':
             # No podemos verificar sin el nombre, retornar que no existe
@@ -11584,13 +11593,13 @@ def api_pastillero_agregar():
     medicamento_id = data.get('medicamento_id')
     cantidad = data.get('cantidad', 1)
     unidad = data.get('unidad', 'pastillas')
-    nombre = data.get('nombre')  # 🆕 Para medicamentos personales
+    nombre = data.get('nombre')  #  Para medicamentos personales
     
     # medicamento_id puede ser None/null para medicamentos personales
     
     conn = get_db_connection()
     try:
-        # 🆕 CASO 1: Medicamento personal (NULL) - buscar por nombre
+        #  CASO 1: Medicamento personal (NULL) - buscar por nombre
         if medicamento_id is None or str(medicamento_id).lower() == 'null':
             if not nombre:
                 conn.close()
@@ -11616,7 +11625,7 @@ def api_pastillero_agregar():
                     VALUES (?, NULL, ?, ?, ?)
                 ''', (usuario_id, nombre, cantidad, unidad))
         
-        # 🆕 CASO 2: Medicamento oficial (con ID)
+        #  CASO 2: Medicamento oficial (con ID)
         else:
             medicamento_id = int(medicamento_id)
             
@@ -11641,10 +11650,10 @@ def api_pastillero_agregar():
                     conn.close()
                     return jsonify({'ok': False, 'error': 'Medicamento no encontrado'}), 404
                 
-                # 🆕 Extraer nombre base normalizado (sin presentación)
+                #  Extraer nombre base normalizado (sin presentacin)
                 nombre_normalizado = extraer_nombre_base(medicamento['nombre'])
                 
-                # 🆕 Verificar si existe un medicamento personal con el mismo nombre (vincular)
+                #  Verificar si existe un medicamento personal con el mismo nombre (vincular)
                 personal_existente = conn.execute('''
                     SELECT id, cantidad FROM pastillero_usuarios
                     WHERE usuario_id = ? AND medicamento_id IS NULL AND nombre = ?
@@ -11676,7 +11685,7 @@ def api_pastillero_agregar():
 
 @app.route('/api/pastillero/crear', methods=['POST'])
 def api_pastillero_crear():
-    """Crear un medicamento nuevo en el pastillero (no está en la BD)"""
+    """Crear un medicamento nuevo en el pastillero (no est en la BD)"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     
@@ -11692,17 +11701,17 @@ def api_pastillero_crear():
     
     conn = get_db_connection()
     try:
-        # Insertar medicamento sin medicamento_id (será NULL)
+        # Insertar medicamento sin medicamento_id (ser NULL)
         conn.execute('''
             INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
             VALUES (?, NULL, ?, ?, ?)
         ''', (usuario_id, nombre, cantidad, unidad))
         
-        # 🆕 Crear alerta para el admin
+        #  Crear alerta para el admin
         conn.execute('''
             INSERT INTO alertas_admin (tipo, mensaje, usuario_id, fecha_creacion)
             VALUES ('medicamento_faltante', ?, ?, datetime('now'))
-        ''', (f'Usuario agregó medicamento no registrado: {nombre}', usuario_id))
+        ''', (f'Usuario agreg medicamento no registrado: {nombre}', usuario_id))
         
         conn.commit()
         conn.close()
@@ -11716,7 +11725,7 @@ def api_pastillero_crear():
 
 @app.route('/api/pastillero/<int:medicamento_id>/tomar', methods=['POST'])
 def api_pastillero_tomar(medicamento_id):
-    """Restar 1 unidad (usuario tomó el medicamento)"""
+    """Restar 1 unidad (usuario tom el medicamento)"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     
@@ -11807,7 +11816,7 @@ def api_pastillero_agregar_cantidad(medicamento_id):
 
 
 # ============================================
-# 🆕 RUTA DE BÚSQUEDA PARA AUTOCOMPLETADO
+#  RUTA DE BSQUEDA PARA AUTOCOMPLETADO
 # ============================================
 
 
@@ -11816,56 +11825,56 @@ def api_pastillero_agregar_cantidad(medicamento_id):
 
 def extraer_nombre_base(nombre_completo):
     """
-    Extrae el nombre base del medicamento sin la presentación.
+    Extrae el nombre base del medicamento sin la presentacin.
     Ejemplos:
-    - "Ibuprofeno 400mg x 100 tabletas" → "Ibuprofeno 400mg"
-    - "Acetaminofén 500mg x 10 tabletas - blister" → "Acetaminofén 500mg"
-    - "Loratadina 10mg jarabe 120ml" → "Loratadina 10mg"
+    - "Ibuprofeno 400mg x 100 tabletas" -> "Ibuprofeno 400mg"
+    - "Acetaminofn 500mg x 10 tabletas - blister" -> "Acetaminofn 500mg"
+    - "Loratadina 10mg jarabe 120ml" -> "Loratadina 10mg"
     
     Estrategia:
-    1. Buscar el patrón de concentración (400mg, 500mg, etc)
-    2. Tomar todo hasta la concentración + la concentración misma
-    3. Eliminar cualquier cosa después (x100, tabletas, blister, etc)
+    1. Buscar el patrn de concentracin (400mg, 500mg, etc)
+    2. Tomar todo hasta la concentracin + la concentracin misma
+    3. Eliminar cualquier cosa despus (x100, tabletas, blister, etc)
     """
-    # Patrón para detectar concentración: número + unidad (mg, g, ml, %, etc)
+    # Patrn para detectar concentracin: nmero + unidad (mg, g, ml, %, etc)
     patron_concentracion = r'\d+\.?\d*\s*(mg|g|ml|mcg|ui|%|mEq)'
     
     match = re.search(patron_concentracion, nombre_completo, re.IGNORECASE)
     
     if match:
-        # Encontramos concentración, tomar hasta ahí
+        # Encontramos concentracin, tomar hasta ah
         fin_concentracion = match.end()
         nombre_base = nombre_completo[:fin_concentracion].strip()
         return nombre_base
     
-    # Si no hay concentración, tomar solo la primera palabra (nombre del medicamento)
+    # Si no hay concentracin, tomar solo la primera palabra (nombre del medicamento)
     primera_palabra = nombre_completo.split()[0] if nombre_completo.split() else nombre_completo
     return primera_palabra
 
 @app.route('/api/productos/buscar', methods=['GET'])
 def buscar_productos_simple():
     """
-    Búsqueda agrupada de productos para autocompletado.
-    - Normaliza búsqueda (tildes, mayúsculas)
-    - Agrupa por nombre base (sin presentación)
+    Bsqueda agrupada de productos para autocompletado.
+    - Normaliza bsqueda (tildes, maysculas)
+    - Agrupa por nombre base (sin presentacin)
     - Vincula con el producto de menor precio
-    - 🆕 Incluye medicamentos personales del pastillero (medicamento_id NULL)
+    -  Incluye medicamentos personales del pastillero (medicamento_id NULL)
     """
     query = request.args.get('q', '').strip()
     
     if len(query) < 2:
         return jsonify({'ok': True, 'productos': []})
     
-    # Verificar si el usuario está autenticado para buscar medicamentos personales
+    # Verificar si el usuario est autenticado para buscar medicamentos personales
     usuario_id = session.get('usuario_id')
     
     try:
-        # Normalizar la búsqueda del usuario
+        # Normalizar la bsqueda del usuario
         query_normalizado = normalizar_texto(query)
         
         conn = get_db_connection()
         
-        # 1️⃣ Buscar medicamentos OFICIALES de la BD (con precios)
+        # 1 Buscar medicamentos OFICIALES de la BD (con precios)
         productos_raw = conn.execute('''
             SELECT DISTINCT
                 m.id as medicamento_id,
@@ -11879,14 +11888,14 @@ def buscar_productos_simple():
             INNER JOIN precios p ON m.id = p.medicamento_id
             LEFT JOIN fabricantes f ON p.fabricante_id = f.id
             WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                m.nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                m.nombre, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')
             ) LIKE ?
             AND m.activo = '1'
             AND p.precio > 0
             ORDER BY m.nombre, p.precio ASC
         ''', (f'%{query_normalizado}%',)).fetchall()
         
-        # 2️⃣ Buscar medicamentos PERSONALES del pastillero (NULL)
+        # 2 Buscar medicamentos PERSONALES del pastillero (NULL)
         medicamentos_personales = []
         if usuario_id:
             medicamentos_personales = conn.execute('''
@@ -11902,13 +11911,13 @@ def buscar_productos_simple():
                 WHERE usuario_id = ?
                 AND medicamento_id IS NULL
                 AND LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                    nombre, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n')
+                    nombre, '', 'a'), '', 'e'), '', 'i'), '', 'o'), '', 'u'), '', 'n')
                 ) LIKE ?
             ''', (usuario_id, f'%{query_normalizado}%')).fetchall()
         
         conn.close()
         
-        # 3️⃣ Agrupar por nombre base y seleccionar el de menor precio
+        # 3 Agrupar por nombre base y seleccionar el de menor precio
         productos_agrupados = {}
         
         # Procesar medicamentos oficiales
@@ -11923,7 +11932,7 @@ def buscar_productos_simple():
                         'medicamento_id': p['medicamento_id'],
                         'fabricante_id': p['fabricante_id'],
                         'nombre': nombre_base,
-                        'fabricante': p['fabricante'] if p['fabricante'] else 'Genérico',
+                        'fabricante': p['fabricante'] if p['fabricante'] else 'Genrico',
                         'precio': p['precio'],
                         'precio_id': p['precio_id'],
                         'tipo': 'oficial'
@@ -11934,15 +11943,15 @@ def buscar_productos_simple():
                     'medicamento_id': p['medicamento_id'],
                     'fabricante_id': p['fabricante_id'],
                     'nombre': nombre_base,
-                    'fabricante': p['fabricante'] if p['fabricante'] else 'Genérico',
+                    'fabricante': p['fabricante'] if p['fabricante'] else 'Genrico',
                     'precio': p['precio'],
                     'precio_id': p['precio_id'],
                     'tipo': 'oficial'
                 }
         
-        # 4️⃣ Agregar medicamentos personales (solo si no existen en oficiales)
+        # 4 Agregar medicamentos personales (solo si no existen en oficiales)
         for p in medicamentos_personales:
-            nombre_base = p['nombre']  # Ya está normalizado en el pastillero
+            nombre_base = p['nombre']  # Ya est normalizado en el pastillero
             
             # Solo agregar si NO existe ya en productos oficiales
             if nombre_base not in productos_agrupados:
@@ -11951,7 +11960,7 @@ def buscar_productos_simple():
                     'fabricante_id': None,
                     'nombre': nombre_base,
                     'tipo': 'personal',
-                    'es_personal': True  # 🆕 Flag para identificar en frontend
+                    'es_personal': True  #  Flag para identificar en frontend
                 }
         
         # Convertir a lista y limitar a 10 resultados
@@ -11979,13 +11988,13 @@ def buscar_productos_simple():
 # -------------------------------------------------------------------
 
 # -------------------------------------------------------------------
-# --- ZONA 7: INICIALIZACIÓN Y EJECUCIÓN DEL SERVIDOR ---
+# --- ZONA 7: INICIALIZACIN Y EJECUCIN DEL SERVIDOR ---
 # -------------------------------------------------------------------
 if __name__ == '__main__':
-    # 🎯 LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
+    #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#
     
-    # Después de inicializar, puedes ejecutar Flask
+    # Despus de inicializar, puedes ejecutar Flask
     app.run(debug=True, host='0.0.0.0')    # 1. Obtener competidores
     competidores = db.execute("SELECT DISTINCT t.id, t.nombre FROM terceros t JOIN precios_competencia pc ON t.id = pc.competidor_id ORDER BY t.nombre").fetchall()
     competidores_list = sorted([c['nombre'] for c in competidores])

@@ -1962,6 +1962,62 @@ def verificar_match_sintoma(nombre_sintoma, palabras_usuario, umbral=0.8):
 # 🔖 VERSIÓN: 2025-11-08 18:30 - COMPLETA CON TODAS LAS MEJORAS
 # ============================================
 
+def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', permitir_sin_cotizaciones=0):
+    """Busca medicamentos por nombre/fabricante/componente activo. Retorna (productos, palabras_sin_match, porcentaje_exito)"""
+    from utils import normalizar_texto, normalizar_palabra_busqueda
+
+    palabras_busqueda = normalizar_texto(busqueda).split()
+    print(f"\n🔍 Búsqueda directa: {palabras_busqueda}")
+
+    query = """SELECT DISTINCT p.id as precio_id, p.medicamento_id, p.fabricante_id, p.precio, p.imagen as imagen_precio,
+        m.nombre as medicamento_nombre, m.presentacion, m.concentracion, m.imagen as imagen_medicamento,
+        m.componente_activo_id, ca.nombre as componente_activo_nombre, f.nombre as fabricante_nombre,
+        s.nombre as sintoma_nombre, ms.sintoma_id
+        FROM precios p
+        INNER JOIN medicamentos m ON p.medicamento_id = m.id
+        INNER JOIN fabricantes f ON p.fabricante_id = f.id
+        LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
+        LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+        LEFT JOIN sintomas s ON ms.sintoma_id = s.id
+        WHERE m.activo = '1'"""
+
+    params = []
+    condiciones = []
+
+    for palabra in palabras_busqueda:
+        for variante in normalizar_palabra_busqueda(palabra):
+            sql_norm = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({}, 'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'ñ','n'))"
+            condiciones.extend([f"{sql_norm.format('m.nombre')} LIKE ?", f"{sql_norm.format('f.nombre')} LIKE ?", f"{sql_norm.format('ca.nombre')} LIKE ?"])
+            params.extend([f'%{variante}%'] * 3)
+
+    if condiciones:
+        query += f" AND ({' OR '.join(condiciones)})"
+
+    if precio_min:
+        try: query += " AND p.precio >= ?"; params.append(float(precio_min))
+        except: pass
+    if precio_max:
+        try: query += " AND p.precio <= ?"; params.append(float(precio_max))
+        except: pass
+
+    query += " AND (? = 1 OR COALESCE((SELECT COUNT(*) FROM precios_competencia pc WHERE pc.medicamento_id=p.medicamento_id AND pc.fabricante_id=p.fabricante_id),0) > 0) AND p.precio > 0"
+    params.append(permitir_sin_cotizaciones)
+
+    productos = conn.execute(query, params).fetchall()
+
+    palabras_con_match = set()
+    for p in productos:
+        for palabra in palabras_busqueda:
+            if palabra in p['medicamento_nombre'].lower() or palabra in p['fabricante_nombre'].lower() or (p['componente_activo_nombre'] and palabra in p['componente_activo_nombre'].lower()):
+                palabras_con_match.add(palabra)
+
+    palabras_sin_match = [p for p in palabras_busqueda if p not in palabras_con_match]
+    porcentaje = (len(palabras_con_match) / len(palabras_busqueda)) * 100 if palabras_busqueda else 0
+    print(f"   📊 Éxito: {porcentaje:.0f}% | Sin match: {palabras_sin_match}")
+
+    return productos, palabras_sin_match, porcentaje
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """
@@ -2002,15 +2058,24 @@ def obtener_productos():
             traceback.print_exc()
             return jsonify({'ok': False, 'error': str(e), 'productos': []}), 500
 
+        # ✅ PASO 1: Buscar medicamentos directos
+        productos_directos = []
+        if busqueda:
+            productos_directos, palabras_sin_match, porcentaje_exito = buscar_medicamentos_directos(busqueda, conn, precio_min, precio_max, permitir_sin_cotizaciones)
+            if porcentaje_exito <= 50 and palabras_sin_match:
+                busqueda_sintomas = ' '.join(palabras_sin_match)
+                print(f"   🔄 Activando búsqueda por síntomas: '{busqueda_sintomas}'")
+
         # DETECCIÓN INTELIGENTE: DIAGNÓSTICOS + SÍNTOMAS
         sintomas_detectados = []
         sintomas_detectados_ids = []
         diagnosticos_detectados_directo = []
         diagnosticos_detectados_directo_ids = []
         diagnosticos_posibles = {}
-        sintomas_faltantes_por_diagnostico = {}  # 🆕 NUEVO
-        busqueda_parcial_aplicada = False  # 🆕 Declarar al inicio
+        sintomas_faltantes_por_diagnostico = {}
+        busqueda_parcial_aplicada = False
 
+        # ✅ PASO 2: Procesar síntomas (si aplica)
         if busqueda_sintomas:
             # ============================================
             # PARTE 1: NORMALIZACIÓN (SIN CAMBIOS)
@@ -2463,11 +2528,9 @@ def obtener_productos():
 
         params = []
 
-        if busqueda:
-            query += " AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)"
-            params.extend([f'%{busqueda.lower()}%', f'%{busqueda.lower()}%'])
-    
-        if busqueda_sintomas:
+        # ✅ PASO 3: Buscar productos por síntomas (si se detectaron)
+        productos_sintomas = []
+        if sintomas_detectados_ids:
             todos_sintomas_ids = list(sintomas_detectados_ids)
         
             for diag_id in diagnosticos_detectados_directo_ids:
@@ -2486,103 +2549,45 @@ def obtener_productos():
         
             if todos_sintomas_ids:
                 placeholders = ','.join(['?' for _ in todos_sintomas_ids])
-            
-                # 🆕 LÓGICA MEJORADA: Si hay búsqueda por nombre, usar OR en lugar de AND
-                if busqueda:
-                    # Caso 1: Búsqueda por nombre Y síntomas → mostrar AMBOS resultados
-                    # Modificar el WHERE anterior para incluir síntomas con OR
-                    # La query actual ya tiene: AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)
-                    # Necesitamos cambiar esa condición para que sea un OR con los síntomas
-                
-                    # Remover el último AND que agregamos para el nombre
-                    # y reconstruir con OR
-                    query = query.replace(
-                        " AND (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)",
-                        f""" AND (
-                            (LOWER(m.nombre) LIKE ? OR LOWER(f.nombre) LIKE ?)
-                            OR 
-                            m.id IN (
-                                SELECT DISTINCT medicamento_id 
-                                FROM medicamento_sintoma 
-                                WHERE sintoma_id IN ({placeholders})
-                            )
-                        )"""
-                    )
-                    params.extend(todos_sintomas_ids)
-                else:
-                    # Caso 2: Solo síntomas (sin búsqueda por nombre) → filtrar solo por síntomas
-                    query += f"""
-                        AND m.id IN (
-                            SELECT DISTINCT medicamento_id 
-                            FROM medicamento_sintoma 
-                            WHERE sintoma_id IN ({placeholders})
-                        )
-                    """
-                    params.extend(todos_sintomas_ids)
-            elif not todos_sintomas_ids and not busqueda:
-                # Solo retornar vacío si NO hay búsqueda por nombre tampoco
-                conn.close()
-                return jsonify({
-                    'ok': True, 
-                    'productos': [], 
-                    'total': 0,
-                    'sintomas_detectados': [],
-                    'diagnosticos_posibles': [],
-                    'mensaje': 'No se detectaron síntomas ni diagnósticos válidos.'
-                })
-            # Si no hay síntomas PERO sí hay búsqueda por nombre, continuar con la query normal
+                query_sintomas = query + f" AND m.id IN (SELECT DISTINCT medicamento_id FROM medicamento_sintoma WHERE sintoma_id IN ({placeholders}))"
+                params_sintomas = params + todos_sintomas_ids
 
-        if precio_min:
-            try:
-                query += " AND p.precio >= ?"
-                params.append(float(precio_min))
-            except ValueError:
-                pass
-    
-        if precio_max:
-            try:
-                query += " AND p.precio <= ?"
-                params.append(float(precio_max))
-            except ValueError:
-                pass
+                if precio_min:
+                    try:
+                        query_sintomas += " AND p.precio >= ?"
+                        params_sintomas.append(float(precio_min))
+                    except ValueError:
+                        pass
+                if precio_max:
+                    try:
+                        query_sintomas += " AND p.precio <= ?"
+                        params_sintomas.append(float(precio_max))
+                    except ValueError:
+                        pass
 
-        # Filtrar productos sin cotizaciones según configuración
-        query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0)"
-        params.append(permitir_sin_cotizaciones)
+                query_sintomas += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
+                params_sintomas.append(permitir_sin_cotizaciones)
 
-        query += " AND p.precio > 0"
+                productos_sintomas = conn.execute(query_sintomas, params_sintomas).fetchall()
+                print(f"   🔍 Productos por síntomas: {len(productos_sintomas)}")
 
-        # Obtener el total de productos disponibles (antes del LIMIT)
-        query_count = query.replace(
-            """SELECT DISTINCT
-                p.id as precio_id,
-                p.medicamento_id,
-                p.fabricante_id,
-                p.precio,
-                p.imagen as imagen_precio,
-                m.nombre as medicamento_nombre,
-                m.presentacion,
-                m.concentracion,
-                m.imagen as imagen_medicamento,
-                m.componente_activo_id,
-                ca.nombre as componente_activo_nombre,
-                f.nombre as fabricante_nombre,
-                s.nombre as sintoma_nombre,
-                ms.sintoma_id""",
-            "SELECT COUNT(DISTINCT p.id)"
-        )
-        total_disponible = conn.execute(query_count, params).fetchone()[0]
+        # ✅ PASO 4: Combinar resultados (directos primero, luego síntomas sin duplicados)
+        if busqueda and productos_directos:
+            ids_directos = {p['precio_id'] for p in productos_directos}
+            productos_sintomas_unicos = [p for p in productos_sintomas if p['precio_id'] not in ids_directos]
+            productos = list(productos_directos) + productos_sintomas_unicos
+            print(f"   📦 Combinado: {len(productos_directos)} directos + {len(productos_sintomas_unicos)} síntomas = {len(productos)}")
+        elif busqueda:
+            productos = list(productos_directos)
+        elif productos_sintomas:
+            productos = list(productos_sintomas)
+        else:
+            # Sin búsqueda, mostrar primeros 50
+            query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
+            params.append(permitir_sin_cotizaciones)
+            productos = conn.execute(query, params).fetchall()
 
-        query += " ORDER BY m.nombre, f.nombre"
-
-        # Limitar resultados iniciales si no hay búsqueda (para mejor rendimiento)
-        hay_limite = False
-        if not busqueda and not busqueda_sintomas:
-            query += " LIMIT 50"
-            hay_limite = True
-
-        productos = conn.execute(query, params).fetchall()
-
+        total_disponible = len(productos)
         productos_agrupados = {}
         for p in productos:
             clave = p['precio_id']

@@ -3180,7 +3180,9 @@ def obtener_productos():
             es_directo = p['precio_id'] in ids_productos_directos
 
             # 🆕 FILTRO: Solo incluir si es directo O tiene coincidencias de síntomas
-            if es_directo or coincidencias_sintomas > 0 or coincidencias_diagnosticos_directos > 0:
+            # EXCEPCIÓN: Si no hay búsqueda (carga inicial), incluir TODOS
+            hay_busqueda = bool(busqueda or busqueda_sintomas)
+            if not hay_busqueda or es_directo or coincidencias_sintomas > 0 or coincidencias_diagnosticos_directos > 0:
                 productos_con_score.append({
                     'precio_id': p['precio_id'],
                     'medicamento_id': p['medicamento_id'],

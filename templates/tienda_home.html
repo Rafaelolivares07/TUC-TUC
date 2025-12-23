@@ -548,7 +548,27 @@
         .btn-ordenar-pastillero:hover {
             background: rgba(255, 255, 255, 0.3);
         }
-        
+
+        /* Botón de contactos */
+        .btn-contactos-pastillero {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .btn-contactos-pastillero:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         .modal-pastillero-body {
             padding: 1.5rem;
             overflow-y: auto;
@@ -3897,21 +3917,143 @@
         }
 
 
+        // ============================================
+        // FUNCIONES DE CONTACTOS ADICIONALES
+        // ============================================
+
+        async function abrirModalContactos() {
+            document.getElementById('modal-contactos').style.display = 'flex';
+            // Cargar contactos existentes
+            await cargarContactosAdicionales();
+        }
+
+        function cerrarModalContactos() {
+            document.getElementById('modal-contactos').style.display = 'none';
+            // Limpiar formulario
+            document.getElementById('contacto-nombre').value = '';
+            document.getElementById('contacto-telefono').value = '';
+        }
+
+        async function cargarContactosAdicionales() {
+            try {
+                const response = await fetch('/api/pastillero/contactos');
+                const data = await response.json();
+
+                const lista = document.getElementById('lista-contactos-adicionales');
+
+                if (!data.ok) {
+                    lista.innerHTML = '<p style="color: #999; text-align: center;">Error al cargar contactos</p>';
+                    return;
+                }
+
+                if (data.contactos.length === 0) {
+                    lista.innerHTML = '<p style="color: #999; text-align: center; padding: 2rem;">No hay contactos agregados aún</p>';
+                    return;
+                }
+
+                // Renderizar lista de contactos
+                lista.innerHTML = data.contactos.map(contacto => `
+                    <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1rem;">${contacto.nombre}</div>
+                            <div style="color: #666; font-size: 0.9rem; margin-top: 0.25rem;">
+                                ${contacto.telefono}
+                                ${contacto.telegram_vinculado
+                                    ? '<span style="color: #27ae60; margin-left: 0.5rem;">✓ Telegram vinculado</span>'
+                                    : '<span style="color: #e67e22; margin-left: 0.5rem;">⚠ Telegram no vinculado</span>'
+                                }
+                            </div>
+                        </div>
+                        <button onclick="eliminarContactoAdicional(${contacto.id})" style="background: #e74c3c; color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                            Eliminar
+                        </button>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error al cargar contactos:', error);
+                document.getElementById('lista-contactos-adicionales').innerHTML =
+                    '<p style="color: #e74c3c; text-align: center;">Error al cargar contactos</p>';
+            }
+        }
+
+        async function agregarContactoAdicional() {
+            const nombre = document.getElementById('contacto-nombre').value.trim();
+            const telefono = document.getElementById('contacto-telefono').value.trim();
+
+            if (!nombre || !telefono) {
+                alert('Por favor completa nombre y teléfono');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/pastillero/contactos/agregar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, telefono })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert('Contacto agregado correctamente');
+                    // Limpiar formulario
+                    document.getElementById('contacto-nombre').value = '';
+                    document.getElementById('contacto-telefono').value = '';
+                    // Recargar lista
+                    await cargarContactosAdicionales();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo agregar el contacto'));
+                }
+            } catch (error) {
+                console.error('Error al agregar contacto:', error);
+                alert('Error al agregar contacto. Intenta de nuevo.');
+            }
+        }
+
+        async function eliminarContactoAdicional(contactoId) {
+            if (!confirm('¿Eliminar este contacto? Dejará de recibir recordatorios.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/pastillero/contactos/${contactoId}/eliminar`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert('Contacto eliminado');
+                    // Recargar lista
+                    await cargarContactosAdicionales();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo eliminar'));
+                }
+            } catch (error) {
+                console.error('Error al eliminar contacto:', error);
+                alert('Error al eliminar contacto');
+            }
+        }
+
+
     </script>
-    
+
     <!-- 🆕 MODAL DEL PASTILLERO -->
     <div id="modal-pastillero" class="modal-pastillero">
         <div class="modal-pastillero-content">
             <div class="modal-pastillero-header">
                 <h2><span>💊</span> <span id="titulo-pastillero">Mi Pastillero</span></h2>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="btn-contactos-pastillero" onclick="abrirModalContactos()" title="Gestionar contactos para recordatorios">
+                        <span>👥</span> Contactos
+                    </button>
                     <button id="btn-ordenar-pastillero" class="btn-ordenar-pastillero" onclick="toggleOrdenPastillero()">
                         <span id="icono-orden">📅</span> <span id="texto-orden">Recientes</span>
                     </button>
                     <button class="btn-cerrar-modal" onclick="cerrarPastillero()">×</button>
                 </div>
-            </div>
-            <div class="modal-pastillero-body">
+            </div>            <div class="modal-pastillero-body">
                 <!-- Búsqueda de medicamentos -->
                 <div class="pastillero-busqueda">
                     <input 
@@ -3997,7 +4139,55 @@
         </div>
     </div>
 
-    <!-- Bot�n flotante de WhatsApp -->
+    <!-- MODAL DE CONTACTOS ADICIONALES -->
+    <div id="modal-contactos" class="modal-registro" style="display: none;">
+        <div class="modal-registro-content">
+            <div class="modal-registro-header">
+                <h2>👥 Contactos para Recordatorios</h2>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">
+                    Agrega familiares o cuidadores que también recibirán recordatorios de tus medicamentos
+                </p>
+            </div>
+            <div class="modal-registro-body">
+                <!-- Formulario para agregar contacto -->
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem;">Agregar nuevo contacto</h3>
+                    <div class="form-group">
+                        <label for="contacto-nombre">Nombre</label>
+                        <input type="text" id="contacto-nombre" placeholder="Ej: Juan Pérez (hijo)" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contacto-telefono">Teléfono</label>
+                        <input type="tel" id="contacto-telefono" placeholder="Ej: 3001234567" required>
+                    </div>
+                    <button class="btn-registrar" onclick="agregarContactoAdicional()" style="width: 100%;">
+                        + Agregar Contacto
+                    </button>
+                </div>
+
+                <!-- Lista de contactos existentes -->
+                <div>
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1rem;">Contactos agregados</h3>
+                    <div id="lista-contactos-adicionales">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+
+                <div style="background: #e7f3ff; padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid #2196F3;">
+                    <p style="margin: 0; font-size: 0.9rem; color: #0d47a1;">
+                        <strong>💡 Cómo funciona:</strong><br>
+                        Cada contacto recibirá recordatorios en Telegram cuando sea hora de tomar tus medicamentos.
+                        Para recibir los recordatorios, deben enviar <strong>/vincular TELEFONO</strong> a @TucTucMedicamentosBot
+                    </p>
+                </div>
+            </div>
+            <div class="modal-registro-footer">
+                <button class="btn-cancelar-registro" onclick="cerrarModalContactos()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botón flotante de WhatsApp -->
     <a href="https://wa.me/573166686397?text=Hola%2C%20tengo%20una%20consulta%20sobre%20medicamentos"
        class="whatsapp-float"
        target="_blank"

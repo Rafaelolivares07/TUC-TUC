@@ -1810,30 +1810,110 @@ def admin_pedido_detalles(pedido_id):
 @app.route('/admin/pedidos/<int:pedido_id>/cambiar_estado', methods=['POST'])
 @admin_required
 def admin_cambiar_estado_pedido(pedido_id):
-    """Cambia el estado de un pedido"""
+    """Cambia el estado de un pedido y agrega medicamentos al pastillero cuando se entrega"""
+    conn = None
     try:
         data = request.get_json()
         nuevo_estado = data.get('estado')
-        
+
         if nuevo_estado not in ['pendiente', 'en_camino', 'entregado', 'cancelado']:
             return jsonify({'ok': False, 'error': 'Estado invlido'}), 400
-        
+
         conn = get_db_connection()
+
+        # Actualizar estado del pedido
         conn.execute("""
-            UPDATE pedidos 
-            SET estado = ? 
-            WHERE id = ?
+            UPDATE pedidos
+            SET estado = %s
+            WHERE id = %s
         """, (nuevo_estado, pedido_id))
+
+        # Si el estado es "entregado", agregar medicamentos al pastillero
+        if nuevo_estado == 'entregado':
+            # 1. Obtener información del pedido y el cliente
+            pedido = conn.execute("""
+                SELECT p.id_tercero, t.telefono, t.nombre
+                FROM pedidos p
+                INNER JOIN terceros t ON p.id_tercero = t.id
+                WHERE p.id = %s
+            """, (pedido_id,)).fetchone()
+
+            if pedido and pedido['telefono']:
+                # 2. Buscar si el cliente tiene cuenta de pastillero (por teléfono)
+                usuario_pastillero = conn.execute("""
+                    SELECT id FROM terceros
+                    WHERE telefono = %s AND id IN (
+                        SELECT DISTINCT usuario_id FROM pastillero_usuarios WHERE usuario_id IS NOT NULL
+                    )
+                    LIMIT 1
+                """, (pedido['telefono'],)).fetchone()
+
+                # Si no tiene cuenta de pastillero, usar el tercero_id como usuario_id
+                usuario_id = usuario_pastillero['id'] if usuario_pastillero else pedido['id_tercero']
+
+                # 3. Obtener los medicamentos del pedido (desde existencias)
+                medicamentos_pedido = conn.execute("""
+                    SELECT e.medicamento_id, e.cantidad, m.nombre
+                    FROM existencias e
+                    INNER JOIN medicamentos m ON e.medicamento_id = m.id
+                    WHERE e.pedido_id = %s AND e.tipo_movimiento = 'salida'
+                """, (pedido_id,)).fetchall()
+
+                # 4. Agregar cada medicamento al pastillero
+                medicamentos_agregados = []
+                for med in medicamentos_pedido:
+                    medicamento_id = med['medicamento_id']
+                    cantidad = med['cantidad']
+                    nombre = med['nombre']
+
+                    # Extraer nombre base normalizado
+                    nombre_normalizado = extraer_nombre_base(nombre)
+
+                    # Verificar si ya existe en el pastillero
+                    existe = conn.execute("""
+                        SELECT id, cantidad FROM pastillero_usuarios
+                        WHERE usuario_id = %s AND medicamento_id = %s
+                    """, (usuario_id, medicamento_id)).fetchone()
+
+                    if existe:
+                        # Sumar a la cantidad existente
+                        conn.execute("""
+                            UPDATE pastillero_usuarios
+                            SET cantidad = cantidad + %s,
+                                fecha_actualizado = CURRENT_TIMESTAMP
+                            WHERE id = %s
+                        """, (cantidad, existe['id']))
+                    else:
+                        # Insertar nuevo medicamento
+                        conn.execute("""
+                            INSERT INTO pastillero_usuarios
+                            (usuario_id, medicamento_id, nombre, cantidad, unidad, fecha_agregado)
+                            VALUES (%s, %s, %s, %s, 'pastillas', CURRENT_TIMESTAMP)
+                        """, (usuario_id, medicamento_id, nombre_normalizado, cantidad))
+
+                    medicamentos_agregados.append(nombre_normalizado)
+
+                print(f"[PASTILLERO] Agregados {len(medicamentos_agregados)} medicamentos al usuario {usuario_id}")
+
         conn.commit()
         conn.close()
-        
+
+        mensaje = f'Estado cambiado a: {nuevo_estado}'
+        if nuevo_estado == 'entregado':
+            mensaje += ' - Medicamentos agregados al pastillero del cliente'
+
         return jsonify({
             'ok': True,
-            'mensaje': f'Estado cambiado a: {nuevo_estado}'
+            'mensaje': mensaje
         })
-        
+
     except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
         print(f"Error cambiando estado: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
     
 

@@ -13555,6 +13555,9 @@ def buscar_medicamentos_admin():
 @app.route('/api/categorias', methods=['GET'])
 def obtener_categorias_publicas():
     """Obtiene categorías activas para mostrar en la tienda"""
+    print("=" * 70)
+    print(" API /api/categorias - VERSION: 2025-12-23 18:00 FIXED")
+    print("=" * 70)
     try:
         conn = get_db_connection()
         categorias = conn.execute("""

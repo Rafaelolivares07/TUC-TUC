@@ -2489,6 +2489,7 @@ def obtener_productos():
         precio_min = request.args.get('precio_min', '')
         precio_max = request.args.get('precio_max', '')
         busqueda_sintomas = request.args.get('sintomas_busqueda', '').strip()
+        categoria_id = request.args.get('categoria_id', '').strip()  # Nuevo parámetro
 
         try:
             conn = get_db_connection()
@@ -3060,8 +3061,19 @@ def obtener_productos():
             productos = list(productos_directos) + productos_sintomas_unicos
             print(f"   Combinado: {len(productos_directos)} directos + {len(productos_sintomas_unicos)} sintomas = {len(productos)}")
         else:
-            # Sin bsqueda, mostrar primeros 50
+            # Sin bsqueda, mostrar primeros 50 (o filtrar por categoría)
             hay_limite = True
+
+            # Filtro por categoría si se proporciona
+            if categoria_id:
+                query += """
+                    AND m.id IN (
+                        SELECT medicamento_id FROM medicamento_categoria
+                        WHERE categoria_id = %s
+                    )
+                """
+                params.append(int(categoria_id))
+
             query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
             params.append(permitir_sin_cotizaciones)
             productos = conn.execute(query, params).fetchall()

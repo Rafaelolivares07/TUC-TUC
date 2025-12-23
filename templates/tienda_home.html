@@ -1021,10 +1021,59 @@
                </div>
            </div>
 
+           <!-- Selector horizontal de categorías -->
+           <div id="selector-categorias" style="
+               width: 100%;
+               margin-top: 1rem;
+               overflow-x: auto;
+               overflow-y: hidden;
+               white-space: nowrap;
+               -webkit-overflow-scrolling: touch;
+               scrollbar-width: none; /* Firefox */
+               -ms-overflow-style: none; /* IE/Edge */
+           ">
+               <style>
+                   #selector-categorias::-webkit-scrollbar {
+                       display: none; /* Chrome/Safari */
+                   }
 
+                   .categoria-chip {
+                       display: inline-block;
+                       padding: 0.6rem 1.2rem;
+                       margin-right: 0.5rem;
+                       background: rgba(255, 255, 255, 0.2);
+                       border: 2px solid rgba(255, 255, 255, 0.3);
+                       border-radius: 25px;
+                       color: white;
+                       font-size: 0.9rem;
+                       font-weight: 600;
+                       cursor: pointer;
+                       transition: all 0.3s;
+                       user-select: none;
+                   }
 
+                   .categoria-chip:hover {
+                       background: rgba(255, 255, 255, 0.3);
+                       transform: translateY(-2px);
+                   }
 
+                   .categoria-chip.activa {
+                       background: white;
+                       color: #2e89ff;
+                       border-color: white;
+                   }
 
+                   .categoria-chip img {
+                       width: 20px;
+                       height: 20px;
+                       margin-right: 0.4rem;
+                       vertical-align: middle;
+                       border-radius: 50%;
+                   }
+               </style>
+
+               <!-- Las categorías se cargarán dinámicamente aquí -->
+           </div>
 
            <!-- Textarea de búsqueda -->
            <textarea
@@ -1162,9 +1211,94 @@
                 });
         }
 
-        // Cargar productos al inicio
+        // Variables globales para categorías
+        let categoriaActiva = null;
+        let categorias = [];
+
+        // Cargar categorías desde el backend
+        async function cargarCategorias() {
+            try {
+                const response = await fetch('/api/categorias');
+                const data = await response.json();
+
+                if (data.ok) {
+                    categorias = data.categorias;
+                    const categoriaDestacadaId = data.categoria_destacada_id;
+
+                    renderizarCategorias(categorias, categoriaDestacadaId);
+
+                    // Establecer categoría activa inicial (destacada o primera)
+                    if (categoriaDestacadaId) {
+                        categoriaActiva = categoriaDestacadaId;
+                    } else if (categorias.length > 0) {
+                        categoriaActiva = categorias[0].id;
+                    }
+                }
+            } catch (error) {
+                console.error('Error cargando categorías:', error);
+            }
+        }
+
+        // Renderizar selector de categorías
+        function renderizarCategorias(cats, destacadaId) {
+            const container = document.getElementById('selector-categorias');
+
+            container.innerHTML = cats.map(cat => `
+                <div class="categoria-chip ${cat.id === destacadaId ? 'activa' : ''}"
+                     data-categoria-id="${cat.id}"
+                     onclick="filtrarPorCategoria(${cat.id})">
+                    ${cat.imagen ? `<img src="${cat.imagen}" alt="${cat.nombre}">` : ''}
+                    ${cat.nombre}
+                </div>
+            `).join('');
+        }
+
+        // Filtrar productos por categoría
+        async function filtrarPorCategoria(categoriaId) {
+            categoriaActiva = categoriaId;
+
+            // Actualizar UI (marcar chip activo)
+            document.querySelectorAll('.categoria-chip').forEach(chip => {
+                if (parseInt(chip.dataset.categoriaId) === categoriaId) {
+                    chip.classList.add('activa');
+                } else {
+                    chip.classList.remove('activa');
+                }
+            });
+
+            // Cargar productos de la categoría
+            document.getElementById('productosContainer').innerHTML = '<div class="loading">Cargando productos...</div>';
+
+            try {
+                const response = await fetch(`/api/productos?categoria_id=${categoriaId}`);
+                const data = await response.json();
+
+                if (data.ok && data.productos && data.productos.length > 0) {
+                    mostrarProductos(data.productos, data);
+                    productosMostradosEnTienda = data.productos;
+                } else {
+                    document.getElementById('productosContainer').innerHTML = `
+                        <div class="sin-resultados" style="text-align: center; padding: 3rem 1.5rem;">
+                            <p style="color: #666;">No hay productos en esta categoría</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error filtrando por categoría:', error);
+                document.getElementById('productosContainer').innerHTML = '<div class="sin-resultados">Error al cargar productos</div>';
+            }
+        }
+
+        // Cargar categorías y productos al inicio
         window.addEventListener('DOMContentLoaded', () => {
-            cargarProductosIniciales();
+            cargarCategorias().then(() => {
+                // Después de cargar categorías, cargar productos de la categoría destacada
+                if (categoriaActiva) {
+                    filtrarPorCategoria(categoriaActiva);
+                } else {
+                    cargarProductosIniciales();
+                }
+            });
         });
 
         // Función para auto-expandir el textarea

@@ -958,7 +958,7 @@ def agregar_direccion_tercero():
             # Crear nuevo tercero
             cursor = conn.execute("""
                 INSERT INTO terceros (nombre, telefono, fecha_creacion)
-                VALUES (?, ?, datetime('now'))
+                VALUES (?, ?, CURRENT_TIMESTAMP)
             """, (nombre_completo, telefono))
             tercero_id = cursor.lastrowid
 
@@ -1283,7 +1283,7 @@ def procesar_pedido():
             if tercero_existente['nombre'] != nombre:
                 conn.execute("""
                     UPDATE terceros
-                    SET nombre = ?, fecha_actualizacion = datetime('now')
+                    SET nombre = ?, fecha_actualizacion = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (nombre, tercero_id))
                 print(f"  Nombre actualizado a: {nombre}")
@@ -1296,7 +1296,7 @@ def procesar_pedido():
             print(f" Insertando nuevo tercero con ID {next_tercero_id}...")
             cursor = conn.execute("""
                 INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
-                VALUES (?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
             """, (next_tercero_id, nombre, telefono))
             tercero_id = next_tercero_id
             print(f" Tercero creado con ID: {tercero_id}")
@@ -1318,7 +1318,7 @@ def procesar_pedido():
             # Actualizar coordenadas si cambiaron
             conn.execute("""
                 UPDATE terceros_direcciones
-                SET latitud = ?, longitud = ?, fecha_actualizacion = datetime('now')
+                SET latitud = ?, longitud = ?, fecha_actualizacion = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (latitud, longitud, direccion_id))
 
@@ -1349,7 +1349,7 @@ def procesar_pedido():
                 id, id_tercero, fecha, total, metodo_pago, costo_domicilio,
                 direccion_entrega, latitud_entrega, longitud_entrega,
                 estado, tiempo_estimado_entrega
-            ) VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
+            ) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
         """, (next_pedido_id, tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
         pedido_id = next_pedido_id
         print(f" Pedido creado con ID: {pedido_id}")
@@ -1364,7 +1364,7 @@ def procesar_pedido():
                 INSERT INTO existencias (
                     id, medicamento_id, fabricante_id, tipo_movimiento,
                     cantidad, fecha, id_tercero, pedido_id
-                ) VALUES (?, ?, ?, 'salida', ?, datetime('now'), ?, ?)
+                ) VALUES (?, ?, ?, 'salida', ?, CURRENT_TIMESTAMP, ?, ?)
             """, (next_existencia_id, item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
         
         conn.commit()
@@ -1458,7 +1458,7 @@ def solicitud_especial():
             # Crear usuario nuevo
             cursor = conn.execute("""
                 INSERT INTO usuarios (dispositivo_id, nombre, fecha_registro, rol)
-                VALUES (?, 'Cliente sin nombre', datetime('now'), 'Paciente')
+                VALUES (?, 'Cliente sin nombre', CURRENT_TIMESTAMP, 'Paciente')
             """, (dispositivo_id,))
             usuario_id = cursor.lastrowid
             print(f" Usuario creado: ID={usuario_id}, dispositivo={dispositivo_id}")
@@ -1469,7 +1469,7 @@ def solicitud_especial():
         # 2. CREAR TERCERO (con telfono, nombre temporal)
         cursor = conn.execute("""
             INSERT INTO terceros (nombre, telefono, id_usuario, fecha_creacion)
-            VALUES ('Cliente sin nombre', ?, ?, datetime('now'))
+            VALUES ('Cliente sin nombre', ?, ?, CURRENT_TIMESTAMP)
         """, (telefono, usuario_id))
         tercero_id = cursor.lastrowid
         print(f" Tercero creado: ID={tercero_id}, telfono={telefono}")
@@ -1489,7 +1489,7 @@ def solicitud_especial():
                 estado,
                 notas,
                 tiempo_estimado_entrega
-            ) VALUES (?, datetime('now'), 0, 'pendiente', 0, '', 
+            ) VALUES (?, CURRENT_TIMESTAMP, 0, 'pendiente', 0, '',
                       'VERIFICANDO_DISPONIBILIDAD', ?, 'Por confirmar')
         """, (tercero_id, notas))
         pedido_id = cursor.lastrowid
@@ -5453,7 +5453,7 @@ def guardar_receta(paciente_id, medicamento_id, dosis, frecuencia, duracion_dias
         conn.execute("""
             INSERT INTO recetas 
                 (paciente_id, medicamento_id, dosis, frecuencia, duracion_dias, fecha_emision, sintomas_base)
-            VALUES (?, ?, ?, ?, ?, datetime('now'), ?) 
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?) 
             """, 
             (paciente_id, medicamento_id, dosis, frecuencia, duracion_dias, sintomas_str)
         )
@@ -10033,7 +10033,7 @@ def crear_desde_huerfano():
         # Crear registro en precios con precio 0
         db.execute("""
             INSERT INTO precios (medicamento_id, fabricante_id, precio, fecha_actualizacion)
-            VALUES (?, ?, 0, datetime('now'))
+            VALUES (?, ?, 0, CURRENT_TIMESTAMP)
         """, (medicamento_id, fabricante_id))
         db.commit()
 
@@ -10107,7 +10107,7 @@ def finalizar_huerfano():
         # Crear registro en precios con precio inicial en 0
         db.execute("""
             INSERT INTO precios (medicamento_id, fabricante_id, precio, fecha_actualizacion)
-            VALUES (?, ?, 0, datetime('now'))
+            VALUES (?, ?, 0, CURRENT_TIMESTAMP)
         """, (medicamento_id, fabricante_id))
         db.commit()
         db.close()
@@ -11645,7 +11645,7 @@ def api_crear_usuario_pastillero():
             if tercero_existente['nombre'] != nombre:
                 conn.execute("""
                     UPDATE terceros
-                    SET nombre = ?, fecha_actualizacion = datetime('now')
+                    SET nombre = ?, fecha_actualizacion = CURRENT_TIMESTAMP
                     WHERE id = ?
                 """, (nombre, tercero_id))
                 conn.commit()
@@ -11658,7 +11658,7 @@ def api_crear_usuario_pastillero():
             print(f"➕ Creando nuevo tercero con ID {next_tercero_id}...")
             conn.execute("""
                 INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
-                VALUES (?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
             """, (next_tercero_id, nombre, telefono))
             tercero_id = next_tercero_id
             conn.commit()
@@ -12005,7 +12005,7 @@ def api_pastillero_crear():
         #  Crear alerta para el admin
         conn.execute('''
             INSERT INTO alertas_admin (tipo, mensaje, usuario_id, fecha_creacion)
-            VALUES ('medicamento_faltante', ?, ?, datetime('now'))
+            VALUES ('medicamento_faltante', ?, ?, CURRENT_TIMESTAMP)
         ''', (f'Usuario agreg medicamento no registrado: {nombre}', usuario_id))
         
         conn.commit()

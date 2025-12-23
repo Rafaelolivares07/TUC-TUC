@@ -1133,10 +1133,38 @@
     <script>
         let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
         actualizarBadgeCarrito();
-        
+
+        // Cargar productos iniciales al cargar la página
+        function cargarProductosIniciales() {
+            console.log('📦 Cargando productos iniciales...');
+
+            document.getElementById('productosContainer').innerHTML = '<div class="loading">Cargando productos...</div>';
+
+            fetch('/api/productos')
+                .then(res => res.json())
+                .then(data => {
+                    console.log('📥 Productos iniciales recibidos:', data.productos ? data.productos.length : 0);
+
+                    if (data.ok && data.productos && data.productos.length > 0) {
+                        mostrarProductos(data.productos, data);
+                        productosMostradosEnTienda = data.productos;
+                    } else {
+                        document.getElementById('productosContainer').innerHTML = `
+                            <div class="sin-resultados" style="text-align: center; padding: 3rem 1.5rem;">
+                                <p style="color: #666;">Escribe un síntoma o nombre de medicamento para buscar</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(err => {
+                    console.error('Error cargando productos iniciales:', err);
+                    document.getElementById('productosContainer').innerHTML = '<div class="sin-resultados">Error al cargar productos</div>';
+                });
+        }
+
         // Cargar productos al inicio
         window.addEventListener('DOMContentLoaded', () => {
-            buscarProductos();
+            cargarProductosIniciales();
         });
 
         // Función para auto-expandir el textarea
@@ -1285,9 +1313,8 @@
         };
         
         function buscarProductos() {
-            alert('🚨 FUNCIÓN buscarProductos() SE EJECUTÓ 🚨');
-            console.log('%c🚨🚨🚨 BUSCAR PRODUCTOS LLAMADO 🚨🚨🚨', 'background: red; color: white; font-size: 30px; padding: 10px;');
-            
+            console.log('🔍 buscarProductos() ejecutado');
+
             const busquedaUnificada = document.getElementById('busqueda_unificada').value;
             
             // 🆕 Guardar síntomas buscados
@@ -1327,11 +1354,13 @@
             fetch(`/api/productos?${params.toString()}`)
                 .then(res => res.json())
                 .then(data => {
-                    console.log('📥 RESPUESTA RECIBIDA:', {
+                    console.log('📥 Respuesta API:', {
                         ok: data.ok,
-                        productos_count: data.productos ? data.productos.length : 0
+                        productos: data.productos ? data.productos.length : 0,
+                        busqueda: busquedaUnificada,
+                        params: params.toString()
                     });
-                    
+
                     if (data.ok) {
                         // 🆕 Envolver en try-catch para que errores no detengan verificación de pastillero
                         try {
@@ -1348,13 +1377,7 @@
                         
                         // 🎯 CRÍTICO: Guardar productos ANTES del setTimeout
                         productosMostradosEnTienda = data.productos || [];
-                        alert('💾 GUARDANDO ' + productosMostradosEnTienda.length + ' PRODUCTOS 💾');
-                        console.log('%c💾💾💾 PRODUCTOS GUARDADOS: ' + productosMostradosEnTienda.length, 'background: green; color: white; font-size: 30px; padding: 10px;');
-                        console.log('💾 Productos guardados en productosMostradosEnTienda:', productosMostradosEnTienda.length);
-                        console.log('💾 Primeros 3 productos:', productosMostradosEnTienda.slice(0, 3).map(p => ({
-                            nombre: p.nombre,
-                            medicamento_id: p.medicamento_id
-                        })));
+                        console.log('💾 Productos guardados:', productosMostradosEnTienda.length);
                         
                         // 🆕 CRÍTICO: Verificar pastillero SIEMPRE, incluso si hay errores arriba
                         // Usar setTimeout para asegurar que se ejecute después de todo lo demás

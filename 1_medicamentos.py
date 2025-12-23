@@ -5189,6 +5189,12 @@ def actualizar_fabricante_medicamento():
             (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
         )
 
+        # Actualizar en cotizaciones para que no queden huérfanas
+        conn.execute(
+            "UPDATE cotizaciones SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
+            (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
+        )
+
         conn.commit()
 
         return jsonify({'ok': True})
@@ -5202,6 +5208,91 @@ def actualizar_fabricante_medicamento():
     finally:
         if conn:
             conn.close()
+
+
+@app.route("/admin/cotizaciones/huerfanas", methods=["GET"])
+@admin_required
+def obtener_cotizaciones_huerfanas():
+    """
+    Busca cotizaciones huérfanas (donde el fabricante_id no coincide con ningún precio activo).
+    Retorna lista de cotizaciones que necesitan corrección.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+
+        # Buscar cotizaciones donde el fabricante_id no existe en la tabla precios
+        # para ese medicamento_id
+        query = """
+            SELECT
+                c.id as cotizacion_id,
+                c.medicamento_id,
+                c.fabricante_id as fabricante_id_cotizacion,
+                c.precio as precio_cotizado,
+                c.fecha_cotizacion,
+                c.tercero_id,
+                m.nombre as medicamento_nombre,
+                f_cotiz.nombre as fabricante_cotizacion,
+                t.nombre as tercero_nombre,
+                GROUP_CONCAT(DISTINCT f_valido.id || ':' || f_valido.nombre) as fabricantes_validos
+            FROM cotizaciones c
+            INNER JOIN medicamentos m ON c.medicamento_id = m.id
+            LEFT JOIN fabricantes f_cotiz ON c.fabricante_id = f_cotiz.id
+            LEFT JOIN terceros t ON c.tercero_id = t.id
+            LEFT JOIN precios p ON c.medicamento_id = p.medicamento_id
+            LEFT JOIN fabricantes f_valido ON p.fabricante_id = f_valido.id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM precios
+                WHERE precios.medicamento_id = c.medicamento_id
+                AND precios.fabricante_id = c.fabricante_id
+            )
+            GROUP BY c.id, c.medicamento_id, c.fabricante_id, c.precio, c.fecha_cotizacion,
+                     c.tercero_id, m.nombre, f_cotiz.nombre, t.nombre
+            ORDER BY c.fecha_cotizacion DESC
+        """
+
+        cotizaciones_huerfanas = conn.execute(query).fetchall()
+
+        resultados = []
+        for cot in cotizaciones_huerfanas:
+            fabricantes_validos = []
+            if cot['fabricantes_validos']:
+                for fab in cot['fabricantes_validos'].split(','):
+                    if ':' in fab:
+                        fab_id, fab_nombre = fab.split(':', 1)
+                        fabricantes_validos.append({
+                            'id': int(fab_id),
+                            'nombre': fab_nombre
+                        })
+
+            resultados.append({
+                'cotizacion_id': cot['cotizacion_id'],
+                'medicamento_id': cot['medicamento_id'],
+                'medicamento_nombre': cot['medicamento_nombre'],
+                'fabricante_id_cotizacion': cot['fabricante_id_cotizacion'],
+                'fabricante_cotizacion': cot['fabricante_cotizacion'],
+                'precio_cotizado': cot['precio_cotizado'],
+                'fecha_cotizacion': cot['fecha_cotizacion'],
+                'tercero_id': cot['tercero_id'],
+                'tercero_nombre': cot['tercero_nombre'],
+                'fabricantes_validos': fabricantes_validos
+            })
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'cotizaciones_huerfanas': resultados,
+            'total': len(resultados)
+        })
+
+    except Exception as e:
+        if conn:
+            conn.close()
+        print(f"Error al buscar cotizaciones huérfanas: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 @app.route("/medicamentos/eliminar/<int:medicamento_id>", methods=["POST"])
 @admin_required

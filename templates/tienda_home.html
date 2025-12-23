@@ -688,11 +688,34 @@
             background: #3498db;
             color: white;
         }
-        
+
         .btn-ver-sintomas:hover {
             background: #2980b9;
         }
-        
+
+        .btn-recordatorio {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-recordatorio:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-recordatorio.activo {
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+
+        .btn-recordatorio.activo:hover {
+            background: #229954;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
         .medicamento-sintomas {
             margin-top: 0.75rem;
             padding: 0.75rem;
@@ -870,6 +893,30 @@
 
         .btn-cancelar-registro:hover {
             background: #e0e0e0;
+        }
+
+        /* Botones de hora en modal de recordatorio */
+        .btn-hora {
+            padding: 0.75rem 1.5rem;
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-hora:hover {
+            background: #e8f5e9;
+            border-color: #4caf50;
+        }
+
+        .btn-hora.selected {
+            background: linear-gradient(135deg, #2e89ff 0%, #1976D2 100%);
+            color: white;
+            border-color: #1976D2;
         }
 
 
@@ -2057,6 +2104,11 @@
                         <button class="btn-medicamento btn-agregar-cantidad" onclick="agregarCantidad(${med.id})">
                             Agregar (+)
                         </button>
+                        <button class="btn-medicamento btn-recordatorio ${med.recordatorio_activo ? 'activo' : ''}"
+                                onclick="toggleRecordatorio(${med.id}, '${med.nombre.replace(/'/g, "\\'")}', ${med.recordatorio_activo || false})"
+                                title="${med.recordatorio_activo ? 'Recordatorio activo' : 'Activar recordatorio'}">
+                            ${med.recordatorio_activo ? '⏰ ON' : '⏰'}
+                        </button>
                         ${med.sintomas && med.sintomas.length > 0 && med.sintomas[0] !== '' ? `
                             <button class="btn-medicamento btn-ver-sintomas" onclick="toggleSintomasPastillero(${med.medicamento_id})">
                                 ¿Para qué sirve?
@@ -2130,6 +2182,11 @@
                         </button>
                         <button class="btn-medicamento btn-agregar-cantidad" onclick="agregarCantidad(${med.id})">
                             Agregar (+)
+                        </button>
+                        <button class="btn-medicamento btn-recordatorio ${med.recordatorio_activo ? 'activo' : ''}"
+                                onclick="toggleRecordatorio(${med.id}, '${med.nombre.replace(/'/g, "\\'")}', ${med.recordatorio_activo || false})"
+                                title="${med.recordatorio_activo ? 'Recordatorio activo' : 'Activar recordatorio'}">
+                            ${med.recordatorio_activo ? '⏰ ON' : '⏰'}
                         </button>
                         ${med.sintomas && med.sintomas.length > 0 && med.sintomas[0] !== '' ? `
                             <button class="btn-medicamento btn-ver-sintomas" onclick="toggleSintomasPastillero(${med.medicamento_id})">
@@ -3711,6 +3768,135 @@
         });
 
 
+        // ============================================
+        // FUNCIONES DE RECORDATORIOS
+        // ============================================
+
+        let recordatorioData = {
+            medicamento_id: null,
+            nombre: '',
+            horas_seleccionadas: null
+        };
+
+        function toggleRecordatorio(medicamentoId, nombreMedicamento, recordatorioActivo) {
+            if (recordatorioActivo) {
+                // Desactivar recordatorio
+                if (confirm(`¿Desactivar recordatorio para ${nombreMedicamento}?`)) {
+                    desactivarRecordatorio(medicamentoId);
+                }
+            } else {
+                // Activar recordatorio
+                mostrarModalRecordatorio(medicamentoId, nombreMedicamento);
+            }
+        }
+
+        function mostrarModalRecordatorio(medicamentoId, nombreMedicamento) {
+            recordatorioData.medicamento_id = medicamentoId;
+            recordatorioData.nombre = nombreMedicamento;
+            recordatorioData.horas_seleccionadas = null;
+
+            // Actualizar título del modal
+            document.getElementById('recordatorio-medicamento-nombre').textContent = nombreMedicamento;
+
+            // Limpiar selección de horas
+            document.querySelectorAll('.btn-hora').forEach(btn => btn.classList.remove('selected'));
+
+            // Configurar fecha/hora actual + 8 horas por defecto
+            const ahora = new Date();
+            ahora.setHours(ahora.getHours() + 8);
+            const fechaLocal = ahora.toISOString().slice(0, 16);
+            document.getElementById('proxima-toma').value = fechaLocal;
+
+            // Mostrar alerta de Telegram si no está vinculado
+            const telefono = localStorage.getItem('telefono_usuario');
+            document.getElementById('telefono-usuario').textContent = telefono || '(tu teléfono)';
+
+            // TODO: Verificar si tiene Telegram vinculado
+            // Por ahora siempre mostramos la alerta
+            document.getElementById('alerta-vincular-telegram').style.display = 'block';
+
+            // Mostrar modal
+            document.getElementById('modal-recordatorio').style.display = 'flex';
+        }
+
+        function cerrarModalRecordatorio() {
+            document.getElementById('modal-recordatorio').style.display = 'none';
+            recordatorioData = { medicamento_id: null, nombre: '', horas_seleccionadas: null };
+        }
+
+        function seleccionarHoras(horas) {
+            recordatorioData.horas_seleccionadas = horas;
+
+            // Actualizar UI
+            document.querySelectorAll('.btn-hora').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+        }
+
+        async function guardarRecordatorio() {
+            const { medicamento_id, horas_seleccionadas } = recordatorioData;
+            const proximaToma = document.getElementById('proxima-toma').value;
+
+            // Validar
+            if (!horas_seleccionadas) {
+                alert('Por favor selecciona cada cuántas horas tomas el medicamento');
+                return;
+            }
+
+            if (!proximaToma) {
+                alert('Por favor selecciona cuándo es tu próxima toma');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/pastillero/${medicamento_id}/activar-recordatorio`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        horas_entre_tomas: horas_seleccionadas,
+                        proxima_toma: proximaToma
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert('Recordatorio activado correctamente');
+                    cerrarModalRecordatorio();
+                    // Recargar pastillero para mostrar botón actualizado
+                    cargarMedicamentosPastillero();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo activar el recordatorio'));
+                }
+            } catch (error) {
+                console.error('Error al activar recordatorio:', error);
+                alert('Error al activar recordatorio. Intenta de nuevo.');
+            }
+        }
+
+        async function desactivarRecordatorio(medicamentoId) {
+            try {
+                const response = await fetch(`/api/pastillero/${medicamentoId}/desactivar-recordatorio`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert('Recordatorio desactivado');
+                    // Recargar pastillero para mostrar botón actualizado
+                    cargarMedicamentosPastillero();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo desactivar'));
+                }
+            } catch (error) {
+                console.error('Error al desactivar recordatorio:', error);
+                alert('Error al desactivar recordatorio');
+            }
+        }
+
+
     </script>
     
     <!-- 🆕 MODAL DEL PASTILLERO -->
@@ -3766,6 +3952,47 @@
             <div class="modal-registro-footer">
                 <button class="btn-registrar" onclick="registrarUsuarioPastillero()">Crear cuenta</button>
                 <button class="btn-cancelar-registro" onclick="cerrarModalRegistro()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE RECORDATORIO -->
+    <div id="modal-recordatorio" class="modal-registro" style="display: none;">
+        <div class="modal-registro-content">
+            <div class="modal-registro-header">
+                <h2>Configurar Recordatorio</h2>
+                <p id="recordatorio-medicamento-nombre" style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;"></p>
+            </div>
+            <div class="modal-registro-body">
+                <div class="form-group">
+                    <label>¿Cada cuántas horas tomas este medicamento?</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
+                        <button class="btn-hora" data-horas="4" onclick="seleccionarHoras(4)">4h</button>
+                        <button class="btn-hora" data-horas="6" onclick="seleccionarHoras(6)">6h</button>
+                        <button class="btn-hora" data-horas="8" onclick="seleccionarHoras(8)">8h</button>
+                        <button class="btn-hora" data-horas="12" onclick="seleccionarHoras(12)">12h</button>
+                        <button class="btn-hora" data-horas="24" onclick="seleccionarHoras(24)">24h</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="proxima-toma">¿Cuándo es tu próxima toma?</label>
+                    <input type="datetime-local" id="proxima-toma" required>
+                </div>
+                <div id="alerta-vincular-telegram" style="display: none; background: #fff3cd; padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0; font-weight: 600; color: #856404;">Para recibir recordatorios, conecta tu Telegram</p>
+                    <ol style="margin: 0.5rem 0 0 1.2rem; font-size: 0.9rem; color: #856404;">
+                        <li>Abre Telegram</li>
+                        <li>Busca: <strong>@TucTucMedicamentosBot</strong></li>
+                        <li>Envía: <strong>/vincular <span id="telefono-usuario"></span></strong></li>
+                    </ol>
+                    <a href="https://t.me/TucTucMedicamentosBot" target="_blank" style="display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background: #0088cc; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                        Abrir Telegram
+                    </a>
+                </div>
+            </div>
+            <div class="modal-registro-footer">
+                <button class="btn-registrar" onclick="guardarRecordatorio()">Activar Recordatorio</button>
+                <button class="btn-cancelar-registro" onclick="cerrarModalRecordatorio()">Cancelar</button>
             </div>
         </div>
     </div>

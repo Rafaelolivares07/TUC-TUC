@@ -25,6 +25,9 @@ import re
 from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import atexit
 
 # Cargar variables de entorno
 load_dotenv()
@@ -401,6 +404,146 @@ def enviar_notificacion_telegram(mensaje):
         import traceback
         traceback.print_exc()
         return False
+
+
+# -------------------------------------------------------------------
+# --- FUNCIN DE RECORDATORIOS AUTOMTICOS (APScheduler) ---
+# -------------------------------------------------------------------
+
+def verificar_y_enviar_recordatorios():
+    """
+    Función que se ejecuta periódicamente para verificar si hay medicamentos
+    que necesitan recordatorio y envía mensajes de Telegram con botones interactivos.
+    """
+    try:
+        print("\n[SCHEDULER] Verificando recordatorios pendientes...")
+
+        conn = get_db_connection()
+
+        # Obtener token de Telegram
+        config = conn.execute('SELECT telegram_token FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
+
+        if not config:
+            token = "8486881295:AAFjs-SU74er_shs4KnQYImMtyU5OTXycng"  # Fallback
+        else:
+            token = config[0]
+
+        # Buscar medicamentos con recordatorio activo cuya próxima toma ya pasó
+        ahora = datetime.now()
+
+        medicamentos_pendientes = conn.execute('''
+            SELECT
+                p.id,
+                p.nombre,
+                p.cantidad,
+                p.horas_entre_tomas,
+                p.proxima_toma,
+                t.telegram_chat_id,
+                t.nombre as usuario_nombre
+            FROM pastillero_usuarios p
+            INNER JOIN terceros t ON p.usuario_id = t.id
+            WHERE p.recordatorio_activo = TRUE
+              AND p.proxima_toma IS NOT NULL
+              AND p.proxima_toma <= %s
+              AND t.telegram_chat_id IS NOT NULL
+              AND t.telegram_chat_id != ''
+        ''', (ahora,)).fetchall()
+
+        if not medicamentos_pendientes:
+            print("[SCHEDULER] No hay recordatorios pendientes")
+            conn.close()
+            return
+
+        print(f"[SCHEDULER] Encontrados {len(medicamentos_pendientes)} recordatorios pendientes")
+
+        # Enviar recordatorio para cada medicamento
+        for med in medicamentos_pendientes:
+            try:
+                medicamento_id = med['id']
+                nombre = med['nombre']
+                cantidad = med['cantidad']
+                horas_entre_tomas = med['horas_entre_tomas']
+                chat_id = med['telegram_chat_id']
+                usuario_nombre = med['usuario_nombre']
+
+                # Construir mensaje
+                mensaje = f"⏰ <b>Recordatorio de Medicamento</b>\n\n"
+                mensaje += f"Hola {usuario_nombre}, es hora de tomar:\n"
+                mensaje += f"<b>{nombre}</b>\n\n"
+                mensaje += f"Quedan: {cantidad} pastillas\n"
+                mensaje += f"Frecuencia: cada {horas_entre_tomas} horas"
+
+                # Crear botones interactivos (InlineKeyboard)
+                keyboard = {
+                    'inline_keyboard': [
+                        [
+                            {'text': '✓ Ya tomé', 'callback_data': f'tomar_{medicamento_id}'},
+                            {'text': '❌ Cancelar hoy', 'callback_data': f'cancelar_{medicamento_id}'}
+                        ]
+                    ]
+                }
+
+                # Enviar mensaje con botones
+                url = f"https://api.telegram.org/bot{token}/sendMessage"
+                data = {
+                    'chat_id': chat_id,
+                    'text': mensaje,
+                    'parse_mode': 'HTML',
+                    'reply_markup': keyboard
+                }
+
+                response = requests.post(url, json=data, timeout=10)
+
+                if response.status_code == 200:
+                    print(f"[OK] Recordatorio enviado: {nombre} -> chat_id={chat_id}")
+
+                    # Actualizar próxima toma (posponer por las horas configuradas)
+                    nueva_proxima_toma = ahora + timedelta(hours=horas_entre_tomas)
+
+                    conn.execute('''
+                        UPDATE pastillero_usuarios
+                        SET proxima_toma = %s
+                        WHERE id = %s
+                    ''', (nueva_proxima_toma, medicamento_id))
+
+                    conn.commit()
+                else:
+                    print(f"[ERROR] No se pudo enviar recordatorio: {response.status_code}")
+                    print(f"Response: {response.text}")
+
+            except Exception as e:
+                print(f"[ERROR] Error procesando recordatorio para {med['nombre']}: {e}")
+                import traceback
+                traceback.print_exc()
+
+        conn.close()
+        print("[SCHEDULER] Verificación de recordatorios completada\n")
+
+    except Exception as e:
+        print(f"[ERROR] Error en verificar_y_enviar_recordatorios: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# Inicializar el scheduler en background
+scheduler = BackgroundScheduler()
+
+# Ejecutar cada 5 minutos
+scheduler.add_job(
+    func=verificar_y_enviar_recordatorios,
+    trigger=IntervalTrigger(minutes=5),
+    id='verificar_recordatorios',
+    name='Verificar y enviar recordatorios de medicamentos',
+    replace_existing=True
+)
+
+# Iniciar el scheduler
+scheduler.start()
+
+# Asegurar que el scheduler se detenga cuando la aplicación se cierre
+atexit.register(lambda: scheduler.shutdown())
+
+print("[SCHEDULER] APScheduler inicializado - Verificando recordatorios cada 5 minutos")
 
 
 # -------------------------------------------------------------------
@@ -11777,19 +11920,22 @@ def api_pastillero():
                 p.cantidad,
                 p.unidad,
                 p.medicamento_id,
+                p.horas_entre_tomas,
+                p.proxima_toma,
+                p.recordatorio_activo,
                 STRING_AGG(DISTINCT s.nombre, ',') as "sintomas_str"
             FROM pastillero_usuarios p
             LEFT JOIN medicamentos m ON p.medicamento_id = m.id
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
-            WHERE p.usuario_id = ?
+            WHERE p.usuario_id = %s
             {where_sintomas}
-            GROUP BY p.id, p.nombre, p.cantidad, p.unidad, p.medicamento_id
+            GROUP BY p.id, p.nombre, p.cantidad, p.unidad, p.medicamento_id, p.horas_entre_tomas, p.proxima_toma, p.recordatorio_activo
             {order_by}
         '''
-        
+
         medicamentos = conn.execute(query, params).fetchall()
-        
+
         medicamentos_list = []
         for med in medicamentos:
             medicamentos_list.append({
@@ -11798,7 +11944,10 @@ def api_pastillero():
                 'cantidad': med['cantidad'],
                 'unidad': med['unidad'],
                 'medicamento_id': med['medicamento_id'],
-                'sintomas': med['sintomas_str'].split(',') if med['sintomas_str'] else []
+                'sintomas': med['sintomas_str'].split(',') if med['sintomas_str'] else [],
+                'horas_entre_tomas': med['horas_entre_tomas'],
+                'proxima_toma': med['proxima_toma'].isoformat() if med['proxima_toma'] else None,
+                'recordatorio_activo': med['recordatorio_activo'] or False
             })
         
         conn.close()
@@ -12248,6 +12397,304 @@ def api_vincular_telegram():
             conn.close()
         print(f"Error al vincular Telegram: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/telegram/webhook', methods=['POST'])
+def telegram_webhook():
+    """
+    Webhook para recibir mensajes del bot de Telegram.
+    Maneja comandos como /vincular y callbacks de botones interactivos.
+    """
+    try:
+        update = request.get_json()
+
+        # Log para debugging
+        print(f"[TELEGRAM] Webhook recibido: {update}")
+
+        # Verificar si es un mensaje de texto (comando)
+        if 'message' in update:
+            message = update['message']
+            chat_id = message['chat']['id']
+            text = message.get('text', '')
+
+            # Comando /start
+            if text.startswith('/start'):
+                enviar_mensaje_telegram(
+                    chat_id,
+                    "¡Hola! Soy el bot de TucTuc Medicamentos.\n\n"
+                    "Para vincular tu cuenta y recibir recordatorios de tus medicamentos:\n"
+                    "Envía: /vincular TU_TELEFONO\n\n"
+                    "Ejemplo: /vincular 3166686397"
+                )
+
+            # Comando /vincular TELEFONO
+            elif text.startswith('/vincular'):
+                partes = text.split()
+
+                if len(partes) != 2:
+                    enviar_mensaje_telegram(
+                        chat_id,
+                        "❌ Formato incorrecto.\n\n"
+                        "Uso correcto: /vincular TU_TELEFONO\n"
+                        "Ejemplo: /vincular 3166686397"
+                    )
+                    return jsonify({'ok': True})
+
+                telefono = partes[1].strip()
+
+                # Normalizar teléfono (remover espacios, guiones, paréntesis)
+                telefono = ''.join(filter(str.isdigit, telefono))
+
+                # Validar que tenga al menos 10 dígitos
+                if len(telefono) < 10:
+                    enviar_mensaje_telegram(
+                        chat_id,
+                        "❌ Teléfono inválido. Debe tener al menos 10 dígitos.\n\n"
+                        "Ejemplo: /vincular 3166686397"
+                    )
+                    return jsonify({'ok': True})
+
+                # Vincular en la base de datos
+                conn = get_db_connection()
+
+                # Buscar usuario por teléfono
+                tercero = conn.execute('''
+                    SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1
+                ''', (telefono,)).fetchone()
+
+                if not tercero:
+                    conn.close()
+                    enviar_mensaje_telegram(
+                        chat_id,
+                        f"❌ No encontramos una cuenta con el teléfono {telefono}.\n\n"
+                        "Asegúrate de:\n"
+                        "1. Haber creado tu pastillero en la app\n"
+                        "2. Usar el mismo teléfono registrado\n\n"
+                        "¿Necesitas ayuda? Visita: https://tuc-tuc.onrender.com"
+                    )
+                    return jsonify({'ok': True})
+
+                # Actualizar telegram_chat_id
+                conn.execute('''
+                    UPDATE terceros
+                    SET telegram_chat_id = %s
+                    WHERE id = %s
+                ''', (str(chat_id), tercero['id']))
+
+                conn.commit()
+                conn.close()
+
+                print(f"[OK] Telegram vinculado: chat_id={chat_id} -> {tercero['nombre']} (tel: {telefono})")
+
+                # Enviar confirmación
+                enviar_mensaje_telegram(
+                    chat_id,
+                    f"✅ ¡Vinculado correctamente!\n\n"
+                    f"Hola {tercero['nombre']}, ahora recibirás recordatorios de tus medicamentos.\n\n"
+                    f"Para activar recordatorios:\n"
+                    f"1. Abre tu pastillero en https://tuc-tuc.onrender.com\n"
+                    f"2. Presiona el botón ⏰ en el medicamento\n"
+                    f"3. Configura cada cuántas horas tomas el medicamento\n\n"
+                    f"¡Listo! Te enviaré recordatorios aquí en Telegram."
+                )
+
+        # Verificar si es un callback de botón (para los botones "Ya tomé" / "Cancelar hoy")
+        elif 'callback_query' in update:
+            callback = update['callback_query']
+            chat_id = callback['message']['chat']['id']
+            callback_data = callback['data']
+            message_id = callback['message']['message_id']
+
+            # El formato del callback será: "tomar_MED_ID" o "cancelar_MED_ID"
+            partes = callback_data.split('_')
+            accion = partes[0]
+            medicamento_id = int(partes[1])
+
+            if accion == 'tomar':
+                # Marcar como tomado y restar 1 pastilla
+                conn = get_db_connection()
+
+                # Obtener chat_id del usuario
+                tercero = conn.execute('''
+                    SELECT id FROM terceros WHERE telegram_chat_id = %s LIMIT 1
+                ''', (str(chat_id),)).fetchone()
+
+                if not tercero:
+                    conn.close()
+                    # Responder al callback
+                    responder_callback(callback['id'], "❌ Usuario no encontrado")
+                    return jsonify({'ok': True})
+
+                # Obtener medicamento del pastillero
+                med = conn.execute('''
+                    SELECT p.nombre, p.cantidad, p.horas_entre_tomas
+                    FROM pastillero_usuarios p
+                    WHERE p.id = %s AND p.usuario_id = %s
+                    LIMIT 1
+                ''', (medicamento_id, tercero['id'])).fetchone()
+
+                if not med:
+                    conn.close()
+                    responder_callback(callback['id'], "❌ Medicamento no encontrado")
+                    return jsonify({'ok': True})
+
+                nueva_cantidad = max(0, med['cantidad'] - 1)
+
+                # Restar 1 pastilla
+                conn.execute('''
+                    UPDATE pastillero_usuarios
+                    SET cantidad = %s
+                    WHERE id = %s
+                ''', (nueva_cantidad, medicamento_id))
+
+                # Calcular próxima toma
+                from datetime import datetime, timedelta
+                proxima_toma = datetime.now() + timedelta(hours=med['horas_entre_tomas'])
+
+                conn.execute('''
+                    UPDATE pastillero_usuarios
+                    SET proxima_toma = %s
+                    WHERE id = %s
+                ''', (proxima_toma, medicamento_id))
+
+                conn.commit()
+                conn.close()
+
+                # Responder al callback
+                responder_callback(callback['id'], "✅ ¡Registrado!")
+
+                # Editar el mensaje para confirmación
+                mensaje_confirmacion = f"✅ <b>Confirmado</b>\n\n{med['nombre']}\n\nQuedan: {nueva_cantidad} pastillas"
+
+                # Alerta si quedan pocas pastillas
+                if nueva_cantidad <= 3 and nueva_cantidad > 0:
+                    mensaje_confirmacion += f"\n\n⚠️ <b>¡Te quedan solo {nueva_cantidad} pastillas!</b>\n"
+                    mensaje_confirmacion += "¿Quieres hacer un pedido?\n"
+                    mensaje_confirmacion += "👉 https://tuc-tuc.onrender.com"
+                elif nueva_cantidad == 0:
+                    mensaje_confirmacion += "\n\n⚠️ <b>¡Se te acabaron las pastillas!</b>\n"
+                    mensaje_confirmacion += "Haz tu pedido aquí:\n"
+                    mensaje_confirmacion += "👉 https://tuc-tuc.onrender.com"
+
+                editar_mensaje_telegram(chat_id, message_id, mensaje_confirmacion)
+
+            elif accion == 'cancelar':
+                # Solo marcar el recordatorio como visto
+                responder_callback(callback['id'], "❌ Cancelado por hoy")
+
+                # Editar el mensaje
+                editar_mensaje_telegram(
+                    chat_id,
+                    message_id,
+                    "❌ <b>Recordatorio cancelado por hoy</b>\n\nTe recordaré en la próxima toma programada."
+                )
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        print(f"[ERROR] Error en webhook de Telegram: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def enviar_mensaje_telegram(chat_id, texto, reply_markup=None):
+    """Envía un mensaje de texto a un chat de Telegram"""
+    try:
+        conn = get_db_connection()
+        config = conn.execute('SELECT telegram_token FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
+        conn.close()
+
+        if not config:
+            # Usar token hardcoded como fallback
+            token = "8486881295:AAFjs-SU74er_shs4KnQYImMtyU5OTXycng"
+        else:
+            token = config[0]
+
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': texto,
+            'parse_mode': 'HTML'
+        }
+
+        if reply_markup:
+            data['reply_markup'] = reply_markup
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"[OK] Mensaje enviado a chat_id={chat_id}")
+            return True
+        else:
+            print(f"[ERROR] No se pudo enviar mensaje: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"[ERROR] Error enviando mensaje Telegram: {e}")
+        return False
+
+
+def editar_mensaje_telegram(chat_id, message_id, texto):
+    """Edita un mensaje existente en Telegram"""
+    try:
+        conn = get_db_connection()
+        config = conn.execute('SELECT telegram_token FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
+        conn.close()
+
+        if not config:
+            token = "8486881295:AAFjs-SU74er_shs4KnQYImMtyU5OTXycng"
+        else:
+            token = config[0]
+
+        url = f"https://api.telegram.org/bot{token}/editMessageText"
+        data = {
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'text': texto,
+            'parse_mode': 'HTML'
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"[OK] Mensaje editado: chat_id={chat_id}, msg_id={message_id}")
+            return True
+        else:
+            print(f"[ERROR] No se pudo editar mensaje: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"[ERROR] Error editando mensaje: {e}")
+        return False
+
+
+def responder_callback(callback_id, texto):
+    """Responde a un callback query (notificación emergente)"""
+    try:
+        conn = get_db_connection()
+        config = conn.execute('SELECT telegram_token FROM CONFIGURACION_SISTEMA WHERE id = 1').fetchone()
+        conn.close()
+
+        if not config:
+            token = "8486881295:AAFjs-SU74er_shs4KnQYImMtyU5OTXycng"
+        else:
+            token = config[0]
+
+        url = f"https://api.telegram.org/bot{token}/answerCallbackQuery"
+        data = {
+            'callback_query_id': callback_id,
+            'text': texto,
+            'show_alert': False
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+        return response.status_code == 200
+
+    except Exception as e:
+        print(f"[ERROR] Error respondiendo callback: {e}")
+        return False
 
 
 # ============================================

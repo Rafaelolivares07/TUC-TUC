@@ -3797,16 +3797,25 @@
             actualizarNombreUsuarioUI(nombreGuardado);
         }
 
-        // Enter en campos del modal de registro
-        document.getElementById('registro-nombre').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                document.getElementById('registro-telefono').focus();
-            }
-        });
+        // Enter en campos del modal de registro (esperar a que DOM esté listo)
+        document.addEventListener('DOMContentLoaded', function() {
+            const registroNombre = document.getElementById('registro-nombre');
+            const registroTelefono = document.getElementById('registro-telefono');
 
-        document.getElementById('registro-telefono').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                registrarUsuarioPastillero();
+            if (registroNombre) {
+                registroNombre.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        document.getElementById('registro-telefono').focus();
+                    }
+                });
+            }
+
+            if (registroTelefono) {
+                registroTelefono.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        registrarUsuarioPastillero();
+                    }
+                });
             }
         });
 

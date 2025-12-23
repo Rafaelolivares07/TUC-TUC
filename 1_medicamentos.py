@@ -13257,6 +13257,284 @@ def buscar_productos_simple():
 # --- TERMINA PASTILLERO ---
 # -------------------------------------------------------------------
 
+
+# -------------------------------------------------------------------
+# --- SISTEMA DE CATEGORÍAS PARAMETRIZABLES ---
+# -------------------------------------------------------------------
+
+@app.route('/api/admin/categorias', methods=['GET'])
+@admin_required
+def obtener_categorias():
+    """Obtiene todas las categorías para el admin"""
+    try:
+        conn = get_db_connection()
+        categorias = conn.execute("""
+            SELECT c.*,
+                   COUNT(DISTINCT mc.medicamento_id) as num_productos
+            FROM categorias c
+            LEFT JOIN medicamento_categoria mc ON c.id = mc.categoria_id
+            GROUP BY c.id
+            ORDER BY c.orden ASC, c.nombre ASC
+        """).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'categorias': [dict(cat) for cat in categorias]
+        })
+    except Exception as e:
+        print(f"Error obteniendo categorías: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/categorias', methods=['POST'])
+@admin_required
+def crear_categoria():
+    """Crea una nueva categoría"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        descripcion = data.get('descripcion', '').strip()
+        imagen = data.get('imagen', '').strip()
+        orden = data.get('orden', 0)
+        activo = data.get('activo', True)
+        es_destacada = data.get('es_destacada', False)
+
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'El nombre es requerido'}), 400
+
+        conn = get_db_connection()
+
+        # Si es destacada, desactivar las demás
+        if es_destacada:
+            conn.execute("UPDATE categorias SET es_destacada = FALSE")
+
+        cursor = conn.execute("""
+            INSERT INTO categorias (nombre, descripcion, imagen, orden, activo, es_destacada)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (nombre, descripcion, imagen or None, orden, activo, es_destacada))
+
+        categoria_id = cursor.fetchone()[0]
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'categoria_id': categoria_id,
+            'message': 'Categoría creada exitosamente'
+        })
+    except Exception as e:
+        print(f"Error creando categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/categorias/<int:categoria_id>', methods=['PUT'])
+@admin_required
+def actualizar_categoria(categoria_id):
+    """Actualiza una categoría existente"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        descripcion = data.get('descripcion', '').strip()
+        imagen = data.get('imagen', '').strip()
+        orden = data.get('orden', 0)
+        activo = data.get('activo', True)
+        es_destacada = data.get('es_destacada', False)
+
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'El nombre es requerido'}), 400
+
+        conn = get_db_connection()
+
+        # Si es destacada, desactivar las demás
+        if es_destacada:
+            conn.execute("UPDATE categorias SET es_destacada = FALSE WHERE id != %s", (categoria_id,))
+
+        conn.execute("""
+            UPDATE categorias
+            SET nombre = %s,
+                descripcion = %s,
+                imagen = %s,
+                orden = %s,
+                activo = %s,
+                es_destacada = %s,
+                fecha_actualizacion = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (nombre, descripcion, imagen or None, orden, activo, es_destacada, categoria_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Categoría actualizada exitosamente'
+        })
+    except Exception as e:
+        print(f"Error actualizando categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/categorias/<int:categoria_id>', methods=['DELETE'])
+@admin_required
+def eliminar_categoria(categoria_id):
+    """Elimina una categoría"""
+    try:
+        conn = get_db_connection()
+
+        # Verificar que no sea la última categoría
+        count = conn.execute("SELECT COUNT(*) FROM categorias").fetchone()[0]
+        if count <= 1:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No puedes eliminar la última categoría'}), 400
+
+        conn.execute("DELETE FROM categorias WHERE id = %s", (categoria_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Categoría eliminada exitosamente'
+        })
+    except Exception as e:
+        print(f"Error eliminando categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/categorias/<int:categoria_id>/productos', methods=['GET'])
+@admin_required
+def obtener_productos_categoria(categoria_id):
+    """Obtiene los productos de una categoría"""
+    try:
+        conn = get_db_connection()
+        productos = conn.execute("""
+            SELECT m.id, m.nombre
+            FROM "MEDICAMENTOS" m
+            INNER JOIN medicamento_categoria mc ON m.id = mc.medicamento_id
+            WHERE mc.categoria_id = %s
+            ORDER BY m.nombre
+        """, (categoria_id,)).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'productos': [dict(p) for p in productos]
+        })
+    except Exception as e:
+        print(f"Error obteniendo productos de categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/categorias/<int:categoria_id>/productos', methods=['POST'])
+@admin_required
+def agregar_producto_categoria(categoria_id):
+    """Agrega un producto a una categoría"""
+    try:
+        data = request.get_json()
+        medicamento_id = data.get('medicamento_id')
+
+        if not medicamento_id:
+            return jsonify({'ok': False, 'error': 'medicamento_id es requerido'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar si ya existe
+        existe = conn.execute("""
+            SELECT 1 FROM medicamento_categoria
+            WHERE medicamento_id = %s AND categoria_id = %s
+        """, (medicamento_id, categoria_id)).fetchone()
+
+        if existe:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'El producto ya está en esta categoría'}), 400
+
+        conn.execute("""
+            INSERT INTO medicamento_categoria (medicamento_id, categoria_id)
+            VALUES (%s, %s)
+        """, (medicamento_id, categoria_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Producto agregado a la categoría'
+        })
+    except Exception as e:
+        print(f"Error agregando producto a categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/categorias/<int:categoria_id>/productos/<int:medicamento_id>', methods=['DELETE'])
+@admin_required
+def eliminar_producto_categoria(categoria_id, medicamento_id):
+    """Elimina un producto de una categoría"""
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            DELETE FROM medicamento_categoria
+            WHERE categoria_id = %s AND medicamento_id = %s
+        """, (categoria_id, medicamento_id))
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Producto eliminado de la categoría'
+        })
+    except Exception as e:
+        print(f"Error eliminando producto de categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# Endpoint público para obtener categorías activas (para la tienda)
+@app.route('/api/categorias', methods=['GET'])
+def obtener_categorias_publicas():
+    """Obtiene categorías activas para mostrar en la tienda"""
+    try:
+        conn = get_db_connection()
+        categorias = conn.execute("""
+            SELECT id, nombre, descripcion, imagen, orden
+            FROM categorias
+            WHERE activo = TRUE
+            ORDER BY orden ASC, nombre ASC
+        """).fetchall()
+
+        # Obtener categoría destacada
+        destacada = conn.execute("""
+            SELECT id FROM categorias
+            WHERE es_destacada = TRUE AND activo = TRUE
+            LIMIT 1
+        """).fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'categorias': [dict(cat) for cat in categorias],
+            'categoria_destacada_id': destacada['id'] if destacada else None
+        })
+    except Exception as e:
+        print(f"Error obteniendo categorías públicas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # -------------------------------------------------------------------
 # --- ZONA 7: INICIALIZACIN Y EJECUCIN DEL SERVIDOR ---
 # -------------------------------------------------------------------

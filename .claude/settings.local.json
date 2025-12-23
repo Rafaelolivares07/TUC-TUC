@@ -24,7 +24,14 @@
       "Bash(del fix_indent_productos.py fix_try_except.py)",
       "Bash(timeout 60 python:*)",
       "Bash(del:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 5 tail:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(netstat:*)"
     ],
     "deny": [],
     "ask": []

@@ -4287,11 +4287,17 @@ def admin_menu():
     """Muestra el men principal de administracin."""
     return render_template('admin_menu.html')
 
+@app.route('/admin/categorias')
+@admin_required
+def admin_categorias():
+    """Página de gestión de categorías"""
+    return render_template('admin_categorias.html')
+
 @app.route('/admin/nuevo_admin')
 @admin_required
 def registro_admin_form_protegido():
     """Muestra el men del administrador con un mensaje de accin (para que la plantilla sea reutilizable)."""
-    return render_template('admin_menu.html', 
+    return render_template('admin_menu.html',
                            nombre=session['nombre'],
                            device_id=session['dispositivo_id'],
                            mensaje_accion="Aqu se gestionar el registro de nuevos administradores.")
@@ -13508,6 +13514,38 @@ def eliminar_producto_categoria(categoria_id, medicamento_id):
         })
     except Exception as e:
         print(f"Error eliminando producto de categoría: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# Endpoint para buscar medicamentos (usado en admin de categorías)
+@app.route('/api/medicamentos/buscar', methods=['GET'])
+@admin_required
+def buscar_medicamentos_admin():
+    """Busca medicamentos por nombre para el admin"""
+    try:
+        query = request.args.get('q', '').strip()
+
+        if not query or len(query) < 2:
+            return jsonify({'ok': True, 'medicamentos': []})
+
+        conn = get_db_connection()
+        medicamentos = conn.execute("""
+            SELECT id, nombre
+            FROM "MEDICAMENTOS"
+            WHERE LOWER(nombre) LIKE %s
+            ORDER BY nombre
+            LIMIT 20
+        """, (f'%{query.lower()}%',)).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'medicamentos': [{'id': m['id'], 'nombre': m['nombre']} for m in medicamentos]
+        })
+    except Exception as e:
+        print(f"Error buscando medicamentos: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500

@@ -2325,18 +2325,18 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
 
     if precio_min:
         try:
-            query += " AND p.precio >= ?"
+            query += " AND p.precio >= %s"
             params.append(float(precio_min))
         except ValueError:
             pass
     if precio_max:
         try:
-            query += " AND p.precio <= ?"
+            query += " AND p.precio <= %s"
             params.append(float(precio_max))
         except ValueError:
             pass
 
-    query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
+    query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
     params.append(permitir_sin_cotizaciones)
 
     productos = conn.execute(query, params).fetchall()
@@ -2986,7 +2986,7 @@ def obtener_productos():
                     query_sintomas_diag = """
                         SELECT DISTINCT sintoma_id
                         FROM diagnostico_sintoma
-                        WHERE diagnostico_id = ?
+                        WHERE diagnostico_id = %s
                     """
                     sintomas_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
                     for s in sintomas_diag:
@@ -2996,7 +2996,7 @@ def obtener_productos():
                     print(f"Error obteniendo sntomas de diagnstico: {e}")
         
             if todos_sintomas_ids:
-                placeholders = ','.join(['?' for _ in todos_sintomas_ids])
+                placeholders = ','.join(['%s' for _ in todos_sintomas_ids])
                 # 🆕 FIX: Incluir información de síntomas con LEFT JOIN para obtener sintomas_ids_por_precio
                 query_sintomas = """SELECT
                 p.id as precio_id,
@@ -3030,18 +3030,18 @@ def obtener_productos():
 
                 if precio_min:
                     try:
-                        query_sintomas += " AND p.precio >= ?"
+                        query_sintomas += " AND p.precio >= %s"
                         params_sintomas.append(float(precio_min))
                     except ValueError:
                         pass
                 if precio_max:
                     try:
-                        query_sintomas += " AND p.precio <= ?"
+                        query_sintomas += " AND p.precio <= %s"
                         params_sintomas.append(float(precio_max))
                     except ValueError:
                         pass
 
-                query_sintomas += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
+                query_sintomas += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
                 params_sintomas.append(permitir_sin_cotizaciones)
 
                 productos_sintomas = conn.execute(query_sintomas, params_sintomas).fetchall()
@@ -3141,7 +3141,7 @@ def obtener_productos():
                     query_sintomas_diag = """
                         SELECT DISTINCT sintoma_id
                         FROM diagnostico_sintoma
-                        WHERE diagnostico_id = ?
+                        WHERE diagnostico_id = %s
                     """
                     sintomas_diag = conn.execute(query_sintomas_diag, [diag_id]).fetchall()
                     sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_diag]
@@ -3227,7 +3227,7 @@ def obtener_productos():
                     query_sintomas_diag = """
                         SELECT DISTINCT sintoma_id
                         FROM diagnostico_sintoma
-                        WHERE diagnostico_id = ?
+                        WHERE diagnostico_id = %s
                     """
                     sintomas_del_diagnostico = conn_ordenamiento.execute(query_sintomas_diag, [diagnostico_principal_id]).fetchall()
                     sintomas_diag_ids = [s['sintoma_id'] for s in sintomas_del_diagnostico]

@@ -463,15 +463,13 @@ def verificar_y_enviar_recordatorios():
                 nombre = med['nombre']
                 cantidad = med['cantidad']
                 horas_entre_tomas = med['horas_entre_tomas']
-                chat_id = med['telegram_chat_id']
+                chat_id_usuario = med['telegram_chat_id']
                 usuario_nombre = med['usuario_nombre']
 
-                # Construir mensaje
-                mensaje = f"⏰ <b>Recordatorio de Medicamento</b>\n\n"
-                mensaje += f"Hola {usuario_nombre}, es hora de tomar:\n"
-                mensaje += f"<b>{nombre}</b>\n\n"
-                mensaje += f"Quedan: {cantidad} pastillas\n"
-                mensaje += f"Frecuencia: cada {horas_entre_tomas} horas"
+                # Obtener usuario_id para buscar contactos adicionales
+                usuario_id = conn.execute('''
+                    SELECT usuario_id FROM pastillero_usuarios WHERE id = %s
+                ''', (medicamento_id,)).fetchone()['usuario_id']
 
                 # Crear botones interactivos (InlineKeyboard)
                 keyboard = {
@@ -483,33 +481,72 @@ def verificar_y_enviar_recordatorios():
                     ]
                 }
 
-                # Enviar mensaje con botones
+                # 1. Enviar mensaje al usuario principal (segunda persona: "debes tomar")
+                mensaje_usuario = f"⏰ <b>Recordatorio de Medicamento</b>\n\n"
+                mensaje_usuario += f"{usuario_nombre} debes tomar:\n"
+                mensaje_usuario += f"<b>{nombre}</b> - 1 pastilla\n\n"
+                mensaje_usuario += f"Quedan: {cantidad} pastillas\n"
+                mensaje_usuario += f"Frecuencia: cada {horas_entre_tomas} horas"
+
                 url = f"https://api.telegram.org/bot{token}/sendMessage"
-                data = {
-                    'chat_id': chat_id,
-                    'text': mensaje,
+                data_usuario = {
+                    'chat_id': chat_id_usuario,
+                    'text': mensaje_usuario,
                     'parse_mode': 'HTML',
                     'reply_markup': keyboard
                 }
 
-                response = requests.post(url, json=data, timeout=10)
+                response = requests.post(url, json=data_usuario, timeout=10)
 
                 if response.status_code == 200:
-                    print(f"[OK] Recordatorio enviado: {nombre} -> chat_id={chat_id}")
-
-                    # Actualizar próxima toma (posponer por las horas configuradas)
-                    nueva_proxima_toma = ahora + timedelta(hours=horas_entre_tomas)
-
-                    conn.execute('''
-                        UPDATE pastillero_usuarios
-                        SET proxima_toma = %s
-                        WHERE id = %s
-                    ''', (nueva_proxima_toma, medicamento_id))
-
-                    conn.commit()
+                    print(f"[OK] Recordatorio enviado al usuario: {nombre} -> chat_id={chat_id_usuario}")
                 else:
-                    print(f"[ERROR] No se pudo enviar recordatorio: {response.status_code}")
-                    print(f"Response: {response.text}")
+                    print(f"[ERROR] No se pudo enviar al usuario: {response.status_code}")
+
+                # 2. Enviar mensajes a contactos adicionales (tercera persona: "debe tomar")
+                contactos_adicionales = conn.execute('''
+                    SELECT
+                        pca.contacto_id,
+                        t.nombre as contacto_nombre,
+                        t.telegram_chat_id
+                    FROM pastillero_contactos_adicionales pca
+                    INNER JOIN terceros t ON pca.contacto_id = t.id
+                    WHERE pca.usuario_id = %s
+                      AND t.telegram_chat_id IS NOT NULL
+                      AND t.telegram_chat_id != ''
+                ''', (usuario_id,)).fetchall()
+
+                for contacto in contactos_adicionales:
+                    mensaje_contacto = f"⏰ <b>Recordatorio de Medicamento</b>\n\n"
+                    mensaje_contacto += f"{usuario_nombre} debe tomar:\n"
+                    mensaje_contacto += f"<b>{nombre}</b> - 1 pastilla\n\n"
+                    mensaje_contacto += f"Quedan: {cantidad} pastillas\n"
+                    mensaje_contacto += f"Frecuencia: cada {horas_entre_tomas} horas"
+
+                    data_contacto = {
+                        'chat_id': contacto['telegram_chat_id'],
+                        'text': mensaje_contacto,
+                        'parse_mode': 'HTML',
+                        'reply_markup': keyboard
+                    }
+
+                    response_contacto = requests.post(url, json=data_contacto, timeout=10)
+
+                    if response_contacto.status_code == 200:
+                        print(f"[OK] Recordatorio enviado a contacto '{contacto['contacto_nombre']}': {nombre}")
+                    else:
+                        print(f"[ERROR] No se pudo enviar a contacto: {response_contacto.status_code}")
+
+                # 3. Actualizar próxima toma (posponer por las horas configuradas)
+                nueva_proxima_toma = ahora + timedelta(hours=horas_entre_tomas)
+
+                conn.execute('''
+                    UPDATE pastillero_usuarios
+                    SET proxima_toma = %s
+                    WHERE id = %s
+                ''', (nueva_proxima_toma, medicamento_id))
+
+                conn.commit()
 
             except Exception as e:
                 print(f"[ERROR] Error procesando recordatorio para {med['nombre']}: {e}")
@@ -12519,6 +12556,183 @@ def api_desactivar_recordatorio(medicamento_id):
             conn.rollback()
             conn.close()
         print(f"Error al desactivar recordatorio: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastillero/contactos', methods=['GET'])
+def api_obtener_contactos_adicionales():
+    """Obtener lista de contactos adicionales del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        contactos = conn.execute('''
+            SELECT
+                pca.id,
+                pca.contacto_id,
+                t.nombre,
+                t.telefono,
+                t.telegram_chat_id,
+                pca.fecha_agregado
+            FROM pastillero_contactos_adicionales pca
+            INNER JOIN terceros t ON pca.contacto_id = t.id
+            WHERE pca.usuario_id = %s
+            ORDER BY pca.fecha_agregado DESC
+        ''', (usuario_id,)).fetchall()
+
+        conn.close()
+
+        contactos_list = []
+        for c in contactos:
+            contactos_list.append({
+                'id': c['id'],
+                'contacto_id': c['contacto_id'],
+                'nombre': c['nombre'],
+                'telefono': c['telefono'],
+                'telegram_vinculado': bool(c['telegram_chat_id']),
+                'fecha_agregado': c['fecha_agregado'].isoformat() if c['fecha_agregado'] else None
+            })
+
+        return jsonify({'ok': True, 'contactos': contactos_list})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        print(f"Error al obtener contactos: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastillero/contactos/agregar', methods=['POST'])
+def api_agregar_contacto_adicional():
+    """Agregar un contacto adicional para recordatorios"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+
+    nombre = data.get('nombre', '').strip()
+    telefono = data.get('telefono', '').strip()
+
+    if not nombre or not telefono:
+        return jsonify({'ok': False, 'error': 'Nombre y teléfono son requeridos'}), 400
+
+    # Normalizar teléfono (remover espacios, guiones, etc)
+    telefono = ''.join(filter(str.isdigit, telefono))
+
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Teléfono inválido'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Buscar si el contacto ya existe en terceros
+        tercero_existente = conn.execute('''
+            SELECT id FROM terceros WHERE telefono = %s LIMIT 1
+        ''', (telefono,)).fetchone()
+
+        if tercero_existente:
+            contacto_id = tercero_existente['id']
+
+            # Actualizar nombre si cambió
+            conn.execute('''
+                UPDATE terceros
+                SET nombre = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                WHERE id = %s
+            ''', (nombre, contacto_id))
+        else:
+            # Crear nuevo tercero
+            conn.execute('''
+                INSERT INTO terceros (nombre, telefono, fecha_creacion)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ''', (nombre, telefono))
+
+            # Obtener el ID recién creado
+            contacto_id = conn.execute('''
+                SELECT id FROM terceros WHERE telefono = %s LIMIT 1
+            ''', (telefono,)).fetchone()['id']
+
+        # Verificar que no se esté agregando a sí mismo
+        if contacto_id == usuario_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No puedes agregarte a ti mismo como contacto'}), 400
+
+        # Verificar que no esté duplicado
+        existe_relacion = conn.execute('''
+            SELECT id FROM pastillero_contactos_adicionales
+            WHERE usuario_id = %s AND contacto_id = %s
+        ''', (usuario_id, contacto_id)).fetchone()
+
+        if existe_relacion:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Este contacto ya está agregado'}), 400
+
+        # Crear la relación
+        conn.execute('''
+            INSERT INTO pastillero_contactos_adicionales (usuario_id, contacto_id)
+            VALUES (%s, %s)
+        ''', (usuario_id, contacto_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Contacto agregado correctamente',
+            'contacto_id': contacto_id
+        })
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        print(f"Error al agregar contacto: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastillero/contactos/<int:contacto_relacion_id>/eliminar', methods=['POST'])
+def api_eliminar_contacto_adicional(contacto_relacion_id):
+    """Eliminar un contacto adicional"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que la relación pertenece al usuario
+        relacion = conn.execute('''
+            SELECT id FROM pastillero_contactos_adicionales
+            WHERE id = %s AND usuario_id = %s
+        ''', (contacto_relacion_id, usuario_id)).fetchone()
+
+        if not relacion:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Contacto no encontrado'}), 404
+
+        # Eliminar la relación
+        conn.execute('''
+            DELETE FROM pastillero_contactos_adicionales
+            WHERE id = %s
+        ''', (contacto_relacion_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Contacto eliminado correctamente'})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        print(f"Error al eliminar contacto: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

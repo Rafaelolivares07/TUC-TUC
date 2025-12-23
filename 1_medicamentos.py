@@ -272,7 +272,7 @@ class PostgreSQLConnectionWrapper:
             'diagnosticos', 'recetas', 'configuracion_precios', 'configuracion_sistema',
             'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
             'navegacion_menu', 'requerimientos', 'notificaciones',
-            'requerimiento_referencias', 'usuario_dispositivo', 'categorias',
+            'requerimiento_referencias', 'usuario_dispositivo',
             'pedidos_productos', 'usuarios_direcciones', 'usuarios_favoritos'
         ]
 
@@ -282,7 +282,8 @@ class PostgreSQLConnectionWrapper:
             'existencias', 'terceros', 'terceros_competidores', 'terceros_direcciones', 'alertas_admin', 'archivos',
             'componentes_activos_sugerencias', 'indicaciones_rechazadas',
             'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
-            'sugerir_sintomas', 'pedidos', 'promos_carousel'
+            'sugerir_sintomas', 'pedidos', 'promos_carousel',
+            'categorias', 'medicamento_categoria'
         ]
 
         # Convertir tablas que deben ir en MAYSCULAS

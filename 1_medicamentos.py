@@ -5170,7 +5170,7 @@ def actualizar_fabricante_medicamento():
 
         # Verificar si ya existe un precio para este medicamento con el nuevo fabricante
         existe = conn.execute(
-            "SELECT COUNT(*) as count FROM precios WHERE medicamento_id = ? AND fabricante_id = ?",
+            "SELECT COUNT(*) as count FROM precios WHERE medicamento_id = %s AND fabricante_id = %s",
             (medicamento_id, fabricante_id_nuevo)
         ).fetchone()
 
@@ -5179,19 +5179,19 @@ def actualizar_fabricante_medicamento():
 
         # Actualizar el fabricante en la tabla PRECIOS
         conn.execute(
-            "UPDATE precios SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
+            "UPDATE precios SET fabricante_id = %s WHERE medicamento_id = %s AND fabricante_id = %s",
             (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
         )
 
-        # Actualizar tambin en precios_competencia si existen
+        # Actualizar también en precios_competencia si existen
         conn.execute(
-            "UPDATE precios_competencia SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
+            "UPDATE precios_competencia SET fabricante_id = %s WHERE medicamento_id = %s AND fabricante_id = %s",
             (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
         )
 
         # Actualizar en cotizaciones para que no queden huérfanas
         conn.execute(
-            "UPDATE cotizaciones SET fabricante_id = ? WHERE medicamento_id = ? AND fabricante_id = ?",
+            "UPDATE cotizaciones SET fabricante_id = %s WHERE medicamento_id = %s AND fabricante_id = %s",
             (fabricante_id_nuevo, medicamento_id, fabricante_id_antiguo)
         )
 
@@ -5223,6 +5223,7 @@ def obtener_cotizaciones_huerfanas():
 
         # Buscar cotizaciones donde el fabricante_id no existe en la tabla precios
         # para ese medicamento_id
+        # Query compatible con PostgreSQL
         query = """
             SELECT
                 c.id as cotizacion_id,
@@ -5234,7 +5235,7 @@ def obtener_cotizaciones_huerfanas():
                 m.nombre as medicamento_nombre,
                 f_cotiz.nombre as fabricante_cotizacion,
                 t.nombre as tercero_nombre,
-                GROUP_CONCAT(DISTINCT f_valido.id || ':' || f_valido.nombre) as fabricantes_validos
+                STRING_AGG(DISTINCT CAST(f_valido.id AS TEXT) || ':' || f_valido.nombre, ',') as fabricantes_validos
             FROM cotizaciones c
             INNER JOIN medicamentos m ON c.medicamento_id = m.id
             LEFT JOIN fabricantes f_cotiz ON c.fabricante_id = f_cotiz.id

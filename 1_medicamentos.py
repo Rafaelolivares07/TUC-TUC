@@ -12111,6 +12111,146 @@ def api_pastillero_agregar_cantidad(medicamento_id):
 
 
 # ============================================
+#  ENDPOINTS DE RECORDATORIOS
+# ============================================
+
+@app.route('/api/pastillero/<int:medicamento_id>/activar-recordatorio', methods=['POST'])
+def api_activar_recordatorio(medicamento_id):
+    """Activar recordatorio para un medicamento del pastillero"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+
+    horas_entre_tomas = data.get('horas_entre_tomas')
+    proxima_toma = data.get('proxima_toma')  # ISO format: "2025-12-23T20:00:00"
+
+    if not horas_entre_tomas or not proxima_toma:
+        return jsonify({'ok': False, 'error': 'Faltan datos requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el medicamento pertenece al usuario
+        medicamento = conn.execute('''
+            SELECT id, nombre FROM pastillero_usuarios
+            WHERE id = %s AND usuario_id = %s
+        ''', (medicamento_id, usuario_id)).fetchone()
+
+        if not medicamento:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Medicamento no encontrado'}), 404
+
+        # Actualizar recordatorio
+        conn.execute('''
+            UPDATE pastillero_usuarios
+            SET horas_entre_tomas = %s,
+                proxima_toma = %s,
+                recordatorio_activo = TRUE
+            WHERE id = %s AND usuario_id = %s
+        ''', (horas_entre_tomas, proxima_toma, medicamento_id, usuario_id))
+
+        conn.commit()
+        conn.close()
+
+        print(f"[OK] Recordatorio activado para medicamento {medicamento_id} ({medicamento['nombre']})")
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Recordatorio activado correctamente'
+        })
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        print(f"Error al activar recordatorio: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastillero/<int:medicamento_id>/desactivar-recordatorio', methods=['POST'])
+def api_desactivar_recordatorio(medicamento_id):
+    """Desactivar recordatorio para un medicamento"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        conn.execute('''
+            UPDATE pastillero_usuarios
+            SET recordatorio_activo = FALSE
+            WHERE id = %s AND usuario_id = %s
+        ''', (medicamento_id, usuario_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Recordatorio desactivado'})
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        print(f"Error al desactivar recordatorio: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vincular-telegram', methods=['POST'])
+def api_vincular_telegram():
+    """Vincular chat_id de Telegram con usuario"""
+    data = request.get_json()
+
+    telefono = data.get('telefono')
+    chat_id = data.get('chat_id')
+
+    if not telefono or not chat_id:
+        return jsonify({'ok': False, 'error': 'Faltan datos requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Buscar tercero por teléfono
+        tercero = conn.execute('''
+            SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1
+        ''', (telefono,)).fetchone()
+
+        if not tercero:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Teléfono no encontrado'}), 404
+
+        # Actualizar telegram_chat_id
+        conn.execute('''
+            UPDATE terceros
+            SET telegram_chat_id = %s
+            WHERE id = %s
+        ''', (str(chat_id), tercero['id']))
+
+        conn.commit()
+        conn.close()
+
+        print(f"[OK] Telegram vinculado: chat_id={chat_id} -> usuario={tercero['nombre']} (tel: {telefono})")
+
+        return jsonify({
+            'ok': True,
+            'nombre': tercero['nombre'],
+            'mensaje': f'Vinculado correctamente con {tercero["nombre"]}'
+        })
+
+    except Exception as e:
+        if 'conn' in locals():
+            conn.rollback()
+            conn.close()
+        print(f"Error al vincular Telegram: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================
 #  RUTA DE BSQUEDA PARA AUTOCOMPLETADO
 # ============================================
 

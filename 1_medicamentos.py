@@ -3062,7 +3062,7 @@ def obtener_productos():
         else:
             # Sin bsqueda, mostrar primeros 50
             hay_limite = True
-            query += " AND (? = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
+            query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
             params.append(permitir_sin_cotizaciones)
             productos = conn.execute(query, params).fetchall()
 

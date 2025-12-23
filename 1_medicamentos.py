@@ -1987,7 +1987,9 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
     if not busqueda or not busqueda.strip():
         return [], [], 0
 
-    palabras_busqueda = normalizar_texto(busqueda).split()
+    # Filtrar stopwords (palabras muy comunes sin significado médico)
+    stopwords = {'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas', 'a', 'con', 'en', 'por', 'para', 'y', 'o', 'que'}
+    palabras_busqueda = [p for p in normalizar_texto(busqueda).split() if p not in stopwords]
     if not palabras_busqueda:
         return [], [], 0
 
@@ -2017,9 +2019,46 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
 
     for palabra in palabras_busqueda:
         for variante in normalizar_palabra_busqueda(palabra):
-            sql_norm = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({}, '','a'),'','e'),'','i'),'','o'),'','u'),'','n'))"
-            condiciones.extend([f"{sql_norm.format('m.nombre')} LIKE ?", f"{sql_norm.format('f.nombre')} LIKE ?", f"{sql_norm.format('ca.nombre')} LIKE ?"])
-            params.extend([f'%{variante}%'] * CAMPOS_BUSQUEDA)
+            # Usar la misma normalización que en test4 (con tildes correctas)
+            sql_norm = "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE({}, 'á','a'), 'é','e'), 'í','i'), 'ó','o'), 'ú','u'), 'ñ','n'))"
+
+            # 🆕 Estrategia de búsqueda según longitud de palabra:
+            # - Palabras CORTAS (≤3 letras): Solo palabra COMPLETA (evita "me" → "Melatonina")
+            # - Palabras LARGAS (>3 letras): Palabra completa Y subcadena (permite "aspirin" → "Aspirina")
+
+            for campo in ['m.nombre', 'f.nombre', 'ca.nombre']:
+                campo_norm = sql_norm.format(campo)
+
+                if len(variante) <= 3:
+                    # Palabras cortas: SOLO palabra completa
+                    condiciones.extend([
+                        f"{campo_norm} LIKE ?",  # inicio: "me tableta"
+                        f"{campo_norm} LIKE ?",  # final: "tableta me"
+                        f"{campo_norm} LIKE ?",  # medio: "dolor me forte"
+                        f"{campo_norm} = ?"      # exacta: "me"
+                    ])
+                    params.extend([
+                        f'{variante} %',
+                        f'% {variante}',
+                        f'% {variante} %',
+                        f'{variante}'
+                    ])
+                else:
+                    # Palabras largas: Palabra completa + subcadena (más flexible)
+                    condiciones.extend([
+                        f"{campo_norm} LIKE ?",  # inicio palabra completa
+                        f"{campo_norm} LIKE ?",  # final palabra completa
+                        f"{campo_norm} LIKE ?",  # medio palabra completa
+                        f"{campo_norm} = ?",     # exacta
+                        f"{campo_norm} LIKE ?"   # subcadena (permite "aspirin" → "Aspirina")
+                    ])
+                    params.extend([
+                        f'{variante} %',
+                        f'% {variante}',
+                        f'% {variante} %',
+                        f'{variante}',
+                        f'%{variante}%'          # búsqueda parcial
+                    ])
 
     if condiciones:
         query += f" AND ({' OR '.join(condiciones)})"
@@ -2041,22 +2080,126 @@ def buscar_medicamentos_directos(busqueda, conn, precio_min='', precio_max='', p
     params.append(permitir_sin_cotizaciones)
 
     productos = conn.execute(query, params).fetchall()
+    print(f"   Productos encontrados: {len(productos)}")
 
     palabras_con_match = set()
+    medicamentos_por_palabra = {palabra: [] for palabra in palabras_busqueda}  # 🆕 DEBUG
+
     for p in productos:
-        med_nombre = p['medicamento_nombre'].lower() if p['medicamento_nombre'] else ''
-        fab_nombre = p['fabricante_nombre'].lower() if p['fabricante_nombre'] else ''
-        comp_nombre = p['componente_activo_nombre'].lower() if p['componente_activo_nombre'] else ''
+        # 🆕 FIX: Normalizar nombres igual que en el query (quitar tildes, minúsculas)
+        med_nombre = normalizar_texto(p['medicamento_nombre']) if p['medicamento_nombre'] else ''
+        fab_nombre = normalizar_texto(p['fabricante_nombre']) if p['fabricante_nombre'] else ''
+        comp_nombre = normalizar_texto(p['componente_activo_nombre']) if p['componente_activo_nombre'] else ''
 
         for palabra in palabras_busqueda:
             if palabra in med_nombre or palabra in fab_nombre or palabra in comp_nombre:
                 palabras_con_match.add(palabra)
+                medicamentos_por_palabra[palabra].append(p['medicamento_nombre'])  # 🆕 Guardar nombre original para debug
 
-    palabras_sin_match = [p for p in palabras_busqueda if p not in palabras_con_match]
+    # 🆕 MANTENER ORDEN ORIGINAL: usar lista en lugar de list comprehension para preservar el orden
+    palabras_sin_match = []
+    for p in palabras_busqueda:
+        if p not in palabras_con_match:
+            palabras_sin_match.append(p)
+
     porcentaje = (len(palabras_con_match) / len(palabras_busqueda)) * 100 if palabras_busqueda else 0
-    print(f"   Exito: {porcentaje:.0f}% | Sin match: {palabras_sin_match}")
+
+    # 🆕 DEBUG: Mostrar detalle de matches
+    print(f"\n[BUSQUEDA DIRECTA]")
+    print(f"   Palabras CON match ({len(palabras_con_match)}): {list(palabras_con_match)}")
+    print(f"   Palabras SIN match ({len(palabras_sin_match)}): {palabras_sin_match}")
+    print(f"   Porcentaje de exito: {porcentaje:.0f}%")
+
+    for palabra in palabras_busqueda:
+        if palabra in palabras_con_match:
+            ejemplos = medicamentos_por_palabra[palabra][:3]  # Mostrar max 3 ejemplos
+            print(f"      '{palabra}' -> {len(medicamentos_por_palabra[palabra])} meds (ej: {ejemplos})")
+        else:
+            print(f"      '{palabra}' -> NO encontrado")
+    print()
 
     return productos, palabras_sin_match, porcentaje
+
+
+@app.route('/api/test_sintoma', methods=['GET'])
+def test_sintoma():
+    """Endpoint de prueba para verificar síntoma y medicamentos asociados"""
+    sintoma = request.args.get('q', 'comezon').strip()
+
+    try:
+        conn = get_db_connection()
+
+        # Test 1: Buscar el síntoma en la BD
+        sintoma_normalizado = normalizar_texto(sintoma)
+        test1 = conn.execute("""
+            SELECT id, nombre
+            FROM sintomas
+            WHERE LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                nombre, 'á','a'), 'é','e'), 'í','i'), 'ó','o'), 'ú','u'), 'ñ','n')
+            ) LIKE %s
+            LIMIT 10
+        """, (f'%{sintoma_normalizado}%',)).fetchall()
+
+        # Test 2: Si encontró síntomas, buscar medicamentos asociados
+        test2 = []
+        test3 = []  # Con filtro de cotizaciones
+        if test1:
+            sintoma_ids = [s['id'] for s in test1]
+            placeholders = ','.join(['%s'] * len(sintoma_ids))
+
+            # Test 2: TODOS los medicamentos asociados
+            test2 = conn.execute(f"""
+                SELECT DISTINCT
+                    m.id,
+                    m.nombre,
+                    s.nombre as sintoma_nombre,
+                    COUNT(p.id) as num_precios
+                FROM medicamentos m
+                INNER JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+                INNER JOIN sintomas s ON ms.sintoma_id = s.id
+                LEFT JOIN precios p ON m.id = p.medicamento_id AND p.precio > 0
+                WHERE ms.sintoma_id IN ({placeholders})
+                AND m.activo = '1'
+                GROUP BY m.id, m.nombre, s.nombre
+                ORDER BY num_precios DESC
+            """, sintoma_ids).fetchall()
+
+            # Test 3: Solo medicamentos CON cotizaciones
+            test3 = conn.execute(f"""
+                SELECT DISTINCT
+                    m.id,
+                    m.nombre,
+                    p.precio,
+                    COALESCE(cot.num_cotizaciones, 0) as num_cotizaciones
+                FROM medicamentos m
+                INNER JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+                INNER JOIN precios p ON m.id = p.medicamento_id
+                LEFT JOIN (
+                    SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
+                    FROM precios_competencia
+                    GROUP BY medicamento_id, fabricante_id
+                ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
+                WHERE ms.sintoma_id IN ({placeholders})
+                AND m.activo = '1'
+                AND p.precio > 0
+                AND COALESCE(cot.num_cotizaciones, 0) > 0
+            """, sintoma_ids).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'busqueda': sintoma,
+            'normalizado': sintoma_normalizado,
+            'sintomas_encontrados': [dict(s) for s in test1],
+            'total_medicamentos_asociados': len(test2),
+            'medicamentos_asociados_muestra': [dict(m) for m in test2[:5]],
+            'medicamentos_con_cotizaciones': len(test3),
+            'con_cotizaciones_muestra': [dict(m) for m in test3[:5]],
+            'mensaje': f'De {len(test2)} medicamentos asociados, solo {len(test3)} tienen cotizaciones. Ese es el problema.'
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
 @app.route('/api/productos', methods=['GET'])
@@ -2103,9 +2246,11 @@ def obtener_productos():
         productos_directos = []
         if busqueda:
             productos_directos, palabras_sin_match, porcentaje_exito = buscar_medicamentos_directos(busqueda, conn, precio_min, precio_max, permitir_sin_cotizaciones)
-            if porcentaje_exito <= 50 and palabras_sin_match:
-                busqueda_sintomas = ' '.join(palabras_sin_match)
-                print(f"   Activando busqueda por sintomas: '{busqueda_sintomas}'")
+            # 🆕 REGLA: Si hay palabras sin match, buscar TAMBIÉN por síntomas
+            # IMPORTANTE: Usar búsqueda ORIGINAL (con stopwords) para detección de síntomas contextuales
+            if palabras_sin_match:
+                busqueda_sintomas = busqueda  # Usar texto original para preservar contexto (ej: "dolor DE espalda")
+                print(f"   Activando busqueda por sintomas (texto original): '{busqueda_sintomas}'")
 
         # DETECCIN INTELIGENTE: DIAGNSTICOS + SNTOMAS
         sintomas_detectados = []
@@ -2592,8 +2737,36 @@ def obtener_productos():
         
             if todos_sintomas_ids:
                 placeholders = ','.join(['?' for _ in todos_sintomas_ids])
-                query_sintomas = query + f" AND m.id IN (SELECT DISTINCT medicamento_id FROM medicamento_sintoma WHERE sintoma_id IN ({placeholders}))"
-                params_sintomas = params + todos_sintomas_ids
+                # 🆕 FIX: Incluir información de síntomas con LEFT JOIN para obtener sintomas_ids_por_precio
+                query_sintomas = """SELECT
+                p.id as precio_id,
+                p.medicamento_id,
+                p.fabricante_id,
+                p.precio,
+                p.imagen as imagen_precio,
+                m.nombre as medicamento_nombre,
+                m.presentacion,
+                m.concentracion,
+                m.imagen as imagen_medicamento,
+                m.componente_activo_id,
+                ca.nombre as componente_activo_nombre,
+                f.nombre as fabricante_nombre,
+                s.nombre as sintoma_nombre,
+                s.id as sintoma_id
+            FROM precios p
+            INNER JOIN medicamentos m ON p.medicamento_id = m.id
+            INNER JOIN fabricantes f ON p.fabricante_id = f.id
+            LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
+            LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            LEFT JOIN sintomas s ON ms.sintoma_id = s.id
+            LEFT JOIN (
+                SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
+                FROM precios_competencia
+                GROUP BY medicamento_id, fabricante_id
+            ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
+            WHERE m.activo = '1'
+            AND m.id IN (SELECT DISTINCT medicamento_id FROM medicamento_sintoma WHERE sintoma_id IN (""" + placeholders + """))"""
+                params_sintomas = todos_sintomas_ids
 
                 if precio_min:
                     try:
@@ -2615,16 +2788,17 @@ def obtener_productos():
                 print(f"    Productos por sntomas: {len(productos_sintomas)}")
 
         #  PASO 4: Combinar resultados (directos primero, luego sntomas sin duplicados)
+        # 🆕 PRIORIDAD DE RESULTADOS:
+        #    1. Medicamentos encontrados por búsqueda directa (var_medicamentos_directos)
+        #    2. Medicamentos encontrados por síntomas (solo si no están en directos)
+        #    La búsqueda por síntomas usó palabras_sin_match en su orden original
         hay_limite = False
-        if busqueda and productos_directos:
+        if busqueda or busqueda_sintomas:
+            # Combinar siempre: productos_directos primero, luego productos_sintomas sin duplicados
             ids_directos = {p['precio_id'] for p in productos_directos}
             productos_sintomas_unicos = [p for p in productos_sintomas if p['precio_id'] not in ids_directos]
             productos = list(productos_directos) + productos_sintomas_unicos
             print(f"   Combinado: {len(productos_directos)} directos + {len(productos_sintomas_unicos)} sintomas = {len(productos)}")
-        elif busqueda:
-            productos = list(productos_directos)
-        elif productos_sintomas:
-            productos = list(productos_sintomas)
         else:
             # Sin bsqueda, mostrar primeros 50
             hay_limite = True
@@ -2690,7 +2864,10 @@ def obtener_productos():
         # ============================================
         # CALCULAR SCORE (SIN CAMBIOS)
         # ============================================
-    
+
+        # Marcar cuáles productos fueron encontrados por búsqueda directa
+        ids_productos_directos = {p['precio_id'] for p in productos_directos}
+
         productos_con_score = []
         for p in productos:
             imagen = p['imagen_precio'] if p['imagen_precio'] else p['imagen_medicamento']
@@ -2739,24 +2916,30 @@ def obtener_productos():
             else:
                 score = coincidencias_sintomas * 10
         
-            productos_con_score.append({
-                'precio_id': p['precio_id'],
-                'medicamento_id': p['medicamento_id'],
-                'fabricante_id': p['fabricante_id'],
-                'nombre': p['medicamento_nombre'],
-                'presentacion': p['presentacion'] or '',
-                'concentracion': p['concentracion'] or '',
-                'fabricante': p['fabricante_nombre'],
-                'precio': p['precio'],
-                'imagen': imagen,
-                'componente_activo': p['componente_activo_nombre'] if p['componente_activo_nombre'] else None,
-                'sintomas_filtrados': sintomas_filtrados_por_precio.get(p['precio_id'], []),
-                'sintomas_totales': sintomas_por_precio.get(p['precio_id'], []),
-                'score': score,
-                'diagnostico_detectado': mejor_diagnostico,
-                'tipo_deteccion': tipo_deteccion,
-                'coincidencias': coincidencias_sintomas
-            })
+            # Determinar si fue encontrado por búsqueda directa
+            es_directo = p['precio_id'] in ids_productos_directos
+
+            # 🆕 FILTRO: Solo incluir si es directo O tiene coincidencias de síntomas
+            if es_directo or coincidencias_sintomas > 0 or coincidencias_diagnosticos_directos > 0:
+                productos_con_score.append({
+                    'precio_id': p['precio_id'],
+                    'medicamento_id': p['medicamento_id'],
+                    'fabricante_id': p['fabricante_id'],
+                    'nombre': p['medicamento_nombre'],
+                    'presentacion': p['presentacion'] or '',
+                    'concentracion': p['concentracion'] or '',
+                    'fabricante': p['fabricante_nombre'],
+                    'precio': p['precio'],
+                    'imagen': imagen,
+                    'componente_activo': p['componente_activo_nombre'] if p['componente_activo_nombre'] else None,
+                    'sintomas_filtrados': sintomas_filtrados_por_precio.get(p['precio_id'], []),
+                    'sintomas_totales': sintomas_por_precio.get(p['precio_id'], []),
+                    'score': score,
+                    'diagnostico_detectado': mejor_diagnostico,
+                    'tipo_deteccion': tipo_deteccion,
+                    'coincidencias': coincidencias_sintomas,
+                    'es_directo': es_directo  # Marca si fue encontrado por búsqueda directa
+                })
     
         # ============================================
         #  ORDENAMIENTO INTELIGENTE
@@ -2809,8 +2992,8 @@ def obtener_productos():
                     
                         print(f"      {producto['nombre'][:30]:30} -> Cubre {cobertura}/{total_sintomas_diagnostico} ({producto['porcentaje_cobertura']:.0f}%) | Extras: {sintomas_extra} | Total: {len(sintomas_producto)}")
                 
-                    #  Ordenar: MENOS extras primero, luego MS cobertura
-                    productos_con_score.sort(key=lambda x: (x['sintomas_extra'], -x['cobertura_diagnostico']))
+                    #  Ordenar: DIRECTOS primero, luego MENOS extras, luego MÁS cobertura
+                    productos_con_score.sort(key=lambda x: (not x['es_directo'], x['sintomas_extra'], -x['cobertura_diagnostico']))
                 
                     print(f"    Orden: Menos extras -> Ms cobertura del diagnstico")
                 
@@ -2818,7 +3001,8 @@ def obtener_productos():
                 
                 except Exception as e:
                     print(f"    Error calculando cobertura: {e}")
-                    productos_con_score.sort(key=lambda x: x['score'], reverse=True)
+                    # Ordenar: DIRECTOS primero, luego por score
+                    productos_con_score.sort(key=lambda x: (not x['es_directo'], -x['score']))
         
             else:
                 # 
@@ -2841,57 +3025,62 @@ def obtener_productos():
                     producto['sintomas_totales_count'] = sintomas_totales
                 
                     print(f"      {producto['nombre'][:30]:30} -> {sintomas_totales} sntomas (score: {producto['especificidad_score']:.1f})")
-            
-                # Ordenar: MENOS sntomas primero (ms especfico)
-                productos_con_score.sort(key=lambda x: (x['especificidad_score'], x['coincidencias']), reverse=True)
+
+                # Ordenar: DIRECTOS primero, luego MENOS síntomas (más específico)
+                productos_con_score.sort(key=lambda x: (not x['es_directo'], -x['especificidad_score'], -x['coincidencias']))
             
                 print(f"    Orden: Ms especfico -> Ms genrico")
             
                 # AHORA aplicar el ordenamiento por sntomas (alternar)
-                # PASO 1: Agrupar por sntoma principal
+                # PASO 0: Separar productos DIRECTOS de productos por síntomas
+                productos_directos_final = [p for p in productos_con_score if p['es_directo']]
+                productos_sintomas_final = [p for p in productos_con_score if not p['es_directo']]
+
+                # PASO 1: Agrupar por sntoma principal (SOLO productos de síntomas)
                 productos_por_sintoma = {}
-            
-                for producto in productos_con_score:
+
+                for producto in productos_sintomas_final:
                     sintomas_del_producto = sintomas_ids_por_precio.get(producto['precio_id'], [])
                     sintomas_coincidentes = [s for s in sintomas_detectados_ids if s in sintomas_del_producto]
-                
+
                     if sintomas_coincidentes:
                         sintoma_principal = sintomas_coincidentes[0]
-                    
+
                         if sintoma_principal not in productos_por_sintoma:
                             productos_por_sintoma[sintoma_principal] = []
-                    
+
                         productos_por_sintoma[sintoma_principal].append(producto)
-            
+
                 # PASO 2: Extraer el MEJOR de cada sntoma (ya ordenados por especificidad)
                 mejores_por_sintoma = []
-            
+
                 for sintoma_id in sintomas_detectados_ids:
                     if sintoma_id in productos_por_sintoma and productos_por_sintoma[sintoma_id]:
                         mejor = productos_por_sintoma[sintoma_id][0]
                         mejores_por_sintoma.append(mejor)
                         productos_por_sintoma[sintoma_id] = productos_por_sintoma[sintoma_id][1:]
-            
+
                 # PASO 3: Alternar el RESTO
                 resto_productos = []
                 tiene_productos = True
-            
+
                 while tiene_productos:
                     tiene_productos = False
                     for sintoma_id in sintomas_detectados_ids:
                         if sintoma_id in productos_por_sintoma and productos_por_sintoma[sintoma_id]:
                             resto_productos.append(productos_por_sintoma[sintoma_id].pop(0))
                             tiene_productos = True
-            
-                # PASO 4: Resultado final
-                productos_con_score = mejores_por_sintoma + resto_productos
-            
+
+                # PASO 4: Resultado final - DIRECTOS PRIMERO, luego síntomas
+                productos_con_score = productos_directos_final + mejores_por_sintoma + resto_productos
+
+                print(f"    Productos DIRECTOS: {len(productos_directos_final)}")
                 print(f"    Mejores por sntoma: {len(mejores_por_sintoma)}")
                 print(f"    Resto alternado: {len(resto_productos)}")
     
         else:
-            # Sin sntomas ni diagnsticos: orden normal
-            productos_con_score.sort(key=lambda x: x['score'], reverse=True)
+            # Sin síntomas ni diagnósticos: DIRECTOS primero, luego por score
+            productos_con_score.sort(key=lambda x: (not x['es_directo'], -x['score']))
 
     
         diagnosticos_response = []
@@ -6476,7 +6665,7 @@ def crear_sintoma():
 
 
 # ==========================================
-# RUTAS PARA GESTIN DE DIAGNSTICOS
+# RUTAS PARA GESTIÓN DE DIAGNÓSTICOS
 # ==========================================
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
@@ -6493,16 +6682,16 @@ def admin_diagnosticos():
     return render_template('lista_diagnosticos.html')
 
 # ==========================================
-# RUTAS ACTUALIZADAS PARA GESTIN DE DIAGNSTICOS
+# RUTAS ACTUALIZADAS PARA GESTIÓN DE DIAGNÓSTICOS
 # (Con campo descripcion_lower)
 # ==========================================
 
 # ==========================================
-# 2. LISTAR TODOS LOS DIAGNSTICOS (JSON)
+# 2. LISTAR TODOS LOS DIAGNÓSTICOS (JSON)
 # ==========================================
 @app.route('/admin/diagnosticos/json', methods=['GET'])
 def listar_diagnosticos_json():
-    """Devuelve todos los diagnsticos con conteo de sntomas"""
+    """Devuelve todos los diagnósticos con conteo de síntomas"""
     conn = get_db_connection()
     
     query = """
@@ -6912,7 +7101,7 @@ def crear_medicamento_rapido():
     medicamento_id = data.get('medicamento_id')  #  ID del medicamento actual
 
     if not nombre:
-        return jsonify({"ok": False, "error": "El nombre no puede estar vaco"}), 400
+        return jsonify({"ok": False, "error": "El nombre no puede estar vacío"}), 400
 
     conn = sqlite3.connect('medicamentos.db')
     c = conn.cursor()
@@ -6954,7 +7143,7 @@ def crear_medicamento_rapido():
 
 
 # ============================================================
-# FUNCIN AUXILIAR - SIMPLIFICAR NOMBRE
+# FUNCION AUXILIAR - SIMPLIFICAR NOMBRE
 # ============================================================
 def simplificar_nombre_medicamento(nombre):
     """Simplifica el nombre eliminando descriptores innecesarios."""
@@ -11428,6 +11617,112 @@ def registrar_uso_navegacion(id):
 # ============================================
 #  RUTAS API DEL PASTILLERO
 # ============================================
+
+@app.route('/api/crear-usuario-pastillero', methods=['POST'])
+def api_crear_usuario_pastillero():
+    """Crear usuario rápido para acceder al pastillero sin checkout"""
+    data = request.get_json()
+
+    nombre = data.get('nombre', '').strip()
+    telefono = data.get('telefono', '').strip()
+
+    if not nombre or not telefono:
+        return jsonify({'ok': False, 'error': 'Nombre y teléfono son requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar si ya existe el teléfono
+        tercero_existente = conn.execute("""
+            SELECT id, nombre FROM terceros WHERE telefono = ? LIMIT 1
+        """, (telefono,)).fetchone()
+
+        if tercero_existente:
+            tercero_id = tercero_existente['id']
+            print(f"✅ Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
+
+            # Actualizar nombre si cambió
+            if tercero_existente['nombre'] != nombre:
+                conn.execute("""
+                    UPDATE terceros
+                    SET nombre = ?, fecha_actualizacion = datetime('now')
+                    WHERE id = ?
+                """, (nombre, tercero_id))
+                conn.commit()
+                print(f"  ✏️ Nombre actualizado a: {nombre}")
+        else:
+            # Crear nuevo tercero
+            cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
+            next_tercero_id = cursor_seq.fetchone()[0]
+
+            print(f"➕ Creando nuevo tercero con ID {next_tercero_id}...")
+            conn.execute("""
+                INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
+                VALUES (?, ?, ?, datetime('now'))
+            """, (next_tercero_id, nombre, telefono))
+            tercero_id = next_tercero_id
+            conn.commit()
+            print(f"✅ Tercero creado con ID: {tercero_id}")
+
+        conn.close()
+
+        # Establecer sesión
+        session['usuario_id'] = tercero_id
+        print(f"🔐 Sesión establecida para usuario_id: {tercero_id}")
+
+        return jsonify({
+            'ok': True,
+            'usuario_id': tercero_id,
+            'nombre': nombre,
+            'telefono': telefono
+        })
+
+    except Exception as e:
+        print(f"❌ Error al crear usuario para pastillero: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurar-sesion', methods=['POST'])
+def api_restaurar_sesion():
+    """Restaurar sesión del usuario desde localStorage"""
+    data = request.get_json()
+    usuario_id = data.get('usuario_id')
+
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'usuario_id requerido'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el usuario existe
+        tercero = conn.execute("""
+            SELECT id, nombre, telefono FROM terceros WHERE id = ? LIMIT 1
+        """, (usuario_id,)).fetchone()
+
+        conn.close()
+
+        if tercero:
+            # Restaurar sesión
+            session['usuario_id'] = tercero['id']
+            print(f"🔄 Sesión restaurada para usuario_id: {tercero['id']} ({tercero['nombre']})")
+
+            return jsonify({
+                'ok': True,
+                'usuario_id': tercero['id'],
+                'nombre': tercero['nombre'],
+                'telefono': tercero['telefono']
+            })
+        else:
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
+
+    except Exception as e:
+        print(f"❌ Error al restaurar sesión: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 @app.route('/api/pastillero', methods=['GET', 'POST'])
 def api_pastillero():

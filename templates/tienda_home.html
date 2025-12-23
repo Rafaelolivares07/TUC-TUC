@@ -755,7 +755,122 @@
             }
         }
 
+        /* 🆕 MODAL DE REGISTRO PARA PASTILLERO */
+        .modal-registro {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
+        .modal-registro-content {
+            background: white;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .modal-registro-header {
+            background: linear-gradient(135deg, #2e89ff 0%, #1976D2 100%);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .modal-registro-header h2 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        .modal-registro-body {
+            padding: 1.5rem;
+        }
+
+        .modal-registro-body .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .modal-registro-body .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-size: 0.95rem;
+        }
+
+        .modal-registro-body .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .modal-registro-body .form-group input:focus {
+            outline: none;
+            border-color: #2e89ff;
+        }
+
+        .modal-registro-body .nota {
+            font-size: 0.8rem;
+            color: #888;
+            margin-top: 0.3rem;
+        }
+
+        .modal-registro-footer {
+            padding: 0 1.5rem 1.5rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn-registrar {
+            flex: 1;
+            padding: 0.9rem;
+            background: linear-gradient(135deg, #2e89ff 0%, #1976D2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-registrar:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-registrar:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-cancelar-registro {
+            flex: 1;
+            padding: 0.9rem;
+            background: #f0f0f0;
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-cancelar-registro:hover {
+            background: #e0e0e0;
+        }
 
 
         /* CONTENEDOR DEL LOGO — tú mandas aquí */
@@ -825,12 +940,18 @@
         </div>
     </div>
 
-    <div class="header" id="header-principal" style="transition: all 0.5s ease; position: sticky; top: 0; z-index: 999; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+    <div class="header" id="header-principal" style="transition: all 0.5s ease; position: sticky; top: 0; z-index: 999; background: #2e89ff; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
 
-           <div id="titulo-principal" style="text-align: center; width: 100%; transition: all 0.5s ease; margin: 0.5rem 0;">
+           <div id="titulo-principal" style="text-align: center; width: 100%; transition: all 0.5s ease; margin: 0.5rem 0; position: relative;">
                <h1 id="titulo-h1" style="margin: 0;">MAS QUE MEDICAMENTOS</h1>
                <p id="subtitulo-p" style="margin: 0.3rem 0;">Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
+
+               <!-- 🆕 Nombre de usuario en header -->
+               <div id="usuario-header" style="display: none; position: absolute; top: 0; right: 0; color: #f8f9fa; font-size: 0.9rem; background: rgba(255,255,255,0.15); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: 600;">
+                   <span style="margin-right: 0.3rem;">👤</span>
+                   <span id="usuario-nombre-header">Hola, Usuario</span>
+               </div>
            </div>
 
 
@@ -838,55 +959,57 @@
 
 
 
-           <!-- Filtros UNIFICADOS -->
-            <div class="filtros" style="margin-top: 0.5rem;">
+           <!-- Textarea de búsqueda -->
+           <textarea
+               id="busqueda_unificada"
+               placeholder="Escribe aqui"
+               rows="1"
+               style="
+                   width: 100%;
+                   padding: 1rem;
+                   border: 2px solid #e0e0e0;
+                   border-radius: 8px;
+                   font-size: 1.1rem;
+                   font-family: inherit;
+                   resize: none;
+                   overflow: hidden;
+                   transition: border-color 0.3s;
+                   min-height: 42px;
+                   margin-top: 0.5rem;
+               "
+               onfocus="activarModoInteraccion()"
+               oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
+               onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
+           ></textarea>
 
-                <div class="filtro-grupo" style="margin-bottom: 0.5rem;display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
-                    <textarea
-                        id="busqueda_unificada"
-                        placeholder="Escribe aqui"
-                        rows="1"
-                        style="
-                            width: 100%;
-                            padding: 1rem;
-                            border: 2px solid #e0e0e0;
-                            border-radius: 8px;
-                            font-size: 1.1rem;
-                            font-family: inherit;
-                            resize: none;
-                            overflow: hidden;
-                            transition: border-color 0.3s;
-                            min-height: 42px;  /* 🆕 Más pequeño */
-                        "
-                        onfocus="activarModoInteraccion()"
-                        oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
-                        onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
-                    ></textarea>
-                    <small style="color: #666; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
-                        
-                    </small>
-                </div>
-                
-                <!-- Filtros de precio (interactivos con contador) -->
-                <div id="filtros-container" style="display: none; margin-top: 0.5rem;">
-                    <div style="cursor: pointer; color: #f8f9fa; font-weight: 600; user-select: none; padding: 0.5rem; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center;" onclick="toggleFiltrosAvanzados()">
-                        <span id="contador-resultados">0 resultados</span> • <span>Filtros ⚙️</span>
-                    </div>
-                    <div id="filtros-avanzados-content" style="display: none; margin-top: 0.5rem;">
-                    <div class="filtros-grid" style="margin-top: 1rem;">
-                        <div class="filtro-grupo">
-                            <label>Precio Mínimo</label>
-                            <input type="number" id="precioMin" placeholder="0">
-                        </div>
-                        
-                        <div class="filtro-grupo">
-                            <label>Precio Máximo</label>
-                            <input type="number" id="precioMax" placeholder="50000">
-                        </div>
-                    </div>
-                    </div>
-                </div>
-            </div>
+           <!-- Filtros de precio (interactivos con contador) -->
+           <div id="filtros-container" style="display: none; margin-top: 0.5rem; width: 100%;">
+               <div style="cursor: pointer; color: #f8f9fa; font-weight: 600; user-select: none; padding: 0.5rem; background: rgba(255,255,255,0.1); border-radius: 8px; text-align: center;" onclick="toggleFiltrosAvanzados()">
+                   <span id="contador-resultados">0 resultados</span> • <span>Filtros ⚙️</span>
+               </div>
+
+               <!-- Toggle de columnas -->
+               <div class="toggle-columnas" id="toggleColumnasContainer" style="margin-top: 0.5rem; background: rgba(255,255,255,0.1); padding: 0.5rem; border-radius: 8px;">
+                   <label style="color: #f8f9fa;">
+                       <input type="checkbox" id="toggleDosColumnas">
+                        Ver 2 medicamentos por pantalla
+                   </label>
+               </div>
+
+               <div id="filtros-avanzados-content" style="display: none; margin-top: 0.5rem;">
+               <div class="filtros-grid" style="margin-top: 1rem; display: flex; gap: 1rem;">
+                   <div class="filtro-grupo" style="flex: 1;">
+                       <label>Precio Mínimo</label>
+                       <input type="number" id="precioMin" placeholder="0">
+                   </div>
+
+                   <div class="filtro-grupo" style="flex: 1;">
+                       <label>Precio Máximo</label>
+                       <input type="number" id="precioMax" placeholder="50000">
+                   </div>
+               </div>
+               </div>
+           </div>
 
 
 
@@ -918,15 +1041,7 @@
             <div id="diagnosticosContent"></div>
             <div id="sintomasDetectados" class="sintomas-detectados"></div>
         </div>
-        
-        <!-- 🆕 TOGGLE DE COLUMNAS (solo móvil) -->
-        <div class="toggle-columnas" id="toggleColumnasContainer">
-            <label>
-                <input type="checkbox" id="toggleDosColumnas">
-                 Ver 2 medicamentos por pantalla
-            </label>
-        </div>
-        
+
         <!-- Productos -->
         <div id="productosContainer" class="loading">
             Cargando productos...
@@ -1132,7 +1247,6 @@
             const params = new URLSearchParams();
             
             if (busquedaUnificada) {
-                params.append('sintomas_busqueda', busquedaUnificada);
                 params.append('q', busquedaUnificada);
             }
             
@@ -1720,9 +1834,41 @@
         }
         
         // 🆕 FUNCIONES DEL PASTILLERO
-        function abrirPastillero() {
+        async function abrirPastillero() {
+            // 🆕 Verificar si hay sesión activa
+            const usuarioId = localStorage.getItem('usuario_id');
+
+            if (!usuarioId) {
+                // No hay usuario registrado → Mostrar modal de registro
+                console.log('⚠️ No hay usuario registrado, mostrando modal de registro');
+                mostrarModalRegistro();
+                return;
+            }
+
+            // 🔄 Intentar restaurar sesión si no está activa en el backend
+            try {
+                const checkResponse = await fetch('/api/pastillero/count');
+                const checkData = await checkResponse.json();
+
+                if (!checkData.ok && checkResponse.status === 401) {
+                    // Sesión expirada → Restaurar automáticamente
+                    console.log('🔄 Sesión expirada, restaurando...');
+                    const restaurada = await restaurarSesionAutomatica();
+
+                    if (!restaurada) {
+                        // No se pudo restaurar → Pedir registro de nuevo
+                        console.log('❌ No se pudo restaurar sesión, pidiendo registro');
+                        mostrarModalRegistro();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('Error al verificar sesión:', error);
+            }
+
+            // ✅ Todo OK → Abrir pastillero normalmente
             document.getElementById('modal-pastillero').classList.add('active');
-            
+
             // 🎯 LÓGICA SIMPLE: Mostrar solo los medicamentos que están tanto en tienda como en pastillero
             if (productosMostradosEnTienda.length > 0) {
                 console.log('📌 Abriendo pastillero filtrado por productos mostrados en tienda');
@@ -1733,7 +1879,7 @@
                 cargarMedicamentosPastillero();
                 modoFiltradoPastillero = false;
             }
-            
+
             document.getElementById('input-buscar-medicamento').focus();
         }
         
@@ -3243,7 +3389,6 @@
             const precioMax = document.getElementById('precioMax').value;
             const params = new URLSearchParams();
             if (busquedaUnificada) {
-                params.append('sintomas_busqueda', busquedaUnificada);
                 params.append('q', busquedaUnificada);
             }
             if (precioMin) params.append('precio_min', precioMin);
@@ -3397,6 +3542,174 @@
         cargarPromos();
 
 
+        // ============================================
+        // 🆕 FUNCIONES DE REGISTRO PARA PASTILLERO
+        // ============================================
+
+        function actualizarNombreUsuarioUI(nombre) {
+            if (!nombre) return;
+
+            // Extraer primer nombre (antes del primer espacio)
+            const primerNombre = nombre.split(' ')[0];
+
+            // Actualizar header principal
+            const usuarioHeader = document.getElementById('usuario-header');
+            const usuarioNombreHeader = document.getElementById('usuario-nombre-header');
+
+            if (usuarioHeader && usuarioNombreHeader) {
+                usuarioNombreHeader.textContent = `Hola, ${primerNombre}`;
+                usuarioHeader.style.display = 'block';
+            }
+
+            // Actualizar título del modal pastillero
+            const tituloPastillero = document.getElementById('titulo-pastillero');
+            if (tituloPastillero) {
+                tituloPastillero.textContent = `Pastillero de ${primerNombre}`;
+            }
+
+            console.log(`✅ UI actualizada con nombre: ${primerNombre}`);
+        }
+
+        function mostrarModalRegistro() {
+            document.getElementById('modal-registro-pastillero').style.display = 'flex';
+            // Auto-focus en el primer campo
+            setTimeout(() => {
+                document.getElementById('registro-nombre').focus();
+            }, 100);
+        }
+
+        function cerrarModalRegistro() {
+            document.getElementById('modal-registro-pastillero').style.display = 'none';
+            // Limpiar campos
+            document.getElementById('registro-nombre').value = '';
+            document.getElementById('registro-telefono').value = '';
+        }
+
+        async function registrarUsuarioPastillero() {
+            const nombre = document.getElementById('registro-nombre').value.trim();
+            const telefono = document.getElementById('registro-telefono').value.trim();
+
+            // Validación
+            if (!nombre || !telefono) {
+                alert('Por favor completa todos los campos');
+                return;
+            }
+
+            if (telefono.length < 10) {
+                alert('El teléfono debe tener al menos 10 dígitos');
+                return;
+            }
+
+            // Deshabilitar botón
+            const btnRegistrar = document.querySelector('.btn-registrar');
+            btnRegistrar.disabled = true;
+            btnRegistrar.textContent = 'Creando cuenta...';
+
+            try {
+                const response = await fetch('/api/crear-usuario-pastillero', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, telefono })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    // Guardar en localStorage
+                    localStorage.setItem('usuario_id', data.usuario_id);
+                    localStorage.setItem('nombre_usuario', data.nombre);
+                    localStorage.setItem('telefono_usuario', data.telefono);
+
+                    console.log('✅ Usuario creado y guardado en localStorage:', data);
+
+                    // 🆕 Actualizar UI con nombre de usuario
+                    actualizarNombreUsuarioUI(data.nombre);
+
+                    // Cerrar modal
+                    cerrarModalRegistro();
+
+                    // Mostrar mensaje de bienvenida
+                    alert(`¡Bienvenido ${data.nombre.split(' ')[0]}! Ya puedes usar el pastillero`);
+
+                    // Abrir pastillero automáticamente
+                    abrirPastillero();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo crear la cuenta'));
+                    btnRegistrar.disabled = false;
+                    btnRegistrar.textContent = 'Crear cuenta';
+                }
+            } catch (error) {
+                console.error('Error al registrar usuario:', error);
+                alert('Error al crear la cuenta. Intenta de nuevo.');
+                btnRegistrar.disabled = false;
+                btnRegistrar.textContent = 'Crear cuenta';
+            }
+        }
+
+        // ============================================
+        // 🆕 RESTAURACIÓN AUTOMÁTICA DE SESIÓN
+        // ============================================
+
+        async function restaurarSesionAutomatica() {
+            const usuarioId = localStorage.getItem('usuario_id');
+
+            if (!usuarioId) {
+                console.log('ℹ️ No hay usuario_id en localStorage');
+                return false;
+            }
+
+            try {
+                const response = await fetch('/api/restaurar-sesion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usuario_id: usuarioId })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    console.log('🔄 Sesión restaurada automáticamente:', data);
+
+                    // 🆕 Actualizar UI con nombre de usuario
+                    actualizarNombreUsuarioUI(data.nombre);
+
+                    return true;
+                } else {
+                    console.log('⚠️ No se pudo restaurar sesión:', data.error);
+                    // Limpiar localStorage si el usuario ya no existe
+                    localStorage.removeItem('usuario_id');
+                    localStorage.removeItem('nombre_usuario');
+                    localStorage.removeItem('telefono_usuario');
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Error al restaurar sesión:', error);
+                return false;
+            }
+        }
+
+        // Ejecutar restauración al cargar la página
+        restaurarSesionAutomatica();
+
+        // 🆕 Actualizar UI si ya hay nombre guardado en localStorage
+        const nombreGuardado = localStorage.getItem('nombre_usuario');
+        if (nombreGuardado) {
+            actualizarNombreUsuarioUI(nombreGuardado);
+        }
+
+        // Enter en campos del modal de registro
+        document.getElementById('registro-nombre').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('registro-telefono').focus();
+            }
+        });
+
+        document.getElementById('registro-telefono').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                registrarUsuarioPastillero();
+            }
+        });
+
 
     </script>
     
@@ -3404,7 +3717,7 @@
     <div id="modal-pastillero" class="modal-pastillero">
         <div class="modal-pastillero-content">
             <div class="modal-pastillero-header">
-                <h2><span>💊</span> Mi Pastillero</h2>
+                <h2><span>💊</span> <span id="titulo-pastillero">Mi Pastillero</span></h2>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <button id="btn-ordenar-pastillero" class="btn-ordenar-pastillero" onclick="toggleOrdenPastillero()">
                         <span id="icono-orden">📅</span> <span id="texto-orden">Recientes</span>
@@ -3428,6 +3741,31 @@
                 <div id="lista-medicamentos-pastillero">
                     <!-- Se llena dinámicamente -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🆕 MODAL DE REGISTRO PARA PASTILLERO -->
+    <div id="modal-registro-pastillero" class="modal-registro" style="display: none;">
+        <div class="modal-registro-content">
+            <div class="modal-registro-header">
+                <h2>Crear cuenta para usar el Pastillero</h2>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 0.5rem;">Solo necesitamos 2 datos para empezar</p>
+            </div>
+            <div class="modal-registro-body">
+                <div class="form-group">
+                    <label for="registro-nombre">Nombre completo</label>
+                    <input type="text" id="registro-nombre" placeholder="Ej: Juan Pérez" required>
+                </div>
+                <div class="form-group">
+                    <label for="registro-telefono">Teléfono</label>
+                    <input type="tel" id="registro-telefono" placeholder="Ej: 3001234567" required>
+                    <p class="nota">Lo usaremos para recordar tus datos en futuras compras</p>
+                </div>
+            </div>
+            <div class="modal-registro-footer">
+                <button class="btn-registrar" onclick="registrarUsuarioPastillero()">Crear cuenta</button>
+                <button class="btn-cancelar-registro" onclick="cerrarModalRegistro()">Cancelar</button>
             </div>
         </div>
     </div>

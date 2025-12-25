@@ -4682,9 +4682,10 @@ def editar_medicamento_admin(medicamento_id):
                 cursor = conn.execute("""
                 INSERT INTO medicamentos (nombre, presentacion, concentracion, imagen, codigo_atc_puro, descripcion_tecnica_atc, uso, stock_actual, componente_activo_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
                 """, (nombre, presentacion, concentracion, imagen_filename, codigo_atc_puro, descripcion_tecnica_atc, '', 0, componente_activo_id))
+                nuevo_id = cursor.fetchone()[0]
                 conn.commit()
-                nuevo_id = cursor.lastrowid
                 flash("Medicamento creado exitosamente.", "success")
                 conn.close()
                 return redirect(url_for('editar_medicamento_admin', medicamento_id=nuevo_id))

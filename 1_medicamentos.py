@@ -4640,8 +4640,8 @@ def editar_medicamento_admin(medicamento_id):
             return render_template('editar_medicamento.html', medicamento=medicamento_dict, es_nuevo=True)
     else:
         # Si no es nuevo, obtener de BD
-        medicamento = conn.execute("SELECT * FROM medicamentos WHERE id = ?", (medicamento_id,)).fetchone()
-        
+        medicamento = conn.execute("SELECT * FROM medicamentos WHERE id = %s", (medicamento_id,)).fetchone()
+
         if not medicamento:
             conn.close()
             flash("Medicamento no encontrado.", "danger")
@@ -4681,8 +4681,8 @@ def editar_medicamento_admin(medicamento_id):
                 # INSERTAR nuevo medicamento
                 cursor = conn.execute("""
                 INSERT INTO medicamentos (nombre, presentacion, concentracion, imagen, codigo_atc_puro, descripcion_tecnica_atc, uso, stock_actual, componente_activo_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (nombre, presentacion, concentracion, imagen_filename, codigo_atc_puro, descripcion_tecnica_atc, '', 0, componente_activo_id))                
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (nombre, presentacion, concentracion, imagen_filename, codigo_atc_puro, descripcion_tecnica_atc, '', 0, componente_activo_id))
                 conn.commit()
                 nuevo_id = cursor.lastrowid
                 flash("Medicamento creado exitosamente.", "success")
@@ -4691,10 +4691,10 @@ def editar_medicamento_admin(medicamento_id):
             else:
                 # ACTUALIZAR medicamento existente
                 conn.execute("""
-                UPDATE MEDICAMENTOS SET
-                nombre = ?, presentacion = ?, concentracion = ?, imagen = ?,
-                codigo_atc_puro = ?, descripcion_tecnica_atc = ?, componente_activo_id = ?
-                WHERE id = ?
+                UPDATE medicamentos SET
+                nombre = %s, presentacion = %s, concentracion = %s, imagen = %s,
+                codigo_atc_puro = %s, descripcion_tecnica_atc = %s, componente_activo_id = %s
+                WHERE id = %s
                 """, (nombre, presentacion, concentracion, imagen_filename,
                 codigo_atc_puro, descripcion_tecnica_atc, componente_activo_id, medicamento_id))
                 

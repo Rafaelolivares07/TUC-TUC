@@ -13436,7 +13436,7 @@ def obtener_productos_categoria(categoria_id):
         conn = get_db_connection()
         productos = conn.execute("""
             SELECT m.id, m.nombre
-            FROM "MEDICAMENTOS" m
+            FROM medicamentos m
             INNER JOIN medicamento_categoria mc ON m.id = mc.medicamento_id
             WHERE mc.categoria_id = %s
             ORDER BY m.nombre

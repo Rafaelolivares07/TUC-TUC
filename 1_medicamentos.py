@@ -4680,8 +4680,8 @@ def editar_medicamento_admin(medicamento_id):
             if es_nuevo:
                 # INSERTAR nuevo medicamento
                 cursor = conn.execute("""
-                INSERT INTO medicamentos (nombre, presentacion, concentracion, imagen, codigo_atc_puro, descripcion_tecnica_atc, uso, stock_actual, componente_activo_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO medicamentos (id, nombre, presentacion, concentracion, imagen, codigo_atc_puro, descripcion_tecnica_atc, uso, stock_actual, componente_activo_id)
+                VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """, (nombre, presentacion, concentracion, imagen_filename, codigo_atc_puro, descripcion_tecnica_atc, '', 0, componente_activo_id))
                 nuevo_id = cursor.fetchone()[0]

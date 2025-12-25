@@ -4822,9 +4822,8 @@ def listar_fabricantes():
     """
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT id, nombre FROM fabricantes ORDER BY nombre")
-        fabricantes = [dict(row) for row in cur.fetchall()]
+        fabricantes_rows = conn.execute("SELECT id, nombre FROM fabricantes ORDER BY nombre").fetchall()
+        fabricantes = [dict(row) for row in fabricantes_rows]
         conn.close()
 
         return jsonify({"ok": True, "fabricantes": fabricantes})
@@ -6160,13 +6159,11 @@ def obtener_sintomas():
     try:
         print("    Conectando a BD...")
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, nombre, descripcion_lower 
-            FROM sintomas 
+        sintomas = conn.execute("""
+            SELECT id, nombre, descripcion_lower
+            FROM sintomas
             ORDER BY nombre
-        """)
-        sintomas = cursor.fetchall()
+        """).fetchall()
         print(f"    Sntomas obtenidos: {len(sintomas)}")
 
         conn.close()

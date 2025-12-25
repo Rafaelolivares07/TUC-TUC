@@ -5198,20 +5198,20 @@ def validar_eliminacion_medicamento(medicamento_id):
         
         # Validacin 1: Existencias
         existencias = conn.execute(
-            "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=?", 
+            "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=%s",
             (medicamento_id,)
         ).fetchone()
-        
+
         if existencias and existencias['total'] > 0:
             conn.close()
             return jsonify({
                 'ok': False,
                 'error': f'No se puede eliminar: Existen {existencias["total"]} registro(s) en existencias'
             })
-        
+
         # Validacin 2: Componente activo (otros medicamentos lo usan)
         medicamentos_dependientes = conn.execute(
-            "SELECT COUNT(*) as total FROM medicamentos WHERE componente_activo_id=?", 
+            "SELECT COUNT(*) as total FROM medicamentos WHERE componente_activo_id=%s",
             (medicamento_id,)
         ).fetchone()
         
@@ -5237,7 +5237,7 @@ def validar_eliminacion_medicamento(medicamento_id):
         
         for tabla, columna in tablas_dependientes:
             count = conn.execute(
-                f"SELECT COUNT(*) as total FROM {tabla} WHERE {columna}=?",
+                f"SELECT COUNT(*) as total FROM {tabla} WHERE {columna}=%s",
                 (medicamento_id,)
             ).fetchone()
             
@@ -5454,7 +5454,7 @@ def eliminar_medicamento(medicamento_id):
         
         #  Contar cuntos fabricantes tiene este medicamento
         fabricantes = conn.execute(
-            "SELECT COUNT(DISTINCT fabricante_id) as total FROM precios WHERE medicamento_id=?",
+            "SELECT COUNT(DISTINCT fabricante_id) as total FROM precios WHERE medicamento_id=%s",
             (medicamento_id,)
         ).fetchone()
         
@@ -5506,33 +5506,33 @@ def eliminar_medicamento_fabricante(conn, medicamento_id, fabricante_id):
     
     #  VALIDACIN: Verificar si existen registros en existencias para esta combinacin
     existencias = conn.execute(
-        "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=? AND fabricante_id=?", 
+        "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=%s AND fabricante_id=%s",
         (medicamento_id, fabricante_id)
     ).fetchone()
-    
+
     if existencias and existencias['total'] > 0:
         return jsonify({
             'ok': False,
             'error': f'No se puede eliminar: Existen {existencias["total"]} registro(s) en existencias para este medicamento con este fabricante'
         }), 400
-    
+
     #  Iniciar transaccin
     conn.execute("BEGIN TRANSACTION")
-    
+
     #  Obtener nombre del medicamento para el mensaje
-    med = conn.execute("SELECT nombre FROM medicamentos WHERE id=?", (medicamento_id,)).fetchone()
+    med = conn.execute("SELECT nombre FROM medicamentos WHERE id=%s", (medicamento_id,)).fetchone()
     nombre_med = med['nombre'] if med else f"ID {medicamento_id}"
-    
+
     #  Eliminar de PRECIOS
     conn.execute(
-        "DELETE FROM precios WHERE medicamento_id=? AND fabricante_id=?",
+        "DELETE FROM precios WHERE medicamento_id=%s AND fabricante_id=%s",
         (medicamento_id, fabricante_id)
     )
     print(f" Eliminado precio de medicamento {medicamento_id} con fabricante {fabricante_id}")
-    
+
     #  Eliminar de PRECIOS_COMPETENCIA
     result = conn.execute(
-        "DELETE FROM precios_competencia WHERE medicamento_id=? AND fabricante_id=?",
+        "DELETE FROM precios_competencia WHERE medicamento_id=%s AND fabricante_id=%s",
         (medicamento_id, fabricante_id)
     )
     eliminados_comp = result.rowcount
@@ -5554,23 +5554,23 @@ def eliminar_medicamento_completo(conn, medicamento_id):
     
     #  VALIDACIN: Verificar si existen registros en existencias
     existencias = conn.execute(
-        "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=?", 
+        "SELECT COUNT(*) as total FROM existencias WHERE medicamento_id=%s",
         (medicamento_id,)
     ).fetchone()
-    
+
     if existencias and existencias['total'] > 0:
         return jsonify({
             'ok': False,
             'error': f'No se puede eliminar: Existen {existencias["total"]} registro(s) en existencias para este medicamento'
         }), 400
-    
+
     #  Iniciar transaccin
     conn.execute("BEGIN TRANSACTION")
-    
+
     #  Obtener imagen antes de eliminar
-    cur = conn.execute("SELECT imagen FROM medicamentos WHERE id=?", (medicamento_id,)).fetchone()
+    cur = conn.execute("SELECT imagen FROM medicamentos WHERE id=%s", (medicamento_id,)).fetchone()
     imagen_filename = cur['imagen'] if cur and 'imagen' in cur else None
-    
+
     #  ELIMINAR DE TODAS LAS TABLAS RELACIONADAS (en orden)
     tablas_a_limpiar = [
         ('MEDICAMENTO_SINTOMA', 'medicamento_id'),
@@ -5581,26 +5581,26 @@ def eliminar_medicamento_completo(conn, medicamento_id):
         ('PRECIOS_COMPETENCIA', 'medicamento_id'),
         ('SUGERIR_SINTOMAS', 'medicamento_id')
     ]
-    
+
     total_eliminados = 0
-    
+
     for tabla, columna in tablas_a_limpiar:
-        result = conn.execute(f"DELETE FROM {tabla} WHERE {columna}=?", (medicamento_id,))
+        result = conn.execute(f"DELETE FROM {tabla} WHERE {columna}=%s", (medicamento_id,))
         eliminados = result.rowcount
         if eliminados > 0:
             total_eliminados += eliminados
             print(f" Eliminados {eliminados} registro(s) de {tabla}")
-    
+
     #  Eliminar el medicamento principal
-    conn.execute("DELETE FROM medicamentos WHERE id=?", (medicamento_id,))
+    conn.execute("DELETE FROM medicamentos WHERE id=%s", (medicamento_id,))
     print(f" Medicamento ID {medicamento_id} eliminado")
-    
+
     #  Eliminar imagen si existe y no la usan otros medicamentos
     if imagen_filename:
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], imagen_filename)
         if os.path.exists(file_path):
             count_refs = conn.execute(
-                "SELECT COUNT(*) FROM medicamentos WHERE imagen=?", 
+                "SELECT COUNT(*) FROM medicamentos WHERE imagen=%s",
                 (imagen_filename,)
             ).fetchone()[0]
             

@@ -96,12 +96,12 @@
             <div class="mb-6 p-4 bg-gray-50 rounded-lg">
                 <h3 class="font-semibold mb-2">Agregar Producto</h3>
                 <div class="flex gap-2">
-                    <input type="text" id="buscar-medicamento" placeholder="Buscar medicamento..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2" onkeyup="buscarMedicamentos()">
+                    <input type="text" id="buscar-medicamento" placeholder="Buscar medicamento..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2" onkeyup="buscarMedicamentos(event)" onkeydown="navegarResultados(event)">
                     <button onclick="agregarProductoSeleccionado()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
                         Agregar
                     </button>
                 </div>
-                <div id="resultados-busqueda" class="mt-2 max-h-40 overflow-y-auto"></div>
+                <div id="resultados-busqueda" class="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg"></div>
             </div>
 
             <!-- Lista de productos -->
@@ -311,12 +311,22 @@
         }
 
         let timeoutBusqueda;
-        async function buscarMedicamentos() {
+        let indiceBusqueda = -1;
+        let resultadosBusqueda = [];
+
+        async function buscarMedicamentos(event) {
+            // Si es flecha arriba/abajo o Enter, no buscar
+            if (event && [38, 40, 13].includes(event.keyCode)) {
+                return;
+            }
+
             clearTimeout(timeoutBusqueda);
             const query = document.getElementById('buscar-medicamento').value.trim();
+            indiceBusqueda = -1;
 
             if (query.length < 2) {
                 document.getElementById('resultados-busqueda').innerHTML = '';
+                resultadosBusqueda = [];
                 return;
             }
 
@@ -326,12 +336,8 @@
                     const data = await res.json();
 
                     if (data.ok && data.medicamentos) {
-                        document.getElementById('resultados-busqueda').innerHTML = data.medicamentos.map(m => `
-                            <div onclick="seleccionarMedicamento(${m.id}, '${m.nombre.replace(/'/g, "\\'")}')"
-                                 class="p-2 hover:bg-indigo-50 cursor-pointer rounded border-b border-gray-200">
-                                ${m.nombre}
-                            </div>
-                        `).join('');
+                        resultadosBusqueda = data.medicamentos;
+                        renderizarResultadosBusqueda();
                     }
                 } catch (error) {
                     console.error('Error buscando medicamentos:', error);
@@ -339,10 +345,67 @@
             }, 300);
         }
 
+        function renderizarResultadosBusqueda() {
+            const container = document.getElementById('resultados-busqueda');
+
+            if (resultadosBusqueda.length === 0) {
+                container.innerHTML = '<p class="p-2 text-gray-500 text-sm">No se encontraron medicamentos</p>';
+                return;
+            }
+
+            container.innerHTML = resultadosBusqueda.map((m, idx) => `
+                <div onclick="seleccionarMedicamento(${m.id}, '${m.nombre.replace(/'/g, "\\'")}')"
+                     data-index="${idx}"
+                     class="resultado-item p-2 hover:bg-indigo-50 cursor-pointer border-b border-gray-200 ${idx === indiceBusqueda ? 'bg-indigo-100' : ''}">
+                    ${m.nombre}
+                </div>
+            `).join('');
+        }
+
+        function navegarResultados(event) {
+            const resultados = resultadosBusqueda;
+
+            if (resultados.length === 0) return;
+
+            // Flecha abajo (40)
+            if (event.keyCode === 40) {
+                event.preventDefault();
+                indiceBusqueda = Math.min(indiceBusqueda + 1, resultados.length - 1);
+                renderizarResultadosBusqueda();
+                scrollToSelected();
+            }
+            // Flecha arriba (38)
+            else if (event.keyCode === 38) {
+                event.preventDefault();
+                indiceBusqueda = Math.max(indiceBusqueda - 1, 0);
+                renderizarResultadosBusqueda();
+                scrollToSelected();
+            }
+            // Enter (13)
+            else if (event.keyCode === 13) {
+                event.preventDefault();
+                if (indiceBusqueda >= 0 && indiceBusqueda < resultados.length) {
+                    const medicamento = resultados[indiceBusqueda];
+                    seleccionarMedicamento(medicamento.id, medicamento.nombre);
+                }
+            }
+        }
+
+        function scrollToSelected() {
+            const container = document.getElementById('resultados-busqueda');
+            const selected = container.querySelector(`[data-index="${indiceBusqueda}"]`);
+
+            if (selected) {
+                selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+
         function seleccionarMedicamento(id, nombre) {
             medicamentoSeleccionado = id;
             document.getElementById('buscar-medicamento').value = nombre;
             document.getElementById('resultados-busqueda').innerHTML = '';
+            resultadosBusqueda = [];
+            indiceBusqueda = -1;
         }
 
         async function agregarProductoSeleccionado() {

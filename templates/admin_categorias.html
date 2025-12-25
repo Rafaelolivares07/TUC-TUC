@@ -95,13 +95,15 @@
             <!-- Agregar producto -->
             <div class="mb-6 p-4 bg-gray-50 rounded-lg">
                 <h3 class="font-semibold mb-2">Agregar Producto</h3>
-                <div class="flex gap-2">
-                    <input type="text" id="buscar-medicamento" placeholder="Buscar medicamento..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2" onkeyup="buscarMedicamentos(event)" onkeydown="navegarResultados(event)">
-                    <button onclick="agregarProductoSeleccionado()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-                        Agregar
-                    </button>
+                <div class="relative">
+                    <div class="flex gap-2">
+                        <input type="text" id="buscar-medicamento" placeholder="Buscar medicamento..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2" onkeyup="buscarMedicamentos(event)" onkeydown="navegarResultados(event)">
+                        <button onclick="agregarProductoSeleccionado()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+                            Agregar
+                        </button>
+                    </div>
+                    <div id="resultados-busqueda" class="mt-2 max-h-60 overflow-y-auto border border-gray-300 rounded-lg bg-white shadow-lg" style="display: none;"></div>
                 </div>
-                <div id="resultados-busqueda" class="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg"></div>
             </div>
 
             <!-- Lista de productos -->
@@ -322,10 +324,12 @@
 
             clearTimeout(timeoutBusqueda);
             const query = document.getElementById('buscar-medicamento').value.trim();
+            const dropdown = document.getElementById('resultados-busqueda');
             indiceBusqueda = -1;
 
             if (query.length < 2) {
-                document.getElementById('resultados-busqueda').innerHTML = '';
+                dropdown.innerHTML = '';
+                dropdown.style.display = 'none';
                 resultadosBusqueda = [];
                 return;
             }
@@ -349,17 +353,19 @@
             const container = document.getElementById('resultados-busqueda');
 
             if (resultadosBusqueda.length === 0) {
-                container.innerHTML = '<p class="p-2 text-gray-500 text-sm">No se encontraron medicamentos</p>';
+                container.innerHTML = '<p class="p-3 text-gray-500 text-sm">No se encontraron medicamentos</p>';
+                container.style.display = 'block';
                 return;
             }
 
             container.innerHTML = resultadosBusqueda.map((m, idx) => `
                 <div onclick="seleccionarMedicamento(${m.id}, '${m.nombre.replace(/'/g, "\\'")}')"
                      data-index="${idx}"
-                     class="resultado-item p-2 hover:bg-indigo-50 cursor-pointer border-b border-gray-200 ${idx === indiceBusqueda ? 'bg-indigo-100' : ''}">
+                     class="resultado-item p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-200 last:border-b-0 ${idx === indiceBusqueda ? 'bg-indigo-100' : ''}">
                     ${m.nombre}
                 </div>
             `).join('');
+            container.style.display = 'block';
         }
 
         function navegarResultados(event) {
@@ -403,7 +409,9 @@
         function seleccionarMedicamento(id, nombre) {
             medicamentoSeleccionado = id;
             document.getElementById('buscar-medicamento').value = nombre;
-            document.getElementById('resultados-busqueda').innerHTML = '';
+            const dropdown = document.getElementById('resultados-busqueda');
+            dropdown.innerHTML = '';
+            dropdown.style.display = 'none';
             resultadosBusqueda = [];
             indiceBusqueda = -1;
         }

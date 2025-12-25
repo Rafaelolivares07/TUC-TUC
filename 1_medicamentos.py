@@ -13534,7 +13534,7 @@ def buscar_medicamentos_admin():
         conn = get_db_connection()
         medicamentos = conn.execute("""
             SELECT id, nombre
-            FROM "MEDICAMENTOS"
+            FROM medicamentos
             WHERE LOWER(nombre) LIKE %s
             ORDER BY nombre
             LIMIT 20

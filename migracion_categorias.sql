@@ -61,8 +61,3 @@ COMMENT ON COLUMN categorias.orden IS 'Orden de aparición en el selector horizo
 COMMENT ON COLUMN categorias.es_destacada IS 'Si es TRUE, esta categoría se muestra por defecto al cargar la tienda';
 
 COMMENT ON TABLE medicamento_categoria IS 'Relaciona medicamentos con sus categorías (relación muchos-a-muchos)';
-
--- Insertar categoría inicial "Destacados"
-INSERT INTO categorias (nombre, descripcion, orden, activo, es_destacada)
-VALUES ('Destacados', 'Productos destacados y más vendidos', 0, TRUE, TRUE)
-ON CONFLICT DO NOTHING;

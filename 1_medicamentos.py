@@ -4498,7 +4498,7 @@ def lista_medicamentos_json():
         
         params = []
         if buscar:
-            query += " AND LOWER(m.nombre) LIKE ?"
+            query += " AND LOWER(m.nombre) LIKE %s"
             params.append(f'%{buscar}%')
         
         query += " ORDER BY m.nombre ASC"

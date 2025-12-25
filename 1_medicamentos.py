@@ -4726,8 +4726,7 @@ def obtener_precios_medicamento(medicamento_id):
     """
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
+        precios_rows = conn.execute("""
             SELECT p.id,
                 p.medicamento_id,
                 p.fabricante_id,
@@ -4737,10 +4736,10 @@ def obtener_precios_medicamento(medicamento_id):
                 p.fecha_actualizacion
             FROM precios p
             LEFT JOIN fabricantes f ON p.fabricante_id = f.id
-            WHERE p.medicamento_id = ?
+            WHERE p.medicamento_id = %s
             ORDER BY p.fecha_actualizacion DESC
-        """, (medicamento_id,))
-        precios = [dict(row) for row in cursor.fetchall()]
+        """, (medicamento_id,)).fetchall()
+        precios = [dict(row) for row in precios_rows]
         conn.close()
         
         return jsonify({"ok": True, "precios": precios})
@@ -4910,25 +4909,24 @@ def guardar_precio():
             return jsonify({"ok": False, "error": "Datos incompletos"}), 400
 
         conn = get_db_connection()
-        cur = conn.cursor()
-
         fecha = datetime.now().strftime("%Y-%m-%d")
 
         if precio_id:  #  actualizar existente
-            cur.execute("""
+            conn.execute("""
                 UPDATE precios
-                SET fabricante_id = ?, precio = ?, fecha_actualizacion = ?
-                WHERE id = ?
+                SET fabricante_id = %s, precio = %s, fecha_actualizacion = %s
+                WHERE id = %s
             """, (fab_id, precio, fecha, precio_id))
             conn.commit()
             nuevo_id = precio_id
         else:  #  insertar nuevo
-            cur.execute("""
+            cur = conn.execute("""
                 INSERT INTO precios (medicamento_id, fabricante_id, precio, fecha_actualizacion)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
             """, (med_id, fab_id, precio, fecha))
+            nuevo_id = cur.fetchone()[0]
             conn.commit()
-            nuevo_id = cur.lastrowid  #  CAPTURA EL ID GENERADO
 
         conn.close()
 
@@ -6197,16 +6195,14 @@ def obtener_sintomas_medicamento(medicamento_id):
     try:
         print(f"    Buscando sntomas para medicamento {medicamento_id}...")
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
+        sintomas = conn.execute("""
             SELECT ms.sintoma_id, s.nombre, s.descripcion_lower
             FROM medicamento_sintoma ms
             INNER JOIN sintomas s ON ms.sintoma_id = s.id
-            WHERE ms.medicamento_id = ?
+            WHERE ms.medicamento_id = %s
             ORDER BY s.nombre
-        """, (medicamento_id,))
-        
-        sintomas = cursor.fetchall()
+        """, (medicamento_id,)).fetchall()
+
         print(f"    Sntomas encontrados: {len(sintomas)}")
         conn.close()
         
@@ -7561,12 +7557,11 @@ def buscar_precios():
         return jsonify({"ok": False, "error": "Debe proporcionar un nombre"}), 400
 
     try:
-        conn = sqlite3.connect('medicamentos.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT nombre FROM fabricantes")
-        fabricantes_db = [row[0].strip().upper() for row in cursor.fetchall()]
+        conn = get_db_connection()
+        fabricantes_rows = conn.execute("SELECT nombre FROM fabricantes").fetchall()
+        fabricantes_db = [row['nombre'].strip().upper() for row in fabricantes_rows]
         conn.close()
-        
+
         print(f" Fabricantes en BD: {len(fabricantes_db)}")
         
         palabras_ignorar = {'tableta', 'capsula', 'frasco', 'caja', 'envase', 'blister', 'sobre', 

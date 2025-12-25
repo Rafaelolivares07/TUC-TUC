@@ -4469,7 +4469,6 @@ def lista_medicamentos_json():
         filtro = request.args.get('filtro', 'todos')
         buscar = request.args.get('buscar', '').strip().lower()
         conn = get_db_connection()
-        cursor = conn.cursor()
         query = """
         SELECT
         m.id,
@@ -4486,23 +4485,23 @@ def lista_medicamentos_json():
         (SELECT STRING_AGG(DISTINCT f.nombre, ',')
         FROM precios p
         INNER JOIN fabricantes f ON p.fabricante_id = f.id
-        WHERE p.medicamento_id = m.id AND p.precio > 0) as "fabricantes_str",
+        WHERE p.medicamento_id = m.id AND p.precio > 0) as fabricantes_str,
         (SELECT STRING_AGG(DISTINCT s.nombre, ',')
         FROM medicamento_sintoma ms
         INNER JOIN sintomas s ON ms.sintoma_id = s.id
-        WHERE ms.medicamento_id = m.id) as "sintomas_str_list",
+        WHERE ms.medicamento_id = m.id) as sintomas_str_list,
         (SELECT p.imagen FROM precios p WHERE p.medicamento_id = m.id AND p.imagen IS NOT NULL AND p.imagen != '' LIMIT 1) as primera_imagen_precio
         FROM medicamentos m
         WHERE 1=1
         """
-        
+
         params = []
         if buscar:
             query += " AND LOWER(m.nombre) LIKE %s"
             params.append(f'%{buscar}%')
-        
+
         query += " ORDER BY m.nombre ASC"
-        medicamentos = cursor.execute(query, params).fetchall()
+        medicamentos = conn.execute(query, params).fetchall()
         
         resultado = []
         for med in medicamentos:

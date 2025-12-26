@@ -113,7 +113,7 @@
         
         .filtro-grupo input, .filtro-grupo select, .filtro-grupo textarea {
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.5rem;  /* Reducido 33%: de 0.75rem a 0.5rem */
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 1rem;
@@ -1038,18 +1038,24 @@
                    }
 
                    .categoria-chip {
-                       display: inline-block;
-                       padding: 0.6rem 1.2rem;
+                       display: inline-flex;
+                       flex-direction: column;
+                       align-items: center;
+                       justify-content: center;
+                       width: 90px;
+                       padding: 0.6rem 0.4rem;
                        margin-right: 0.5rem;
                        background: rgba(255, 255, 255, 0.2);
                        border: 2px solid rgba(255, 255, 255, 0.3);
-                       border-radius: 25px;
+                       border-radius: 12px;
                        color: white;
-                       font-size: 0.9rem;
+                       font-size: 0.75rem;
                        font-weight: 600;
                        cursor: pointer;
                        transition: all 0.3s;
                        user-select: none;
+                       text-align: center;
+                       gap: 0.4rem;
                    }
 
                    .categoria-chip:hover {
@@ -1064,11 +1070,11 @@
                    }
 
                    .categoria-chip img {
-                       width: 20px;
-                       height: 20px;
-                       margin-right: 0.4rem;
-                       vertical-align: middle;
-                       border-radius: 50%;
+                       width: 48px;
+                       height: 48px;
+                       object-fit: cover;
+                       border-radius: 8px;
+                       display: block;
                    }
                </style>
 
@@ -1104,6 +1110,8 @@
                    <span id="contador-resultados">0 resultados</span> • <span>Filtros ⚙️</span>
                </div>
 
+               <div id="filtros-avanzados-content" style="display: none; margin-top: 0.5rem;">
+
                <!-- Toggle de columnas -->
                <div class="toggle-columnas" id="toggleColumnasContainer" style="margin-top: 0.5rem; background: rgba(255,255,255,0.1); padding: 0.5rem; border-radius: 8px;">
                    <label style="color: #f8f9fa;">
@@ -1112,7 +1120,6 @@
                    </label>
                </div>
 
-               <div id="filtros-avanzados-content" style="display: none; margin-top: 0.5rem;">
                <div class="filtros-grid" style="margin-top: 1rem; display: flex; gap: 1rem;">
                    <div class="filtro-grupo" style="flex: 1;">
                        <label>Precio Mínimo</label>

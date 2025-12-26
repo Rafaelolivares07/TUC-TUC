@@ -10842,11 +10842,11 @@ def buscar_o_crear_tercero():
     db = get_db_connection()
     # Buscar tercero existente (insensible a maysculas/minsculas)
     # PostgreSQL: usar LOWER() en lugar de COLLATE NOCASE
-    tercero = db.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(?)", (nombre,)).fetchone()
+    tercero = db.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s)", (nombre,)).fetchone()
     if tercero:
         # Actualizar fecha_actualizacion al usarlo
         db.execute(
-            "UPDATE terceros SET fecha_actualizacion = ? WHERE id = ?",
+            "UPDATE terceros SET fecha_actualizacion = %s WHERE id = %s",
             (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), tercero['id'])
         )
         db.commit()
@@ -10855,11 +10855,11 @@ def buscar_o_crear_tercero():
 
     # Crear nuevo tercero
     cursor = db.execute(
-        "INSERT INTO terceros (nombre, fecha_creacion, fecha_actualizacion) VALUES (?, ?, ?)",
+        "INSERT INTO terceros (nombre, fecha_creacion, fecha_actualizacion) VALUES (%s, %s, %s) RETURNING id",
         (nombre, datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
     )
+    nuevo_id = cursor.fetchone()[0]
     db.commit()
-    nuevo_id = cursor.lastrowid
     db.close()
     return jsonify({'id': nuevo_id})
 

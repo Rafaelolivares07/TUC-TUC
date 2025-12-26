@@ -1258,8 +1258,8 @@
                 <div class="categoria-chip ${cat.id === destacadaId ? 'activa' : ''}"
                      data-categoria-id="${cat.id}"
                      onclick="filtrarPorCategoria(${cat.id})">
-                    ${cat.imagen ? `<img src="${cat.imagen}" alt="${cat.nombre}">` : ''}
-                    ${cat.nombre}
+                    ${cat.imagen ? `<div style="width: 48px; height: 48px; overflow: hidden; flex-shrink: 0;"><img src="${cat.imagen}" alt="${cat.nombre}" style="width: 48px; height: 48px; object-fit: cover; display: block; margin: 0;"></div>` : ''}
+                    <span style="display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${cat.nombre}</span>
                 </div>
             `).join('');
         }

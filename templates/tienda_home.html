@@ -1262,7 +1262,6 @@
                      data-categoria-id="${cat.id}"
                      onclick="filtrarPorCategoria(${cat.id})">
                     ${cat.imagen ? `<div style="width: 61px; height: 61px; overflow: hidden; flex-shrink: 0;"><img src="${cat.imagen}" alt="${cat.nombre}" style="width: 61px; height: 61px; object-fit: cover; display: block; margin: 0;"></div>` : ''}
-                    <span style="display: block; width: 61px; max-width: 61px; text-align: justify; word-wrap: break-word; line-height: 1.2;">${cat.nombre}</span>
                 </div>
             `).join('');
         }

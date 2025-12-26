@@ -13520,7 +13520,7 @@ def eliminar_producto_categoria(categoria_id, medicamento_id):
 @app.route('/api/medicamentos/buscar', methods=['GET'])
 @admin_required
 def buscar_medicamentos_admin():
-    """Busca medicamentos por nombre para el admin"""
+    """Busca medicamentos por nombre para el admin - Solo productos con precio"""
     try:
         query = request.args.get('q', '').strip()
 
@@ -13529,17 +13529,29 @@ def buscar_medicamentos_admin():
 
         conn = get_db_connection()
         medicamentos = conn.execute("""
-            SELECT id, nombre
-            FROM medicamentos
-            WHERE LOWER(nombre) LIKE %s
-            ORDER BY nombre
+            SELECT DISTINCT
+                m.id,
+                m.nombre,
+                f.nombre as fabricante_nombre,
+                p.precio
+            FROM medicamentos m
+            INNER JOIN precios p ON m.id = p.medicamento_id
+            INNER JOIN fabricantes f ON p.fabricante_id = f.id
+            WHERE LOWER(m.nombre) LIKE %s
+            AND p.precio > 0
+            ORDER BY m.nombre, f.nombre
             LIMIT 20
         """, (f'%{query.lower()}%',)).fetchall()
         conn.close()
 
         return jsonify({
             'ok': True,
-            'medicamentos': [{'id': m['id'], 'nombre': m['nombre']} for m in medicamentos]
+            'medicamentos': [{
+                'id': m['id'],
+                'nombre': m['nombre'],
+                'fabricante': m['fabricante_nombre'],
+                'precio': float(m['precio'])
+            } for m in medicamentos]
         })
     except Exception as e:
         print(f"Error buscando medicamentos: {e}")

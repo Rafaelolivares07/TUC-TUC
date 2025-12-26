@@ -404,6 +404,7 @@
                     <th onclick="ordenarTabla(7)">Costo</th>
                     <th onclick="ordenarTabla(8)">Fecha</th>
                     <th onclick="ordenarTabla(9)">URLs</th>
+                    <th onclick="ordenarTabla(10)">Activo</th>
                 </tr>
             </thead>
             <tbody id="tbody-medicamentos"></tbody>
@@ -836,6 +837,7 @@
             const tbody = document.getElementById('tbody-medicamentos');
             tbody.innerHTML = meds.map((m, idx) => {
                 const iconoImagen = m.tiene_imagen === 'S' ? '<span style="color: #5cb85c;">✓</span>' : '<span style="color: #ccc;">✗</span>';
+                const iconoActivo = m.activo === '1' ? '<span style="color: #5cb85c;">✓</span>' : '<span style="color: #d9534f;">✗</span>';
                 return `
                 <tr onclick="seleccionarMedicamento(${JSON.stringify(m).replace(/"/g, '&quot;')}); indiceMedicamentoActual = ${idx}; resaltarFilaActiva();">
                     <td>${m.nombre}</td>
@@ -848,6 +850,7 @@
                     <td style="text-align: right;">${m.competencia_precio ? Math.round(m.competencia_precio).toLocaleString('es-CO') : ''}</td>
                     <td>${m.competencia_fecha || ''}</td>
                     <td>${(m.cotizaciones_con_url > 0 || m.cotizaciones_total > 0) ? `🔗 ${m.cotizaciones_con_url}/${m.cotizaciones_total}` : ''}</td>
+                    <td style="text-align: center;">${iconoActivo}</td>
                 </tr>
                 `;
             }).join('');

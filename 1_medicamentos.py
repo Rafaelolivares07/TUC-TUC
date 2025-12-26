@@ -4632,6 +4632,7 @@ def editar_medicamento_admin(medicamento_id):
             'imagen': None,
             'uso': '',
             'stock_actual': 0,
+            'activo': '1',  # Por defecto activo
             'laboratorio_sugerido': laboratorio_precar  #  Solo pasar, no guardar
         }
         
@@ -4655,6 +4656,8 @@ def editar_medicamento_admin(medicamento_id):
         concentracion = request.form.get('concentracion', '').strip()  # Opcional
         codigo_atc_puro = request.form.get('codigo_atc_puro', '').upper().strip()
         descripcion_tecnica_atc = request.form.get('descripcion_tecnica_atc', '')
+        # Campo activo (checkbox)
+        activo = '1' if request.form.get('activo') == '1' else '0'
         #  Componente activo
         componente_activo_id = request.form.get('componente_activo_id', '')
         if componente_activo_id and componente_activo_id.strip():
@@ -4680,10 +4683,10 @@ def editar_medicamento_admin(medicamento_id):
             if es_nuevo:
                 # INSERTAR nuevo medicamento
                 cursor = conn.execute("""
-                INSERT INTO medicamentos (nombre, presentacion, concentracion, imagen, codigo_atc_puro, descripcion_tecnica_atc, uso, stock_actual, componente_activo_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO medicamentos (nombre, presentacion, concentracion, imagen, codigo_atc_puro, descripcion_tecnica_atc, uso, stock_actual, componente_activo_id, activo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
-                """, (nombre, presentacion, concentracion, imagen_filename, codigo_atc_puro, descripcion_tecnica_atc, '', 0, componente_activo_id))
+                """, (nombre, presentacion, concentracion, imagen_filename, codigo_atc_puro, descripcion_tecnica_atc, '', 0, componente_activo_id, activo))
                 nuevo_id = cursor.fetchone()[0]
                 conn.commit()
                 flash("Medicamento creado exitosamente.", "success")
@@ -4694,10 +4697,10 @@ def editar_medicamento_admin(medicamento_id):
                 conn.execute("""
                 UPDATE medicamentos SET
                 nombre = %s, presentacion = %s, concentracion = %s, imagen = %s,
-                codigo_atc_puro = %s, descripcion_tecnica_atc = %s, componente_activo_id = %s
+                codigo_atc_puro = %s, descripcion_tecnica_atc = %s, componente_activo_id = %s, activo = %s
                 WHERE id = %s
                 """, (nombre, presentacion, concentracion, imagen_filename,
-                codigo_atc_puro, descripcion_tecnica_atc, componente_activo_id, medicamento_id))
+                codigo_atc_puro, descripcion_tecnica_atc, componente_activo_id, activo, medicamento_id))
                 
                 conn.commit()
                 flash("Medicamento actualizado exitosamente.", "success")
@@ -10188,6 +10191,7 @@ def precios_dinamicos_data():
         SELECT
             m.id as medicamento_id,
             m.nombre,
+            m.activo,
             f.id as fabricante_id,
             f.nombre as fabricante_nombre,
             COALESCE(p.precio, 0) AS precio_actual,
@@ -10228,6 +10232,7 @@ def precios_dinamicos_data():
         SELECT
             NULL as medicamento_id,
             pu.nombre,
+            NULL as activo,
             NULL as fabricante_id,
             '' as fabricante_nombre,
             0 AS precio_actual,

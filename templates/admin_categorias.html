@@ -94,14 +94,10 @@
 
             <!-- Agregar producto -->
             <div class="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h3 class="font-semibold mb-2">Agregar Producto</h3>
+                <h3 class="font-semibold mb-2">Agregar/Quitar Productos</h3>
+                <p class="text-sm text-gray-600 mb-2">Haz clic en los productos para agregarlos o quitarlos de la categoría</p>
                 <div class="relative">
-                    <div class="flex gap-2">
-                        <input type="text" id="buscar-medicamento" placeholder="Buscar medicamento..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2" onkeyup="buscarMedicamentos(event)" onkeydown="navegarResultados(event)">
-                        <button onclick="agregarProductoSeleccionado()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-                            Agregar
-                        </button>
-                    </div>
+                    <input type="text" id="buscar-medicamento" placeholder="Buscar medicamento..." class="w-full border border-gray-300 rounded-lg px-3 py-2" onkeyup="buscarMedicamentos(event)">
                     <div id="resultados-busqueda" class="mt-2 max-h-60 overflow-y-auto border border-gray-300 rounded-lg bg-white shadow-lg" style="display: none;"></div>
                 </div>
             </div>
@@ -123,6 +119,7 @@
         let categorias = [];
         let categoriaActualProductos = null;
         let medicamentoSeleccionado = null;
+        let productosEnCategoria = []; // IDs de productos ya en la categoría
 
         // Cargar categorías al iniciar
         document.addEventListener('DOMContentLoaded', cargarCategorias);
@@ -291,6 +288,9 @@
                 const data = await res.json();
 
                 if (data.ok) {
+                    // Guardar IDs de productos en la categoría
+                    productosEnCategoria = data.productos.map(p => p.id);
+
                     const container = document.getElementById('productos-categoria-list');
 
                     if (data.productos.length === 0) {
@@ -314,6 +314,11 @@
                             </div>
                         `).join('')}
                     `;
+
+                    // Actualizar dropdown si está abierto
+                    if (resultadosBusqueda.length > 0) {
+                        renderizarResultadosBusqueda();
+                    }
                 }
             } catch (error) {
                 console.error('Error cargando productos:', error);
@@ -366,14 +371,68 @@
                 return;
             }
 
-            container.innerHTML = resultadosBusqueda.map((m, idx) => `
-                <div onclick="seleccionarMedicamento(${m.id}, '${m.nombre.replace(/'/g, "\\'")}')"
-                     data-index="${idx}"
-                     class="resultado-item p-3 hover:bg-indigo-50 cursor-pointer border-b border-gray-200 last:border-b-0 ${idx === indiceBusqueda ? 'bg-indigo-100' : ''}">
-                    ${m.nombre}
-                </div>
-            `).join('');
+            container.innerHTML = resultadosBusqueda.map((m, idx) => {
+                const estaEnCategoria = productosEnCategoria.includes(m.id);
+                const bgColor = estaEnCategoria ? 'bg-green-100 border-green-300' : 'bg-white hover:bg-indigo-50';
+                const iconoEstado = estaEnCategoria ? '<span class="text-green-600 font-bold mr-2">✓</span>' : '';
+
+                return `
+                    <div onclick="toggleProductoCategoria(${m.id}, '${m.nombre.replace(/'/g, "\\'")}')"
+                         data-index="${idx}"
+                         data-medicamento-id="${m.id}"
+                         class="resultado-item p-3 cursor-pointer border-b border-gray-200 last:border-b-0 transition-colors ${bgColor}">
+                        ${iconoEstado}${m.nombre}
+                    </div>
+                `;
+            }).join('');
             container.style.display = 'block';
+        }
+
+        async function toggleProductoCategoria(medicamentoId, nombre) {
+            const estaEnCategoria = productosEnCategoria.includes(medicamentoId);
+
+            try {
+                if (estaEnCategoria) {
+                    // Eliminar de la categoría
+                    const res = await fetch(`/api/admin/categorias/${categoriaActualProductos}/productos/${medicamentoId}`, {
+                        method: 'DELETE'
+                    });
+
+                    const data = await res.json();
+
+                    if (data.ok) {
+                        // Quitar del array
+                        productosEnCategoria = productosEnCategoria.filter(id => id !== medicamentoId);
+                        // Actualizar lista de productos y dropdown
+                        cargarProductosCategoria(categoriaActualProductos);
+                        cargarCategorias(); // Actualizar contador
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } else {
+                    // Agregar a la categoría
+                    const res = await fetch(`/api/admin/categorias/${categoriaActualProductos}/productos`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ medicamento_id: medicamentoId })
+                    });
+
+                    const data = await res.json();
+
+                    if (data.ok) {
+                        // Agregar al array
+                        productosEnCategoria.push(medicamentoId);
+                        // Actualizar lista de productos y dropdown
+                        cargarProductosCategoria(categoriaActualProductos);
+                        cargarCategorias(); // Actualizar contador
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error al toggle producto:', error);
+                alert('Error al procesar el producto');
+            }
         }
 
         function navegarResultados(event) {
@@ -395,14 +454,12 @@
                 renderizarResultadosBusqueda();
                 scrollToSelected();
             }
-            // Enter (13)
+            // Enter (13) - Ahora hace toggle
             else if (event.keyCode === 13) {
                 event.preventDefault();
                 if (indiceBusqueda >= 0 && indiceBusqueda < resultados.length) {
                     const medicamento = resultados[indiceBusqueda];
-                    seleccionarMedicamento(medicamento.id, medicamento.nombre);
-                    // Agregar automáticamente después de seleccionar con Enter
-                    setTimeout(() => agregarProductoSeleccionado(), 100);
+                    toggleProductoCategoria(medicamento.id, medicamento.nombre);
                 }
             }
         }
@@ -416,56 +473,6 @@
             }
         }
 
-        function seleccionarMedicamento(id, nombre) {
-            medicamentoSeleccionado = id;
-            document.getElementById('buscar-medicamento').value = nombre;
-            const dropdown = document.getElementById('resultados-busqueda');
-            dropdown.innerHTML = '';
-            dropdown.style.display = 'none';
-            resultadosBusqueda = [];
-            indiceBusqueda = -1;
-        }
-
-        async function agregarProductoSeleccionado() {
-            if (!medicamentoSeleccionado) {
-                alert('Selecciona un medicamento primero');
-                return;
-            }
-
-            try {
-                const res = await fetch(`/api/admin/categorias/${categoriaActualProductos}/productos`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ medicamento_id: medicamentoSeleccionado })
-                });
-
-                const data = await res.json();
-
-                if (data.ok) {
-                    // Limpiar input
-                    document.getElementById('buscar-medicamento').value = '';
-                    medicamentoSeleccionado = null;
-
-                    // Recargar lista de productos
-                    cargarProductosCategoria(categoriaActualProductos);
-                    cargarCategorias(); // Actualizar contador
-
-                    // Mensaje de éxito
-                    const input = document.getElementById('buscar-medicamento');
-                    input.placeholder = '✓ Producto agregado! Buscar otro...';
-                    input.classList.add('border-green-500');
-                    setTimeout(() => {
-                        input.placeholder = 'Buscar medicamento...';
-                        input.classList.remove('border-green-500');
-                    }, 2000);
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            } catch (error) {
-                console.error('Error agregando producto:', error);
-                alert('Error al agregar producto');
-            }
-        }
 
         async function eliminarProductoCategoria(categoriaId, medicamentoId) {
             if (!confirm('¿Eliminar este producto de la categoría?')) return;

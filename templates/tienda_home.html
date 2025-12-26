@@ -1052,7 +1052,7 @@
                        border: 2px solid rgba(255, 255, 255, 0.3);
                        border-radius: 12px;
                        color: white;
-                       font-size: 0.75rem;
+                       font-size: 0.56rem;
                        font-weight: 600;
                        cursor: pointer;
                        transition: all 0.3s;
@@ -1073,12 +1073,12 @@
                    }
 
                    .categoria-chip img {
-                       width: 48px !important;
-                       height: 48px !important;
-                       max-width: 48px !important;
-                       max-height: 48px !important;
-                       min-width: 48px !important;
-                       min-height: 48px !important;
+                       width: 61px !important;
+                       height: 61px !important;
+                       max-width: 61px !important;
+                       max-height: 61px !important;
+                       min-width: 61px !important;
+                       min-height: 61px !important;
                        object-fit: cover;
                        border-radius: 8px;
                        display: block;
@@ -1261,7 +1261,7 @@
                 <div class="categoria-chip ${cat.id === destacadaId ? 'activa' : ''}"
                      data-categoria-id="${cat.id}"
                      onclick="filtrarPorCategoria(${cat.id})">
-                    ${cat.imagen ? `<div style="width: 48px; height: 48px; overflow: hidden; flex-shrink: 0;"><img src="${cat.imagen}" alt="${cat.nombre}" style="width: 48px; height: 48px; object-fit: cover; display: block; margin: 0;"></div>` : ''}
+                    ${cat.imagen ? `<div style="width: 61px; height: 61px; overflow: hidden; flex-shrink: 0;"><img src="${cat.imagen}" alt="${cat.nombre}" style="width: 61px; height: 61px; object-fit: cover; display: block; margin: 0;"></div>` : ''}
                     <span style="display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${cat.nombre}</span>
                 </div>
             `).join('');

@@ -10864,6 +10864,37 @@ def buscar_o_crear_tercero():
     return jsonify({'id': nuevo_id})
 
 
+@app.route('/admin/fix-terceros-sequence', methods=['GET'])
+@admin_required
+def fix_terceros_sequence():
+    """Endpoint temporal para crear la secuencia de terceros en PostgreSQL"""
+    try:
+        db = get_db_connection()
+
+        # Crear secuencia si no existe
+        db.execute('CREATE SEQUENCE IF NOT EXISTS terceros_id_seq')
+
+        # Configurar columna para usar la secuencia
+        db.execute("ALTER TABLE terceros ALTER COLUMN id SET DEFAULT nextval('terceros_id_seq')")
+
+        # Obtener MAX id actual
+        result = db.execute('SELECT COALESCE(MAX(id), 0) FROM terceros').fetchone()
+        max_id = result[0] if result else 0
+
+        # Sincronizar secuencia
+        db.execute(f"SELECT setval('terceros_id_seq', {max_id})")
+
+        db.commit()
+        db.close()
+
+        return jsonify({
+            'success': True,
+            'message': f'Secuencia terceros_id_seq creada y sincronizada. MAX ID: {max_id}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/terceros/guardar-campo', methods=['POST'])
 def guardar_campo_tercero():
     data = request.get_json()

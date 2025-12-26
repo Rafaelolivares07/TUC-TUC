@@ -4849,21 +4849,20 @@ def obtener_o_crear_fabricante():
             return jsonify({"ok": False, "error": "nombre requerido"}), 400
 
         conn = get_db_connection()
-        cur = conn.cursor()
 
         # Buscar si ya existe (insensible a maysculas/minsculas)
-        row = cur.execute(
-            "SELECT id, nombre FROM fabricantes WHERE lower(nombre)=?",
+        row = conn.execute(
+            "SELECT id, nombre FROM fabricantes WHERE lower(nombre)=%s",
             (nombre.lower(),)
         ).fetchone()
 
         if row:
             fab = dict(row)
         else:
-            cur = conn.execute("INSERT INTO fabricantes (nombre) VALUES (?)", (nombre,))
+            cur = conn.execute("INSERT INTO fabricantes (nombre) VALUES (%s) RETURNING id", (nombre,))
+            fab_id = cur.fetchone()[0]
             conn.commit()
-            fab_id = cur.lastrowid
-            row = conn.execute("SELECT id, nombre FROM fabricantes WHERE id=?", (fab_id,)).fetchone()
+            row = conn.execute("SELECT id, nombre FROM fabricantes WHERE id=%s", (fab_id,)).fetchone()
             fab = dict(row)
 
         conn.close()
@@ -10325,14 +10324,14 @@ def crear_fabricante():
     conn = get_db_connection()
 
     # Verificar si ya existe
-    existe = conn.execute("SELECT id FROM fabricantes WHERE nombre = ?", (nombre,)).fetchone()
+    existe = conn.execute("SELECT id FROM fabricantes WHERE nombre = %s", (nombre,)).fetchone()
     if existe:
         conn.close()
         return jsonify({'id': existe['id'], 'nombre': nombre, 'existia': True})
 
-    # Crear nuevo - obtener el siguiente ID de la secuencia
-    next_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM fabricantes").fetchone()[0]
-    conn.execute("INSERT INTO fabricantes (id, nombre) VALUES (?, ?)", (next_id, nombre))
+    # Crear nuevo con RETURNING
+    cursor = conn.execute("INSERT INTO fabricantes (nombre) VALUES (%s) RETURNING id", (nombre,))
+    next_id = cursor.fetchone()[0]
     conn.commit()
 
     conn.close()
@@ -10354,8 +10353,8 @@ def fusionar_huerfano():
         # Actualizar todos los registros del pastillero con ese nombre
         db.execute("""
             UPDATE pastillero_usuarios
-            SET medicamento_id = ?
-            WHERE nombre = ? AND (medicamento_id IS NULL OR medicamento_id = 0)
+            SET medicamento_id = %s
+            WHERE nombre = %s AND (medicamento_id IS NULL OR medicamento_id = 0)
         """, (medicamento_id, nombre_huerfano))
 
         db.commit()
@@ -10383,12 +10382,12 @@ def crear_desde_huerfano():
     try:
         # Si no hay fabricante_id, crear el fabricante
         if not fabricante_id and fabricante_nombre:
-            existe = db.execute("SELECT id FROM FABRICANTES WHERE nombre = ?", (fabricante_nombre,)).fetchone()
+            existe = db.execute("SELECT id FROM FABRICANTES WHERE nombre = %s", (fabricante_nombre,)).fetchone()
             if existe:
                 fabricante_id = existe['id']
             else:
-                cursor = db.execute("INSERT INTO FABRICANTES (nombre) VALUES (?)", (fabricante_nombre,))
-                fabricante_id = cursor.lastrowid
+                cursor = db.execute("INSERT INTO FABRICANTES (nombre) VALUES (%s) RETURNING id", (fabricante_nombre,))
+                fabricante_id = cursor.fetchone()[0]
                 db.commit()
 
         if not fabricante_id:
@@ -10396,22 +10395,22 @@ def crear_desde_huerfano():
             return jsonify({'error': 'Fabricante requerido'}), 400
 
         # Crear medicamento
-        cursor = db.execute("INSERT INTO MEDICAMENTOS (nombre) VALUES (?)", (nombre_nuevo,))
-        medicamento_id = cursor.lastrowid
+        cursor = db.execute("INSERT INTO MEDICAMENTOS (nombre) VALUES (%s) RETURNING id", (nombre_nuevo,))
+        medicamento_id = cursor.fetchone()[0]
         db.commit()
 
         # Crear registro en precios con precio 0
         db.execute("""
             INSERT INTO precios (medicamento_id, fabricante_id, precio, fecha_actualizacion)
-            VALUES (?, ?, 0, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, 0, CURRENT_TIMESTAMP)
         """, (medicamento_id, fabricante_id))
         db.commit()
 
         # Actualizar pastillero
         db.execute("""
             UPDATE pastillero_usuarios
-            SET medicamento_id = ?
-            WHERE nombre = ? AND (medicamento_id IS NULL OR medicamento_id = 0)
+            SET medicamento_id = %s
+            WHERE nombre = %s AND (medicamento_id IS NULL OR medicamento_id = 0)
         """, (medicamento_id, nombre_huerfano))
         db.commit()
 

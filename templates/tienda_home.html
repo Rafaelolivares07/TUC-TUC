@@ -1044,8 +1044,8 @@
                        flex-direction: column;
                        align-items: center;
                        justify-content: center;
-                       width: 90px;
-                       min-width: 90px;
+                       width: 100px;
+                       min-width: 100px;
                        flex-shrink: 0;
                        padding: 0.6rem 0.4rem;
                        background: rgba(255, 255, 255, 0.2);
@@ -1067,18 +1067,18 @@
                    }
 
                    .categoria-chip.activa {
-                       background: white;
-                       color: #2e89ff;
-                       border-color: white;
+                       background: rgba(255, 255, 255, 0.2);
+                       border: 4px solid #22c55e;
+                       box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
                    }
 
                    .categoria-chip img {
-                       width: 61px !important;
-                       height: 61px !important;
-                       max-width: 61px !important;
-                       max-height: 61px !important;
-                       min-width: 61px !important;
-                       min-height: 61px !important;
+                       width: 73px !important;
+                       height: 73px !important;
+                       max-width: 73px !important;
+                       max-height: 73px !important;
+                       min-width: 73px !important;
+                       min-height: 73px !important;
                        object-fit: cover;
                        border-radius: 8px;
                        display: block;
@@ -1261,7 +1261,7 @@
                 <div class="categoria-chip ${cat.id === destacadaId ? 'activa' : ''}"
                      data-categoria-id="${cat.id}"
                      onclick="filtrarPorCategoria(${cat.id})">
-                    ${cat.imagen ? `<div style="width: 61px; height: 61px; overflow: hidden; flex-shrink: 0;"><img src="${cat.imagen}" alt="${cat.nombre}" style="width: 61px; height: 61px; object-fit: cover; display: block; margin: 0;"></div>` : ''}
+                    ${cat.imagen ? `<div style="width: 73px; height: 73px; overflow: hidden; flex-shrink: 0;"><img src="${cat.imagen}" alt="${cat.nombre}" style="width: 73px; height: 73px; object-fit: cover; display: block; margin: 0;"></div>` : ''}
                 </div>
             `).join('');
         }

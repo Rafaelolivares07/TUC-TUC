@@ -13528,6 +13528,10 @@ def buscar_medicamentos_admin():
             return jsonify({'ok': True, 'medicamentos': []})
 
         conn = get_db_connection()
+
+        # Normalizar búsqueda: remover acentos y convertir a minúsculas
+        query_normalizado = query.lower()
+
         medicamentos = conn.execute("""
             SELECT DISTINCT
                 m.id,
@@ -13537,11 +13541,11 @@ def buscar_medicamentos_admin():
             FROM medicamentos m
             INNER JOIN precios p ON m.id = p.medicamento_id
             INNER JOIN fabricantes f ON p.fabricante_id = f.id
-            WHERE LOWER(m.nombre) LIKE %s
+            WHERE unaccent(LOWER(m.nombre)) LIKE unaccent(%s)
             AND p.precio > 0
             ORDER BY m.nombre, f.nombre
             LIMIT 20
-        """, (f'%{query.lower()}%',)).fetchall()
+        """, (f'%{query_normalizado}%',)).fetchall()
         conn.close()
 
         return jsonify({

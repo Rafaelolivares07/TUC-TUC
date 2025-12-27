@@ -2524,11 +2524,16 @@
                         horaLocal = 'Hora inválida';
                         console.error('Fecha inválida:', msg.fecha);
                     } else {
-                        horaLocal = fecha.toLocaleString('es-CO', {
+                        // Debug: ver qué hora nos da
+                        const horaUTC = fecha.toISOString();
+                        horaLocal = fecha.toLocaleTimeString('es-CO', {
                             hour: '2-digit',
                             minute: '2-digit',
                             timeZone: 'America/Bogota'
                         });
+                        console.log('Fecha original:', msg.fecha);
+                        console.log('Fecha UTC:', horaUTC);
+                        console.log('Hora Colombia:', horaLocal);
                     }
                 } catch (e) {
                     horaLocal = '--:--';

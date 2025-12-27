@@ -3949,6 +3949,41 @@
             document.getElementById('modal-qr-vinculacion').style.display = 'none';
         }
 
+        async function copiarURLVinculacion() {
+            const urlText = document.getElementById('url-vinculacion-text').textContent;
+
+            try {
+                await navigator.clipboard.writeText(urlText);
+
+                // Cambiar temporalmente el texto del botón
+                const btn = event.target;
+                const textoOriginal = btn.innerHTML;
+                btn.innerHTML = '✅ ¡Copiado!';
+                btn.style.background = '#2196F3';
+
+                setTimeout(() => {
+                    btn.innerHTML = textoOriginal;
+                    btn.style.background = '#4CAF50';
+                }, 2000);
+
+                console.log('✅ URL copiada al portapapeles');
+            } catch (error) {
+                console.error('Error al copiar:', error);
+                // Fallback para navegadores antiguos
+                const textArea = document.createElement('textarea');
+                textArea.value = urlText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('Enlace copiado al portapapeles');
+                } catch (err) {
+                    alert('No se pudo copiar. Por favor copia manualmente la URL.');
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+
         // Detectar si se abrió con un token de vinculación
         (async function() {
             const pathParts = window.location.pathname.split('/');
@@ -4394,6 +4429,10 @@
                 <div id="url-vinculacion-text" style="margin-top: 1rem; padding: 0.75rem; background: #f5f5f5; border-radius: 6px; word-break: break-all; font-size: 0.8rem; color: #666;">
                     <!-- URL se mostrará aquí -->
                 </div>
+
+                <button onclick="copiarURLVinculacion()" style="margin-top: 1rem; padding: 0.75rem 1.5rem; background: #4CAF50; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                    📋 Copiar enlace
+                </button>
             </div>
             <div class="modal-registro-footer">
                 <button class="btn-cancelar-registro" onclick="cerrarModalQR()">Cerrar</button>

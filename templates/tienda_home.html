@@ -2308,9 +2308,13 @@
             // Conectar evento de búsqueda
             setTimeout(() => {
                 const inputBuscar = document.getElementById('input-buscar-usuario');
+                console.log('🔗 Conectando evento de búsqueda. Input encontrado:', !!inputBuscar);
                 if (inputBuscar) {
                     inputBuscar.addEventListener('input', buscarUsuarios);
+                    console.log('✅ Evento de búsqueda conectado');
                     inputBuscar.focus();
+                } else {
+                    console.error('❌ No se encontró el input de búsqueda');
                 }
             }, 100);
         }
@@ -2554,30 +2558,47 @@
 
         function buscarUsuarios(event) {
             const query = event.target.value.trim();
+            console.log('🔍 Búsqueda de usuarios:', query);
 
             clearTimeout(timeoutBusqueda);
 
+            const resultadosDiv = document.getElementById('resultados-busqueda-usuarios');
+            if (!resultadosDiv) {
+                console.error('❌ No se encontró el div de resultados');
+                return;
+            }
+
             if (query.length < 2) {
-                document.getElementById('resultados-busqueda-usuarios').classList.remove('active');
+                resultadosDiv.classList.remove('active');
                 return;
             }
 
             timeoutBusqueda = setTimeout(() => {
+                console.log('🌐 Buscando en servidor:', query);
                 fetch(`/api/chat/buscar-usuarios?q=${encodeURIComponent(query)}`)
                     .then(res => res.json())
                     .then(data => {
+                        console.log('✅ Respuesta del servidor:', data);
                         if (data.ok && data.usuarios.length > 0) {
                             mostrarResultadosBusqueda(data.usuarios);
                         } else {
-                            document.getElementById('resultados-busqueda-usuarios').innerHTML = `
+                            resultadosDiv.innerHTML = `
                                 <div style="padding: 1rem; text-align: center; color: #888;">
                                     No se encontraron usuarios
                                 </div>
                             `;
-                            document.getElementById('resultados-busqueda-usuarios').classList.add('active');
+                            resultadosDiv.classList.add('active');
                         }
                     })
-                    .catch(err => console.error('Error al buscar usuarios:', err));
+                    .catch(err => {
+                        console.error('❌ Error al buscar usuarios:', err);
+                        resultadosDiv.innerHTML = `
+                            <div style="padding: 1rem; text-align: center; color: #e74c3c;">
+                                Error al buscar
+                            </div>
+                        `;
+                        resultadosDiv.classList.add('active');
+                    });
             }, 300);
         }
 

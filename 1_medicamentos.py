@@ -12717,29 +12717,33 @@ def api_pastillero_verificar(medicamento_id):
     """Verificar si un medicamento ya existe en el pastillero"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'existe': False})
-    
+
     usuario_id = session['usuario_id']
-    
+
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     try:
         conn = get_db_connection()
-        
+
         # Si medicamento_id es 'null', buscar por nombre (parmetro adicional necesario)
         # Por ahora solo buscar por ID si no es null
         if medicamento_id == 'null':
             # No podemos verificar sin el nombre, retornar que no existe
             conn.close()
             return jsonify({'ok': True, 'existe': False})
-        
+
         medicamento_id = int(medicamento_id)
-        
+
         resultado = conn.execute('''
             SELECT cantidad, unidad, nombre
             FROM pastillero_usuarios
-            WHERE usuario_id = ? AND medicamento_id = ?
-        ''', (usuario_id, medicamento_id)).fetchone()
-        
+            WHERE pastillero_id = ? AND medicamento_id = ?
+        ''', (pastillero_id, medicamento_id)).fetchone()
+
         conn.close()
-        
+
         if resultado:
             return jsonify({
                 'ok': True,
@@ -12868,31 +12872,36 @@ def api_pastillero_crear():
     """Crear un medicamento nuevo en el pastillero (no est en la BD)"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    
+
     usuario_id = session['usuario_id']
+
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     data = request.get_json()
-    
+
     nombre = data.get('nombre', '').strip()
     cantidad = data.get('cantidad', 1)
     unidad = data.get('unidad', 'pastillas')
-    
+
     if not nombre:
         return jsonify({'ok': False, 'error': 'Falta nombre del medicamento'}), 400
-    
+
     conn = get_db_connection()
     try:
         # Insertar medicamento sin medicamento_id (ser NULL)
         conn.execute('''
-            INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
+            INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
             VALUES (%s, NULL, %s, %s, %s)
-        ''', (usuario_id, nombre, cantidad, unidad))
+        ''', (pastillero_id, nombre, cantidad, unidad))
 
         #  Crear alerta para el admin
         conn.execute('''
             INSERT INTO alertas_admin (tipo, mensaje, usuario_id, fecha_creacion)
             VALUES ('medicamento_faltante', %s, %s, CURRENT_TIMESTAMP)
         ''', (f'Usuario agreg medicamento no registrado: {nombre}', usuario_id))
-        
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -12908,16 +12917,20 @@ def api_pastillero_tomar(medicamento_id):
     """Restar 1 unidad (usuario tom el medicamento)"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    
+
     usuario_id = session['usuario_id']
-    
+
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     conn = get_db_connection()
     try:
-        # Verificar que el medicamento pertenece al usuario
+        # Verificar que el medicamento pertenece al pastillero
         medicamento = conn.execute('''
             SELECT cantidad, unidad FROM pastillero_usuarios
-            WHERE id = ? AND usuario_id = ?
-        ''', (medicamento_id, usuario_id)).fetchone()
+            WHERE id = ? AND pastillero_id = ?
+        ''', (medicamento_id, pastillero_id)).fetchone()
 
         if not medicamento:
             conn.close()
@@ -12955,18 +12968,23 @@ def api_pastillero_agregar_cantidad(medicamento_id):
     """Agregar cantidad a un medicamento existente en el pastillero"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    
+
     usuario_id = session['usuario_id']
+
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     data = request.get_json()
     cantidad = data.get('cantidad', 1)
-    
+
     conn = get_db_connection()
     try:
-        # Verificar que el medicamento pertenece al usuario
+        # Verificar que el medicamento pertenece al pastillero
         medicamento = conn.execute('''
             SELECT cantidad, unidad FROM pastillero_usuarios
-            WHERE id = ? AND usuario_id = ?
-        ''', (medicamento_id, usuario_id)).fetchone()
+            WHERE id = ? AND pastillero_id = ?
+        ''', (medicamento_id, pastillero_id)).fetchone()
 
         if not medicamento:
             conn.close()
@@ -13006,6 +13024,11 @@ def api_activar_recordatorio(medicamento_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
     usuario_id = session['usuario_id']
+
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     data = request.get_json()
 
     horas_entre_tomas = data.get('horas_entre_tomas')
@@ -13017,11 +13040,11 @@ def api_activar_recordatorio(medicamento_id):
     try:
         conn = get_db_connection()
 
-        # Verificar que el medicamento pertenece al usuario
+        # Verificar que el medicamento pertenece al pastillero
         medicamento = conn.execute('''
             SELECT id, nombre FROM pastillero_usuarios
-            WHERE id = %s AND usuario_id = %s
-        ''', (medicamento_id, usuario_id)).fetchone()
+            WHERE id = %s AND pastillero_id = %s
+        ''', (medicamento_id, pastillero_id)).fetchone()
 
         if not medicamento:
             conn.close()
@@ -13033,8 +13056,8 @@ def api_activar_recordatorio(medicamento_id):
             SET horas_entre_tomas = %s,
                 proxima_toma = %s,
                 recordatorio_activo = TRUE
-            WHERE id = %s AND usuario_id = %s
-        ''', (horas_entre_tomas, proxima_toma, medicamento_id, usuario_id))
+            WHERE id = %s AND pastillero_id = %s
+        ''', (horas_entre_tomas, proxima_toma, medicamento_id, pastillero_id))
 
         conn.commit()
         conn.close()
@@ -13064,14 +13087,18 @@ def api_desactivar_recordatorio(medicamento_id):
 
     usuario_id = session['usuario_id']
 
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     try:
         conn = get_db_connection()
 
         conn.execute('''
             UPDATE pastillero_usuarios
             SET recordatorio_activo = FALSE
-            WHERE id = %s AND usuario_id = %s
-        ''', (medicamento_id, usuario_id))
+            WHERE id = %s AND pastillero_id = %s
+        ''', (medicamento_id, pastillero_id))
 
         conn.commit()
         conn.close()

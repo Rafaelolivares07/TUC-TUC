@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tienda - Medicamentos a Domicilio</title>
+
+    <!-- QRCode.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
     <style>
         * {
             margin: 0;
@@ -3897,6 +3901,93 @@
             }
         }
 
+        // ============================================
+        // VINCULACIÓN CON CÓDIGO QR
+        // ============================================
+
+        async function generarQRVinculacion() {
+            try {
+                // Generar token en el backend
+                const response = await fetch('/api/generar-token-vinculacion', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    // Mostrar modal
+                    document.getElementById('modal-qr-vinculacion').style.display = 'flex';
+
+                    // Generar código QR usando qrcode.js
+                    const qrContainer = document.getElementById('qr-code-container');
+                    qrContainer.innerHTML = ''; // Limpiar
+
+                    // Crear código QR
+                    new QRCode(qrContainer, {
+                        text: data.url,
+                        width: 256,
+                        height: 256,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+
+                    // Mostrar URL también
+                    document.getElementById('url-vinculacion-text').textContent = data.url;
+
+                    console.log('✅ QR generado:', data.url);
+                } else {
+                    alert('Error al generar código QR: ' + (data.error || 'Desconocido'));
+                }
+            } catch (error) {
+                console.error('Error al generar QR:', error);
+                alert('Error al generar código QR. Intenta de nuevo.');
+            }
+        }
+
+        function cerrarModalQR() {
+            document.getElementById('modal-qr-vinculacion').style.display = 'none';
+        }
+
+        // Detectar si se abrió con un token de vinculación
+        (async function() {
+            const pathParts = window.location.pathname.split('/');
+            if (pathParts[1] === 'vincular' && pathParts[2]) {
+                const token = pathParts[2];
+                console.log('🔗 Detectado token de vinculación:', token);
+
+                try {
+                    const response = await fetch(`/api/validar-token-vinculacion/${token}`, {
+                        method: 'POST'
+                    });
+
+                    const data = await response.json();
+
+                    if (data.ok) {
+                        // Guardar en localStorage
+                        localStorage.setItem('usuario_id', data.usuario_id);
+                        localStorage.setItem('nombre_usuario', data.nombre);
+                        localStorage.setItem('telefono_usuario', data.telefono);
+
+                        console.log('✅ Dispositivo vinculado exitosamente:', data);
+
+                        // Mostrar mensaje de bienvenida
+                        alert(`¡Dispositivo vinculado exitosamente!\n\nBienvenido ${data.nombre.split(' ')[0]}`);
+
+                        // Redirigir a la página principal
+                        window.location.href = '/';
+                    } else {
+                        alert('Error al vincular dispositivo: ' + data.error);
+                        window.location.href = '/';
+                    }
+                } catch (error) {
+                    console.error('Error al validar token:', error);
+                    alert('Error al vincular dispositivo. Intenta de nuevo.');
+                    window.location.href = '/';
+                }
+            }
+        })();
+
         // Ejecutar restauración al cargar la página
         restaurarSesionAutomatica();
 
@@ -4186,6 +4277,9 @@
             <div class="modal-pastillero-header">
                 <h2><span>💊</span> <span id="titulo-pastillero">Mi Pastillero</span></h2>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="btn-contactos-pastillero" onclick="generarQRVinculacion()" title="Vincular otro dispositivo con código QR">
+                        <span>📱</span> Vincular
+                    </button>
                     <button class="btn-contactos-pastillero" onclick="abrirModalContactos()" title="Gestionar contactos para recordatorios">
                         <span>👥</span> Contactos
                     </button>
@@ -4276,6 +4370,33 @@
             <div class="modal-registro-footer">
                 <button class="btn-registrar" onclick="guardarRecordatorio()">Activar Recordatorio</button>
                 <button class="btn-cancelar-registro" onclick="cerrarModalRecordatorio()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE VINCULACIÓN QR -->
+    <div id="modal-qr-vinculacion" class="modal-registro" style="display: none;">
+        <div class="modal-registro-content" style="max-width: 400px;">
+            <div class="modal-registro-header">
+                <h2>Vincular otro dispositivo</h2>
+            </div>
+            <div class="modal-registro-body" style="text-align: center;">
+                <p style="margin-bottom: 1rem; color: #555;">Escanea este código QR desde tu otro dispositivo para vincular tu cuenta</p>
+
+                <div id="qr-code-container" style="display: flex; justify-content: center; margin: 1rem 0;">
+                    <!-- El QR se generará aquí -->
+                </div>
+
+                <p style="font-size: 0.85rem; color: #888; margin-top: 1rem;">
+                    El código expira en <strong>5 minutos</strong>
+                </p>
+
+                <div id="url-vinculacion-text" style="margin-top: 1rem; padding: 0.75rem; background: #f5f5f5; border-radius: 6px; word-break: break-all; font-size: 0.8rem; color: #666;">
+                    <!-- URL se mostrará aquí -->
+                </div>
+            </div>
+            <div class="modal-registro-footer">
+                <button class="btn-cancelar-registro" onclick="cerrarModalQR()">Cerrar</button>
             </div>
         </div>
     </div>

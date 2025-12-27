@@ -12760,17 +12760,23 @@ def api_pastillero_agregar():
     """Agregar un medicamento existente al pastillero"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    
+
     usuario_id = session['usuario_id']
+
+    # Obtener pastillero activo del usuario
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'No tienes un pastillero activo'}), 400
+
     data = request.get_json()
-    
+
     medicamento_id = data.get('medicamento_id')
     cantidad = data.get('cantidad', 1)
     unidad = data.get('unidad', 'pastillas')
     nombre = data.get('nombre')  #  Para medicamentos personales
-    
+
     # medicamento_id puede ser None/null para medicamentos personales
-    
+
     conn = get_db_connection()
     try:
         #  CASO 1: Medicamento personal (NULL) - buscar por nombre
@@ -12782,8 +12788,8 @@ def api_pastillero_agregar():
             # Buscar si ya existe este medicamento personal por nombre
             existe = conn.execute('''
                 SELECT id, cantidad FROM pastillero_usuarios
-                WHERE usuario_id = %s AND medicamento_id IS NULL AND nombre = %s
-            ''', (usuario_id, nombre)).fetchone()
+                WHERE pastillero_id = %s AND medicamento_id IS NULL AND nombre = %s
+            ''', (pastillero_id, nombre)).fetchone()
 
             if existe:
                 # Actualizar cantidad del existente
@@ -12795,9 +12801,9 @@ def api_pastillero_agregar():
             else:
                 # Crear nuevo medicamento personal
                 conn.execute('''
-                    INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
+                    INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
                     VALUES (%s, NULL, %s, %s, %s)
-                ''', (usuario_id, nombre, cantidad, unidad))
+                ''', (pastillero_id, nombre, cantidad, unidad))
 
         #  CASO 2: Medicamento oficial (con ID)
         else:
@@ -12806,8 +12812,8 @@ def api_pastillero_agregar():
             # Verificar si ya existe en el pastillero (por ID o por nombre)
             existe = conn.execute('''
                 SELECT id, cantidad FROM pastillero_usuarios
-                WHERE usuario_id = %s AND medicamento_id = %s
-            ''', (usuario_id, medicamento_id)).fetchone()
+                WHERE pastillero_id = %s AND medicamento_id = %s
+            ''', (pastillero_id, medicamento_id)).fetchone()
 
             if existe:
                 # Actualizar cantidad
@@ -12830,8 +12836,8 @@ def api_pastillero_agregar():
                 #  Verificar si existe un medicamento personal con el mismo nombre (vincular)
                 personal_existente = conn.execute('''
                     SELECT id, cantidad FROM pastillero_usuarios
-                    WHERE usuario_id = %s AND medicamento_id IS NULL AND nombre = %s
-                ''', (usuario_id, nombre_normalizado)).fetchone()
+                    WHERE pastillero_id = %s AND medicamento_id IS NULL AND nombre = %s
+                ''', (pastillero_id, nombre_normalizado)).fetchone()
 
                 if personal_existente:
                     # Vincular el medicamento personal con el ID oficial y sumar cantidad
@@ -12843,9 +12849,9 @@ def api_pastillero_agregar():
                 else:
                     # Insertar nuevo con nombre normalizado
                     conn.execute('''
-                        INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
+                        INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
                         VALUES (%s, %s, %s, %s, %s)
-                    ''', (usuario_id, medicamento_id, nombre_normalizado, cantidad, unidad))
+                    ''', (pastillero_id, medicamento_id, nombre_normalizado, cantidad, unidad))
         
         conn.commit()
         conn.close()

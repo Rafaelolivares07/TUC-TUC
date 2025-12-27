@@ -1042,7 +1042,8 @@
                    min-height: 42px;
                    margin-top: 0.15rem;
                "
-               onfocus="activarModoInteraccion()"
+               onfocus="activarModoInteraccion(); ocultarCategorias();"
+               onblur="mostrarCategoriasCondicional();"
                oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
                onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
            ></textarea>
@@ -1094,7 +1095,7 @@
         <!-- Selector horizontal de categorías -->
         <div id="selector-categorias" style="
             width: 100%;
-            margin: 0.33rem 0;
+            margin: 0.33rem 0 0 0;
             overflow-x: auto;
             overflow-y: hidden;
             display: flex;
@@ -1444,7 +1445,53 @@
             console.log(productosMostradosEnTienda);
             return productosMostradosEnTienda;
         };
-        
+
+        // Funciones para mostrar/ocultar categorías
+        function ocultarCategorias() {
+            const selectorCategorias = document.getElementById('selector-categorias');
+            if (selectorCategorias) {
+                selectorCategorias.style.maxHeight = selectorCategorias.offsetHeight + 'px';
+                setTimeout(() => {
+                    selectorCategorias.style.maxHeight = '0';
+                    selectorCategorias.style.overflow = 'hidden';
+                    selectorCategorias.style.opacity = '0';
+                    selectorCategorias.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+                }, 10);
+            }
+        }
+
+        function mostrarCategorias() {
+            const selectorCategorias = document.getElementById('selector-categorias');
+            if (selectorCategorias) {
+                selectorCategorias.style.maxHeight = '200px'; // Altura suficiente para las categorías
+                selectorCategorias.style.opacity = '1';
+                selectorCategorias.style.overflow = 'auto';
+            }
+        }
+
+        function mostrarCategoriasCondicional() {
+            const textarea = document.getElementById('busqueda_unificada');
+            // Solo mostrar si el textarea está vacío
+            if (textarea && textarea.value.trim() === '') {
+                mostrarCategorias();
+            }
+        }
+
+        // Detector de scroll hacia arriba para mostrar categorías
+        let lastScrollTop = 0;
+        window.addEventListener('scroll', function() {
+            const st = window.pageYOffset || document.documentElement.scrollTop;
+
+            // Si scrollea hacia arriba (scroll negativo)
+            if (st < lastScrollTop) {
+                const textarea = document.getElementById('busqueda_unificada');
+                // Mostrar categorías al scrollear arriba (sin importar si hay texto)
+                mostrarCategorias();
+            }
+
+            lastScrollTop = st <= 0 ? 0 : st; // Para mobile o scroll negativo
+        }, false);
+
         function buscarProductos() {
             console.log('🔍 buscarProductos() ejecutado');
 

@@ -14342,7 +14342,7 @@ def api_chat_enviar():
 
         conn.execute('''
             INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, pastillero_id, estado, fecha)
-            VALUES (%s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP AT TIME ZONE 'America/Bogota')
+            VALUES (%s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
         ''', (usuario_id, destinatario_id, mensaje, tipo, pastillero_id))
 
         conn.commit()

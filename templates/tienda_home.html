@@ -2510,12 +2510,25 @@
                 const bg = esMio ? '#3498db' : '#ecf0f1';
                 const color = esMio ? 'white' : '#333';
 
+                // Convertir fecha a hora de Colombia
+                // Si la fecha no incluye 'Z' o '+', asumimos que es UTC y agregamos 'Z'
+                let fechaStr = msg.fecha;
+                if (!fechaStr.includes('Z') && !fechaStr.includes('+') && !fechaStr.includes('-', 10)) {
+                    fechaStr += 'Z';
+                }
+                const fecha = new Date(fechaStr);
+                const horaLocal = fecha.toLocaleString('es-CO', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Bogota'
+                });
+
                 return `
                     <div style="display: flex; justify-content: ${align}; margin-bottom: 0.75rem;">
                         <div style="max-width: 70%; background: ${bg}; color: ${color}; padding: 0.75rem; border-radius: 12px;">
                             <div style="font-size: 0.95rem; margin-bottom: 0.25rem;">${msg.mensaje}</div>
                             <div style="font-size: 0.7rem; opacity: 0.7; text-align: right;">
-                                ${new Date(msg.fecha).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota'})}
+                                ${horaLocal}
                             </div>
                         </div>
                     </div>

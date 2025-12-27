@@ -95,7 +95,7 @@ def configurar_webhook():
     print()
     print("Para probar el bot:")
     print("1. Abre Telegram")
-    print("2. Busca: @TucTucMedicamentosBot")
+    print("2. Busca: @tuctuc_notif_bot")
     print("3. Envía: /start")
     print("4. Envía: /vincular TU_TELEFONO")
     print()

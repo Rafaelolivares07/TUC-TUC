@@ -3893,6 +3893,9 @@
                     // 🆕 Actualizar UI con nombre de usuario
                     actualizarNombreUsuarioUI(data.nombre);
 
+                    // Sincronizar contador del pastillero desde el backend
+                    actualizarBadgePastillero();
+
                     return true;
                 } else {
                     console.log('⚠️ No se pudo restaurar sesión:', data.error);
@@ -3932,6 +3935,9 @@
                     if (data.nombre) {
                         actualizarNombreUsuarioUI(data.nombre);
                     }
+
+                    // Sincronizar contador del pastillero desde el backend
+                    actualizarBadgePastillero();
 
                     return true;
                 } else {

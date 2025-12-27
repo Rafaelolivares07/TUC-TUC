@@ -10926,6 +10926,37 @@ def fix_alertas_sequence():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/crear-tabla-tokens-vinculacion', methods=['GET'])
+@admin_required
+def crear_tabla_tokens_vinculacion():
+    """Endpoint temporal para crear la tabla de tokens de vinculación"""
+    try:
+        db = get_db_connection()
+
+        # Crear tabla de tokens de vinculación
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS tokens_vinculacion (
+                token TEXT PRIMARY KEY,
+                usuario_id INTEGER NOT NULL,
+                nombre TEXT,
+                telefono TEXT,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                usado BOOLEAN DEFAULT FALSE,
+                fecha_uso TIMESTAMP
+            )
+        ''')
+
+        db.commit()
+        db.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'Tabla tokens_vinculacion creada exitosamente'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/terceros/guardar-campo', methods=['POST'])
 def guardar_campo_tercero():
     data = request.get_json()
@@ -12263,6 +12294,120 @@ def api_obtener_datos_usuario_sesion():
         'nombre': nombre,
         'telefono': telefono
     })
+
+
+@app.route('/api/generar-token-vinculacion', methods=['POST'])
+def api_generar_token_vinculacion():
+    """Generar token único para vincular otro dispositivo"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No hay sesión activa'}), 401
+
+    usuario_id = session['usuario_id']
+    nombre = session.get('nombre', '')
+    telefono = session.get('telefono', '')
+
+    try:
+        # Generar token único
+        token = str(uuid.uuid4())
+
+        # Guardar en BD
+        db = get_db_connection()
+
+        # Limpiar tokens antiguos (más de 10 minutos)
+        db.execute('''
+            DELETE FROM tokens_vinculacion
+            WHERE fecha_creacion < NOW() - INTERVAL '10 minutes'
+        ''')
+
+        # Insertar nuevo token
+        db.execute('''
+            INSERT INTO tokens_vinculacion (token, usuario_id, nombre, telefono)
+            VALUES (%s, %s, %s, %s)
+        ''', (token, usuario_id, nombre, telefono))
+
+        db.commit()
+        db.close()
+
+        # Generar URL completa
+        url_vinculacion = f"https://tuc-tuc.onrender.com/vincular/{token}"
+
+        return jsonify({
+            'ok': True,
+            'token': token,
+            'url': url_vinculacion
+        })
+
+    except Exception as e:
+        print(f"Error al generar token: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/vincular/<token>')
+def vincular_dispositivo(token):
+    """Página para vincular dispositivo mediante token QR"""
+    return render_template('tienda_home.html', token_vinculacion=token)
+
+
+@app.route('/api/validar-token-vinculacion/<token>', methods=['POST'])
+def api_validar_token_vinculacion(token):
+    """Validar token y crear sesión en nuevo dispositivo"""
+    try:
+        db = get_db_connection()
+
+        # Buscar token
+        token_data = db.execute('''
+            SELECT usuario_id, nombre, telefono, usado, fecha_creacion
+            FROM tokens_vinculacion
+            WHERE token = %s
+        ''', (token,)).fetchone()
+
+        if not token_data:
+            db.close()
+            return jsonify({'ok': False, 'error': 'Token inválido'}), 404
+
+        # Verificar que no esté usado
+        if token_data['usado']:
+            db.close()
+            return jsonify({'ok': False, 'error': 'Este token ya fue utilizado'}), 400
+
+        # Verificar que no haya expirado (5 minutos)
+        fecha_creacion = token_data['fecha_creacion']
+        if isinstance(fecha_creacion, str):
+            from dateutil import parser
+            fecha_creacion = parser.parse(fecha_creacion)
+
+        tiempo_transcurrido = datetime.utcnow() - fecha_creacion.replace(tzinfo=None)
+        if tiempo_transcurrido.total_seconds() > 300:  # 5 minutos
+            db.close()
+            return jsonify({'ok': False, 'error': 'El token ha expirado. Genera uno nuevo.'}), 400
+
+        # Marcar token como usado
+        db.execute('''
+            UPDATE tokens_vinculacion
+            SET usado = TRUE, fecha_uso = NOW()
+            WHERE token = %s
+        ''', (token,))
+
+        db.commit()
+        db.close()
+
+        # Crear sesión
+        session['usuario_id'] = token_data['usuario_id']
+        session['nombre'] = token_data['nombre']
+        session['telefono'] = token_data['telefono']
+        session.permanent = True
+
+        return jsonify({
+            'ok': True,
+            'usuario_id': token_data['usuario_id'],
+            'nombre': token_data['nombre'],
+            'telefono': token_data['telefono']
+        })
+
+    except Exception as e:
+        print(f"Error al validar token: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/pastillero/count', methods=['GET'])

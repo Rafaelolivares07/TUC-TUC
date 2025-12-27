@@ -12247,14 +12247,32 @@ def api_pastillero():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/obtener-datos-usuario-sesion', methods=['GET'])
+def api_obtener_datos_usuario_sesion():
+    """Obtener datos del usuario desde la sesión activa"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No hay sesión activa'})
+
+    usuario_id = session['usuario_id']
+    nombre = session.get('nombre', '')
+    telefono = session.get('telefono', '')
+
+    return jsonify({
+        'ok': True,
+        'usuario_id': usuario_id,
+        'nombre': nombre,
+        'telefono': telefono
+    })
+
+
 @app.route('/api/pastillero/count', methods=['GET'])
 def api_pastillero_count():
     """Obtener cantidad de medicamentos en el pastillero"""
     if 'usuario_id' not in session:
         return jsonify({'ok': True, 'count': 0})
-    
+
     usuario_id = session['usuario_id']
-    
+
     try:
         conn = get_db_connection()
         result = conn.execute('''
@@ -12262,7 +12280,7 @@ def api_pastillero_count():
             FROM pastillero_usuarios
             WHERE usuario_id = ?
         ''', (usuario_id,)).fetchone()
-        
+
         conn.close()
         return jsonify({'ok': True, 'count': result['count']})
     except Exception as e:

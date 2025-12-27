@@ -2073,34 +2073,57 @@
         // 🆕 FUNCIONES DEL PASTILLERO
         async function abrirPastillero() {
             // 🆕 Verificar si hay sesión activa
-            const usuarioId = localStorage.getItem('usuario_id');
+            let usuarioId = localStorage.getItem('usuario_id');
 
-            if (!usuarioId) {
-                // No hay usuario registrado → Mostrar modal de registro
-                console.log('⚠️ No hay usuario registrado, mostrando modal de registro');
-                mostrarModalRegistro();
-                return;
-            }
-
-            // 🔄 Intentar restaurar sesión si no está activa en el backend
+            // 🔄 Intentar recuperar sesión del backend ANTES de pedir registro
             try {
                 const checkResponse = await fetch('/api/pastillero/count');
                 const checkData = await checkResponse.json();
 
-                if (!checkData.ok && checkResponse.status === 401) {
-                    // Sesión expirada → Restaurar automáticamente
-                    console.log('🔄 Sesión expirada, restaurando...');
-                    const restaurada = await restaurarSesionAutomatica();
+                if (checkData.ok && checkData.count >= 0) {
+                    // ✅ Hay sesión activa en el backend
+                    console.log('✅ Sesión activa en backend, medicamentos:', checkData.count);
 
-                    if (!restaurada) {
-                        // No se pudo restaurar → Pedir registro de nuevo
-                        console.log('❌ No se pudo restaurar sesión, pidiendo registro');
+                    // Si no tenemos usuario_id en localStorage, intentar recuperarlo
+                    if (!usuarioId) {
+                        console.log('🔄 Recuperando datos de usuario del backend...');
+                        const recuperada = await recuperarDatosUsuarioDesdeBackend();
+
+                        if (recuperada) {
+                            usuarioId = localStorage.getItem('usuario_id');
+                        } else {
+                            // No se pudo recuperar → Mostrar modal de registro
+                            console.log('❌ No se pudo recuperar usuario, pidiendo registro');
+                            mostrarModalRegistro();
+                            return;
+                        }
+                    }
+                } else if (checkResponse.status === 401 || !checkData.ok) {
+                    // Sesión expirada o no existe
+                    if (usuarioId) {
+                        // Intentar restaurar con usuario_id guardado
+                        console.log('🔄 Sesión expirada, restaurando...');
+                        const restaurada = await restaurarSesionAutomatica();
+
+                        if (!restaurada) {
+                            console.log('❌ No se pudo restaurar sesión, pidiendo registro');
+                            mostrarModalRegistro();
+                            return;
+                        }
+                    } else {
+                        // No hay sesión ni usuario_id → Pedir registro
+                        console.log('⚠️ No hay sesión activa, mostrando modal de registro');
                         mostrarModalRegistro();
                         return;
                     }
                 }
             } catch (error) {
                 console.error('Error al verificar sesión:', error);
+                // Si hay error pero tenemos usuario_id, intentar continuar
+                if (!usuarioId) {
+                    mostrarModalRegistro();
+                    return;
+                }
             }
 
             // ✅ Todo OK → Abrir pastillero normalmente
@@ -3834,6 +3857,42 @@
                 }
             } catch (error) {
                 console.error('❌ Error al restaurar sesión:', error);
+                return false;
+            }
+        }
+
+        // ============================================
+        // 🆕 RECUPERAR DATOS DE USUARIO DESDE BACKEND
+        // ============================================
+
+        async function recuperarDatosUsuarioDesdeBackend() {
+            try {
+                const response = await fetch('/api/obtener-datos-usuario-sesion', {
+                    method: 'GET'
+                });
+
+                const data = await response.json();
+
+                if (data.ok && data.usuario_id) {
+                    // Guardar en localStorage
+                    localStorage.setItem('usuario_id', data.usuario_id);
+                    localStorage.setItem('nombre_usuario', data.nombre || '');
+                    localStorage.setItem('telefono_usuario', data.telefono || '');
+
+                    console.log('✅ Datos de usuario recuperados del backend:', data);
+
+                    // Actualizar UI
+                    if (data.nombre) {
+                        actualizarNombreUsuarioUI(data.nombre);
+                    }
+
+                    return true;
+                } else {
+                    console.log('⚠️ No se pudieron recuperar datos del backend');
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Error al recuperar datos del backend:', error);
                 return false;
             }
         }

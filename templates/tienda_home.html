@@ -1042,9 +1042,9 @@
                    min-height: 42px;
                    margin-top: 0.15rem;
                "
-               onfocus="activarModoInteraccion(); ocultarCategorias();"
+               onfocus="activarModoInteraccion();"
                onblur="mostrarCategoriasCondicional();"
-               oninput="autoExpand(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
+               oninput="autoExpand(this); manejarCategoriasPorInput(this); clearTimeout(window.busquedaTimeout); window.busquedaTimeout = setTimeout(() => { if(this.value.length <= 200) buscarProductos(); }, 800);"
                onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); buscarProductos(); }"
            ></textarea>
 
@@ -1473,6 +1473,18 @@
             const textarea = document.getElementById('busqueda_unificada');
             // Solo mostrar si el textarea está vacío
             if (textarea && textarea.value.trim() === '') {
+                mostrarCategorias();
+            }
+        }
+
+        function manejarCategoriasPorInput(textarea) {
+            const valor = textarea.value.trim();
+
+            if (valor.length > 0) {
+                // Si empieza a escribir, ocultar categorías
+                ocultarCategorias();
+            } else {
+                // Si borra todo, mostrar categorías automáticamente
                 mostrarCategorias();
             }
         }

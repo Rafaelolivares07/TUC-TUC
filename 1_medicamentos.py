@@ -11020,6 +11020,48 @@ def diagnostico_pastillero():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/admin/actualizar-telegram-chat-id', methods=['POST'])
+@admin_required
+def actualizar_telegram_chat_id():
+    """Endpoint para actualizar manualmente el telegram_chat_id de un usuario"""
+    try:
+        data = request.get_json()
+        usuario_id = data.get('usuario_id')
+        chat_id = data.get('chat_id')
+
+        if not usuario_id or not chat_id:
+            return jsonify({'ok': False, 'error': 'Faltan usuario_id o chat_id'}), 400
+
+        db = get_db_connection()
+
+        # Obtener nombre del usuario
+        usuario = db.execute('SELECT nombre FROM terceros WHERE id = %s', (usuario_id,)).fetchone()
+
+        if not usuario:
+            db.close()
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
+
+        # Actualizar telegram_chat_id
+        db.execute('''
+            UPDATE terceros
+            SET telegram_chat_id = %s
+            WHERE id = %s
+        ''', (str(chat_id), usuario_id))
+
+        db.commit()
+        db.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Chat ID actualizado para {usuario["nombre"]}',
+            'usuario': usuario['nombre'],
+            'chat_id': chat_id
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/terceros/guardar-campo', methods=['POST'])
 def guardar_campo_tercero():
     data = request.get_json()

@@ -12692,13 +12692,18 @@ def api_pastillero_count():
 
     usuario_id = session['usuario_id']
 
+    # Obtener pastillero activo del usuario
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': True, 'count': 0})
+
     try:
         conn = get_db_connection()
         result = conn.execute('''
             SELECT COUNT(*) as count
             FROM pastillero_usuarios
-            WHERE usuario_id = ?
-        ''', (usuario_id,)).fetchone()
+            WHERE pastillero_id = %s
+        ''', (pastillero_id,)).fetchone()
 
         conn.close()
         return jsonify({'ok': True, 'count': result['count']})

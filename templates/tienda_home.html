@@ -2524,16 +2524,12 @@
                         horaLocal = 'Hora inválida';
                         console.error('Fecha inválida:', msg.fecha);
                     } else {
-                        // Debug: ver qué hora nos da
-                        const horaUTC = fecha.toISOString();
+                        // Mostrar hora en formato 12 horas con AM/PM (sin conversión de timezone)
                         horaLocal = fecha.toLocaleTimeString('es-CO', {
-                            hour: '2-digit',
+                            hour: 'numeric',
                             minute: '2-digit',
-                            timeZone: 'America/Bogota'
+                            hour12: true
                         });
-                        console.log('Fecha original:', msg.fecha);
-                        console.log('Fecha UTC:', horaUTC);
-                        console.log('Hora Colombia:', horaLocal);
                     }
                 } catch (e) {
                     horaLocal = '--:--';

@@ -13160,6 +13160,16 @@ def telegram_webhook():
                     "Ejemplo: /vincular 3166686397"
                 )
 
+            # Comando /michatid - Para obtener el chat_id del usuario
+            elif text.startswith('/michatid'):
+                enviar_mensaje_telegram(
+                    chat_id,
+                    f"📱 Tu Chat ID de Telegram es:\n\n<code>{chat_id}</code>\n\n"
+                    f"Puedes usar este ID para vinculación manual si tienes problemas.",
+                    parse_mode='HTML'
+                )
+                print(f"[INFO] Usuario solicitó chat_id: {chat_id}")
+
             # Comando /vincular TELEFONO
             elif text.startswith('/vincular'):
                 partes = text.split()

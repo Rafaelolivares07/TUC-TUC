@@ -5037,29 +5037,27 @@
     <div id="modal-pastillero" class="modal-pastillero">
         <div class="modal-pastillero-content">
             <div class="modal-pastillero-header">
-                <div style="display: flex; align-items: center; gap: 1rem; flex: 1;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
                     <h2 style="margin: 0;"><span>💊</span></h2>
-                    <select id="selector-pastilleros" onchange="cambiarPastillero()" style="flex: 1; max-width: 300px; padding: 0.5rem; border-radius: 6px; border: 2px solid #e0e0e0; font-size: 0.9rem; font-weight: 600;">
+                    <select id="selector-pastilleros" onchange="cambiarPastillero()" style="flex: 1; max-width: 250px; padding: 0.4rem; border-radius: 6px; border: 2px solid #e0e0e0; font-size: 0.85rem; font-weight: 600;">
                         <option value="">Mi Pastillero</option>
                     </select>
-                    <button class="btn-contactos-pastillero" onclick="abrirModalNuevoPastillero()" title="Crear nuevo pastillero">
+                    <button class="btn-contactos-pastillero" onclick="abrirModalNuevoPastillero()" title="Crear nuevo pastillero" style="padding: 0.4rem 0.6rem; font-size: 1rem;">
                         <span>➕</span>
                     </button>
-                    <button class="btn-contactos-pastillero" onclick="abrirModalCompartirPastillero()" title="Compartir pastillero">
+                    <button class="btn-contactos-pastillero" onclick="abrirModalCompartirPastillero()" title="Compartir pastillero" style="padding: 0.4rem 0.6rem; font-size: 1rem;">
                         <span>👥</span>
                     </button>
-                </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <button class="btn-contactos-pastillero" onclick="generarQRVinculacion()" title="Vincular otro dispositivo con código QR">
-                        <span>📱</span> Vincular
+                    <button class="btn-contactos-pastillero" onclick="generarQRVinculacion()" title="Vincular otro dispositivo" style="padding: 0.4rem 0.6rem; font-size: 1rem;">
+                        <span>📱</span>
                     </button>
-                    <button class="btn-contactos-pastillero" onclick="abrirModalContactos()" title="Gestionar contactos para recordatorios">
-                        <span>👥</span> Contactos
+                    <button class="btn-contactos-pastillero" onclick="abrirModalContactos()" title="Gestionar contactos" style="padding: 0.4rem 0.6rem; font-size: 1rem;">
+                        <span>👤</span>
                     </button>
-                    <button id="btn-ordenar-pastillero" class="btn-ordenar-pastillero" onclick="toggleOrdenPastillero()">
-                        <span id="icono-orden">📅</span> <span id="texto-orden">Recientes</span>
+                    <button id="btn-ordenar-pastillero" class="btn-ordenar-pastillero" onclick="toggleOrdenPastillero()" title="Ordenar medicamentos" style="padding: 0.4rem 0.6rem; font-size: 1rem;">
+                        <span id="icono-orden">📅</span>
                     </button>
-                    <button class="btn-cerrar-modal" onclick="cerrarPastillero()">×</button>
+                    <button class="btn-cerrar-modal" onclick="cerrarPastillero()" style="margin-left: auto;">×</button>
                 </div>
             </div>
             <div class="modal-pastillero-body">

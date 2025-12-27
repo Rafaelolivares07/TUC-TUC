@@ -11062,6 +11062,143 @@ def actualizar_telegram_chat_id():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/migrar-sistema-pastilleros', methods=['POST'])
+@admin_required
+def migrar_sistema_pastilleros():
+    """Endpoint para migrar al nuevo sistema de pastilleros compartidos"""
+    try:
+        db = get_db_connection()
+
+        resultado = {
+            'ok': True,
+            'pasos': [],
+            'errores': []
+        }
+
+        # 1. Crear tabla pastilleros
+        resultado['pasos'].append('Creando tabla pastilleros...')
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS pastilleros (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                creado_por_usuario_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 2. Crear tabla relaciones_pastillero
+        resultado['pasos'].append('Creando tabla relaciones_pastillero...')
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS relaciones_pastillero (
+                id SERIAL PRIMARY KEY,
+                pastillero_id INTEGER NOT NULL REFERENCES pastilleros(id) ON DELETE CASCADE,
+                usuario_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+                tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('propietario', 'miembro', 'autorizado')),
+                fecha_agregado TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(pastillero_id, usuario_id)
+            )
+        ''')
+
+        # 3. Crear tabla mensajes
+        resultado['pasos'].append('Creando tabla mensajes...')
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS mensajes (
+                id SERIAL PRIMARY KEY,
+                remitente_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+                destinatario_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+                mensaje TEXT NOT NULL,
+                tipo VARCHAR(30) NOT NULL DEFAULT 'texto' CHECK (tipo IN ('texto', 'invitacion_compartir', 'solicitud_acceso')),
+                pastillero_id INTEGER REFERENCES pastilleros(id) ON DELETE CASCADE,
+                estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aceptado', 'rechazado', 'leido')),
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 4. Obtener usuarios con medicamentos
+        resultado['pasos'].append('Obteniendo usuarios con medicamentos...')
+        usuarios_con_pastillero = db.execute('''
+            SELECT DISTINCT usuario_id, t.nombre
+            FROM pastillero_usuarios p
+            INNER JOIN terceros t ON p.usuario_id = t.id
+        ''').fetchall()
+
+        resultado['usuarios_encontrados'] = len(usuarios_con_pastillero)
+
+        # 5. Crear pastilleros para cada usuario
+        resultado['pasos'].append(f'Creando pastilleros para {len(usuarios_con_pastillero)} usuarios...')
+        pastilleros_creados = 0
+
+        for usuario in usuarios_con_pastillero:
+            usuario_id = usuario['usuario_id']
+            nombre_usuario = usuario['nombre']
+
+            # Crear pastillero
+            pastillero_id = db.execute('''
+                INSERT INTO pastilleros (nombre, creado_por_usuario_id)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (f"Mi pastillero", usuario_id)).fetchone()['id']
+
+            # Crear relación de propietario
+            db.execute('''
+                INSERT INTO relaciones_pastillero (pastillero_id, usuario_id, tipo)
+                VALUES (%s, %s, 'propietario')
+            ''', (pastillero_id, usuario_id))
+
+            pastilleros_creados += 1
+
+        resultado['pastilleros_creados'] = pastilleros_creados
+
+        # 6. Agregar columna pastillero_id si no existe
+        resultado['pasos'].append('Agregando columna pastillero_id...')
+        try:
+            db.execute('''
+                ALTER TABLE pastillero_usuarios
+                ADD COLUMN IF NOT EXISTS pastillero_id INTEGER REFERENCES pastilleros(id) ON DELETE CASCADE
+            ''')
+        except Exception as e:
+            # La columna ya existe, continuar
+            pass
+
+        # 7. Migrar medicamentos
+        resultado['pasos'].append('Migrando medicamentos al nuevo sistema...')
+        db.execute('''
+            UPDATE pastillero_usuarios pu
+            SET pastillero_id = p.id
+            FROM pastilleros p
+            WHERE pu.usuario_id = p.creado_por_usuario_id
+            AND pu.pastillero_id IS NULL
+        ''')
+
+        medicamentos_migrados = db.execute('SELECT COUNT(*) as count FROM pastillero_usuarios WHERE pastillero_id IS NOT NULL').fetchone()['count']
+        resultado['medicamentos_migrados'] = medicamentos_migrados
+
+        # 8. Hacer pastillero_id NOT NULL
+        resultado['pasos'].append('Configurando restricciones finales...')
+        try:
+            db.execute('''
+                ALTER TABLE pastillero_usuarios
+                ALTER COLUMN pastillero_id SET NOT NULL
+            ''')
+        except Exception as e:
+            # Ya está configurado, continuar
+            pass
+
+        db.commit()
+        db.close()
+
+        resultado['mensaje'] = 'Migración completada exitosamente'
+        return jsonify(resultado)
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/admin/terceros/guardar-campo', methods=['POST'])
 def guardar_campo_tercero():
     data = request.get_json()

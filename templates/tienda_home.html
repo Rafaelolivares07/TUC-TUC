@@ -2228,6 +2228,9 @@
             // ✅ Todo OK → Abrir pastillero normalmente
             document.getElementById('modal-pastillero').classList.add('active');
 
+            // 🆕 Cargar lista de pastilleros en el selector
+            await cargarListaPastilleros();
+
             // 🎯 LÓGICA SIMPLE: Mostrar solo los medicamentos que están tanto en tienda como en pastillero
             if (productosMostradosEnTienda.length > 0) {
                 console.log('📌 Abriendo pastillero filtrado por productos mostrados en tienda');
@@ -2251,6 +2254,137 @@
             document.getElementById('input-buscar-medicamento').value = '';
             document.getElementById('sugerencias-medicamentos').classList.remove('active');
             modoFiltradoPastillero = false;  // 🆕 Reset modo filtrado
+        }
+
+        // 🆕 FUNCIONES DE GESTIÓN DE PASTILLEROS
+        async function cargarListaPastilleros() {
+            try {
+                const response = await fetch('/api/pastilleros/mis-pastilleros');
+                const data = await response.json();
+
+                if (data.ok) {
+                    const selector = document.getElementById('selector-pastilleros');
+
+                    // Obtener el pastillero activo actual
+                    const pastilleroActivo = data.pastilleros.find(p => p.activo) || data.pastilleros[0];
+
+                    // Poblar el selector
+                    selector.innerHTML = data.pastilleros.map(p => `
+                        <option value="${p.id}" ${p.activo ? 'selected' : ''}>
+                            ${p.nombre} ${p.tipo === 'propietario' ? '👑' : p.tipo === 'miembro' ? '👥' : '🔓'} (${p.total_medicamentos})
+                        </option>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error al cargar pastilleros:', error);
+            }
+        }
+
+        async function cambiarPastillero() {
+            const selector = document.getElementById('selector-pastilleros');
+            const pastilleroId = selector.value;
+
+            if (!pastilleroId) return;
+
+            try {
+                const response = await fetch('/api/pastilleros/cambiar-activo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pastillero_id: parseInt(pastilleroId) })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    console.log('✅ Pastillero cambiado:', data.nombre);
+
+                    // Recargar medicamentos del nuevo pastillero
+                    if (modoFiltradoPastillero) {
+                        cargarMedicamentosPastilleroFiltrado();
+                    } else {
+                        cargarMedicamentosPastillero();
+                    }
+
+                    // Actualizar badge
+                    actualizarBadgePastillero();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo cambiar el pastillero'));
+                }
+            } catch (error) {
+                console.error('Error al cambiar pastillero:', error);
+                alert('Error al cambiar el pastillero');
+            }
+        }
+
+        function abrirModalNuevoPastillero() {
+            const nombre = prompt('Nombre del nuevo pastillero:', 'Mi nuevo pastillero');
+
+            if (!nombre || nombre.trim() === '') return;
+
+            fetch('/api/pastilleros/crear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre: nombre.trim() })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    alert(`✅ Pastillero "${data.nombre}" creado exitosamente`);
+                    // Recargar lista de pastilleros
+                    cargarListaPastilleros();
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo crear el pastillero'));
+                }
+            })
+            .catch(error => {
+                console.error('Error al crear pastillero:', error);
+                alert('Error al crear el pastillero');
+            });
+        }
+
+        function abrirModalCompartirPastillero() {
+            const selector = document.getElementById('selector-pastilleros');
+            const pastilleroId = selector.value;
+
+            if (!pastilleroId) {
+                alert('Selecciona un pastillero primero');
+                return;
+            }
+
+            // Solicitar el teléfono del usuario a invitar
+            const telefono = prompt('Ingresa el teléfono del usuario con quien deseas compartir el pastillero:');
+
+            if (!telefono || telefono.trim() === '') return;
+
+            // Solicitar el tipo de acceso
+            const tipo = prompt('Tipo de acceso:\n- miembro (acceso completo al pastillero compartido)\n- autorizado (solo puede ver, no editar)\n\nEscribe "miembro" o "autorizado":', 'miembro');
+
+            if (tipo !== 'miembro' && tipo !== 'autorizado') {
+                alert('Tipo de acceso inválido. Debe ser "miembro" o "autorizado"');
+                return;
+            }
+
+            fetch('/api/pastilleros/compartir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pastillero_id: parseInt(pastilleroId),
+                    telefono_destinatario: telefono.trim(),
+                    tipo: tipo
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    alert(`✅ Invitación enviada a ${data.destinatario}`);
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo enviar la invitación'));
+                }
+            })
+            .catch(error => {
+                console.error('Error al compartir pastillero:', error);
+                alert('Error al enviar la invitación');
+            });
         }
 
         // 🆕 FUNCIONES DEL CHAT
@@ -2541,6 +2675,51 @@
                     console.error('Error al formatear fecha:', msg.fecha, e);
                 }
 
+                // 🎯 Renderizar mensajes especiales (invitaciones)
+                if (msg.tipo === 'invitacion_compartir') {
+                    const esDestinatario = msg.destinatario_id === parseInt(localStorage.getItem('usuario_id'));
+                    const estadoEmoji = msg.estado === 'aceptado' ? '✅' : msg.estado === 'rechazado' ? '❌' : '⏳';
+
+                    let botonesHtml = '';
+                    if (esDestinatario && msg.estado === 'pendiente') {
+                        botonesHtml = `
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                <button onclick="responderInvitacion(${msg.id}, 'aceptado')"
+                                        style="flex: 1; background: #4caf50; color: white; border: none; padding: 0.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                    ✅ Aceptar
+                                </button>
+                                <button onclick="responderInvitacion(${msg.id}, 'rechazado')"
+                                        style="flex: 1; background: #f44336; color: white; border: none; padding: 0.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                                    ❌ Rechazar
+                                </button>
+                            </div>
+                        `;
+                    } else if (msg.estado !== 'pendiente') {
+                        const estadoTexto = msg.estado === 'aceptado' ? 'Aceptado' : 'Rechazado';
+                        botonesHtml = `
+                            <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.8;">
+                                ${estadoEmoji} ${estadoTexto}
+                            </div>
+                        `;
+                    }
+
+                    return `
+                        <div style="display: flex; justify-content: center; margin-bottom: 0.75rem;">
+                            <div style="max-width: 80%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);">
+                                <div style="font-size: 0.95rem; margin-bottom: 0.5rem;">
+                                    <strong>📬 Invitación para compartir pastillero</strong>
+                                </div>
+                                <div style="font-size: 0.9rem; margin-bottom: 0.25rem;">${msg.mensaje}</div>
+                                ${botonesHtml}
+                                <div style="font-size: 0.7rem; opacity: 0.7; text-align: right; margin-top: 0.5rem;">
+                                    ${horaLocal}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 🎯 Mensaje normal
                 return `
                     <div style="display: flex; justify-content: ${align}; margin-bottom: 0.75rem;">
                         <div style="max-width: 70%; background: ${bg}; color: ${color}; padding: 0.75rem; border-radius: 12px;">
@@ -2582,6 +2761,44 @@
                 }
             })
             .catch(err => console.error('Error al enviar mensaje:', err));
+        }
+
+        // 🆕 Responder a invitación de pastillero
+        function responderInvitacion(mensajeId, respuesta) {
+            if (!confirm(`¿Estás seguro de ${respuesta === 'aceptado' ? 'aceptar' : 'rechazar'} esta invitación?`)) {
+                return;
+            }
+
+            fetch('/api/pastilleros/responder-invitacion', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    mensaje_id: mensajeId,
+                    respuesta: respuesta
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    if (respuesta === 'aceptado') {
+                        alert(`✅ ¡Ahora tienes acceso al pastillero "${data.pastillero_nombre}"!`);
+                    } else {
+                        alert('❌ Invitación rechazada');
+                    }
+                    // Recargar mensajes para mostrar el nuevo estado
+                    cargarMensajes(conversacionActual);
+                    // Recargar lista de pastilleros si está abierto el modal de pastillero
+                    if (document.getElementById('modal-pastillero').classList.contains('active')) {
+                        cargarListaPastilleros();
+                    }
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo procesar la respuesta'));
+                }
+            })
+            .catch(err => {
+                console.error('Error al responder invitación:', err);
+                alert('Error al procesar la respuesta');
+            });
         }
 
         // Búsqueda de usuarios
@@ -4820,7 +5037,18 @@
     <div id="modal-pastillero" class="modal-pastillero">
         <div class="modal-pastillero-content">
             <div class="modal-pastillero-header">
-                <h2><span>💊</span> <span id="titulo-pastillero">Mi Pastillero</span></h2>
+                <div style="display: flex; align-items: center; gap: 1rem; flex: 1;">
+                    <h2 style="margin: 0;"><span>💊</span></h2>
+                    <select id="selector-pastilleros" onchange="cambiarPastillero()" style="flex: 1; max-width: 300px; padding: 0.5rem; border-radius: 6px; border: 2px solid #e0e0e0; font-size: 0.9rem; font-weight: 600;">
+                        <option value="">Mi Pastillero</option>
+                    </select>
+                    <button class="btn-contactos-pastillero" onclick="abrirModalNuevoPastillero()" title="Crear nuevo pastillero">
+                        <span>➕</span>
+                    </button>
+                    <button class="btn-contactos-pastillero" onclick="abrirModalCompartirPastillero()" title="Compartir pastillero">
+                        <span>👥</span>
+                    </button>
+                </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <button class="btn-contactos-pastillero" onclick="generarQRVinculacion()" title="Vincular otro dispositivo con código QR">
                         <span>📱</span> Vincular
@@ -4833,7 +5061,8 @@
                     </button>
                     <button class="btn-cerrar-modal" onclick="cerrarPastillero()">×</button>
                 </div>
-            </div>            <div class="modal-pastillero-body">
+            </div>
+            <div class="modal-pastillero-body">
                 <!-- Búsqueda de medicamentos -->
                 <div class="pastillero-busqueda">
                     <input 

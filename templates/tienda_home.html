@@ -461,7 +461,53 @@
             font-size: 0.85rem;
             font-weight: bold;
         }
-        
+
+        /* 🆕 BOTÓN FLOTANTE CHAT */
+        .chat-flotante {
+            position: fixed;
+            top: 10px;
+            left: 90px;  /* A la derecha del pastillero */
+            background: #3498db;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            opacity: 0;
+        }
+
+        .chat-flotante:hover {
+            transform: scale(1.1);
+        }
+
+        .chat-flotante.visible {
+            display: flex;
+            opacity: 1;
+        }
+
+        .chat-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
         /* 🆕 BOTÓN SCROLL TO TOP - Moverlo más arriba */
         .scroll-to-top {
             bottom: 12rem !important;  /* Moverlo arriba del pastillero */
@@ -1167,14 +1213,20 @@
     </div>
     
     <!-- Carrito Flotante -->
+    <!-- 🆕 BOTÓN FLOTANTE CHAT (lado izquierdo superior) -->
+    <div id="chat-flotante" class="chat-flotante" onclick="abrirChat()" title="Mensajes">
+        💬
+        <span class="chat-badge" id="chatCount" style="display: none;">0</span>
+    </div>
+
     <!-- 🆕 BOTÓN FLOTANTE PASTILLERO (lado izquierdo) -->
-    <div id="pastillero-flotante" class="pastillero-flotante" onclick="abrirPastillero()">
+    <div id="pastillero-flotante" class="pastillero-flotante" onclick="abrirPastillero()" title="Mi pastillero">
         💊
         <span class="pastillero-badge" id="pastilleroCount">0</span>
     </div>
-    
+
     <!-- BOTÓN FLOTANTE CARRITO (lado derecho) -->
-    <div class="carrito-flotante" onclick="verCarrito()">
+    <div class="carrito-flotante" onclick="verCarrito()"
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-9.8-3.2v-.1l.9-1.7h7.4c.7 0 1.4-.4 1.7-1l3.9-7-1.7-1-3.9 7h-7l-4.4-9.5H1v2h2l3.6 7.6L5.2 14c-.1.3-.2.6-.2 1 0 1.1.9 2 2 2h12v-2H7.4c-.1 0-.2-.1-.2-.2z"/>
         </svg>
@@ -2200,7 +2252,79 @@
             document.getElementById('sugerencias-medicamentos').classList.remove('active');
             modoFiltradoPastillero = false;  // 🆕 Reset modo filtrado
         }
-        
+
+        // 🆕 FUNCIONES DEL CHAT
+        async function abrirChat() {
+            // Verificar si hay sesión activa (misma lógica que pastillero)
+            let usuarioId = localStorage.getItem('usuario_id');
+
+            try {
+                const checkResponse = await fetch('/api/pastillero/count');
+                const checkData = await checkResponse.json();
+
+                if (checkData.ok && checkData.count >= 0) {
+                    console.log('✅ Sesión activa en backend');
+
+                    if (!usuarioId) {
+                        console.log('🔄 Recuperando datos de usuario del backend...');
+                        const recuperada = await recuperarDatosUsuarioDesdeBackend();
+
+                        if (recuperada) {
+                            usuarioId = localStorage.getItem('usuario_id');
+                        } else {
+                            console.log('❌ No se pudo recuperar usuario, pidiendo registro');
+                            mostrarModalRegistro();
+                            return;
+                        }
+                    }
+                } else if (checkResponse.status === 401 || !checkData.ok) {
+                    if (usuarioId) {
+                        console.log('🔄 Sesión expirada, restaurando...');
+                        const restaurada = await restaurarSesionAutomatica();
+
+                        if (!restaurada) {
+                            console.log('❌ No se pudo restaurar sesión, pidiendo registro');
+                            mostrarModalRegistro();
+                            return;
+                        }
+                    } else {
+                        console.log('⚠️ No hay sesión activa, mostrando modal de registro');
+                        mostrarModalRegistro();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('Error al verificar sesión:', error);
+                if (!usuarioId) {
+                    mostrarModalRegistro();
+                    return;
+                }
+            }
+
+            // ✅ Todo OK → Abrir chat
+            document.getElementById('modal-chat').classList.add('active');
+            cargarConversaciones();
+            document.getElementById('input-buscar-usuario').focus();
+        }
+
+        function cerrarChat() {
+            document.getElementById('modal-chat').classList.remove('active');
+            document.getElementById('input-buscar-usuario').value = '';
+        }
+
+        function cargarConversaciones() {
+            // TODO: Cargar conversaciones del usuario
+            console.log('🔄 Cargando conversaciones...');
+
+            document.getElementById('lista-conversaciones').innerHTML = `
+                <div class="pastillero-vacio">
+                    <div class="pastillero-vacio-icon">💬</div>
+                    <p>No tienes conversaciones aún</p>
+                    <p style="font-size: 0.85rem; color: #888;">Busca un usuario arriba para iniciar una conversación</p>
+                </div>
+            `;
+        }
+
         function cargarMedicamentosPastillero(orden = null, sintomas = null) {
             // Si no se especifica orden, usar el actual
             if (orden) {
@@ -3075,9 +3199,10 @@
         
         document.body.appendChild(scrollButton);
         
-        // Control de visibilidad del carrito y pastillero flotantes según header
+        // Control de visibilidad del carrito, pastillero y chat flotantes según header
         const carritoFlotante = document.querySelector('.carrito-flotante');
         const pastilleroFlotante = document.querySelector('.pastillero-flotante');
+        const chatFlotante = document.querySelector('.chat-flotante');
         const header = document.querySelector('.header');
 
         window.addEventListener('scroll', function() {
@@ -3088,16 +3213,18 @@
                 scrollButton.style.display = 'none';
             }
 
-            // Carrito y Pastillero flotantes: mostrar cuando header desaparece
+            // Carrito, Pastillero y Chat flotantes: mostrar cuando header desaparece
             if (header) {
                 const headerRect = header.getBoundingClientRect();
                 // Si el header está fuera de la vista (arriba)
                 if (headerRect.bottom < 0) {
                     carritoFlotante.classList.add('visible');
                     pastilleroFlotante.classList.add('visible');
+                    chatFlotante.classList.add('visible');
                 } else {
                     carritoFlotante.classList.remove('visible');
                     pastilleroFlotante.classList.remove('visible');
+                    chatFlotante.classList.remove('visible');
                 }
             }
         });
@@ -4533,6 +4660,36 @@
             </div>
             <div class="modal-registro-footer">
                 <button class="btn-cancelar-registro" onclick="cerrarModalContactos()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🆕 MODAL DE CHAT -->
+    <div id="modal-chat" class="modal-pastillero">
+        <div class="modal-pastillero-content">
+            <div class="modal-pastillero-header">
+                <h2><span>💬</span> Mensajes</h2>
+                <button class="btn-cerrar-modal" onclick="cerrarChat()">×</button>
+            </div>
+            <div class="modal-pastillero-body">
+                <!-- Búsqueda de usuarios -->
+                <div class="pastillero-busqueda">
+                    <input
+                        type="text"
+                        id="input-buscar-usuario"
+                        placeholder="Buscar usuario por nombre o teléfono..."
+                        autocomplete="off"
+                    >
+                </div>
+
+                <!-- Lista de conversaciones -->
+                <div id="lista-conversaciones" style="margin-top: 1rem;">
+                    <div class="pastillero-vacio">
+                        <div class="pastillero-vacio-icon">💬</div>
+                        <p>No tienes conversaciones aún</p>
+                        <p style="font-size: 0.85rem; color: #888;">Busca un usuario arriba para iniciar una conversación</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

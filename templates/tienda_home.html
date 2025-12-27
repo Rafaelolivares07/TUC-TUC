@@ -2304,7 +2304,15 @@
             // ✅ Todo OK → Abrir chat
             document.getElementById('modal-chat').classList.add('active');
             cargarConversaciones();
-            document.getElementById('input-buscar-usuario').focus();
+
+            // Conectar evento de búsqueda
+            setTimeout(() => {
+                const inputBuscar = document.getElementById('input-buscar-usuario');
+                if (inputBuscar) {
+                    inputBuscar.addEventListener('input', buscarUsuarios);
+                    inputBuscar.focus();
+                }
+            }, 100);
         }
 
         function cerrarChat() {
@@ -2313,16 +2321,283 @@
         }
 
         function cargarConversaciones() {
-            // TODO: Cargar conversaciones del usuario
             console.log('🔄 Cargando conversaciones...');
 
-            document.getElementById('lista-conversaciones').innerHTML = `
-                <div class="pastillero-vacio">
-                    <div class="pastillero-vacio-icon">💬</div>
-                    <p>No tienes conversaciones aún</p>
-                    <p style="font-size: 0.85rem; color: #888;">Busca un usuario arriba para iniciar una conversación</p>
+            fetch('/api/chat/conversaciones')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok && data.conversaciones.length > 0) {
+                        mostrarConversaciones(data.conversaciones);
+                    } else {
+                        document.getElementById('lista-conversaciones').innerHTML = `
+                            <div class="pastillero-vacio">
+                                <div class="pastillero-vacio-icon">💬</div>
+                                <p>No tienes conversaciones aún</p>
+                                <p style="font-size: 0.85rem; color: #888;">Busca un usuario arriba para iniciar una conversación</p>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(err => {
+                    console.error('Error al cargar conversaciones:', err);
+                    document.getElementById('lista-conversaciones').innerHTML = `
+                        <div class="pastillero-vacio">
+                            <div class="pastillero-vacio-icon">⚠️</div>
+                            <p>Error al cargar conversaciones</p>
+                        </div>
+                    `;
+                });
+        }
+
+        function mostrarConversaciones(conversaciones) {
+            const html = conversaciones.map(conv => {
+                const badgeNoLeidos = conv.no_leidos > 0 ?
+                    `<span style="background: #e74c3c; color: white; padding: 0.2rem 0.5rem; border-radius: 10px; font-size: 0.75rem; margin-left: auto;">${conv.no_leidos}</span>` : '';
+
+                return `
+                    <div class="medicamento-card" onclick="abrirConversacion(${conv.id}, '${conv.nombre}')" style="cursor: pointer;">
+                        <div class="medicamento-info">
+                            <div class="medicamento-nombre">
+                                <span style="font-size: 1.2rem; margin-right: 0.5rem;">👤</span>
+                                ${conv.nombre}
+                                ${badgeNoLeidos}
+                            </div>
+                            <div class="medicamento-detalle" style="font-size: 0.85rem; color: #888;">
+                                ${conv.telefono}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('lista-conversaciones').innerHTML = html;
+        }
+
+        // Variables globales para el chat
+        let conversacionActual = null;
+        let nombreUsuarioActual = '';
+
+        function abrirConversacion(usuarioId, nombreUsuario) {
+            conversacionActual = usuarioId;
+            nombreUsuarioActual = nombreUsuario;
+
+            console.log('📬 Abriendo conversación con:', nombreUsuario);
+
+            // Cambiar el modal a vista de conversación
+            document.getElementById('modal-chat').innerHTML = `
+                <div class="modal-pastillero-content">
+                    <div class="modal-pastillero-header">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button onclick="volverAListaConversaciones()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">←</button>
+                            <h2><span>👤</span> ${nombreUsuario}</h2>
+                        </div>
+                        <button class="btn-cerrar-modal" onclick="cerrarChat()">×</button>
+                    </div>
+                    <div class="modal-pastillero-body">
+                        <!-- Mensajes -->
+                        <div id="mensajes-chat" style="max-height: 400px; overflow-y: auto; padding: 1rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;">
+                            <div style="text-align: center; color: #888;">
+                                <p>Cargando mensajes...</p>
+                            </div>
+                        </div>
+
+                        <!-- Input para enviar mensaje -->
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input
+                                type="text"
+                                id="input-nuevo-mensaje"
+                                placeholder="Escribe un mensaje..."
+                                style="flex: 1; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.95rem;"
+                                onkeypress="if(event.key === 'Enter') enviarMensaje()"
+                            >
+                            <button onclick="enviarMensaje()" style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                                Enviar
+                            </button>
+                        </div>
+                    </div>
                 </div>
             `;
+
+            cargarMensajes(usuarioId);
+        }
+
+        function volverAListaConversaciones() {
+            conversacionActual = null;
+            nombreUsuarioActual = '';
+
+            // Restaurar el modal original
+            document.getElementById('modal-chat').innerHTML = `
+                <div class="modal-pastillero-content">
+                    <div class="modal-pastillero-header">
+                        <h2><span>💬</span> Mensajes</h2>
+                        <button class="btn-cerrar-modal" onclick="cerrarChat()">×</button>
+                    </div>
+                    <div class="modal-pastillero-body">
+                        <!-- Búsqueda de usuarios -->
+                        <div class="pastillero-busqueda">
+                            <input
+                                type="text"
+                                id="input-buscar-usuario"
+                                placeholder="Buscar usuario por nombre o teléfono..."
+                                autocomplete="off"
+                            >
+                            <div id="resultados-busqueda-usuarios" class="pastillero-sugerencias"></div>
+                        </div>
+
+                        <!-- Lista de conversaciones -->
+                        <div id="lista-conversaciones" style="margin-top: 1rem;">
+                            <div class="pastillero-vacio">
+                                <div class="pastillero-vacio-icon">💬</div>
+                                <p>No tienes conversaciones aún</p>
+                                <p style="font-size: 0.85rem; color: #888;">Busca un usuario arriba para iniciar una conversación</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Recargar conversaciones
+            cargarConversaciones();
+
+            // Reconectar el evento de búsqueda
+            setTimeout(() => {
+                const inputBuscar = document.getElementById('input-buscar-usuario');
+                if (inputBuscar) {
+                    inputBuscar.addEventListener('input', buscarUsuarios);
+                }
+            }, 100);
+        }
+
+        function cargarMensajes(usuarioId) {
+            fetch(`/api/chat/mensajes/${usuarioId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok) {
+                        mostrarMensajes(data.mensajes);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error al cargar mensajes:', err);
+                    document.getElementById('mensajes-chat').innerHTML = `
+                        <div style="text-align: center; color: #e74c3c;">
+                            <p>Error al cargar mensajes</p>
+                        </div>
+                    `;
+                });
+        }
+
+        function mostrarMensajes(mensajes) {
+            const usuarioId = parseInt(localStorage.getItem('usuario_id'));
+            const container = document.getElementById('mensajes-chat');
+
+            if (mensajes.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #888;">
+                        <p>No hay mensajes aún</p>
+                        <p style="font-size: 0.85rem;">Escribe algo para iniciar la conversación</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = mensajes.map(msg => {
+                const esMio = msg.remitente_id === usuarioId;
+                const align = esMio ? 'flex-end' : 'flex-start';
+                const bg = esMio ? '#3498db' : '#ecf0f1';
+                const color = esMio ? 'white' : '#333';
+
+                return `
+                    <div style="display: flex; justify-content: ${align}; margin-bottom: 0.75rem;">
+                        <div style="max-width: 70%; background: ${bg}; color: ${color}; padding: 0.75rem; border-radius: 12px;">
+                            <div style="font-size: 0.95rem; margin-bottom: 0.25rem;">${msg.mensaje}</div>
+                            <div style="font-size: 0.7rem; opacity: 0.7; text-align: right;">
+                                ${new Date(msg.fecha).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'})}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+
+            // Scroll al final
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function enviarMensaje() {
+            const input = document.getElementById('input-nuevo-mensaje');
+            const mensaje = input.value.trim();
+
+            if (!mensaje || !conversacionActual) return;
+
+            fetch('/api/chat/enviar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    destinatario_id: conversacionActual,
+                    mensaje: mensaje,
+                    tipo: 'texto'
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    input.value = '';
+                    cargarMensajes(conversacionActual);
+                }
+            })
+            .catch(err => console.error('Error al enviar mensaje:', err));
+        }
+
+        // Búsqueda de usuarios
+        let timeoutBusqueda = null;
+
+        function buscarUsuarios(event) {
+            const query = event.target.value.trim();
+
+            clearTimeout(timeoutBusqueda);
+
+            if (query.length < 2) {
+                document.getElementById('resultados-busqueda-usuarios').classList.remove('active');
+                return;
+            }
+
+            timeoutBusqueda = setTimeout(() => {
+                fetch(`/api/chat/buscar-usuarios?q=${encodeURIComponent(query)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.ok && data.usuarios.length > 0) {
+                            mostrarResultadosBusqueda(data.usuarios);
+                        } else {
+                            document.getElementById('resultados-busqueda-usuarios').innerHTML = `
+                                <div style="padding: 1rem; text-align: center; color: #888;">
+                                    No se encontraron usuarios
+                                </div>
+                            `;
+                            document.getElementById('resultados-busqueda-usuarios').classList.add('active');
+                        }
+                    })
+                    .catch(err => console.error('Error al buscar usuarios:', err));
+            }, 300);
+        }
+
+        function mostrarResultadosBusqueda(usuarios) {
+            const html = usuarios.map(u => `
+                <div class="sugerencia-item" onclick="seleccionarUsuario(${u.id}, '${u.nombre}')">
+                    <div style="font-weight: 600;">${u.nombre}</div>
+                    <div style="font-size: 0.85rem; color: #888;">${u.telefono}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('resultados-busqueda-usuarios').innerHTML = html;
+            document.getElementById('resultados-busqueda-usuarios').classList.add('active');
+        }
+
+        function seleccionarUsuario(usuarioId, nombreUsuario) {
+            document.getElementById('input-buscar-usuario').value = '';
+            document.getElementById('resultados-busqueda-usuarios').classList.remove('active');
+
+            abrirConversacion(usuarioId, nombreUsuario);
         }
 
         function cargarMedicamentosPastillero(orden = null, sintomas = null) {
@@ -4687,6 +4962,7 @@
                         placeholder="Buscar usuario por nombre o teléfono..."
                         autocomplete="off"
                     >
+                    <div id="resultados-busqueda-usuarios" class="pastillero-sugerencias"></div>
                 </div>
 
                 <!-- Lista de conversaciones -->

@@ -14171,6 +14171,190 @@ def obtener_categorias_publicas():
 
 
 # -------------------------------------------------------------------
+# --- ENDPOINTS DE CHAT Y MENSAJERÍA ---
+# -------------------------------------------------------------------
+
+@app.route('/api/chat/buscar-usuarios', methods=['GET'])
+def api_chat_buscar_usuarios():
+    """Buscar usuarios por nombre o teléfono para iniciar conversación"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    query = request.args.get('q', '').strip()
+    if len(query) < 2:
+        return jsonify({'ok': True, 'usuarios': []})
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        # Buscar usuarios por nombre o teléfono (excluyendo al usuario actual)
+        usuarios = conn.execute('''
+            SELECT id, nombre, telefono
+            FROM terceros
+            WHERE id != %s
+            AND (
+                LOWER(nombre) LIKE %s
+                OR telefono LIKE %s
+            )
+            ORDER BY nombre
+            LIMIT 10
+        ''', (usuario_id, f'%{query.lower()}%', f'%{query}%')).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'usuarios': [dict(u) for u in usuarios]
+        })
+    except Exception as e:
+        print(f"Error al buscar usuarios: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/conversaciones', methods=['GET'])
+def api_chat_conversaciones():
+    """Obtener lista de conversaciones del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        # Obtener conversaciones únicas con último mensaje
+        conversaciones = conn.execute('''
+            WITH ultima_interaccion AS (
+                SELECT
+                    CASE
+                        WHEN remitente_id = %s THEN destinatario_id
+                        ELSE remitente_id
+                    END as otro_usuario_id,
+                    MAX(fecha) as ultima_fecha
+                FROM mensajes
+                WHERE remitente_id = %s OR destinatario_id = %s
+                GROUP BY otro_usuario_id
+            )
+            SELECT
+                t.id,
+                t.nombre,
+                t.telefono,
+                ui.ultima_fecha,
+                (
+                    SELECT COUNT(*)
+                    FROM mensajes m
+                    WHERE m.remitente_id = t.id
+                    AND m.destinatario_id = %s
+                    AND m.estado = 'pendiente'
+                ) as no_leidos
+            FROM ultima_interaccion ui
+            INNER JOIN terceros t ON t.id = ui.otro_usuario_id
+            ORDER BY ui.ultima_fecha DESC
+        ''', (usuario_id, usuario_id, usuario_id, usuario_id)).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'conversaciones': [dict(c) for c in conversaciones]
+        })
+    except Exception as e:
+        print(f"Error al obtener conversaciones: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/mensajes/<int:otro_usuario_id>', methods=['GET'])
+def api_chat_mensajes(otro_usuario_id):
+    """Obtener mensajes de una conversación específica"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        # Marcar mensajes como leídos
+        conn.execute('''
+            UPDATE mensajes
+            SET estado = 'leido'
+            WHERE remitente_id = %s
+            AND destinatario_id = %s
+            AND estado = 'pendiente'
+        ''', (otro_usuario_id, usuario_id))
+
+        # Obtener mensajes de la conversación
+        mensajes = conn.execute('''
+            SELECT
+                m.id,
+                m.remitente_id,
+                m.destinatario_id,
+                m.mensaje,
+                m.tipo,
+                m.pastillero_id,
+                m.estado,
+                m.fecha,
+                t_rem.nombre as remitente_nombre,
+                t_dest.nombre as destinatario_nombre,
+                p.nombre as pastillero_nombre
+            FROM mensajes m
+            INNER JOIN terceros t_rem ON m.remitente_id = t_rem.id
+            INNER JOIN terceros t_dest ON m.destinatario_id = t_dest.id
+            LEFT JOIN pastilleros p ON m.pastillero_id = p.id
+            WHERE (m.remitente_id = %s AND m.destinatario_id = %s)
+               OR (m.remitente_id = %s AND m.destinatario_id = %s)
+            ORDER BY m.fecha ASC
+        ''', (usuario_id, otro_usuario_id, otro_usuario_id, usuario_id)).fetchall()
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensajes': [dict(m) for m in mensajes]
+        })
+    except Exception as e:
+        print(f"Error al obtener mensajes: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/enviar', methods=['POST'])
+def api_chat_enviar():
+    """Enviar un mensaje"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+
+    destinatario_id = data.get('destinatario_id')
+    mensaje = data.get('mensaje', '').strip()
+    tipo = data.get('tipo', 'texto')
+    pastillero_id = data.get('pastillero_id')
+
+    if not destinatario_id or not mensaje:
+        return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        conn.execute('''
+            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, pastillero_id, estado, fecha)
+            VALUES (%s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
+        ''', (usuario_id, destinatario_id, mensaje, tipo, pastillero_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        print(f"Error al enviar mensaje: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# -------------------------------------------------------------------
 # --- ZONA 7: INICIALIZACIN Y EJECUCIN DEL SERVIDOR ---
 # -------------------------------------------------------------------
 if __name__ == '__main__':

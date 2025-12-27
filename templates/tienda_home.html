@@ -1833,11 +1833,12 @@
             `;
         });
     }
-    
+
     if (diagnosticos.length === 0 && sintomas.length > 0) {
-        html = '<p style="color: #666; font-size: 0.9rem;">No se detectó un diagnóstico y/o tratamiento específico, pero encontramos medicamentos para tus síntomas y/o indicaciones.</p>';
+        // html = '<p style="color: #666; font-size: 0.9rem;">No se detectó un diagnóstico y/o tratamiento específico, pero encontramos medicamentos para tus síntomas y/o indicaciones.</p>';
+        html = ''; // Comentado temporalmente para reducir espacio visual
     }
-    
+
     content.innerHTML = html;
     
     if (sintomas.length > 0) {

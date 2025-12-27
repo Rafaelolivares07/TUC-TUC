@@ -12688,28 +12688,51 @@ def api_validar_token_vinculacion(token):
 def api_pastillero_count():
     """Obtener cantidad de medicamentos en el pastillero"""
     if 'usuario_id' not in session:
-        return jsonify({'ok': True, 'count': 0})
+        return jsonify({'ok': True, 'count': 0, 'nombre': 'Mi pastillero'})
 
     usuario_id = session['usuario_id']
 
     # Obtener pastillero activo del usuario
     pastillero_id = obtener_pastillero_activo(usuario_id)
     if not pastillero_id:
-        return jsonify({'ok': True, 'count': 0})
+        return jsonify({'ok': True, 'count': 0, 'nombre': 'Mi pastillero'})
 
     try:
         conn = get_db_connection()
+
+        # Obtener count y nombre del pastillero
         result = conn.execute('''
-            SELECT COUNT(*) as count
-            FROM pastillero_usuarios
-            WHERE pastillero_id = %s
+            SELECT
+                COUNT(pu.id) as count,
+                p.nombre as nombre_pastillero
+            FROM pastilleros p
+            LEFT JOIN pastillero_usuarios pu ON p.id = pu.pastillero_id
+            WHERE p.id = %s
+            GROUP BY p.id, p.nombre
         ''', (pastillero_id,)).fetchone()
 
+        # Si no hay resultado, obtener solo el nombre del pastillero
+        if not result:
+            nombre = conn.execute('''
+                SELECT nombre FROM pastilleros WHERE id = %s
+            ''', (pastillero_id,)).fetchone()
+
+            conn.close()
+            return jsonify({
+                'ok': True,
+                'count': 0,
+                'nombre': nombre['nombre'] if nombre else 'Mi pastillero'
+            })
+
         conn.close()
-        return jsonify({'ok': True, 'count': result['count']})
+        return jsonify({
+            'ok': True,
+            'count': result['count'],
+            'nombre': result['nombre_pastillero']
+        })
     except Exception as e:
         print(f"Error al contar pastillero: {e}")
-        return jsonify({'ok': True, 'count': 0})
+        return jsonify({'ok': True, 'count': 0, 'nombre': 'Mi pastillero'})
 
 
 @app.route('/api/pastillero/verificar/<medicamento_id>', methods=['GET'])

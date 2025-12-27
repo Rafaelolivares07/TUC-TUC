@@ -2957,8 +2957,15 @@
                 .then(res => res.json())
                 .then(data => {
                     const count = data.count || 0;
+                    const nombre = data.nombre || 'Mi pastillero';
                     totalMedicamentosPastillero = count;  // 🆕 Guardar total global
                     document.getElementById('pastilleroCount').textContent = count;
+
+                    // 🆕 Actualizar tooltip con el nombre del pastillero
+                    const btnPastillero = document.getElementById('pastillero-flotante');
+                    if (btnPastillero) {
+                        btnPastillero.setAttribute('title', nombre);
+                    }
                 })
                 .catch(err => console.error('Error al actualizar pastillero:', err));
         }

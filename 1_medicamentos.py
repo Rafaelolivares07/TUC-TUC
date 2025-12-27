@@ -13165,8 +13165,7 @@ def telegram_webhook():
                 enviar_mensaje_telegram(
                     chat_id,
                     f"📱 Tu Chat ID de Telegram es:\n\n<code>{chat_id}</code>\n\n"
-                    f"Puedes usar este ID para vinculación manual si tienes problemas.",
-                    parse_mode='HTML'
+                    f"Puedes usar este ID para vinculación manual si tienes problemas."
                 )
                 print(f"[INFO] Usuario solicitó chat_id: {chat_id}")
 

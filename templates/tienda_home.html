@@ -2518,18 +2518,23 @@
                     // - PostgreSQL: "2025-01-15 16:30:45"
                     // - ISO: "2025-01-15T16:30:45Z"
 
-                    const fecha = new Date(msg.fecha);
+                    // El servidor guarda en GMT la hora de Colombia
+                    // Ej: "Sat, 27 Dec 2025 16:34:47 GMT" significa que en Colombia son las 4:34 PM
+                    // Extraer la hora directamente del string sin conversión
+                    const match = msg.fecha.match(/(\d{2}):(\d{2}):(\d{2})/);
 
-                    if (isNaN(fecha.getTime())) {
-                        horaLocal = 'Hora inválida';
-                        console.error('Fecha inválida:', msg.fecha);
+                    if (match) {
+                        let hora = parseInt(match[1]);
+                        const minuto = match[2];
+                        const ampm = hora >= 12 ? 'p. m.' : 'a. m.';
+
+                        // Convertir a formato 12 horas
+                        if (hora === 0) hora = 12;
+                        else if (hora > 12) hora -= 12;
+
+                        horaLocal = `${hora}:${minuto} ${ampm}`;
                     } else {
-                        // Mostrar hora en formato 12 horas con AM/PM (sin conversión de timezone)
-                        horaLocal = fecha.toLocaleTimeString('es-CO', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                        });
+                        horaLocal = '--:--';
                     }
                 } catch (e) {
                     horaLocal = '--:--';

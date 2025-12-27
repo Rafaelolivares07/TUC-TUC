@@ -12322,6 +12322,33 @@ def registrar_uso_navegacion(id):
 #  RUTAS API DEL PASTILLERO
 # ============================================
 
+def obtener_pastillero_activo(usuario_id):
+    """
+    Obtener el pastillero activo del usuario.
+    Por ahora retorna el pastillero por defecto (donde es propietario).
+    En el futuro, retornará el pastillero seleccionado en session.
+    """
+    db = get_db_connection()
+
+    # Obtener el pastillero donde el usuario es propietario o miembro
+    pastillero = db.execute('''
+        SELECT p.id, p.nombre, rp.tipo
+        FROM pastilleros p
+        INNER JOIN relaciones_pastillero rp ON p.id = rp.pastillero_id
+        WHERE rp.usuario_id = %s
+        AND rp.tipo IN ('propietario', 'miembro')
+        ORDER BY rp.tipo DESC, p.id ASC
+        LIMIT 1
+    ''', (usuario_id,)).fetchone()
+
+    db.close()
+
+    if pastillero:
+        return pastillero['id']
+
+    return None
+
+
 @app.route('/api/crear-usuario-pastillero', methods=['POST'])
 def api_crear_usuario_pastillero():
     """Crear usuario rápido para acceder al pastillero sin checkout"""
@@ -12433,9 +12460,14 @@ def api_pastillero():
     """Obtener todos los medicamentos del pastillero del usuario"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    
+
     usuario_id = session['usuario_id']
-    
+
+    # Obtener pastillero activo del usuario
+    pastillero_id = obtener_pastillero_activo(usuario_id)
+    if not pastillero_id:
+        return jsonify({'ok': True, 'medicamentos': []})  # Usuario sin pastillero
+
     #  Aceptar parmetros por GET o POST
     if request.method == 'POST':
         data = request.get_json() or {}
@@ -12444,20 +12476,20 @@ def api_pastillero():
     else:  # GET
         orden = request.args.get('orden', 'recientes')
         sintomas_filtro = request.args.get('sintomas')
-    
+
     try:
         conn = get_db_connection()
-        
+
         # Determinar ORDER BY segn el parmetro
         if orden == 'alfabetico':
             # PostgreSQL: usar LOWER() en lugar de COLLATE NOCASE
             order_by = 'ORDER BY LOWER(p.nombre) ASC'
         else:  # recientes (por defecto)
             order_by = 'ORDER BY p.fecha_actualizado DESC'
-        
+
         #  Construir filtro WHERE para sntomas
         where_sintomas = ""
-        params = [usuario_id]
+        params = [pastillero_id]
         
         if sintomas_filtro:
             # Convertir string de sntomas separados por coma en lista
@@ -12489,7 +12521,7 @@ def api_pastillero():
             LEFT JOIN medicamentos m ON p.medicamento_id = m.id
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN sintomas s ON ms.sintoma_id = s.id
-            WHERE p.usuario_id = %s
+            WHERE p.pastillero_id = %s
             {where_sintomas}
             GROUP BY p.id, p.nombre, p.cantidad, p.unidad, p.medicamento_id, p.horas_entre_tomas, p.proxima_toma, p.recordatorio_activo
             {order_by}

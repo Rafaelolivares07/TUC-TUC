@@ -2511,17 +2511,38 @@
                 const color = esMio ? 'white' : '#333';
 
                 // Convertir fecha a hora de Colombia
-                // Si la fecha no incluye 'Z' o '+', asumimos que es UTC y agregamos 'Z'
-                let fechaStr = msg.fecha;
-                if (!fechaStr.includes('Z') && !fechaStr.includes('+') && !fechaStr.includes('-', 10)) {
-                    fechaStr += 'Z';
+                let horaLocal = '';
+                try {
+                    // PostgreSQL devuelve formato: "2025-01-15 16:30:45.123456"
+                    // Necesitamos convertirlo a ISO format agregando 'T' y 'Z'
+                    let fechaStr = msg.fecha;
+
+                    // Si tiene espacio, reemplazar por 'T' (formato ISO)
+                    if (fechaStr.includes(' ')) {
+                        fechaStr = fechaStr.replace(' ', 'T');
+                    }
+
+                    // Si no tiene zona horaria, agregar 'Z' (UTC)
+                    if (!fechaStr.includes('Z') && !fechaStr.includes('+') && !fechaStr.match(/[+-]\d{2}:\d{2}$/)) {
+                        fechaStr += 'Z';
+                    }
+
+                    const fecha = new Date(fechaStr);
+
+                    if (isNaN(fecha.getTime())) {
+                        horaLocal = 'Hora inválida';
+                        console.error('Fecha inválida:', msg.fecha);
+                    } else {
+                        horaLocal = fecha.toLocaleString('es-CO', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'America/Bogota'
+                        });
+                    }
+                } catch (e) {
+                    horaLocal = '--:--';
+                    console.error('Error al formatear fecha:', msg.fecha, e);
                 }
-                const fecha = new Date(fechaStr);
-                const horaLocal = fecha.toLocaleString('es-CO', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    timeZone: 'America/Bogota'
-                });
 
                 return `
                     <div style="display: flex; justify-content: ${align}; margin-bottom: 0.75rem;">

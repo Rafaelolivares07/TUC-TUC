@@ -2515,7 +2515,7 @@
                         <div style="max-width: 70%; background: ${bg}; color: ${color}; padding: 0.75rem; border-radius: 12px;">
                             <div style="font-size: 0.95rem; margin-bottom: 0.25rem;">${msg.mensaje}</div>
                             <div style="font-size: 0.7rem; opacity: 0.7; text-align: right;">
-                                ${new Date(msg.fecha).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit'})}
+                                ${new Date(msg.fecha).toLocaleTimeString('es-CO', {hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota'})}
                             </div>
                         </div>
                     </div>

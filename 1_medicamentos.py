@@ -12325,12 +12325,30 @@ def registrar_uso_navegacion(id):
 def obtener_pastillero_activo(usuario_id):
     """
     Obtener el pastillero activo del usuario.
-    Por ahora retorna el pastillero por defecto (donde es propietario).
-    En el futuro, retornará el pastillero seleccionado en session.
+    Prioridad:
+    1. Pastillero guardado en sesión (pastillero_activo_id)
+    2. Primer pastillero donde es propietario o miembro
     """
-    db = get_db_connection()
+    # Si hay un pastillero guardado en sesión, usarlo
+    if 'pastillero_activo_id' in session:
+        pastillero_id = session['pastillero_activo_id']
 
-    # Obtener el pastillero donde el usuario es propietario o miembro
+        # Verificar que el usuario todavía tiene acceso
+        db = get_db_connection()
+        acceso = db.execute('''
+            SELECT id FROM relaciones_pastillero
+            WHERE pastillero_id = %s AND usuario_id = %s
+        ''', (pastillero_id, usuario_id)).fetchone()
+        db.close()
+
+        if acceso:
+            return pastillero_id
+        else:
+            # Ya no tiene acceso, eliminar de sesión
+            del session['pastillero_activo_id']
+
+    # Obtener el primer pastillero donde es propietario o miembro
+    db = get_db_connection()
     pastillero = db.execute('''
         SELECT p.id, p.nombre, rp.tipo
         FROM pastilleros p
@@ -14351,6 +14369,241 @@ def api_chat_enviar():
         return jsonify({'ok': True})
     except Exception as e:
         print(f"Error al enviar mensaje: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# -------------------------------------------------------------------
+# --- ENDPOINTS DE GESTIÓN DE PASTILLEROS ---
+# -------------------------------------------------------------------
+
+@app.route('/api/pastilleros/mis-pastilleros', methods=['GET'])
+def api_mis_pastilleros():
+    """Obtener todos los pastilleros del usuario (propietario o miembro)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        pastilleros = conn.execute('''
+            SELECT
+                p.id,
+                p.nombre,
+                rp.tipo,
+                p.creado_por_usuario_id,
+                t.nombre as creador_nombre,
+                (SELECT COUNT(*) FROM pastillero_usuarios pu WHERE pu.pastillero_id = p.id) as total_medicamentos
+            FROM pastilleros p
+            INNER JOIN relaciones_pastillero rp ON p.id = rp.pastillero_id
+            LEFT JOIN terceros t ON p.creado_por_usuario_id = t.id
+            WHERE rp.usuario_id = %s
+            ORDER BY rp.tipo DESC, p.id ASC
+        ''', (usuario_id,)).fetchall()
+
+        conn.close()
+
+        # Obtener el pastillero activo actual
+        pastillero_activo = obtener_pastillero_activo(usuario_id)
+
+        return jsonify({
+            'ok': True,
+            'pastilleros': [dict(p) for p in pastilleros],
+            'activo_id': pastillero_activo
+        })
+    except Exception as e:
+        print(f"Error al obtener pastilleros: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastilleros/cambiar-activo', methods=['POST'])
+def api_cambiar_pastillero_activo():
+    """Cambiar el pastillero activo del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+    pastillero_id = data.get('pastillero_id')
+
+    if not pastillero_id:
+        return jsonify({'ok': False, 'error': 'Falta pastillero_id'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el usuario tiene acceso a este pastillero
+        acceso = conn.execute('''
+            SELECT id FROM relaciones_pastillero
+            WHERE pastillero_id = %s AND usuario_id = %s
+        ''', (pastillero_id, usuario_id)).fetchone()
+
+        if not acceso:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No tienes acceso a este pastillero'}), 403
+
+        # Guardar en sesión (por ahora, en el futuro podría ser en BD)
+        session['pastillero_activo_id'] = pastillero_id
+
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        print(f"Error al cambiar pastillero activo: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastilleros/crear', methods=['POST'])
+def api_crear_pastillero():
+    """Crear un nuevo pastillero"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Falta nombre del pastillero'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Crear pastillero
+        conn.execute('''
+            INSERT INTO pastilleros (nombre, creado_por_usuario_id)
+            VALUES (%s, %s)
+        ''', (nombre, usuario_id))
+
+        # Obtener el ID del pastillero creado
+        pastillero_id = conn.execute('''
+            SELECT id FROM pastilleros
+            WHERE creado_por_usuario_id = %s
+            ORDER BY id DESC LIMIT 1
+        ''', (usuario_id,)).fetchone()['id']
+
+        # Crear relación de propietario
+        conn.execute('''
+            INSERT INTO relaciones_pastillero (pastillero_id, usuario_id, tipo)
+            VALUES (%s, %s, 'propietario')
+        ''', (pastillero_id, usuario_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'pastillero_id': pastillero_id})
+    except Exception as e:
+        print(f"Error al crear pastillero: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastilleros/compartir', methods=['POST'])
+def api_compartir_pastillero():
+    """Enviar invitación para compartir pastillero"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+
+    pastillero_id = data.get('pastillero_id')
+    destinatario_id = data.get('destinatario_id')
+    tipo_acceso = data.get('tipo_acceso', 'miembro')  # 'miembro' o 'autorizado'
+
+    if not pastillero_id or not destinatario_id:
+        return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el usuario es propietario del pastillero
+        es_propietario = conn.execute('''
+            SELECT id FROM relaciones_pastillero
+            WHERE pastillero_id = %s AND usuario_id = %s AND tipo = 'propietario'
+        ''', (pastillero_id, usuario_id)).fetchone()
+
+        if not es_propietario:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Solo el propietario puede compartir'}), 403
+
+        # Obtener nombre del pastillero
+        pastillero = conn.execute('''
+            SELECT nombre FROM pastilleros WHERE id = %s
+        ''', (pastillero_id,)).fetchone()
+
+        # Crear mensaje de invitación
+        tipo_msg = 'invitacion_compartir' if tipo_acceso == 'miembro' else 'solicitud_acceso'
+        mensaje_texto = f"Te invito a {'compartir' if tipo_acceso == 'miembro' else 'ver'} mi pastillero '{pastillero['nombre']}'"
+
+        conn.execute('''
+            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, pastillero_id, estado, fecha)
+            VALUES (%s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
+        ''', (usuario_id, destinatario_id, mensaje_texto, tipo_msg, pastillero_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        print(f"Error al compartir pastillero: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastilleros/responder-invitacion', methods=['POST'])
+def api_responder_invitacion():
+    """Aceptar o rechazar invitación de pastillero"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+
+    mensaje_id = data.get('mensaje_id')
+    aceptar = data.get('aceptar', False)
+
+    if not mensaje_id:
+        return jsonify({'ok': False, 'error': 'Falta mensaje_id'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Obtener el mensaje
+        mensaje = conn.execute('''
+            SELECT * FROM mensajes
+            WHERE id = %s AND destinatario_id = %s
+        ''', (mensaje_id, usuario_id)).fetchone()
+
+        if not mensaje:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Mensaje no encontrado'}), 404
+
+        if aceptar:
+            # Determinar el tipo de acceso
+            tipo = 'miembro' if mensaje['tipo'] == 'invitacion_compartir' else 'autorizado'
+
+            # Agregar al pastillero
+            conn.execute('''
+                INSERT INTO relaciones_pastillero (pastillero_id, usuario_id, tipo)
+                VALUES (%s, %s, %s)
+                ON CONFLICT DO NOTHING
+            ''', (mensaje['pastillero_id'], usuario_id, tipo))
+
+            # Marcar mensaje como aceptado
+            conn.execute('''
+                UPDATE mensajes SET estado = 'aceptado' WHERE id = %s
+            ''', (mensaje_id,))
+        else:
+            # Marcar mensaje como rechazado
+            conn.execute('''
+                UPDATE mensajes SET estado = 'rechazado' WHERE id = %s
+            ''', (mensaje_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        print(f"Error al responder invitación: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

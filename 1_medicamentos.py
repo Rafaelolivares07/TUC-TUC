@@ -10957,6 +10957,69 @@ def crear_tabla_tokens_vinculacion():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/diagnostico-pastillero', methods=['GET'])
+@admin_required
+def diagnostico_pastillero():
+    """Endpoint para diagnosticar estado del pastillero y recordatorios"""
+    try:
+        db = get_db_connection()
+
+        ahora = datetime.now()
+
+        # Obtener todos los medicamentos del pastillero con recordatorio activo
+        pastillero = db.execute('''
+            SELECT
+                p.id,
+                p.usuario_id,
+                p.nombre,
+                p.cantidad,
+                p.horas_entre_tomas,
+                p.proxima_toma,
+                p.recordatorio_activo,
+                t.nombre as usuario_nombre,
+                t.telegram_chat_id
+            FROM pastillero_usuarios p
+            INNER JOIN terceros t ON p.usuario_id = t.id
+            WHERE p.recordatorio_activo = TRUE
+            ORDER BY p.proxima_toma
+        ''').fetchall()
+
+        resultado = {
+            'hora_servidor': ahora.strftime('%Y-%m-%d %H:%M:%S'),
+            'total_recordatorios_activos': len(pastillero),
+            'medicamentos': []
+        }
+
+        for med in pastillero:
+            proxima_toma = med['proxima_toma']
+            if proxima_toma:
+                if isinstance(proxima_toma, str):
+                    from dateutil import parser
+                    proxima_toma = parser.parse(proxima_toma)
+
+                diferencia = (proxima_toma - ahora).total_seconds() / 60  # en minutos
+                estado = 'VENCIDO' if diferencia < 0 else 'PENDIENTE'
+
+                resultado['medicamentos'].append({
+                    'id': med['id'],
+                    'nombre': med['nombre'],
+                    'usuario': med['usuario_nombre'],
+                    'telegram_chat_id': med['telegram_chat_id'],
+                    'cantidad': med['cantidad'],
+                    'horas_entre_tomas': med['horas_entre_tomas'],
+                    'proxima_toma': proxima_toma.strftime('%Y-%m-%d %H:%M:%S'),
+                    'diferencia_minutos': round(diferencia, 1),
+                    'estado': estado
+                })
+
+        db.close()
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/admin/terceros/guardar-campo', methods=['POST'])
 def guardar_campo_tercero():
     data = request.get_json()

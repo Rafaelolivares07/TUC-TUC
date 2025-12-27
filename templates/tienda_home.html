@@ -2513,21 +2513,12 @@
                 // Convertir fecha a hora de Colombia
                 let horaLocal = '';
                 try {
-                    // PostgreSQL devuelve formato: "2025-01-15 16:30:45.123456"
-                    // Necesitamos convertirlo a ISO format agregando 'T' y 'Z'
-                    let fechaStr = msg.fecha;
+                    // La fecha puede venir en varios formatos:
+                    // - GMT: "Sat, 27 Dec 2025 16:34:47 GMT"
+                    // - PostgreSQL: "2025-01-15 16:30:45"
+                    // - ISO: "2025-01-15T16:30:45Z"
 
-                    // Si tiene espacio, reemplazar por 'T' (formato ISO)
-                    if (fechaStr.includes(' ')) {
-                        fechaStr = fechaStr.replace(' ', 'T');
-                    }
-
-                    // Si no tiene zona horaria, agregar 'Z' (UTC)
-                    if (!fechaStr.includes('Z') && !fechaStr.includes('+') && !fechaStr.match(/[+-]\d{2}:\d{2}$/)) {
-                        fechaStr += 'Z';
-                    }
-
-                    const fecha = new Date(fechaStr);
+                    const fecha = new Date(msg.fecha);
 
                     if (isNaN(fecha.getTime())) {
                         horaLocal = 'Hora inválida';

@@ -2956,9 +2956,9 @@
             })
             .catch(err => console.error('Error:', err));
         }
-        
-        // Búsqueda y autocompletado
-        let timeoutBusqueda;
+
+        // Búsqueda y autocompletado de medicamentos en pastillero
+        let timeoutBusquedaMedicamentos;
         let sugerenciaActiva = -1; // Índice de la sugerencia seleccionada
         
         document.addEventListener('DOMContentLoaded', function() {
@@ -2967,16 +2967,16 @@
             
             input.addEventListener('input', function() {
                 const query = this.value.trim();
-                
-                clearTimeout(timeoutBusqueda);
+
+                clearTimeout(timeoutBusquedaMedicamentos);
                 sugerenciaActiva = -1; // Reset al escribir
-                
+
                 if (query.length < 2) {
                     sugerencias.classList.remove('active');
                     return;
                 }
-                
-                timeoutBusqueda = setTimeout(() => {
+
+                timeoutBusquedaMedicamentos = setTimeout(() => {
                     buscarMedicamentosParaPastillero(query);
                 }, 300);
             });

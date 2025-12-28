@@ -1154,7 +1154,7 @@
         
         <!-- 🆕 Diagnósticos Detectados -->
         <div id="diagnosticosDetectados" style="display: none;" class="diagnosticos-detectados">
-            <h4>🩺 Análisis de tus síntomas:</h4>
+            <!-- <h4>🩺 Análisis de tus síntomas:</h4> -->
             <div id="diagnosticosContent"></div>
             <div id="sintomasDetectados" class="sintomas-detectados"></div>
         </div>
@@ -1922,9 +1922,9 @@
     content.innerHTML = html;
     
     if (sintomas.length > 0) {
-        const tituloSintomas = esBusquedaParcial 
+        const tituloSintomas = esBusquedaParcial
             ? '💡 Posibles síntomas: ¿se refiere a alguno de estos? Agregue palabras para refinar su búsqueda y así encontremos los mejores resultados'
-            : 'Síntomas y/o indicaciones detectadas:';
+            : 'Síntomas y/o indicaciones:';
         
         sintomasDiv.innerHTML = `
             <strong style="display: block; margin-bottom: 0.5rem; color: #667eea;">${tituloSintomas}</strong>

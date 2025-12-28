@@ -1332,16 +1332,19 @@
         // 🆕 Cargar todos los productos con paginación
         async function cargarTodosLosProductos() {
             try {
+                console.log('🔥 cargarTodosLosProductos() llamada');
                 mostrandoTodosLosProductos = true;
                 document.getElementById('productosContainer').innerHTML = '<div class="loading">Cargando todos los productos...</div>';
 
                 const response = await fetch('/api/productos');
                 const data = await response.json();
+                console.log(`📦 Productos recibidos: ${data.productos ? data.productos.length : 0}`);
 
                 if (data.ok && data.productos && data.productos.length > 0) {
                     todosLosProductos = data.productos;
                     productosMostradosEnTienda = data.productos;
                     paginaActual = 1;
+                    console.log(`📄 Mostrando página 1 con ${productosPorPagina} productos`);
                     mostrarProductosPaginados();
                 } else {
                     document.getElementById('productosContainer').innerHTML = `
@@ -1363,6 +1366,8 @@
             const productosPagina = todosLosProductos.slice(inicio, fin);
 
             const totalPaginas = Math.ceil(todosLosProductos.length / productosPorPagina);
+
+            console.log(`✂️ Slice: inicio=${inicio}, fin=${fin}, productos en página=${productosPagina.length}, total=${todosLosProductos.length}, páginas=${totalPaginas}`);
 
             // Mostrar productos
             mostrarProductos(productosPagina, { total: todosLosProductos.length });

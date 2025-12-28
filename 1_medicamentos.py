@@ -3093,12 +3093,36 @@ def obtener_productos():
             params.append(permitir_sin_cotizaciones)
 
             # Aplicar paginación: primero contar total, luego limitar
-            count_query = query.replace("SELECT DISTINCT p.id as precio_id", "SELECT COUNT(DISTINCT p.id)")
-            # Remover todo después de FROM para el count
-            from_index = count_query.find("FROM precios")
-            count_query_clean = "SELECT COUNT(DISTINCT p.id) " + count_query[from_index:]
+            # Construir count query desde cero usando la misma estructura
+            count_query = """
+                SELECT COUNT(DISTINCT p.id)
+                FROM precios p
+                INNER JOIN medicamentos m ON p.medicamento_id = m.id
+                INNER JOIN fabricantes f ON p.fabricante_id = f.id
+                LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
+                LEFT JOIN (
+                    SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
+                    FROM precios_competencia
+                    GROUP BY medicamento_id, fabricante_id
+                ) cot ON p.medicamento_id = cot.medicamento_id AND p.fabricante_id = cot.fabricante_id
+                WHERE m.activo = '1'
+            """
 
-            total_productos = conn.execute(count_query_clean, params).fetchone()[0]
+            # Aplicar mismo filtro de categoría si existe
+            count_params = []
+            if categoria_id:
+                count_query += """
+                    AND m.id IN (
+                        SELECT medicamento_id FROM medicamento_categoria
+                        WHERE categoria_id = %s
+                    )
+                """
+                count_params.append(int(categoria_id))
+
+            count_query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
+            count_params.append(permitir_sin_cotizaciones)
+
+            total_productos = conn.execute(count_query, count_params).fetchone()[0]
 
             # Aplicar LIMIT y OFFSET para paginación
             offset = (page - 1) * limit

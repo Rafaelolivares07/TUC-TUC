@@ -275,7 +275,15 @@
             cargarProductosCategoria(categoriaId);
 
             // Cargar automáticamente todos los productos disponibles
-            cargarTodosLosProductosDisponibles();
+            await cargarTodosLosProductosDisponibles();
+
+            // Hacer foco en el input de búsqueda para que el dropdown sea visible
+            setTimeout(() => {
+                const inputBusqueda = document.getElementById('buscar-medicamento');
+                if (inputBusqueda) {
+                    inputBusqueda.focus();
+                }
+            }, 100);
         }
 
         function cerrarModalProductos() {

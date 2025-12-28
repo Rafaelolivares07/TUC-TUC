@@ -1485,14 +1485,10 @@
 
         // Cargar categorías y productos al inicio
         window.addEventListener('DOMContentLoaded', () => {
-            cargarCategorias().then(() => {
-                // Después de cargar categorías, cargar productos de la categoría destacada
-                if (categoriaActiva) {
-                    filtrarPorCategoria(categoriaActiva);
-                } else {
-                    cargarProductosIniciales();
-                }
-            });
+            cargarCategorias();
+            // ⚠️ NOTA: cargarCategorias() ya maneja la carga de productos automáticamente:
+            // - Si hay categoría destacada → carga esa categoría
+            // - Si NO hay categoría destacada → carga todos los productos CON PAGINACIÓN
         });
 
         // Función para auto-expandir el textarea

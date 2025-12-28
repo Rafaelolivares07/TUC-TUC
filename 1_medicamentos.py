@@ -2490,7 +2490,21 @@ def obtener_productos():
         precio_min = request.args.get('precio_min', '')
         precio_max = request.args.get('precio_max', '')
         busqueda_sintomas = request.args.get('sintomas_busqueda', '').strip()
-        categoria_id = request.args.get('categoria_id', '').strip()  # Nuevo parámetro
+        categoria_id = request.args.get('categoria_id', '').strip()
+
+        # Parámetros de paginación
+        page = request.args.get('page', '1')
+        limit = request.args.get('limit', '30')
+        try:
+            page = int(page)
+            limit = int(limit)
+            if page < 1:
+                page = 1
+            if limit < 1 or limit > 100:
+                limit = 30
+        except ValueError:
+            page = 1
+            limit = 30
 
         try:
             conn = get_db_connection()
@@ -3074,13 +3088,22 @@ def obtener_productos():
                     )
                 """
                 params.append(int(categoria_id))
-                # Si hay categoría específica, limitar a 50
-                query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre LIMIT 50"
-            else:
-                # Si NO hay categoría, devolver TODOS los productos (para paginación en frontend)
-                query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre"
 
+            query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre"
             params.append(permitir_sin_cotizaciones)
+
+            # Aplicar paginación: primero contar total, luego limitar
+            count_query = query.replace("SELECT DISTINCT p.id as precio_id", "SELECT COUNT(DISTINCT p.id)")
+            # Remover todo después de FROM para el count
+            from_index = count_query.find("FROM precios")
+            count_query_clean = "SELECT COUNT(DISTINCT p.id) " + count_query[from_index:]
+
+            total_productos = conn.execute(count_query_clean, params).fetchone()[0]
+
+            # Aplicar LIMIT y OFFSET para paginación
+            offset = (page - 1) * limit
+            query += f" LIMIT {limit} OFFSET {offset}"
+
             productos = conn.execute(query, params).fetchall()
 
         total_disponible = len(productos)
@@ -3375,6 +3398,10 @@ def obtener_productos():
         
             diagnosticos_response.append(diag_response)
     
+        # Calcular información de paginación
+        total_count = total_productos if 'total_productos' in locals() else len(productos_con_score)
+        total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+
         return jsonify({
             'ok': True,
             'productos': productos_con_score,
@@ -3385,7 +3412,14 @@ def obtener_productos():
             'diagnosticos_posibles': diagnosticos_response,
             'diagnosticos_directos': diagnosticos_detectados_directo,
             'sintomas_sobrantes': sintomas_sobrantes,  #  Sntomas que no estn en el diagnstico
-            'busqueda_parcial': busqueda_parcial_aplicada  #  Flag para mostrar mensaje especial en frontend
+            'busqueda_parcial': busqueda_parcial_aplicada,  #  Flag para mostrar mensaje especial en frontend
+            # Información de paginación
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total_items': total_count,
+                'total_pages': total_pages
+            }
         })
     except Exception as e:
         print(f"\nERROR CRITICO en /api/productos: {e}")

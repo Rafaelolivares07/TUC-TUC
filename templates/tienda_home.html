@@ -1329,23 +1329,29 @@
             }
         }
 
-        // 🆕 Cargar todos los productos con paginación
-        async function cargarTodosLosProductos() {
+        // 🆕 Cargar productos con paginación desde el servidor
+        async function cargarTodosLosProductos(page = 1) {
             try {
-                console.log('🔥 cargarTodosLosProductos() llamada');
+                console.log(`🔥 cargarTodosLosProductos() página ${page}`);
                 mostrandoTodosLosProductos = true;
-                document.getElementById('productosContainer').innerHTML = '<div class="loading">Cargando todos los productos...</div>';
+                paginaActual = page;
+                document.getElementById('productosContainer').innerHTML = '<div class="loading">Cargando productos...</div>';
 
-                const response = await fetch('/api/productos');
+                // ⚡ Petición al servidor CON paginación
+                const response = await fetch(`/api/productos?page=${page}&limit=${productosPorPagina}`);
                 const data = await response.json();
-                console.log(`📦 Productos recibidos: ${data.productos ? data.productos.length : 0}`);
+                console.log(`📦 Productos recibidos: ${data.productos ? data.productos.length : 0} de ${data.pagination?.total_items || 0}`);
 
                 if (data.ok && data.productos && data.productos.length > 0) {
-                    todosLosProductos = data.productos;
                     productosMostradosEnTienda = data.productos;
-                    paginaActual = 1;
-                    console.log(`📄 Mostrando página 1 con ${productosPorPagina} productos`);
-                    mostrarProductosPaginados();
+
+                    // Mostrar productos
+                    mostrarProductos(data.productos, data);
+
+                    // Mostrar botones de paginación con info del servidor
+                    if (data.pagination) {
+                        mostrarBotonesPaginacionServidor(data.pagination);
+                    }
                 } else {
                     document.getElementById('productosContainer').innerHTML = `
                         <div class="sin-resultados" style="text-align: center; padding: 3rem 1.5rem;">
@@ -1354,37 +1360,20 @@
                     `;
                 }
             } catch (error) {
-                console.error('Error cargando todos los productos:', error);
+                console.error('Error cargando productos:', error);
                 document.getElementById('productosContainer').innerHTML = '<div class="sin-resultados">Error al cargar productos</div>';
             }
         }
 
-        // 🆕 Mostrar productos paginados
-        function mostrarProductosPaginados() {
-            const inicio = (paginaActual - 1) * productosPorPagina;
-            const fin = inicio + productosPorPagina;
-            const productosPagina = todosLosProductos.slice(inicio, fin);
-
-            const totalPaginas = Math.ceil(todosLosProductos.length / productosPorPagina);
-
-            console.log(`✂️ Slice: inicio=${inicio}, fin=${fin}, productos en página=${productosPagina.length}, total=${todosLosProductos.length}, páginas=${totalPaginas}`);
-
-            // Mostrar productos
-            mostrarProductos(productosPagina, { total: todosLosProductos.length });
-
-            // Mostrar botones de paginación
-            mostrarBotonesPaginacion(totalPaginas);
-        }
-
-        // 🆕 Mostrar botones de paginación
-        function mostrarBotonesPaginacion(totalPaginas) {
+        // 🆕 Mostrar botones de paginación con datos del servidor
+        function mostrarBotonesPaginacionServidor(pagination) {
             const container = document.getElementById('productosContainer');
-            const totalProductos = todosLosProductos.length;
+            const { page, total_pages, total_items } = pagination;
 
             const botonesHTML = `
                 <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem; padding: 1rem;">
-                    ${paginaActual > 1 ? `
-                        <button onclick="cambiarPagina(${paginaActual - 1})" style="
+                    ${page > 1 ? `
+                        <button onclick="cambiarPaginaServidor(${page - 1})" style="
                             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                             color: white;
                             border: none;
@@ -1400,11 +1389,11 @@
                     ` : ''}
 
                     <span style="color: #666; font-weight: 600;">
-                        Página ${paginaActual} de ${totalPaginas} (${totalProductos} productos)
+                        Página ${page} de ${total_pages} (${total_items} productos)
                     </span>
 
-                    ${paginaActual < totalPaginas ? `
-                        <button onclick="cambiarPagina(${paginaActual + 1})" style="
+                    ${page < total_pages ? `
+                        <button onclick="cambiarPaginaServidor(${page + 1})" style="
                             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                             color: white;
                             border: none;
@@ -1424,10 +1413,9 @@
             container.insertAdjacentHTML('beforeend', botonesHTML);
         }
 
-        // 🆕 Cambiar de página
-        function cambiarPagina(nuevaPagina) {
-            paginaActual = nuevaPagina;
-            mostrarProductosPaginados();
+        // 🆕 Cambiar de página (servidor)
+        function cambiarPaginaServidor(nuevaPagina) {
+            cargarTodosLosProductos(nuevaPagina);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 

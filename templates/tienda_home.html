@@ -469,27 +469,23 @@
             left: 90px;  /* A la derecha del pastillero */
             background: #3498db;
             color: white;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: none;
+            padding: 0.6rem 1rem;
+            border-radius: 20px;
+            display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
+            font-size: 0.95rem;
+            font-weight: 600;
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 1000;
-            opacity: 0;
+            white-space: nowrap;
         }
 
         .chat-flotante:hover {
-            transform: scale(1.1);
-        }
-
-        .chat-flotante.visible {
-            display: flex;
-            opacity: 1;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(52, 152, 219, 0.5);
         }
 
         .chat-badge {
@@ -1061,11 +1057,6 @@
         <div class="container" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
 
            <div id="titulo-principal" style="text-align: center; width: 100%; transition: all 0.5s ease; margin: 0.15rem 0; position: relative;">
-               <!-- 🆕 Nombre de usuario en header -->
-               <div id="usuario-header" style="display: none; position: absolute; top: 0; right: 0; color: #f8f9fa; font-size: 0.9rem; background: rgba(255,255,255,0.15); padding: 0.4rem 0.8rem; border-radius: 20px; font-weight: 600;">
-                   <span style="margin-right: 0.3rem;">👤</span>
-                   <span id="usuario-nombre-header">Hola, Usuario</span>
-               </div>
                <h1 id="titulo-h1" style="margin: 0;">MAS QUE MEDICAMENTOS</h1>
                <p id="subtitulo-p" style="margin: 0.09rem 0;">Domicilio 30 minutos - Gratis en compras superiores a $50.000</p>
            </div>
@@ -1215,7 +1206,8 @@
     <!-- Carrito Flotante -->
     <!-- 🆕 BOTÓN FLOTANTE CHAT (lado izquierdo superior) -->
     <div id="chat-flotante" class="chat-flotante" onclick="abrirChat()" title="Mensajes">
-        💬
+        <span id="usuario-nombre-chat">Usuario</span>
+        <span style="margin-left: 0.3rem;">💬</span>
         <span class="chat-badge" id="chatCount" style="display: none;">0</span>
     </div>
 
@@ -2167,6 +2159,20 @@
         function actualizarBadgeCarrito() {
             const total = carrito.reduce((sum, item) => sum + item.cantidad, 0);
             document.getElementById('carritoCount').textContent = total;
+
+            // Actualizar visibilidad del carrito flotante
+            const carritoFlotante = document.querySelector('.carrito-flotante');
+            const header = document.querySelector('.header');
+
+            if (carritoFlotante && header) {
+                const headerRect = header.getBoundingClientRect();
+                // Visible si: tiene al menos 1 item O el header está oculto
+                if (total >= 1 || headerRect.bottom < 0) {
+                    carritoFlotante.classList.add('visible');
+                } else {
+                    carritoFlotante.classList.remove('visible');
+                }
+            }
         }
         
         // 🆕 FUNCIONES DEL PASTILLERO
@@ -3750,11 +3756,15 @@
         
         document.body.appendChild(scrollButton);
         
-        // Control de visibilidad del carrito, pastillero y chat flotantes según header
+        // Control de visibilidad de los botones flotantes
         const carritoFlotante = document.querySelector('.carrito-flotante');
         const pastilleroFlotante = document.querySelector('.pastillero-flotante');
         const chatFlotante = document.querySelector('.chat-flotante');
         const header = document.querySelector('.header');
+
+        // Pastillero y Chat siempre visibles
+        pastilleroFlotante.classList.add('visible');
+        chatFlotante.classList.add('visible');
 
         window.addEventListener('scroll', function() {
             // Botón scroll to top
@@ -3764,18 +3774,16 @@
                 scrollButton.style.display = 'none';
             }
 
-            // Carrito, Pastillero y Chat flotantes: mostrar cuando header desaparece
+            // Carrito flotante: visible si tiene items O si header desaparece
             if (header) {
                 const headerRect = header.getBoundingClientRect();
-                // Si el header está fuera de la vista (arriba)
-                if (headerRect.bottom < 0) {
+                const carritoCount = parseInt(document.getElementById('carritoCount')?.textContent || '0');
+
+                // Visible si: tiene al menos 1 item O el header está oculto
+                if (carritoCount >= 1 || headerRect.bottom < 0) {
                     carritoFlotante.classList.add('visible');
-                    pastilleroFlotante.classList.add('visible');
-                    chatFlotante.classList.add('visible');
                 } else {
                     carritoFlotante.classList.remove('visible');
-                    pastilleroFlotante.classList.remove('visible');
-                    chatFlotante.classList.remove('visible');
                 }
             }
         });
@@ -4450,13 +4458,10 @@
             // Extraer primer nombre (antes del primer espacio)
             const primerNombre = nombre.split(' ')[0];
 
-            // Actualizar header principal
-            const usuarioHeader = document.getElementById('usuario-header');
-            const usuarioNombreHeader = document.getElementById('usuario-nombre-header');
-
-            if (usuarioHeader && usuarioNombreHeader) {
-                usuarioNombreHeader.textContent = `Hola, ${primerNombre}`;
-                usuarioHeader.style.display = 'block';
+            // Actualizar botón flotante del chat con nombre de usuario
+            const usuarioNombreChat = document.getElementById('usuario-nombre-chat');
+            if (usuarioNombreChat) {
+                usuarioNombreChat.textContent = primerNombre;
             }
 
             // Actualizar título del modal pastillero

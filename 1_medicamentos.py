@@ -3089,17 +3089,15 @@ def obtener_productos():
                 """
                 params.append(int(categoria_id))
 
-            query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0 ORDER BY m.nombre"
+            query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
             params.append(permitir_sin_cotizaciones)
 
-            # Aplicar paginación: primero contar total, luego limitar
-            # Construir count query desde cero usando la misma estructura
-            count_query = """
-                SELECT COUNT(DISTINCT p.id)
+            # Aplicar paginación: primero obtener precio_ids únicos paginados
+            # Esto evita que el LIMIT se aplique a las filas antes del agrupamiento
+            subquery_precios = """
+                SELECT DISTINCT p.id
                 FROM precios p
                 INNER JOIN medicamentos m ON p.medicamento_id = m.id
-                INNER JOIN fabricantes f ON p.fabricante_id = f.id
-                LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
                 LEFT JOIN (
                     SELECT medicamento_id, fabricante_id, COUNT(*) as num_cotizaciones
                     FROM precios_competencia
@@ -3108,25 +3106,31 @@ def obtener_productos():
                 WHERE m.activo = '1'
             """
 
-            # Aplicar mismo filtro de categoría si existe
-            count_params = []
+            subquery_params = []
             if categoria_id:
-                count_query += """
+                subquery_precios += """
                     AND m.id IN (
                         SELECT medicamento_id FROM medicamento_categoria
                         WHERE categoria_id = %s
                     )
                 """
-                count_params.append(int(categoria_id))
+                subquery_params.append(int(categoria_id))
 
-            count_query += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
-            count_params.append(permitir_sin_cotizaciones)
+            subquery_precios += " AND (%s = 1 OR COALESCE(cot.num_cotizaciones, 0) > 0) AND p.precio > 0"
+            subquery_params.append(permitir_sin_cotizaciones)
 
-            total_productos = conn.execute(count_query, count_params).fetchone()[0]
+            # Contar total de productos únicos
+            count_query = f"SELECT COUNT(*) FROM ({subquery_precios})"
+            total_productos = conn.execute(count_query, subquery_params).fetchone()[0]
 
-            # Aplicar LIMIT y OFFSET para paginación
+            # Aplicar LIMIT y OFFSET a los precio_ids únicos
             offset = (page - 1) * limit
-            query += f" LIMIT {limit} OFFSET {offset}"
+            subquery_precios += f" ORDER BY m.nombre LIMIT {limit} OFFSET {offset}"
+
+            # Usar los precio_ids paginados en el query principal
+            query += f" AND p.id IN ({subquery_precios})"
+            params.extend(subquery_params)
+            query += " ORDER BY m.nombre"
 
             productos = conn.execute(query, params).fetchall()
 

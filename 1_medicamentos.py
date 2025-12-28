@@ -3120,7 +3120,7 @@ def obtener_productos():
             subquery_params.append(permitir_sin_cotizaciones)
 
             # Contar total de productos únicos
-            count_query = f"SELECT COUNT(*) FROM ({subquery_precios})"
+            count_query = f"SELECT COUNT(*) FROM ({subquery_precios}) AS subq"
             total_productos = conn.execute(count_query, subquery_params).fetchone()[0]
 
             # Aplicar LIMIT y OFFSET a los precio_ids únicos

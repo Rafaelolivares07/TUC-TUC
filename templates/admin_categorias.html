@@ -273,6 +273,9 @@
             document.getElementById('modal-productos').classList.add('flex');
 
             cargarProductosCategoria(categoriaId);
+
+            // Cargar automáticamente todos los productos disponibles
+            cargarTodosLosProductosDisponibles();
         }
 
         function cerrarModalProductos() {
@@ -329,6 +332,20 @@
         let indiceBusqueda = -1;
         let resultadosBusqueda = [];
 
+        async function cargarTodosLosProductosDisponibles() {
+            try {
+                const res = await fetch('/api/medicamentos/buscar?q=');
+                const data = await res.json();
+
+                if (data.ok && data.medicamentos) {
+                    resultadosBusqueda = data.medicamentos;
+                    renderizarResultadosBusqueda();
+                }
+            } catch (error) {
+                console.error('Error cargando todos los productos:', error);
+            }
+        }
+
         async function buscarMedicamentos(event) {
             // Si es flecha arriba/abajo o Enter, no buscar
             if (event && [38, 40, 13].includes(event.keyCode)) {
@@ -340,10 +357,9 @@
             const dropdown = document.getElementById('resultados-busqueda');
             indiceBusqueda = -1;
 
-            if (query.length < 2) {
-                dropdown.innerHTML = '';
-                dropdown.style.display = 'none';
-                resultadosBusqueda = [];
+            // Si el query está vacío, mostrar todos los productos
+            if (query.length === 0) {
+                cargarTodosLosProductosDisponibles();
                 return;
             }
 

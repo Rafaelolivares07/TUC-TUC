@@ -1296,6 +1296,12 @@
         let categoriaActiva = null;
         let categorias = [];
 
+        // Variables globales para paginación
+        let paginaActual = 1;
+        let productosPorPagina = 30;
+        let todosLosProductos = [];
+        let mostrandoTodosLosProductos = false;
+
         // Cargar categorías desde el backend
         async function cargarCategorias() {
             try {
@@ -1308,16 +1314,116 @@
 
                     renderizarCategorias(categorias, categoriaDestacadaId);
 
-                    // Establecer categoría activa inicial (destacada o primera)
+                    // Si HAY categoría destacada → mostrar sus productos
                     if (categoriaDestacadaId) {
                         categoriaActiva = categoriaDestacadaId;
-                    } else if (categorias.length > 0) {
-                        categoriaActiva = categorias[0].id;
+                        filtrarPorCategoria(categoriaDestacadaId);
+                    } else {
+                        // Si NO hay categoría destacada → mostrar TODOS los productos con paginación
+                        categoriaActiva = null;
+                        await cargarTodosLosProductos();
                     }
                 }
             } catch (error) {
                 console.error('Error cargando categorías:', error);
             }
+        }
+
+        // 🆕 Cargar todos los productos con paginación
+        async function cargarTodosLosProductos() {
+            try {
+                mostrandoTodosLosProductos = true;
+                document.getElementById('productosContainer').innerHTML = '<div class="loading">Cargando todos los productos...</div>';
+
+                const response = await fetch('/api/productos');
+                const data = await response.json();
+
+                if (data.ok && data.productos && data.productos.length > 0) {
+                    todosLosProductos = data.productos;
+                    productosMostradosEnTienda = data.productos;
+                    paginaActual = 1;
+                    mostrarProductosPaginados();
+                } else {
+                    document.getElementById('productosContainer').innerHTML = `
+                        <div class="sin-resultados" style="text-align: center; padding: 3rem 1.5rem;">
+                            <p style="color: #666;">No hay productos disponibles</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error cargando todos los productos:', error);
+                document.getElementById('productosContainer').innerHTML = '<div class="sin-resultados">Error al cargar productos</div>';
+            }
+        }
+
+        // 🆕 Mostrar productos paginados
+        function mostrarProductosPaginados() {
+            const inicio = (paginaActual - 1) * productosPorPagina;
+            const fin = inicio + productosPorPagina;
+            const productosPagina = todosLosProductos.slice(inicio, fin);
+
+            const totalPaginas = Math.ceil(todosLosProductos.length / productosPorPagina);
+
+            // Mostrar productos
+            mostrarProductos(productosPagina, { total: todosLosProductos.length });
+
+            // Mostrar botones de paginación
+            mostrarBotonesPaginacion(totalPaginas);
+        }
+
+        // 🆕 Mostrar botones de paginación
+        function mostrarBotonesPaginacion(totalPaginas) {
+            const container = document.getElementById('productosContainer');
+            const totalProductos = todosLosProductos.length;
+
+            const botonesHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem; padding: 1rem;">
+                    ${paginaActual > 1 ? `
+                        <button onclick="cambiarPagina(${paginaActual - 1})" style="
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            border: none;
+                            padding: 0.75rem 1.5rem;
+                            border-radius: 8px;
+                            font-size: 1rem;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                            ← Página Anterior
+                        </button>
+                    ` : ''}
+
+                    <span style="color: #666; font-weight: 600;">
+                        Página ${paginaActual} de ${totalPaginas} (${totalProductos} productos)
+                    </span>
+
+                    ${paginaActual < totalPaginas ? `
+                        <button onclick="cambiarPagina(${paginaActual + 1})" style="
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            border: none;
+                            padding: 0.75rem 1.5rem;
+                            border-radius: 8px;
+                            font-size: 1rem;
+                            font-weight: 600;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.3)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                            Página Siguiente →
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+
+            container.insertAdjacentHTML('beforeend', botonesHTML);
+        }
+
+        // 🆕 Cambiar de página
+        function cambiarPagina(nuevaPagina) {
+            paginaActual = nuevaPagina;
+            mostrarProductosPaginados();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // Renderizar selector de categorías
@@ -1336,6 +1442,9 @@
         // Filtrar productos por categoría
         async function filtrarPorCategoria(categoriaId) {
             categoriaActiva = categoriaId;
+
+            // Salir del modo paginación
+            mostrandoTodosLosProductos = false;
 
             // Actualizar UI (marcar chip activo)
             document.querySelectorAll('.categoria-chip').forEach(chip => {
@@ -1608,10 +1717,13 @@
                 return;
             }
             
+            // Salir del modo paginación
+            mostrandoTodosLosProductos = false;
+
             const precioMin = document.getElementById('precioMin').value;
             const precioMax = document.getElementById('precioMax').value;
             const params = new URLSearchParams();
-            
+
             if (busquedaUnificada) {
                 params.append('q', busquedaUnificada);
             }
@@ -4390,6 +4502,9 @@
         window.buscarProductos = function() {
             const busquedaUnificada = document.getElementById('busqueda_unificada').value;
             if (busquedaUnificada.trim().length > 0 && busquedaUnificada.trim().length < 3) return;
+
+            // Salir del modo paginación
+            mostrandoTodosLosProductos = false;
 
             const precioMin = document.getElementById('precioMin').value;
             const precioMax = document.getElementById('precioMax').value;

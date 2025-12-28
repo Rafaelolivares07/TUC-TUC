@@ -342,15 +342,19 @@
 
         async function cargarTodosLosProductosDisponibles() {
             try {
+                console.log('🔍 Cargando todos los productos disponibles...');
                 const res = await fetch('/api/medicamentos/buscar?q=');
                 const data = await res.json();
+
+                console.log('📦 Productos recibidos:', data.medicamentos?.length || 0);
 
                 if (data.ok && data.medicamentos) {
                     resultadosBusqueda = data.medicamentos;
                     renderizarResultadosBusqueda();
+                    console.log('✅ Dropdown renderizado');
                 }
             } catch (error) {
-                console.error('Error cargando todos los productos:', error);
+                console.error('❌ Error cargando todos los productos:', error);
             }
         }
 
@@ -388,10 +392,12 @@
 
         function renderizarResultadosBusqueda() {
             const container = document.getElementById('resultados-busqueda');
+            console.log('🎨 renderizarResultadosBusqueda() - resultados:', resultadosBusqueda.length);
 
             if (resultadosBusqueda.length === 0) {
                 container.innerHTML = '<p class="p-3 text-gray-500 text-sm">No se encontraron medicamentos</p>';
                 container.style.display = 'block';
+                console.log('⚠️ Sin resultados, mostrando mensaje');
                 return;
             }
 
@@ -419,6 +425,7 @@
                 `;
             }).join('');
             container.style.display = 'block';
+            console.log('✅ Dropdown mostrado con', resultadosBusqueda.length, 'productos. Display:', container.style.display);
         }
 
         async function toggleProductoCategoria(medicamentoId, nombre) {

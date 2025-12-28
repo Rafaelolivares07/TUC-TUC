@@ -3095,7 +3095,7 @@ def obtener_productos():
             # Aplicar paginación: primero obtener precio_ids únicos paginados
             # Esto evita que el LIMIT se aplique a las filas antes del agrupamiento
             subquery_precios = """
-                SELECT DISTINCT p.id
+                SELECT DISTINCT p.id, m.nombre as med_nombre
                 FROM precios p
                 INNER JOIN medicamentos m ON p.medicamento_id = m.id
                 LEFT JOIN (
@@ -3125,10 +3125,10 @@ def obtener_productos():
 
             # Aplicar LIMIT y OFFSET a los precio_ids únicos
             offset = (page - 1) * limit
-            subquery_precios += f" ORDER BY m.nombre LIMIT {limit} OFFSET {offset}"
+            subquery_precios += f" ORDER BY med_nombre LIMIT {limit} OFFSET {offset}"
 
-            # Usar los precio_ids paginados en el query principal
-            query += f" AND p.id IN ({subquery_precios})"
+            # Usar los precio_ids paginados en el query principal (solo los IDs)
+            query += f" AND p.id IN (SELECT id FROM ({subquery_precios}) AS precios_paginados)"
             params.extend(subquery_params)
             query += " ORDER BY m.nombre"
 

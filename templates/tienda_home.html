@@ -415,12 +415,42 @@
             font-size: 0.85rem;  /* 🆕 Aumentado de 0.75rem */
             font-weight: bold;
         }
-        
+
+        /* 🆕 BOTÓN FLOTANTE TUC TUC */
+        .tuctuc-flotante {
+            position: fixed;
+            top: 70px;
+            left: 10px;
+            background: white;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(46, 137, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .tuctuc-flotante:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(46, 137, 255, 0.6);
+        }
+
+        .tuctuc-flotante img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+
         /* 🆕 BOTÓN FLOTANTE PASTILLERO */
         .pastillero-flotante {
             position: fixed;
-            top: 10px;  /* Misma altura que el carrito */
-            left: 20px;  /* Mismo margen que el carrito (pero a la izquierda) */
+            top: 70px;
+            left: 80px;
             background: #2ecc71;
             color: white;
             width: 60px;  /* Mismo tamaño que el carrito */
@@ -465,8 +495,8 @@
         /* 🆕 BOTÓN FLOTANTE CHAT */
         .chat-flotante {
             position: fixed;
-            top: 10px;
-            left: 90px;  /* A la derecha del pastillero */
+            top: 70px;
+            left: 150px;  /* A la derecha del pastillero */
             background: #3498db;
             color: white;
             padding: 0.6rem 1rem;
@@ -1203,18 +1233,23 @@
         </div>
     </div>
     
-    <!-- Carrito Flotante -->
-    <!-- 🆕 BOTÓN FLOTANTE CHAT (lado izquierdo superior) -->
+    <!-- Botones Flotantes -->
+    <!-- 🆕 BOTÓN FLOTANTE TUC TUC -->
+    <div id="tuctuc-flotante" class="tuctuc-flotante" onclick="abrirMenuTucTuc()" title="Menú Tuc Tuc">
+        <img src="/static/logo1.png" alt="Tuc Tuc">
+    </div>
+
+    <!-- 🆕 BOTÓN FLOTANTE PASTILLERO -->
+    <div id="pastillero-flotante" class="pastillero-flotante" onclick="abrirPastillero()" title="Mi pastillero">
+        💊
+        <span class="pastillero-badge" id="pastilleroCount">0</span>
+    </div>
+
+    <!-- 🆕 BOTÓN FLOTANTE CHAT -->
     <div id="chat-flotante" class="chat-flotante" onclick="abrirChat()" title="Mensajes">
         <span id="usuario-nombre-chat">Usuario</span>
         <span style="margin-left: 0.3rem;">💬</span>
         <span class="chat-badge" id="chatCount" style="display: none;">0</span>
-    </div>
-
-    <!-- 🆕 BOTÓN FLOTANTE PASTILLERO (lado izquierdo) -->
-    <div id="pastillero-flotante" class="pastillero-flotante" onclick="abrirPastillero()" title="Mi pastillero">
-        💊
-        <span class="pastillero-badge" id="pastilleroCount">0</span>
     </div>
 
     <!-- BOTÓN FLOTANTE CARRITO (lado derecho) -->
@@ -2462,6 +2497,71 @@
         function cerrarChat() {
             document.getElementById('modal-chat').classList.remove('active');
             document.getElementById('input-buscar-usuario').value = '';
+        }
+
+        // 🆕 FUNCIONES MENÚ TUC TUC
+        function abrirMenuTucTuc() {
+            document.getElementById('modal-menu-tuctuc').classList.add('active');
+        }
+
+        function cerrarMenuTucTuc() {
+            document.getElementById('modal-menu-tuctuc').classList.remove('active');
+        }
+
+        async function abrirChatEmpresa() {
+            // Cerrar el menú Tuc Tuc
+            cerrarMenuTucTuc();
+
+            // Verificar sesión (misma lógica que abrirChat)
+            let usuarioId = localStorage.getItem('usuario_id');
+
+            try {
+                const checkResponse = await fetch('/api/pastillero/count');
+                const checkData = await checkResponse.json();
+
+                if (checkData.ok && checkData.count >= 0) {
+                    if (!usuarioId) {
+                        const recuperada = await recuperarDatosUsuarioDesdeBackend();
+                        if (recuperada) {
+                            usuarioId = localStorage.getItem('usuario_id');
+                        } else {
+                            mostrarModalRegistro();
+                            return;
+                        }
+                    }
+                } else if (checkResponse.status === 401 || !checkData.ok) {
+                    if (usuarioId) {
+                        const restaurada = await restaurarSesionAutomatica();
+                        if (!restaurada) {
+                            mostrarModalRegistro();
+                            return;
+                        }
+                    } else {
+                        mostrarModalRegistro();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('Error al verificar sesión:', error);
+                if (!usuarioId) {
+                    mostrarModalRegistro();
+                    return;
+                }
+            }
+
+            // Abrir modal de chat
+            document.getElementById('modal-chat').classList.add('active');
+
+            // Abrir conversación directa con la empresa (ID 16)
+            abrirConversacion(16, 'Tuc Tuc');
+
+            // Conectar búsqueda
+            setTimeout(() => {
+                const inputBuscar = document.getElementById('input-buscar-usuario');
+                if (inputBuscar) {
+                    inputBuscar.addEventListener('input', buscarUsuarios);
+                }
+            }, 100);
         }
 
         function cargarConversaciones() {
@@ -5037,6 +5137,37 @@
 
 
     </script>
+
+    <!-- 🆕 MODAL MENÚ TUC TUC -->
+    <div id="modal-menu-tuctuc" class="modal-pastillero">
+        <div class="modal-pastillero-content" style="max-width: 400px;">
+            <div class="modal-pastillero-header">
+                <h2><span>🏥</span> Menú Tuc Tuc</h2>
+                <button class="btn-cerrar-modal" onclick="cerrarMenuTucTuc()">×</button>
+            </div>
+            <div class="modal-pastillero-body">
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <button onclick="abrirChatEmpresa()" style="
+                        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+                        color: white;
+                        border: none;
+                        padding: 1rem;
+                        border-radius: 12px;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 0.75rem;
+                        transition: all 0.3s ease;
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(52, 152, 219, 0.3)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">
+                        <span style="font-size: 1.5rem;">💬</span>
+                        <span>Chat con Tuc Tuc</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 🆕 MODAL DEL PASTILLERO -->
     <div id="modal-pastillero" class="modal-pastillero">

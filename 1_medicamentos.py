@@ -14177,28 +14177,42 @@ def buscar_medicamentos_admin():
     try:
         query = request.args.get('q', '').strip()
 
-        if not query or len(query) < 2:
-            return jsonify({'ok': True, 'medicamentos': []})
-
         conn = get_db_connection()
 
-        # Normalizar búsqueda: remover acentos y convertir a minúsculas
-        query_normalizado = query.lower()
+        # Si no hay query o es muy corto, devolver TODOS los medicamentos (limitado)
+        if not query or len(query) < 2:
+            medicamentos = conn.execute("""
+                SELECT DISTINCT
+                    m.id,
+                    m.nombre,
+                    f.nombre as fabricante_nombre,
+                    p.precio
+                FROM medicamentos m
+                INNER JOIN precios p ON m.id = p.medicamento_id
+                INNER JOIN fabricantes f ON p.fabricante_id = f.id
+                WHERE p.precio > 0
+                ORDER BY m.nombre, f.nombre
+                LIMIT 100
+            """).fetchall()
+        else:
+            # Normalizar búsqueda: remover acentos y convertir a minúsculas
+            query_normalizado = query.lower()
 
-        medicamentos = conn.execute("""
-            SELECT DISTINCT
-                m.id,
-                m.nombre,
-                f.nombre as fabricante_nombre,
-                p.precio
-            FROM medicamentos m
-            INNER JOIN precios p ON m.id = p.medicamento_id
-            INNER JOIN fabricantes f ON p.fabricante_id = f.id
-            WHERE unaccent(LOWER(m.nombre)) LIKE unaccent(%s)
-            AND p.precio > 0
-            ORDER BY m.nombre, f.nombre
-            LIMIT 20
-        """, (f'%{query_normalizado}%',)).fetchall()
+            medicamentos = conn.execute("""
+                SELECT DISTINCT
+                    m.id,
+                    m.nombre,
+                    f.nombre as fabricante_nombre,
+                    p.precio
+                FROM medicamentos m
+                INNER JOIN precios p ON m.id = p.medicamento_id
+                INNER JOIN fabricantes f ON p.fabricante_id = f.id
+                WHERE unaccent(LOWER(m.nombre)) LIKE unaccent(%s)
+                AND p.precio > 0
+                ORDER BY m.nombre, f.nombre
+                LIMIT 20
+            """, (f'%{query_normalizado}%',)).fetchall()
+
         conn.close()
 
         return jsonify({

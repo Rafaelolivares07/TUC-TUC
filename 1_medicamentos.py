@@ -14179,7 +14179,7 @@ def buscar_medicamentos_admin():
 
         conn = get_db_connection()
 
-        # Si no hay query o es muy corto, devolver TODOS los medicamentos (limitado)
+        # Si no hay query o es muy corto, devolver TODOS los medicamentos
         if not query or len(query) < 2:
             medicamentos = conn.execute("""
                 SELECT DISTINCT
@@ -14192,7 +14192,6 @@ def buscar_medicamentos_admin():
                 INNER JOIN fabricantes f ON p.fabricante_id = f.id
                 WHERE p.precio > 0
                 ORDER BY m.nombre, f.nombre
-                LIMIT 100
             """).fetchall()
         else:
             # Normalizar búsqueda: remover acentos y convertir a minúsculas

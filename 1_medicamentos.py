@@ -14718,7 +14718,7 @@ def admin_sugerir_sintomas(med_id=None):
                 SELECT m.id
                 FROM medicamentos m
                 LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
-                WHERE ms.sintoma_id IS NULL AND m.activo = '1'
+                WHERE ms.sintoma_id IS NULL
                 ORDER BY
                     CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
                     (SELECT CASE WHEN p.precio > 0 THEN 0 ELSE 1 END FROM precios p WHERE p.medicamento_id = m.id LIMIT 1),
@@ -14756,7 +14756,7 @@ def admin_sugerir_sintomas(med_id=None):
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN precios p ON p.medicamento_id = m.id
-            WHERE ms.sintoma_id IS NULL AND m.activo = '1'
+            WHERE ms.sintoma_id IS NULL
             ORDER BY
                 CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
                 CASE WHEN p.precio > 0 THEN 0 ELSE 1 END,
@@ -14769,7 +14769,7 @@ def admin_sugerir_sintomas(med_id=None):
             SELECT COUNT(DISTINCT m.id) as total
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
-            WHERE ms.sintoma_id IS NULL AND m.activo = '1'
+            WHERE ms.sintoma_id IS NULL
         """).fetchone()['total']
 
         # Determinar término de búsqueda (componente activo si existe, sino nombre)
@@ -14801,7 +14801,7 @@ def filtrar_medicamentos_sugerir():
 
         conn = get_db_connection()
 
-        where_clauses = ["ms.sintoma_id IS NULL", "m.activo = '1'"]
+        where_clauses = ["ms.sintoma_id IS NULL"]
 
         if filtro_tipo == 'genericos':
             where_clauses.append("m.componente_activo_id IS NULL")
@@ -15053,7 +15053,7 @@ def guardar_sugerencias_sintomas(med_id):
             SELECT m.id
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
-            WHERE ms.sintoma_id IS NULL AND m.activo = '1' AND m.id != %s
+            WHERE ms.sintoma_id IS NULL AND m.id != %s
             ORDER BY
                 CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
                 (SELECT CASE WHEN p.precio > 0 THEN 0 ELSE 1 END FROM precios p WHERE p.medicamento_id = m.id LIMIT 1),
@@ -15101,7 +15101,7 @@ def diagnostico_sintomas():
             SELECT COUNT(DISTINCT m.id) as total
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
-            WHERE ms.sintoma_id IS NULL AND m.activo = '1'
+            WHERE ms.sintoma_id IS NULL
         """).fetchone()
 
         # 5. Valores del campo activo

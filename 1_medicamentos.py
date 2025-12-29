@@ -14720,7 +14720,7 @@ def admin_sugerir_sintomas(med_id=None):
                 LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
                 WHERE ms.sintoma_id IS NULL
                 ORDER BY
-                    CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
+                    CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END,
                     (SELECT CASE WHEN p.precio > 0 THEN 0 ELSE 1 END FROM precios p WHERE p.medicamento_id = m.id LIMIT 1),
                     m.nombre
                 LIMIT 1
@@ -14758,7 +14758,7 @@ def admin_sugerir_sintomas(med_id=None):
             LEFT JOIN precios p ON p.medicamento_id = m.id
             WHERE ms.sintoma_id IS NULL
             ORDER BY
-                CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
+                CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END,
                 CASE WHEN p.precio > 0 THEN 0 ELSE 1 END,
                 m.nombre
             LIMIT 200
@@ -14823,7 +14823,7 @@ def filtrar_medicamentos_sugerir():
             LEFT JOIN precios p ON p.medicamento_id = m.id
             WHERE {where_sql}
             ORDER BY
-                CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
+                CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END,
                 CASE WHEN p.precio > 0 THEN 0 ELSE 1 END,
                 m.nombre
             LIMIT 200
@@ -15055,7 +15055,7 @@ def guardar_sugerencias_sintomas(med_id):
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             WHERE ms.sintoma_id IS NULL AND m.id != %s
             ORDER BY
-                CASE WHEN m.componente_activo_id IS NULL THEN 0 ELSE 1 END,
+                CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END,
                 (SELECT CASE WHEN p.precio > 0 THEN 0 ELSE 1 END FROM precios p WHERE p.medicamento_id = m.id LIMIT 1),
                 m.nombre
             LIMIT 1

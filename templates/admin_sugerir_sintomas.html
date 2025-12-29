@@ -94,10 +94,16 @@
             </button>
         </div>
 
-        <!-- BOTÓN PEGAR Y PROCESAR -->
+        <!-- ÁREA DE PEGADO Y PROCESAMIENTO -->
         <div class="bg-white rounded-lg shadow-md p-4 mb-4">
-            <button id="btnPegarProcesar" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold">
-                📋 Pegar y Procesar Texto
+            <h3 class="font-semibold text-gray-700 mb-3">📋 Procesar texto del medicamento</h3>
+
+            <textarea id="textoPegar" rows="4"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-3"
+                placeholder="Pega aquí el texto del medicamento (min. 20 caracteres) y presiona 'Procesar'..."></textarea>
+
+            <button id="btnProcesarTexto" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold">
+                ▶ Procesar Texto
             </button>
 
             <div id="mensajeProcesando" class="hidden mt-3 text-center text-gray-600">
@@ -165,12 +171,13 @@
         let sintomasData = [];
 
         // Elementos DOM
-        const btnPegarProcesar = document.getElementById('btnPegarProcesar');
+        const btnProcesarTexto = document.getElementById('btnProcesarTexto');
         const btnGuardar = document.getElementById('btnGuardar');
         const btnGoogleSearch = document.getElementById('btnGoogleSearch');
         const selectorMedicamento = document.getElementById('selectorMedicamento');
         const filtroTipo = document.getElementById('filtroTipo');
         const filtroPrecio = document.getElementById('filtroPrecio');
+        const textoPegar = document.getElementById('textoPegar');
         const textoPegado = document.getElementById('textoPegado');
         const mensajeProcesando = document.getElementById('mensajeProcesando');
         const panelValidacion = document.getElementById('panelValidacion');
@@ -223,7 +230,11 @@
             const precio = filtroPrecio.value;
 
             try {
-                const response = await fetch(`/admin/sugerir-sintomas/filtrar?tipo=${tipo}&precio=${precio}`);
+                const response = await fetch(`/admin/sugerir-sintomas/filtrar?tipo=${tipo}&precio=${precio}`, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
                 const data = await response.json();
 
                 if (data.ok) {
@@ -281,36 +292,42 @@
             aplicarFiltros();
         }
 
-        // Pegar y Procesar
-        btnPegarProcesar?.addEventListener('click', async () => {
+        // Procesar texto pegado manualmente
+        btnProcesarTexto?.addEventListener('click', async () => {
             try {
-                // Leer clipboard
-                const texto = await navigator.clipboard.readText();
+                const texto = textoPegar.value.trim();
 
-                if (!texto || texto.trim().length < 20) {
-                    alert('El texto del portapapeles es muy corto (mínimo 20 caracteres)');
+                if (!texto || texto.length < 20) {
+                    alert('El texto es muy corto (mínimo 20 caracteres)');
                     return;
                 }
 
+                // Guardar en el textarea de solo lectura también
                 textoPegado.value = texto;
                 mensajeProcesando.classList.remove('hidden');
-                btnPegarProcesar.disabled = true;
+                btnProcesarTexto.disabled = true;
 
                 // Enviar a procesar
                 const response = await fetch('/admin/sugerir-sintomas/procesar-texto/{{ medicamento.id }}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ texto })
                 });
 
                 const data = await response.json();
                 mensajeProcesando.classList.add('hidden');
-                btnPegarProcesar.disabled = false;
+                btnProcesarTexto.disabled = false;
 
                 if (!data.ok) {
                     alert('Error: ' + data.error);
                     return;
                 }
+
+                // Limpiar el textarea de entrada para el siguiente
+                textoPegar.value = '';
 
                 // Mostrar validación
                 mostrarValidacion(data.validacion);
@@ -329,7 +346,7 @@
             } catch (error) {
                 console.error('Error:', error);
                 mensajeProcesando.classList.add('hidden');
-                btnPegarProcesar.disabled = false;
+                btnProcesarTexto.disabled = false;
                 alert('Error al procesar texto: ' + error.message);
             }
         });
@@ -510,7 +527,10 @@
             try {
                 const response = await fetch('/admin/sugerir-sintomas/guardar/{{ medicamento.id }}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         sintomas: sintomasIds,
                         diagnosticos: diagnosticosIds,
@@ -553,7 +573,10 @@
             try {
                 const response = await fetch('/admin/sugerir-sintomas/guardar/{{ medicamento.id }}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         sintomas: [],
                         diagnosticos: [],

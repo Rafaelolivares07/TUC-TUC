@@ -15076,6 +15076,68 @@ def guardar_sugerencias_sintomas(med_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/diagnostico-sintomas', methods=['GET'])
+@admin_required
+def diagnostico_sintomas():
+    """Endpoint temporal para diagnosticar medicamentos pendientes"""
+    try:
+        conn = get_db_connection()
+
+        # 1. Total medicamentos
+        total = conn.execute("SELECT COUNT(*) as total FROM medicamentos").fetchone()
+
+        # 2. Medicamentos activos
+        activos = conn.execute("SELECT COUNT(*) as total FROM medicamentos WHERE activo = 'TRUE'").fetchone()
+
+        # 3. Con síntomas
+        con_sintomas = conn.execute("""
+            SELECT COUNT(DISTINCT m.id) as total
+            FROM medicamentos m
+            INNER JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+        """).fetchone()
+
+        # 4. Sin síntomas (activos)
+        sin_sintomas = conn.execute("""
+            SELECT COUNT(DISTINCT m.id) as total
+            FROM medicamentos m
+            LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            WHERE ms.sintoma_id IS NULL AND m.activo = 'TRUE'
+        """).fetchone()
+
+        # 5. Valores del campo activo
+        valores_activo = conn.execute("""
+            SELECT DISTINCT activo, COUNT(*) as cantidad
+            FROM medicamentos
+            GROUP BY activo
+        """).fetchall()
+
+        # 6. Primeros 5 sin síntomas
+        primeros = conn.execute("""
+            SELECT m.id, m.nombre, m.activo, m.componente_activo_id
+            FROM medicamentos m
+            LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            WHERE ms.sintoma_id IS NULL
+            ORDER BY m.nombre
+            LIMIT 5
+        """).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'total_medicamentos': total['total'],
+            'medicamentos_activos': activos['total'],
+            'con_sintomas': con_sintomas['total'],
+            'sin_sintomas_activos': sin_sintomas['total'],
+            'valores_activo': [{'valor': v['activo'], 'cantidad': v['cantidad']} for v in valores_activo],
+            'primeros_5_sin_sintomas': [{'id': m['id'], 'nombre': m['nombre'], 'activo': m['activo']} for m in primeros]
+        })
+
+    except Exception as e:
+        print(f"Error en diagnóstico: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO

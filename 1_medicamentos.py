@@ -15121,13 +15121,40 @@ def diagnostico_sintomas():
             GROUP BY activo
         """).fetchall()
 
-        # 6. Primeros 5 sin síntomas
-        primeros = conn.execute("""
-            SELECT m.id, m.nombre, m.activo, m.componente_activo_id
+        # 6. Medicamentos CON PRECIO (exhibibles en tienda)
+        con_precio = conn.execute("""
+            SELECT COUNT(DISTINCT m.id) as total
             FROM medicamentos m
+            INNER JOIN precios p ON m.id = p.medicamento_id
+            WHERE p.precio > 0
+        """).fetchone()
+
+        # 7. Medicamentos con precio Y con síntomas
+        con_precio_y_sintomas = conn.execute("""
+            SELECT COUNT(DISTINCT m.id) as total
+            FROM medicamentos m
+            INNER JOIN precios p ON m.id = p.medicamento_id
+            INNER JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            WHERE p.precio > 0
+        """).fetchone()
+
+        # 8. Medicamentos con precio SIN síntomas (PRIORITARIOS)
+        con_precio_sin_sintomas = conn.execute("""
+            SELECT COUNT(DISTINCT m.id) as total
+            FROM medicamentos m
+            INNER JOIN precios p ON m.id = p.medicamento_id
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
-            WHERE ms.sintoma_id IS NULL
-            ORDER BY m.nombre
+            WHERE p.precio > 0 AND ms.sintoma_id IS NULL
+        """).fetchone()
+
+        # 9. Primeros 5 con precio sin síntomas
+        primeros_con_precio = conn.execute("""
+            SELECT m.id, m.nombre, p.precio
+            FROM medicamentos m
+            INNER JOIN precios p ON m.id = p.medicamento_id
+            LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            WHERE p.precio > 0 AND ms.sintoma_id IS NULL
+            ORDER BY p.precio DESC, m.nombre
             LIMIT 5
         """).fetchall()
 
@@ -15140,8 +15167,11 @@ def diagnostico_sintomas():
             'con_sintomas': con_sintomas['total'],
             'sin_sintomas_activos': sin_sintomas['total'],
             'sin_ningun_registro': sin_registros['total'],
+            'con_precio': con_precio['total'],
+            'con_precio_y_sintomas': con_precio_y_sintomas['total'],
+            'con_precio_sin_sintomas': con_precio_sin_sintomas['total'],
             'valores_activo': [{'valor': v['activo'], 'cantidad': v['cantidad']} for v in valores_activo],
-            'primeros_5_sin_sintomas': [{'id': m['id'], 'nombre': m['nombre'], 'activo': m['activo']} for m in primeros]
+            'primeros_5_con_precio_sin_sintomas': [{'id': m['id'], 'nombre': m['nombre'], 'precio': m['precio']} for m in primeros_con_precio]
         })
 
     except Exception as e:

@@ -4473,9 +4473,9 @@
                     throw new Error(stats.error || 'Error al cargar estadísticas');
                 }
 
-                // Calcular porcentajes
-                const pctConSintomas = ((stats.con_sintomas / stats.total_medicamentos) * 100).toFixed(1);
-                const pctSinSintomas = ((stats.sin_ningun_registro / stats.total_medicamentos) * 100).toFixed(1);
+                // Calcular porcentajes SOLO de productos exhibibles (con precio)
+                const pctConSintomas = ((stats.con_precio_y_sintomas / stats.con_precio) * 100).toFixed(1);
+                const pctSinSintomas = ((stats.con_precio_sin_sintomas / stats.con_precio) * 100).toFixed(1);
 
                 modal.innerHTML = `
                     <div style="
@@ -4486,34 +4486,33 @@
                         width: 90%;
                         box-shadow: 0 0 30px rgba(0,0,0,0.6);
                     ">
-                        <h3 style="color: #e74c3c; margin-bottom: 1.5rem;">🔒 Reporte Interno (Solo Admin)</h3>
+                        <h3 style="color: #e74c3c; margin-bottom: 1.5rem;">🏪 Reporte Tienda (Solo Admin)</h3>
 
                         <div style="font-size: 0.9rem; line-height: 1.8;">
                             <p><strong>🕗 Fecha/hora:</strong> ${new Date().toLocaleString('es-CO')}</p>
                             <hr style="margin: 1rem 0; border: none; border-top: 1px solid #eee;">
 
-                            <p style="color: #2c3e50; font-size: 1rem; margin-bottom: 0.5rem;"><strong>📊 INVENTARIO GENERAL</strong></p>
-                            <p style="margin-left: 1rem;">📦 Total medicamentos: <strong style="color: #3498db;">${stats.total_medicamentos}</strong></p>
-                            <p style="margin-left: 1rem;">✅ Activos: <strong style="color: #27ae60;">${stats.medicamentos_activos}</strong></p>
-                            <p style="margin-left: 1rem;">❌ Inactivos: <strong style="color: #95a5a6;">${stats.total_medicamentos - stats.medicamentos_activos}</strong></p>
+                            <p style="color: #2c3e50; font-size: 1rem; margin-bottom: 0.5rem;"><strong>📊 PRODUCTOS EXHIBIBLES (Con Precio)</strong></p>
+                            <p style="margin-left: 1rem;">🛒 Total exhibibles: <strong style="color: #3498db;">${stats.con_precio}</strong></p>
+                            <p style="margin-left: 1rem; font-size: 0.8rem; color: #95a5a6;">De ${stats.total_medicamentos} medicamentos en BD</p>
 
                             <hr style="margin: 1rem 0; border: none; border-top: 1px solid #eee;">
 
-                            <p style="color: #2c3e50; font-size: 1rem; margin-bottom: 0.5rem;"><strong>💊 ASIGNACIÓN DE SÍNTOMAS</strong></p>
-                            <p style="margin-left: 1rem;">✓ Con síntomas: <strong style="color: #27ae60;">${stats.con_sintomas}</strong> <span style="color: #7f8c8d;">(${pctConSintomas}%)</span></p>
-                            <p style="margin-left: 1rem;">⚠️ Sin ningún síntoma: <strong style="color: #e67e22;">${stats.sin_ningun_registro}</strong> <span style="color: #7f8c8d;">(${pctSinSintomas}%)</span></p>
+                            <p style="color: #2c3e50; font-size: 1rem; margin-bottom: 0.5rem;"><strong>💊 COBERTURA DE SÍNTOMAS</strong></p>
+                            <p style="margin-left: 1rem;">✅ Con síntomas: <strong style="color: #27ae60;">${stats.con_precio_y_sintomas}</strong> <span style="color: #7f8c8d;">(${pctConSintomas}%)</span></p>
+                            <p style="margin-left: 1rem;">⚠️ Sin síntomas: <strong style="color: #e67e22;">${stats.con_precio_sin_sintomas}</strong> <span style="color: #7f8c8d;">(${pctSinSintomas}%)</span></p>
 
                             <hr style="margin: 1rem 0; border: none; border-top: 1px solid #eee;">
 
-                            <p style="color: #2c3e50; font-size: 1rem; margin-bottom: 0.5rem;"><strong>🎯 PRÓXIMOS A COMPLETAR</strong></p>
+                            <p style="color: #2c3e50; font-size: 1rem; margin-bottom: 0.5rem;"><strong>🎯 PRIORITARIOS (Mayor Precio)</strong></p>
                             <div style="margin-left: 1rem; font-size: 0.85rem; color: #555;">
-                                ${stats.primeros_5_sin_sintomas.map(m => `
-                                    <p style="margin: 0.3rem 0;">• ${m.nombre}</p>
+                                ${stats.primeros_5_con_precio_sin_sintomas.map(m => `
+                                    <p style="margin: 0.3rem 0;">• ${m.nombre} <span style="color: #27ae60; font-weight: bold;">$${m.precio.toLocaleString()}</span></p>
                                 `).join('')}
                             </div>
 
                             <p style="margin-top: 1.5rem; font-size: 0.8rem; color: #95a5a6; text-align: center;">
-                                Datos en tiempo real desde la base de datos
+                                Solo productos exhibibles en tienda (precio > 0)
                             </p>
                         </div>
 

@@ -15096,12 +15096,22 @@ def diagnostico_sintomas():
             INNER JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
         """).fetchone()
 
-        # 4. Sin síntomas (activos)
+        # 4. Sin síntomas (cualquier medicamento)
         sin_sintomas = conn.execute("""
             SELECT COUNT(DISTINCT m.id) as total
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             WHERE ms.sintoma_id IS NULL
+        """).fetchone()
+
+        # 5. Medicamentos SIN NINGÚN registro en medicamento_sintoma (ni una sola relación)
+        sin_registros = conn.execute("""
+            SELECT COUNT(DISTINCT m.id) as total
+            FROM medicamentos m
+            WHERE NOT EXISTS (
+                SELECT 1 FROM medicamento_sintoma ms
+                WHERE ms.medicamento_id = m.id
+            )
         """).fetchone()
 
         # 5. Valores del campo activo
@@ -15129,6 +15139,7 @@ def diagnostico_sintomas():
             'medicamentos_activos': activos['total'],
             'con_sintomas': con_sintomas['total'],
             'sin_sintomas_activos': sin_sintomas['total'],
+            'sin_ningun_registro': sin_registros['total'],
             'valores_activo': [{'valor': v['activo'], 'cantidad': v['cantidad']} for v in valores_activo],
             'primeros_5_sin_sintomas': [{'id': m['id'], 'nombre': m['nombre'], 'activo': m['activo']} for m in primeros]
         })

@@ -483,6 +483,15 @@
                     } else {
                         // Tiene cuenta pero sin direcciones guardadas
                         mostrarAlerta('Bienvenido de nuevo! Agrega tus datos de entrega.', 'info');
+
+                        // Pre-llenar el nombre del usuario
+                        if (terceroExistente.nombre) {
+                            document.getElementById('nombre').value = terceroExistente.nombre;
+                        }
+
+                        // Asegurar que el formulario esté visible
+                        document.getElementById('direccionesGuardadas').classList.add('hidden');
+                        document.getElementById('formularioDatos').classList.remove('hidden');
                     }
                 } else {
                     // Teléfono nuevo
@@ -537,8 +546,14 @@
             document.getElementById('formularioDatos').classList.remove('hidden');
             direccionSeleccionada = null;
 
-            // Limpiar campos
-            document.getElementById('nombre').value = '';
+            // Si el usuario ya existe, pre-llenar su nombre
+            if (terceroExistente && terceroExistente.nombre) {
+                document.getElementById('nombre').value = terceroExistente.nombre;
+            } else {
+                document.getElementById('nombre').value = '';
+            }
+
+            // Limpiar campos de dirección (porque es nueva dirección)
             document.getElementById('direccion').value = '';
             document.getElementById('aliasDireccion').value = '';
         }

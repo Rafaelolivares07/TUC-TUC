@@ -1,7 +1,6 @@
 from flask import Flask, request, redirect, url_for,send_from_directory, jsonify, render_template, session, flash, send_file
 import sqlalchemy
 import pandas
-import sqlite3
 import psycopg2
 import uuid
 import json
@@ -201,11 +200,8 @@ app.config['SESSION_COOKIE_SECURE'] = os.getenv('RENDER', None) is not None
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevenir XSS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Proteccin CSRF
 
-#  Nombre de la base de datos
-DB_NAME = 'medicamentos.db'
-
 class PostgreSQLRow:
-    """Row object que simula sqlite3.Row - soporta acceso por ndice y por nombre"""
+    """Row object compatible con acceso por ndice y por nombre de columna"""
     def __init__(self, cursor, values):
         self._cursor = cursor
         self._values = values
@@ -4779,7 +4775,7 @@ def editar_medicamento_admin(medicamento_id):
                 conn.close()
                 return redirect(url_for('editar_medicamento_admin', medicamento_id=medicamento_id))            
        
-        except sqlite3.Error as e:
+        except Exception as e:
             flash(f"Error al guardar el medicamento: {e}", "danger")
             conn.rollback()
             conn.close()
@@ -5551,7 +5547,7 @@ def eliminar_medicamento(medicamento_id):
         #  CASO 2: Solo 1 fabricante o ninguno -> eliminar medicamento completo
         return eliminar_medicamento_completo(conn, medicamento_id)
         
-    except (sqlite3.Error, Exception) as e:
+    except Exception as e:
         if conn:
             try:
                 conn.rollback()
@@ -7068,7 +7064,7 @@ def crear_sintoma():
                     'mensaje': f' Sntoma "{nombre}" creado exitosamente'
                 })
                 
-            except sqlite3.OperationalError as e:
+            except Exception as e:
                 if conn:
                     try:
                         conn.close()
@@ -7502,84 +7498,6 @@ def buscar_sintomas():
 
 
 
-
-
-@app.route('/buscar_medicamentos')
-def buscar_medicamentos():
-    """Devuelve coincidencias de medicamentos segn el texto buscado."""
-    nombre = request.args.get('nombre', '').strip()
-
-    if not nombre:
-        return jsonify({"ok": False, "error": "Debe proporcionar un nombre", "medicamentos": []})
-
-    conn = sqlite3.connect('medicamentos.db')
-    c = conn.cursor()
-    try:
-        c.execute("""
-            SELECT id, nombre
-            FROM MEDICAMENTOS
-            WHERE lower(nombre) LIKE ?
-            ORDER BY nombre ASC
-            LIMIT 10
-        """, (f"%{nombre.lower()}%",))
-        resultados = [{"id": r[0], "nombre": r[1]} for r in c.fetchall()]
-        conn.close()
-
-        return jsonify({"ok": True, "medicamentos": resultados})
-    except Exception as e:
-        conn.close()
-        return jsonify({"ok": False, "error": str(e), "medicamentos": []})
-
-
-
-
-# --- Crear medicamento rpido (sin recargar la pgina) ---
-@app.route('/crear_medicamento_rapido', methods=['POST'])
-def crear_medicamento_rapido():
-    data = request.get_json()
-    nombre = (data.get('nombre') or '').strip()
-    medicamento_id = data.get('medicamento_id')  #  ID del medicamento actual
-
-    if not nombre:
-        return jsonify({"ok": False, "error": "El nombre no puede estar vacío"}), 400
-
-    conn = sqlite3.connect('medicamentos.db')
-    c = conn.cursor()
-    try:
-        # Buscar si ya existe un medicamento con ese nombre
-        c.execute("SELECT id, nombre FROM MEDICAMENTOS WHERE lower(nombre) = lower(?)", (nombre,))
-        existente = c.fetchone()
-        
-        if existente:
-            componente_id, med_nombre = existente
-        else:
-            # Crear nuevo registro
-            c.execute("INSERT INTO MEDICAMENTOS (nombre, activo) VALUES (?, 1)", (nombre,))
-            conn.commit()
-            componente_id = c.lastrowid
-            med_nombre = nombre
-
-        #  ASOCIAR como componente activo del medicamento actual
-        if medicamento_id:
-            c.execute("""
-                UPDATE MEDICAMENTOS 
-                SET componente_activo_id = ? 
-                WHERE id = ?
-            """, (componente_id, medicamento_id))
-            conn.commit()
-            print(f" Medicamento {medicamento_id} ahora tiene componente activo {componente_id}")
-
-        conn.close()
-        return jsonify({
-            "ok": True,
-            "id": componente_id,
-            "nombre": med_nombre,
-            "exists": bool(existente)
-        })
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ============================================================
@@ -8621,145 +8539,6 @@ def aplicar_aprobados():
     except Exception as e:
         conn.close()
         return jsonify({'success': False, 'error': str(e)})
-
-
-
-@app.route('/admin/actualizar_precios', methods=['GET', 'POST'])
-def actualizar_precios():
-    """Pantalla para actualizar precios comparando con competencia."""
-    if request.method == 'POST':
-        accion = request.form.get('accion')
-        
-        conn = sqlite3.connect('medicamentos.db')
-        cursor = conn.cursor()
-        
-        # Accin: Actualizar nombre del medicamento
-        if accion == 'actualizar_nombre':
-            medicamento_id = request.form.get('medicamento_id')
-            nuevo_nombre = request.form.get('nuevo_nombre')
-            
-            cursor.execute("""
-                UPDATE medicamentos 
-                SET nombre = ?
-                WHERE id = ?
-            """, (nuevo_nombre, medicamento_id))
-            
-            conn.commit()
-            conn.close()
-            return jsonify({"ok": True})
-        
-        # Accin: Guardar precios
-        elif accion == 'guardar_precios':
-            medicamento_id = request.form.get('medicamento_id')
-            precio_id = request.form.get('precio_id')
-            fabricante_id = request.form.get('fabricante_id')
-            precio_sugerido = request.form.get('precio_sugerido')
-            
-            # Actualizar precio y fabricante en PRECIOS
-            cursor.execute("""
-                UPDATE PRECIOS 
-                SET precio = ?, fabricante_id = ?, fecha_actualizacion = DATE('now')
-                WHERE id = ?
-            """, (precio_sugerido, fabricante_id, precio_id))
-            
-            print(f" Actualizado precio_id={precio_id}: precio={precio_sugerido}, fabricante={fabricante_id}")
-            
-            # Borrar precios antiguos de competencia para este medicamento
-            cursor.execute("""
-                DELETE FROM precios_competencia 
-                WHERE medicamento_id = ?
-            """, (medicamento_id,))
-            
-            # Guardar nuevos precios de competencia
-            competidores = cursor.execute("""
-                SELECT t.id 
-                FROM terceros t
-                JOIN terceros_competidores tc ON t.id = tc.tercero_id
-            """).fetchall()
-            
-            for (comp_id,) in competidores:
-                precio_comp = request.form.get(f'precio_competidor_{comp_id}')
-                if precio_comp:
-                    cursor.execute("""
-                        INSERT INTO precios_competencia 
-                        (medicamento_id, competidor_id, precio, fecha_actualizacion)
-                        VALUES (?, ?, ?, DATE('now'))
-                    """, (medicamento_id, comp_id, precio_comp))
-                    print(f"   Guardado precio competidor {comp_id}: ${precio_comp}")
-            
-            conn.commit()
-            conn.close()
-            return jsonify({"ok": True})
-    
-    # GET - Mostrar formulario
-    conn = sqlite3.connect('medicamentos.db')
-    cursor = conn.cursor()
-    
-    #    OBTENER CONFIGURACIN GLOBAL (NUEVO)
-    config_row = cursor.execute("SELECT * FROM configuracion_precios WHERE id = 1").fetchone()
-    if config_row:
-        # Asumiendo que la tabla tiene columnas: id, descuento_competencia, recargo_escaso, redondeo_superior
-        config = {
-            'descuento_competencia': config_row[1],
-            'recargo_escaso': config_row[2],
-            'redondeo_superior': config_row[3],
-            'ganancia_min_escaso': config_row[4],  # <-- Nuevo
-            'ganancia_max_escaso': config_row[5],   # <-- Nuevo
-            'base_escaso': config_row[6],
-            'usar_precio': config_row[7] if len(config_row) > 7 else config_row[6]  # Usar nuevo campo si existe
-        }
-    else:
-        # Valores por defecto si no existe la configuracin
-        config = {
-            'descuento_competencia': 200,
-            'recargo_escaso': 30,
-            'redondeo_superior': 100,
-            'ganancia_min_escaso': 2000,  # <-- Nuevo
-            'ganancia_max_escaso': 10000,  # <-- Nuevo
-            'base_escaso': 'minimo'
-        }
-    
-    # Obtener medicamentos con precio 0
-    medicamentos = cursor.execute("""
-        SELECT 
-            m.id, 
-            m.nombre, 
-            f.id, 
-            f.nombre, 
-            p.precio, 
-            p.id
-        FROM medicamentos m
-        JOIN PRECIOS p ON m.id = p.medicamento_id
-        JOIN FABRICANTES f ON p.fabricante_id = f.id
-        WHERE p.precio = 0
-        ORDER BY 
-            EXISTS (
-                SELECT 1 
-                FROM MEDICAMENTO_SINTOMA ms 
-                WHERE ms.medicamento_id = m.id
-            ) DESC,
-            m.nombre ASC
-        LIMIT 10
-    """).fetchall()
-
-    # Obtener todos los fabricantes
-    fabricantes = cursor.execute("SELECT id, nombre FROM FABRICANTES ORDER BY nombre").fetchall()
-    
-    # Obtener competidores
-    competidores = cursor.execute("""
-        SELECT t.id, t.nombre 
-        FROM terceros t
-        JOIN terceros_competidores tc ON t.id = tc.tercero_id
-        ORDER BY t.nombre
-    """).fetchall()
-    
-    conn.close()
-    
-    return render_template('actualizar_precios.html', 
-                         medicamentos=medicamentos,
-                         fabricantes=fabricantes,
-                         competidores=competidores,
-                         config=config)  #    PASAR CONFIG AL TEMPLATE
 
 
 
@@ -10113,58 +9892,6 @@ def run_migration_endpoint():
 
         except Exception as e:
             mensajes.append(f" Error en secuencia: {str(e)}")
-
-        # Migracin 6: Migrar datos del pastillero desde SQLite a PostgreSQL
-        try:
-            import sqlite3
-            import os
-
-            sqlite_path = os.path.join(os.path.dirname(__file__), 'medicamentos.db')
-
-            if os.path.exists(sqlite_path):
-                mensajes.append(" Iniciando migracin de pastillero desde SQLite...")
-
-                # Conectar a SQLite
-                sqlite_conn = sqlite3.connect(sqlite_path)
-                sqlite_conn.row_factory = sqlite3.Row
-                sqlite_cursor = sqlite_conn.cursor()
-
-                # Leer datos del pastillero
-                sqlite_cursor.execute("""
-                    SELECT usuario_id, medicamento_id, nombre, cantidad, unidad
-                    FROM pastillero_usuarios
-                """)
-
-                pastillero_rows = sqlite_cursor.fetchall()
-                count = 0
-
-                if pastillero_rows:
-                    for row in pastillero_rows:
-                        # Verificar si ya existe para evitar duplicados
-                        exists = conn.execute("""
-                            SELECT id FROM pastillero_usuarios
-                            WHERE usuario_id = ? AND medicamento_id IS NOT DISTINCT FROM ?
-                            AND nombre = ?
-                        """, (row['usuario_id'], row['medicamento_id'], row['nombre'])).fetchone()
-
-                        if not exists:
-                            conn.execute("""
-                                INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (row['usuario_id'], row['medicamento_id'], row['nombre'],
-                                  row['cantidad'], row['unidad']))
-                            count += 1
-
-                    mensajes.append(f" Migrados {count} medicamentos al pastillero (de {len(pastillero_rows)} encontrados)")
-                else:
-                    mensajes.append(" No hay medicamentos en el pastillero de SQLite")
-
-                sqlite_conn.close()
-            else:
-                mensajes.append(" Archivo medicamentos.db no encontrado, saltando migracin de pastillero")
-
-        except Exception as e:
-            mensajes.append(f" Error en migracin de pastillero: {str(e)}")
 
         conn.commit()
         conn.close()

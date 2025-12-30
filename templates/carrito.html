@@ -296,6 +296,14 @@
                     <span>Total</span>
                     <span id="total">$0</span>
                 </div>
+
+                <!-- Advertencia de horario (si aplica) -->
+                <div id="advertencia-horario" style="display: none; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <p style="margin: 0; color: #92400e; font-size: 0.95rem;">
+                        <strong>⚠️ Nota:</strong> <span id="mensaje-horario"></span>
+                    </p>
+                </div>
+
                 <button class="btn-checkout" onclick="irCheckout()">
                     Continuar con la Compra
                 </button>
@@ -391,6 +399,30 @@
         
         // Inicializar
         actualizarCarrito();
+
+        // Validar horario al cargar el carrito
+        async function validarHorarioCarrito() {
+            try {
+                const res = await fetch('/api/validar-horario');
+                const data = await res.json();
+
+                if (data.ok && !data.dentro_horario && data.mensaje) {
+                    // Mostrar advertencia
+                    const advertencia = document.getElementById('advertencia-horario');
+                    const mensaje = document.getElementById('mensaje-horario');
+
+                    mensaje.textContent = data.mensaje;
+                    advertencia.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error validando horario:', error);
+            }
+        }
+
+        // Ejecutar validación al cargar la página
+        document.addEventListener('DOMContentLoaded', () => {
+            validarHorarioCarrito();
+        });
     </script>
 </body>
 </html>

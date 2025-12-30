@@ -14874,6 +14874,176 @@ def api_responder_invitacion():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/pastillero/alertas', methods=['GET'])
+def api_obtener_alertas_pastillero():
+    """
+    Obtiene medicamentos que requieren reposición
+    - Botiquín: cuando cantidad <= nivel_minimo_alerta
+    - Tratamiento: cuando tomas pendientes > cantidad disponible
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+
+    try:
+        conn = get_db_connection()
+
+        # Obtener pastillero activo
+        pastillero_id = session.get('pastillero_activo_id')
+        if not pastillero_id:
+            pastillero = conn.execute("""
+                SELECT p.id FROM pastilleros p
+                INNER JOIN relaciones_pastillero rp ON p.id = rp.pastillero_id
+                WHERE rp.usuario_id = %s AND rp.tipo IN ('propietario', 'miembro')
+                ORDER BY rp.tipo DESC, p.id ASC
+                LIMIT 1
+            """, (usuario_id,)).fetchone()
+
+            if not pastillero:
+                conn.close()
+                return jsonify({'ok': True, 'alertas': []})
+
+            pastillero_id = pastillero['id']
+
+        # ALERTAS DE BOTIQUÍN: cantidad <= nivel_minimo_alerta
+        alertas_botiquin = conn.execute("""
+            SELECT
+                p.id,
+                p.nombre,
+                p.medicamento_id,
+                p.cantidad,
+                p.unidad,
+                p.nivel_minimo_alerta,
+                'botiquin' as tipo_alerta,
+                'Quedan ' || p.cantidad || ' ' || p.unidad || ' (mínimo: ' || p.nivel_minimo_alerta || ')' as mensaje
+            FROM pastillero_usuarios p
+            WHERE p.pastillero_id = %s
+              AND p.tipo_medicamento = 'botiquin'
+              AND p.alerta_reposicion = TRUE
+              AND p.cantidad <= p.nivel_minimo_alerta
+              AND (p.alerta_pospuesta_hasta IS NULL OR p.alerta_pospuesta_hasta < CURRENT_TIMESTAMP)
+            ORDER BY p.cantidad ASC
+        """, (pastillero_id,)).fetchall()
+
+        # ALERTAS DE TRATAMIENTO: calcular tomas pendientes
+        ahora = datetime.now()
+        alertas_tratamiento = []
+
+        medicamentos_tratamiento = conn.execute("""
+            SELECT
+                p.id,
+                p.nombre,
+                p.medicamento_id,
+                p.cantidad,
+                p.unidad,
+                p.horas_entre_tomas,
+                p.fecha_inicio_tratamiento,
+                p.fecha_fin_tratamiento,
+                p.tomas_completadas
+            FROM pastillero_usuarios p
+            WHERE p.pastillero_id = %s
+              AND p.tipo_medicamento = 'tratamiento'
+              AND p.fecha_fin_tratamiento IS NOT NULL
+              AND p.fecha_fin_tratamiento >= %s
+              AND (p.alerta_pospuesta_hasta IS NULL OR p.alerta_pospuesta_hasta < CURRENT_TIMESTAMP)
+        """, (pastillero_id, ahora.date())).fetchall()
+
+        for med in medicamentos_tratamiento:
+            if med['horas_entre_tomas'] and med['fecha_fin_tratamiento']:
+                # Calcular días restantes
+                dias_restantes = (med['fecha_fin_tratamiento'] - ahora.date()).days
+
+                # Calcular tomas pendientes
+                tomas_por_dia = 24 / med['horas_entre_tomas']
+                tomas_pendientes = int(dias_restantes * tomas_por_dia)
+
+                # Si faltan más tomas de las que tiene en stock
+                if tomas_pendientes > med['cantidad']:
+                    faltantes = tomas_pendientes - med['cantidad']
+                    alertas_tratamiento.append({
+                        'id': med['id'],
+                        'nombre': med['nombre'],
+                        'medicamento_id': med['medicamento_id'],
+                        'cantidad': med['cantidad'],
+                        'unidad': med['unidad'],
+                        'tomas_pendientes': tomas_pendientes,
+                        'tipo_alerta': 'tratamiento',
+                        'mensaje': f"Te faltarán {faltantes} tomas para completar el tratamiento"
+                    })
+
+        # Combinar alertas
+        alertas = [dict(row) for row in alertas_botiquin] + alertas_tratamiento
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'alertas': alertas,
+            'total': len(alertas)
+        })
+
+    except Exception as e:
+        print(f"Error al obtener alertas: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastillero/alertas/posponer/<int:medicamento_id>', methods=['POST'])
+def api_posponer_alerta(medicamento_id):
+    """Pospone alerta por 24 horas (botón 'Ahora no')"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        # Posponer 24 horas
+        proxima_alerta = datetime.now() + timedelta(hours=24)
+
+        conn.execute("""
+            UPDATE pastillero_usuarios
+            SET alerta_pospuesta_hasta = %s
+            WHERE id = %s
+        """, (proxima_alerta, medicamento_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'pospuesta_hasta': proxima_alerta.isoformat()})
+
+    except Exception as e:
+        print(f"Error al posponer alerta: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pastillero/alertas/desactivar/<int:medicamento_id>', methods=['POST'])
+def api_desactivar_alerta(medicamento_id):
+    """Desactiva alertas permanentemente (botón 'No recordar más')"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        conn.execute("""
+            UPDATE pastillero_usuarios
+            SET alerta_reposicion = FALSE,
+                alerta_pospuesta_hasta = NULL
+            WHERE id = %s
+        """, (medicamento_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        print(f"Error al desactivar alerta: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # -------------------------------------------------------------------
 # --- ZONA 7: INICIALIZACIN Y EJECUCIN DEL SERVIDOR ---
 # -------------------------------------------------------------------

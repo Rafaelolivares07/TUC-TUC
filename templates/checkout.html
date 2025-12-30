@@ -437,6 +437,7 @@
         let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
         let metodoSeleccionado = null;
         let telefonoGuardado = localStorage.getItem('telefono_usuario');
+        let nombreGuardado = localStorage.getItem('nombre_usuario');
         let direccionesGuardadas = [];
         let direccionSeleccionada = null;
         let terceroExistente = null;
@@ -451,6 +452,11 @@
         if (telefonoGuardado) {
             document.getElementById('telefono').value = telefonoGuardado;
             verificarTelefono(telefonoGuardado);
+        }
+
+        // Auto-rellenar nombre si existe en localStorage
+        if (nombreGuardado) {
+            document.getElementById('nombre').value = nombreGuardado;
         }
 
         // Verificar teléfono cuando el usuario termine de escribir
@@ -484,9 +490,11 @@
                         // Tiene cuenta pero sin direcciones guardadas
                         mostrarAlerta('Bienvenido de nuevo! Agrega tus datos de entrega.', 'info');
 
-                        // Pre-llenar el nombre del usuario
+                        // Pre-llenar el nombre del usuario (prioridad: API > localStorage)
                         if (terceroExistente.nombre) {
                             document.getElementById('nombre').value = terceroExistente.nombre;
+                        } else if (nombreGuardado) {
+                            document.getElementById('nombre').value = nombreGuardado;
                         }
 
                         // Asegurar que el formulario esté visible
@@ -546,9 +554,11 @@
             document.getElementById('formularioDatos').classList.remove('hidden');
             direccionSeleccionada = null;
 
-            // Si el usuario ya existe, pre-llenar su nombre
+            // Pre-llenar nombre: prioridad 1) terceroExistente, 2) localStorage, 3) vacío
             if (terceroExistente && terceroExistente.nombre) {
                 document.getElementById('nombre').value = terceroExistente.nombre;
+            } else if (nombreGuardado) {
+                document.getElementById('nombre').value = nombreGuardado;
             } else {
                 document.getElementById('nombre').value = '';
             }

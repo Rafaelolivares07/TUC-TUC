@@ -4360,6 +4360,12 @@ def admin_categorias():
     """Página de gestión de categorías"""
     return render_template('admin_categorias.html')
 
+@app.route('/admin/parametros')
+@admin_required
+def admin_parametros():
+    """Página de gestión de parámetros del sistema"""
+    return render_template('admin_parametros.html')
+
 @app.route('/admin/nuevo_admin')
 @admin_required
 def registro_admin_form_protegido():

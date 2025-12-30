@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parámetros del Sistema</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+
+        .accordion-section {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .accordion-header {
+            background: #f9fafb;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+            user-select: none;
+        }
+
+        .accordion-header:hover {
+            background: #f3f4f6;
+        }
+
+        .accordion-header.active {
+            background: #eff6ff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .accordion-icon {
+            transition: transform 0.3s ease;
+            color: #6b7280;
+        }
+
+        .accordion-icon.rotated {
+            transform: rotate(90deg);
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .accordion-content.expanded {
+            max-height: 2000px;
+        }
+
+        .time-input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .time-select {
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .time-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .festivo-item {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .festivo-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-color: #d1d5db;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Parámetros del Sistema</h1>
+                <p class="text-gray-600 mt-1">Configura horarios, festivos y otros parámetros</p>
+            </div>
+            <a href="{{ url_for('admin_menu') }}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition">
+                ← Volver
+            </a>
+        </div>
+
+        <!-- Acordeón de Parámetros -->
+        <div id="accordion-parametros">
+
+            <!-- Sección 1: Horarios de Entrega -->
+            <div class="accordion-section">
+                <div class="accordion-header active" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">🕐 Horarios de Entrega</h3>
+                        <p class="text-sm text-gray-500 mt-1">Configura los horarios de atención y entrega</p>
+                    </div>
+                    <svg class="accordion-icon rotated" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content expanded">
+                    <div class="p-6 bg-white">
+
+                        <!-- Horario Lunes a Sábado -->
+                        <div class="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <h4 class="font-semibold text-gray-800 mb-4">Lunes a Sábado (días hábiles)</h4>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Hora de Apertura</label>
+                                    <div class="time-input-group">
+                                        <select id="lun_sab_apertura_h" class="time-select">
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                            <option value="6">6</option>
+                                            <option value="7" selected>7</option>
+                                            <option value="8">8</option>
+                                            <option value="9">9</option>
+                                            <option value="10">10</option>
+                                            <option value="11">11</option>
+                                            <option value="12">12</option>
+                                        </select>
+                                        <span class="text-gray-600 font-medium">:</span>
+                                        <select id="lun_sab_apertura_m" class="time-select">
+                                            <option value="0" selected>00</option>
+                                            <option value="15">15</option>
+                                            <option value="30">30</option>
+                                            <option value="45">45</option>
+                                        </select>
+                                        <select id="lun_sab_apertura_ampm" class="time-select">
+                                            <option value="AM" selected>AM</option>
+                                            <option value="PM">PM</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Hora de Cierre</label>
+                                    <div class="time-input-group">
+                                        <select id="lun_sab_cierre_h" class="time-select">
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                            <option value="6">6</option>
+                                            <option value="7">7</option>
+                                            <option value="8">8</option>
+                                            <option value="9">9</option>
+                                            <option value="10">10</option>
+                                            <option value="11">11</option>
+                                            <option value="12" selected>12</option>
+                                        </select>
+                                        <span class="text-gray-600 font-medium">:</span>
+                                        <select id="lun_sab_cierre_m" class="time-select">
+                                            <option value="0" selected>00</option>
+                                            <option value="15">15</option>
+                                            <option value="30">30</option>
+                                            <option value="45">45</option>
+                                        </select>
+                                        <select id="lun_sab_cierre_ampm" class="time-select">
+                                            <option value="AM" selected>AM</option>
+                                            <option value="PM">PM</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Horario Domingos y Festivos -->
+                        <div class="mb-6 p-4 bg-green-50 rounded-lg border border-green-100">
+                            <h4 class="font-semibold text-gray-800 mb-4">Domingos y Festivos</h4>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Hora de Apertura</label>
+                                    <div class="time-input-group">
+                                        <select id="dom_festivos_apertura_h" class="time-select">
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                            <option value="6">6</option>
+                                            <option value="7">7</option>
+                                            <option value="8">8</option>
+                                            <option value="9">9</option>
+                                            <option value="10" selected>10</option>
+                                            <option value="11">11</option>
+                                            <option value="12">12</option>
+                                        </select>
+                                        <span class="text-gray-600 font-medium">:</span>
+                                        <select id="dom_festivos_apertura_m" class="time-select">
+                                            <option value="0" selected>00</option>
+                                            <option value="15">15</option>
+                                            <option value="30">30</option>
+                                            <option value="45">45</option>
+                                        </select>
+                                        <select id="dom_festivos_apertura_ampm" class="time-select">
+                                            <option value="AM" selected>AM</option>
+                                            <option value="PM">PM</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Hora de Cierre</label>
+                                    <div class="time-input-group">
+                                        <select id="dom_festivos_cierre_h" class="time-select">
+                                            <option value="1">1</option>
+                                            <option value="2" selected>2</option>
+                                            <option value="3">3</option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                            <option value="6">6</option>
+                                            <option value="7">7</option>
+                                            <option value="8">8</option>
+                                            <option value="9">9</option>
+                                            <option value="10">10</option>
+                                            <option value="11">11</option>
+                                            <option value="12">12</option>
+                                        </select>
+                                        <span class="text-gray-600 font-medium">:</span>
+                                        <select id="dom_festivos_cierre_m" class="time-select">
+                                            <option value="0" selected>00</option>
+                                            <option value="15">15</option>
+                                            <option value="30">30</option>
+                                            <option value="45">45</option>
+                                        </select>
+                                        <select id="dom_festivos_cierre_ampm" class="time-select">
+                                            <option value="AM">AM</option>
+                                            <option value="PM" selected>PM</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botón Guardar Horarios -->
+                        <button onclick="guardarHorarios()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold">
+                            💾 Guardar Horarios
+                        </button>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 2: Lista de Festivos -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">📅 Festivos</h3>
+                        <p class="text-sm text-gray-500 mt-1">Gestiona la lista de días festivos</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white">
+
+                        <!-- Agregar Festivo -->
+                        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                            <h4 class="font-semibold text-gray-800 mb-3">Agregar Nuevo Festivo</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <input type="date" id="festivo-fecha" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="festivo-nombre" placeholder="Nombre del festivo" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button onclick="agregarFestivo()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium">
+                                    + Agregar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Lista de Festivos -->
+                        <div id="lista-festivos" class="space-y-2">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 3: Futuras Configuraciones (placeholder) -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">⚙️ Otras Configuraciones</h3>
+                        <p class="text-sm text-gray-500 mt-1">Próximamente: notificaciones, zonas de entrega, etc.</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white text-center text-gray-500">
+                        <p>Esta sección estará disponible próximamente.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Toggle acordeón
+        function toggleAccordion(header) {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.accordion-icon');
+            const isActive = header.classList.contains('active');
+
+            if (isActive) {
+                // Cerrar
+                header.classList.remove('active');
+                content.classList.remove('expanded');
+                icon.classList.remove('rotated');
+            } else {
+                // Abrir
+                header.classList.add('active');
+                content.classList.add('expanded');
+                icon.classList.add('rotated');
+            }
+        }
+
+        // Cargar horarios al iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarHorarios();
+            cargarFestivos();
+        });
+
+        async function cargarHorarios() {
+            try {
+                const res = await fetch('/api/parametros/horarios');
+                const data = await res.json();
+
+                if (data.ok && data.horarios) {
+                    // Lun-Sáb
+                    const lunSab = data.horarios.lun_sab || {};
+                    document.getElementById('lun_sab_apertura_h').value = lunSab.apertura_h || 7;
+                    document.getElementById('lun_sab_apertura_m').value = lunSab.apertura_m || 0;
+                    document.getElementById('lun_sab_apertura_ampm').value = lunSab.apertura_ampm || 'AM';
+                    document.getElementById('lun_sab_cierre_h').value = lunSab.cierre_h || 12;
+                    document.getElementById('lun_sab_cierre_m').value = lunSab.cierre_m || 0;
+                    document.getElementById('lun_sab_cierre_ampm').value = lunSab.cierre_ampm || 'AM';
+
+                    // Dom-Festivos
+                    const domFestivos = data.horarios.dom_festivos || {};
+                    document.getElementById('dom_festivos_apertura_h').value = domFestivos.apertura_h || 10;
+                    document.getElementById('dom_festivos_apertura_m').value = domFestivos.apertura_m || 0;
+                    document.getElementById('dom_festivos_apertura_ampm').value = domFestivos.apertura_ampm || 'AM';
+                    document.getElementById('dom_festivos_cierre_h').value = domFestivos.cierre_h || 2;
+                    document.getElementById('dom_festivos_cierre_m').value = domFestivos.cierre_m || 0;
+                    document.getElementById('dom_festivos_cierre_ampm').value = domFestivos.cierre_ampm || 'PM';
+                }
+            } catch (error) {
+                console.error('Error cargando horarios:', error);
+            }
+        }
+
+        async function guardarHorarios() {
+            const horarios = {
+                lun_sab: {
+                    apertura_h: parseInt(document.getElementById('lun_sab_apertura_h').value),
+                    apertura_m: parseInt(document.getElementById('lun_sab_apertura_m').value),
+                    apertura_ampm: document.getElementById('lun_sab_apertura_ampm').value,
+                    cierre_h: parseInt(document.getElementById('lun_sab_cierre_h').value),
+                    cierre_m: parseInt(document.getElementById('lun_sab_cierre_m').value),
+                    cierre_ampm: document.getElementById('lun_sab_cierre_ampm').value
+                },
+                dom_festivos: {
+                    apertura_h: parseInt(document.getElementById('dom_festivos_apertura_h').value),
+                    apertura_m: parseInt(document.getElementById('dom_festivos_apertura_m').value),
+                    apertura_ampm: document.getElementById('dom_festivos_apertura_ampm').value,
+                    cierre_h: parseInt(document.getElementById('dom_festivos_cierre_h').value),
+                    cierre_m: parseInt(document.getElementById('dom_festivos_cierre_m').value),
+                    cierre_ampm: document.getElementById('dom_festivos_cierre_ampm').value
+                }
+            };
+
+            try {
+                const res = await fetch('/api/parametros/horarios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(horarios)
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    alert('✅ Horarios guardados correctamente');
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error guardando horarios:', error);
+                alert('❌ Error al guardar horarios');
+            }
+        }
+
+        async function cargarFestivos() {
+            try {
+                const res = await fetch('/api/parametros/festivos');
+                const data = await res.json();
+
+                if (data.ok && data.festivos) {
+                    renderizarFestivos(data.festivos);
+                }
+            } catch (error) {
+                console.error('Error cargando festivos:', error);
+            }
+        }
+
+        function renderizarFestivos(festivos) {
+            const container = document.getElementById('lista-festivos');
+
+            if (festivos.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-8">No hay festivos registrados</p>';
+                return;
+            }
+
+            container.innerHTML = festivos.map(f => {
+                const fecha = new Date(f.fecha + 'T00:00:00');
+                const fechaFormateada = fecha.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+
+                return `
+                    <div class="festivo-item">
+                        <div>
+                            <span class="font-semibold text-gray-800">${fechaFormateada}</span>
+                            <span class="text-gray-600 ml-3">- ${f.nombre}</span>
+                        </div>
+                        <button onclick="eliminarFestivo(${f.id})" class="text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1 rounded transition font-medium">
+                            Eliminar
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function agregarFestivo() {
+            const fecha = document.getElementById('festivo-fecha').value;
+            const nombre = document.getElementById('festivo-nombre').value.trim();
+
+            if (!fecha || !nombre) {
+                alert('Por favor completa la fecha y el nombre del festivo');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/parametros/festivos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fecha, nombre })
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    document.getElementById('festivo-fecha').value = '';
+                    document.getElementById('festivo-nombre').value = '';
+                    cargarFestivos();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error agregando festivo:', error);
+                alert('❌ Error al agregar festivo');
+            }
+        }
+
+        async function eliminarFestivo(id) {
+            if (!confirm('¿Estás seguro de eliminar este festivo?')) return;
+
+            try {
+                const res = await fetch(`/api/parametros/festivos/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    cargarFestivos();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error eliminando festivo:', error);
+                alert('❌ Error al eliminar festivo');
+            }
+        }
+    </script>
+</body>
+</html>

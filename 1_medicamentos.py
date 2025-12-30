@@ -12479,17 +12479,58 @@ def api_crear_usuario_pastillero():
             conn.commit()
             print(f"✅ Tercero creado con ID: {tercero_id}")
 
+        # Verificar si el usuario ya tiene un pastillero
+        pastillero_existente = conn.execute("""
+            SELECT p.id FROM pastilleros p
+            INNER JOIN relaciones_pastillero rp ON p.id = rp.pastillero_id
+            WHERE rp.usuario_id = %s AND rp.tipo = 'propietario'
+            LIMIT 1
+        """, (tercero_id,)).fetchone()
+
+        if pastillero_existente:
+            pastillero_id = pastillero_existente['id']
+            print(f"✅ Pastillero existente encontrado: ID {pastillero_id}")
+        else:
+            # Crear pastillero automáticamente para el nuevo usuario
+            nombre_pastillero = f"Pastillero de {nombre}"
+            print(f"➕ Creando pastillero automático: {nombre_pastillero}")
+
+            conn.execute("""
+                INSERT INTO pastilleros (nombre, creado_por_usuario_id)
+                VALUES (%s, %s)
+            """, (nombre_pastillero, tercero_id))
+
+            # Obtener el ID del pastillero recién creado
+            pastillero_nuevo = conn.execute("""
+                SELECT id FROM pastilleros
+                WHERE creado_por_usuario_id = %s
+                ORDER BY id DESC LIMIT 1
+            """, (tercero_id,)).fetchone()
+
+            pastillero_id = pastillero_nuevo['id']
+
+            # Crear relación de propietario
+            conn.execute("""
+                INSERT INTO relaciones_pastillero (pastillero_id, usuario_id, tipo)
+                VALUES (%s, %s, 'propietario')
+            """, (pastillero_id, tercero_id))
+
+            conn.commit()
+            print(f"✅ Pastillero creado con ID: {pastillero_id}")
+
         conn.close()
 
-        # Establecer sesión
+        # Establecer sesión con usuario y pastillero activo
         session['usuario_id'] = tercero_id
-        print(f"🔐 Sesión establecida para usuario_id: {tercero_id}")
+        session['pastillero_activo_id'] = pastillero_id
+        print(f"🔐 Sesión establecida para usuario_id: {tercero_id}, pastillero_id: {pastillero_id}")
 
         return jsonify({
             'ok': True,
             'usuario_id': tercero_id,
             'nombre': nombre,
-            'telefono': telefono
+            'telefono': telefono,
+            'pastillero_id': pastillero_id
         })
 
     except Exception as e:
@@ -12516,18 +12557,59 @@ def api_restaurar_sesion():
             SELECT id, nombre, telefono FROM terceros WHERE id = ? LIMIT 1
         """, (usuario_id,)).fetchone()
 
-        conn.close()
-
         if tercero:
+            # Obtener el pastillero activo del usuario
+            pastillero = conn.execute("""
+                SELECT p.id FROM pastilleros p
+                INNER JOIN relaciones_pastillero rp ON p.id = rp.pastillero_id
+                WHERE rp.usuario_id = %s AND rp.tipo IN ('propietario', 'miembro')
+                ORDER BY rp.tipo DESC, p.id ASC
+                LIMIT 1
+            """, (tercero['id'],)).fetchone()
+
+            if not pastillero:
+                # Usuario no tiene pastillero - crear uno automáticamente
+                nombre_pastillero = f"Pastillero de {tercero['nombre']}"
+                print(f"➕ Usuario sin pastillero. Creando automáticamente: {nombre_pastillero}")
+
+                conn.execute("""
+                    INSERT INTO pastilleros (nombre, creado_por_usuario_id)
+                    VALUES (%s, %s)
+                """, (nombre_pastillero, tercero['id']))
+
+                # Obtener el ID del pastillero recién creado
+                pastillero_nuevo = conn.execute("""
+                    SELECT id FROM pastilleros
+                    WHERE creado_por_usuario_id = %s
+                    ORDER BY id DESC LIMIT 1
+                """, (tercero['id'],)).fetchone()
+
+                pastillero_id = pastillero_nuevo['id']
+
+                # Crear relación de propietario
+                conn.execute("""
+                    INSERT INTO relaciones_pastillero (pastillero_id, usuario_id, tipo)
+                    VALUES (%s, %s, 'propietario')
+                """, (pastillero_id, tercero['id']))
+
+                conn.commit()
+                print(f"✅ Pastillero creado con ID: {pastillero_id}")
+            else:
+                pastillero_id = pastillero['id']
+
+            conn.close()
+
             # Restaurar sesión
             session['usuario_id'] = tercero['id']
-            print(f"🔄 Sesión restaurada para usuario_id: {tercero['id']} ({tercero['nombre']})")
+            session['pastillero_activo_id'] = pastillero_id
+            print(f"🔄 Sesión restaurada para usuario_id: {tercero['id']} ({tercero['nombre']}), pastillero_id: {pastillero_id}")
 
             return jsonify({
                 'ok': True,
                 'usuario_id': tercero['id'],
                 'nombre': tercero['nombre'],
-                'telefono': tercero['telefono']
+                'telefono': tercero['telefono'],
+                'pastillero_id': pastillero_id
             })
         else:
             return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404

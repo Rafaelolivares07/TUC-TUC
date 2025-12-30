@@ -12701,6 +12701,13 @@ def api_pastillero_agregar():
     unidad = data.get('unidad', 'pastillas')
     nombre = data.get('nombre')  #  Para medicamentos personales
 
+    # 🆕 Campos nuevos para tipos de medicamento
+    tipo_medicamento = data.get('tipo_medicamento', 'botiquin')  # 'botiquin' o 'tratamiento'
+    alerta_reposicion = data.get('alerta_reposicion', False)
+    nivel_minimo_alerta = data.get('nivel_minimo_alerta', 10)
+    fecha_inicio_tratamiento = data.get('fecha_inicio_tratamiento')
+    fecha_fin_tratamiento = data.get('fecha_fin_tratamiento')
+
     # medicamento_id puede ser None/null para medicamentos personales
 
     conn = get_db_connection()
@@ -12727,9 +12734,14 @@ def api_pastillero_agregar():
             else:
                 # Crear nuevo medicamento personal
                 conn.execute('''
-                    INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
-                    VALUES (%s, NULL, %s, %s, %s)
-                ''', (pastillero_id, nombre, cantidad, unidad))
+                    INSERT INTO pastillero_usuarios (
+                        pastillero_id, medicamento_id, nombre, cantidad, unidad,
+                        tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
+                        fecha_inicio_tratamiento, fecha_fin_tratamiento
+                    )
+                    VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (pastillero_id, nombre, cantidad, unidad, tipo_medicamento,
+                      alerta_reposicion, nivel_minimo_alerta, fecha_inicio_tratamiento, fecha_fin_tratamiento))
 
         #  CASO 2: Medicamento oficial (con ID)
         else:
@@ -12775,9 +12787,15 @@ def api_pastillero_agregar():
                 else:
                     # Insertar nuevo con nombre normalizado
                     conn.execute('''
-                        INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
-                        VALUES (%s, %s, %s, %s, %s)
-                    ''', (pastillero_id, medicamento_id, nombre_normalizado, cantidad, unidad))
+                        INSERT INTO pastillero_usuarios (
+                            pastillero_id, medicamento_id, nombre, cantidad, unidad,
+                            tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
+                            fecha_inicio_tratamiento, fecha_fin_tratamiento
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ''', (pastillero_id, medicamento_id, nombre_normalizado, cantidad, unidad,
+                          tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
+                          fecha_inicio_tratamiento, fecha_fin_tratamiento))
         
         conn.commit()
         conn.close()
@@ -12850,8 +12868,9 @@ def api_pastillero_tomar(medicamento_id):
     try:
         # Verificar que el medicamento pertenece al pastillero
         medicamento = conn.execute('''
-            SELECT cantidad, unidad FROM pastillero_usuarios
-            WHERE id = ? AND pastillero_id = ?
+            SELECT cantidad, unidad, tipo_medicamento, tomas_completadas
+            FROM pastillero_usuarios
+            WHERE id = %s AND pastillero_id = %s
         ''', (medicamento_id, pastillero_id)).fetchone()
 
         if not medicamento:
@@ -12862,14 +12881,22 @@ def api_pastillero_tomar(medicamento_id):
 
         if nueva_cantidad <= 0:
             # Eliminar si llega a 0
-            conn.execute('DELETE FROM pastillero_usuarios WHERE id = ?', (medicamento_id,))
+            conn.execute('DELETE FROM pastillero_usuarios WHERE id = %s', (medicamento_id,))
         else:
-            # Actualizar cantidad
-            conn.execute('''
-                UPDATE pastillero_usuarios
-                SET cantidad = ?
-                WHERE id = ?
-            ''', (nueva_cantidad, medicamento_id))
+            # Si es tratamiento, incrementar contador de tomas completadas
+            if medicamento['tipo_medicamento'] == 'tratamiento':
+                conn.execute('''
+                    UPDATE pastillero_usuarios
+                    SET cantidad = %s, tomas_completadas = tomas_completadas + 1
+                    WHERE id = %s
+                ''', (nueva_cantidad, medicamento_id))
+            else:
+                # Actualizar solo cantidad (botiquín)
+                conn.execute('''
+                    UPDATE pastillero_usuarios
+                    SET cantidad = %s
+                    WHERE id = %s
+                ''', (nueva_cantidad, medicamento_id))
 
         conn.commit()
         conn.close()

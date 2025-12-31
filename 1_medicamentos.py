@@ -14246,40 +14246,95 @@ def eliminar_festivo(festivo_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@app.route('/api/parametro/<nombre_parametro>', methods=['GET'])
-def obtener_parametro(nombre_parametro):
-    """Obtiene el valor de un parámetro del sistema por su nombre"""
-    try:
-        conn = get_db_connection()
+@app.route('/api/parametro/<nombre_parametro>', methods=['GET', 'POST'])
+@admin_required
+def parametro_sistema(nombre_parametro):
+    """GET: Obtiene el valor de un parámetro / POST: Actualiza el valor"""
 
-        row = conn.execute("""
-            SELECT valor_numerico, valor_texto, valor_booleano, tipo
-            FROM parametros_sistema
-            WHERE nombre = %s
-        """, (nombre_parametro,)).fetchone()
+    if request.method == 'GET':
+        try:
+            conn = get_db_connection()
 
-        conn.close()
+            row = conn.execute("""
+                SELECT valor_numerico, valor_texto, valor_booleano, tipo
+                FROM parametros_sistema
+                WHERE nombre = %s
+            """, (nombre_parametro,)).fetchone()
 
-        if row:
-            # Retornar el valor según el tipo
-            if row['tipo'] == 'numerico':
-                valor = row['valor_numerico']
-            elif row['tipo'] == 'texto':
-                valor = row['valor_texto']
-            elif row['tipo'] == 'booleano':
-                valor = row['valor_booleano']
+            conn.close()
+
+            if row:
+                # Retornar el valor según el tipo
+                if row['tipo'] == 'numerico':
+                    valor = row['valor_numerico']
+                elif row['tipo'] == 'texto':
+                    valor = row['valor_texto']
+                elif row['tipo'] == 'booleano':
+                    valor = row['valor_booleano']
+                else:
+                    valor = None
+
+                return jsonify({'ok': True, 'valor': valor, 'tipo': row['tipo']})
             else:
-                valor = None
+                return jsonify({'ok': False, 'error': 'Parámetro no encontrado', 'valor': None})
 
-            return jsonify({'ok': True, 'valor': valor, 'tipo': row['tipo']})
-        else:
-            return jsonify({'ok': False, 'error': 'Parámetro no encontrado', 'valor': None})
+        except Exception as e:
+            print(f"Error obteniendo parámetro {nombre_parametro}: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'ok': False, 'error': str(e), 'valor': None}), 500
 
-    except Exception as e:
-        print(f"Error obteniendo parámetro {nombre_parametro}: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e), 'valor': None}), 500
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            valor = data.get('valor')
+
+            if valor is None:
+                return jsonify({'ok': False, 'error': 'Valor no proporcionado'}), 400
+
+            conn = get_db_connection()
+
+            # Primero verificar el tipo del parámetro
+            row = conn.execute("""
+                SELECT tipo FROM parametros_sistema WHERE nombre = %s
+            """, (nombre_parametro,)).fetchone()
+
+            if not row:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Parámetro no encontrado'}), 404
+
+            tipo = row['tipo']
+
+            # Actualizar según el tipo
+            if tipo == 'numerico':
+                conn.execute("""
+                    UPDATE parametros_sistema
+                    SET valor_numerico = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                    WHERE nombre = %s
+                """, (float(valor), nombre_parametro))
+            elif tipo == 'texto':
+                conn.execute("""
+                    UPDATE parametros_sistema
+                    SET valor_texto = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                    WHERE nombre = %s
+                """, (str(valor), nombre_parametro))
+            elif tipo == 'booleano':
+                conn.execute("""
+                    UPDATE parametros_sistema
+                    SET valor_booleano = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                    WHERE nombre = %s
+                """, (bool(valor), nombre_parametro))
+
+            conn.commit()
+            conn.close()
+
+            return jsonify({'ok': True, 'message': 'Parámetro actualizado correctamente'})
+
+        except Exception as e:
+            print(f"Error actualizando parámetro {nombre_parametro}: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/validar-horario', methods=['GET'])

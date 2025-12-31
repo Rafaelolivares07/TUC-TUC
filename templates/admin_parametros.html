@@ -307,20 +307,69 @@
                 </div>
             </div>
 
-            <!-- Sección 3: Futuras Configuraciones (placeholder) -->
+            <!-- Sección 3: Políticas de Precios -->
             <div class="accordion-section">
                 <div class="accordion-header" onclick="toggleAccordion(this)">
                     <div>
-                        <h3 class="text-lg font-semibold text-gray-800">⚙️ Otras Configuraciones</h3>
-                        <p class="text-sm text-gray-500 mt-1">Próximamente: notificaciones, zonas de entrega, etc.</p>
+                        <h3 class="text-lg font-semibold text-gray-800">💰 Políticas de Precios</h3>
+                        <p class="text-sm text-gray-500 mt-1">Configura validaciones y reglas de cotizaciones</p>
                     </div>
                     <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </div>
                 <div class="accordion-content">
-                    <div class="p-6 bg-white text-center text-gray-500">
-                        <p>Esta sección estará disponible próximamente.</p>
+                    <div class="p-6 bg-white">
+
+                        <!-- Diferencia Máxima en Cotizaciones -->
+                        <div class="mb-6 p-4 bg-amber-50 rounded-lg border border-amber-100">
+                            <h4 class="font-semibold text-gray-800 mb-2">Diferencia Máxima en Cotizaciones</h4>
+                            <p class="text-sm text-gray-600 mb-4">
+                                Porcentaje máximo de diferencia <strong>RAZONABLE</strong> entre una nueva cotización y las existentes antes de mostrar alerta de confirmación
+                            </p>
+
+                            <div class="flex items-center gap-4">
+                                <div class="flex-1">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Umbral de diferencia (%)</label>
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            id="diferencia_maxima_cotizaciones"
+                                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-32 text-center font-semibold text-lg"
+                                            min="1"
+                                            max="100"
+                                            value="30">
+                                        <span class="text-2xl font-bold text-gray-700">%</span>
+                                    </div>
+                                </div>
+
+                                <div class="flex-1 bg-white p-3 rounded border border-gray-200">
+                                    <p class="text-xs text-gray-500 mb-1">Ejemplo con 30%:</p>
+                                    <p class="text-sm text-gray-700">
+                                        <span class="font-mono bg-red-50 px-2 py-0.5 rounded text-red-700">$7,000</span> vs
+                                        <span class="font-mono bg-green-50 px-2 py-0.5 rounded text-green-700">$10,000</span> →
+                                        <span class="font-semibold text-red-600">⚠️ Alerta</span>
+                                    </p>
+                                    <p class="text-sm text-gray-700 mt-1">
+                                        <span class="font-mono bg-green-50 px-2 py-0.5 rounded text-green-700">$11,000</span> vs
+                                        <span class="font-mono bg-green-50 px-2 py-0.5 rounded text-green-700">$10,000</span> →
+                                        <span class="font-semibold text-green-600">✓ OK</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex justify-end">
+                                <button onclick="guardarParametroPrecios()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium">
+                                    💾 Guardar Cambios
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Futuras políticas de precios -->
+                        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                            <p class="text-sm text-gray-500">Próximamente: márgenes de ganancia, descuentos automáticos, etc.</p>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -352,6 +401,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             cargarHorarios();
             cargarFestivos();
+            cargarParametrosPrecios();
         });
 
         async function cargarHorarios() {
@@ -511,6 +561,49 @@
             } catch (error) {
                 console.error('Error eliminando festivo:', error);
                 alert('❌ Error al eliminar festivo');
+            }
+        }
+
+        // ========== POLÍTICAS DE PRECIOS ==========
+
+        async function cargarParametrosPrecios() {
+            try {
+                const res = await fetch('/api/parametro/diferencia_maxima_cotizaciones');
+                const data = await res.json();
+
+                if (data.ok && data.valor !== null) {
+                    document.getElementById('diferencia_maxima_cotizaciones').value = data.valor;
+                }
+            } catch (error) {
+                console.error('Error cargando parámetros de precios:', error);
+            }
+        }
+
+        async function guardarParametroPrecios() {
+            const valor = parseFloat(document.getElementById('diferencia_maxima_cotizaciones').value);
+
+            if (isNaN(valor) || valor < 1 || valor > 100) {
+                alert('⚠️ El porcentaje debe estar entre 1% y 100%');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/parametro/diferencia_maxima_cotizaciones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ valor: valor })
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    alert('✅ Parámetro guardado correctamente');
+                } else {
+                    alert('❌ Error al guardar: ' + (data.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error('Error guardando parámetro:', error);
+                alert('❌ Error al guardar parámetro');
             }
         }
     </script>

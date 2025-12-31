@@ -534,6 +534,46 @@
             font-weight: bold;
         }
 
+        /* 🆕 BOTÓN FLOTANTE ALERTAS REPOSICIÓN */
+        .alertas-flotante {
+            position: fixed;
+            top: 80px;  /* Debajo del pastillero */
+            left: 80px;
+            background: #f39c12;  /* Naranja para alertas */
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .alertas-flotante:hover {
+            transform: scale(1.1);
+        }
+
+        .alertas-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
         /* 🆕 BOTÓN SCROLL TO TOP - Moverlo más arriba */
         .scroll-to-top {
             bottom: 12rem !important;  /* Moverlo arriba del pastillero */
@@ -1331,6 +1371,12 @@
         <span id="usuario-nombre-chat">Usuario</span>
         <span style="margin-left: 0.3rem;">💬</span>
         <span class="chat-badge" id="chatCount" style="display: none;">0</span>
+    </div>
+
+    <!-- 🆕 BOTÓN FLOTANTE ALERTAS REPOSICIÓN -->
+    <div id="alertas-flotante" class="alertas-flotante" onclick="abrirPastillero()" title="Alertas de reposición" style="display: none;">
+        ⚠️
+        <span class="alertas-badge" id="alertasCount">0</span>
     </div>
 
     <!-- BOTÓN FLOTANTE CARRITO (lado derecho) -->
@@ -3310,10 +3356,17 @@
             // TODO: Implementar agregar al carrito
         }
 
-        // 🆕 Actualizar contador del globo de alertas en tienda (placeholder)
+        // 🆕 Actualizar contador del globo de alertas en tienda
         function actualizarContadorAlertasTienda(cantidad) {
-            // TODO: Implementar globo flotante en tienda
-            console.log(`Alertas activas: ${cantidad}`);
+            const globoAlertas = document.getElementById('alertas-flotante');
+            const badge = document.getElementById('alertasCount');
+
+            if (cantidad > 0) {
+                globoAlertas.style.display = 'flex';
+                badge.textContent = cantidad;
+            } else {
+                globoAlertas.style.display = 'none';
+            }
         }
 
         function cargarMedicamentosPastillero(orden = null, sintomas = null) {
@@ -4028,7 +4081,21 @@
         // Actualizar contador del pastillero al cargar
         document.addEventListener('DOMContentLoaded', function() {
             actualizarBadgePastillero();
+            // 🆕 Cargar contador de alertas en el globo flotante
+            cargarContadorAlertas();
         });
+
+        // 🆕 Función para cargar solo el contador de alertas (sin abrir modal)
+        function cargarContadorAlertas() {
+            fetch('/api/pastillero/alertas')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok && data.alertas) {
+                        actualizarContadorAlertasTienda(data.alertas.length);
+                    }
+                })
+                .catch(err => console.error('Error al cargar contador alertas:', err));
+        }
         
         // 🔍 FUNCIÓN DEBUG: Mostrar JSON de comparación tienda vs pastillero
         function mostrarDebugJSON() {

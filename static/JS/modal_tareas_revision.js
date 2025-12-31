@@ -101,9 +101,17 @@ function mostrarModalTareas() {
 
                 <!-- Botones -->
                 <div style="padding: 20px; background: #f8f9fa; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #dee2e6;">
-                    <button onclick="rechazarTarea()" style="background: #dc3545; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
-                        ❌ Estoy Ocupado
-                    </button>
+                    <!-- Botones lado izquierdo -->
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="saltarTareaActual()" style="background: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+                            ⏭️ Saltar Esta
+                        </button>
+                        <button onclick="cerrarYRechazarTodas()" style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
+                            ❌ Estoy Ocupado
+                        </button>
+                    </div>
+
+                    <!-- Botones lado derecho -->
                     <div style="display: flex; gap: 10px;">
                         <button onclick="confirmarPrecio()" style="background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
                             ✅ Confirmar Precio
@@ -264,8 +272,8 @@ async function guardarPrecioActualizado() {
     }
 }
 
-// Rechazar tarea (estoy ocupado)
-async function rechazarTarea() {
+// Saltar tarea actual (rechazar solo esta, mostrar siguiente)
+async function saltarTareaActual() {
     const tarea = tareasRevisionPendientes[indiceActual];
 
     try {
@@ -275,7 +283,7 @@ async function rechazarTarea() {
             body: JSON.stringify({
                 tarea_id: tarea.tarea_id,
                 accion: 'rechazar',
-                observaciones: 'Admin rechazó la tarea (ocupado con otras tareas)'
+                observaciones: 'Admin saltó esta tarea específica'
             })
         });
 
@@ -287,8 +295,46 @@ async function rechazarTarea() {
             alert('❌ Error: ' + (data.error || 'Error desconocido'));
         }
     } catch (error) {
-        console.error('Error rechazando tarea:', error);
-        alert('❌ Error al rechazar tarea');
+        console.error('Error saltando tarea:', error);
+        alert('❌ Error al saltar tarea');
+    }
+}
+
+// Cerrar modal y rechazar TODAS las tareas pendientes (estoy ocupado)
+async function cerrarYRechazarTodas() {
+    if (!confirm('⚠️ ¿Estás seguro?\n\nSe cerrarán TODAS las tareas pendientes y volverán a aparecer en 30 días.\n\n¿Continuar?')) {
+        return;
+    }
+
+    try {
+        // Mostrar indicador de carga
+        const modal = document.getElementById('modal-tareas-revision');
+        const originalContent = modal.innerHTML;
+        modal.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%;"><p style="font-size: 1.5rem; color: white;">⏳ Cerrando tareas...</p></div>';
+
+        // Rechazar todas las tareas restantes (desde indiceActual hasta el final)
+        const tareasRestantes = tareasRevisionPendientes.slice(indiceActual);
+
+        for (const tarea of tareasRestantes) {
+            await fetch('/api/tareas-revision/responder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tarea_id: tarea.tarea_id,
+                    accion: 'rechazar',
+                    observaciones: 'Admin rechazó todas las tareas (ocupado)'
+                })
+            });
+        }
+
+        // Cerrar modal inmediatamente
+        cerrarModalTareas();
+
+    } catch (error) {
+        console.error('Error rechazando todas las tareas:', error);
+        alert('❌ Error al cerrar tareas. Intenta de nuevo.');
+        // Restaurar modal en caso de error
+        location.reload();
     }
 }
 

@@ -588,6 +588,7 @@ def admin_required(f):
     """
     Decorador para proteger rutas que requieren rol de Administrador.
     Compatible con peticiones AJAX (devuelve JSON) y navegacin normal (redirige).
+    🆕 Genera automáticamente tareas de revisión de cotizaciones cada 6 horas.
     """
     def wrapper(*args, **kwargs):
 
@@ -601,7 +602,7 @@ def admin_required(f):
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
                       request.headers.get('Accept', '').find('application/json') != -1 or \
                       request.path.startswith('/admin/') and (
-                          request.path.endswith('/sintomas') or 
+                          request.path.endswith('/sintomas') or
                           '/sintomas' in request.path or
                           request.is_json
                       )
@@ -610,17 +611,84 @@ def admin_required(f):
             if is_ajax:
                 # Si es AJAX, devolver JSON con error
                 return jsonify({
-                    'ok': False, 
+                    'ok': False,
                     'error': 'Acceso denegado. Se requiere ser Administrador.'
                 }), 403
             else:
                 # Si es navegacin normal, redirigir
                 flash("Acceso denegado. Se requiere ser Administrador.", 'danger')
                 return redirect(url_for('index'))
-          
+
         print(f"   ACCESO PERMITIDO - Ejecutando funcion {f.__name__}")
+
+        # 🆕 Generar tareas de revisión de cotizaciones automáticamente cada 6 horas
+        try:
+            from datetime import datetime, timedelta
+
+            # Verificar última ejecución (almacenada en memoria del proceso)
+            if not hasattr(wrapper, '_ultima_generacion_tareas'):
+                wrapper._ultima_generacion_tareas = None
+
+            ahora = datetime.now()
+            debe_generar = False
+
+            # Generar si es la primera vez o si pasaron más de 6 horas
+            if wrapper._ultima_generacion_tareas is None:
+                debe_generar = True
+            else:
+                horas_transcurridas = (ahora - wrapper._ultima_generacion_tareas).total_seconds() / 3600
+                if horas_transcurridas >= 6:
+                    debe_generar = True
+
+            if debe_generar:
+                print(f"   🔄 Generando tareas de revisión de cotizaciones...")
+
+                conn = get_db_connection()
+
+                # Obtener parámetro de días de vigencia
+                param_dias = conn.execute("""
+                    SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'dias_vigencia_cotizacion'
+                """).fetchone()
+
+                dias_vigencia = int(param_dias['valor_numerico']) if param_dias else 30
+                fecha_limite = ahora - timedelta(days=dias_vigencia)
+
+                # Buscar cotizaciones vencidas sin tarea pendiente
+                cotizaciones_vencidas = conn.execute("""
+                    SELECT pc.id
+                    FROM precios_competencia pc
+                    WHERE pc.activo = TRUE
+                    AND pc.fecha_actualizacion < %s
+                    AND pc.id NOT IN (
+                        SELECT cotizacion_id FROM tareas_revision_cotizaciones
+                        WHERE estado = 'pendiente'
+                        OR (proxima_revision IS NOT NULL AND proxima_revision > CURRENT_DATE)
+                    )
+                """, (fecha_limite,)).fetchall()
+
+                # Crear tareas
+                tareas_creadas = 0
+                for cot in cotizaciones_vencidas:
+                    conn.execute("""
+                        INSERT INTO tareas_revision_cotizaciones (cotizacion_id, admin_asignado_id, estado)
+                        VALUES (%s, NULL, 'pendiente')
+                        ON CONFLICT (cotizacion_id, estado) DO NOTHING
+                    """, (cot['id'],))
+                    tareas_creadas += 1
+
+                conn.commit()
+                conn.close()
+
+                wrapper._ultima_generacion_tareas = ahora
+                print(f"   ✅ {tareas_creadas} tareas de revisión creadas/actualizadas")
+
+        except Exception as e:
+            print(f"   ⚠️ Error generando tareas de revisión: {e}")
+            # No fallar la petición si hay error en generación de tareas
+            pass
+
         return f(*args, **kwargs)
-    
+
     wrapper.__name__ = f.__name__
     return wrapper
 

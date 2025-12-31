@@ -1461,15 +1461,29 @@ def upload_promo_image():
 # CARRITO API (sincronizado en DB)
 # ==========================================
 
+@app.route('/api/carrito/check-auth', methods=['GET'])
+def check_auth_carrito():
+    """
+    Verifica si el usuario está logueado.
+    Usado para decidir entre localStorage (anónimo) o DB (logueado).
+    """
+    return jsonify({
+        'ok': True,
+        'is_logged_in': 'user_id' in session,
+        'user_id': session.get('user_id')
+    })
+
 @app.route('/api/carrito', methods=['GET'])
 def obtener_carrito():
     """
     Obtiene los items del carrito del usuario actual desde existencias.
     Usa estado='carrito_temporal' para diferenciar de pedidos pendientes.
+    🆕 Solo funciona si el usuario está logueado (usuarios anónimos usan localStorage).
     """
     try:
+        # 🆕 Retornar vacío si no está logueado (usar localStorage en frontend)
         if 'user_id' not in session:
-            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+            return jsonify({'ok': True, 'items': [], 'is_logged_in': False})
 
         user_id = session['user_id']
         conn = get_db_connection()
@@ -1524,10 +1538,12 @@ def agregar_al_carrito():
     """
     Agrega un medicamento al carrito (crea existencia temporal).
     Si ya existe, incrementa la cantidad.
+    🆕 Solo funciona si el usuario está logueado (usuarios anónimos usan localStorage).
     """
     try:
+        # 🆕 Retornar indicador si no está logueado (frontend debe usar localStorage)
         if 'user_id' not in session:
-            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+            return jsonify({'ok': False, 'is_logged_in': False, 'use_localstorage': True})
 
         data = request.get_json()
         user_id = session['user_id']

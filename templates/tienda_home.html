@@ -1394,6 +1394,18 @@
         // 🆕 Función para cargar carrito desde API (DB sincronizado)
         async function cargarCarritoDesdeAPI() {
             try {
+                // 🔍 Verificar si el usuario está logueado
+                const authResponse = await fetch('/api/carrito/check-auth');
+                const authData = await authResponse.json();
+
+                if (!authData.is_logged_in) {
+                    // Usuario NO logueado → cargar desde localStorage
+                    carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+                    return;
+                }
+
+                // Usuario logueado → proceder con migración y carga desde DB
+
                 // 🔄 MIGRACIÓN AUTOMÁTICA: Si hay items en localStorage, migrarlos a la DB
                 const carritoLocalStorage = JSON.parse(localStorage.getItem('carrito') || '[]');
                 if (carritoLocalStorage.length > 0) {
@@ -1444,7 +1456,8 @@
                 }
             } catch (error) {
                 console.error('Error al cargar carrito desde API:', error);
-                // Mantener carrito actual en caso de error
+                // Fallback: cargar desde localStorage
+                carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
             }
         }
 
@@ -2465,31 +2478,51 @@
             }
 
             try {
-                // 🆕 Usar API para agregar al carrito (sincronizado en DB)
-                const response = await fetch('/api/carrito/agregar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id_medicamento: producto.medicamento_id,
-                        cantidad: 1,
-                        precio_unitario: producto.precio
-                    })
-                });
+                // 🆕 Verificar si el usuario está logueado
+                const authResponse = await fetch('/api/carrito/check-auth');
+                const authData = await authResponse.json();
 
-                const data = await response.json();
+                if (!authData.is_logged_in) {
+                    // Usuario NO logueado → usar localStorage (comportamiento original)
+                    const index = carrito.findIndex(item => item.precio_id === producto.precio_id);
 
-                if (!data.ok) {
-                    throw new Error(data.error || 'Error al agregar al carrito');
+                    if (index >= 0) {
+                        carrito[index].cantidad++;
+                    } else {
+                        carrito.push({
+                            ...producto,
+                            cantidad: 1
+                        });
+                    }
+
+                    localStorage.setItem('carrito', JSON.stringify(carrito));
+                    actualizarBadgeCarrito();
+                    mostrarToast(`${producto.nombre} agregado al carrito`);
+                } else {
+                    // Usuario logueado → usar API (sincronizado en DB)
+                    const response = await fetch('/api/carrito/agregar', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            id_medicamento: producto.medicamento_id,
+                            cantidad: 1,
+                            precio_unitario: producto.precio
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!data.ok) {
+                        throw new Error(data.error || 'Error al agregar al carrito');
+                    }
+
+                    // Actualizar carrito local desde la API
+                    await cargarCarritoDesdeAPI();
+                    actualizarBadgeCarrito();
+                    mostrarToast(`${producto.nombre} agregado al carrito`);
                 }
-
-                // 🆕 Actualizar carrito local desde la API
-                await cargarCarritoDesdeAPI();
-                actualizarBadgeCarrito();
-
-                // Mostrar toast
-                mostrarToast(`${producto.nombre} agregado al carrito`);
 
                 // Validar horario solo en el PRIMER producto
                 const yaVioModal = localStorage.getItem('vio_modal_horario');

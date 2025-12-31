@@ -321,6 +321,18 @@
         // 🆕 Función para cargar carrito desde API
         async function cargarCarritoDesdeAPI() {
             try {
+                // 🔍 Verificar si el usuario está logueado
+                const authResponse = await fetch('/api/carrito/check-auth');
+                const authData = await authResponse.json();
+
+                if (!authData.is_logged_in) {
+                    // Usuario NO logueado → cargar desde localStorage
+                    carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+                    actualizarCarrito();
+                    return;
+                }
+
+                // Usuario logueado → cargar desde API (DB)
                 const response = await fetch('/api/carrito');
                 const data = await response.json();
 
@@ -344,7 +356,8 @@
                 actualizarCarrito();
             } catch (error) {
                 console.error('Error al cargar carrito desde API:', error);
-                carrito = [];
+                // Fallback: cargar desde localStorage
+                carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
                 actualizarCarrito();
             }
         }
@@ -412,26 +425,37 @@
             }
 
             try {
-                // 🆕 Actualizar cantidad en API
-                const response = await fetch('/api/carrito/actualizar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        item_id: item.precio_id, // precio_id es el id de existencia
-                        cantidad: nuevaCantidad
-                    })
-                });
+                // 🔍 Verificar si el usuario está logueado
+                const authResponse = await fetch('/api/carrito/check-auth');
+                const authData = await authResponse.json();
 
-                const data = await response.json();
+                if (!authData.is_logged_in) {
+                    // Usuario NO logueado → usar localStorage
+                    carrito[index].cantidad = nuevaCantidad;
+                    localStorage.setItem('carrito', JSON.stringify(carrito));
+                    actualizarCarrito();
+                } else {
+                    // Usuario logueado → usar API
+                    const response = await fetch('/api/carrito/actualizar', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            item_id: item.precio_id, // precio_id es el id de existencia
+                            cantidad: nuevaCantidad
+                        })
+                    });
 
-                if (!data.ok) {
-                    throw new Error(data.error || 'Error al actualizar cantidad');
+                    const data = await response.json();
+
+                    if (!data.ok) {
+                        throw new Error(data.error || 'Error al actualizar cantidad');
+                    }
+
+                    // Recargar carrito desde API
+                    await cargarCarritoDesdeAPI();
                 }
-
-                // Recargar carrito desde API
-                await cargarCarritoDesdeAPI();
             } catch (error) {
                 console.error('Error al cambiar cantidad:', error);
                 alert('Error al actualizar cantidad. Por favor intenta nuevamente.');
@@ -442,25 +466,36 @@
             const item = carrito[index];
 
             try {
-                // 🆕 Eliminar item usando API
-                const response = await fetch('/api/carrito/eliminar', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        item_id: item.precio_id // precio_id es el id de existencia
-                    })
-                });
+                // 🔍 Verificar si el usuario está logueado
+                const authResponse = await fetch('/api/carrito/check-auth');
+                const authData = await authResponse.json();
 
-                const data = await response.json();
+                if (!authData.is_logged_in) {
+                    // Usuario NO logueado → usar localStorage
+                    carrito.splice(index, 1);
+                    localStorage.setItem('carrito', JSON.stringify(carrito));
+                    actualizarCarrito();
+                } else {
+                    // Usuario logueado → usar API
+                    const response = await fetch('/api/carrito/eliminar', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            item_id: item.precio_id // precio_id es el id de existencia
+                        })
+                    });
 
-                if (!data.ok) {
-                    throw new Error(data.error || 'Error al eliminar item');
+                    const data = await response.json();
+
+                    if (!data.ok) {
+                        throw new Error(data.error || 'Error al eliminar item');
+                    }
+
+                    // Recargar carrito desde API
+                    await cargarCarritoDesdeAPI();
                 }
-
-                // Recargar carrito desde API
-                await cargarCarritoDesdeAPI();
             } catch (error) {
                 console.error('Error al eliminar item:', error);
                 alert('Error al eliminar el producto. Por favor intenta nuevamente.');

@@ -1551,7 +1551,7 @@
         }
 
         // 🆕 Función para validar diferencia de precio con cotizaciones existentes
-        async function validarDiferenciaPrecio(medId, fabId, precioNuevo) {
+        async function validarDiferenciaPrecio(medId, fabId, precioNuevo, cotizacionIdEditando = null) {
             try {
                 // 1. Obtener parámetro de umbral desde la base de datos
                 const resParam = await fetch('/api/parametro/diferencia_maxima_cotizaciones');
@@ -1567,12 +1567,13 @@
                 }
 
                 // 3. Calcular precios min y max de cotizaciones activas
+                // IMPORTANTE: Excluir la cotización que se está editando para evitar compararla consigo misma
                 const preciosActivos = data.competencias
-                    .filter(c => c.activo)
+                    .filter(c => c.activo && c.id != cotizacionIdEditando) // Excluir la que se está editando
                     .map(c => parseFloat(c.precio));
 
                 if (preciosActivos.length === 0) {
-                    return null; // No hay cotizaciones activas
+                    return null; // No hay otras cotizaciones activas para comparar
                 }
 
                 const min = Math.min(...preciosActivos);
@@ -1608,12 +1609,11 @@
             const url = document.getElementById('url-cotizacion')?.value.trim() || null;
             if (!medId || !fabId || !terceroId || precio <= 0) return;
 
-            // 🆕 Validar diferencia de precio ANTES de guardar (solo si es nueva cotización)
-            if (!modoEdicion) {
-                const alerta = await validarDiferenciaPrecio(medId, fabId, precio);
-                if (alerta && !confirm(alerta)) {
-                    return; // Usuario canceló
-                }
+            // 🆕 Validar diferencia de precio ANTES de guardar (SIEMPRE: creación Y edición)
+            // Excluir la cotización actual si estamos editando para no compararla consigo misma
+            const alerta = await validarDiferenciaPrecio(medId, fabId, precio, cotizacionId);
+            if (alerta && !confirm(alerta)) {
+                return; // Usuario canceló
             }
 
             let res;

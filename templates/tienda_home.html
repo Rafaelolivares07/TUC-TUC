@@ -2498,6 +2498,9 @@
             // 🆕 Cargar lista de pastilleros en el selector
             await cargarListaPastilleros();
 
+            // 🆕 Cargar alertas de reposición
+            cargarAlertasReposicion();
+
             // 🎯 LÓGICA SIMPLE: Mostrar solo los medicamentos que están tanto en tienda como en pastillero
             if (productosMostradosEnTienda.length > 0) {
                 console.log('📌 Abriendo pastillero filtrado por productos mostrados en tienda');
@@ -3199,6 +3202,118 @@
             document.getElementById('resultados-busqueda-usuarios').classList.remove('active');
 
             abrirConversacion(usuarioId, nombreUsuario);
+        }
+
+        // 🆕 Función para cargar alertas de reposición
+        function cargarAlertasReposicion() {
+            fetch('/api/pastillero/alertas')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ok && data.alertas && data.alertas.length > 0) {
+                        mostrarAlertasReposicion(data.alertas);
+                        // Actualizar contador del globo en tienda
+                        actualizarContadorAlertasTienda(data.alertas.length);
+                    } else {
+                        // Sin alertas, limpiar contenedor
+                        document.getElementById('contenedor-alertas-reposicion').innerHTML = '';
+                        actualizarContadorAlertasTienda(0);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error al cargar alertas:', err);
+                    document.getElementById('contenedor-alertas-reposicion').innerHTML = '';
+                });
+        }
+
+        // 🆕 Mostrar alertas con botones de acción
+        function mostrarAlertasReposicion(alertas) {
+            const container = document.getElementById('contenedor-alertas-reposicion');
+
+            container.innerHTML = `
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <h4 style="margin: 0 0 0.75rem 0; color: #856404; display: flex; align-items: center; gap: 0.5rem;">
+                        ⚠️ Necesitas reponer ${alertas.length} medicamento${alertas.length > 1 ? 's' : ''}
+                    </h4>
+                    ${alertas.map(alerta => `
+                        <div style="background: white; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid #ffeaa7;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                <div style="flex: 1;">
+                                    <strong style="color: #333; font-size: 0.95rem;">${alerta.nombre}</strong>
+                                    <p style="margin: 0.25rem 0 0 0; color: #666; font-size: 0.85rem;">${alerta.mensaje}</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <button onclick="agregarAlCarritoDesdeAlerta(${alerta.id}, '${alerta.nombre.replace(/'/g, "\\'")}')"
+                                        style="flex: 1; min-width: 100px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; padding: 0.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">
+                                    🛒 Agregar al carrito
+                                </button>
+                                <button onclick="posponerAlerta(${alerta.id})"
+                                        style="flex: 1; min-width: 100px; background: #f39c12; color: white; border: none; padding: 0.5rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">
+                                    ⏰ Ahora no (24h)
+                                </button>
+                                <button onclick="desactivarAlerta(${alerta.id})"
+                                        style="background: #e74c3c; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">
+                                    ✕ No recordar
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // 🆕 Posponer alerta 24 horas
+        function posponerAlerta(medicamentoId) {
+            fetch(`/api/pastillero/alertas/posponer/${medicamentoId}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    cargarAlertasReposicion(); // Recargar alertas
+                } else {
+                    alert(data.error || 'Error al posponer alerta');
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('Error al posponer alerta');
+            });
+        }
+
+        // 🆕 Desactivar alerta permanentemente
+        function desactivarAlerta(medicamentoId) {
+            if (!confirm('¿Estás seguro de desactivar las alertas de reposición para este medicamento?')) {
+                return;
+            }
+
+            fetch(`/api/pastillero/alertas/desactivar/${medicamentoId}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok) {
+                    cargarAlertasReposicion(); // Recargar alertas
+                } else {
+                    alert(data.error || 'Error al desactivar alerta');
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('Error al desactivar alerta');
+            });
+        }
+
+        // 🆕 Agregar al carrito desde alerta (placeholder - implementar después)
+        function agregarAlCarritoDesdeAlerta(medicamentoId, nombre) {
+            alert(`Función en desarrollo: Agregar "${nombre}" al carrito`);
+            // TODO: Implementar agregar al carrito
+        }
+
+        // 🆕 Actualizar contador del globo de alertas en tienda (placeholder)
+        function actualizarContadorAlertasTienda(cantidad) {
+            // TODO: Implementar globo flotante en tienda
+            console.log(`Alertas activas: ${cantidad}`);
         }
 
         function cargarMedicamentosPastillero(orden = null, sintomas = null) {
@@ -5551,15 +5666,20 @@
             <div class="modal-pastillero-body">
                 <!-- Búsqueda de medicamentos -->
                 <div class="pastillero-busqueda">
-                    <input 
-                        type="text" 
-                        id="input-buscar-medicamento" 
+                    <input
+                        type="text"
+                        id="input-buscar-medicamento"
                         placeholder="Buscar medicamento para agregar (Enter para crear)"
                         autocomplete="off"
                     >
                     <div id="sugerencias-medicamentos" class="pastillero-sugerencias"></div>
                 </div>
-                
+
+                <!-- 🆕 Contenedor de alertas de reposición -->
+                <div id="contenedor-alertas-reposicion" style="margin-bottom: 1rem;">
+                    <!-- Se llena dinámicamente con alertas -->
+                </div>
+
                 <!-- Lista de medicamentos -->
                 <div id="lista-medicamentos-pastillero">
                     <!-- Se llena dinámicamente -->

@@ -12825,6 +12825,13 @@ def api_pastillero_crear():
     cantidad = data.get('cantidad', 1)
     unidad = data.get('unidad', 'pastillas')
 
+    # 🆕 Campos de tipo de medicamento
+    tipo_medicamento = data.get('tipo_medicamento', 'botiquin')
+    alerta_reposicion = data.get('alerta_reposicion', False)
+    nivel_minimo_alerta = data.get('nivel_minimo_alerta', 10)
+    fecha_inicio_tratamiento = data.get('fecha_inicio_tratamiento')
+    fecha_fin_tratamiento = data.get('fecha_fin_tratamiento')
+
     if not nombre:
         return jsonify({'ok': False, 'error': 'Falta nombre del medicamento'}), 400
 
@@ -12832,9 +12839,14 @@ def api_pastillero_crear():
     try:
         # Insertar medicamento sin medicamento_id (ser NULL)
         conn.execute('''
-            INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
-            VALUES (%s, NULL, %s, %s, %s)
-        ''', (pastillero_id, nombre, cantidad, unidad))
+            INSERT INTO pastillero_usuarios (
+                pastillero_id, medicamento_id, nombre, cantidad, unidad,
+                tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
+                fecha_inicio_tratamiento, fecha_fin_tratamiento
+            )
+            VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (pastillero_id, nombre, cantidad, unidad, tipo_medicamento,
+              alerta_reposicion, nivel_minimo_alerta, fecha_inicio_tratamiento, fecha_fin_tratamiento))
 
         #  Crear alerta para el admin
         conn.execute('''

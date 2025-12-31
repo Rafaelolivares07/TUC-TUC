@@ -3666,6 +3666,54 @@
             sugerencias.classList.add('active');
         }
         
+        // Función auxiliar para preguntar tipo de medicamento y parámetros
+        function obtenerParametrosTipoMedicamento(esNuevo) {
+            // Solo preguntar tipo si es medicamento nuevo
+            if (!esNuevo) {
+                return {}; // Si ya existe, no cambiar tipo
+            }
+
+            // Preguntar tipo de medicamento
+            const tipo = confirm('¿Es un medicamento de BOTIQUÍN (stock permanente)?\n\n' +
+                                'OK = BOTIQUÍN (Dolex, alcohol, siempre reponer)\n' +
+                                'Cancelar = TRATAMIENTO (antibiótico temporal)');
+
+            if (tipo) {
+                // BOTIQUÍN
+                const alertar = confirm('¿Quieres recibir alertas cuando el stock esté bajo?');
+                let nivelMinimo = 10;
+
+                if (alertar) {
+                    const nivel = prompt('¿Con cuántas unidades restantes quieres ser alertado?', '10');
+                    if (nivel && !isNaN(nivel)) {
+                        nivelMinimo = parseInt(nivel);
+                    }
+                }
+
+                return {
+                    tipo_medicamento: 'botiquin',
+                    alerta_reposicion: alertar,
+                    nivel_minimo_alerta: nivelMinimo
+                };
+            } else {
+                // TRATAMIENTO
+                const fechaInicio = prompt('Fecha de inicio del tratamiento (YYYY-MM-DD):',
+                                          new Date().toISOString().split('T')[0]);
+                if (!fechaInicio) return null;
+
+                const fechaFin = prompt('Fecha de fin del tratamiento (YYYY-MM-DD):',
+                                       new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0]);
+                if (!fechaFin) return null;
+
+                return {
+                    tipo_medicamento: 'tratamiento',
+                    alerta_reposicion: true, // Siempre alertar si faltarán tomas
+                    fecha_inicio_tratamiento: fechaInicio,
+                    fecha_fin_tratamiento: fechaFin
+                };
+            }
+        }
+
         function seleccionarMedicamento(medicamentoId, nombre) {
             // Convertir 'null' string a null real
             if (medicamentoId === 'null' || medicamentoId === null) {
@@ -3675,11 +3723,11 @@
             // 🆕 Primero verificar si ya existe en el pastillero
             // Para medicamentos personales (null), no verificamos porque ya están en el pastillero
             if (medicamentoId === null) {
-                // Es un medicamento personal, preguntar cantidad directamente
+                // Es un medicamento personal, preguntar cantidad directamente (ya existe, solo aumentar stock)
                 const cantidad = prompt(`Ya tienes "${nombre}" en tu pastillero.\n¿Cuántas MÁS quieres agregar?`, '10');
                 if (!cantidad) return;
-                
-                // Agregar al pastillero (sumará a lo existente)
+
+                // Agregar al pastillero (sumará a lo existente) - NO preguntar tipo porque ya existe
                 fetch('/api/pastillero/agregar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3687,7 +3735,7 @@
                         medicamento_id: null,
                         nombre: nombre,
                         cantidad: parseInt(cantidad),
-                        unidad: 'pastillas'  // Usar unidad por defecto
+                        unidad: 'pastillas'
                     })
                 })
                 .then(res => res.json())
@@ -3711,7 +3759,8 @@
                 .then(res => res.json())
                 .then(data => {
                     let mensajeCantidad, mensajeUnidad;
-                    
+                    const esNuevo = !data.existe;
+
                     if (data.existe) {
                         // Ya existe - mostrar info actual
                         mensajeCantidad = `Ya tienes ${data.cantidad} ${data.unidad} de ${nombre}.\n¿Cuántas MÁS quieres agregar?`;
@@ -3721,10 +3770,10 @@
                         mensajeCantidad = `¿Cuántas unidades de ${nombre} tienes?`;
                         mensajeUnidad = null;
                     }
-                    
+
                     const cantidad = prompt(mensajeCantidad, '10');
                     if (!cantidad) return;
-                    
+
                     // Solo pedir unidad si es nuevo medicamento
                     let unidad;
                     if (mensajeUnidad) {
@@ -3733,16 +3782,21 @@
                         unidad = prompt('Unidad de medida:', 'pastillas');
                         if (!unidad) return;
                     }
-                    
+
+                    // 🆕 Obtener parámetros de tipo (solo si es nuevo)
+                    const parametrosTipo = obtenerParametrosTipoMedicamento(esNuevo);
+                    if (esNuevo && parametrosTipo === null) return; // Usuario canceló
+
                     // Agregar al pastillero
                     fetch('/api/pastillero/agregar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             medicamento_id: medicamentoId,
-                            nombre: nombre,  // 🆕 Enviar nombre también
+                            nombre: nombre,
                             cantidad: parseInt(cantidad),
-                            unidad: unidad
+                            unidad: unidad,
+                            ...parametrosTipo  // 🆕 Incluir tipo y parámetros
                         })
                     })
                     .then(res => res.json())
@@ -3762,13 +3816,17 @@
                 })
                 .catch(err => {
                     console.error('Error al verificar:', err);
-                    // Si falla la verificación, continuar con flujo normal
+                    // Si falla la verificación, continuar con flujo normal (asumir nuevo)
                     const cantidad = prompt(`¿Cuántas unidades de ${nombre} tienes?`, '10');
                     if (!cantidad) return;
-                    
+
                     const unidad = prompt('Unidad de medida:', 'pastillas');
                     if (!unidad) return;
-                    
+
+                    // 🆕 Obtener parámetros de tipo (asumir nuevo porque falló verificación)
+                    const parametrosTipo = obtenerParametrosTipoMedicamento(true);
+                    if (parametrosTipo === null) return; // Usuario canceló
+
                     fetch('/api/pastillero/agregar', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -3776,7 +3834,8 @@
                             medicamento_id: medicamentoId,
                             nombre: nombre,
                             cantidad: parseInt(cantidad),
-                            unidad: unidad
+                            unidad: unidad,
+                            ...parametrosTipo  // 🆕 Incluir tipo y parámetros
                         })
                     })
                     .then(res => res.json())
@@ -3798,17 +3857,22 @@
         function crearMedicamentoNuevo(nombre) {
             const cantidad = prompt(`¿Cuántas unidades de "${nombre}" tienes?`, '10');
             if (!cantidad) return;
-            
+
             const unidad = prompt('Unidad de medida:', 'pastillas');
             if (!unidad) return;
-            
+
+            // 🆕 Obtener parámetros de tipo (siempre es nuevo)
+            const parametrosTipo = obtenerParametrosTipoMedicamento(true);
+            if (parametrosTipo === null) return; // Usuario canceló
+
             fetch('/api/pastillero/crear', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     nombre: nombre,
                     cantidad: parseInt(cantidad),
-                    unidad: unidad
+                    unidad: unidad,
+                    ...parametrosTipo  // 🆕 Incluir tipo y parámetros
                 })
             })
             .then(res => res.json())

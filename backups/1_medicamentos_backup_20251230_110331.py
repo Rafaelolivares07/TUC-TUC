@@ -1,6 +1,7 @@
 from flask import Flask, request, redirect, url_for,send_from_directory, jsonify, render_template, session, flash, send_file
 import sqlalchemy
 import pandas
+import sqlite3
 import psycopg2
 import uuid
 import json
@@ -200,8 +201,11 @@ app.config['SESSION_COOKIE_SECURE'] = os.getenv('RENDER', None) is not None
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevenir XSS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Proteccin CSRF
 
+#  Nombre de la base de datos
+DB_NAME = 'medicamentos.db'
+
 class PostgreSQLRow:
-    """Row object compatible con acceso por ndice y por nombre de columna"""
+    """Row object que simula sqlite3.Row - soporta acceso por ndice y por nombre"""
     def __init__(self, cursor, values):
         self._cursor = cursor
         self._values = values
@@ -4775,7 +4779,7 @@ def editar_medicamento_admin(medicamento_id):
                 conn.close()
                 return redirect(url_for('editar_medicamento_admin', medicamento_id=medicamento_id))            
        
-        except Exception as e:
+        except sqlite3.Error as e:
             flash(f"Error al guardar el medicamento: {e}", "danger")
             conn.rollback()
             conn.close()
@@ -5547,7 +5551,7 @@ def eliminar_medicamento(medicamento_id):
         #  CASO 2: Solo 1 fabricante o ninguno -> eliminar medicamento completo
         return eliminar_medicamento_completo(conn, medicamento_id)
         
-    except Exception as e:
+    except (sqlite3.Error, Exception) as e:
         if conn:
             try:
                 conn.rollback()
@@ -7064,7 +7068,7 @@ def crear_sintoma():
                     'mensaje': f' Sntoma "{nombre}" creado exitosamente'
                 })
                 
-            except Exception as e:
+            except sqlite3.OperationalError as e:
                 if conn:
                     try:
                         conn.close()
@@ -7498,6 +7502,84 @@ def buscar_sintomas():
 
 
 
+
+
+@app.route('/buscar_medicamentos')
+def buscar_medicamentos():
+    """Devuelve coincidencias de medicamentos segn el texto buscado."""
+    nombre = request.args.get('nombre', '').strip()
+
+    if not nombre:
+        return jsonify({"ok": False, "error": "Debe proporcionar un nombre", "medicamentos": []})
+
+    conn = sqlite3.connect('medicamentos.db')
+    c = conn.cursor()
+    try:
+        c.execute("""
+            SELECT id, nombre
+            FROM MEDICAMENTOS
+            WHERE lower(nombre) LIKE ?
+            ORDER BY nombre ASC
+            LIMIT 10
+        """, (f"%{nombre.lower()}%",))
+        resultados = [{"id": r[0], "nombre": r[1]} for r in c.fetchall()]
+        conn.close()
+
+        return jsonify({"ok": True, "medicamentos": resultados})
+    except Exception as e:
+        conn.close()
+        return jsonify({"ok": False, "error": str(e), "medicamentos": []})
+
+
+
+
+# --- Crear medicamento rpido (sin recargar la pgina) ---
+@app.route('/crear_medicamento_rapido', methods=['POST'])
+def crear_medicamento_rapido():
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    medicamento_id = data.get('medicamento_id')  #  ID del medicamento actual
+
+    if not nombre:
+        return jsonify({"ok": False, "error": "El nombre no puede estar vacío"}), 400
+
+    conn = sqlite3.connect('medicamentos.db')
+    c = conn.cursor()
+    try:
+        # Buscar si ya existe un medicamento con ese nombre
+        c.execute("SELECT id, nombre FROM MEDICAMENTOS WHERE lower(nombre) = lower(?)", (nombre,))
+        existente = c.fetchone()
+        
+        if existente:
+            componente_id, med_nombre = existente
+        else:
+            # Crear nuevo registro
+            c.execute("INSERT INTO MEDICAMENTOS (nombre, activo) VALUES (?, 1)", (nombre,))
+            conn.commit()
+            componente_id = c.lastrowid
+            med_nombre = nombre
+
+        #  ASOCIAR como componente activo del medicamento actual
+        if medicamento_id:
+            c.execute("""
+                UPDATE MEDICAMENTOS 
+                SET componente_activo_id = ? 
+                WHERE id = ?
+            """, (componente_id, medicamento_id))
+            conn.commit()
+            print(f" Medicamento {medicamento_id} ahora tiene componente activo {componente_id}")
+
+        conn.close()
+        return jsonify({
+            "ok": True,
+            "id": componente_id,
+            "nombre": med_nombre,
+            "exists": bool(existente)
+        })
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ============================================================
@@ -8539,6 +8621,145 @@ def aplicar_aprobados():
     except Exception as e:
         conn.close()
         return jsonify({'success': False, 'error': str(e)})
+
+
+
+@app.route('/admin/actualizar_precios', methods=['GET', 'POST'])
+def actualizar_precios():
+    """Pantalla para actualizar precios comparando con competencia."""
+    if request.method == 'POST':
+        accion = request.form.get('accion')
+        
+        conn = sqlite3.connect('medicamentos.db')
+        cursor = conn.cursor()
+        
+        # Accin: Actualizar nombre del medicamento
+        if accion == 'actualizar_nombre':
+            medicamento_id = request.form.get('medicamento_id')
+            nuevo_nombre = request.form.get('nuevo_nombre')
+            
+            cursor.execute("""
+                UPDATE medicamentos 
+                SET nombre = ?
+                WHERE id = ?
+            """, (nuevo_nombre, medicamento_id))
+            
+            conn.commit()
+            conn.close()
+            return jsonify({"ok": True})
+        
+        # Accin: Guardar precios
+        elif accion == 'guardar_precios':
+            medicamento_id = request.form.get('medicamento_id')
+            precio_id = request.form.get('precio_id')
+            fabricante_id = request.form.get('fabricante_id')
+            precio_sugerido = request.form.get('precio_sugerido')
+            
+            # Actualizar precio y fabricante en PRECIOS
+            cursor.execute("""
+                UPDATE PRECIOS 
+                SET precio = ?, fabricante_id = ?, fecha_actualizacion = DATE('now')
+                WHERE id = ?
+            """, (precio_sugerido, fabricante_id, precio_id))
+            
+            print(f" Actualizado precio_id={precio_id}: precio={precio_sugerido}, fabricante={fabricante_id}")
+            
+            # Borrar precios antiguos de competencia para este medicamento
+            cursor.execute("""
+                DELETE FROM precios_competencia 
+                WHERE medicamento_id = ?
+            """, (medicamento_id,))
+            
+            # Guardar nuevos precios de competencia
+            competidores = cursor.execute("""
+                SELECT t.id 
+                FROM terceros t
+                JOIN terceros_competidores tc ON t.id = tc.tercero_id
+            """).fetchall()
+            
+            for (comp_id,) in competidores:
+                precio_comp = request.form.get(f'precio_competidor_{comp_id}')
+                if precio_comp:
+                    cursor.execute("""
+                        INSERT INTO precios_competencia 
+                        (medicamento_id, competidor_id, precio, fecha_actualizacion)
+                        VALUES (?, ?, ?, DATE('now'))
+                    """, (medicamento_id, comp_id, precio_comp))
+                    print(f"   Guardado precio competidor {comp_id}: ${precio_comp}")
+            
+            conn.commit()
+            conn.close()
+            return jsonify({"ok": True})
+    
+    # GET - Mostrar formulario
+    conn = sqlite3.connect('medicamentos.db')
+    cursor = conn.cursor()
+    
+    #    OBTENER CONFIGURACIN GLOBAL (NUEVO)
+    config_row = cursor.execute("SELECT * FROM configuracion_precios WHERE id = 1").fetchone()
+    if config_row:
+        # Asumiendo que la tabla tiene columnas: id, descuento_competencia, recargo_escaso, redondeo_superior
+        config = {
+            'descuento_competencia': config_row[1],
+            'recargo_escaso': config_row[2],
+            'redondeo_superior': config_row[3],
+            'ganancia_min_escaso': config_row[4],  # <-- Nuevo
+            'ganancia_max_escaso': config_row[5],   # <-- Nuevo
+            'base_escaso': config_row[6],
+            'usar_precio': config_row[7] if len(config_row) > 7 else config_row[6]  # Usar nuevo campo si existe
+        }
+    else:
+        # Valores por defecto si no existe la configuracin
+        config = {
+            'descuento_competencia': 200,
+            'recargo_escaso': 30,
+            'redondeo_superior': 100,
+            'ganancia_min_escaso': 2000,  # <-- Nuevo
+            'ganancia_max_escaso': 10000,  # <-- Nuevo
+            'base_escaso': 'minimo'
+        }
+    
+    # Obtener medicamentos con precio 0
+    medicamentos = cursor.execute("""
+        SELECT 
+            m.id, 
+            m.nombre, 
+            f.id, 
+            f.nombre, 
+            p.precio, 
+            p.id
+        FROM medicamentos m
+        JOIN PRECIOS p ON m.id = p.medicamento_id
+        JOIN FABRICANTES f ON p.fabricante_id = f.id
+        WHERE p.precio = 0
+        ORDER BY 
+            EXISTS (
+                SELECT 1 
+                FROM MEDICAMENTO_SINTOMA ms 
+                WHERE ms.medicamento_id = m.id
+            ) DESC,
+            m.nombre ASC
+        LIMIT 10
+    """).fetchall()
+
+    # Obtener todos los fabricantes
+    fabricantes = cursor.execute("SELECT id, nombre FROM FABRICANTES ORDER BY nombre").fetchall()
+    
+    # Obtener competidores
+    competidores = cursor.execute("""
+        SELECT t.id, t.nombre 
+        FROM terceros t
+        JOIN terceros_competidores tc ON t.id = tc.tercero_id
+        ORDER BY t.nombre
+    """).fetchall()
+    
+    conn.close()
+    
+    return render_template('actualizar_precios.html', 
+                         medicamentos=medicamentos,
+                         fabricantes=fabricantes,
+                         competidores=competidores,
+                         config=config)  #    PASAR CONFIG AL TEMPLATE
 
 
 
@@ -9892,6 +10113,58 @@ def run_migration_endpoint():
 
         except Exception as e:
             mensajes.append(f" Error en secuencia: {str(e)}")
+
+        # Migracin 6: Migrar datos del pastillero desde SQLite a PostgreSQL
+        try:
+            import sqlite3
+            import os
+
+            sqlite_path = os.path.join(os.path.dirname(__file__), 'medicamentos.db')
+
+            if os.path.exists(sqlite_path):
+                mensajes.append(" Iniciando migracin de pastillero desde SQLite...")
+
+                # Conectar a SQLite
+                sqlite_conn = sqlite3.connect(sqlite_path)
+                sqlite_conn.row_factory = sqlite3.Row
+                sqlite_cursor = sqlite_conn.cursor()
+
+                # Leer datos del pastillero
+                sqlite_cursor.execute("""
+                    SELECT usuario_id, medicamento_id, nombre, cantidad, unidad
+                    FROM pastillero_usuarios
+                """)
+
+                pastillero_rows = sqlite_cursor.fetchall()
+                count = 0
+
+                if pastillero_rows:
+                    for row in pastillero_rows:
+                        # Verificar si ya existe para evitar duplicados
+                        exists = conn.execute("""
+                            SELECT id FROM pastillero_usuarios
+                            WHERE usuario_id = ? AND medicamento_id IS NOT DISTINCT FROM ?
+                            AND nombre = ?
+                        """, (row['usuario_id'], row['medicamento_id'], row['nombre'])).fetchone()
+
+                        if not exists:
+                            conn.execute("""
+                                INSERT INTO pastillero_usuarios (usuario_id, medicamento_id, nombre, cantidad, unidad)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (row['usuario_id'], row['medicamento_id'], row['nombre'],
+                                  row['cantidad'], row['unidad']))
+                            count += 1
+
+                    mensajes.append(f" Migrados {count} medicamentos al pastillero (de {len(pastillero_rows)} encontrados)")
+                else:
+                    mensajes.append(" No hay medicamentos en el pastillero de SQLite")
+
+                sqlite_conn.close()
+            else:
+                mensajes.append(" Archivo medicamentos.db no encontrado, saltando migracin de pastillero")
+
+        except Exception as e:
+            mensajes.append(f" Error en migracin de pastillero: {str(e)}")
 
         conn.commit()
         conn.close()
@@ -12701,13 +12974,6 @@ def api_pastillero_agregar():
     unidad = data.get('unidad', 'pastillas')
     nombre = data.get('nombre')  #  Para medicamentos personales
 
-    # 🆕 Campos nuevos para tipos de medicamento
-    tipo_medicamento = data.get('tipo_medicamento', 'botiquin')  # 'botiquin' o 'tratamiento'
-    alerta_reposicion = data.get('alerta_reposicion', False)
-    nivel_minimo_alerta = data.get('nivel_minimo_alerta', 10)
-    fecha_inicio_tratamiento = data.get('fecha_inicio_tratamiento')
-    fecha_fin_tratamiento = data.get('fecha_fin_tratamiento')
-
     # medicamento_id puede ser None/null para medicamentos personales
 
     conn = get_db_connection()
@@ -12734,14 +13000,9 @@ def api_pastillero_agregar():
             else:
                 # Crear nuevo medicamento personal
                 conn.execute('''
-                    INSERT INTO pastillero_usuarios (
-                        pastillero_id, medicamento_id, nombre, cantidad, unidad,
-                        tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
-                        fecha_inicio_tratamiento, fecha_fin_tratamiento
-                    )
-                    VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (pastillero_id, nombre, cantidad, unidad, tipo_medicamento,
-                      alerta_reposicion, nivel_minimo_alerta, fecha_inicio_tratamiento, fecha_fin_tratamiento))
+                    INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
+                    VALUES (%s, NULL, %s, %s, %s)
+                ''', (pastillero_id, nombre, cantidad, unidad))
 
         #  CASO 2: Medicamento oficial (con ID)
         else:
@@ -12787,15 +13048,9 @@ def api_pastillero_agregar():
                 else:
                     # Insertar nuevo con nombre normalizado
                     conn.execute('''
-                        INSERT INTO pastillero_usuarios (
-                            pastillero_id, medicamento_id, nombre, cantidad, unidad,
-                            tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
-                            fecha_inicio_tratamiento, fecha_fin_tratamiento
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ''', (pastillero_id, medicamento_id, nombre_normalizado, cantidad, unidad,
-                          tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
-                          fecha_inicio_tratamiento, fecha_fin_tratamiento))
+                        INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
+                        VALUES (%s, %s, %s, %s, %s)
+                    ''', (pastillero_id, medicamento_id, nombre_normalizado, cantidad, unidad))
         
         conn.commit()
         conn.close()
@@ -12825,13 +13080,6 @@ def api_pastillero_crear():
     cantidad = data.get('cantidad', 1)
     unidad = data.get('unidad', 'pastillas')
 
-    # 🆕 Campos de tipo de medicamento
-    tipo_medicamento = data.get('tipo_medicamento', 'botiquin')
-    alerta_reposicion = data.get('alerta_reposicion', False)
-    nivel_minimo_alerta = data.get('nivel_minimo_alerta', 10)
-    fecha_inicio_tratamiento = data.get('fecha_inicio_tratamiento')
-    fecha_fin_tratamiento = data.get('fecha_fin_tratamiento')
-
     if not nombre:
         return jsonify({'ok': False, 'error': 'Falta nombre del medicamento'}), 400
 
@@ -12839,14 +13087,9 @@ def api_pastillero_crear():
     try:
         # Insertar medicamento sin medicamento_id (ser NULL)
         conn.execute('''
-            INSERT INTO pastillero_usuarios (
-                pastillero_id, medicamento_id, nombre, cantidad, unidad,
-                tipo_medicamento, alerta_reposicion, nivel_minimo_alerta,
-                fecha_inicio_tratamiento, fecha_fin_tratamiento
-            )
-            VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (pastillero_id, nombre, cantidad, unidad, tipo_medicamento,
-              alerta_reposicion, nivel_minimo_alerta, fecha_inicio_tratamiento, fecha_fin_tratamiento))
+            INSERT INTO pastillero_usuarios (pastillero_id, medicamento_id, nombre, cantidad, unidad)
+            VALUES (%s, NULL, %s, %s, %s)
+        ''', (pastillero_id, nombre, cantidad, unidad))
 
         #  Crear alerta para el admin
         conn.execute('''
@@ -12880,9 +13123,8 @@ def api_pastillero_tomar(medicamento_id):
     try:
         # Verificar que el medicamento pertenece al pastillero
         medicamento = conn.execute('''
-            SELECT cantidad, unidad, tipo_medicamento, tomas_completadas
-            FROM pastillero_usuarios
-            WHERE id = %s AND pastillero_id = %s
+            SELECT cantidad, unidad FROM pastillero_usuarios
+            WHERE id = ? AND pastillero_id = ?
         ''', (medicamento_id, pastillero_id)).fetchone()
 
         if not medicamento:
@@ -12893,22 +13135,14 @@ def api_pastillero_tomar(medicamento_id):
 
         if nueva_cantidad <= 0:
             # Eliminar si llega a 0
-            conn.execute('DELETE FROM pastillero_usuarios WHERE id = %s', (medicamento_id,))
+            conn.execute('DELETE FROM pastillero_usuarios WHERE id = ?', (medicamento_id,))
         else:
-            # Si es tratamiento, incrementar contador de tomas completadas
-            if medicamento['tipo_medicamento'] == 'tratamiento':
-                conn.execute('''
-                    UPDATE pastillero_usuarios
-                    SET cantidad = %s, tomas_completadas = tomas_completadas + 1
-                    WHERE id = %s
-                ''', (nueva_cantidad, medicamento_id))
-            else:
-                # Actualizar solo cantidad (botiquín)
-                conn.execute('''
-                    UPDATE pastillero_usuarios
-                    SET cantidad = %s
-                    WHERE id = %s
-                ''', (nueva_cantidad, medicamento_id))
+            # Actualizar cantidad
+            conn.execute('''
+                UPDATE pastillero_usuarios
+                SET cantidad = ?
+                WHERE id = ?
+            ''', (nueva_cantidad, medicamento_id))
 
         conn.commit()
         conn.close()
@@ -14246,360 +14480,6 @@ def eliminar_festivo(festivo_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@app.route('/api/parametro/<nombre_parametro>', methods=['GET', 'POST'])
-@admin_required
-def parametro_sistema(nombre_parametro):
-    """GET: Obtiene el valor de un parámetro / POST: Actualiza el valor"""
-
-    if request.method == 'GET':
-        try:
-            conn = get_db_connection()
-
-            row = conn.execute("""
-                SELECT valor_numerico, valor_texto, valor_booleano, tipo
-                FROM parametros_sistema
-                WHERE nombre = %s
-            """, (nombre_parametro,)).fetchone()
-
-            conn.close()
-
-            if row:
-                # Retornar el valor según el tipo
-                if row['tipo'] == 'numerico':
-                    valor = row['valor_numerico']
-                elif row['tipo'] == 'texto':
-                    valor = row['valor_texto']
-                elif row['tipo'] == 'booleano':
-                    valor = row['valor_booleano']
-                else:
-                    valor = None
-
-                return jsonify({'ok': True, 'valor': valor, 'tipo': row['tipo']})
-            else:
-                return jsonify({'ok': False, 'error': 'Parámetro no encontrado', 'valor': None})
-
-        except Exception as e:
-            print(f"Error obteniendo parámetro {nombre_parametro}: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'ok': False, 'error': str(e), 'valor': None}), 500
-
-    elif request.method == 'POST':
-        try:
-            data = request.get_json()
-            valor = data.get('valor')
-
-            if valor is None:
-                return jsonify({'ok': False, 'error': 'Valor no proporcionado'}), 400
-
-            conn = get_db_connection()
-
-            # Primero verificar el tipo del parámetro
-            row = conn.execute("""
-                SELECT tipo FROM parametros_sistema WHERE nombre = %s
-            """, (nombre_parametro,)).fetchone()
-
-            if not row:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'Parámetro no encontrado'}), 404
-
-            tipo = row['tipo']
-
-            # Actualizar según el tipo
-            if tipo == 'numerico':
-                conn.execute("""
-                    UPDATE parametros_sistema
-                    SET valor_numerico = %s, fecha_actualizacion = CURRENT_TIMESTAMP
-                    WHERE nombre = %s
-                """, (float(valor), nombre_parametro))
-            elif tipo == 'texto':
-                conn.execute("""
-                    UPDATE parametros_sistema
-                    SET valor_texto = %s, fecha_actualizacion = CURRENT_TIMESTAMP
-                    WHERE nombre = %s
-                """, (str(valor), nombre_parametro))
-            elif tipo == 'booleano':
-                conn.execute("""
-                    UPDATE parametros_sistema
-                    SET valor_booleano = %s, fecha_actualizacion = CURRENT_TIMESTAMP
-                    WHERE nombre = %s
-                """, (bool(valor), nombre_parametro))
-
-            conn.commit()
-            conn.close()
-
-            return jsonify({'ok': True, 'message': 'Parámetro actualizado correctamente'})
-
-        except Exception as e:
-            print(f"Error actualizando parámetro {nombre_parametro}: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/listar-admins', methods=['GET'])
-@admin_required
-def listar_admins():
-    """Retorna lista de usuarios admin para multi-select"""
-    try:
-        conn = get_db_connection()
-        rows = conn.execute("""
-            SELECT id, nombre, email
-            FROM usuarios
-            WHERE rol = 'admin'
-            ORDER BY nombre
-        """).fetchall()
-        conn.close()
-
-        return jsonify({'ok': True, 'admins': [dict(row) for row in rows]})
-    except Exception as e:
-        print(f"Error listando admins: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/tareas-revision/generar', methods=['POST'])
-@admin_required
-def generar_tareas_revision_cotizaciones():
-    """
-    Genera tareas de revisión para cotizaciones vencidas.
-    Se ejecuta automáticamente por temporizador o manualmente.
-    """
-    from datetime import datetime, timedelta
-
-    try:
-        conn = get_db_connection()
-
-        # 1. Obtener parámetros
-        param_dias = conn.execute("""
-            SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'dias_vigencia_cotizacion'
-        """).fetchone()
-
-        param_admins = conn.execute("""
-            SELECT valor_texto FROM parametros_sistema WHERE nombre = 'admins_responsables_cotizaciones'
-        """).fetchone()
-
-        dias_vigencia = int(param_dias['valor_numerico']) if param_dias else 30
-        admins_responsables = param_admins['valor_texto'] if param_admins else 'cualquiera'
-
-        # 2. Buscar cotizaciones activas vencidas que NO tengan tarea pendiente o próxima revisión futura
-        fecha_limite = datetime.now() - timedelta(days=dias_vigencia)
-
-        cotizaciones_vencidas = conn.execute("""
-            SELECT pc.id, pc.medicamento_id, pc.fabricante_id, pc.competidor_id,
-                   pc.precio, pc.fecha_actualizacion, pc.url
-            FROM precios_competencia pc
-            WHERE pc.activo = TRUE
-            AND pc.fecha_actualizacion < %s
-            AND pc.id NOT IN (
-                SELECT cotizacion_id FROM tareas_revision_cotizaciones
-                WHERE estado = 'pendiente'
-                OR (proxima_revision IS NOT NULL AND proxima_revision > CURRENT_DATE)
-            )
-        """, (fecha_limite,)).fetchall()
-
-        tareas_creadas = 0
-
-        # 3. Crear tareas para cada cotización vencida
-        for cot in cotizaciones_vencidas:
-            conn.execute("""
-                INSERT INTO tareas_revision_cotizaciones
-                (cotizacion_id, admin_asignado_id, estado)
-                VALUES (%s, NULL, 'pendiente')
-                ON CONFLICT (cotizacion_id, estado) DO NOTHING
-            """, (cot['id'],))
-            tareas_creadas += 1
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({
-            'ok': True,
-            'message': f'{tareas_creadas} tareas de revisión creadas',
-            'tareas_creadas': tareas_creadas
-        })
-
-    except Exception as e:
-        print(f"Error generando tareas de revisión: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/tareas-revision/pendientes', methods=['GET'])
-@admin_required
-def obtener_tareas_revision_pendientes():
-    """
-    Obtiene las tareas de revisión pendientes para el admin actual.
-    Si es 'cualquiera', muestra todas. Si hay IDs específicos, solo las de esos admins.
-    """
-    try:
-        conn = get_db_connection()
-        admin_id = session.get('user_id')
-
-        # Obtener parámetro de admins responsables
-        param_admins = conn.execute("""
-            SELECT valor_texto FROM parametros_sistema WHERE nombre = 'admins_responsables_cotizaciones'
-        """).fetchone()
-
-        admins_responsables = param_admins['valor_texto'] if param_admins else 'cualquiera'
-
-        # Verificar si este admin tiene permisos
-        tiene_permiso = False
-        if admins_responsables == 'cualquiera':
-            tiene_permiso = True
-        else:
-            # Parsear IDs (ej: "1,5,7")
-            ids_permitidos = [int(x.strip()) for x in admins_responsables.split(',') if x.strip().isdigit()]
-            if admin_id in ids_permitidos:
-                tiene_permiso = True
-
-        if not tiene_permiso:
-            return jsonify({'ok': True, 'tareas': []})
-
-        # Obtener tareas pendientes con todos los datos necesarios
-        tareas = conn.execute("""
-            SELECT
-                t.id as tarea_id,
-                pc.id as cotizacion_id,
-                m.nombre as medicamento,
-                f.nombre as fabricante,
-                ter.nombre as competidor,
-                pc.precio,
-                pc.fecha_actualizacion,
-                pc.url,
-                EXTRACT(DAY FROM (NOW() - pc.fecha_actualizacion)) as dias_vencido
-            FROM tareas_revision_cotizaciones t
-            JOIN precios_competencia pc ON t.cotizacion_id = pc.id
-            JOIN medicamentos m ON pc.medicamento_id = m.id
-            JOIN fabricantes f ON pc.fabricante_id = f.id
-            JOIN terceros ter ON pc.competidor_id = ter.id
-            WHERE t.estado = 'pendiente'
-            AND (t.admin_asignado_id IS NULL OR t.admin_asignado_id = %s)
-            ORDER BY pc.fecha_actualizacion ASC
-        """, (admin_id,)).fetchall()
-
-        conn.close()
-
-        return jsonify({
-            'ok': True,
-            'tareas': [dict(row) for row in tareas],
-            'total': len(tareas)
-        })
-
-    except Exception as e:
-        print(f"Error obteniendo tareas pendientes: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/tareas-revision/responder', methods=['POST'])
-@admin_required
-def responder_tarea_revision():
-    """
-    Permite al admin responder una tarea (completar, rechazar, actualizar precio).
-    """
-    from datetime import datetime, timedelta
-
-    try:
-        data = request.get_json()
-        tarea_id = data.get('tarea_id')
-        accion = data.get('accion')  # 'completar', 'rechazar', 'actualizar'
-        precio_nuevo = data.get('precio_nuevo')
-        observaciones = data.get('observaciones', '')
-
-        if not tarea_id or not accion:
-            return jsonify({'ok': False, 'error': 'Faltan parámetros'}), 400
-
-        conn = get_db_connection()
-        admin_id = session.get('user_id')
-
-        # Obtener parámetro de días de reactivación
-        param_reactivacion = conn.execute("""
-            SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'dias_reactivacion_revision'
-        """).fetchone()
-
-        dias_reactivacion = int(param_reactivacion['valor_numerico']) if param_reactivacion else 30
-        proxima_revision = datetime.now().date() + timedelta(days=dias_reactivacion)
-
-        # Actualizar tarea según acción
-        if accion == 'completar':
-            # Solo marcar como completada (precio sin cambios)
-            conn.execute("""
-                UPDATE tareas_revision_cotizaciones
-                SET estado = 'completada',
-                    fecha_respuesta = CURRENT_TIMESTAMP,
-                    admin_respondio_id = %s,
-                    admin_asignado_id = %s,
-                    observaciones = %s,
-                    proxima_revision = %s
-                WHERE id = %s
-            """, (admin_id, admin_id, observaciones, proxima_revision, tarea_id))
-
-        elif accion == 'rechazar':
-            # Rechazar tarea
-            conn.execute("""
-                UPDATE tareas_revision_cotizaciones
-                SET estado = 'rechazada',
-                    fecha_respuesta = CURRENT_TIMESTAMP,
-                    admin_respondio_id = %s,
-                    admin_asignado_id = %s,
-                    observaciones = %s,
-                    proxima_revision = %s
-                WHERE id = %s
-            """, (admin_id, admin_id, observaciones, proxima_revision, tarea_id))
-
-        elif accion == 'actualizar':
-            # Actualizar precio en precios_competencia y completar tarea
-            if not precio_nuevo:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'Debe proporcionar el nuevo precio'}), 400
-
-            # Obtener cotizacion_id
-            tarea = conn.execute("""
-                SELECT cotizacion_id FROM tareas_revision_cotizaciones WHERE id = %s
-            """, (tarea_id,)).fetchone()
-
-            if not tarea:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'Tarea no encontrada'}), 404
-
-            # Actualizar precio en precios_competencia
-            conn.execute("""
-                UPDATE precios_competencia
-                SET precio = %s, fecha_actualizacion = CURRENT_TIMESTAMP
-                WHERE id = %s
-            """, (float(precio_nuevo), tarea['cotizacion_id']))
-
-            # Marcar tarea como completada con precio actualizado
-            conn.execute("""
-                UPDATE tareas_revision_cotizaciones
-                SET estado = 'completada',
-                    fecha_respuesta = CURRENT_TIMESTAMP,
-                    admin_respondio_id = %s,
-                    admin_asignado_id = %s,
-                    precio_actualizado = %s,
-                    observaciones = %s,
-                    proxima_revision = %s
-                WHERE id = %s
-            """, (admin_id, admin_id, float(precio_nuevo), observaciones, proxima_revision, tarea_id))
-
-        else:
-            conn.close()
-            return jsonify({'ok': False, 'error': 'Acción no válida'}), 400
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({'ok': True, 'message': f'Tarea {accion} correctamente'})
-
-    except Exception as e:
-        print(f"Error respondiendo tarea: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
 @app.route('/api/validar-horario', methods=['GET'])
 def validar_horario():
     """Valida si la hora actual está dentro del horario de entregas"""
@@ -15264,176 +15144,6 @@ def api_responder_invitacion():
         return jsonify({'ok': True})
     except Exception as e:
         print(f"Error al responder invitación: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/pastillero/alertas', methods=['GET'])
-def api_obtener_alertas_pastillero():
-    """
-    Obtiene medicamentos que requieren reposición
-    - Botiquín: cuando cantidad <= nivel_minimo_alerta
-    - Tratamiento: cuando tomas pendientes > cantidad disponible
-    """
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
-    usuario_id = session['usuario_id']
-
-    try:
-        conn = get_db_connection()
-
-        # Obtener pastillero activo
-        pastillero_id = session.get('pastillero_activo_id')
-        if not pastillero_id:
-            pastillero = conn.execute("""
-                SELECT p.id FROM pastilleros p
-                INNER JOIN relaciones_pastillero rp ON p.id = rp.pastillero_id
-                WHERE rp.usuario_id = %s AND rp.tipo IN ('propietario', 'miembro')
-                ORDER BY rp.tipo DESC, p.id ASC
-                LIMIT 1
-            """, (usuario_id,)).fetchone()
-
-            if not pastillero:
-                conn.close()
-                return jsonify({'ok': True, 'alertas': []})
-
-            pastillero_id = pastillero['id']
-
-        # ALERTAS DE BOTIQUÍN: cantidad <= nivel_minimo_alerta
-        alertas_botiquin = conn.execute("""
-            SELECT
-                p.id,
-                p.nombre,
-                p.medicamento_id,
-                p.cantidad,
-                p.unidad,
-                p.nivel_minimo_alerta,
-                'botiquin' as tipo_alerta,
-                'Quedan ' || p.cantidad || ' ' || p.unidad || ' (mínimo: ' || p.nivel_minimo_alerta || ')' as mensaje
-            FROM pastillero_usuarios p
-            WHERE p.pastillero_id = %s
-              AND p.tipo_medicamento = 'botiquin'
-              AND p.alerta_reposicion = TRUE
-              AND p.cantidad <= p.nivel_minimo_alerta
-              AND (p.alerta_pospuesta_hasta IS NULL OR p.alerta_pospuesta_hasta < CURRENT_TIMESTAMP)
-            ORDER BY p.cantidad ASC
-        """, (pastillero_id,)).fetchall()
-
-        # ALERTAS DE TRATAMIENTO: calcular tomas pendientes
-        ahora = datetime.now()
-        alertas_tratamiento = []
-
-        medicamentos_tratamiento = conn.execute("""
-            SELECT
-                p.id,
-                p.nombre,
-                p.medicamento_id,
-                p.cantidad,
-                p.unidad,
-                p.horas_entre_tomas,
-                p.fecha_inicio_tratamiento,
-                p.fecha_fin_tratamiento,
-                p.tomas_completadas
-            FROM pastillero_usuarios p
-            WHERE p.pastillero_id = %s
-              AND p.tipo_medicamento = 'tratamiento'
-              AND p.fecha_fin_tratamiento IS NOT NULL
-              AND p.fecha_fin_tratamiento >= %s
-              AND (p.alerta_pospuesta_hasta IS NULL OR p.alerta_pospuesta_hasta < CURRENT_TIMESTAMP)
-        """, (pastillero_id, ahora.date())).fetchall()
-
-        for med in medicamentos_tratamiento:
-            if med['horas_entre_tomas'] and med['fecha_fin_tratamiento']:
-                # Calcular días restantes
-                dias_restantes = (med['fecha_fin_tratamiento'] - ahora.date()).days
-
-                # Calcular tomas pendientes
-                tomas_por_dia = 24 / med['horas_entre_tomas']
-                tomas_pendientes = int(dias_restantes * tomas_por_dia)
-
-                # Si faltan más tomas de las que tiene en stock
-                if tomas_pendientes > med['cantidad']:
-                    faltantes = tomas_pendientes - med['cantidad']
-                    alertas_tratamiento.append({
-                        'id': med['id'],
-                        'nombre': med['nombre'],
-                        'medicamento_id': med['medicamento_id'],
-                        'cantidad': med['cantidad'],
-                        'unidad': med['unidad'],
-                        'tomas_pendientes': tomas_pendientes,
-                        'tipo_alerta': 'tratamiento',
-                        'mensaje': f"Te faltarán {faltantes} tomas para completar el tratamiento"
-                    })
-
-        # Combinar alertas
-        alertas = [dict(row) for row in alertas_botiquin] + alertas_tratamiento
-
-        conn.close()
-
-        return jsonify({
-            'ok': True,
-            'alertas': alertas,
-            'total': len(alertas)
-        })
-
-    except Exception as e:
-        print(f"Error al obtener alertas: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/pastillero/alertas/posponer/<int:medicamento_id>', methods=['POST'])
-def api_posponer_alerta(medicamento_id):
-    """Pospone alerta por 24 horas (botón 'Ahora no')"""
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
-    try:
-        conn = get_db_connection()
-
-        # Posponer 24 horas
-        proxima_alerta = datetime.now() + timedelta(hours=24)
-
-        conn.execute("""
-            UPDATE pastillero_usuarios
-            SET alerta_pospuesta_hasta = %s
-            WHERE id = %s
-        """, (proxima_alerta, medicamento_id))
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({'ok': True, 'pospuesta_hasta': proxima_alerta.isoformat()})
-
-    except Exception as e:
-        print(f"Error al posponer alerta: {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/pastillero/alertas/desactivar/<int:medicamento_id>', methods=['POST'])
-def api_desactivar_alerta(medicamento_id):
-    """Desactiva alertas permanentemente (botón 'No recordar más')"""
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
-    try:
-        conn = get_db_connection()
-
-        conn.execute("""
-            UPDATE pastillero_usuarios
-            SET alerta_reposicion = FALSE,
-                alerta_pospuesta_hasta = NULL
-            WHERE id = %s
-        """, (medicamento_id,))
-
-        conn.commit()
-        conn.close()
-
-        return jsonify({'ok': True})
-
-    except Exception as e:
-        print(f"Error al desactivar alerta: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

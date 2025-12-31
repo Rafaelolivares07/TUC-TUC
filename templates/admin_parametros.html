@@ -365,9 +365,88 @@
                             </div>
                         </div>
 
-                        <!-- Futuras políticas de precios -->
-                        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                            <p class="text-sm text-gray-500">Próximamente: márgenes de ganancia, descuentos automáticos, etc.</p>
+                        <!-- Revisión Automática de Cotizaciones Vencidas -->
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <h4 class="font-semibold text-gray-800 mb-2">📅 Revisión Automática de Cotizaciones Vencidas</h4>
+                            <p class="text-sm text-gray-600 mb-4">
+                                Configura cuándo y a quiénes asignar tareas automáticas de revisión de cotizaciones antiguas
+                            </p>
+
+                            <!-- Días de vigencia -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Días de vigencia de cotización</label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        id="dias_vigencia_cotizacion"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-center"
+                                        min="1"
+                                        value="30">
+                                    <span class="text-sm text-gray-600">días (después de este tiempo se requiere revisión)</span>
+                                </div>
+                            </div>
+
+                            <!-- Días de reactivación -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Días para volver a solicitar revisión</label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        id="dias_reactivacion_revision"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-center"
+                                        min="1"
+                                        value="30">
+                                    <span class="text-sm text-gray-600">días (después de completar/rechazar)</span>
+                                </div>
+                            </div>
+
+                            <!-- Admins responsables (multi-select) -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Admins responsables de revisión</label>
+                                <select
+                                    id="admins_responsables_cotizaciones"
+                                    multiple
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    style="min-height: 120px;">
+                                    <option value="cualquiera">Cualquier Admin (primero que entre)</option>
+                                    <!-- Cargado dinámicamente -->
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Mantén presionado Ctrl (Cmd en Mac) para seleccionar múltiples admins
+                                </p>
+                            </div>
+
+                            <!-- Frecuencia de alerta -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Cuándo mostrar alertas</label>
+                                <select
+                                    id="frecuencia_alerta_cotizaciones"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                    <option value="login">Solo al hacer login</option>
+                                    <option value="periodico">Periódico (cada X días)</option>
+                                    <option value="ambos">Ambos (login y periódico)</option>
+                                </select>
+                            </div>
+
+                            <!-- Días entre alertas periódicas (condicional) -->
+                            <div id="container_dias_periodico" class="mb-4" style="display: none;">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Días entre alertas periódicas</label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        id="dias_alerta_periodica_cotizaciones"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-center"
+                                        min="1"
+                                        value="15">
+                                    <span class="text-sm text-gray-600">días (no superior a días de vigencia)</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex justify-end">
+                                <button onclick="guardarParametrosRevisionCotizaciones()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium">
+                                    💾 Guardar Configuración
+                                </button>
+                            </div>
                         </div>
 
                     </div>
@@ -606,6 +685,178 @@
                 alert('❌ Error al guardar parámetro');
             }
         }
+
+        // ==================== REVISIÓN DE COTIZACIONES ====================
+
+        async function cargarParametrosRevisionCotizaciones() {
+            try {
+                // Cargar días de vigencia
+                const resDiasVigencia = await fetch('/api/parametro/dias_vigencia_cotizacion');
+                const dataDiasVigencia = await resDiasVigencia.json();
+                if (dataDiasVigencia.ok && dataDiasVigencia.valor !== null) {
+                    document.getElementById('dias_vigencia_cotizacion').value = dataDiasVigencia.valor;
+                }
+
+                // Cargar días de reactivación
+                const resDiasReactivacion = await fetch('/api/parametro/dias_reactivacion_revision');
+                const dataDiasReactivacion = await resDiasReactivacion.json();
+                if (dataDiasReactivacion.ok && dataDiasReactivacion.valor !== null) {
+                    document.getElementById('dias_reactivacion_revision').value = dataDiasReactivacion.valor;
+                }
+
+                // Cargar días alerta periódica
+                const resDiasPeriodico = await fetch('/api/parametro/dias_alerta_periodica_cotizaciones');
+                const dataDiasPeriodico = await resDiasPeriodico.json();
+                if (dataDiasPeriodico.ok && dataDiasPeriodico.valor !== null) {
+                    document.getElementById('dias_alerta_periodica_cotizaciones').value = dataDiasPeriodico.valor;
+                }
+
+                // Cargar admins disponibles
+                const resAdmins = await fetch('/api/admin/listar-admins');
+                const dataAdmins = await resAdmins.json();
+
+                if (dataAdmins.ok && dataAdmins.admins) {
+                    const select = document.getElementById('admins_responsables_cotizaciones');
+                    // Limpiar opciones excepto "cualquiera"
+                    select.innerHTML = '<option value="cualquiera">Cualquier Admin (primero que entre)</option>';
+
+                    // Agregar admins
+                    dataAdmins.admins.forEach(admin => {
+                        const option = document.createElement('option');
+                        option.value = admin.id;
+                        option.textContent = `${admin.nombre} (${admin.email})`;
+                        select.appendChild(option);
+                    });
+
+                    // Cargar admins responsables seleccionados
+                    const resResponsables = await fetch('/api/parametro/admins_responsables_cotizaciones');
+                    const dataResponsables = await resResponsables.json();
+
+                    if (dataResponsables.ok && dataResponsables.valor) {
+                        const valor = dataResponsables.valor;
+                        if (valor === 'cualquiera') {
+                            select.querySelector('option[value="cualquiera"]').selected = true;
+                        } else {
+                            // Parsear IDs (ej: "1,5,7")
+                            const ids = valor.split(',').map(x => x.trim());
+                            Array.from(select.options).forEach(option => {
+                                if (ids.includes(option.value)) {
+                                    option.selected = true;
+                                }
+                            });
+                        }
+                    }
+                }
+
+                // Cargar frecuencia de alerta
+                const resFrecuencia = await fetch('/api/parametro/frecuencia_alerta_cotizaciones');
+                const dataFrecuencia = await resFrecuencia.json();
+                if (dataFrecuencia.ok && dataFrecuencia.valor) {
+                    document.getElementById('frecuencia_alerta_cotizaciones').value = dataFrecuencia.valor;
+                    toggleDiasPeriodico(); // Mostrar/ocultar input de días periódicos
+                }
+
+            } catch (error) {
+                console.error('Error cargando parámetros de revisión:', error);
+            }
+        }
+
+        function toggleDiasPeriodico() {
+            const frecuencia = document.getElementById('frecuencia_alerta_cotizaciones').value;
+            const container = document.getElementById('container_dias_periodico');
+
+            if (frecuencia === 'periodico' || frecuencia === 'ambos') {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        async function guardarParametrosRevisionCotizaciones() {
+            try {
+                const diasVigencia = parseInt(document.getElementById('dias_vigencia_cotizacion').value);
+                const diasReactivacion = parseInt(document.getElementById('dias_reactivacion_revision').value);
+                const diasPeriodico = parseInt(document.getElementById('dias_alerta_periodica_cotizaciones').value);
+                const frecuencia = document.getElementById('frecuencia_alerta_cotizaciones').value;
+
+                // Validaciones
+                if (isNaN(diasVigencia) || diasVigencia < 1) {
+                    alert('⚠️ Los días de vigencia deben ser al menos 1');
+                    return;
+                }
+
+                if (isNaN(diasReactivacion) || diasReactivacion < 1) {
+                    alert('⚠️ Los días de reactivación deben ser al menos 1');
+                    return;
+                }
+
+                if ((frecuencia === 'periodico' || frecuencia === 'ambos')) {
+                    if (isNaN(diasPeriodico) || diasPeriodico < 1) {
+                        alert('⚠️ Los días entre alertas periódicas deben ser al menos 1');
+                        return;
+                    }
+
+                    if (diasPeriodico > diasVigencia) {
+                        alert('⚠️ Los días entre alertas periódicas no pueden ser mayores que los días de vigencia');
+                        return;
+                    }
+                }
+
+                // Obtener admins seleccionados
+                const select = document.getElementById('admins_responsables_cotizaciones');
+                const selectedOptions = Array.from(select.selectedOptions);
+
+                let adminsValor;
+                if (selectedOptions.some(opt => opt.value === 'cualquiera')) {
+                    adminsValor = 'cualquiera';
+                } else {
+                    adminsValor = selectedOptions.map(opt => opt.value).join(',');
+                }
+
+                if (!adminsValor || adminsValor === '') {
+                    alert('⚠️ Debe seleccionar al menos un admin o "cualquiera"');
+                    return;
+                }
+
+                // Guardar todos los parámetros
+                const parametros = [
+                    { nombre: 'dias_vigencia_cotizacion', valor: diasVigencia },
+                    { nombre: 'dias_reactivacion_revision', valor: diasReactivacion },
+                    { nombre: 'dias_alerta_periodica_cotizaciones', valor: diasPeriodico },
+                    { nombre: 'admins_responsables_cotizaciones', valor: adminsValor },
+                    { nombre: 'frecuencia_alerta_cotizaciones', valor: frecuencia }
+                ];
+
+                for (const param of parametros) {
+                    const res = await fetch(`/api/parametro/${param.nombre}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ valor: param.valor })
+                    });
+
+                    const data = await res.json();
+                    if (!data.ok) {
+                        throw new Error(`Error guardando ${param.nombre}: ${data.error}`);
+                    }
+                }
+
+                alert('✅ Configuración de revisión guardada correctamente');
+
+            } catch (error) {
+                console.error('Error guardando parámetros de revisión:', error);
+                alert('❌ Error al guardar configuración: ' + error.message);
+            }
+        }
+
+        // Listener para mostrar/ocultar input de días periódicos
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarHorarios();
+            cargarFestivos();
+            cargarParametrosPrecios();
+            cargarParametrosRevisionCotizaciones();
+
+            document.getElementById('frecuencia_alerta_cotizaciones').addEventListener('change', toggleDiasPeriodico);
+        });
     </script>
 </body>
 </html>

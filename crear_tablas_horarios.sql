@@ -91,3 +91,39 @@ VALUES (
 ) ON CONFLICT (nombre) DO NOTHING;
 
 COMMENT ON TABLE parametros_sistema IS 'Parámetros configurables del sistema organizados por secciones';
+
+-- Tabla de tareas de revisión de cotizaciones
+CREATE TABLE IF NOT EXISTS tareas_revision_cotizaciones (
+    id SERIAL PRIMARY KEY,
+    cotizacion_id INTEGER NOT NULL REFERENCES precios_competencia(id) ON DELETE CASCADE,
+    fecha_deteccion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    admin_asignado_id INTEGER, -- NULL si es 'cualquiera', sino ID del admin que la tomó
+    estado VARCHAR(20) DEFAULT 'pendiente', -- 'pendiente', 'completada', 'rechazada'
+    fecha_respuesta TIMESTAMP,
+    admin_respondio_id INTEGER, -- ID del admin que respondió
+    precio_actualizado DECIMAL(10,2),
+    observaciones TEXT,
+    proxima_revision DATE, -- Fecha calculada para próxima revisión
+    UNIQUE(cotizacion_id, estado) -- Evita duplicados de tareas pendientes para la misma cotización
+);
+
+-- Índices para mejorar performance
+CREATE INDEX IF NOT EXISTS idx_tareas_estado ON tareas_revision_cotizaciones(estado);
+CREATE INDEX IF NOT EXISTS idx_tareas_admin_asignado ON tareas_revision_cotizaciones(admin_asignado_id);
+CREATE INDEX IF NOT EXISTS idx_tareas_proxima_revision ON tareas_revision_cotizaciones(proxima_revision);
+
+COMMENT ON TABLE tareas_revision_cotizaciones IS 'Tareas automáticas de revisión de cotizaciones vencidas asignadas a admins';
+
+-- Insertar parámetros de revisión de cotizaciones
+INSERT INTO parametros_sistema (nombre, seccion, descripcion, valor_numerico, tipo)
+VALUES
+    ('dias_vigencia_cotizacion', 'POLITICAS DE PRECIOS', 'Días de vigencia de una cotización antes de requerir revisión', 30, 'numerico'),
+    ('dias_reactivacion_revision', 'POLITICAS DE PRECIOS', 'Días después de completar/rechazar una revisión para volver a solicitarla', 30, 'numerico'),
+    ('dias_alerta_periodica_cotizaciones', 'POLITICAS DE PRECIOS', 'Días entre alertas periódicas de cotizaciones (máximo = días de vigencia)', 15, 'numerico')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO parametros_sistema (nombre, seccion, descripcion, valor_texto, tipo)
+VALUES
+    ('admins_responsables_cotizaciones', 'POLITICAS DE PRECIOS', 'IDs de admins responsables separados por coma (ej: ''1,5,7'') o ''cualquiera''', 'cualquiera', 'texto'),
+    ('frecuencia_alerta_cotizaciones', 'POLITICAS DE PRECIOS', 'Cuándo mostrar alertas: ''login'', ''periodico'', ''ambos''', 'login', 'texto')
+ON CONFLICT (nombre) DO NOTHING;

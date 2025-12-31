@@ -31,7 +31,10 @@
       "Bash(timeout 5 tail:*)",
       "Bash(taskkill:*)",
       "Bash(timeout:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Bash(ping:*)",
+      "Bash(where:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

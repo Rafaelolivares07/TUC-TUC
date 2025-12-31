@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sugerir Síntomas - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Animaciones suaves */
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Item seleccionado (verde) */
+        .item-seleccionado {
+            background: #d1fae5 !important;
+            border-color: #34d399 !important;
+        }
+
+        /* Scrollbar personalizado */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-24">
+
+    <!-- Header con navegación -->
+    <div class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <div class="max-w-4xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold text-gray-900">Sugerir Síntomas</h1>
+                    <p class="text-xs md:text-sm text-gray-600 mt-1">Asigna síntomas a medicamentos pendientes</p>
+                </div>
+                <a href="/admin" class="bg-gray-100 text-gray-700 px-3 md:px-4 py-2 rounded-lg hover:bg-gray-200 text-sm font-medium">
+                    ← Volver
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container principal -->
+    <div class="max-w-4xl mx-auto px-4 py-4 md:py-6">
+
+        <!-- Card de selector de medicamento + filtros -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-4 md:mb-6">
+
+            <!-- Selector de medicamento (auto-carga) -->
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                    Medicamento actual
+                </label>
+                <select id="medicamento-select" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent" onchange="cargarMedicamento()">
+                    <option value="123" selected>ACETAMINOFEN 500MG (Genérico, CON precio) ✅</option>
+                    <option value="124">IBUPROFENO 400MG (Comercial, SIN precio) ⚠️</option>
+                    <option value="125">ASPIRINA 100MG (Genérico, CON precio) ✅</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-2">
+                    <span class="font-semibold">Componente activo:</span> Paracetamol
+                </p>
+            </div>
+
+            <!-- Botón de búsqueda en Google -->
+            <div class="mb-4">
+                <button onclick="buscarEnGoogle()" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 font-semibold shadow-md transition-all flex items-center justify-center gap-2">
+                    <span class="text-lg">🔍</span>
+                    <span>Buscar "Paracetamol" en Google</span>
+                </button>
+            </div>
+
+            <!-- Botón "Pegar y Procesar" -->
+            <div class="mb-4">
+                <button onclick="pegarYProcesar()" class="w-full bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-3 rounded-lg hover:from-green-600 hover:to-green-700 font-semibold shadow-md transition-all flex items-center justify-center gap-2">
+                    <span class="text-lg">📋</span>
+                    <span>Pegar y Procesar</span>
+                </button>
+                <p class="text-xs text-gray-500 mt-2 text-center">
+                    Copia el texto en Google y haz clic aquí para procesarlo automáticamente
+                </p>
+            </div>
+
+            <!-- Filtros con botones (colapsable en móvil) -->
+            <details class="border-t border-gray-200 pt-4">
+                <summary class="cursor-pointer text-sm font-semibold text-gray-700 mb-3 list-none flex items-center justify-between">
+                    <span>⚙️ Filtrar medicamentos</span>
+                    <span class="text-gray-400">▼</span>
+                </summary>
+
+                <!-- Filtro por tipo -->
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-gray-600 mb-2">Por tipo:</label>
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="filtro-tipo active bg-indigo-600 text-white border-indigo-600 px-4 py-2 rounded-lg border-2 font-medium text-sm transition-all hover:bg-indigo-700" data-tipo="todos">
+                            Todos
+                        </button>
+                        <button class="filtro-tipo bg-white text-gray-700 border-gray-300 px-4 py-2 rounded-lg border-2 font-medium text-sm transition-all hover:bg-gray-50" data-tipo="genericos">
+                            Genéricos
+                        </button>
+                        <button class="filtro-tipo bg-white text-gray-700 border-gray-300 px-4 py-2 rounded-lg border-2 font-medium text-sm transition-all hover:bg-gray-50" data-tipo="comerciales">
+                            Comerciales
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtro por precio -->
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-2">Por precio:</label>
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="filtro-precio active bg-indigo-600 text-white border-indigo-600 px-4 py-2 rounded-lg border-2 font-medium text-sm transition-all hover:bg-indigo-700" data-precio="todos">
+                            Todos
+                        </button>
+                        <button class="filtro-precio bg-white text-gray-700 border-gray-300 px-4 py-2 rounded-lg border-2 font-medium text-sm transition-all hover:bg-gray-50" data-precio="con">
+                            Con precio ✅
+                        </button>
+                        <button class="filtro-precio bg-white text-gray-700 border-gray-300 px-4 py-2 rounded-lg border-2 font-medium text-sm transition-all hover:bg-gray-50" data-precio="sin">
+                            Sin precio ⚠️
+                        </button>
+                    </div>
+                </div>
+            </details>
+
+        </div>
+
+        <!-- Textarea (opcional, solo para ver el texto) -->
+        <div id="texto-container" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-4 md:mb-6 hidden">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-gray-900">Texto procesado</h3>
+                <button onclick="ocultarTexto()" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <textarea
+                id="texto-fuente"
+                readonly
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono custom-scrollbar resize-none bg-gray-50"
+                rows="6"
+            ></textarea>
+        </div>
+
+        <!-- Card de resultados -->
+        <div id="resultados-container" class="hidden fade-in">
+
+            <!-- Diagnósticos detectados -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-4 md:mb-6">
+                <h3 class="text-base md:text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold">DIAGNÓSTICOS</span>
+                    <span class="text-sm text-gray-500">(3)</span>
+                </h3>
+                <p class="text-xs text-gray-600 mb-3">Haz clic para seleccionar/deseleccionar</p>
+
+                <div class="space-y-2">
+                    <!-- Item seleccionado por defecto -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-600 font-bold text-lg flex-shrink-0">✓</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-900">Gripe</div>
+                                <p class="text-xs text-gray-500 mt-1">Síntomas: fiebre, dolor de cabeza, congestión nasal</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Item seleccionado por defecto (nuevo) -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-600 font-bold text-lg flex-shrink-0">✓</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-medium text-gray-900">Migraña</span>
+                                    <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">NUEVO</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Síntomas: dolor de cabeza intenso, náuseas</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Item NO seleccionado -->
+                    <div onclick="toggleItem(this)" class="cursor-pointer p-3 bg-gray-50 border-2 border-gray-200 rounded-lg transition-all hover:shadow-md hover:bg-gray-100" data-seleccionado="false">
+                        <div class="flex items-start gap-3">
+                            <span class="text-gray-300 font-bold text-lg flex-shrink-0">○</span>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-700">Resfriado común</div>
+                                <p class="text-xs text-gray-500 mt-1">Síntomas: estornudos, congestión, dolor de garganta</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Síntomas sugeridos -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-4 md:mb-6">
+                <h3 class="text-base md:text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold">SÍNTOMAS</span>
+                    <span class="text-sm text-gray-500">(8)</span>
+                </h3>
+                <p class="text-xs text-gray-600 mb-3">Haz clic para seleccionar/deseleccionar</p>
+
+                <!-- Grid responsive: 1 columna móvil, 2 columnas desktop -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+
+                    <!-- Seleccionado -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-center gap-3">
+                            <span class="text-green-600 font-bold text-lg">✓</span>
+                            <span class="font-medium text-gray-900">Fiebre</span>
+                        </div>
+                    </div>
+
+                    <!-- Seleccionado -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-center gap-3">
+                            <span class="text-green-600 font-bold text-lg">✓</span>
+                            <span class="font-medium text-gray-900">Dolor de cabeza</span>
+                        </div>
+                    </div>
+
+                    <!-- Seleccionado -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-center gap-3">
+                            <span class="text-green-600 font-bold text-lg">✓</span>
+                            <span class="font-medium text-gray-900">Congestión nasal</span>
+                        </div>
+                    </div>
+
+                    <!-- NO seleccionado (NUEVO) -->
+                    <div onclick="toggleItem(this)" class="cursor-pointer p-3 bg-gray-50 border-2 border-gray-200 rounded-lg transition-all hover:shadow-md hover:bg-gray-100" data-seleccionado="false">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-gray-300 font-bold text-lg">○</span>
+                            <span class="font-medium text-gray-700">Escalofríos</span>
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">NUEVO</span>
+                        </div>
+                    </div>
+
+                    <!-- Seleccionado -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-center gap-3">
+                            <span class="text-green-600 font-bold text-lg">✓</span>
+                            <span class="font-medium text-gray-900">Náuseas</span>
+                        </div>
+                    </div>
+
+                    <!-- Seleccionado -->
+                    <div onclick="toggleItem(this)" class="item-seleccionado cursor-pointer p-3 border-2 border-green-400 rounded-lg transition-all hover:shadow-md" data-seleccionado="true">
+                        <div class="flex items-center gap-3">
+                            <span class="text-green-600 font-bold text-lg">✓</span>
+                            <span class="font-medium text-gray-900">Dolor muscular</span>
+                        </div>
+                    </div>
+
+                    <!-- NO seleccionado -->
+                    <div onclick="toggleItem(this)" class="cursor-pointer p-3 bg-gray-50 border-2 border-gray-200 rounded-lg transition-all hover:shadow-md hover:bg-gray-100" data-seleccionado="false">
+                        <div class="flex items-center gap-3">
+                            <span class="text-gray-300 font-bold text-lg">○</span>
+                            <span class="font-medium text-gray-700">Fatiga</span>
+                        </div>
+                    </div>
+
+                    <!-- NO seleccionado (NUEVO) -->
+                    <div onclick="toggleItem(this)" class="cursor-pointer p-3 bg-gray-50 border-2 border-gray-200 rounded-lg transition-all hover:shadow-md hover:bg-gray-100" data-seleccionado="false">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-gray-300 font-bold text-lg">○</span>
+                            <span class="font-medium text-gray-700">Malestar general</span>
+                            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-semibold">NUEVO</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Botones de acción (sticky en móvil) -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg md:static md:max-w-4xl md:mx-auto md:mt-6 md:rounded-lg md:border">
+        <div class="flex gap-3 flex-col sm:flex-row">
+            <button onclick="guardarYSiguiente()" class="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg hover:from-green-600 hover:to-green-700 font-semibold shadow-md transition-all text-center">
+                ✓ Guardar y siguiente
+            </button>
+            <button onclick="omitirMedicamento()" class="sm:flex-none bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium transition-all">
+                Omitir
+            </button>
+        </div>
+        <p class="text-xs text-gray-500 text-center mt-3">
+            Quedan <span class="font-bold text-indigo-600">47 medicamentos</span> sin síntomas
+        </p>
+    </div>
+
+    <!-- Loader (oculto por defecto) -->
+    <div id="loader" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 shadow-xl mx-4">
+            <div class="flex items-center gap-3">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <span class="text-gray-700 font-medium">Procesando texto...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== FUNCIONES PRINCIPALES ==========
+
+        function cargarMedicamento() {
+            const select = document.getElementById('medicamento-select');
+            const medId = select.value;
+            console.log('Cargando medicamento ID:', medId);
+            // Aquí harías el fetch real al backend
+            // location.href = `/admin/sugerir-sintomas/${medId}`;
+        }
+
+        function buscarEnGoogle() {
+            const termino = 'Paracetamol'; // En la versión real vendría del medicamento actual
+            const url = `https://www.google.com/search?q=${encodeURIComponent(termino + ' síntomas tratamiento')}`;
+            window.open(url, '_blank');
+        }
+
+        async function pegarYProcesar() {
+            try {
+                // Leer clipboard
+                const texto = await navigator.clipboard.readText();
+
+                if (!texto || texto.length < 20) {
+                    alert('El texto copiado es muy corto. Copia más contenido.');
+                    return;
+                }
+
+                // Mostrar loader
+                document.getElementById('loader').classList.remove('hidden');
+
+                // Mostrar texto en textarea
+                document.getElementById('texto-fuente').value = texto;
+                document.getElementById('texto-container').classList.remove('hidden');
+
+                // Simular procesamiento (en la versión real sería un fetch al backend)
+                setTimeout(() => {
+                    document.getElementById('loader').classList.add('hidden');
+                    document.getElementById('resultados-container').classList.remove('hidden');
+
+                    // Scroll suave a resultados
+                    document.getElementById('resultados-container').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }, 1500);
+
+            } catch (err) {
+                console.error('Error al leer clipboard:', err);
+                alert('No se pudo leer el portapapeles. Asegúrate de haber copiado texto primero.');
+            }
+        }
+
+        function ocultarTexto() {
+            document.getElementById('texto-container').classList.add('hidden');
+        }
+
+        // ========== TOGGLE DE ITEMS (SÍNTOMAS Y DIAGNÓSTICOS) ==========
+
+        function toggleItem(elemento) {
+            const seleccionado = elemento.dataset.seleccionado === 'true';
+
+            if (seleccionado) {
+                // Deseleccionar
+                elemento.dataset.seleccionado = 'false';
+                elemento.classList.remove('item-seleccionado', 'border-green-400');
+                elemento.classList.add('bg-gray-50', 'border-gray-200');
+
+                // Cambiar checkmark a círculo
+                const icon = elemento.querySelector('span:first-child');
+                icon.textContent = '○';
+                icon.classList.remove('text-green-600');
+                icon.classList.add('text-gray-300');
+
+                // Cambiar color del texto
+                const textos = elemento.querySelectorAll('.text-gray-900');
+                textos.forEach(t => {
+                    t.classList.remove('text-gray-900');
+                    t.classList.add('text-gray-700');
+                });
+            } else {
+                // Seleccionar
+                elemento.dataset.seleccionado = 'true';
+                elemento.classList.add('item-seleccionado', 'border-green-400');
+                elemento.classList.remove('bg-gray-50', 'border-gray-200');
+
+                // Cambiar círculo a checkmark
+                const icon = elemento.querySelector('span:first-child');
+                icon.textContent = '✓';
+                icon.classList.add('text-green-600');
+                icon.classList.remove('text-gray-300');
+
+                // Cambiar color del texto
+                const textos = elemento.querySelectorAll('.text-gray-700');
+                textos.forEach(t => {
+                    t.classList.remove('text-gray-700');
+                    t.classList.add('text-gray-900');
+                });
+            }
+        }
+
+        // ========== FILTROS ==========
+
+        document.querySelectorAll('.filtro-tipo').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remover active de hermanos
+                this.parentElement.querySelectorAll('.filtro-tipo').forEach(b => {
+                    b.classList.remove('active', 'bg-indigo-600', 'text-white', 'border-indigo-600');
+                    b.classList.add('bg-white', 'text-gray-700', 'border-gray-300');
+                });
+                // Agregar active a este
+                this.classList.add('active', 'bg-indigo-600', 'text-white', 'border-indigo-600');
+                this.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
+
+                // Aquí harías el fetch para filtrar medicamentos
+                console.log('Filtro tipo:', this.dataset.tipo);
+            });
+        });
+
+        document.querySelectorAll('.filtro-precio').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remover active de hermanos
+                this.parentElement.querySelectorAll('.filtro-precio').forEach(b => {
+                    b.classList.remove('active', 'bg-indigo-600', 'text-white', 'border-indigo-600');
+                    b.classList.add('bg-white', 'text-gray-700', 'border-gray-300');
+                });
+                // Agregar active a este
+                this.classList.add('active', 'bg-indigo-600', 'text-white', 'border-indigo-600');
+                this.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
+
+                // Aquí harías el fetch para filtrar medicamentos
+                console.log('Filtro precio:', this.dataset.precio);
+            });
+        });
+
+        // ========== ACCIONES PRINCIPALES ==========
+
+        function guardarYSiguiente() {
+            // Recopilar seleccionados
+            const diagnosticos = [];
+            const sintomas = [];
+
+            document.querySelectorAll('#resultados-container [data-seleccionado="true"]').forEach(item => {
+                // Aquí recopilarías los IDs y los enviarías al backend
+                console.log('Seleccionado:', item.textContent.trim());
+            });
+
+            console.log('Guardando y pasando al siguiente medicamento...');
+            // Aquí harías el POST al backend
+        }
+
+        function omitirMedicamento() {
+            console.log('Omitiendo medicamento...');
+            // Aquí cargarías el siguiente medicamento
+        }
+    </script>
+
+</body>
+</html>

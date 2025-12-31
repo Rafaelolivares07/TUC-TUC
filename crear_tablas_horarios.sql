@@ -61,3 +61,33 @@ ON CONFLICT (fecha) DO NOTHING;
 
 COMMENT ON TABLE parametros_horarios IS 'Horarios de entrega de la tienda (Lun-Sáb y Dom-Festivos)';
 COMMENT ON TABLE festivos IS 'Lista de días festivos donde aplica horario especial';
+
+-- Tabla de parámetros del sistema (generales)
+CREATE TABLE IF NOT EXISTS parametros_sistema (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    seccion VARCHAR(100) NOT NULL, -- Ej: 'HORARIOS DE ENTREGA', 'POLITICAS DE PRECIOS'
+    descripcion TEXT,
+    valor_numerico DECIMAL(10,2),
+    valor_texto TEXT,
+    valor_booleano BOOLEAN,
+    tipo VARCHAR(20) NOT NULL, -- 'numerico', 'texto', 'booleano'
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Índice para búsquedas rápidas por nombre
+CREATE INDEX IF NOT EXISTS idx_parametros_nombre ON parametros_sistema(nombre);
+CREATE INDEX IF NOT EXISTS idx_parametros_seccion ON parametros_sistema(seccion);
+
+-- Insertar parámetro de diferencia máxima en cotizaciones
+INSERT INTO parametros_sistema (nombre, seccion, descripcion, valor_numerico, tipo)
+VALUES (
+    'diferencia_maxima_cotizaciones',
+    'POLITICAS DE PRECIOS',
+    'Porcentaje máximo de diferencia RAZONABLE entre una nueva cotización y las existentes antes de mostrar alerta',
+    30,
+    'numerico'
+) ON CONFLICT (nombre) DO NOTHING;
+
+COMMENT ON TABLE parametros_sistema IS 'Parámetros configurables del sistema organizados por secciones';

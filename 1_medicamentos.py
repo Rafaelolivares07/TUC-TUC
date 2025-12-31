@@ -14246,6 +14246,42 @@ def eliminar_festivo(festivo_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/parametro/<nombre_parametro>', methods=['GET'])
+def obtener_parametro(nombre_parametro):
+    """Obtiene el valor de un parámetro del sistema por su nombre"""
+    try:
+        conn = get_db_connection()
+
+        row = conn.execute("""
+            SELECT valor_numerico, valor_texto, valor_booleano, tipo
+            FROM parametros_sistema
+            WHERE nombre = %s
+        """, (nombre_parametro,)).fetchone()
+
+        conn.close()
+
+        if row:
+            # Retornar el valor según el tipo
+            if row['tipo'] == 'numerico':
+                valor = row['valor_numerico']
+            elif row['tipo'] == 'texto':
+                valor = row['valor_texto']
+            elif row['tipo'] == 'booleano':
+                valor = row['valor_booleano']
+            else:
+                valor = None
+
+            return jsonify({'ok': True, 'valor': valor, 'tipo': row['tipo']})
+        else:
+            return jsonify({'ok': False, 'error': 'Parámetro no encontrado', 'valor': None})
+
+    except Exception as e:
+        print(f"Error obteniendo parámetro {nombre_parametro}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e), 'valor': None}), 500
+
+
 @app.route('/api/validar-horario', methods=['GET'])
 def validar_horario():
     """Valida si la hora actual está dentro del horario de entregas"""

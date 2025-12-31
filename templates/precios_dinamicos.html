@@ -1550,6 +1550,55 @@
             });
         }
 
+        // 🆕 Función para validar diferencia de precio con cotizaciones existentes
+        async function validarDiferenciaPrecio(medId, fabId, precioNuevo) {
+            try {
+                // 1. Obtener parámetro de umbral desde la base de datos
+                const resParam = await fetch('/api/parametro/diferencia_maxima_cotizaciones');
+                const dataParam = await resParam.json();
+                const umbral = dataParam.ok && dataParam.valor ? parseFloat(dataParam.valor) : 30; // Default 30%
+
+                // 2. Obtener cotizaciones existentes de este producto
+                const res = await fetch(`/admin/precios_competencia/listar?medicamento_id=${medId}&fabricante_id=${fabId}`);
+                const data = await res.json();
+
+                if (!data.competencias || data.competencias.length === 0) {
+                    return null; // No hay cotizaciones previas, no validar
+                }
+
+                // 3. Calcular precios min y max de cotizaciones activas
+                const preciosActivos = data.competencias
+                    .filter(c => c.activo)
+                    .map(c => parseFloat(c.precio));
+
+                if (preciosActivos.length === 0) {
+                    return null; // No hay cotizaciones activas
+                }
+
+                const min = Math.min(...preciosActivos);
+                const max = Math.max(...preciosActivos);
+
+                // 4. Validar si el precio nuevo está fuera del rango razonable
+                if (precioNuevo < min) {
+                    const diff = ((min - precioNuevo) / min * 100).toFixed(1);
+                    if (parseFloat(diff) > umbral) {
+                        return `⚠️ ¡ATENCIÓN! El precio que estás ingresando ($${precioNuevo.toLocaleString('es-CO')}) es un ${diff}% MENOR que la cotización más barata existente ($${min.toLocaleString('es-CO')}).\n\n¿Estás seguro de continuar?`;
+                    }
+                } else if (precioNuevo > max) {
+                    const diff = ((precioNuevo - max) / max * 100).toFixed(1);
+                    if (parseFloat(diff) > umbral) {
+                        return `⚠️ ¡ATENCIÓN! El precio que estás ingresando ($${precioNuevo.toLocaleString('es-CO')}) es un ${diff}% MAYOR que la cotización más cara existente ($${max.toLocaleString('es-CO')}).\n\n¿Estás seguro de continuar?`;
+                    }
+                }
+
+                return null; // Precio dentro del rango razonable
+
+            } catch (error) {
+                console.error('Error validando diferencia de precio:', error);
+                return null; // En caso de error, permitir continuar sin validación
+            }
+        }
+
         async function guardarPrecioCompetencia(e) {
             const precio = parseFloat(e.target.value);
             const medId = document.getElementById('medicamento-activo').value;
@@ -1558,6 +1607,15 @@
             const cotizacionId = document.getElementById('cotizacion-id-editando')?.value;
             const url = document.getElementById('url-cotizacion')?.value.trim() || null;
             if (!medId || !fabId || !terceroId || precio <= 0) return;
+
+            // 🆕 Validar diferencia de precio ANTES de guardar (solo si es nueva cotización)
+            if (!modoEdicion) {
+                const alerta = await validarDiferenciaPrecio(medId, fabId, precio);
+                if (alerta && !confirm(alerta)) {
+                    return; // Usuario canceló
+                }
+            }
+
             let res;
             if (modoEdicion && cotizacionId) {
                 // EDITAR cotización existente

@@ -3350,10 +3350,62 @@
             });
         }
 
-        // 🆕 Agregar al carrito desde alerta (placeholder - implementar después)
-        function agregarAlCarritoDesdeAlerta(medicamentoId, nombre) {
-            alert(`Función en desarrollo: Agregar "${nombre}" al carrito`);
-            // TODO: Implementar agregar al carrito
+        // 🆕 Agregar al carrito desde alerta
+        async function agregarAlCarritoDesdeAlerta(medicamentoId, nombre) {
+            // Primero verificar que el medicamento tenga precio
+            try {
+                // Buscar en pastillero_usuarios para obtener el medicamento_id oficial
+                const resPastillero = await fetch('/api/pastillero');
+                const dataPastillero = await resPastillero.json();
+
+                if (!dataPastillero.ok || !dataPastillero.medicamentos) {
+                    mostrarToast('Error al obtener información del medicamento');
+                    return;
+                }
+
+                const medPastillero = dataPastillero.medicamentos.find(m => m.id === medicamentoId);
+
+                if (!medPastillero || !medPastillero.medicamento_id) {
+                    mostrarToast(`"${nombre}" es un medicamento personal sin precio en tienda`);
+                    return;
+                }
+
+                // Obtener precios del medicamento oficial
+                const resMed = await fetch(`/medicamento/${medPastillero.medicamento_id}`);
+                const htmlMed = await resMed.text();
+
+                // Parsear HTML para extraer precios (simplificado - tomar primer precio disponible)
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlMed, 'text/html');
+                const preciosCards = doc.querySelectorAll('[data-precio-id]');
+
+                if (preciosCards.length === 0) {
+                    mostrarToast(`"${nombre}" no tiene precios disponibles`);
+                    return;
+                }
+
+                // Tomar el primer precio disponible
+                const primeraCard = preciosCards[0];
+                const precioId = primeraCard.getAttribute('data-precio-id');
+                const precio = parseFloat(primeraCard.getAttribute('data-precio'));
+                const presentacion = primeraCard.getAttribute('data-presentacion') || 'N/A';
+
+                // Agregar al carrito
+                await agregarAlCarrito({
+                    medicamento_id: medPastillero.medicamento_id,
+                    precio_id: parseInt(precioId),
+                    nombre: nombre,
+                    precio: precio,
+                    presentacion: presentacion
+                });
+
+                // Cerrar modal si está abierto
+                cerrarPastillero();
+
+            } catch (error) {
+                console.error('Error al agregar al carrito desde alerta:', error);
+                mostrarToast('Error al agregar al carrito');
+            }
         }
 
         // 🆕 Actualizar contador del globo de alertas en tienda

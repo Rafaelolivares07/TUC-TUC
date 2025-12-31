@@ -1739,8 +1739,9 @@ def checkout():
 def procesar_pedido():
     """
     Procesa el pedido y crea el registro en BD + enva WhatsApp.
-    🆕 Ahora obtiene los items del carrito desde la DB (estado='carrito_temporal')
-    y los convierte a pendientes en lugar de crear nuevas existencias.
+    🆕 Sistema HÍBRIDO:
+    - Usuario logueado → usa items de DB (estado='carrito_temporal'), convierte a 'pendiente'
+    - Usuario anónimo → recibe items del frontend, crea existencias, auto-login al finalizar
     """
     try:
         data = request.get_json()
@@ -1750,39 +1751,51 @@ def procesar_pedido():
         telefono = data.get('telefono', '').strip()
         direccion = data.get('direccion', '').strip()
         metodo_pago = data.get('metodo_pago')
-
-        # 🆕 Validar autenticación
-        if 'user_id' not in session:
-            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
-
-        user_id = session['user_id']
-
-        # 🆕 Obtener items del carrito desde la DB
-        conn = get_db_connection()
-        items_carrito = conn.execute("""
-            SELECT
-                e.id as existencia_id,
-                e.id_medicamento,
-                e.cantidad,
-                e.precio_unitario,
-                e.precio_total,
-                m.nombre_comercial,
-                m.nombre_generico,
-                m.imagen
-            FROM existencias e
-            JOIN medicamentos m ON e.id_medicamento = m.id
-            WHERE e.estado = 'carrito_temporal'
-            AND e.id_tercero = ?
-        """, (user_id,)).fetchall()
-
-        if not items_carrito:
-            conn.close()
-            return jsonify({'ok': False, 'error': 'El carrito está vacío'}), 400
+        items = data.get('items', [])  # 🆕 Para usuarios anónimos
 
         # Validar datos básicos
         if not all([nombre, telefono, direccion, metodo_pago]):
-            conn.close()
             return jsonify({'ok': False, 'error': 'Datos incompletos'}), 400
+
+        # 🆕 Detectar si el usuario está logueado
+        is_logged_in = 'user_id' in session
+        conn = get_db_connection()
+
+        if is_logged_in:
+            # Usuario LOGUEADO → obtener items del carrito desde la DB
+            user_id = session['user_id']
+
+            items_carrito = conn.execute("""
+                SELECT
+                    e.id as existencia_id,
+                    e.id_medicamento,
+                    e.cantidad,
+                    e.precio_unitario,
+                    e.precio_total,
+                    m.nombre_comercial,
+                    m.nombre_generico,
+                    m.imagen
+                FROM existencias e
+                JOIN medicamentos m ON e.id_medicamento = m.id
+                WHERE e.estado = 'carrito_temporal'
+                AND e.id_tercero = ?
+            """, (user_id,)).fetchall()
+
+            if not items_carrito:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'El carrito está vacío'}), 400
+
+            # Convertir a lista de diccionarios para procesamiento uniforme
+            items_carrito = [dict(row) for row in items_carrito]
+            usar_db = True
+        else:
+            # Usuario ANÓNIMO → usar items enviados del frontend (localStorage)
+            if not items or len(items) == 0:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'El carrito está vacío'}), 400
+
+            items_carrito = items
+            usar_db = False
         
         # Geocoding - obtener coordenadas
         GOOGLE_API_KEY = 'AIzaSyCiAtNFl95bJJFuqiNsiYynBS3LuDisq9g'
@@ -1894,13 +1907,18 @@ def procesar_pedido():
             direccion_id = cursor.lastrowid
             print(f" Direccin creada con ID: {direccion_id}")
 
-        # 2. Calcular totales 🆕 desde items_carrito (DB)
-        subtotal = sum(float(item['precio_total']) for item in items_carrito)
+        # 2. Calcular totales (híbrido: DB o localStorage)
+        if usar_db:
+            # Usuario logueado: items ya tienen precio_total calculado
+            subtotal = sum(float(item['precio_total']) for item in items_carrito)
+        else:
+            # Usuario anónimo: calcular desde items del frontend
+            subtotal = sum(item['precio'] * item['cantidad'] for item in items_carrito)
+
         costo_domicilio = 0 if subtotal >= 50000 else 5000
         total = subtotal + costo_domicilio
 
         # 3. Crear PEDIDO
-        # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
         cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
         next_pedido_id = cursor_seq.fetchone()[0]
 
@@ -1915,28 +1933,57 @@ def procesar_pedido():
         pedido_id = next_pedido_id
         print(f" Pedido creado con ID: {pedido_id}")
 
-        # 4. 🆕 ACTUALIZAR EXISTENCIAS del carrito a pendientes (en vez de INSERT)
-        print(f" 🔄 Convirtiendo {len(items_carrito)} items del carrito a pedido pendiente...")
-        conn.execute("""
-            UPDATE existencias
-            SET estado = 'pendiente',
-                pedido_id = ?,
-                fecha_actualizacion = CURRENT_TIMESTAMP
-            WHERE id_tercero = ?
-            AND estado = 'carrito_temporal'
-        """, (pedido_id, tercero_id))
-        print(f" ✅ Items del carrito actualizados a estado 'pendiente'")
+        # 4. Crear/Actualizar EXISTENCIAS (híbrido)
+        if usar_db:
+            # Usuario LOGUEADO: UPDATE existencias de 'carrito_temporal' a 'pendiente'
+            print(f" 🔄 Convirtiendo {len(items_carrito)} items del carrito a pedido pendiente...")
+            conn.execute("""
+                UPDATE existencias
+                SET estado = 'pendiente',
+                    pedido_id = ?,
+                    fecha_actualizacion = CURRENT_TIMESTAMP
+                WHERE id_tercero = ?
+                AND estado = 'carrito_temporal'
+            """, (pedido_id, tercero_id))
+            print(f" ✅ Items del carrito actualizados a estado 'pendiente'")
+        else:
+            # Usuario ANÓNIMO: INSERT nuevas existencias (comportamiento original)
+            print(f" ➕ Creando {len(items_carrito)} existencias para usuario anónimo...")
+            for item in items_carrito:
+                cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
+                next_existencia_id = cursor_seq.fetchone()[0]
+
+                conn.execute("""
+                    INSERT INTO existencias (
+                        id, medicamento_id, fabricante_id, tipo_movimiento,
+                        cantidad, fecha, id_tercero, pedido_id
+                    ) VALUES (?, ?, ?, 'salida', ?, CURRENT_TIMESTAMP, ?, ?)
+                """, (next_existencia_id, item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
+            print(f" ✅ Existencias creadas para usuario anónimo")
+
+        # 🆕 AUTO-LOGIN: Si era usuario anónimo, crear session automáticamente
+        if not is_logged_in:
+            session['user_id'] = tercero_id
+            session['nombre'] = nombre
+            session['telefono'] = telefono
+            print(f" 🔐 Auto-login completado: user_id={tercero_id}")
         
         conn.commit()
         conn.close()
 
         # 5. ENVIAR NOTIFICACIN TELEGRAM AL ADMIN
         try:
-            # 🆕 Construir lista de productos desde items_carrito (DB)
-            items_texto = "\n".join([
-                f" {item['nombre_comercial']} x{item['cantidad']} = ${float(item['precio_total']):,.0f}"
-                for item in items_carrito
-            ])
+            # 🆕 Construir lista de productos (híbrido: DB o localStorage)
+            if usar_db:
+                items_texto = "\n".join([
+                    f" {item['nombre_comercial']} x{item['cantidad']} = ${float(item['precio_total']):,.0f}"
+                    for item in items_carrito
+                ])
+            else:
+                items_texto = "\n".join([
+                    f" {item['nombre']} ({item['fabricante']}) x{item['cantidad']} = ${item['precio'] * item['cantidad']:,}"
+                    for item in items_carrito
+                ])
 
             # Link a Google Maps
             maps_link = f"https://www.google.com/maps?q={latitud},{longitud}" if latitud and longitud else "Sin coordenadas"

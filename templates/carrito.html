@@ -315,13 +315,44 @@
     <script>
         const COSTO_DOMICILIO = 5000;
         const DOMICILIO_GRATIS_MIN = 50000;
-        
-        let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
-        
+
+        let carrito = []; // 🆕 Se cargará desde API
+
+        // 🆕 Función para cargar carrito desde API
+        async function cargarCarritoDesdeAPI() {
+            try {
+                const response = await fetch('/api/carrito');
+                const data = await response.json();
+
+                if (data.ok && data.items) {
+                    // Convertir formato de API a formato de carrito local
+                    carrito = data.items.map(item => ({
+                        precio_id: item.id, // Usar existencia_id como precio_id
+                        medicamento_id: item.id_medicamento,
+                        nombre: item.nombre_comercial,
+                        fabricante: item.nombre_generico || '', // Usar nombre genérico como fabricante temporalmente
+                        precio: item.precio_unitario,
+                        cantidad: item.cantidad,
+                        imagen: item.imagen,
+                        concentracion: item.concentracion,
+                        presentacion: item.forma_farmaceutica
+                    }));
+                } else {
+                    carrito = [];
+                }
+
+                actualizarCarrito();
+            } catch (error) {
+                console.error('Error al cargar carrito desde API:', error);
+                carrito = [];
+                actualizarCarrito();
+            }
+        }
+
         function formatearPrecio(precio) {
             return new Intl.NumberFormat('es-CO').format(precio);
         }
-        
+
         function actualizarCarrito() {
             if (carrito.length === 0) {
                 document.getElementById('carritoVacio').style.display = 'block';
@@ -371,22 +402,69 @@
             document.getElementById('total').textContent = '$' + formatearPrecio(total);
         }
         
-        function cambiarCantidad(index, cambio) {
-            carrito[index].cantidad += cambio;
-            
-            if (carrito[index].cantidad <= 0) {
+        async function cambiarCantidad(index, cambio) {
+            const item = carrito[index];
+            const nuevaCantidad = item.cantidad + cambio;
+
+            if (nuevaCantidad <= 0) {
                 eliminarItem(index);
                 return;
             }
-            
-            localStorage.setItem('carrito', JSON.stringify(carrito));
-            actualizarCarrito();
+
+            try {
+                // 🆕 Actualizar cantidad en API
+                const response = await fetch('/api/carrito/actualizar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        item_id: item.precio_id, // precio_id es el id de existencia
+                        cantidad: nuevaCantidad
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.ok) {
+                    throw new Error(data.error || 'Error al actualizar cantidad');
+                }
+
+                // Recargar carrito desde API
+                await cargarCarritoDesdeAPI();
+            } catch (error) {
+                console.error('Error al cambiar cantidad:', error);
+                alert('Error al actualizar cantidad. Por favor intenta nuevamente.');
+            }
         }
-        
-        function eliminarItem(index) {
-            carrito.splice(index, 1);
-            localStorage.setItem('carrito', JSON.stringify(carrito));
-            actualizarCarrito();
+
+        async function eliminarItem(index) {
+            const item = carrito[index];
+
+            try {
+                // 🆕 Eliminar item usando API
+                const response = await fetch('/api/carrito/eliminar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        item_id: item.precio_id // precio_id es el id de existencia
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.ok) {
+                    throw new Error(data.error || 'Error al eliminar item');
+                }
+
+                // Recargar carrito desde API
+                await cargarCarritoDesdeAPI();
+            } catch (error) {
+                console.error('Error al eliminar item:', error);
+                alert('Error al eliminar el producto. Por favor intenta nuevamente.');
+            }
         }
         
         function irCheckout() {
@@ -397,8 +475,8 @@
             window.location.href = '/tienda/checkout';
         }
         
-        // Inicializar
-        actualizarCarrito();
+        // 🆕 Inicializar - Cargar desde API
+        cargarCarritoDesdeAPI();
 
         // Validar horario al cargar el carrito
         async function validarHorarioCarrito() {

@@ -1457,6 +1457,263 @@ def upload_promo_image():
 # FIN ENDPOINTS PROMOS CAROUSEL
 # ==========================================
 
+# ==========================================
+# CARRITO API (sincronizado en DB)
+# ==========================================
+
+@app.route('/api/carrito', methods=['GET'])
+def obtener_carrito():
+    """
+    Obtiene los items del carrito del usuario actual desde existencias.
+    Usa estado='carrito_temporal' para diferenciar de pedidos pendientes.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+
+        user_id = session['user_id']
+        conn = get_db_connection()
+
+        # Query items del carrito con información del medicamento
+        items = conn.execute("""
+            SELECT
+                e.id,
+                e.id_medicamento,
+                e.cantidad,
+                e.precio_unitario,
+                e.precio_total,
+                m.nombre_comercial,
+                m.nombre_generico,
+                m.imagen,
+                m.concentracion,
+                m.forma_farmaceutica
+            FROM existencias e
+            JOIN medicamentos m ON e.id_medicamento = m.id
+            WHERE e.estado = 'carrito_temporal'
+            AND e.id_tercero = ?
+            ORDER BY e.id DESC
+        """, (user_id,)).fetchall()
+
+        conn.close()
+
+        # Convertir a lista de diccionarios
+        carrito = []
+        for item in items:
+            carrito.append({
+                'id': item['id'],
+                'id_medicamento': item['id_medicamento'],
+                'cantidad': item['cantidad'],
+                'precio_unitario': float(item['precio_unitario']) if item['precio_unitario'] else 0,
+                'precio_total': float(item['precio_total']) if item['precio_total'] else 0,
+                'nombre_comercial': item['nombre_comercial'],
+                'nombre_generico': item['nombre_generico'],
+                'imagen': item['imagen'],
+                'concentracion': item['concentracion'],
+                'forma_farmaceutica': item['forma_farmaceutica']
+            })
+
+        return jsonify({'ok': True, 'items': carrito})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/carrito/agregar', methods=['POST'])
+def agregar_al_carrito():
+    """
+    Agrega un medicamento al carrito (crea existencia temporal).
+    Si ya existe, incrementa la cantidad.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+
+        data = request.get_json()
+        user_id = session['user_id']
+        id_medicamento = data.get('id_medicamento')
+        cantidad = int(data.get('cantidad', 1))
+        precio_unitario = float(data.get('precio_unitario', 0))
+
+        if not id_medicamento or cantidad <= 0:
+            return jsonify({'ok': False, 'error': 'Datos inválidos'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar si el item ya existe en el carrito
+        item_existente = conn.execute("""
+            SELECT id, cantidad FROM existencias
+            WHERE estado = 'carrito_temporal'
+            AND id_tercero = ?
+            AND id_medicamento = ?
+        """, (user_id, id_medicamento)).fetchone()
+
+        if item_existente:
+            # Actualizar cantidad existente
+            nueva_cantidad = item_existente['cantidad'] + cantidad
+            nuevo_total = nueva_cantidad * precio_unitario
+
+            conn.execute("""
+                UPDATE existencias
+                SET cantidad = ?,
+                    precio_total = ?,
+                    fecha_actualizacion = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (nueva_cantidad, nuevo_total, item_existente['id']))
+
+            item_id = item_existente['id']
+        else:
+            # Crear nuevo item en carrito
+            precio_total = cantidad * precio_unitario
+
+            # Obtener siguiente ID
+            cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
+            next_id = cursor_seq.fetchone()[0]
+
+            conn.execute("""
+                INSERT INTO existencias (
+                    id, id_tercero, id_medicamento, cantidad,
+                    precio_unitario, precio_total, estado, pedido_id
+                ) VALUES (?, ?, ?, ?, ?, ?, 'carrito_temporal', NULL)
+            """, (next_id, user_id, id_medicamento, cantidad, precio_unitario, precio_total))
+
+            item_id = next_id
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'item_id': item_id, 'mensaje': 'Item agregado al carrito'})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/carrito/actualizar', methods=['POST'])
+def actualizar_cantidad_carrito():
+    """
+    Actualiza la cantidad de un item del carrito.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+
+        data = request.get_json()
+        user_id = session['user_id']
+        item_id = data.get('item_id')
+        nueva_cantidad = int(data.get('cantidad', 1))
+
+        if not item_id or nueva_cantidad <= 0:
+            return jsonify({'ok': False, 'error': 'Datos inválidos'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar que el item pertenece al usuario y es carrito_temporal
+        item = conn.execute("""
+            SELECT precio_unitario FROM existencias
+            WHERE id = ?
+            AND id_tercero = ?
+            AND estado = 'carrito_temporal'
+        """, (item_id, user_id)).fetchone()
+
+        if not item:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Item no encontrado'}), 404
+
+        # Actualizar cantidad y precio total
+        nuevo_total = nueva_cantidad * item['precio_unitario']
+
+        conn.execute("""
+            UPDATE existencias
+            SET cantidad = ?,
+                precio_total = ?,
+                fecha_actualizacion = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (nueva_cantidad, nuevo_total, item_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Cantidad actualizada'})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/carrito/eliminar', methods=['POST'])
+def eliminar_del_carrito():
+    """
+    Elimina un item del carrito.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+
+        data = request.get_json()
+        user_id = session['user_id']
+        item_id = data.get('item_id')
+
+        if not item_id:
+            return jsonify({'ok': False, 'error': 'ID de item requerido'}), 400
+
+        conn = get_db_connection()
+
+        # Eliminar solo si pertenece al usuario y es carrito_temporal
+        result = conn.execute("""
+            DELETE FROM existencias
+            WHERE id = ?
+            AND id_tercero = ?
+            AND estado = 'carrito_temporal'
+        """, (item_id, user_id))
+
+        conn.commit()
+
+        if result.rowcount == 0:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Item no encontrado'}), 404
+
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Item eliminado del carrito'})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/carrito/vaciar', methods=['POST'])
+def vaciar_carrito():
+    """
+    Vacía completamente el carrito del usuario.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+
+        user_id = session['user_id']
+        conn = get_db_connection()
+
+        # Eliminar todos los items del carrito del usuario
+        conn.execute("""
+            DELETE FROM existencias
+            WHERE id_tercero = ?
+            AND estado = 'carrito_temporal'
+        """, (user_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Carrito vaciado'})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ==========================================
+# FIN CARRITO API
+# ==========================================
+
 @app.route('/tienda/checkout')
 def checkout():
     """Pgina de checkout"""
@@ -1464,18 +1721,51 @@ def checkout():
 
 @app.route('/tienda/procesar_pedido', methods=['POST'])
 def procesar_pedido():
-    """Procesa el pedido y crea el registro en BD + enva WhatsApp"""
+    """
+    Procesa el pedido y crea el registro en BD + enva WhatsApp.
+    🆕 Ahora obtiene los items del carrito desde la DB (estado='carrito_temporal')
+    y los convierte a pendientes en lugar de crear nuevas existencias.
+    """
     try:
         data = request.get_json()
-        
+
         # Validar datos
         nombre = data.get('nombre', '').strip()
         telefono = data.get('telefono', '').strip()
         direccion = data.get('direccion', '').strip()
         metodo_pago = data.get('metodo_pago')
-        items = data.get('items', [])
-        
-        if not all([nombre, telefono, direccion, metodo_pago, items]):
+
+        # 🆕 Validar autenticación
+        if 'user_id' not in session:
+            return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
+
+        user_id = session['user_id']
+
+        # 🆕 Obtener items del carrito desde la DB
+        conn = get_db_connection()
+        items_carrito = conn.execute("""
+            SELECT
+                e.id as existencia_id,
+                e.id_medicamento,
+                e.cantidad,
+                e.precio_unitario,
+                e.precio_total,
+                m.nombre_comercial,
+                m.nombre_generico,
+                m.imagen
+            FROM existencias e
+            JOIN medicamentos m ON e.id_medicamento = m.id
+            WHERE e.estado = 'carrito_temporal'
+            AND e.id_tercero = ?
+        """, (user_id,)).fetchall()
+
+        if not items_carrito:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'El carrito está vacío'}), 400
+
+        # Validar datos básicos
+        if not all([nombre, telefono, direccion, metodo_pago]):
+            conn.close()
             return jsonify({'ok': False, 'error': 'Datos incompletos'}), 400
         
         # Geocoding - obtener coordenadas
@@ -1546,6 +1836,16 @@ def procesar_pedido():
             tercero_id = next_tercero_id
             print(f" Tercero creado con ID: {tercero_id}")
 
+        # 🆕 Actualizar id_tercero en existencias del carrito si user_id != tercero_id
+        if user_id != tercero_id:
+            conn.execute("""
+                UPDATE existencias
+                SET id_tercero = ?
+                WHERE id_tercero = ?
+                AND estado = 'carrito_temporal'
+            """, (tercero_id, user_id))
+            print(f" ✅ Actualizado id_tercero del carrito: {user_id} → {tercero_id}")
+
         # 2. Buscar o crear DIRECCIN en terceros_direcciones
         alias_direccion = data.get('alias_direccion', 'Principal')
 
@@ -1577,12 +1877,12 @@ def procesar_pedido():
             """, (tercero_id, alias_direccion, nombre, telefono, direccion, latitud, longitud, True))
             direccion_id = cursor.lastrowid
             print(f" Direccin creada con ID: {direccion_id}")
-        
-        # 2. Calcular totales
-        subtotal = sum(item['precio'] * item['cantidad'] for item in items)
+
+        # 2. Calcular totales 🆕 desde items_carrito (DB)
+        subtotal = sum(float(item['precio_total']) for item in items_carrito)
         costo_domicilio = 0 if subtotal >= 50000 else 5000
         total = subtotal + costo_domicilio
-        
+
         # 3. Crear PEDIDO
         # Obtener el siguiente ID manualmente (la tabla no tiene secuencia)
         cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM pedidos")
@@ -1598,29 +1898,28 @@ def procesar_pedido():
         """, (next_pedido_id, tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
         pedido_id = next_pedido_id
         print(f" Pedido creado con ID: {pedido_id}")
-        
-        # 4. Crear EXISTENCIAS (salidas) para cada item
-        for item in items:
-            # Obtener siguiente ID para existencias
-            cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
-            next_existencia_id = cursor_seq.fetchone()[0]
 
-            conn.execute("""
-                INSERT INTO existencias (
-                    id, medicamento_id, fabricante_id, tipo_movimiento,
-                    cantidad, fecha, id_tercero, pedido_id
-                ) VALUES (?, ?, ?, 'salida', ?, CURRENT_TIMESTAMP, ?, ?)
-            """, (next_existencia_id, item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
+        # 4. 🆕 ACTUALIZAR EXISTENCIAS del carrito a pendientes (en vez de INSERT)
+        print(f" 🔄 Convirtiendo {len(items_carrito)} items del carrito a pedido pendiente...")
+        conn.execute("""
+            UPDATE existencias
+            SET estado = 'pendiente',
+                pedido_id = ?,
+                fecha_actualizacion = CURRENT_TIMESTAMP
+            WHERE id_tercero = ?
+            AND estado = 'carrito_temporal'
+        """, (pedido_id, tercero_id))
+        print(f" ✅ Items del carrito actualizados a estado 'pendiente'")
         
         conn.commit()
         conn.close()
 
         # 5. ENVIAR NOTIFICACIN TELEGRAM AL ADMIN
         try:
-            # Construir lista de productos
+            # 🆕 Construir lista de productos desde items_carrito (DB)
             items_texto = "\n".join([
-                f" {item['nombre']} ({item['fabricante']}) x{item['cantidad']} = ${item['precio'] * item['cantidad']:,}"
-                for item in items
+                f" {item['nombre_comercial']} x{item['cantidad']} = ${float(item['precio_total']):,.0f}"
+                for item in items_carrito
             ])
 
             # Link a Google Maps

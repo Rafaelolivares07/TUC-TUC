@@ -1391,6 +1391,68 @@
         let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
         actualizarBadgeCarrito();
 
+        // 🆕 Función para cargar carrito desde API (DB sincronizado)
+        async function cargarCarritoDesdeAPI() {
+            try {
+                // 🔄 MIGRACIÓN AUTOMÁTICA: Si hay items en localStorage, migrarlos a la DB
+                const carritoLocalStorage = JSON.parse(localStorage.getItem('carrito') || '[]');
+                if (carritoLocalStorage.length > 0) {
+                    console.log('🔄 Migrando', carritoLocalStorage.length, 'items de localStorage a DB...');
+
+                    // Migrar cada item del localStorage a la API
+                    for (const item of carritoLocalStorage) {
+                        try {
+                            await fetch('/api/carrito/agregar', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    id_medicamento: item.medicamento_id,
+                                    cantidad: item.cantidad || 1,
+                                    precio_unitario: item.precio
+                                })
+                            });
+                        } catch (err) {
+                            console.error('Error migrando item:', err);
+                        }
+                    }
+
+                    // Limpiar localStorage después de migración exitosa
+                    localStorage.removeItem('carrito');
+                    console.log('✅ Migración completada. localStorage limpiado.');
+                }
+
+                // Cargar carrito desde API
+                const response = await fetch('/api/carrito');
+                const data = await response.json();
+
+                if (data.ok && data.items) {
+                    // Convertir formato de API a formato de carrito local
+                    carrito = data.items.map(item => ({
+                        precio_id: item.id, // Usar existencia_id como precio_id
+                        medicamento_id: item.id_medicamento,
+                        nombre: item.nombre_comercial,
+                        precio: item.precio_unitario,
+                        cantidad: item.cantidad,
+                        imagen: item.imagen,
+                        concentracion: item.concentracion,
+                        forma_farmaceutica: item.forma_farmaceutica
+                    }));
+                } else {
+                    carrito = [];
+                }
+            } catch (error) {
+                console.error('Error al cargar carrito desde API:', error);
+                // Mantener carrito actual en caso de error
+            }
+        }
+
+        // 🆕 Cargar carrito desde API al inicio (migración automática incluida)
+        cargarCarritoDesdeAPI().then(() => {
+            actualizarBadgeCarrito();
+        });
+
         // Cargar productos iniciales al cargar la página
         function cargarProductosIniciales() {
             console.log('📦 Cargando productos iniciales...');
@@ -2402,27 +2464,41 @@
                 return;
             }
 
-            const index = carrito.findIndex(item => item.precio_id === producto.precio_id);
-
-            if (index >= 0) {
-                carrito[index].cantidad++;
-            } else {
-                carrito.push({
-                    ...producto,
-                    cantidad: 1
+            try {
+                // 🆕 Usar API para agregar al carrito (sincronizado en DB)
+                const response = await fetch('/api/carrito/agregar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id_medicamento: producto.medicamento_id,
+                        cantidad: 1,
+                        precio_unitario: producto.precio
+                    })
                 });
-            }
 
-            localStorage.setItem('carrito', JSON.stringify(carrito));
-            actualizarBadgeCarrito();
+                const data = await response.json();
 
-            // Mostrar toast
-            mostrarToast(`${producto.nombre} agregado al carrito`);
+                if (!data.ok) {
+                    throw new Error(data.error || 'Error al agregar al carrito');
+                }
 
-            // Validar horario solo en el PRIMER producto
-            const yaVioModal = localStorage.getItem('vio_modal_horario');
-            if (!yaVioModal) {
-                await validarYMostrarModalHorario();
+                // 🆕 Actualizar carrito local desde la API
+                await cargarCarritoDesdeAPI();
+                actualizarBadgeCarrito();
+
+                // Mostrar toast
+                mostrarToast(`${producto.nombre} agregado al carrito`);
+
+                // Validar horario solo en el PRIMER producto
+                const yaVioModal = localStorage.getItem('vio_modal_horario');
+                if (!yaVioModal) {
+                    await validarYMostrarModalHorario();
+                }
+            } catch (error) {
+                console.error('Error al agregar al carrito:', error);
+                mostrarToast('Error al agregar el producto. Por favor intenta nuevamente.');
             }
         }
 

@@ -1469,8 +1469,8 @@ def check_auth_carrito():
     """
     return jsonify({
         'ok': True,
-        'is_logged_in': 'user_id' in session,
-        'user_id': session.get('user_id')
+        'is_logged_in': 'usuario_id' in session,
+        'user_id': session.get('usuario_id')
     })
 
 @app.route('/api/carrito', methods=['GET'])
@@ -1482,10 +1482,10 @@ def obtener_carrito():
     """
     try:
         # 🆕 Retornar vacío si no está logueado (usar localStorage en frontend)
-        if 'user_id' not in session:
+        if 'usuario_id' not in session:
             return jsonify({'ok': True, 'items': [], 'is_logged_in': False})
 
-        user_id = session['user_id']
+        usuario_id = session['usuario_id']
         conn = get_db_connection()
 
         # Query items del carrito con información del medicamento
@@ -1506,7 +1506,7 @@ def obtener_carrito():
             WHERE e.estado = 'carrito_temporal'
             AND e.id_tercero = ?
             ORDER BY e.id DESC
-        """, (user_id,)).fetchall()
+        """, (usuario_id,)).fetchall()
 
         conn.close()
 
@@ -1542,11 +1542,11 @@ def agregar_al_carrito():
     """
     try:
         # 🆕 Retornar indicador si no está logueado (frontend debe usar localStorage)
-        if 'user_id' not in session:
+        if 'usuario_id' not in session:
             return jsonify({'ok': False, 'is_logged_in': False, 'use_localstorage': True})
 
         data = request.get_json()
-        user_id = session['user_id']
+        usuario_id = session['usuario_id']
         id_medicamento = data.get('id_medicamento')
         cantidad = int(data.get('cantidad', 1))
         precio_unitario = float(data.get('precio_unitario', 0))
@@ -1562,7 +1562,7 @@ def agregar_al_carrito():
             WHERE estado = 'carrito_temporal'
             AND id_tercero = ?
             AND id_medicamento = ?
-        """, (user_id, id_medicamento)).fetchone()
+        """, (usuario_id, id_medicamento)).fetchone()
 
         if item_existente:
             # Actualizar cantidad existente
@@ -1591,7 +1591,7 @@ def agregar_al_carrito():
                     id, id_tercero, id_medicamento, cantidad,
                     precio_unitario, precio_total, estado, pedido_id
                 ) VALUES (?, ?, ?, ?, ?, ?, 'carrito_temporal', NULL)
-            """, (next_id, user_id, id_medicamento, cantidad, precio_unitario, precio_total))
+            """, (next_id, usuario_id, id_medicamento, cantidad, precio_unitario, precio_total))
 
             item_id = next_id
 
@@ -1611,11 +1611,11 @@ def actualizar_cantidad_carrito():
     Actualiza la cantidad de un item del carrito.
     """
     try:
-        if 'user_id' not in session:
+        if 'usuario_id' not in session:
             return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
 
         data = request.get_json()
-        user_id = session['user_id']
+        usuario_id = session['usuario_id']
         item_id = data.get('item_id')
         nueva_cantidad = int(data.get('cantidad', 1))
 
@@ -1630,7 +1630,7 @@ def actualizar_cantidad_carrito():
             WHERE id = ?
             AND id_tercero = ?
             AND estado = 'carrito_temporal'
-        """, (item_id, user_id)).fetchone()
+        """, (item_id, usuario_id)).fetchone()
 
         if not item:
             conn.close()
@@ -1663,11 +1663,11 @@ def eliminar_del_carrito():
     Elimina un item del carrito.
     """
     try:
-        if 'user_id' not in session:
+        if 'usuario_id' not in session:
             return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
 
         data = request.get_json()
-        user_id = session['user_id']
+        usuario_id = session['usuario_id']
         item_id = data.get('item_id')
 
         if not item_id:
@@ -1681,7 +1681,7 @@ def eliminar_del_carrito():
             WHERE id = ?
             AND id_tercero = ?
             AND estado = 'carrito_temporal'
-        """, (item_id, user_id))
+        """, (item_id, usuario_id))
 
         conn.commit()
 
@@ -1704,10 +1704,10 @@ def vaciar_carrito():
     Vacía completamente el carrito del usuario.
     """
     try:
-        if 'user_id' not in session:
+        if 'usuario_id' not in session:
             return jsonify({'ok': False, 'error': 'Usuario no autenticado'}), 401
 
-        user_id = session['user_id']
+        usuario_id = session['usuario_id']
         conn = get_db_connection()
 
         # Eliminar todos los items del carrito del usuario
@@ -1715,7 +1715,7 @@ def vaciar_carrito():
             DELETE FROM existencias
             WHERE id_tercero = ?
             AND estado = 'carrito_temporal'
-        """, (user_id,))
+        """, (usuario_id,))
 
         conn.commit()
         conn.close()
@@ -1758,12 +1758,12 @@ def procesar_pedido():
             return jsonify({'ok': False, 'error': 'Datos incompletos'}), 400
 
         # 🆕 Detectar si el usuario está logueado
-        is_logged_in = 'user_id' in session
+        is_logged_in = 'usuario_id' in session
         conn = get_db_connection()
 
         if is_logged_in:
             # Usuario LOGUEADO → obtener items del carrito desde la DB
-            user_id = session['user_id']
+            usuario_id = session['usuario_id']
 
             items_carrito = conn.execute("""
                 SELECT
@@ -1779,7 +1779,7 @@ def procesar_pedido():
                 JOIN medicamentos m ON e.id_medicamento = m.id
                 WHERE e.estado = 'carrito_temporal'
                 AND e.id_tercero = ?
-            """, (user_id,)).fetchall()
+            """, (usuario_id,)).fetchall()
 
             if not items_carrito:
                 conn.close()
@@ -1865,15 +1865,15 @@ def procesar_pedido():
             tercero_id = next_tercero_id
             print(f" Tercero creado con ID: {tercero_id}")
 
-        # 🆕 Actualizar id_tercero en existencias del carrito si user_id != tercero_id
-        if user_id != tercero_id:
+        # 🆕 Actualizar id_tercero en existencias del carrito si usuario_id != tercero_id
+        if usuario_id != tercero_id:
             conn.execute("""
                 UPDATE existencias
                 SET id_tercero = ?
                 WHERE id_tercero = ?
                 AND estado = 'carrito_temporal'
-            """, (tercero_id, user_id))
-            print(f" ✅ Actualizado id_tercero del carrito: {user_id} → {tercero_id}")
+            """, (tercero_id, usuario_id))
+            print(f" ✅ Actualizado id_tercero del carrito: {usuario_id} → {tercero_id}")
 
         # 2. Buscar o crear DIRECCIN en terceros_direcciones
         alias_direccion = data.get('alias_direccion', 'Principal')
@@ -1963,10 +1963,10 @@ def procesar_pedido():
 
         # 🆕 AUTO-LOGIN: Si era usuario anónimo, crear session automáticamente
         if not is_logged_in:
-            session['user_id'] = tercero_id
+            session['usuario_id'] = tercero_id
             session['nombre'] = nombre
             session['telefono'] = telefono
-            print(f" 🔐 Auto-login completado: user_id={tercero_id}")
+            print(f" 🔐 Auto-login completado: usuario_id={tercero_id}")
         
         conn.commit()
         conn.close()

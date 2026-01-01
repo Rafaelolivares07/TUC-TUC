@@ -2889,6 +2889,56 @@ def test_sintoma():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
+@app.route('/api/migrar-carrito-db', methods=['GET'])
+def migrar_carrito_db():
+    """ENDPOINT TEMPORAL: Ejecuta migraciones para sistema de carrito sincronizado"""
+    try:
+        conn = get_db_connection()
+        resultados = []
+
+        # 1. Agregar columnas al carrito
+        try:
+            conn.execute('ALTER TABLE existencias ADD COLUMN IF NOT EXISTS precio_unitario DECIMAL(10,2)')
+            resultados.append('✅ Columna precio_unitario agregada')
+        except Exception as e:
+            resultados.append(f'⚠️ precio_unitario: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE existencias ADD COLUMN IF NOT EXISTS precio_total DECIMAL(10,2)')
+            resultados.append('✅ Columna precio_total agregada')
+        except Exception as e:
+            resultados.append(f'⚠️ precio_total: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE existencias ADD COLUMN IF NOT EXISTS estado VARCHAR(20)')
+            resultados.append('✅ Columna estado agregada')
+        except Exception as e:
+            resultados.append(f'⚠️ estado: {str(e)}')
+
+        # 2. Crear índice
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_existencias_carrito ON existencias(id_tercero, estado) WHERE estado = 'carrito_temporal'")
+            resultados.append('✅ Índice idx_existencias_carrito creado')
+        except Exception as e:
+            resultados.append(f'⚠️ índice: {str(e)}')
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Migraciones ejecutadas',
+            'resultados': resultados
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """

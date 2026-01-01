@@ -1561,7 +1561,7 @@ def agregar_al_carrito():
             SELECT id, cantidad FROM existencias
             WHERE estado = 'carrito_temporal'
             AND id_tercero = ?
-            AND id_medicamento = ?
+            AND medicamento_id = ?
         """, (usuario_id, id_medicamento)).fetchone()
 
         if item_existente:
@@ -1588,7 +1588,7 @@ def agregar_al_carrito():
 
             conn.execute("""
                 INSERT INTO existencias (
-                    id, id_tercero, id_medicamento, cantidad,
+                    id, id_tercero, medicamento_id, cantidad,
                     precio_unitario, precio_total, estado, pedido_id
                 ) VALUES (?, ?, ?, ?, ?, ?, 'carrito_temporal', NULL)
             """, (next_id, usuario_id, id_medicamento, cantidad, precio_unitario, precio_total))

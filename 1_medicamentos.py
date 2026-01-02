@@ -1879,7 +1879,7 @@ def procesar_pedido():
                 WHERE id_tercero = ?
                 AND estado = 'carrito_temporal'
             """, (tercero_id, usuario_id))
-            print(f" ✅ Actualizado id_tercero del carrito: {usuario_id} → {tercero_id}")
+            print(f" OK: Actualizado id_tercero del carrito: {usuario_id} -> {tercero_id}")
 
         # 2. Buscar o crear DIRECCIN en terceros_direcciones
         alias_direccion = data.get('alias_direccion', 'Principal')
@@ -1942,7 +1942,7 @@ def procesar_pedido():
         # 4. Crear/Actualizar EXISTENCIAS (híbrido)
         if usar_db:
             # Usuario LOGUEADO: UPDATE existencias de 'carrito_temporal' a 'pendiente'
-            print(f" 🔄 Convirtiendo {len(items_carrito)} items del carrito a pedido pendiente...")
+            print(f" Convirtiendo {len(items_carrito)} items del carrito a pedido pendiente...")
             conn.execute("""
                 UPDATE existencias
                 SET estado = 'pendiente',
@@ -1951,10 +1951,10 @@ def procesar_pedido():
                 WHERE id_tercero = ?
                 AND estado = 'carrito_temporal'
             """, (pedido_id, tercero_id))
-            print(f" ✅ Items del carrito actualizados a estado 'pendiente'")
+            print(f" OK: Items del carrito actualizados a estado 'pendiente'")
         else:
             # Usuario ANÓNIMO: INSERT nuevas existencias (comportamiento original)
-            print(f" ➕ Creando {len(items_carrito)} existencias para usuario anónimo...")
+            print(f" Creando {len(items_carrito)} existencias para usuario anónimo...")
             for item in items_carrito:
                 cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM existencias")
                 next_existencia_id = cursor_seq.fetchone()[0]
@@ -1965,7 +1965,7 @@ def procesar_pedido():
                         cantidad, fecha, id_tercero, pedido_id
                     ) VALUES (?, ?, ?, 'salida', ?, CURRENT_TIMESTAMP, ?, ?)
                 """, (next_existencia_id, item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
-            print(f" ✅ Existencias creadas para usuario anónimo")
+            print(f" OK: Existencias creadas para usuario anónimo")
 
         # 🆕 AUTO-LOGIN: Si era usuario anónimo, crear session automáticamente
         if not is_logged_in:
@@ -12733,7 +12733,7 @@ def api_crear_usuario_pastillero():
 
         if tercero_existente:
             tercero_id = tercero_existente['id']
-            print(f"✅ Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
+            print(f"OK: Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
 
             # Actualizar nombre si cambió
             if tercero_existente['nombre'] != nombre:
@@ -12743,20 +12743,20 @@ def api_crear_usuario_pastillero():
                     WHERE id = ?
                 """, (nombre, tercero_id))
                 conn.commit()
-                print(f"  ✏️ Nombre actualizado a: {nombre}")
+                print(f"  Nombre actualizado a: {nombre}")
         else:
             # Crear nuevo tercero
             cursor_seq = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM terceros")
             next_tercero_id = cursor_seq.fetchone()[0]
 
-            print(f"➕ Creando nuevo tercero con ID {next_tercero_id}...")
+            print(f"Creando nuevo tercero con ID {next_tercero_id}...")
             conn.execute("""
                 INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
             """, (next_tercero_id, nombre, telefono))
             tercero_id = next_tercero_id
             conn.commit()
-            print(f"✅ Tercero creado con ID: {tercero_id}")
+            print(f"OK: Tercero creado con ID: {tercero_id}")
 
         # Verificar si el usuario ya tiene un pastillero
         pastillero_existente = conn.execute("""
@@ -12768,11 +12768,11 @@ def api_crear_usuario_pastillero():
 
         if pastillero_existente:
             pastillero_id = pastillero_existente['id']
-            print(f"✅ Pastillero existente encontrado: ID {pastillero_id}")
+            print(f"OK: Pastillero existente encontrado: ID {pastillero_id}")
         else:
             # Crear pastillero automáticamente para el nuevo usuario
             nombre_pastillero = f"Pastillero de {nombre}"
-            print(f"➕ Creando pastillero automático: {nombre_pastillero}")
+            print(f"Creando pastillero automatico: {nombre_pastillero}")
 
             conn.execute("""
                 INSERT INTO pastilleros (nombre, creado_por_usuario_id)
@@ -12795,7 +12795,7 @@ def api_crear_usuario_pastillero():
             """, (pastillero_id, tercero_id))
 
             conn.commit()
-            print(f"✅ Pastillero creado con ID: {pastillero_id}")
+            print(f"OK: Pastillero creado con ID: {pastillero_id}")
 
         conn.close()
 
@@ -12813,7 +12813,7 @@ def api_crear_usuario_pastillero():
         })
 
     except Exception as e:
-        print(f"❌ Error al crear usuario para pastillero: {e}")
+        print(f"ERROR al crear usuario para pastillero: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -12849,7 +12849,7 @@ def api_restaurar_sesion():
             if not pastillero:
                 # Usuario no tiene pastillero - crear uno automáticamente
                 nombre_pastillero = f"Pastillero de {tercero['nombre']}"
-                print(f"➕ Usuario sin pastillero. Creando automáticamente: {nombre_pastillero}")
+                print(f"Usuario sin pastillero. Creando automaticamente: {nombre_pastillero}")
 
                 conn.execute("""
                     INSERT INTO pastilleros (nombre, creado_por_usuario_id)
@@ -12872,7 +12872,7 @@ def api_restaurar_sesion():
                 """, (pastillero_id, tercero['id']))
 
                 conn.commit()
-                print(f"✅ Pastillero creado con ID: {pastillero_id}")
+                print(f"OK: Pastillero creado con ID: {pastillero_id}")
             else:
                 pastillero_id = pastillero['id']
 
@@ -12881,7 +12881,7 @@ def api_restaurar_sesion():
             # Restaurar sesión
             session['usuario_id'] = tercero['id']
             session['pastillero_activo_id'] = pastillero_id
-            print(f"🔄 Sesión restaurada para usuario_id: {tercero['id']} ({tercero['nombre']}), pastillero_id: {pastillero_id}")
+            print(f"Sesion restaurada para usuario_id: {tercero['id']} ({tercero['nombre']}), pastillero_id: {pastillero_id}")
 
             return jsonify({
                 'ok': True,
@@ -12894,7 +12894,7 @@ def api_restaurar_sesion():
             return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
 
     except Exception as e:
-        print(f"❌ Error al restaurar sesión: {e}")
+        print(f"ERROR al restaurar sesion: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500

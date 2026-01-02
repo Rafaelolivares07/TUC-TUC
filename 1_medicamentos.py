@@ -16360,8 +16360,8 @@ def guardar_sugerencias_sintomas(med_id):
 
             if not existe:
                 cursor = conn.execute(
-                    'INSERT INTO sintomas (nombre) VALUES (%s)',
-                    (nombre_sintoma.title(),)
+                    'INSERT INTO sintomas (nombre, descripcion_lower) VALUES (%s, %s)',
+                    (nombre_sintoma.title(), nombre_sintoma.lower())
                 )
                 conn.commit()
 

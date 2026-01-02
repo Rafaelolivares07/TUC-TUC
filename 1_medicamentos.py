@@ -16193,17 +16193,20 @@ def filtrar_medicamentos_sugerir():
         where_sql = " AND ".join(where_clauses)
 
         # Usar el wrapper correctamente sin f-string para que convierta nombres de tablas
+        # Agregar las expresiones de ORDER BY al SELECT para cumplir con PostgreSQL DISTINCT
         query = """
-            SELECT DISTINCT m.id, m.nombre, m.componente_activo_id,
-                   CASE WHEN p.precio > 0 THEN 1 ELSE 0 END as tiene_precio
+            SELECT DISTINCT
+                m.id,
+                m.nombre,
+                m.componente_activo_id,
+                CASE WHEN p.precio > 0 THEN 1 ELSE 0 END as tiene_precio,
+                CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END as es_generico_sort,
+                CASE WHEN p.precio > 0 THEN 0 ELSE 1 END as sin_precio_sort
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN precios p ON p.medicamento_id = m.id
             WHERE """ + where_sql + """
-            ORDER BY
-                CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END,
-                CASE WHEN p.precio > 0 THEN 0 ELSE 1 END,
-                m.nombre
+            ORDER BY es_generico_sort, sin_precio_sort, m.nombre
             LIMIT 200
         """
         medicamentos = conn.execute(query).fetchall()

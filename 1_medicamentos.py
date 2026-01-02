@@ -3120,13 +3120,26 @@ def diagnosticar_sintomas_db():
             'columnas': [{'nombre': c[0], 'tipo': c[1], 'default': c[2], 'nullable': c[3]} for c in columnas]
         })
 
-        # 2. Verificar si existe secuencia
+        # 2. Verificar si existe secuencia asociada a la columna id
         cursor.execute("""
-            SELECT pg_get_serial_sequence('SINTOMAS', 'id') as secuencia
+            SELECT c.column_default
+            FROM information_schema.columns c
+            WHERE c.table_name = 'SINTOMAS' AND c.column_name = 'id'
         """)
-        secuencia = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        column_default = result[0] if result else None
+
+        # Extraer nombre de secuencia del default si existe
+        secuencia = None
+        if column_default and 'nextval' in column_default:
+            import re
+            match = re.search(r"nextval\('([^']+)'", column_default)
+            if match:
+                secuencia = match.group(1)
+
         resultados.append({
             'paso': 'Secuencia actual',
+            'column_default': column_default,
             'secuencia': secuencia
         })
 

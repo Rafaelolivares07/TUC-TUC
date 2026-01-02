@@ -2995,6 +2995,89 @@ def migrar_carrito_db():
         }), 500
 
 
+@app.route('/api/migrar-requerimientos-db', methods=['GET'])
+def migrar_requerimientos_db():
+    """ENDPOINT TEMPORAL: Ejecuta migración para sistema de requerimientos a PostgreSQL"""
+    try:
+        import psycopg2
+        resultados = []
+
+        # Conectar directamente a PostgreSQL sin el wrapper
+        database_url = os.getenv('DATABASE_URL')
+        if not database_url:
+            database_url = os.getenv('LOCAL_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/medicamentos')
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        pg_conn = psycopg2.connect(database_url)
+        pg_conn.set_session(autocommit=False)
+        cursor = pg_conn.cursor()
+
+        # Leer el archivo SQL de migración
+        sql_file_path = os.path.join(os.path.dirname(__file__), 'migracion_requerimientos.sql')
+
+        if not os.path.exists(sql_file_path):
+            return jsonify({
+                'ok': False,
+                'error': f'Archivo de migración no encontrado: {sql_file_path}'
+            }), 404
+
+        with open(sql_file_path, 'r', encoding='utf-8') as f:
+            sql_completo = f.read()
+
+        try:
+            # Ejecutar el script SQL completo
+            cursor.execute(sql_completo)
+            pg_conn.commit()
+            resultados.append('✅ Script SQL ejecutado completamente')
+
+        except Exception as e:
+            pg_conn.rollback()
+            resultados.append(f'❌ Error ejecutando SQL: {str(e)}')
+
+        # Verificar que las tablas existan (mayúsculas porque así las crea el sistema)
+        try:
+            tablas_verificar = [
+                ('REQUERIMIENTOS', 'REQUERIMIENTOS'),
+                ('REQUERIMIENTO_REFERENCIAS', 'requerimiento_referencias'),
+                ('archivos', 'archivos')
+            ]
+
+            for nombre_display, nombre_real in tablas_verificar:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE UPPER(table_name) = UPPER(%s)
+                    )
+                """, (nombre_real,))
+
+                resultado = cursor.fetchone()
+
+                if resultado and resultado[0]:
+                    resultados.append(f'✅ Tabla {nombre_display} existe')
+                else:
+                    resultados.append(f'❌ Tabla {nombre_display} NO EXISTE')
+        except Exception as e:
+            resultados.append(f'⚠️ Error en verificación: {str(e)}')
+
+        cursor.close()
+        pg_conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Migración de requerimientos completada',
+            'resultados': resultados
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """
@@ -4417,10 +4500,11 @@ def crear_requerimiento():
         conn = get_db_connection()
         cursor = conn.execute("""
             INSERT INTO requerimientos (descripcion, modulo, prioridad, estado)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
         """, (descripcion, modulo, prioridad, estado))
+        requerimiento_id = cursor.fetchone()[0]
         conn.commit()
-        requerimiento_id = cursor.lastrowid
         conn.close()
         
         return jsonify({
@@ -4447,8 +4531,8 @@ def actualizar_requerimiento(requerimiento_id):
         conn = get_db_connection()
         conn.execute("""
             UPDATE requerimientos
-            SET descripcion = ?, modulo = ?, prioridad = ?, estado = ?
-            WHERE id = ?
+            SET descripcion = %s, modulo = %s, prioridad = %s, estado = %s
+            WHERE id = %s
         """, (descripcion, modulo, prioridad, estado, requerimiento_id))
         conn.commit()
         conn.close()
@@ -4587,7 +4671,7 @@ def obtener_referencias(requerimiento_id):
         referencias = conn.execute("""
             SELECT id, archivo_relacionado, seccion_identificador, descripcion_referencia, estado
             FROM requerimiento_referencias
-            WHERE requerimiento_id = ?
+            WHERE requerimiento_id = %s
             ORDER BY id DESC
         """, (requerimiento_id,)).fetchall()
         conn.close()
@@ -4616,12 +4700,13 @@ def agregar_referencia(requerimiento_id):
         
         conn = get_db_connection()
         cursor = conn.execute("""
-            INSERT INTO requerimiento_referencias 
+            INSERT INTO requerimiento_referencias
             (requerimiento_id, archivo_relacionado, seccion_identificador, descripcion_referencia, estado)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
         """, (requerimiento_id, archivo, identificador, descripcion, estado))
+        ref_id = cursor.fetchone()[0]
         conn.commit()
-        ref_id = cursor.lastrowid
         conn.close()
         
         return jsonify({
@@ -4648,8 +4733,8 @@ def actualizar_estado_referencia(requerimiento_id, ref_id):
         conn = get_db_connection()
         conn.execute("""
             UPDATE requerimiento_referencias
-            SET estado = ?
-            WHERE id = ? AND requerimiento_id = ?
+            SET estado = %s
+            WHERE id = %s AND requerimiento_id = %s
         """, (nuevo_estado, ref_id, requerimiento_id))
         conn.commit()
         conn.close()
@@ -4668,7 +4753,7 @@ def eliminar_referencia(requerimiento_id, ref_id):
         conn = get_db_connection()
         conn.execute("""
             DELETE FROM requerimiento_referencias
-            WHERE id = ? AND requerimiento_id = ?
+            WHERE id = %s AND requerimiento_id = %s
         """, (ref_id, requerimiento_id))
         conn.commit()
         conn.close()
@@ -4774,10 +4859,11 @@ def agregar_archivo():
         conn = get_db_connection()
         cursor = conn.execute("""
             INSERT INTO archivos (nombre_archivo, descripcion, ruta)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
+            RETURNING id
         """, (nombre, descripcion, ruta))
+        archivo_id = cursor.fetchone()[0]
         conn.commit()
-        archivo_id = cursor.lastrowid
         conn.close()
         
         return jsonify({
@@ -4795,7 +4881,7 @@ def eliminar_archivo(archivo_id):
     """Elimina un archivo de la tabla"""
     try:
         conn = get_db_connection()
-        conn.execute("DELETE FROM archivos WHERE id = ?", (archivo_id,))
+        conn.execute("DELETE FROM archivos WHERE id = %s", (archivo_id,))
         conn.commit()
         conn.close()
         
@@ -4823,14 +4909,14 @@ def poblar_archivos():
             if any(archivo.endswith(ext) for ext in extensiones):
                 # Verificar si ya existe
                 existe = conexion.execute(
-                    "SELECT id FROM archivos WHERE nombre_archivo = ?",
+                    "SELECT id FROM archivos WHERE nombre_archivo = %s",
                     (archivo,)
                 ).fetchone()
-                
+
                 if not existe:
                     conexion.execute("""
                         INSERT INTO archivos (nombre_archivo, descripcion, ruta)
-                        VALUES (?, ?, ?)
+                        VALUES (%s, %s, %s)
                     """, (archivo, f'Archivo: {archivo}', f'/templates/{archivo}'))
                     archivos_agregados += 1
                 else:

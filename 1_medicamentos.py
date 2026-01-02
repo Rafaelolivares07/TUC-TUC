@@ -16528,35 +16528,21 @@ def guardar_sugerencias_sintomas(med_id):
         todos_sintomas_ids = sintomas_ids + sintomas_creados_ids
 
         for sintoma_id in todos_sintomas_ids:
-            # Verificar que no exista la relación
-            existe = conn.execute(
-                'SELECT 1 FROM medicamento_sintoma WHERE medicamento_id = %s AND sintoma_id = %s',
+            # Usar ON CONFLICT DO NOTHING para evitar errores de duplicados
+            conn.execute(
+                'INSERT INTO medicamento_sintoma (medicamento_id, sintoma_id) VALUES (%s, %s) ON CONFLICT DO NOTHING RETURNING medicamento_id',
                 (med_id, sintoma_id)
-            ).fetchone()
-
-            if not existe:
-                # Tabla de relación sin id, agregar RETURNING para evitar que wrapper agregue RETURNING id
-                conn.execute(
-                    'INSERT INTO medicamento_sintoma (medicamento_id, sintoma_id) VALUES (%s, %s) RETURNING medicamento_id',
-                    (med_id, sintoma_id)
-                )
+            )
 
         # 4. Asignar diagnósticos al medicamento
         todos_diagnosticos_ids = diagnosticos_ids + diagnosticos_creados_ids
 
         for diag_id in todos_diagnosticos_ids:
-            # Verificar que no exista la relación
-            existe = conn.execute(
-                'SELECT 1 FROM diagnostico_medicamento WHERE medicamento_id = %s AND diagnostico_id = %s',
+            # Usar ON CONFLICT DO NOTHING para evitar errores de duplicados
+            conn.execute(
+                'INSERT INTO diagnostico_medicamento (medicamento_id, diagnostico_id) VALUES (%s, %s) ON CONFLICT DO NOTHING RETURNING medicamento_id',
                 (med_id, diag_id)
-            ).fetchone()
-
-            if not existe:
-                # Tabla de relación sin id, agregar RETURNING para evitar que wrapper agregue RETURNING id
-                conn.execute(
-                    'INSERT INTO diagnostico_medicamento (medicamento_id, diagnostico_id) VALUES (%s, %s) RETURNING medicamento_id',
-                    (med_id, diag_id)
-                )
+            )
 
         conn.commit()
 

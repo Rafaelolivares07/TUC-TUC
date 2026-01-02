@@ -16407,8 +16407,9 @@ def guardar_sugerencias_sintomas(med_id):
             ).fetchone()
 
             if not existe:
+                # Tabla de relación sin id, agregar RETURNING para evitar que wrapper agregue RETURNING id
                 conn.execute(
-                    'INSERT INTO medicamento_sintoma (medicamento_id, sintoma_id) VALUES (%s, %s)',
+                    'INSERT INTO medicamento_sintoma (medicamento_id, sintoma_id) VALUES (%s, %s) RETURNING medicamento_id',
                     (med_id, sintoma_id)
                 )
 
@@ -16423,8 +16424,9 @@ def guardar_sugerencias_sintomas(med_id):
             ).fetchone()
 
             if not existe:
+                # Tabla de relación sin id, agregar RETURNING para evitar que wrapper agregue RETURNING id
                 conn.execute(
-                    'INSERT INTO medicamento_diagnostico (medicamento_id, diagnostico_id) VALUES (%s, %s)',
+                    'INSERT INTO medicamento_diagnostico (medicamento_id, diagnostico_id) VALUES (%s, %s) RETURNING medicamento_id',
                     (med_id, diag_id)
                 )
 

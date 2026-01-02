@@ -13427,24 +13427,28 @@ def api_pastillero_tomar(medicamento_id):
 
         nueva_cantidad = medicamento['cantidad'] - 1
 
-        if nueva_cantidad <= 0:
-            # Eliminar si llega a 0
-            conn.execute('DELETE FROM pastillero_usuarios WHERE id = %s', (medicamento_id,))
+        # No permitir cantidades negativas
+        if nueva_cantidad < 0:
+            nueva_cantidad = 0
+
+        # NUNCA eliminar automáticamente al llegar a 0
+        # - Botiquín: mantener para historial y alertas de reposición
+        # - Tratamiento: mantener hasta fecha_fin_tratamiento o eliminación manual
+
+        # Si es tratamiento, incrementar contador de tomas completadas
+        if medicamento['tipo_medicamento'] == 'tratamiento':
+            conn.execute('''
+                UPDATE pastillero_usuarios
+                SET cantidad = %s, tomas_completadas = tomas_completadas + 1
+                WHERE id = %s
+            ''', (nueva_cantidad, medicamento_id))
         else:
-            # Si es tratamiento, incrementar contador de tomas completadas
-            if medicamento['tipo_medicamento'] == 'tratamiento':
-                conn.execute('''
-                    UPDATE pastillero_usuarios
-                    SET cantidad = %s, tomas_completadas = tomas_completadas + 1
-                    WHERE id = %s
-                ''', (nueva_cantidad, medicamento_id))
-            else:
-                # Actualizar solo cantidad (botiquín)
-                conn.execute('''
-                    UPDATE pastillero_usuarios
-                    SET cantidad = %s
-                    WHERE id = %s
-                ''', (nueva_cantidad, medicamento_id))
+            # Actualizar solo cantidad (botiquín)
+            conn.execute('''
+                UPDATE pastillero_usuarios
+                SET cantidad = %s
+                WHERE id = %s
+            ''', (nueva_cantidad, medicamento_id))
 
         conn.commit()
         conn.close()

@@ -524,9 +524,22 @@ def verificar_y_enviar_recordatorios():
                         print(f"[ERROR] No se pudo enviar a contacto: {response_contacto.status_code}")
 
                 # 3. Actualizar próxima toma manteniendo HORARIOS FIJOS
-                # Calcular desde la hora programada original, no desde "ahora"
-                # Esto evita que los horarios se desplacen
-                nueva_proxima_toma = proxima_toma + timedelta(hours=horas_entre_tomas)
+                # Si proxima_toma está muy en el pasado, calcular el siguiente múltiplo
+                # desde ahora para evitar envíos repetidos
+                if isinstance(proxima_toma, str):
+                    from dateutil import parser
+                    proxima_toma = parser.parse(proxima_toma)
+
+                # Calcular cuántas tomas se han saltado
+                ahora_dt = datetime.now()
+                if proxima_toma < ahora_dt:
+                    # Calcular cuántos intervalos han pasado desde la proxima_toma original
+                    diferencia = (ahora_dt - proxima_toma).total_seconds() / 3600  # en horas
+                    intervalos_pasados = int(diferencia / horas_entre_tomas) + 1
+                    nueva_proxima_toma = proxima_toma + timedelta(hours=horas_entre_tomas * intervalos_pasados)
+                else:
+                    # Si está en el futuro (caso raro), solo agregar un intervalo
+                    nueva_proxima_toma = proxima_toma + timedelta(hours=horas_entre_tomas)
 
                 conn.execute('''
                     UPDATE pastillero_usuarios

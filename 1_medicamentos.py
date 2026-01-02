@@ -468,16 +468,6 @@ def verificar_y_enviar_recordatorios():
                     SELECT usuario_id FROM pastillero_usuarios WHERE id = %s
                 ''', (medicamento_id,)).fetchone()['usuario_id']
 
-                # Crear botones interactivos (InlineKeyboard)
-                keyboard = {
-                    'inline_keyboard': [
-                        [
-                            {'text': '✓ Ya tomé', 'callback_data': f'tomar_{medicamento_id}'},
-                            {'text': '❌ Cancelar hoy', 'callback_data': f'cancelar_{medicamento_id}'}
-                        ]
-                    ]
-                }
-
                 # 1. Enviar mensaje al usuario principal (segunda persona: "debes tomar")
                 mensaje_usuario = f"⏰ <b>Recordatorio de Medicamento</b>\n\n"
                 mensaje_usuario += f"{usuario_nombre} debes tomar:\n"
@@ -489,8 +479,7 @@ def verificar_y_enviar_recordatorios():
                 data_usuario = {
                     'chat_id': chat_id_usuario,
                     'text': mensaje_usuario,
-                    'parse_mode': 'HTML',
-                    'reply_markup': keyboard
+                    'parse_mode': 'HTML'
                 }
 
                 response = requests.post(url, json=data_usuario, timeout=10)
@@ -523,8 +512,7 @@ def verificar_y_enviar_recordatorios():
                     data_contacto = {
                         'chat_id': contacto['telegram_chat_id'],
                         'text': mensaje_contacto,
-                        'parse_mode': 'HTML',
-                        'reply_markup': keyboard
+                        'parse_mode': 'HTML'
                     }
 
                     response_contacto = requests.post(url, json=data_contacto, timeout=10)
@@ -534,8 +522,10 @@ def verificar_y_enviar_recordatorios():
                     else:
                         print(f"[ERROR] No se pudo enviar a contacto: {response_contacto.status_code}")
 
-                # 3. Actualizar próxima toma (posponer por las horas configuradas)
-                nueva_proxima_toma = ahora + timedelta(hours=horas_entre_tomas)
+                # 3. Actualizar próxima toma manteniendo HORARIOS FIJOS
+                # Calcular desde la hora programada original, no desde "ahora"
+                # Esto evita que los horarios se desplacen
+                nueva_proxima_toma = proxima_toma + timedelta(hours=horas_entre_tomas)
 
                 conn.execute('''
                     UPDATE pastillero_usuarios

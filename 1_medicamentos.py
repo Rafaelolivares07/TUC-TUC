@@ -3209,6 +3209,123 @@ def diagnosticar_sintomas_db():
         }), 500
 
 
+@app.route('/api/diagnosticar-diagnosticos-db', methods=['GET'])
+def diagnosticar_diagnosticos_db():
+    """ENDPOINT TEMPORAL: Diagnostica y corrige estructura de tabla diagnosticos"""
+    try:
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        # Conectar directamente sin wrapper
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+
+        resultados = []
+
+        # 1. Ver estructura actual de DIAGNOSTICOS
+        cursor.execute("""
+            SELECT column_name, data_type, column_default, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'DIAGNOSTICOS'
+            ORDER BY ordinal_position
+        """)
+        columnas = cursor.fetchall()
+        resultados.append({
+            'paso': 'Estructura actual',
+            'columnas': [{'nombre': c[0], 'tipo': c[1], 'default': c[2], 'nullable': c[3]} for c in columnas]
+        })
+
+        # 2. Verificar si existe secuencia asociada a la columna id
+        cursor.execute("""
+            SELECT c.column_default
+            FROM information_schema.columns c
+            WHERE c.table_name = 'DIAGNOSTICOS' AND c.column_name = 'id'
+        """)
+        result = cursor.fetchone()
+        column_default = result[0] if result else None
+
+        # Extraer nombre de secuencia del default si existe
+        secuencia = None
+        if column_default and 'nextval' in column_default:
+            import re
+            match = re.search(r"nextval\('([^']+)'", column_default)
+            if match:
+                secuencia = match.group(1)
+
+        resultados.append({
+            'paso': 'Secuencia actual',
+            'column_default': column_default,
+            'secuencia': secuencia
+        })
+
+        # 3. Si no hay secuencia, crearla y asociarla
+        if not secuencia:
+            # Crear secuencia
+            cursor.execute("CREATE SEQUENCE IF NOT EXISTS diagnosticos_id_seq")
+
+            # Obtener el máximo id actual
+            cursor.execute('SELECT COALESCE(MAX(id), 0) + 1 FROM "DIAGNOSTICOS"')
+            next_val = cursor.fetchone()[0]
+
+            # Establecer el valor inicial de la secuencia
+            cursor.execute(f"ALTER SEQUENCE diagnosticos_id_seq RESTART WITH {next_val}")
+
+            # Asociar la secuencia a la columna id
+            cursor.execute('ALTER TABLE "DIAGNOSTICOS" ALTER COLUMN id SET DEFAULT nextval(\'diagnosticos_id_seq\')')
+
+            # Hacer que la secuencia sea propiedad de la columna
+            cursor.execute('ALTER SEQUENCE diagnosticos_id_seq OWNED BY "DIAGNOSTICOS".id')
+
+            conn.commit()
+
+            resultados.append({
+                'paso': 'Corrección aplicada',
+                'mensaje': 'Secuencia creada y asociada correctamente',
+                'next_value': next_val
+            })
+        else:
+            resultados.append({
+                'paso': 'Corrección',
+                'mensaje': 'La secuencia ya existe, no se requiere corrección'
+            })
+
+        # 4. Verificar nuevamente
+        cursor.execute("""
+            SELECT column_name, data_type, column_default, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'DIAGNOSTICOS' AND column_name = 'id'
+        """)
+        columna_id = cursor.fetchone()
+        resultados.append({
+            'paso': 'Verificación final',
+            'columna_id': {
+                'nombre': columna_id[0],
+                'tipo': columna_id[1],
+                'default': columna_id[2],
+                'nullable': columna_id[3]
+            }
+        })
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Diagnóstico y corrección completados',
+            'resultados': resultados
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """

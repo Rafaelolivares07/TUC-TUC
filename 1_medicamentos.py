@@ -641,7 +641,7 @@ def admin_required(f):
                     debe_generar = True
 
             if debe_generar:
-                print(f"   🔄 Generando tareas de revisión de cotizaciones...")
+                print(f"   Generando tareas de revision de cotizaciones...")
 
                 conn = get_db_connection()
 
@@ -680,10 +680,10 @@ def admin_required(f):
                 conn.close()
 
                 wrapper._ultima_generacion_tareas = ahora
-                print(f"   ✅ {tareas_creadas} tareas de revisión creadas/actualizadas")
+                print(f"   OK: {tareas_creadas} tareas de revision creadas/actualizadas")
 
         except Exception as e:
-            print(f"   ⚠️ Error generando tareas de revisión: {e}")
+            print(f"   ERROR generando tareas de revision: {e}")
             # No fallar la petición si hay error en generación de tareas
             pass
 
@@ -898,17 +898,25 @@ def tienda_home():
         # Obtener todos los sntomas para filtros
         conn = get_db_connection()
         sintomas = conn.execute("SELECT id, nombre FROM sintomas ORDER BY nombre").fetchall()
-        conn.close()
 
-        # Pasar rol si est en sesin (para funcionalidades especiales de admin)
+        # Pasar rol y nombre si están en sesión
         es_admin = session.get('rol') == 'Administrador'
-        return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas], es_admin=es_admin)
+
+        # Obtener nombre desde la tabla terceros (la fuente correcta para usuarios de la tienda)
+        nombre_usuario = ''
+        if 'usuario_id' in session:
+            usuario_tercero = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (session['usuario_id'],)).fetchone()
+            if usuario_tercero:
+                nombre_usuario = usuario_tercero['nombre']
+
+        conn.close()
+        return render_template('tienda_home.html', sintomas=[dict(s) for s in sintomas], es_admin=es_admin, nombre_usuario=nombre_usuario)
     except Exception as e:
         print(f"ERROR en tienda_home: {e}")
         import traceback
         traceback.print_exc()
         # Devolver pgina sin sntomas si hay error
-        return render_template('tienda_home.html', sintomas=[], es_admin=False)
+        return render_template('tienda_home.html', sintomas=[], es_admin=False, nombre_usuario='')
 
 
 @app.route('/tienda/carrito')
@@ -1492,17 +1500,16 @@ def obtener_carrito():
         items = conn.execute("""
             SELECT
                 e.id,
-                e.id_medicamento,
+                e.medicamento_id,
                 e.cantidad,
                 e.precio_unitario,
                 e.precio_total,
-                m.nombre_comercial,
-                m.nombre_generico,
+                m.nombre,
+                m.presentacion,
                 m.imagen,
-                m.concentracion,
-                m.forma_farmaceutica
+                m.concentracion
             FROM existencias e
-            JOIN medicamentos m ON e.id_medicamento = m.id
+            JOIN medicamentos m ON e.medicamento_id = m.id
             WHERE e.estado = 'carrito_temporal'
             AND e.id_tercero = ?
             ORDER BY e.id DESC
@@ -1515,15 +1522,15 @@ def obtener_carrito():
         for item in items:
             carrito.append({
                 'id': item['id'],
-                'id_medicamento': item['id_medicamento'],
+                'id_medicamento': item['medicamento_id'],
                 'cantidad': item['cantidad'],
                 'precio_unitario': float(item['precio_unitario']) if item['precio_unitario'] else 0,
                 'precio_total': float(item['precio_total']) if item['precio_total'] else 0,
-                'nombre_comercial': item['nombre_comercial'],
-                'nombre_generico': item['nombre_generico'],
+                'nombre_comercial': item['nombre'],
+                'nombre_generico': item['presentacion'],
                 'imagen': item['imagen'],
                 'concentracion': item['concentracion'],
-                'forma_farmaceutica': item['forma_farmaceutica']
+                'forma_farmaceutica': ''
             })
 
         return jsonify({'ok': True, 'items': carrito})
@@ -1572,8 +1579,7 @@ def agregar_al_carrito():
             conn.execute("""
                 UPDATE existencias
                 SET cantidad = ?,
-                    precio_total = ?,
-                    fecha_actualizacion = CURRENT_TIMESTAMP
+                    precio_total = ?
                 WHERE id = ?
             """, (nueva_cantidad, nuevo_total, item_existente['id']))
 
@@ -1598,7 +1604,7 @@ def agregar_al_carrito():
         conn.commit()
         conn.close()
 
-        return jsonify({'ok': True, 'item_id': item_id, 'mensaje': 'Item agregado al carrito'})
+        return jsonify({'ok': True, 'item_id': item_id, 'mensaje': 'Item agregado al carrito', 'use_localstorage': False})
 
     except Exception as e:
         traceback.print_exc()
@@ -2889,6 +2895,23 @@ def test_sintoma():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
+@app.route('/api/debug-usuario/<int:user_id>', methods=['GET'])
+def debug_usuario(user_id):
+    """ENDPOINT TEMPORAL: Ver datos de un usuario"""
+    try:
+        conn = get_db_connection()
+        usuario = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (user_id,)).fetchone()
+        conn.close()
+
+        if usuario:
+            return jsonify({'ok': True, 'usuario': dict(usuario)})
+        else:
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'})
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+
 @app.route('/api/migrar-carrito-db', methods=['GET'])
 def migrar_carrito_db():
     """ENDPOINT TEMPORAL: Ejecuta migraciones para sistema de carrito sincronizado"""
@@ -2918,9 +2941,52 @@ def migrar_carrito_db():
         # 2. Crear índice
         try:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_existencias_carrito ON existencias(id_tercero, estado) WHERE estado = 'carrito_temporal'")
-            resultados.append('✅ Índice idx_existencias_carrito creado')
+            resultados.append('OK: Indice idx_existencias_carrito creado')
         except Exception as e:
-            resultados.append(f'⚠️ índice: {str(e)}')
+            resultados.append(f'ERROR indice: {str(e)}')
+
+        # 3. Agregar columnas de tipos de medicamentos al pastillero
+        try:
+            conn.execute("ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS tipo_medicamento VARCHAR(20) DEFAULT 'botiquin'")
+            resultados.append('OK: Columna tipo_medicamento agregada')
+        except Exception as e:
+            resultados.append(f'ERROR tipo_medicamento: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS alerta_reposicion BOOLEAN DEFAULT FALSE')
+            resultados.append('OK: Columna alerta_reposicion agregada')
+        except Exception as e:
+            resultados.append(f'ERROR alerta_reposicion: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS nivel_minimo_alerta INTEGER DEFAULT 10')
+            resultados.append('OK: Columna nivel_minimo_alerta agregada')
+        except Exception as e:
+            resultados.append(f'ERROR nivel_minimo_alerta: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS fecha_inicio_tratamiento DATE DEFAULT NULL')
+            resultados.append('OK: Columna fecha_inicio_tratamiento agregada')
+        except Exception as e:
+            resultados.append(f'ERROR fecha_inicio_tratamiento: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS fecha_fin_tratamiento DATE DEFAULT NULL')
+            resultados.append('OK: Columna fecha_fin_tratamiento agregada')
+        except Exception as e:
+            resultados.append(f'ERROR fecha_fin_tratamiento: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS tomas_completadas INTEGER DEFAULT 0')
+            resultados.append('OK: Columna tomas_completadas agregada')
+        except Exception as e:
+            resultados.append(f'ERROR tomas_completadas: {str(e)}')
+
+        try:
+            conn.execute('ALTER TABLE pastillero_usuarios ADD COLUMN IF NOT EXISTS alerta_pospuesta_hasta TIMESTAMP DEFAULT NULL')
+            resultados.append('OK: Columna alerta_pospuesta_hasta agregada')
+        except Exception as e:
+            resultados.append(f'ERROR alerta_pospuesta_hasta: {str(e)}')
 
         conn.commit()
         conn.close()

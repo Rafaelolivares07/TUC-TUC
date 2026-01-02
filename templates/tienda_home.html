@@ -2482,12 +2482,8 @@
                 const authResponse = await fetch('/api/carrito/check-auth');
                 const authData = await authResponse.json();
 
-                // 🐛 DEBUG TEMPORAL
-                alert(`DEBUG: is_logged_in=${authData.is_logged_in}, user_id=${authData.user_id}`);
-
                 if (!authData.is_logged_in) {
                     // Usuario NO logueado → usar localStorage (comportamiento original)
-                    alert('DEBUG: Usando localStorage (usuario NO logueado)');
                     const index = carrito.findIndex(item => item.precio_id === producto.precio_id);
 
                     if (index >= 0) {
@@ -2504,8 +2500,6 @@
                     mostrarToast(`${producto.nombre} agregado al carrito`);
                 } else {
                     // Usuario logueado → usar API (sincronizado en DB)
-                    alert('DEBUG: Usando API/DB (usuario logueado)');
-
                     const response = await fetch('/api/carrito/agregar', {
                         method: 'POST',
                         headers: {
@@ -2519,9 +2513,6 @@
                     });
 
                     const data = await response.json();
-
-                    // 🐛 DEBUG TEMPORAL - Mostrar ERROR si existe
-                    alert(`DEBUG API Response: ok=${data.ok}, error="${data.error}", use_localstorage=${data.use_localstorage}`);
 
                     if (!data.ok) {
                         throw new Error(data.error || 'Error al agregar al carrito');
@@ -5557,9 +5548,16 @@
         // Ejecutar restauración al cargar la página
         restaurarSesionAutomatica();
 
-        // 🆕 Actualizar UI si ya hay nombre guardado en localStorage
+        // 🆕 Actualizar UI con nombre del servidor (prioridad) o localStorage
+        const nombreServidor = "{{ nombre_usuario }}";
         const nombreGuardado = localStorage.getItem('nombre_usuario');
-        if (nombreGuardado) {
+
+        if (nombreServidor) {
+            // Prioridad: nombre desde la sesión del servidor
+            actualizarNombreUsuarioUI(nombreServidor);
+            localStorage.setItem('nombre_usuario', nombreServidor); // Sincronizar localStorage
+        } else if (nombreGuardado) {
+            // Fallback: nombre desde localStorage
             actualizarNombreUsuarioUI(nombreGuardado);
         }
 

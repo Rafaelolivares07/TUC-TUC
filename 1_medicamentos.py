@@ -3107,11 +3107,11 @@ def diagnosticar_sintomas_db():
 
         resultados = []
 
-        # 1. Ver estructura actual de sintomas
+        # 1. Ver estructura actual de SINTOMAS (mayúsculas)
         cursor.execute("""
             SELECT column_name, data_type, column_default, is_nullable
             FROM information_schema.columns
-            WHERE table_name = 'sintomas'
+            WHERE table_name = 'SINTOMAS'
             ORDER BY ordinal_position
         """)
         columnas = cursor.fetchall()
@@ -3122,7 +3122,7 @@ def diagnosticar_sintomas_db():
 
         # 2. Verificar si existe secuencia
         cursor.execute("""
-            SELECT pg_get_serial_sequence('sintomas', 'id') as secuencia
+            SELECT pg_get_serial_sequence('SINTOMAS', 'id') as secuencia
         """)
         secuencia = cursor.fetchone()[0]
         resultados.append({
@@ -3136,17 +3136,17 @@ def diagnosticar_sintomas_db():
             cursor.execute("CREATE SEQUENCE IF NOT EXISTS sintomas_id_seq")
 
             # Obtener el máximo id actual
-            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sintomas")
+            cursor.execute('SELECT COALESCE(MAX(id), 0) + 1 FROM "SINTOMAS"')
             next_val = cursor.fetchone()[0]
 
             # Establecer el valor inicial de la secuencia
             cursor.execute(f"ALTER SEQUENCE sintomas_id_seq RESTART WITH {next_val}")
 
             # Asociar la secuencia a la columna id
-            cursor.execute("ALTER TABLE sintomas ALTER COLUMN id SET DEFAULT nextval('sintomas_id_seq')")
+            cursor.execute('ALTER TABLE "SINTOMAS" ALTER COLUMN id SET DEFAULT nextval(\'sintomas_id_seq\')')
 
             # Hacer que la secuencia sea propiedad de la columna
-            cursor.execute("ALTER SEQUENCE sintomas_id_seq OWNED BY sintomas.id")
+            cursor.execute('ALTER SEQUENCE sintomas_id_seq OWNED BY "SINTOMAS".id')
 
             conn.commit()
 
@@ -3165,7 +3165,7 @@ def diagnosticar_sintomas_db():
         cursor.execute("""
             SELECT column_name, data_type, column_default, is_nullable
             FROM information_schema.columns
-            WHERE table_name = 'sintomas' AND column_name = 'id'
+            WHERE table_name = 'SINTOMAS' AND column_name = 'id'
         """)
         columna_id = cursor.fetchone()
         resultados.append({

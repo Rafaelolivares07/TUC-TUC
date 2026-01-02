@@ -16419,14 +16419,14 @@ def guardar_sugerencias_sintomas(med_id):
         for diag_id in todos_diagnosticos_ids:
             # Verificar que no exista la relación
             existe = conn.execute(
-                'SELECT 1 FROM medicamento_diagnostico WHERE medicamento_id = %s AND diagnostico_id = %s',
+                'SELECT 1 FROM diagnostico_medicamento WHERE medicamento_id = %s AND diagnostico_id = %s',
                 (med_id, diag_id)
             ).fetchone()
 
             if not existe:
                 # Tabla de relación sin id, agregar RETURNING para evitar que wrapper agregue RETURNING id
                 conn.execute(
-                    'INSERT INTO medicamento_diagnostico (medicamento_id, diagnostico_id) VALUES (%s, %s) RETURNING medicamento_id',
+                    'INSERT INTO diagnostico_medicamento (medicamento_id, diagnostico_id) VALUES (%s, %s) RETURNING medicamento_id',
                     (med_id, diag_id)
                 )
 

@@ -47,10 +47,21 @@ REGLAS_DIAGNOSTICOS = {
     'artritis': ['dolor articular', 'inflamación', 'rigidez matutina', 'hinchazón'],
     'artrosis': ['dolor articular', 'rigidez', 'crujidos', 'limitación de movimiento'],
 
+    # ========== ÓSEO/NUTRICIONAL ==========
+    'osteoporosis': ['debilidad ósea', 'dolor óseo', 'fracturas frecuentes', 'pérdida de altura'],
+    'raquitismo': ['debilidad ósea', 'deformidades óseas', 'dolor óseo', 'crecimiento deficiente'],
+    'osteomalacia': ['dolor óseo', 'debilidad muscular', 'fracturas', 'dolor de espalda'],
+    'deficiencia de vitamina d': ['debilidad muscular', 'dolor óseo', 'fatiga', 'depresión'],
+    'deficiencia de vitamina c': ['fatiga', 'debilidad', 'encías sangrantes', 'anemia'],
+    'deficiencia de vitamina b12': ['fatiga', 'debilidad', 'hormigueo', 'anemia'],
+    'deficiencia de calcio': ['debilidad ósea', 'calambres musculares', 'hormigueo', 'fatiga'],
+    'deficiencia de hierro': ['fatiga', 'debilidad', 'palidez', 'anemia'],
+
     # ========== OTROS ==========
     'diabetes': ['sed excesiva', 'orina frecuente', 'hambre extrema', 'fatiga'],
     'anemia': ['fatiga', 'debilidad', 'palidez', 'dificultad respiratoria'],
     'alergia': ['reacción alérgica', 'comezón', 'enrojecimiento', 'estornudos'],
+    'hipoparatiroidismo': ['calambres musculares', 'hormigueo', 'espasmos', 'fatiga'],
 }
 
 # =====================================================================
@@ -198,6 +209,30 @@ def extraer_sugeridos_de_texto_avanzado(texto):
             for s in sintomas:
                 sugeridos.add(s)
 
+    # Detectar patrones de prevención/tratamiento para suplementos
+    patrones_prevencion = [
+        r'prevenir\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'prevención\s+de\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'prevención\s+del\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'tratar\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'tratamiento\s+de\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'tratamiento\s+del\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'usado\s+para\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'usada\s+para\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'indicado\s+para\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+        r'indicada\s+para\s+([a-záéíóúñ\s]+?)(?:\.|,|;|y\s)',
+    ]
+
+    for patron in patrones_prevencion:
+        matches = re.finditer(patron, t, re.IGNORECASE)
+        for match in matches:
+            enfermedad_mencionada = match.group(1).strip().lower()
+            # Buscar si esta enfermedad está en REGLAS_DIAGNOSTICOS
+            for enfermedad, sintomas in REGLAS_DIAGNOSTICOS.items():
+                if enfermedad in enfermedad_mencionada or enfermedad_mencionada in enfermedad:
+                    for s in sintomas:
+                        sugeridos.add(s)
+
     # Keywords de síntomas comunes
     sintomas_keywords = {
         'fiebre': ['fiebre', 'fever', 'temperatura elevada'],
@@ -215,6 +250,21 @@ def extraer_sugeridos_de_texto_avanzado(texto):
         'enrojecimiento': ['enrojecimiento', 'redness'],
         'hinchazón': ['hinchazón', 'swelling', 'edema'],
         'dolor muscular': ['dolor muscular', 'malestar muscular'],
+        'debilidad muscular': ['debilidad muscular', 'músculos débiles'],
+        'dolor óseo': ['dolor óseo', 'dolor de huesos'],
+        'debilidad ósea': ['debilidad ósea', 'huesos débiles'],
+        'fracturas frecuentes': ['fracturas frecuentes', 'fracturas'],
+        'calambres musculares': ['calambres musculares', 'calambres'],
+        'hormigueo': ['hormigueo', 'entumecimiento'],
+        'encías sangrantes': ['encías sangrantes', 'sangrado de encías'],
+        'palidez': ['palidez', 'piel pálida'],
+        'anemia': ['anemia', 'bajo nivel de hierro'],
+        'depresión': ['depresión', 'tristeza persistente'],
+        'espasmos': ['espasmos', 'contracciones involuntarias'],
+        'deformidades óseas': ['deformidades óseas', 'huesos deformados'],
+        'crecimiento deficiente': ['crecimiento deficiente', 'crecimiento lento'],
+        'pérdida de altura': ['pérdida de altura', 'reducción de estatura'],
+        'dolor de espalda': ['dolor de espalda', 'lumbalgia'],
     }
 
     for sintoma_principal, keywords in sintomas_keywords.items():

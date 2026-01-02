@@ -16192,19 +16192,21 @@ def filtrar_medicamentos_sugerir():
 
         where_sql = " AND ".join(where_clauses)
 
-        medicamentos = conn.execute(f"""
+        # Usar el wrapper correctamente sin f-string para que convierta nombres de tablas
+        query = """
             SELECT DISTINCT m.id, m.nombre, m.componente_activo_id,
                    CASE WHEN p.precio > 0 THEN 1 ELSE 0 END as tiene_precio
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN precios p ON p.medicamento_id = m.id
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
             ORDER BY
                 CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END,
                 CASE WHEN p.precio > 0 THEN 0 ELSE 1 END,
                 m.nombre
             LIMIT 200
-        """).fetchall()
+        """
+        medicamentos = conn.execute(query).fetchall()
 
         conn.close()
 

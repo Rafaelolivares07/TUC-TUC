@@ -462,6 +462,7 @@ def verificar_y_enviar_recordatorios():
                 horas_entre_tomas = med['horas_entre_tomas']
                 chat_id_usuario = med['telegram_chat_id']
                 usuario_nombre = med['usuario_nombre']
+                proxima_toma = med['proxima_toma']  # Extraer próxima_toma del registro
 
                 # Obtener usuario_id para buscar contactos adicionales
                 usuario_id = conn.execute('''
@@ -16358,17 +16359,14 @@ def guardar_sugerencias_sintomas(med_id):
             ).fetchone()
 
             if not existe:
-                conn.execute(
+                cursor = conn.execute(
                     'INSERT INTO sintomas (nombre) VALUES (%s)',
                     (nombre_sintoma.title(),)
                 )
                 conn.commit()
 
-                nuevo_id = conn.execute(
-                    'SELECT id FROM sintomas WHERE LOWER(nombre) = %s',
-                    (nombre_sintoma.lower(),)
-                ).fetchone()['id']
-
+                # El wrapper agrega RETURNING id automáticamente y lo guarda en lastrowid
+                nuevo_id = cursor.lastrowid
                 sintomas_creados_ids.append(nuevo_id)
 
         # 2. Crear nuevos diagnósticos si es necesario

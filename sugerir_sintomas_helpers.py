@@ -57,6 +57,24 @@ REGLAS_DIAGNOSTICOS = {
     'deficiencia de calcio': ['debilidad ósea', 'calambres musculares', 'hormigueo', 'fatiga'],
     'deficiencia de hierro': ['fatiga', 'debilidad', 'palidez', 'anemia'],
 
+    # ========== INFECCIONES OFTÁLMICAS ==========
+    'conjuntivitis': ['ojos rojos', 'secreción ocular', 'lagrimeo', 'picazón en los ojos', 'sensibilidad a la luz'],
+    'conjuntivitis bacteriana': ['ojos rojos', 'secreción ocular', 'lagrimeo', 'picazón en los ojos'],
+    'queratitis': ['dolor ocular', 'visión borrosa', 'ojos rojos', 'sensibilidad a la luz', 'lagrimeo'],
+    'blefaritis': ['párpados inflamados', 'enrojecimiento de párpados', 'comezón en párpados', 'costras en pestañas'],
+
+    # ========== INFECCIONES SISTÉMICAS GRAVES ==========
+    'septicemia': ['fiebre alta', 'escalofríos', 'presión arterial baja', 'confusión', 'taquicardia'],
+    'meningitis': ['fiebre alta', 'dolor de cabeza severo', 'rigidez de cuello', 'náusea', 'vómito', 'confusión'],
+    'peritonitis': ['dolor abdominal severo', 'fiebre', 'náusea', 'vómito', 'distensión abdominal'],
+    'infección urinaria': ['dolor al orinar', 'orina turbia', 'orina con sangre', 'urgencia urinaria', 'fiebre'],
+    'infecciones urinarias complicadas': ['dolor al orinar', 'fiebre alta', 'dolor lumbar', 'orina turbia'],
+
+    # ========== INFECCIONES RESPIRATORIAS ESPECÍFICAS ==========
+    'fibrosis quística': ['tos crónica', 'mucosidad espesa', 'dificultad respiratoria', 'infecciones pulmonares recurrentes'],
+    'infección por pseudomonas': ['fiebre', 'tos productiva', 'dificultad respiratoria', 'mucosidad verde'],
+    'infecciones pulmonares crónicas': ['tos persistente', 'mucosidad', 'dificultad respiratoria', 'fiebre recurrente'],
+
     # ========== OTROS ==========
     'diabetes': ['sed excesiva', 'orina frecuente', 'hambre extrema', 'fatiga'],
     'anemia': ['fatiga', 'debilidad', 'palidez', 'dificultad respiratoria'],
@@ -265,6 +283,42 @@ def extraer_sugeridos_de_texto_avanzado(texto):
         'crecimiento deficiente': ['crecimiento deficiente', 'crecimiento lento'],
         'pérdida de altura': ['pérdida de altura', 'reducción de estatura'],
         'dolor de espalda': ['dolor de espalda', 'lumbalgia'],
+
+        # Síntomas oftálmicos
+        'ojos rojos': ['ojos rojos', 'enrojecimiento ocular', 'conjuntiva roja'],
+        'secreción ocular': ['secreción ocular', 'legañas', 'pus en los ojos'],
+        'lagrimeo': ['lagrimeo', 'ojos llorosos', 'lágrimas excesivas'],
+        'picazón en los ojos': ['picazón en los ojos', 'ojos que pican', 'comezón ocular'],
+        'dolor ocular': ['dolor ocular', 'dolor en los ojos', 'dolor de ojos'],
+        'visión borrosa': ['visión borrosa', 'vista borrosa', 'visión nublada'],
+        'sensibilidad a la luz': ['sensibilidad a la luz', 'fotofobia', 'molestia con luz'],
+        'párpados inflamados': ['párpados inflamados', 'párpados hinchados', 'inflamación de párpados'],
+        'enrojecimiento de párpados': ['enrojecimiento de párpados', 'párpados rojos'],
+        'comezón en párpados': ['comezón en párpados', 'párpados que pican'],
+        'costras en pestañas': ['costras en pestañas', 'pestañas con costras'],
+
+        # Síntomas sistémicos graves
+        'fiebre alta': ['fiebre alta', 'fiebre elevada', 'temperatura muy alta'],
+        'escalofríos': ['escalofríos', 'temblores', 'tiritona'],
+        'presión arterial baja': ['presión arterial baja', 'hipotensión', 'presión baja'],
+        'confusión': ['confusión', 'desorientación', 'alteración mental'],
+        'taquicardia': ['taquicardia', 'ritmo cardíaco acelerado', 'palpitaciones'],
+        'rigidez de cuello': ['rigidez de cuello', 'cuello rígido', 'rigidez nucal'],
+        'distensión abdominal': ['distensión abdominal', 'abdomen distendido', 'hinchazón abdominal'],
+
+        # Síntomas urinarios
+        'dolor al orinar': ['dolor al orinar', 'ardor al orinar', 'micción dolorosa'],
+        'orina turbia': ['orina turbia', 'orina opaca', 'orina con aspecto turbio'],
+        'orina con sangre': ['orina con sangre', 'hematuria', 'sangre en orina'],
+        'urgencia urinaria': ['urgencia urinaria', 'necesidad urgente de orinar', 'urgencia miccional'],
+        'dolor lumbar': ['dolor lumbar', 'dolor de espalda baja', 'dolor en los riñones'],
+
+        # Síntomas respiratorios específicos
+        'tos crónica': ['tos crónica', 'tos persistente', 'tos de larga duración'],
+        'tos productiva': ['tos productiva', 'tos con flema', 'tos con expectoración'],
+        'mucosidad espesa': ['mucosidad espesa', 'flema espesa', 'moco espeso'],
+        'mucosidad verde': ['mucosidad verde', 'flema verde', 'esputo verde'],
+        'infecciones pulmonares recurrentes': ['infecciones pulmonares recurrentes', 'infecciones de pulmón repetidas'],
     }
 
     for sintoma_principal, keywords in sintomas_keywords.items():

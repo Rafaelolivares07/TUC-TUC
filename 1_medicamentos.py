@@ -3380,7 +3380,73 @@ def analizar_estructura_diagnosticos():
 
         resultado = {}
 
-        # 1. Estructura de diagnostico_sintoma
+        # 0. PRIMERO: Obtener TODAS las tablas que existen
+        cursor.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """)
+        todas_tablas = [r[0] for r in cursor.fetchall()]
+        resultado['todas_las_tablas'] = todas_tablas
+
+        # 0b. Estructura COMPLETA de todas las tablas
+        cursor.execute("""
+            SELECT
+                table_name,
+                column_name,
+                data_type,
+                is_nullable,
+                column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            ORDER BY table_name, ordinal_position
+        """)
+        estructura_completa = {}
+        for row in cursor.fetchall():
+            tabla = row[0]
+            if tabla not in estructura_completa:
+                estructura_completa[tabla] = []
+            estructura_completa[tabla].append({
+                'columna': row[1],
+                'tipo': row[2],
+                'nullable': row[3],
+                'default': row[4]
+            })
+        resultado['estructura_completa'] = estructura_completa
+
+        # 0c. TODAS las constraints
+        cursor.execute("""
+            SELECT
+                tc.table_name,
+                tc.constraint_name,
+                tc.constraint_type,
+                kcu.column_name,
+                ccu.table_name AS foreign_table_name,
+                ccu.column_name AS foreign_column_name
+            FROM information_schema.table_constraints tc
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            LEFT JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+            WHERE tc.table_schema = 'public'
+            ORDER BY tc.table_name, tc.constraint_type
+        """)
+        constraints_completas = {}
+        for row in cursor.fetchall():
+            tabla = row[0]
+            if tabla not in constraints_completas:
+                constraints_completas[tabla] = []
+            constraints_completas[tabla].append({
+                'constraint_name': row[1],
+                'constraint_type': row[2],
+                'columna': row[3],
+                'referencia_tabla': row[4],
+                'referencia_columna': row[5]
+            })
+        resultado['constraints_completas'] = constraints_completas
+
+        # 1. Estructura de diagnostico_sintoma (si existe)
         cursor.execute("""
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns

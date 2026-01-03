@@ -3459,50 +3459,46 @@ def analizar_estructura_diagnosticos():
             for r in estructura
         ]
 
-        # 2. Conteo de registros
-        cursor.execute("""
-            SELECT 'DIAGNOSTICOS' as tabla, COUNT(*) as total FROM "DIAGNOSTICOS"
-            UNION ALL
-            SELECT 'SINTOMAS', COUNT(*) FROM "SINTOMAS"
-            UNION ALL
-            SELECT 'diagnostico_sintoma', COUNT(*) FROM diagnostico_sintoma
-            UNION ALL
-            SELECT 'medicamento_sintoma', COUNT(*) FROM medicamento_sintoma
-            UNION ALL
-            SELECT 'diagnostico_medicamento', COUNT(*) FROM diagnostico_medicamento
-        """)
-        conteos = cursor.fetchall()
-        resultado['conteos'] = {r[0]: r[1] for r in conteos}
+        # 2. Conteo de registros (solo tablas que existen)
+        conteos = {}
+        for tabla in ['DIAGNOSTICOS', 'SINTOMAS', 'diagnostico_sintoma', 'medicamento_sintoma', 'diagnostico_medicamento', 'medicamentos']:
+            # Verificar si existe (case-insensitive)
+            tabla_existe = any(t.lower() == tabla.lower() for t in todas_tablas)
+            if tabla_existe:
+                # Encontrar nombre exacto
+                nombre_exacto = next((t for t in todas_tablas if t.lower() == tabla.lower()), tabla)
+                try:
+                    cursor.execute(f'SELECT COUNT(*) FROM "{nombre_exacto}"')
+                    conteos[nombre_exacto] = cursor.fetchone()[0]
+                except:
+                    conteos[nombre_exacto] = 'ERROR'
+            else:
+                conteos[tabla] = 'NO_EXISTE'
+        resultado['conteos'] = conteos
 
-        # 3. Muestra de DIAGNOSTICOS (primeros 30)
-        cursor.execute('SELECT id, descripcion FROM "DIAGNOSTICOS" ORDER BY id LIMIT 30')
-        resultado['muestra_diagnosticos'] = [
-            {'id': r[0], 'descripcion': r[1]} for r in cursor.fetchall()
-        ]
+        # 3-6. Muestras de datos solo si las tablas existen
+        if 'DIAGNOSTICOS' in [t for t in todas_tablas]:
+            cursor.execute('SELECT id, descripcion FROM "DIAGNOSTICOS" ORDER BY id LIMIT 30')
+            resultado['muestra_diagnosticos'] = [
+                {'id': r[0], 'descripcion': r[1]} for r in cursor.fetchall()
+            ]
 
-        # 4. Muestra de SINTOMAS (primeros 30)
-        cursor.execute('SELECT id, nombre FROM "SINTOMAS" ORDER BY id LIMIT 30')
-        resultado['muestra_sintomas'] = [
-            {'id': r[0], 'nombre': r[1]} for r in cursor.fetchall()
-        ]
+        if 'SINTOMAS' in [t for t in todas_tablas]:
+            cursor.execute('SELECT id, nombre FROM "SINTOMAS" ORDER BY id LIMIT 30')
+            resultado['muestra_sintomas'] = [
+                {'id': r[0], 'nombre': r[1]} for r in cursor.fetchall()
+            ]
 
-        # 5. Muestra de diagnostico_sintoma (si tiene datos)
-        cursor.execute('SELECT * FROM diagnostico_sintoma LIMIT 20')
-        cols = [desc[0] for desc in cursor.description]
-        diagnostico_sintoma_data = cursor.fetchall()
-        resultado['muestra_diagnostico_sintoma'] = [
-            dict(zip(cols, row)) for row in diagnostico_sintoma_data
-        ]
-
-        # 6. Constraints de diagnostico_sintoma
-        cursor.execute("""
-            SELECT constraint_name, constraint_type
-            FROM information_schema.table_constraints
-            WHERE table_name = 'diagnostico_sintoma'
-        """)
-        resultado['constraints'] = [
-            {'nombre': r[0], 'tipo': r[1]} for r in cursor.fetchall()
-        ]
+        # diagnostico_sintoma probablemente NO existe, pero verificamos
+        if 'diagnostico_sintoma' in todas_tablas:
+            cursor.execute('SELECT * FROM diagnostico_sintoma LIMIT 20')
+            cols = [desc[0] for desc in cursor.description]
+            diagnostico_sintoma_data = cursor.fetchall()
+            resultado['muestra_diagnostico_sintoma'] = [
+                dict(zip(cols, row)) for row in diagnostico_sintoma_data
+            ]
+        else:
+            resultado['muestra_diagnostico_sintoma'] = 'TABLA_NO_EXISTE'
 
         # 7. Estadísticas de uso actual
         cursor.execute("""

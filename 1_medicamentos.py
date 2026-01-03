@@ -3461,6 +3461,29 @@ def analizar_estructura_diagnosticos():
         }), 500
 
 
+@app.route('/api/test-import', methods=['GET'])
+def test_import():
+    """Endpoint de prueba para verificar que requests funciona"""
+    try:
+        import requests
+        return jsonify({
+            'ok': True,
+            'mensaje': 'requests esta disponible',
+            'test': 'OK'
+        })
+    except ImportError as e:
+        return jsonify({
+            'ok': False,
+            'error': 'requests no esta disponible',
+            'detalles': str(e)
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'ok': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/importar-datasets-medicos', methods=['GET'])
 def importar_datasets_medicos():
     """
@@ -3469,10 +3492,10 @@ def importar_datasets_medicos():
     - Disease-Symptom dataset (síntomas y relaciones)
     """
     import csv
-    import requests
     import traceback as tb
 
     try:
+        import requests
         import psycopg2
         database_url = os.getenv('DATABASE_URL')
         if database_url and database_url.startswith('postgres://'):

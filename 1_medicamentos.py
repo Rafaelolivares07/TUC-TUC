@@ -16583,6 +16583,155 @@ def procesar_texto_pegado(med_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/buscar-componentes-activos', methods=['GET'])
+@admin_required
+def buscar_componentes_activos():
+    """Busca medicamentos genéricos (componentes activos) por nombre"""
+    try:
+        query = request.args.get('q', '').strip()
+
+        if len(query) < 2:
+            return jsonify({'ok': True, 'componentes': []})
+
+        conn = get_db_connection()
+
+        # Buscar medicamentos que son genéricos (componente_activo_id IS NULL)
+        # y cuyo nombre contiene el query
+        componentes = conn.execute("""
+            SELECT DISTINCT m.id, m.nombre,
+                   (SELECT COUNT(*) FROM medicamentos WHERE componente_activo_id = m.id) as num_usos
+            FROM medicamentos m
+            WHERE m.componente_activo_id IS NULL
+              AND LOWER(m.nombre) LIKE LOWER(%s)
+            ORDER BY num_usos DESC, m.nombre
+            LIMIT 20
+        """, (f'%{query}%',)).fetchall()
+
+        conn.close()
+
+        resultados = []
+        for comp in componentes:
+            resultados.append({
+                'id': comp['id'],
+                'nombre': comp['nombre'],
+                'usado_en': f"{comp['num_usos']} productos" if comp['num_usos'] > 0 else None
+            })
+
+        return jsonify({'ok': True, 'componentes': resultados})
+
+    except Exception as e:
+        print(f"Error buscando componentes activos: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/asignar-componente-activo', methods=['POST'])
+@admin_required
+def asignar_componente_activo():
+    """Asigna un componente activo existente a un medicamento"""
+    try:
+        data = request.get_json()
+        medicamento_id = data.get('medicamento_id')
+        componente_activo_id = data.get('componente_activo_id')
+
+        if not medicamento_id or not componente_activo_id:
+            return jsonify({'ok': False, 'error': 'Faltan parámetros'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar que el componente activo existe y es genérico
+        componente = conn.execute(
+            'SELECT id, nombre, componente_activo_id FROM medicamentos WHERE id = %s',
+            (componente_activo_id,)
+        ).fetchone()
+
+        if not componente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Componente activo no encontrado'}), 404
+
+        if componente['componente_activo_id'] is not None:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'El medicamento seleccionado no es un componente activo (genérico)'}), 400
+
+        # Asignar componente activo
+        conn.execute(
+            'UPDATE medicamentos SET componente_activo_id = %s WHERE id = %s',
+            (componente_activo_id, medicamento_id)
+        )
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Componente activo asignado correctamente',
+            'componente_nombre': componente['nombre']
+        })
+
+    except Exception as e:
+        print(f"Error asignando componente activo: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/crear-componente-activo', methods=['POST'])
+@admin_required
+def crear_componente_activo():
+    """Crea un nuevo medicamento genérico (componente activo) y lo asigna a un medicamento"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        medicamento_id = data.get('medicamento_id')
+
+        if not nombre or not medicamento_id:
+            return jsonify({'ok': False, 'error': 'Faltan parámetros'}), 400
+
+        # Normalizar nombre para verificación
+        nombre_normalizado = nombre.lower()
+
+        conn = get_db_connection()
+
+        # Verificar que no exista un medicamento genérico con ese nombre
+        existe = conn.execute(
+            'SELECT id, nombre FROM medicamentos WHERE LOWER(nombre) = %s AND componente_activo_id IS NULL',
+            (nombre_normalizado,)
+        ).fetchone()
+
+        if existe:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'Ya existe un componente activo con el nombre "{existe["nombre"]}"'
+            }), 400
+
+        # Crear nuevo medicamento genérico
+        cursor = conn.execute(
+            'INSERT INTO medicamentos (nombre, componente_activo_id) VALUES (%s, NULL)',
+            (nombre.title(),)
+        )
+        nuevo_id = cursor.lastrowid
+
+        # Asignar al medicamento original
+        conn.execute(
+            'UPDATE medicamentos SET componente_activo_id = %s WHERE id = %s',
+            (nuevo_id, medicamento_id)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Componente activo "{nombre}" creado y asignado correctamente',
+            'componente_id': nuevo_id,
+            'componente_nombre': nombre.title()
+        })
+
+    except Exception as e:
+        print(f"Error creando componente activo: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/sugerir-sintomas/guardar/<int:med_id>', methods=['POST'])
 @admin_required
 def guardar_sugerencias_sintomas(med_id):

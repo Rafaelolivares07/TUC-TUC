@@ -88,11 +88,82 @@
                 {% endfor %}
             </select>
 
-            <!-- Botón Google Search -->
+            <!-- COMPONENTE ACTIVO - Display y gestión -->
+            <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <!-- Display del componente activo actual -->
+                {% if medicamento.componente_activo_nombre %}
+                <div class="flex items-center text-sm mb-2">
+                    <span class="text-green-600 font-semibold">✅ Componente activo:</span>
+                    <span id="componenteActivoDisplay" class="ml-2 font-medium text-gray-800">{{ medicamento.componente_activo_nombre }}</span>
+                </div>
+                {% else %}
+                <div class="flex items-center text-sm mb-2">
+                    <span class="text-amber-600 font-semibold">⚠️ Este producto NO tiene componente activo asignado</span>
+                </div>
+                {% endif %}
+
+                <!-- Botón para buscar/cambiar componente activo -->
+                {% if medicamento.componente_activo_nombre %}
+                <button id="btnBuscarComponente" class="w-full px-3 py-2 bg-amber-500 text-white text-sm rounded-lg hover:bg-amber-600 transition">
+                    🔄 Cambiar componente activo
+                </button>
+                {% else %}
+                <button id="btnBuscarComponente" class="w-full px-3 py-2 bg-amber-500 text-white text-sm rounded-lg hover:bg-amber-600 transition">
+                    🔍 ¿Cuál es el componente activo de "{{ medicamento.nombre }}"?
+                </button>
+                {% endif %}
+
+                <!-- Panel colapsado para asignar/cambiar componente activo -->
+                <div id="panelComponenteActivo" class="hidden mt-3 space-y-2">
+                    <!-- Input de búsqueda -->
+                    <div class="relative">
+                        <input
+                            type="text"
+                            id="inputComponenteActivo"
+                            placeholder="Escribe el nombre del componente activo..."
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            autocomplete="off"
+                        />
+                        <!-- Indicador de búsqueda -->
+                        <div id="searchingIndicator" class="hidden absolute right-3 top-2.5">
+                            <div class="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dropdown de sugerencias -->
+                    <div id="dropdownComponentes" class="hidden max-h-48 overflow-y-auto border border-gray-300 rounded-lg bg-white shadow-lg">
+                        <!-- Se llenará dinámicamente con JavaScript -->
+                    </div>
+
+                    <!-- Mensajes de feedback -->
+                    <div id="feedbackComponente" class="hidden text-sm"></div>
+
+                    <!-- Botón para colapsar el panel -->
+                    <button id="btnColapsarPanel" class="w-full px-2 py-1 text-xs text-gray-600 hover:text-gray-800">
+                        ▲ Cerrar panel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botón Google Search (existente, modificado) -->
             <button id="btnGoogleSearch" class="mt-3 w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
-                🔍 Buscar "{{ termino_busqueda }}" en Google
+                {% if medicamento.componente_activo_nombre %}
+                🔍 Para qué sirve "{{ medicamento.componente_activo_nombre }}"
+                {% else %}
+                🔍 Para qué sirve "{{ medicamento.nombre }}"
+                {% endif %}
             </button>
         </div>
+
+        <!-- Data del medicamento actual para JS -->
+        <script>
+            window.medicamentoActual = {
+                id: {{ medicamento.id }},
+                nombre: "{{ medicamento.nombre }}",
+                componente_activo: "{{ medicamento.componente_activo_nombre or '' }}",
+                componente_activo_id: {{ medicamento.componente_activo_id or 'null' }}
+            };
+        </script>
 
         <!-- ÁREA DE PEGADO Y PROCESAMIENTO -->
         <div class="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -195,6 +266,255 @@
         const panelTextarea = document.getElementById('panelTextarea');
         const iconoTextarea = document.getElementById('iconoTextarea');
 
+        // Elementos del componente activo
+        const btnBuscarComponente = document.getElementById('btnBuscarComponente');
+        const panelComponenteActivo = document.getElementById('panelComponenteActivo');
+        const inputComponenteActivo = document.getElementById('inputComponenteActivo');
+        const dropdownComponentes = document.getElementById('dropdownComponentes');
+        const searchingIndicator = document.getElementById('searchingIndicator');
+        const feedbackComponente = document.getElementById('feedbackComponente');
+        const btnColapsarPanel = document.getElementById('btnColapsarPanel');
+        const componenteActivoDisplay = document.getElementById('componenteActivoDisplay');
+
+        // Estado del componente activo
+        let componentesActivos = [];
+        let selectedIndex = -1;
+        let searchTimeout = null;
+
+        // ============================================================
+        // LÓGICA DEL COMPONENTE ACTIVO
+        // ============================================================
+
+        // Botón buscar/cambiar componente activo
+        btnBuscarComponente?.addEventListener('click', () => {
+            // Abrir Google
+            const query = `cuál es el componente activo de ${window.medicamentoActual.nombre}`;
+            window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
+
+            // Desplegar panel
+            panelComponenteActivo.classList.remove('hidden');
+            inputComponenteActivo.focus();
+        });
+
+        // Colapsar panel
+        btnColapsarPanel?.addEventListener('click', () => {
+            panelComponenteActivo.classList.add('hidden');
+            inputComponenteActivo.value = '';
+            dropdownComponentes.classList.add('hidden');
+            feedbackComponente.classList.add('hidden');
+        });
+
+        // Input de búsqueda con autocompletado
+        inputComponenteActivo?.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+
+            // Limpiar timeout anterior
+            if (searchTimeout) clearTimeout(searchTimeout);
+
+            if (query.length < 2) {
+                dropdownComponentes.classList.add('hidden');
+                feedbackComponente.classList.add('hidden');
+                return;
+            }
+
+            // Mostrar indicador de búsqueda
+            searchingIndicator.classList.remove('hidden');
+
+            // Debounce de 300ms
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/admin/buscar-componentes-activos?q=${encodeURIComponent(query)}`);
+                    const data = await response.json();
+
+                    searchingIndicator.classList.add('hidden');
+
+                    if (data.ok) {
+                        componentesActivos = data.componentes;
+                        mostrarSugerencias(componentesActivos, query);
+                    }
+                } catch (error) {
+                    console.error('Error buscando componentes:', error);
+                    searchingIndicator.classList.add('hidden');
+                }
+            }, 300);
+        });
+
+        // Navegación con teclado en el input
+        inputComponenteActivo?.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!dropdownComponentes.classList.contains('hidden')) {
+                    selectedIndex = 0;
+                    actualizarSeleccion();
+                    dropdownComponentes.querySelector('.dropdown-item')?.focus();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const query = inputComponenteActivo.value.trim();
+                if (query.length >= 2) {
+                    crearNuevoComponenteActivo(query);
+                }
+            }
+        });
+
+        // Mostrar sugerencias en el dropdown
+        function mostrarSugerencias(componentes, query) {
+            if (componentes.length === 0) {
+                dropdownComponentes.classList.add('hidden');
+                feedbackComponente.classList.remove('hidden');
+                feedbackComponente.className = 'text-sm text-amber-600 p-2 bg-amber-50 rounded border border-amber-200';
+                feedbackComponente.textContent = `No existe "${query}" como componente activo. Presiona Enter para crear uno nuevo.`;
+                return;
+            }
+
+            feedbackComponente.classList.add('hidden');
+            dropdownComponentes.classList.remove('hidden');
+            dropdownComponentes.innerHTML = componentes.map((comp, index) => `
+                <div class="dropdown-item px-3 py-2 hover:bg-blue-50 cursor-pointer focus:bg-blue-100 focus:outline-none"
+                     tabindex="0"
+                     data-index="${index}"
+                     data-id="${comp.id}"
+                     data-nombre="${comp.nombre}">
+                    <div class="font-medium text-gray-800">${comp.nombre}</div>
+                    ${comp.usado_en ? `<div class="text-xs text-gray-500">Usado en: ${comp.usado_en}</div>` : ''}
+                </div>
+            `).join('');
+
+            // Event listeners para items del dropdown
+            dropdownComponentes.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    asignarComponenteActivo(item.dataset.id, item.dataset.nombre);
+                });
+
+                item.addEventListener('keydown', (e) => {
+                    const currentIndex = parseInt(item.dataset.index);
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const nextItem = dropdownComponentes.querySelector(`[data-index="${currentIndex + 1}"]`);
+                        if (nextItem) nextItem.focus();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        if (currentIndex === 0) {
+                            inputComponenteActivo.focus();
+                        } else {
+                            const prevItem = dropdownComponentes.querySelector(`[data-index="${currentIndex - 1}"]`);
+                            if (prevItem) prevItem.focus();
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        asignarComponenteActivo(item.dataset.id, item.dataset.nombre);
+                    }
+                });
+            });
+        }
+
+        function actualizarSeleccion() {
+            dropdownComponentes.querySelectorAll('.dropdown-item').forEach((item, index) => {
+                if (index === selectedIndex) {
+                    item.classList.add('bg-blue-100');
+                } else {
+                    item.classList.remove('bg-blue-100');
+                }
+            });
+        }
+
+        // Asignar componente activo existente
+        async function asignarComponenteActivo(componenteId, componenteNombre) {
+            try {
+                const response = await fetch('/admin/asignar-componente-activo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        medicamento_id: window.medicamentoActual.id,
+                        componente_activo_id: componenteId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    // Actualizar UI
+                    window.medicamentoActual.componente_activo = componenteNombre;
+                    window.medicamentoActual.componente_activo_id = componenteId;
+
+                    feedbackComponente.classList.remove('hidden');
+                    feedbackComponente.className = 'text-sm text-green-600 p-2 bg-green-50 rounded border border-green-200';
+                    feedbackComponente.textContent = `✅ Componente activo asignado: ${componenteNombre}`;
+
+                    // Recargar página para actualizar todo el contexto
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    alert('Error al asignar componente activo: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error asignando componente:', error);
+                alert('Error al asignar componente activo');
+            }
+        }
+
+        // Crear nuevo componente activo
+        async function crearNuevoComponenteActivo(nombre) {
+            // Normalizar nombre
+            const nombreNormalizado = nombre.trim().toLowerCase();
+
+            // Verificar si ya existe con normalización
+            const existe = componentesActivos.some(c =>
+                c.nombre.toLowerCase() === nombreNormalizado
+            );
+
+            if (existe) {
+                feedbackComponente.classList.remove('hidden');
+                feedbackComponente.className = 'text-sm text-red-600 p-2 bg-red-50 rounded border border-red-200';
+                feedbackComponente.textContent = `❌ Ya existe un componente activo con ese nombre`;
+                return;
+            }
+
+            // Confirmar creación
+            if (!confirm(`¿Crear nuevo componente activo "${nombre}" y asignarlo a este medicamento?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/crear-componente-activo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        medicamento_id: window.medicamentoActual.id
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    feedbackComponente.classList.remove('hidden');
+                    feedbackComponente.className = 'text-sm text-green-600 p-2 bg-green-50 rounded border border-green-200';
+                    feedbackComponente.textContent = `✅ Componente activo "${nombre}" creado y asignado`;
+
+                    // Recargar página
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    alert('Error al crear componente activo: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error creando componente:', error);
+                alert('Error al crear componente activo');
+            }
+        }
+
+        // ============================================================
+        // FIN LÓGICA DEL COMPONENTE ACTIVO
+        // ============================================================
+
         // Toggle filtros
         toggleFiltros?.addEventListener('click', () => {
             panelFiltros.classList.toggle('hidden');
@@ -209,7 +529,8 @@
 
         // Google Search
         btnGoogleSearch?.addEventListener('click', () => {
-            const termino = "{{ termino_busqueda }}";
+            // Usar componente activo si existe, sino el nombre
+            const termino = window.medicamentoActual.componente_activo || window.medicamentoActual.nombre;
             window.open(`https://www.google.com/search?q=${encodeURIComponent(termino)}`, '_blank');
         });
 

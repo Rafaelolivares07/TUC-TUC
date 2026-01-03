@@ -3461,6 +3461,318 @@ def analizar_estructura_diagnosticos():
         }), 500
 
 
+@app.route('/api/importar-datasets-medicos', methods=['GET'])
+def importar_datasets_medicos():
+    """
+    ENDPOINT: Importa datasets médicos a PostgreSQL
+    - CIE-10 en español (enfermedades)
+    - Disease-Symptom dataset (síntomas y relaciones)
+    """
+    import csv
+    from urllib.request import urlretrieve
+    import traceback as tb
+
+    try:
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+
+        resultado = {
+            'ok': True,
+            'pasos': [],
+            'estadisticas': {}
+        }
+
+        # PASO 1: Crear tablas
+        resultado['pasos'].append('Creando tablas...')
+
+        # Tabla: enfermedades_catalogo (CIE-10)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enfermedades_catalogo (
+                id SERIAL PRIMARY KEY,
+                codigo VARCHAR(20) UNIQUE NOT NULL,
+                codigo_padre_0 VARCHAR(20),
+                codigo_padre_1 VARCHAR(20),
+                codigo_padre_2 VARCHAR(20),
+                codigo_padre_3 VARCHAR(20),
+                codigo_padre_4 VARCHAR(20),
+                descripcion TEXT NOT NULL,
+                descripcion_lower TEXT,
+                nivel INTEGER,
+                fuente VARCHAR(100),
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedades_descripcion_lower ON enfermedades_catalogo(descripcion_lower)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedades_codigo ON enfermedades_catalogo(codigo)")
+
+        # Tabla: sintomas_catalogo
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sintomas_catalogo (
+                id SERIAL PRIMARY KEY,
+                nombre_original VARCHAR(100) UNIQUE NOT NULL,
+                nombre_espanol VARCHAR(100),
+                nombre_lower TEXT,
+                categoria VARCHAR(50),
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sintomas_nombre_lower ON sintomas_catalogo(nombre_lower)")
+
+        # Tabla: enfermedades_dataset
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enfermedades_dataset (
+                id SERIAL PRIMARY KEY,
+                nombre_original VARCHAR(100) UNIQUE NOT NULL,
+                nombre_espanol VARCHAR(100),
+                nombre_lower TEXT,
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Tabla: enfermedad_sintoma_dataset
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enfermedad_sintoma_dataset (
+                id SERIAL PRIMARY KEY,
+                enfermedad_id INTEGER NOT NULL REFERENCES enfermedades_dataset(id),
+                sintoma_id INTEGER NOT NULL REFERENCES sintomas_catalogo(id),
+                frecuencia VARCHAR(20) DEFAULT 'comun',
+                fuente VARCHAR(100) DEFAULT 'kaggle-disease-symptom-dataset',
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(enfermedad_id, sintoma_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedad_sintoma_enfermedad ON enfermedad_sintoma_dataset(enfermedad_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedad_sintoma_sintoma ON enfermedad_sintoma_dataset(sintoma_id)")
+
+        # Tabla: sinonimos_medicos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sinonimos_medicos (
+                id SERIAL PRIMARY KEY,
+                termino_original VARCHAR(200) NOT NULL,
+                termino_normalizado VARCHAR(200) NOT NULL,
+                tipo VARCHAR(20),
+                idioma VARCHAR(10) DEFAULT 'es',
+                fuente VARCHAR(100),
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sinonimos_original ON sinonimos_medicos(termino_original)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sinonimos_normalizado ON sinonimos_medicos(termino_normalizado)")
+
+        conn.commit()
+        resultado['pasos'].append('✅ Tablas creadas exitosamente')
+
+        # PASO 2: Descargar CIE-10
+        resultado['pasos'].append('Descargando CIE-10...')
+        URL_CIE10 = "https://raw.githubusercontent.com/verasativa/CIE-10/master/cie-10.csv"
+        archivo_temp_cie10 = "/tmp/cie10_temp.csv"
+
+        try:
+            urlretrieve(URL_CIE10, archivo_temp_cie10)
+            resultado['pasos'].append('✅ CIE-10 descargado')
+        except Exception as e:
+            resultado['pasos'].append(f'⚠️ Error descargando CIE-10: {str(e)}')
+            return jsonify(resultado)
+
+        # PASO 3: Importar CIE-10
+        resultado['pasos'].append('Importando CIE-10...')
+        registros_cie10 = 0
+
+        with open(archivo_temp_cie10, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    cursor.execute("""
+                        INSERT INTO enfermedades_catalogo
+                        (codigo, codigo_padre_0, codigo_padre_1, codigo_padre_2,
+                         codigo_padre_3, codigo_padre_4, descripcion, descripcion_lower,
+                         nivel, fuente)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (codigo) DO NOTHING
+                    """, (
+                        row['code'],
+                        row['code_0'] if row['code_0'] else None,
+                        row['code_1'] if row['code_1'] else None,
+                        row['code_2'] if row['code_2'] else None,
+                        row['code_3'] if row['code_3'] else None,
+                        row['code_4'] if row['code_4'] else None,
+                        row['description'],
+                        row['description'].lower(),
+                        int(row['level']) if row['level'] else 0,
+                        row['source']
+                    ))
+                    registros_cie10 += 1
+                except:
+                    pass
+
+        conn.commit()
+        resultado['estadisticas']['enfermedades_cie10'] = registros_cie10
+        resultado['pasos'].append(f'✅ {registros_cie10} enfermedades CIE-10 importadas')
+
+        # PASO 4: Descargar Disease-Symptom dataset
+        resultado['pasos'].append('Descargando Disease-Symptom dataset...')
+        URL_DISEASE_SYMPTOM = "https://raw.githubusercontent.com/anujdutt9/Disease-Prediction-from-Symptoms/master/dataset/training_data.csv"
+        archivo_temp_disease = "/tmp/disease_symptom_temp.csv"
+
+        try:
+            urlretrieve(URL_DISEASE_SYMPTOM, archivo_temp_disease)
+            resultado['pasos'].append('✅ Disease-Symptom descargado')
+        except Exception as e:
+            resultado['pasos'].append(f'⚠️ Error descargando Disease-Symptom: {str(e)}')
+            conn.close()
+            return jsonify(resultado)
+
+        # Diccionario de traducciones (top 50 más comunes)
+        TRADUCCIONES_SINTOMAS = {
+            'itching': 'picazón', 'skin_rash': 'erupción cutánea', 'continuous_sneezing': 'estornudos continuos',
+            'shivering': 'escalofríos', 'chills': 'escalofríos', 'joint_pain': 'dolor articular',
+            'stomach_pain': 'dolor de estómago', 'acidity': 'acidez', 'vomiting': 'vómito',
+            'fatigue': 'fatiga', 'weight_gain': 'aumento de peso', 'anxiety': 'ansiedad',
+            'mood_swings': 'cambios de humor', 'weight_loss': 'pérdida de peso', 'restlessness': 'inquietud',
+            'lethargy': 'letargo', 'cough': 'tos', 'high_fever': 'fiebre alta', 'breathlessness': 'falta de aire',
+            'sweating': 'sudoración', 'dehydration': 'deshidratación', 'indigestion': 'indigestión',
+            'headache': 'dolor de cabeza', 'nausea': 'náuseas', 'loss_of_appetite': 'pérdida de apetito',
+            'back_pain': 'dolor de espalda', 'constipation': 'estreñimiento', 'abdominal_pain': 'dolor abdominal',
+            'diarrhoea': 'diarrea', 'mild_fever': 'fiebre leve', 'chest_pain': 'dolor de pecho',
+            'weakness_in_limbs': 'debilidad en extremidades', 'dizziness': 'mareo', 'cramps': 'calambres',
+            'neck_pain': 'dolor de cuello', 'muscle_weakness': 'debilidad muscular', 'depression': 'depresión',
+            'irritability': 'irritabilidad', 'muscle_pain': 'dolor muscular', 'belly_pain': 'dolor de vientre',
+            'lack_of_concentration': 'falta de concentración', 'coma': 'coma', 'palpitations': 'palpitaciones',
+            'blackheads': 'puntos negros', 'blister': 'ampolla', 'congestion': 'congestión',
+            'runny_nose': 'secreción nasal', 'obesity': 'obesidad', 'malaise': 'malestar general',
+            'phlegm': 'flema', 'throat_irritation': 'irritación de garganta', 'knee_pain': 'dolor de rodilla'
+        }
+
+        TRADUCCIONES_ENFERMEDADES = {
+            'Fungal infection': 'Infección fúngica', 'Allergy': 'Alergia', 'GERD': 'Reflujo gastroesofágico',
+            'Chronic cholestasis': 'Colestasis crónica', 'Drug Reaction': 'Reacción a medicamentos',
+            'Peptic ulcer diseae': 'Úlcera péptica', 'AIDS': 'SIDA', 'Diabetes': 'Diabetes',
+            'Gastroenteritis': 'Gastroenteritis', 'Bronchial Asthma': 'Asma bronquial', 'Hypertension': 'Hipertensión',
+            'Migraine': 'Migraña', 'Cervical spondylosis': 'Espondilosis cervical', 'Jaundice': 'Ictericia',
+            'Malaria': 'Malaria', 'Chicken pox': 'Varicela', 'Dengue': 'Dengue', 'Typhoid': 'Tifoidea',
+            'hepatitis A': 'Hepatitis A', 'Hepatitis B': 'Hepatitis B', 'Hepatitis C': 'Hepatitis C',
+            'Tuberculosis': 'Tuberculosis', 'Common Cold': 'Resfriado común', 'Pneumonia': 'Neumonía',
+            'Heart attack': 'Infarto', 'Hypothyroidism': 'Hipotiroidismo', 'Hyperthyroidism': 'Hipertiroidismo',
+            'Osteoarthristis': 'Osteoartritis', 'Arthritis': 'Artritis', 'Acne': 'Acné',
+            'Urinary tract infection': 'Infección urinaria', 'Psoriasis': 'Psoriasis', 'Impetigo': 'Impétigo'
+        }
+
+        # PASO 5: Importar síntomas
+        resultado['pasos'].append('Importando síntomas...')
+        sintomas_unicos = set()
+
+        with open(archivo_temp_disease, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            columnas = reader.fieldnames
+            sintomas_unicos = set([col for col in columnas if col != 'prognosis'])
+
+        sintomas_importados = 0
+        for sintoma_orig in sintomas_unicos:
+            sintoma_esp = TRADUCCIONES_SINTOMAS.get(sintoma_orig, sintoma_orig)
+            try:
+                cursor.execute("""
+                    INSERT INTO sintomas_catalogo (nombre_original, nombre_espanol, nombre_lower)
+                    VALUES (%s, %s, %s) ON CONFLICT (nombre_original) DO NOTHING
+                """, (sintoma_orig, sintoma_esp, sintoma_esp.lower()))
+                sintomas_importados += 1
+            except:
+                pass
+
+        conn.commit()
+        resultado['estadisticas']['sintomas'] = sintomas_importados
+        resultado['pasos'].append(f'✅ {sintomas_importados} síntomas importados')
+
+        # PASO 6: Importar enfermedades
+        resultado['pasos'].append('Importando enfermedades...')
+        enfermedades_unicas = set()
+
+        with open(archivo_temp_disease, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                enfermedades_unicas.add(row['prognosis'])
+
+        enfermedades_importadas = 0
+        for enfermedad_orig in enfermedades_unicas:
+            enfermedad_esp = TRADUCCIONES_ENFERMEDADES.get(enfermedad_orig, enfermedad_orig)
+            try:
+                cursor.execute("""
+                    INSERT INTO enfermedades_dataset (nombre_original, nombre_espanol, nombre_lower)
+                    VALUES (%s, %s, %s) ON CONFLICT (nombre_original) DO NOTHING
+                """, (enfermedad_orig, enfermedad_esp, enfermedad_esp.lower()))
+                enfermedades_importadas += 1
+            except:
+                pass
+
+        conn.commit()
+        resultado['estadisticas']['enfermedades'] = enfermedades_importadas
+        resultado['pasos'].append(f'✅ {enfermedades_importadas} enfermedades importadas')
+
+        # PASO 7: Crear relaciones
+        resultado['pasos'].append('Creando relaciones enfermedad-síntoma...')
+        relaciones_creadas = 0
+
+        with open(archivo_temp_disease, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                enfermedad_nombre = row['prognosis']
+
+                cursor.execute("SELECT id FROM enfermedades_dataset WHERE nombre_original = %s", (enfermedad_nombre,))
+                enfermedad_result = cursor.fetchone()
+                if not enfermedad_result:
+                    continue
+                enfermedad_id = enfermedad_result[0]
+
+                for sintoma_nombre, valor in row.items():
+                    if sintoma_nombre == 'prognosis' or valor != '1':
+                        continue
+
+                    cursor.execute("SELECT id FROM sintomas_catalogo WHERE nombre_original = %s", (sintoma_nombre,))
+                    sintoma_result = cursor.fetchone()
+                    if not sintoma_result:
+                        continue
+                    sintoma_id = sintoma_result[0]
+
+                    try:
+                        cursor.execute("""
+                            INSERT INTO enfermedad_sintoma_dataset (enfermedad_id, sintoma_id)
+                            VALUES (%s, %s) ON CONFLICT DO NOTHING
+                        """, (enfermedad_id, sintoma_id))
+                        relaciones_creadas += 1
+                    except:
+                        pass
+
+                if relaciones_creadas % 100 == 0:
+                    conn.commit()
+
+        conn.commit()
+        resultado['estadisticas']['relaciones'] = relaciones_creadas
+        resultado['pasos'].append(f'✅ {relaciones_creadas} relaciones creadas')
+
+        # Limpiar archivos temporales
+        try:
+            os.remove(archivo_temp_cie10)
+            os.remove(archivo_temp_disease)
+        except:
+            pass
+
+        conn.close()
+        resultado['pasos'].append('🎉 IMPORTACIÓN COMPLETADA EXITOSAMENTE')
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': tb.format_exc()
+        }), 500
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """

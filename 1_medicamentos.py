@@ -3326,6 +3326,46 @@ def diagnosticar_diagnosticos_db():
         }), 500
 
 
+@app.route('/api/debug-medicamento/<int:med_id>', methods=['GET'])
+def debug_medicamento(med_id):
+    """ENDPOINT TEMPORAL: Debug de datos del medicamento"""
+    try:
+        conn = get_db_connection()
+
+        # Query exacto que usa sugerir-sintomas
+        medicamento = conn.execute("""
+            SELECT m.id, m.nombre, m.componente_activo_id,
+                   ca.nombre as componente_activo_nombre
+            FROM medicamentos m
+            LEFT JOIN medicamentos ca ON m.componente_activo_id = ca.id
+            WHERE m.id = %s
+        """, (med_id,)).fetchone()
+
+        # Verificar también qué dice el componente activo directo
+        componente_directo = None
+        if medicamento and medicamento['componente_activo_id']:
+            componente_directo = conn.execute(
+                'SELECT id, nombre, componente_activo_id FROM medicamentos WHERE id = %s',
+                (medicamento['componente_activo_id'],)
+            ).fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'medicamento': dict(medicamento) if medicamento else None,
+            'componente_directo': dict(componente_directo) if componente_directo else None
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """

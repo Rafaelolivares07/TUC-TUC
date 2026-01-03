@@ -80,6 +80,17 @@ REGLAS_DIAGNOSTICOS = {
     'infección por pseudomonas': ['fiebre', 'tos productiva', 'dificultad respiratoria', 'mucosidad verde'],
     'infecciones pulmonares crónicas': ['tos persistente', 'mucosidad', 'dificultad respiratoria', 'fiebre recurrente'],
 
+    # ========== INFECCIONES VIRALES (HERPES) ==========
+    'herpes zóster': ['dolor intenso', 'erupción cutánea', 'ampollas', 'ardor en la piel', 'picazón'],
+    'culebrilla': ['dolor intenso', 'erupción cutánea', 'ampollas', 'ardor en la piel'],
+    'herpes genital': ['lesiones genitales', 'ampollas genitales', 'dolor genital', 'ardor al orinar', 'picazón genital'],
+    'herpes labial': ['llagas en los labios', 'ampollas en la boca', 'ardor bucal', 'hormigueo en labios'],
+    'herpes simple': ['lesiones cutáneas', 'ampollas', 'ardor en la piel', 'picazón', 'dolor localizado'],
+    'calenturas': ['llagas en los labios', 'ampollas en la boca', 'hormigueo en labios'],
+    'neuralgia posherpética': ['dolor crónico', 'dolor nervioso', 'ardor persistente', 'sensibilidad en la piel'],
+    'citomegalovirus': ['fiebre', 'fatiga', 'dolor muscular', 'inflamación de ganglios'],
+    'cmv': ['fiebre', 'fatiga', 'dolor muscular', 'debilidad'],
+
     # ========== PSIQUIÁTRICO / TRASTORNOS ALIMENTARIOS ==========
     'trastorno por atracón': ['comer en exceso', 'pérdida de control al comer', 'ansiedad por comida'],
     'trastornos de la alimentación': ['pérdida de apetito', 'comer en exceso', 'ansiedad por comida', 'pérdida de peso'],
@@ -357,6 +368,27 @@ def extraer_sugeridos_de_texto_avanzado(texto):
         'dificultad para perder peso': ['dificultad para perder peso', 'no logra bajar de peso'],
         'impulsividad': ['impulsividad', 'actuar sin pensar', 'falta de control'],
         'comportamiento compulsivo': ['comportamiento compulsivo', 'compulsión', 'conducta compulsiva'],
+
+        # Síntomas de infecciones virales por herpes
+        'dolor intenso': ['dolor intenso', 'dolor fuerte', 'dolor agudo'],
+        'erupción cutánea': ['erupción cutánea', 'erupción', 'brote en la piel', 'sarpullido'],
+        'ampollas': ['ampollas', 'vesículas', 'burbujas en la piel'],
+        'ardor en la piel': ['ardor en la piel', 'quemazón en la piel', 'sensación de quemadura'],
+        'lesiones genitales': ['lesiones genitales', 'llagas genitales', 'úlceras genitales'],
+        'ampollas genitales': ['ampollas genitales', 'vesículas genitales'],
+        'dolor genital': ['dolor genital', 'molestia genital'],
+        'picazón genital': ['picazón genital', 'comezón genital', 'prurito genital'],
+        'llagas en los labios': ['llagas en los labios', 'úlceras labiales', 'heridas en labios'],
+        'ampollas en la boca': ['ampollas en la boca', 'vesículas bucales', 'ampollas labiales'],
+        'ardor bucal': ['ardor bucal', 'quemazón en la boca', 'ardor en labios'],
+        'hormigueo en labios': ['hormigueo en labios', 'cosquilleo en labios'],
+        'lesiones cutáneas': ['lesiones cutáneas', 'llagas en la piel', 'úlceras cutáneas'],
+        'dolor localizado': ['dolor localizado', 'dolor en zona específica'],
+        'dolor crónico': ['dolor crónico', 'dolor persistente', 'dolor de larga duración'],
+        'dolor nervioso': ['dolor nervioso', 'dolor neuropático', 'neuralgia'],
+        'ardor persistente': ['ardor persistente', 'quemazón continua'],
+        'sensibilidad en la piel': ['sensibilidad en la piel', 'piel sensible', 'hipersensibilidad cutánea'],
+        'inflamación de ganglios': ['inflamación de ganglios', 'ganglios inflamados', 'adenopatía'],
     }
 
     for sintoma_principal, keywords in sintomas_keywords.items():

@@ -35,8 +35,13 @@ REGLAS_DIAGNOSTICOS = {
     'angina': ['dolor en el pecho', 'opresión torácica', 'dificultad respiratoria'],
 
     # ========== NEUROLÓGICO ==========
+    'epilepsia': ['convulsiones', 'crisis epilépticas', 'pérdida de conciencia', 'espasmos musculares'],
+    'crisis epilépticas': ['convulsiones', 'pérdida de conciencia', 'espasmos musculares', 'rigidez muscular'],
+    'convulsiones': ['convulsiones', 'espasmos musculares', 'pérdida de conciencia', 'sacudidas involuntarias'],
     'migraña': ['dolor de cabeza severo', 'náusea', 'sensibilidad a luz', 'vómito'],
     'cefalea': ['dolor de cabeza', 'tensión', 'mareo'],
+    'trastorno bipolar': ['cambios de ánimo', 'episodios maníacos', 'depresión', 'irritabilidad'],
+    'episodios maníacos': ['euforia', 'hiperactividad', 'insomnio', 'impulsividad'],
 
     # ========== DERMATOLÓGICO ==========
     'dermatitis': ['enrojecimiento', 'comezón', 'inflamación', 'descamación'],
@@ -74,6 +79,13 @@ REGLAS_DIAGNOSTICOS = {
     'fibrosis quística': ['tos crónica', 'mucosidad espesa', 'dificultad respiratoria', 'infecciones pulmonares recurrentes'],
     'infección por pseudomonas': ['fiebre', 'tos productiva', 'dificultad respiratoria', 'mucosidad verde'],
     'infecciones pulmonares crónicas': ['tos persistente', 'mucosidad', 'dificultad respiratoria', 'fiebre recurrente'],
+
+    # ========== PSIQUIÁTRICO / TRASTORNOS ALIMENTARIOS ==========
+    'trastorno por atracón': ['comer en exceso', 'pérdida de control al comer', 'ansiedad por comida'],
+    'trastornos de la alimentación': ['pérdida de apetito', 'comer en exceso', 'ansiedad por comida', 'pérdida de peso'],
+    'trastornos del control de impulsos': ['impulsividad', 'ansiedad', 'irritabilidad', 'comportamiento compulsivo'],
+    'sobrepeso': ['exceso de peso', 'obesidad', 'aumento de peso'],
+    'obesidad': ['exceso de peso', 'aumento de peso', 'dificultad para perder peso'],
 
     # ========== OTROS ==========
     'diabetes': ['sed excesiva', 'orina frecuente', 'hambre extrema', 'fatiga'],
@@ -319,6 +331,32 @@ def extraer_sugeridos_de_texto_avanzado(texto):
         'mucosidad espesa': ['mucosidad espesa', 'flema espesa', 'moco espeso'],
         'mucosidad verde': ['mucosidad verde', 'flema verde', 'esputo verde'],
         'infecciones pulmonares recurrentes': ['infecciones pulmonares recurrentes', 'infecciones de pulmón repetidas'],
+
+        # Síntomas neurológicos / epilepsia
+        'convulsiones': ['convulsiones', 'convulsión', 'ataque epiléptico', 'ataques'],
+        'crisis epilépticas': ['crisis epilépticas', 'crisis epiléptica', 'epilepsia'],
+        'pérdida de conciencia': ['pérdida de conciencia', 'desmayo', 'pérdida del conocimiento'],
+        'espasmos musculares': ['espasmos musculares', 'espasmo', 'contracciones musculares'],
+        'rigidez muscular': ['rigidez muscular', 'músculos rígidos', 'tensión muscular'],
+        'sacudidas involuntarias': ['sacudidas involuntarias', 'movimientos involuntarios', 'sacudidas'],
+
+        # Síntomas psiquiátricos / trastorno bipolar
+        'cambios de ánimo': ['cambios de ánimo', 'cambios de humor', 'inestabilidad emocional'],
+        'episodios maníacos': ['episodios maníacos', 'manía', 'episodio maníaco'],
+        'euforia': ['euforia', 'exceso de energía', 'hiperactividad emocional'],
+        'hiperactividad': ['hiperactividad', 'exceso de actividad', 'inquietud extrema'],
+        'irritabilidad': ['irritabilidad', 'irritación', 'mal humor'],
+
+        # Síntomas de trastornos alimentarios
+        'comer en exceso': ['comer en exceso', 'atracón', 'comer compulsivamente'],
+        'pérdida de control al comer': ['pérdida de control al comer', 'comer sin control'],
+        'ansiedad por comida': ['ansiedad por comida', 'ansiedad alimentaria'],
+        'pérdida de apetito': ['pérdida de apetito', 'falta de apetito', 'inapetencia', 'anorexia'],
+        'exceso de peso': ['exceso de peso', 'sobrepeso'],
+        'aumento de peso': ['aumento de peso', 'subida de peso', 'incremento de peso'],
+        'dificultad para perder peso': ['dificultad para perder peso', 'no logra bajar de peso'],
+        'impulsividad': ['impulsividad', 'actuar sin pensar', 'falta de control'],
+        'comportamiento compulsivo': ['comportamiento compulsivo', 'compulsión', 'conducta compulsiva'],
     }
 
     for sintoma_principal, keywords in sintomas_keywords.items():

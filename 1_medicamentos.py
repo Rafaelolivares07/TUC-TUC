@@ -16444,11 +16444,19 @@ def admin_sugerir_sintomas(med_id=None):
 
         conn.close()
 
-        return render_template('admin_sugerir_sintomas.html',
+        # Renderizar template con headers anti-caché
+        response = make_response(render_template('admin_sugerir_sintomas.html',
                              medicamento=medicamento,
                              medicamentos_list=medicamentos_list,
                              total_pendientes=total_pendientes,
-                             termino_busqueda=termino_busqueda)
+                             termino_busqueda=termino_busqueda))
+
+        # Prevenir caché del navegador y CDN
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+
+        return response
 
     except Exception as e:
         print(f"Error en admin_sugerir_sintomas: {e}")

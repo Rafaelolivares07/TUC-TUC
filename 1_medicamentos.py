@@ -3469,7 +3469,7 @@ def importar_datasets_medicos():
     - Disease-Symptom dataset (síntomas y relaciones)
     """
     import csv
-    from urllib.request import urlretrieve
+    import requests
     import traceback as tb
 
     try:
@@ -3573,7 +3573,10 @@ def importar_datasets_medicos():
         archivo_temp_cie10 = "/tmp/cie10_temp.csv"
 
         try:
-            urlretrieve(URL_CIE10, archivo_temp_cie10)
+            response = requests.get(URL_CIE10, timeout=30)
+            response.raise_for_status()
+            with open(archivo_temp_cie10, 'wb') as f:
+                f.write(response.content)
             resultado['pasos'].append('✅ CIE-10 descargado')
         except Exception as e:
             resultado['pasos'].append(f'⚠️ Error descargando CIE-10: {str(e)}')
@@ -3620,7 +3623,10 @@ def importar_datasets_medicos():
         archivo_temp_disease = "/tmp/disease_symptom_temp.csv"
 
         try:
-            urlretrieve(URL_DISEASE_SYMPTOM, archivo_temp_disease)
+            response = requests.get(URL_DISEASE_SYMPTOM, timeout=30)
+            response.raise_for_status()
+            with open(archivo_temp_disease, 'wb') as f:
+                f.write(response.content)
             resultado['pasos'].append('✅ Disease-Symptom descargado')
         except Exception as e:
             resultado['pasos'].append(f'⚠️ Error descargando Disease-Symptom: {str(e)}')

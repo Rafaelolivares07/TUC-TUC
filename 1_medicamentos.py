@@ -3366,6 +3366,143 @@ def debug_medicamento(med_id):
         }), 500
 
 
+@app.route('/api/analizar-estructura-diagnosticos', methods=['GET'])
+def analizar_estructura_diagnosticos():
+    """ENDPOINT TEMPORAL: Analiza estructura y datos de diagnósticos/síntomas"""
+    try:
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+
+        resultado = {}
+
+        # 1. Estructura de diagnostico_sintoma
+        cursor.execute("""
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_name = 'diagnostico_sintoma'
+            ORDER BY ordinal_position
+        """)
+        estructura = cursor.fetchall()
+        resultado['estructura_diagnostico_sintoma'] = [
+            {'columna': r[0], 'tipo': r[1], 'nullable': r[2], 'default': r[3]}
+            for r in estructura
+        ]
+
+        # 2. Conteo de registros
+        cursor.execute("""
+            SELECT 'DIAGNOSTICOS' as tabla, COUNT(*) as total FROM "DIAGNOSTICOS"
+            UNION ALL
+            SELECT 'SINTOMAS', COUNT(*) FROM "SINTOMAS"
+            UNION ALL
+            SELECT 'diagnostico_sintoma', COUNT(*) FROM diagnostico_sintoma
+            UNION ALL
+            SELECT 'medicamento_sintoma', COUNT(*) FROM medicamento_sintoma
+            UNION ALL
+            SELECT 'diagnostico_medicamento', COUNT(*) FROM diagnostico_medicamento
+        """)
+        conteos = cursor.fetchall()
+        resultado['conteos'] = {r[0]: r[1] for r in conteos}
+
+        # 3. Muestra de DIAGNOSTICOS (primeros 30)
+        cursor.execute('SELECT id, descripcion FROM "DIAGNOSTICOS" ORDER BY id LIMIT 30')
+        resultado['muestra_diagnosticos'] = [
+            {'id': r[0], 'descripcion': r[1]} for r in cursor.fetchall()
+        ]
+
+        # 4. Muestra de SINTOMAS (primeros 30)
+        cursor.execute('SELECT id, nombre FROM "SINTOMAS" ORDER BY id LIMIT 30')
+        resultado['muestra_sintomas'] = [
+            {'id': r[0], 'nombre': r[1]} for r in cursor.fetchall()
+        ]
+
+        # 5. Muestra de diagnostico_sintoma (si tiene datos)
+        cursor.execute('SELECT * FROM diagnostico_sintoma LIMIT 20')
+        cols = [desc[0] for desc in cursor.description]
+        diagnostico_sintoma_data = cursor.fetchall()
+        resultado['muestra_diagnostico_sintoma'] = [
+            dict(zip(cols, row)) for row in diagnostico_sintoma_data
+        ]
+
+        # 6. Constraints de diagnostico_sintoma
+        cursor.execute("""
+            SELECT constraint_name, constraint_type
+            FROM information_schema.table_constraints
+            WHERE table_name = 'diagnostico_sintoma'
+        """)
+        resultado['constraints'] = [
+            {'nombre': r[0], 'tipo': r[1]} for r in cursor.fetchall()
+        ]
+
+        # 7. Estadísticas de uso actual
+        cursor.execute("""
+            SELECT
+                d.descripcion,
+                COUNT(DISTINCT dm.medicamento_id) as num_medicamentos,
+                COUNT(DISTINCT ms.sintoma_id) as num_sintomas_asociados
+            FROM "DIAGNOSTICOS" d
+            LEFT JOIN diagnostico_medicamento dm ON d.id = dm.diagnostico_id
+            LEFT JOIN medicamento_sintoma ms ON dm.medicamento_id = ms.medicamento_id
+            GROUP BY d.id, d.descripcion
+            HAVING COUNT(DISTINCT dm.medicamento_id) > 0
+            ORDER BY num_medicamentos DESC
+            LIMIT 20
+        """)
+        resultado['diagnosticos_mas_usados'] = [
+            {
+                'diagnostico': r[0],
+                'num_medicamentos': r[1],
+                'num_sintomas_potenciales': r[2]
+            }
+            for r in cursor.fetchall()
+        ]
+
+        # 8. Análisis de inferencias posibles
+        cursor.execute("""
+            SELECT
+                d.descripcion as diagnostico,
+                s.nombre as sintoma,
+                COUNT(DISTINCT m.id) as num_medicamentos
+            FROM "DIAGNOSTICOS" d
+            JOIN diagnostico_medicamento dm ON d.id = dm.diagnostico_id
+            JOIN medicamentos m ON dm.medicamento_id = m.id
+            JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
+            JOIN "SINTOMAS" s ON ms.sintoma_id = s.id
+            GROUP BY d.id, d.descripcion, s.id, s.nombre
+            HAVING COUNT(DISTINCT m.id) >= 3
+            ORDER BY d.descripcion, num_medicamentos DESC
+            LIMIT 50
+        """)
+        resultado['inferencias_posibles'] = [
+            {
+                'diagnostico': r[0],
+                'sintoma': r[1],
+                'num_medicamentos': r[2],
+                'confianza': 'alta' if r[2] >= 5 else 'media'
+            }
+            for r in cursor.fetchall()
+        ]
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'analisis': resultado
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/productos', methods=['GET'])
 def obtener_productos():
     """

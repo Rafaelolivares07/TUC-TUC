@@ -60,6 +60,9 @@ REGLAS_DIAGNOSTICOS = {
     'dermatitis': ['enrojecimiento', 'comezón', 'inflamación', 'descamación'],
     'acné': ['pápulas', 'pústulas', 'comedones', 'inflamación'],
     'urticaria': ['rash', 'comezón', 'habones', 'enrojecimiento'],
+    'hemangiomas infantiles': ['mancha roja en la piel', 'tumor vascular', 'protuberancia roja', 'marca de nacimiento'],
+    'hemangiomas superficiales': ['mancha roja en la piel', 'protuberancia roja', 'lesión cutánea'],
+    'hemangioma': ['mancha roja en la piel', 'tumor vascular benigno', 'lesión cutánea roja'],
 
     # ========== ARTICULAR ==========
     'artritis': ['dolor articular', 'inflamación', 'rigidez matutina', 'hinchazón'],
@@ -75,7 +78,11 @@ REGLAS_DIAGNOSTICOS = {
     'deficiencia de calcio': ['debilidad ósea', 'calambres musculares', 'hormigueo', 'fatiga'],
     'deficiencia de hierro': ['fatiga', 'debilidad', 'palidez', 'anemia'],
 
-    # ========== INFECCIONES OFTÁLMICAS ==========
+    # ========== OFTÁLMICAS (OJOS) ==========
+    'glaucoma': ['presión ocular elevada', 'dolor ocular', 'visión borrosa', 'pérdida de visión periférica', 'halos alrededor de luces'],
+    'hipertensión ocular': ['presión ocular elevada', 'dolor ocular leve', 'sin síntomas aparentes'],
+    'presión intraocular elevada': ['dolor ocular', 'visión borrosa', 'presión en los ojos'],
+    'daño al nervio óptico': ['pérdida de visión', 'visión borrosa', 'puntos ciegos'],
     'conjuntivitis': ['ojos rojos', 'secreción ocular', 'lagrimeo', 'picazón en los ojos', 'sensibilidad a la luz'],
     'conjuntivitis bacteriana': ['ojos rojos', 'secreción ocular', 'lagrimeo', 'picazón en los ojos'],
     'queratitis': ['dolor ocular', 'visión borrosa', 'ojos rojos', 'sensibilidad a la luz', 'lagrimeo'],

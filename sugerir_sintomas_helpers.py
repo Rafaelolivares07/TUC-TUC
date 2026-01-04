@@ -33,6 +33,19 @@ REGLAS_DIAGNOSTICOS = {
     # ========== CARDIOVASCULAR ==========
     'hipertensión': ['presión arterial elevada', 'dolor de cabeza', 'mareo', 'fatiga'],
     'angina': ['dolor en el pecho', 'opresión torácica', 'dificultad respiratoria'],
+    'fibrilación auricular': ['palpitaciones irregulares', 'latidos irregulares', 'mareo', 'fatiga', 'falta de aire'],
+    'arritmia': ['palpitaciones', 'latidos irregulares', 'mareo', 'desmayo', 'dolor en el pecho'],
+    'trombosis venosa profunda': ['dolor en piernas', 'hinchazón de piernas', 'enrojecimiento en piernas', 'calor en la zona afectada'],
+    'tvp': ['dolor en piernas', 'hinchazón de piernas', 'enrojecimiento en piernas'],
+    'embolia pulmonar': ['dificultad respiratoria', 'dolor en el pecho', 'tos con sangre', 'taquicardia', 'mareo'],
+    'válvulas cardíacas artificiales': ['palpitaciones', 'fatiga', 'dificultad respiratoria', 'mareo'],
+    'prótesis valvulares': ['palpitaciones', 'fatiga', 'dificultad respiratoria'],
+    'prevención de ataques cerebrales': ['mareo', 'confusión', 'dolor de cabeza', 'debilidad'],
+    'prevención de stroke': ['mareo', 'confusión', 'dolor de cabeza', 'debilidad'],
+    'prevención de acv': ['mareo', 'confusión', 'dolor de cabeza', 'debilidad'],
+    'prevención de infarto': ['dolor en el pecho', 'falta de aire', 'fatiga', 'mareo'],
+    'anticoagulación': ['riesgo de sangrado', 'moretones fáciles', 'sangrado de encías'],
+    'coágulos sanguíneos': ['dolor localizado', 'hinchazón', 'enrojecimiento', 'calor en la zona'],
 
     # ========== NEUROLÓGICO ==========
     'epilepsia': ['convulsiones', 'crisis epilépticas', 'pérdida de conciencia', 'espasmos musculares'],

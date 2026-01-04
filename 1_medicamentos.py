@@ -17471,12 +17471,12 @@ def migrar_texto_fuente():
         conn = psycopg2.connect(database_url)
         cursor = conn.cursor()
 
-        # Verificar si la columna ya existe
+        # Verificar si la columna ya existe (usar LOWER para case-insensitive)
         cursor.execute("""
-            SELECT column_name
+            SELECT column_name, table_name
             FROM information_schema.columns
-            WHERE table_name = 'medicamentos'
-            AND column_name = 'texto_fuente'
+            WHERE LOWER(table_name) = 'medicamentos'
+            AND LOWER(column_name) = 'texto_fuente'
         """)
         existe = cursor.fetchone()
 
@@ -17484,13 +17484,31 @@ def migrar_texto_fuente():
             conn.close()
             return jsonify({
                 'ok': True,
-                'mensaje': 'La columna texto_fuente ya existe',
+                'mensaje': f'La columna texto_fuente ya existe en tabla {existe[1]}',
                 'columna_agregada': False
             })
 
-        # Agregar columna texto_fuente
+        # Primero, obtener el nombre REAL de la tabla (puede estar en mayúsculas)
         cursor.execute("""
-            ALTER TABLE medicamentos
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND LOWER(table_name) = 'medicamentos'
+        """)
+        tabla_real = cursor.fetchone()
+
+        if not tabla_real:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': 'No se encontró la tabla medicamentos en ningún formato (minúsculas/mayúsculas)'
+            }), 404
+
+        nombre_tabla = tabla_real[0]
+
+        # Agregar columna texto_fuente usando el nombre real de la tabla con comillas
+        cursor.execute(f"""
+            ALTER TABLE "{nombre_tabla}"
             ADD COLUMN texto_fuente TEXT
         """)
         conn.commit()
@@ -17499,8 +17517,8 @@ def migrar_texto_fuente():
         cursor.execute("""
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns
-            WHERE table_name = 'medicamentos'
-            AND column_name = 'texto_fuente'
+            WHERE LOWER(table_name) = 'medicamentos'
+            AND LOWER(column_name) = 'texto_fuente'
         """)
         columna_info = cursor.fetchone()
 
@@ -17508,8 +17526,9 @@ def migrar_texto_fuente():
 
         return jsonify({
             'ok': True,
-            'mensaje': 'Columna texto_fuente agregada exitosamente',
+            'mensaje': f'Columna texto_fuente agregada exitosamente a tabla {nombre_tabla}',
             'columna_agregada': True,
+            'tabla_real': nombre_tabla,
             'columna_info': {
                 'nombre': columna_info[0],
                 'tipo': columna_info[1],

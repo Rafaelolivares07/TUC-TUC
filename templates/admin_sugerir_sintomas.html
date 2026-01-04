@@ -602,6 +602,14 @@
                             ${m.tiene_precio ? '' : '[Sin precio]'}
                         </option>`
                     ).join('');
+
+                    // Actualizar componente activo del primer medicamento seleccionado
+                    if (data.medicamentos.length > 0) {
+                        const primerMedicamento = data.medicamentos.find(m => m.id === {{ medicamento.id }}) || data.medicamentos[0];
+                        if (componenteActivoDisplay && primerMedicamento.componente_activo_nombre) {
+                            componenteActivoDisplay.textContent = primerMedicamento.componente_activo_nombre;
+                        }
+                    }
                 }
             } catch (error) {
                 console.error('Error aplicando filtros:', error);

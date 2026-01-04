@@ -17018,12 +17018,14 @@ def filtrar_medicamentos_sugerir():
                 m.id,
                 m.nombre,
                 m.componente_activo_id,
+                ca.nombre as componente_activo_nombre,
                 CASE WHEN p.precio > 0 THEN 1 ELSE 0 END as tiene_precio,
                 CASE WHEN m.componente_activo_id IS NULL THEN 1 ELSE 0 END as es_generico_sort,
                 CASE WHEN p.precio > 0 THEN 0 ELSE 1 END as sin_precio_sort
             FROM medicamentos m
             LEFT JOIN medicamento_sintoma ms ON m.id = ms.medicamento_id
             LEFT JOIN precios p ON p.medicamento_id = m.id
+            LEFT JOIN componentes_activos ca ON ca.id = m.componente_activo_id
             WHERE """ + where_sql + """
             ORDER BY es_generico_sort, sin_precio_sort, m.nombre
             LIMIT 200
@@ -17038,7 +17040,8 @@ def filtrar_medicamentos_sugerir():
                 'id': m['id'],
                 'nombre': m['nombre'],
                 'es_generico': m['componente_activo_id'] is None,
-                'tiene_precio': m['tiene_precio'] == 1
+                'tiene_precio': m['tiene_precio'] == 1,
+                'componente_activo_nombre': m['componente_activo_nombre']
             } for m in medicamentos]
         })
 

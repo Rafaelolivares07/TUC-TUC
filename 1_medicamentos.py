@@ -3461,26 +3461,113 @@ def analizar_estructura_diagnosticos():
         }), 500
 
 
-@app.route('/api/test-import', methods=['GET'])
-def test_import():
-    """Endpoint de prueba para verificar que requests funciona"""
+@app.route('/api/crear-tablas-datasets', methods=['GET'])
+def crear_tablas_datasets():
+    """PASO 1: Solo crear las tablas necesarias para los datasets"""
     try:
-        import requests
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+
+        # Tabla: enfermedades_catalogo (CIE-10)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enfermedades_catalogo (
+                id SERIAL PRIMARY KEY,
+                codigo VARCHAR(20) UNIQUE NOT NULL,
+                codigo_padre_0 VARCHAR(20),
+                codigo_padre_1 VARCHAR(20),
+                codigo_padre_2 VARCHAR(20),
+                codigo_padre_3 VARCHAR(20),
+                codigo_padre_4 VARCHAR(20),
+                descripcion TEXT NOT NULL,
+                descripcion_lower TEXT,
+                nivel INTEGER,
+                fuente VARCHAR(100),
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedades_descripcion_lower ON enfermedades_catalogo(descripcion_lower)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedades_codigo ON enfermedades_catalogo(codigo)")
+
+        # Tabla: sintomas_catalogo
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sintomas_catalogo (
+                id SERIAL PRIMARY KEY,
+                nombre_original VARCHAR(100) UNIQUE NOT NULL,
+                nombre_espanol VARCHAR(100),
+                nombre_lower TEXT,
+                categoria VARCHAR(50),
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sintomas_nombre_lower ON sintomas_catalogo(nombre_lower)")
+
+        # Tabla: enfermedades_dataset
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enfermedades_dataset (
+                id SERIAL PRIMARY KEY,
+                nombre_original VARCHAR(100) UNIQUE NOT NULL,
+                nombre_espanol VARCHAR(100),
+                nombre_lower TEXT,
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Tabla: enfermedad_sintoma_dataset
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enfermedad_sintoma_dataset (
+                id SERIAL PRIMARY KEY,
+                enfermedad_id INTEGER NOT NULL REFERENCES enfermedades_dataset(id),
+                sintoma_id INTEGER NOT NULL REFERENCES sintomas_catalogo(id),
+                frecuencia VARCHAR(20) DEFAULT 'comun',
+                fuente VARCHAR(100) DEFAULT 'kaggle-disease-symptom-dataset',
+                fecha_importacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(enfermedad_id, sintoma_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedad_sintoma_enfermedad ON enfermedad_sintoma_dataset(enfermedad_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_enfermedad_sintoma_sintoma ON enfermedad_sintoma_dataset(sintoma_id)")
+
+        # Tabla: sinonimos_medicos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sinonimos_medicos (
+                id SERIAL PRIMARY KEY,
+                termino_original VARCHAR(200) NOT NULL,
+                termino_normalizado VARCHAR(200) NOT NULL,
+                tipo VARCHAR(20),
+                idioma VARCHAR(10) DEFAULT 'es',
+                fuente VARCHAR(100),
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sinonimos_original ON sinonimos_medicos(termino_original)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sinonimos_normalizado ON sinonimos_medicos(termino_normalizado)")
+
+        conn.commit()
+        conn.close()
+
         return jsonify({
             'ok': True,
-            'mensaje': 'requests esta disponible',
-            'test': 'OK'
+            'mensaje': 'Tablas creadas exitosamente',
+            'tablas': [
+                'enfermedades_catalogo',
+                'sintomas_catalogo',
+                'enfermedades_dataset',
+                'enfermedad_sintoma_dataset',
+                'sinonimos_medicos'
+            ]
         })
-    except ImportError as e:
-        return jsonify({
-            'ok': False,
-            'error': 'requests no esta disponible',
-            'detalles': str(e)
-        }), 500
+
     except Exception as e:
+        import traceback
         return jsonify({
             'ok': False,
-            'error': str(e)
+            'error': str(e),
+            'traceback': traceback.format_exc()
         }), 500
 
 

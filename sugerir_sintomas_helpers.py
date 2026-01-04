@@ -55,6 +55,9 @@ REGLAS_DIAGNOSTICOS = {
     'cefalea': ['dolor de cabeza', 'tensión', 'mareo'],
     'trastorno bipolar': ['cambios de ánimo', 'episodios maníacos', 'depresión', 'irritabilidad'],
     'episodios maníacos': ['euforia', 'hiperactividad', 'insomnio', 'impulsividad'],
+    'neuropatía periférica': ['hormigueo', 'entumecimiento', 'debilidad muscular', 'dolor nervioso', 'sensación de ardor'],
+    'trastornos nerviosos periféricos': ['hormigueo', 'entumecimiento', 'debilidad', 'sensación de alfileres y agujas'],
+    'daño nervioso': ['hormigueo', 'entumecimiento', 'debilidad muscular', 'dolor nervioso'],
 
     # ========== DERMATOLÓGICO ==========
     'dermatitis': ['enrojecimiento', 'comezón', 'inflamación', 'descamación'],
@@ -75,8 +78,12 @@ REGLAS_DIAGNOSTICOS = {
     'deficiencia de vitamina d': ['debilidad muscular', 'dolor óseo', 'fatiga', 'depresión'],
     'deficiencia de vitamina c': ['fatiga', 'debilidad', 'encías sangrantes', 'anemia'],
     'deficiencia de vitamina b12': ['fatiga', 'debilidad', 'hormigueo', 'anemia'],
+    'deficiencia de vitamina e': ['debilidad muscular', 'hormigueo', 'debilidad', 'problemas de visión', 'deterioro del sistema inmunitario', 'infecciones recurrentes'],
+    'deficiencia de vitamina b6': ['hormigueo', 'debilidad', 'fatiga', 'anemia', 'confusión', 'depresión', 'sistema inmunitario debilitado'],
     'deficiencia de calcio': ['debilidad ósea', 'calambres musculares', 'hormigueo', 'fatiga'],
     'deficiencia de hierro': ['fatiga', 'debilidad', 'palidez', 'anemia'],
+    'deficiencia nutricional': ['fatiga', 'debilidad', 'pérdida de peso', 'palidez', 'sistema inmunitario debilitado'],
+    'deficiencias vitamínicas': ['fatiga', 'debilidad', 'hormigueo', 'deterioro del sistema inmunitario'],
 
     # ========== OFTÁLMICAS (OJOS) ==========
     'glaucoma': ['presión ocular elevada', 'dolor ocular', 'visión borrosa', 'pérdida de visión periférica', 'halos alrededor de luces'],
@@ -118,11 +125,22 @@ REGLAS_DIAGNOSTICOS = {
     'sobrepeso': ['exceso de peso', 'obesidad', 'aumento de peso'],
     'obesidad': ['exceso de peso', 'aumento de peso', 'dificultad para perder peso'],
 
+    # ========== GINECOLÓGICO / MENSTRUAL ==========
+    'síntomas menstruales': ['cólicos menstruales', 'dolor menstrual', 'calambres abdominales', 'cambios de ánimo', 'fatiga durante menstruación'],
+    'dismenorrea': ['cólicos menstruales', 'dolor menstrual', 'náusea durante menstruación', 'dolor abdominal'],
+    'síndrome premenstrual': ['cambios de ánimo', 'hinchazón', 'fatiga', 'cólicos', 'irritabilidad'],
+    'calambres menstruales': ['dolor menstrual', 'cólicos abdominales', 'dolor pélvico'],
+
     # ========== OTROS ==========
     'diabetes': ['sed excesiva', 'orina frecuente', 'hambre extrema', 'fatiga'],
     'anemia': ['fatiga', 'debilidad', 'palidez', 'dificultad respiratoria'],
     'alergia': ['reacción alérgica', 'comezón', 'enrojecimiento', 'estornudos'],
     'hipoparatiroidismo': ['calambres musculares', 'hormigueo', 'espasmos', 'fatiga'],
+    'estrés oxidativo': ['fatiga', 'envejecimiento prematuro', 'deterioro celular', 'debilidad'],
+    'daño por radicales libres': ['fatiga', 'envejecimiento prematuro', 'deterioro de tejidos'],
+    'protección antioxidante': ['prevención de envejecimiento', 'protección celular'],
+    'debilitamiento del sistema inmunitario': ['infecciones frecuentes', 'fatiga', 'debilidad', 'recuperación lenta'],
+    'infecciones recurrentes': ['infecciones frecuentes', 'sistema inmunitario debilitado', 'fatiga'],
 }
 
 # =====================================================================

@@ -538,7 +538,8 @@
         selectorMedicamento?.addEventListener('change', (e) => {
             const medId = e.target.value;
             if (medId) {
-                window.location.href = `/admin/sugerir-sintomas/${medId}`;
+                // Agregar timestamp para forzar recarga y evitar caché
+                window.location.href = `/admin/sugerir-sintomas/${medId}?t=${Date.now()}`;
             }
         });
 
@@ -871,9 +872,9 @@
 
                 // Ir al siguiente medicamento
                 if (data.siguiente_id) {
-                    window.location.href = `/admin/sugerir-sintomas/${data.siguiente_id}`;
+                    window.location.href = `/admin/sugerir-sintomas/${data.siguiente_id}?t=${Date.now()}`;
                 } else {
-                    window.location.href = '/admin/sugerir-sintomas';
+                    window.location.href = `/admin/sugerir-sintomas?t=${Date.now()}`;
                 }
 
             } catch (error) {
@@ -909,13 +910,13 @@
                 const data = await response.json();
 
                 if (data.ok && data.siguiente_id) {
-                    window.location.href = `/admin/sugerir-sintomas/${data.siguiente_id}`;
+                    window.location.href = `/admin/sugerir-sintomas/${data.siguiente_id}?t=${Date.now()}`;
                 } else {
-                    window.location.href = '/admin/sugerir-sintomas';
+                    window.location.href = `/admin/sugerir-sintomas?t=${Date.now()}`;
                 }
             } catch (error) {
                 console.error('Error:', error);
-                window.location.reload();
+                window.location.href = `/admin/sugerir-sintomas?t=${Date.now()}`;
             }
         });
 

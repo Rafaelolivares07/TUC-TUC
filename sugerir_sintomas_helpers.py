@@ -118,6 +118,25 @@ REGLAS_DIAGNOSTICOS = {
     'citomegalovirus': ['fiebre', 'fatiga', 'dolor muscular', 'inflamación de ganglios'],
     'cmv': ['fiebre', 'fatiga', 'dolor muscular', 'debilidad'],
 
+    # ========== INFECCIONES POR HONGOS (MICÓTICAS) ==========
+    'pie de atleta': ['picazón entre los dedos', 'descamación de pies', 'enrojecimiento de pies', 'mal olor en pies', 'grietas en la piel de pies'],
+    'tinea pedis': ['picazón entre los dedos', 'descamación de pies', 'enrojecimiento de pies', 'piel agrietada en pies'],
+    'tiña': ['manchas circulares en la piel', 'enrojecimiento', 'picazón', 'descamación', 'bordes elevados'],
+    'tiña del cuerpo': ['manchas circulares en la piel', 'enrojecimiento', 'picazón', 'descamación'],
+    'tinea corporis': ['manchas circulares en la piel', 'enrojecimiento', 'picazón', 'descamación'],
+    'tiña inguinal': ['picazón en la ingle', 'enrojecimiento en la ingle', 'sarpullido en la ingle', 'descamación en área genital'],
+    'tinea cruris': ['picazón en la ingle', 'enrojecimiento en la ingle', 'irritación genital'],
+    'tiña de las manos': ['descamación en manos', 'enrojecimiento de manos', 'picazón en manos', 'grietas en manos'],
+    'pitiriasis versicolor': ['manchas claras u oscuras en la piel', 'descamación leve', 'picazón leve', 'cambios de color en la piel'],
+    'candidiasis cutánea': ['enrojecimiento', 'picazón', 'sarpullido', 'piel húmeda', 'descamación'],
+    'candidiasis vulvovaginal': ['picazón vaginal', 'flujo vaginal blanco', 'ardor vaginal', 'irritación vaginal', 'enrojecimiento genital'],
+    'hongos vaginales': ['picazón vaginal', 'flujo vaginal blanco', 'ardor vaginal', 'irritación vaginal'],
+    'infección vaginal por hongos': ['picazón vaginal', 'flujo vaginal', 'ardor vaginal', 'molestias al orinar'],
+    'balanitis candidiásica': ['enrojecimiento del glande', 'picazón en el glande', 'inflamación del pene', 'secreción blanquecina'],
+    'inflamación del glande': ['enrojecimiento del glande', 'picazón genital', 'dolor en el pene', 'irritación genital'],
+    'infecciones superficiales de la piel': ['enrojecimiento', 'picazón', 'descamación', 'irritación cutánea'],
+    'infecciones por hongos': ['picazón', 'enrojecimiento', 'descamación', 'irritación', 'mal olor'],
+
     # ========== PSIQUIÁTRICO / TRASTORNOS ALIMENTARIOS ==========
     'trastorno por atracón': ['comer en exceso', 'pérdida de control al comer', 'ansiedad por comida'],
     'trastornos de la alimentación': ['pérdida de apetito', 'comer en exceso', 'ansiedad por comida', 'pérdida de peso'],

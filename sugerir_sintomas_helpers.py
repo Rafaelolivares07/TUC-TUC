@@ -162,6 +162,40 @@ REGLAS_DIAGNOSTICOS = {
     'síndrome premenstrual': ['cambios de ánimo', 'hinchazón', 'fatiga', 'cólicos', 'irritabilidad'],
     'calambres menstruales': ['dolor menstrual', 'cólicos abdominales', 'dolor pélvico'],
 
+    # ========== COSMÉTICO / CUIDADO DE PIEL ==========
+    'hidratación de piel': ['piel seca', 'resequedad', 'descamación', 'piel áspera', 'tirantez'],
+    'hidratación profunda': ['piel muy seca', 'resequedad severa', 'piel agrietada'],
+    'piel seca': ['resequedad', 'descamación', 'tirantez', 'aspereza', 'comezón por sequedad'],
+    'resequedad': ['piel seca', 'descamación', 'tirantez', 'falta de hidratación'],
+    'manchas en la piel': ['hiperpigmentación', 'manchas oscuras', 'manchas solares', 'melasma', 'decoloración'],
+    'manchas superficiales': ['manchas leves', 'hiperpigmentación leve', 'decoloración superficial'],
+    'luminosidad': ['piel opaca', 'falta de brillo', 'tono apagado', 'falta de luminosidad'],
+    'suavizar la piel': ['piel áspera', 'aspereza', 'textura irregular', 'piel rugosa'],
+    'protección de la piel': ['protección contra resequedad', 'barrera protectora', 'cuidado de piel'],
+    'control de impurezas': ['impurezas', 'piel grasa', 'poros obstruidos', 'exceso de grasa'],
+    'limpieza de piel': ['impurezas', 'suciedad', 'residuos', 'limpieza facial'],
+    'astringente': ['poros dilatados', 'piel grasa', 'exceso de sebo', 'brillo excesivo'],
+    'protección labial': ['labios secos', 'labios agrietados', 'resequedad labial'],
+    'labios secos': ['resequedad labial', 'labios agrietados', 'descamación de labios'],
+    'protector solar labial': ['protección contra rayos uv en labios', 'cuidado labial solar'],
+    'humectación': ['piel seca', 'resequedad', 'falta de humedad', 'deshidratación cutánea'],
+
+    # ========== PREVENCIÓN / PROTECCIÓN SEXUAL ==========
+    'prevención de embarazo': ['anticonceptivo', 'control natal', 'planificación familiar'],
+    'anticonceptivo': ['prevención de embarazo', 'control de natalidad', 'método de barrera'],
+    'protección sexual': ['prevención de its', 'prevención de ets', 'sexo seguro', 'barrera de protección'],
+    'prevención de its': ['protección contra enfermedades de transmisión sexual', 'sexo seguro'],
+    'prevención de ets': ['protección contra enfermedades venéreas', 'sexo seguro'],
+    'método de barrera': ['anticonceptivo de barrera', 'protección física'],
+    'planificación familiar': ['control natal', 'anticonceptivo', 'prevención de embarazo'],
+
+    # ========== HIGIENE Y LIMPIEZA ==========
+    'limpieza antiséptica': ['desinfección', 'eliminación de gérmenes', 'higiene'],
+    'desinfección': ['eliminación de bacterias', 'antiséptico', 'higiene'],
+    'higiene personal': ['limpieza', 'cuidado personal', 'aseo'],
+    'limpieza de heridas': ['desinfección de heridas', 'antiséptico para heridas', 'cuidado de lesiones'],
+    'antiséptico': ['desinfección', 'eliminación de gérmenes', 'prevención de infecciones'],
+
     # ========== OTROS ==========
     'diabetes': ['sed excesiva', 'orina frecuente', 'hambre extrema', 'fatiga'],
     'anemia': ['fatiga', 'debilidad', 'palidez', 'dificultad respiratoria'],

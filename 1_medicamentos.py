@@ -17414,6 +17414,115 @@ def guardar_sugerencias_sintomas(med_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/sugerir-sintomas/guardar-texto-fuente/<int:med_id>', methods=['POST'])
+@admin_required
+def guardar_texto_fuente(med_id):
+    """Guarda el texto fuente completo que se usó para detectar síntomas"""
+    try:
+        data = request.get_json()
+        texto_fuente = data.get('texto_fuente', '').strip() if data else ''
+
+        if not texto_fuente:
+            return jsonify({'ok': False, 'error': 'Texto vacío'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar que el medicamento existe
+        medicamento = conn.execute(
+            'SELECT id FROM medicamentos WHERE id = %s',
+            (med_id,)
+        ).fetchone()
+
+        if not medicamento:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Medicamento no encontrado'}), 404
+
+        # Actualizar texto_fuente
+        conn.execute(
+            'UPDATE medicamentos SET texto_fuente = %s WHERE id = %s',
+            (texto_fuente, med_id)
+        )
+        conn.commit()
+        conn.close()
+
+        print(f"✅ [TEXTO FUENTE] Guardado para medicamento ID {med_id} ({len(texto_fuente)} caracteres)")
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Texto fuente guardado correctamente',
+            'caracteres': len(texto_fuente)
+        })
+
+    except Exception as e:
+        print(f"❌ Error al guardar texto_fuente: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/migrar-texto-fuente', methods=['GET'])
+def migrar_texto_fuente():
+    """ENDPOINT TEMPORAL: Agrega columna texto_fuente a tabla medicamentos si no existe"""
+    try:
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+        conn = psycopg2.connect(database_url)
+        cursor = conn.cursor()
+
+        # Verificar si la columna ya existe
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'medicamentos'
+            AND column_name = 'texto_fuente'
+        """)
+        existe = cursor.fetchone()
+
+        if existe:
+            conn.close()
+            return jsonify({
+                'ok': True,
+                'mensaje': 'La columna texto_fuente ya existe',
+                'columna_agregada': False
+            })
+
+        # Agregar columna texto_fuente
+        cursor.execute("""
+            ALTER TABLE medicamentos
+            ADD COLUMN texto_fuente TEXT
+        """)
+        conn.commit()
+
+        # Verificar que se agregó correctamente
+        cursor.execute("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'medicamentos'
+            AND column_name = 'texto_fuente'
+        """)
+        columna_info = cursor.fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Columna texto_fuente agregada exitosamente',
+            'columna_agregada': True,
+            'columna_info': {
+                'nombre': columna_info[0],
+                'tipo': columna_info[1],
+                'nullable': columna_info[2]
+            } if columna_info else None
+        })
+
+    except Exception as e:
+        print(f"Error en migración texto_fuente: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/diagnostico-sintomas', methods=['GET'])
 @admin_required
 def diagnostico_sintomas():

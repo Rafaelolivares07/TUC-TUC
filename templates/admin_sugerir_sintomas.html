@@ -673,6 +673,22 @@
                 // Habilitar botón guardar
                 btnGuardar.disabled = false;
 
+                // Guardar el texto fuente completo en la BD
+                try {
+                    await fetch('/admin/sugerir-sintomas/guardar-texto-fuente/{{ medicamento.id }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ texto_fuente: texto })
+                    });
+                    console.log('✅ Texto fuente guardado en BD');
+                } catch (errorTexto) {
+                    console.warn('⚠️ No se pudo guardar texto fuente:', errorTexto);
+                    // No mostramos error al usuario porque es secundario
+                }
+
             } catch (error) {
                 console.error('Error:', error);
                 mensajeProcesando.classList.add('hidden');

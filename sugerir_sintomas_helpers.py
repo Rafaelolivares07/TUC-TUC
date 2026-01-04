@@ -228,13 +228,22 @@ REGLAS_DIAGNOSTICOS = {
     'reparación capilar': ['cabello dañado', 'puntas abiertas', 'cabello quebradizo'],
 
     # ========== PREVENCIÓN / PROTECCIÓN SEXUAL ==========
-    'prevención de embarazo': ['anticonceptivo', 'control natal', 'planificación familiar'],
-    'anticonceptivo': ['prevención de embarazo', 'control de natalidad', 'método de barrera'],
+    'prevención de embarazo': ['anticonceptivo', 'control natal', 'planificación familiar', 'protección contra embarazo'],
+    'protección contra embarazo': ['anticonceptivo', 'prevención de embarazo', 'método anticonceptivo'],
+    'anticonceptivo': ['prevención de embarazo', 'control de natalidad', 'método de barrera', 'protección contra embarazo'],
     'protección sexual': ['prevención de its', 'prevención de ets', 'sexo seguro', 'barrera de protección'],
-    'prevención de its': ['protección contra enfermedades de transmisión sexual', 'sexo seguro'],
-    'prevención de ets': ['protección contra enfermedades venéreas', 'sexo seguro'],
-    'método de barrera': ['anticonceptivo de barrera', 'protección física'],
+    'prevención de its': ['protección contra enfermedades de transmisión sexual', 'sexo seguro', 'protección contra its'],
+    'prevención de ets': ['protección contra enfermedades venéreas', 'sexo seguro', 'protección contra ets'],
+    'enfermedades de transmisión sexual': ['its', 'ets', 'enfermedades venéreas', 'infecciones de transmisión sexual'],
+    'protección contra enfermedades de transmisión sexual': ['prevención de its', 'prevención de ets', 'sexo seguro'],
+    'método de barrera': ['anticonceptivo de barrera', 'protección física', 'barrera anticonceptiva'],
     'planificación familiar': ['control natal', 'anticonceptivo', 'prevención de embarazo'],
+    'condón': ['preservativo', 'anticonceptivo de barrera', 'protección sexual', 'prevención de embarazo'],
+    'preservativo': ['condón', 'anticonceptivo de barrera', 'protección sexual'],
+    'sin látex': ['alternativa al látex', 'para alergia al látex', 'libre de látex'],
+    'poliisopreno': ['material sin látex', 'alternativa sintética', 'para sensibilidad al látex'],
+    'sensibilidad al látex': ['alergia al látex', 'reacción al látex', 'irritación por látex'],
+    'alergia al látex': ['sensibilidad al látex', 'reacción alérgica al látex', 'intolerancia al látex'],
 
     # ========== HIGIENE Y LIMPIEZA ==========
     'limpieza antiséptica': ['desinfección', 'eliminación de gérmenes', 'higiene'],

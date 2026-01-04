@@ -29,6 +29,18 @@ REGLAS_DIAGNOSTICOS = {
     'diarrea': ['diarrea', 'evacuaciones frecuentes', 'dolor abdominal'],
     'estreñimiento': ['estreñimiento', 'dificultad para defecar', 'dolor abdominal'],
     'colitis': ['diarrea con sangre', 'dolor abdominal', 'cólicos'],
+    'síndrome de intestino irritable': ['dolor abdominal', 'distensión abdominal', 'diarrea', 'estreñimiento', 'cólicos', 'gases', 'cambios en evacuaciones'],
+    'sii': ['dolor abdominal', 'distensión abdominal', 'diarrea', 'estreñimiento', 'cólicos'],
+    'intestino irritable': ['dolor abdominal', 'distensión abdominal', 'diarrea', 'estreñimiento', 'gases'],
+    'trastorno funcional intestinal': ['dolor abdominal', 'distensión abdominal', 'diarrea', 'estreñimiento'],
+    'dispepsia': ['dolor abdominal superior', 'sensación de llenura', 'náusea', 'eructos', 'malestar estomacal'],
+    'reflujo gástrico': ['acidez', 'ardor estomacal', 'regurgitación', 'dolor en el pecho', 'dificultad al tragar'],
+    'reflujo gastroesofágico': ['acidez', 'ardor estomacal', 'regurgitación', 'tos crónica'],
+    'distensión abdominal': ['hinchazón abdominal', 'abdomen distendido', 'sensación de llenura', 'gases'],
+    'espasmos intestinales': ['dolor abdominal tipo cólico', 'cólicos', 'dolor intermitente'],
+    'trastornos de motilidad intestinal': ['estreñimiento', 'diarrea', 'dolor abdominal', 'distensión'],
+    'dolor abdominal': ['dolor de estómago', 'dolor en el abdomen', 'malestar abdominal', 'cólicos'],
+    'cólicos abdominales': ['dolor tipo cólico', 'espasmos abdominales', 'dolor intermitente'],
 
     # ========== CARDIOVASCULAR ==========
     'hipertensión': ['presión arterial elevada', 'dolor de cabeza', 'mareo', 'fatiga'],

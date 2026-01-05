@@ -502,10 +502,21 @@
             }
         }
         
-        function irCheckout() {
+        async function irCheckout() {
+            // Esperar a que el carrito termine de cargar antes de verificar
             if (carrito.length === 0) {
-                alert('El carrito está vacío');
-                return;
+                // Verificar si aún está cargando
+                const carritoConItems = document.getElementById('carritoConItems');
+                if (carritoConItems.style.display === 'block') {
+                    // Hay items visibles, el carrito aún está cargando la variable
+                    // Esperar un momento y reintentar
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                if (carrito.length === 0) {
+                    alert('El carrito está vacío');
+                    return;
+                }
             }
             window.location.href = '/tienda/checkout';
         }

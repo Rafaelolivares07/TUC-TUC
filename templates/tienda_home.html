@@ -2681,6 +2681,26 @@
             modoFiltradoPastillero = false;  // 🆕 Reset modo filtrado
         }
 
+        // FUNCIONES MODAL TIPO DE MEDICAMENTO
+        let resolverTipoMedicamento = null;
+
+        function mostrarModalTipoMedicamento() {
+            return new Promise((resolve) => {
+                resolverTipoMedicamento = resolve;
+                const modal = document.getElementById('modal-tipo-medicamento');
+                modal.style.display = 'flex';
+            });
+        }
+
+        function seleccionarTipoMedicamento(tipo) {
+            const modal = document.getElementById('modal-tipo-medicamento');
+            modal.style.display = 'none';
+            if (resolverTipoMedicamento) {
+                resolverTipoMedicamento(tipo);
+                resolverTipoMedicamento = null;
+            }
+        }
+
         // 🆕 FUNCIONES DE GESTIÓN DE PASTILLEROS
         async function cargarListaPastilleros() {
             try {
@@ -2880,7 +2900,10 @@
 
         function cerrarChat() {
             document.getElementById('modal-chat').classList.remove('active');
-            document.getElementById('input-buscar-usuario').value = '';
+            const inputBuscar = document.getElementById('input-buscar-usuario');
+            if (inputBuscar) {
+                inputBuscar.value = '';
+            }
         }
 
         // 🆕 FUNCIONES MENÚ TUC TUC
@@ -3996,18 +4019,16 @@
         }
         
         // Función auxiliar para preguntar tipo de medicamento y parámetros
-        function obtenerParametrosTipoMedicamento(esNuevo) {
+        async function obtenerParametrosTipoMedicamento(esNuevo) {
             // Solo preguntar tipo si es medicamento nuevo
             if (!esNuevo) {
                 return {}; // Si ya existe, no cambiar tipo
             }
 
-            // Preguntar tipo de medicamento
-            const tipo = confirm('¿Es un medicamento de BOTIQUÍN (stock permanente)?\n\n' +
-                                'OK = BOTIQUÍN (Dolex, alcohol, siempre reponer)\n' +
-                                'Cancelar = TRATAMIENTO (antibiótico temporal)');
+            // Preguntar tipo de medicamento con modal personalizado
+            const tipoSeleccionado = await mostrarModalTipoMedicamento();
 
-            if (tipo) {
+            if (tipoSeleccionado === 'botiquin') {
                 // BOTIQUÍN
                 const alertar = confirm('¿Quieres recibir alertas cuando el stock esté bajo?');
                 let nivelMinimo = 10;
@@ -4024,7 +4045,7 @@
                     alerta_reposicion: alertar,
                     nivel_minimo_alerta: nivelMinimo
                 };
-            } else {
+            } else if (tipoSeleccionado === 'tratamiento') {
                 // TRATAMIENTO
                 const fechaInicio = prompt('Fecha de inicio del tratamiento (YYYY-MM-DD):',
                                           new Date().toISOString().split('T')[0]);
@@ -5920,6 +5941,28 @@
                     <!-- Se llena dinámicamente -->
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- MODAL SELECTOR TIPO DE MEDICAMENTO -->
+    <div id="modal-tipo-medicamento" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 2rem; max-width: 400px; margin: 1rem;">
+            <h3 style="margin: 0 0 1rem 0; text-align: center;">Selecciona el tipo de medicamento</h3>
+            <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1.5rem;">¿Es un medicamento que siempre tienes en casa o un tratamiento temporal?</p>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <button onclick="seleccionarTipoMedicamento('botiquin')" style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; border: none; padding: 1rem; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <span style="font-size: 1.5rem;">🏥</span> Botiquín
+                </button>
+                <button onclick="seleccionarTipoMedicamento('tratamiento')" style="background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); color: white; border: none; padding: 1rem; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                    <span style="font-size: 1.5rem;">💊</span> Tratamiento
+                </button>
+            </div>
+
+            <p style="font-size: 0.8rem; color: #888; margin-top: 1rem; text-align: center;">
+                <strong>Botiquín:</strong> Stock permanente (Dolex, alcohol)<br>
+                <strong>Tratamiento:</strong> Temporal (antibiótico, analgésico)
+            </p>
         </div>
     </div>
 

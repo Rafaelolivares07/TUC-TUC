@@ -15850,8 +15850,8 @@ def eliminar_colaborador(colaborador_id):
 
 @app.route('/api/terceros/buscar', methods=['GET'])
 @admin_required
-def buscar_terceros():
-    """Busca terceros por nombre o teléfono"""
+def buscar_terceros_colaboradores():
+    """Busca terceros por nombre o teléfono para colaboradores de entrega"""
     try:
         query = request.args.get('q', '').strip()
 

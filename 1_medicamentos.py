@@ -2024,7 +2024,35 @@ def procesar_pedido():
         except Exception as e:
             print(f" Error enviando notificacin Telegram: {e}")
             # No fallar el pedido si la notificacin falla
-        
+
+        # 6. ENVIAR MENSAJE AUTOMÁTICO AL CLIENTE EN EL CHAT
+        try:
+            conn = get_db_connection()
+
+            mensaje_cliente = f"""¡Hola {nombre}! 👋
+
+Tu pedido #{pedido_id} ha sido recibido exitosamente y está en proceso.
+
+📦 Total: ${total:,}
+💳 Método de pago: {metodo_pago.upper()}
+🕐 Tiempo estimado: 30 minutos
+
+Te notificaremos cuando tu pedido esté listo para entrega. ¡Gracias por tu compra!"""
+
+            # Enviar mensaje desde el admin (ID 16) al cliente
+            conn.execute('''
+                INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, estado, fecha)
+                VALUES (%s, %s, %s, 'texto', 'pendiente', CURRENT_TIMESTAMP)
+            ''', (16, tercero_id, mensaje_cliente))
+
+            conn.commit()
+            conn.close()
+            print(f"✅ Mensaje de confirmación enviado al cliente {tercero_id}")
+
+        except Exception as e:
+            print(f"⚠️ Error enviando mensaje al cliente: {e}")
+            # No fallar el pedido si el mensaje falla
+
         return jsonify({
             'ok': True,
             'pedido_id': pedido_id,

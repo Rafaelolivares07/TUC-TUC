@@ -1777,18 +1777,18 @@ def procesar_pedido():
 
             items_carrito = conn.execute("""
                 SELECT
-                    e."ID" as existencia_id,
-                    e."ID_MEDICAMENTO" as id_medicamento,
-                    e."CANTIDAD" as cantidad,
-                    e."PRECIO_UNITARIO" as precio_unitario,
-                    e."PRECIO_TOTAL" as precio_total,
-                    m."NOMBRE_COMERCIAL" as nombre_comercial,
-                    m."NOMBRE_GENERICO" as nombre_generico,
-                    m."IMAGEN" as imagen
+                    e.id as existencia_id,
+                    e.medicamento_id as id_medicamento,
+                    e.cantidad,
+                    e.precio_unitario,
+                    e.precio_total,
+                    m.nombre as nombre_comercial,
+                    m.presentacion as nombre_generico,
+                    m.imagen
                 FROM existencias e
-                JOIN medicamentos m ON e."ID_MEDICAMENTO" = m."ID"
-                WHERE e."ESTADO" = 'carrito_temporal'
-                AND e."ID_TERCERO" = %s
+                JOIN medicamentos m ON e.medicamento_id = m.id
+                WHERE e.estado = 'carrito_temporal'
+                AND e.id_tercero = %s
             """, (usuario_id,)).fetchall()
 
             if not items_carrito:

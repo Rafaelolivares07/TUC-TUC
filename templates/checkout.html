@@ -772,6 +772,8 @@
 
                     // Limpiar carrito
                     localStorage.removeItem('carrito');
+                    // Nota: Para usuarios logueados, el backend ya cambió estado='carrito_temporal'
+                    // a 'pendiente', por lo que el carrito aparecerá vacío automáticamente
 
                     // Redirigir a confirmación
                     window.location.href = '/tienda/confirmacion';

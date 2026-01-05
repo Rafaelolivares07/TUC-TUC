@@ -1788,7 +1788,7 @@ def procesar_pedido():
                 FROM existencias e
                 JOIN medicamentos m ON e.id_medicamento = m.id
                 WHERE e.estado = 'carrito_temporal'
-                AND e.id_tercero = ?
+                AND e.id_tercero = %s
             """, (usuario_id,)).fetchall()
 
             if not items_carrito:
@@ -1846,7 +1846,7 @@ def procesar_pedido():
         # 1. Buscar o crear TERCERO (cliente)
         # Primero buscar si ya existe por telfono
         tercero_existente = conn.execute("""
-            SELECT id, nombre FROM terceros WHERE telefono = ? LIMIT 1
+            SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1
         """, (telefono,)).fetchone()
 
         if tercero_existente:
@@ -1857,8 +1857,8 @@ def procesar_pedido():
             if tercero_existente['nombre'] != nombre:
                 conn.execute("""
                     UPDATE terceros
-                    SET nombre = ?, fecha_actualizacion = CURRENT_TIMESTAMP
-                    WHERE id = ?
+                    SET nombre = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                    WHERE id = %s
                 """, (nombre, tercero_id))
                 print(f"  Nombre actualizado a: {nombre}")
 
@@ -1870,7 +1870,7 @@ def procesar_pedido():
             print(f" Insertando nuevo tercero con ID {next_tercero_id}...")
             cursor = conn.execute("""
                 INSERT INTO terceros (id, nombre, telefono, fecha_creacion)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
             """, (next_tercero_id, nombre, telefono))
             tercero_id = next_tercero_id
             print(f" Tercero creado con ID: {tercero_id}")
@@ -1879,8 +1879,8 @@ def procesar_pedido():
         if usuario_id != tercero_id:
             conn.execute("""
                 UPDATE existencias
-                SET id_tercero = ?
-                WHERE id_tercero = ?
+                SET id_tercero = %s
+                WHERE id_tercero = %s
                 AND estado = 'carrito_temporal'
             """, (tercero_id, usuario_id))
             print(f" OK: Actualizado id_tercero del carrito: {usuario_id} -> {tercero_id}")
@@ -1891,7 +1891,7 @@ def procesar_pedido():
         # Buscar si existe esta direccin exacta para este tercero
         direccion_existente = conn.execute("""
             SELECT id FROM terceros_direcciones
-            WHERE tercero_id = ? AND direccion = ?
+            WHERE tercero_id = %s AND direccion = %s
             LIMIT 1
         """, (tercero_id, direccion)).fetchone()
 
@@ -1902,8 +1902,8 @@ def procesar_pedido():
             # Actualizar coordenadas si cambiaron
             conn.execute("""
                 UPDATE terceros_direcciones
-                SET latitud = ?, longitud = ?, fecha_actualizacion = CURRENT_TIMESTAMP
-                WHERE id = ?
+                SET latitud = %s, longitud = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                WHERE id = %s
             """, (latitud, longitud, direccion_id))
 
         else:
@@ -1912,7 +1912,7 @@ def procesar_pedido():
             cursor = conn.execute("""
                 INSERT INTO terceros_direcciones
                 (tercero_id, alias, nombre_completo, telefono, direccion, latitud, longitud, es_principal)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (tercero_id, alias_direccion, nombre, telefono, direccion, latitud, longitud, True))
             direccion_id = cursor.lastrowid
             print(f" Direccin creada con ID: {direccion_id}")
@@ -1938,7 +1938,7 @@ def procesar_pedido():
                 id, id_tercero, fecha, total, metodo_pago, costo_domicilio,
                 direccion_entrega, latitud_entrega, longitud_entrega,
                 estado, tiempo_estimado_entrega
-            ) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, 'pendiente', '30 minutos')
+            ) VALUES (%s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s, %s, %s, 'pendiente', '30 minutos')
         """, (next_pedido_id, tercero_id, total, metodo_pago, costo_domicilio, direccion, latitud, longitud))
         pedido_id = next_pedido_id
         print(f" Pedido creado con ID: {pedido_id}")
@@ -1950,9 +1950,9 @@ def procesar_pedido():
             conn.execute("""
                 UPDATE existencias
                 SET estado = 'pendiente',
-                    pedido_id = ?,
+                    pedido_id = %s,
                     fecha_actualizacion = CURRENT_TIMESTAMP
-                WHERE id_tercero = ?
+                WHERE id_tercero = %s
                 AND estado = 'carrito_temporal'
             """, (pedido_id, tercero_id))
             print(f" OK: Items del carrito actualizados a estado 'pendiente'")
@@ -1967,7 +1967,7 @@ def procesar_pedido():
                     INSERT INTO existencias (
                         id, medicamento_id, fabricante_id, tipo_movimiento,
                         cantidad, fecha, id_tercero, pedido_id
-                    ) VALUES (?, ?, ?, 'salida', ?, CURRENT_TIMESTAMP, ?, ?)
+                    ) VALUES (%s, %s, %s, 'salida', %s, CURRENT_TIMESTAMP, %s, %s)
                 """, (next_existencia_id, item['medicamento_id'], item['fabricante_id'], item['cantidad'], tercero_id, pedido_id))
             print(f" OK: Existencias creadas para usuario anónimo")
 
@@ -15680,6 +15680,369 @@ def eliminar_festivo(festivo_id):
         print(f"Error eliminando festivo: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# --- ENDPOINTS DE COLABORADORES DE ENTREGA ---
+
+@app.route('/api/colaboradores-entrega', methods=['GET'])
+@admin_required
+def get_colaboradores_entrega():
+    """Obtiene lista de colaboradores de entrega"""
+    try:
+        conn = get_db_connection()
+
+        colaboradores = conn.execute("""
+            SELECT
+                c.id,
+                c.tercero_id,
+                c.activo,
+                c.fecha_creacion,
+                t.nombre,
+                t.telefono
+            FROM colaboradores_entrega c
+            INNER JOIN terceros t ON c.tercero_id = t.id
+            ORDER BY c.fecha_creacion DESC
+        """).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'colaboradores': [dict(c) for c in colaboradores]
+        })
+    except Exception as e:
+        print(f"Error obteniendo colaboradores: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores-entrega', methods=['POST'])
+@admin_required
+def agregar_colaborador_entrega():
+    """Agrega un tercero existente como colaborador de entrega"""
+    try:
+        data = request.get_json()
+        tercero_id = data.get('tercero_id')
+
+        if not tercero_id:
+            return jsonify({'ok': False, 'error': 'tercero_id requerido'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar que el tercero existe
+        tercero = conn.execute("SELECT id FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
+        if not tercero:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tercero no encontrado'}), 404
+
+        # Insertar colaborador
+        conn.execute("""
+            INSERT INTO colaboradores_entrega (tercero_id)
+            VALUES (%s)
+        """, (tercero_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Colaborador agregado correctamente'
+        })
+    except Exception as e:
+        print(f"Error agregando colaborador: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores-entrega/crear-y-agregar', methods=['POST'])
+@admin_required
+def crear_y_agregar_colaborador():
+    """Crea un nuevo tercero y lo agrega como colaborador"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        telefono = data.get('telefono', '').strip()
+
+        if not nombre or not telefono:
+            return jsonify({'ok': False, 'error': 'Nombre y teléfono requeridos'}), 400
+
+        conn = get_db_connection()
+
+        # Crear tercero
+        cursor = conn.execute("""
+            INSERT INTO terceros (nombre, telefono)
+            VALUES (%s, %s)
+            RETURNING id
+        """, (nombre, telefono))
+
+        tercero_id = cursor.fetchone()[0]
+
+        # Agregar como colaborador
+        conn.execute("""
+            INSERT INTO colaboradores_entrega (tercero_id)
+            VALUES (%s)
+        """, (tercero_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Repartidor creado y agregado correctamente'
+        })
+    except Exception as e:
+        print(f"Error creando repartidor: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores-entrega/<int:colaborador_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_estado_colaborador(colaborador_id):
+    """Activa o desactiva un colaborador"""
+    try:
+        data = request.get_json()
+        activo = data.get('activo')
+
+        if activo is None:
+            return jsonify({'ok': False, 'error': 'activo requerido'}), 400
+
+        conn = get_db_connection()
+
+        conn.execute("""
+            UPDATE colaboradores_entrega
+            SET activo = %s
+            WHERE id = %s
+        """, (activo, colaborador_id))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Estado actualizado correctamente'
+        })
+    except Exception as e:
+        print(f"Error actualizando estado: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores-entrega/<int:colaborador_id>', methods=['DELETE'])
+@admin_required
+def eliminar_colaborador(colaborador_id):
+    """Elimina un colaborador de entrega"""
+    try:
+        conn = get_db_connection()
+
+        conn.execute("""
+            DELETE FROM colaboradores_entrega WHERE id = %s
+        """, (colaborador_id,))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'message': 'Colaborador eliminado correctamente'
+        })
+    except Exception as e:
+        print(f"Error eliminando colaborador: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/terceros/buscar', methods=['GET'])
+@admin_required
+def buscar_terceros():
+    """Busca terceros por nombre o teléfono"""
+    try:
+        query = request.args.get('q', '').strip()
+
+        if not query:
+            return jsonify({'ok': False, 'error': 'Parámetro q requerido'}), 400
+
+        conn = get_db_connection()
+
+        terceros = conn.execute("""
+            SELECT id, nombre, telefono
+            FROM terceros
+            WHERE LOWER(nombre) LIKE %s OR telefono LIKE %s
+            LIMIT 10
+        """, (f'%{query.lower()}%', f'%{query}%')).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'terceros': [dict(t) for t in terceros]
+        })
+    except Exception as e:
+        print(f"Error buscando terceros: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ==================== SESIONES DE COLABORADORES ====================
+
+@app.route('/api/colaboradores/heartbeat', methods=['POST'])
+def heartbeat_colaborador():
+    """
+    Endpoint para que la app móvil envíe señal de vida cada 2-3 minutos.
+    Actualiza ultima_actividad de la sesión activa del colaborador.
+    """
+    try:
+        # Obtener tercero_id de la sesión
+        tercero_id = session.get('usuario_id')
+
+        if not tercero_id:
+            return jsonify({'ok': False, 'error': 'No hay sesión activa'}), 401
+
+        conn = get_db_connection()
+
+        # Verificar si es colaborador
+        colaborador = conn.execute("""
+            SELECT id FROM colaboradores_entrega
+            WHERE tercero_id = %s AND activo = TRUE
+        """, (tercero_id,)).fetchone()
+
+        if not colaborador:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Usuario no es colaborador activo'}), 403
+
+        # Actualizar ultima_actividad de su sesión activa
+        conn.execute("""
+            UPDATE sesiones_colaboradores
+            SET ultima_actividad = NOW()
+            WHERE colaborador_id = %s
+              AND estado = 'activo'
+              AND logout_timestamp IS NULL
+        """, (colaborador['id'],))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'message': 'Heartbeat registrado'})
+
+    except Exception as e:
+        print(f"Error en heartbeat: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores/iniciar-sesion', methods=['POST'])
+def iniciar_sesion_colaborador():
+    """
+    Crea registro de sesión cuando un colaborador hace login.
+    Se llama después del login exitoso del tercero.
+    """
+    try:
+        tercero_id = session.get('usuario_id')
+
+        if not tercero_id:
+            return jsonify({'ok': False, 'error': 'No hay sesión activa'}), 401
+
+        conn = get_db_connection()
+
+        # Verificar si es colaborador activo
+        colaborador = conn.execute("""
+            SELECT id FROM colaboradores_entrega
+            WHERE tercero_id = %s AND activo = TRUE
+        """, (tercero_id,)).fetchone()
+
+        if not colaborador:
+            conn.close()
+            return jsonify({'ok': True, 'es_colaborador': False})
+
+        # Cerrar sesiones anteriores (en caso de cierre abrupto)
+        conn.execute("""
+            UPDATE sesiones_colaboradores
+            SET logout_timestamp = NOW(),
+                estado = 'inactivo'
+            WHERE colaborador_id = %s
+              AND logout_timestamp IS NULL
+        """, (colaborador['id'],))
+
+        # Crear nueva sesión
+        conn.execute("""
+            INSERT INTO sesiones_colaboradores (colaborador_id)
+            VALUES (%s)
+        """, (colaborador['id'],))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'es_colaborador': True,
+            'mensaje': 'Sesión de colaborador iniciada'
+        })
+
+    except Exception as e:
+        print(f"Error iniciando sesión colaborador: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores/cerrar-sesion', methods=['POST'])
+def cerrar_sesion_colaborador():
+    """
+    Cierra la sesión activa del colaborador al hacer logout.
+    """
+    try:
+        tercero_id = session.get('usuario_id')
+
+        if not tercero_id:
+            return jsonify({'ok': True})  # Ya no hay sesión
+
+        conn = get_db_connection()
+
+        # Obtener colaborador
+        colaborador = conn.execute("""
+            SELECT id FROM colaboradores_entrega
+            WHERE tercero_id = %s
+        """, (tercero_id,)).fetchone()
+
+        if colaborador:
+            # Cerrar sesiones activas
+            conn.execute("""
+                UPDATE sesiones_colaboradores
+                SET logout_timestamp = NOW(),
+                    estado = 'inactivo'
+                WHERE colaborador_id = %s
+                  AND logout_timestamp IS NULL
+            """, (colaborador['id'],))
+
+            conn.commit()
+
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Sesión cerrada'})
+
+    except Exception as e:
+        print(f"Error cerrando sesión colaborador: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/colaboradores/activos', methods=['GET'])
+def contar_colaboradores_activos():
+    """
+    Retorna el número de colaboradores con sesión activa (logueados).
+    Considera timeout de 5 minutos sin heartbeat.
+    """
+    try:
+        conn = get_db_connection()
+
+        resultado = conn.execute("""
+            SELECT COUNT(*) as total
+            FROM sesiones_colaboradores
+            WHERE estado = 'activo'
+              AND logout_timestamp IS NULL
+              AND ultima_actividad > NOW() - INTERVAL '5 minutes'
+        """).fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'colaboradores_activos': resultado['total']
+        })
+
+    except Exception as e:
+        print(f"Error contando colaboradores activos: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

@@ -2029,10 +2029,27 @@ def procesar_pedido():
         try:
             conn = get_db_connection()
 
+            # Construir lista de productos para el mensaje al cliente
+            if usar_db:
+                items_lista = "\n".join([
+                    f"• {item['nombre_comercial']} x{item['cantidad']} - ${float(item['precio_total']):,.0f}"
+                    for item in items_carrito
+                ])
+            else:
+                items_lista = "\n".join([
+                    f"• {item['nombre']} x{item['cantidad']} - ${item['precio'] * item['cantidad']:,.0f}"
+                    for item in items_carrito
+                ])
+
             mensaje_cliente = f"""¡Hola {nombre}! 👋
 
 Tu pedido #{pedido_id} ha sido recibido exitosamente y está en proceso.
 
+📋 Productos:
+{items_lista}
+
+💰 Subtotal: ${subtotal:,}
+🚚 Domicilio: ${costo_domicilio:,}
 📦 Total: ${total:,}
 💳 Método de pago: {metodo_pago.upper()}
 🕐 Tiempo estimado: 30 minutos

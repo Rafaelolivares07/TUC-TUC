@@ -1950,8 +1950,7 @@ def procesar_pedido():
             conn.execute("""
                 UPDATE existencias
                 SET estado = 'pendiente',
-                    pedido_id = %s,
-                    fecha_actualizacion = CURRENT_TIMESTAMP
+                    pedido_id = %s
                 WHERE id_tercero = %s
                 AND estado = 'carrito_temporal'
             """, (pedido_id, tercero_id))

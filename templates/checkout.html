@@ -434,7 +434,7 @@
     </div>
 
     <script>
-        let carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+        let carrito = [];
         let metodoSeleccionado = null;
         let telefonoGuardado = localStorage.getItem('telefono_usuario');
         let nombreGuardado = localStorage.getItem('nombre_usuario');
@@ -443,10 +443,61 @@
         let terceroExistente = null;
         let requiereVerificacion = false;
 
-        if (carrito.length === 0) {
-            alert('El carrito está vacío');
-            window.location.href = '/tienda';
+        // 🆕 Cargar carrito desde API (para usuarios logueados) o localStorage
+        async function cargarCarritoInicial() {
+            try {
+                // Verificar si el usuario está logueado
+                const authResponse = await fetch('/api/carrito/check-auth');
+                const authData = await authResponse.json();
+
+                if (!authData.is_logged_in) {
+                    // Usuario NO logueado → cargar desde localStorage
+                    carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+                } else {
+                    // Usuario logueado → cargar desde API (DB)
+                    const response = await fetch('/api/carrito');
+                    const data = await response.json();
+
+                    if (data.ok && data.items && data.items.length > 0) {
+                        // Convertir formato de API a formato esperado
+                        carrito = data.items.map(item => ({
+                            medicamento_id: item.id_medicamento,
+                            fabricante_id: item.fabricante_id || null,
+                            nombre: item.nombre_comercial,
+                            fabricante: item.nombre_generico || '',
+                            cantidad: item.cantidad,
+                            precio: item.precio_unitario
+                        }));
+                    } else {
+                        carrito = [];
+                    }
+                }
+
+                // Verificar si el carrito está vacío
+                if (carrito.length === 0) {
+                    alert('El carrito está vacío');
+                    window.location.href = '/tienda';
+                    return;
+                }
+
+                // Continuar con la inicialización del checkout
+                actualizarResumen();
+
+            } catch (error) {
+                console.error('Error al cargar carrito:', error);
+                // Fallback: intentar desde localStorage
+                carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
+                if (carrito.length === 0) {
+                    alert('El carrito está vacío');
+                    window.location.href = '/tienda';
+                    return;
+                }
+                actualizarResumen();
+            }
         }
+
+        // Inicializar carga del carrito
+        cargarCarritoInicial();
 
         // Auto-rellenar teléfono si existe en localStorage
         if (telefonoGuardado) {
@@ -821,8 +872,7 @@
             }
         });
 
-        // Inicializar
-        actualizarResumen();
+        // Inicializar - Ya no se llama aquí, se llama desde cargarCarritoInicial()
     </script>
 </body>
 </html>

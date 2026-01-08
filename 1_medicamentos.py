@@ -2987,7 +2987,7 @@ def temporal_schema_usuarios_terceros():
         # 3. Sample de USUARIOS con rol admin
         sample_usuarios = conn.execute("""
             SELECT *
-            FROM "USUARIOS"
+            FROM USUARIOS
             WHERE rol = 'Administrador'
             LIMIT 3
         """).fetchall()

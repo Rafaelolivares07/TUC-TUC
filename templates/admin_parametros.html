@@ -1148,7 +1148,7 @@
                 }
 
                 // Cargar IDs seleccionados desde parámetros
-                const resParam = await fetch('/api/parametro-sistema/admins_chat_notificaciones');
+                const resParam = await fetch('/api/parametro/admins_chat_notificaciones');
                 const dataParam = await resParam.json();
 
                 let idsSeleccionados = [];
@@ -1181,7 +1181,7 @@
             const valorTexto = idsSeleccionados.join(',');
 
             try {
-                const res = await fetch('/api/parametro-sistema/admins_chat_notificaciones', {
+                const res = await fetch('/api/parametro/admins_chat_notificaciones', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ valor: valorTexto })

@@ -1515,7 +1515,7 @@ def obtener_carrito():
             FROM existencias e
             JOIN medicamentos m ON e.medicamento_id = m.id
             WHERE e.estado = 'carrito_temporal'
-            AND e.id_tercero = ?
+            AND e.id_tercero = %s
             ORDER BY e.id DESC
         """, (usuario_id,)).fetchall()
 

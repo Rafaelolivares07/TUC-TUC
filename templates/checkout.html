@@ -775,8 +775,8 @@
                     // Nota: Para usuarios logueados, el backend ya cambió estado='carrito_temporal'
                     // a 'pendiente', por lo que el carrito aparecerá vacío automáticamente
 
-                    // Redirigir a confirmación
-                    window.location.href = '/tienda/confirmacion';
+                    // Redirigir a confirmación con el ID del pedido
+                    window.location.href = `/tienda/confirmacion?pedido=${data.pedido_id}`;
                 } else {
                     mostrarAlerta('Error: ' + (data.error || 'No se pudo procesar el pedido'), 'warning');
                     btnConfirmar.disabled = false;

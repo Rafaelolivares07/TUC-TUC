@@ -2959,7 +2959,7 @@ def test_sintoma():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
-@app.route('/api/temporal-crear-parametro-admins-chat', methods=['POST'])
+@app.route('/api/temporal-crear-parametro-admins-chat', methods=['GET'])
 def temporal_crear_parametro_admins_chat():
     """ENDPOINT TEMPORAL: Crear parámetro admins_chat_notificaciones"""
     try:

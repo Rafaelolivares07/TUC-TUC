@@ -2029,6 +2029,20 @@ def procesar_pedido():
         try:
             conn = get_db_connection()
 
+            # Obtener admin para notificaciones desde parámetros
+            param_row = conn.execute("""
+                SELECT valor_texto FROM parametros_sistema
+                WHERE nombre = 'admins_chat_notificaciones'
+            """).fetchone()
+
+            if not param_row or not param_row['valor_texto']:
+                print("⚠️ No hay admins configurados para notificaciones. Usando ID por defecto (16)")
+                admin_id = 16
+            else:
+                # Tomar el primer ID de la lista
+                ids_lista = param_row['valor_texto'].split(',')
+                admin_id = int(ids_lista[0].strip())
+
             # Construir lista de productos para el mensaje al cliente
             if usar_db:
                 items_lista = "\n".join([
@@ -2056,18 +2070,20 @@ Tu pedido #{pedido_id} ha sido recibido exitosamente y está en proceso.
 
 Te notificaremos cuando tu pedido esté listo para entrega. ¡Gracias por tu compra!"""
 
-            # Enviar mensaje desde el admin (ID 16) al cliente
+            # Enviar mensaje desde el admin al cliente
             conn.execute('''
                 INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, estado, fecha)
                 VALUES (%s, %s, %s, 'texto', 'pendiente', CURRENT_TIMESTAMP)
-            ''', (16, tercero_id, mensaje_cliente))
+            ''', (admin_id, tercero_id, mensaje_cliente))
 
             conn.commit()
             conn.close()
-            print(f"✅ Mensaje de confirmación enviado al cliente {tercero_id}")
+            print(f"✅ Mensaje de confirmación enviado al cliente {tercero_id} desde admin {admin_id}")
 
         except Exception as e:
             print(f"⚠️ Error enviando mensaje al cliente: {e}")
+            import traceback
+            traceback.print_exc()
             # No fallar el pedido si el mensaje falla
 
         return jsonify({
@@ -15919,6 +15935,73 @@ def buscar_terceros_colaboradores():
         })
     except Exception as e:
         print(f"Error buscando terceros: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/terceros/admins', methods=['GET'])
+@admin_required
+def obtener_admins():
+    """Obtiene lista de terceros que son administradores"""
+    try:
+        conn = get_db_connection()
+
+        # Buscar terceros con rol de administrador
+        admins = conn.execute("""
+            SELECT t.id, t.nombre, t.telefono
+            FROM terceros t
+            INNER JOIN usuarios u ON t.id = u.tercero_id
+            WHERE u.rol = 'Administrador'
+            ORDER BY t.nombre
+        """).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'admins': [dict(a) for a in admins]
+        })
+    except Exception as e:
+        print(f"Error obteniendo admins: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin-chat-principal', methods=['GET'])
+def obtener_admin_chat_principal():
+    """Obtiene el ID y nombre del admin principal para chat (primer admin de la lista de notificaciones)"""
+    try:
+        conn = get_db_connection()
+
+        # Obtener parámetro de admins
+        param_row = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema
+            WHERE nombre = 'admins_chat_notificaciones'
+        """).fetchone()
+
+        if not param_row or not param_row['valor_texto']:
+            # Fallback: ID 16
+            admin_id = 16
+        else:
+            # Tomar el primer ID
+            ids_lista = param_row['valor_texto'].split(',')
+            admin_id = int(ids_lista[0].strip())
+
+        # Obtener nombre del admin
+        admin_info = conn.execute("""
+            SELECT nombre FROM terceros WHERE id = %s
+        """, (admin_id,)).fetchone()
+
+        conn.close()
+
+        if not admin_info:
+            return jsonify({'ok': False, 'error': 'Admin no encontrado'}), 404
+
+        return jsonify({
+            'ok': True,
+            'admin_id': admin_id,
+            'admin_nombre': admin_info['nombre']
+        })
+    except Exception as e:
+        print(f"Error obteniendo admin principal: {e}")
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

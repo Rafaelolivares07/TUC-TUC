@@ -453,6 +453,120 @@
                 </div>
             </div>
 
+            <!-- Sección 4: Repartidores -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">🚴 Repartidores</h3>
+                        <p class="text-sm text-gray-500 mt-1">Gestiona repartidores y generación de rutas</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white">
+
+                        <!-- Agregar Repartidor -->
+                        <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                            <h4 class="font-semibold text-gray-800 mb-3">Agregar Nuevo Repartidor</h4>
+
+                            <!-- Buscar tercero existente -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Buscar tercero existente</label>
+                                <div class="flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="buscar-tercero"
+                                        placeholder="Nombre o teléfono..."
+                                        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <button onclick="buscarTercero()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium">
+                                        Buscar
+                                    </button>
+                                </div>
+                                <div id="resultados-busqueda" class="mt-2"></div>
+                            </div>
+
+                            <!-- O crear nuevo tercero -->
+                            <div class="border-t pt-4 mt-4">
+                                <p class="text-sm text-gray-600 mb-3">O crear nuevo repartidor:</p>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <input type="text" id="nuevo-nombre" placeholder="Nombre completo" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <input type="tel" id="nuevo-telefono" placeholder="Teléfono" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <button onclick="crearYAgregarColaborador()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium">
+                                        + Crear y Agregar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lista de Repartidores -->
+                        <div>
+                            <h4 class="font-semibold text-gray-800 mb-3">Repartidores Activos</h4>
+                            <div id="lista-colaboradores" class="space-y-2">
+                                <!-- Se llenará dinámicamente -->
+                            </div>
+                        </div>
+
+                        <!-- Info de rutas -->
+                        <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <p class="text-sm text-gray-700">
+                                <strong>Generación de rutas:</strong> El sistema optimiza rutas según pedidos disponibles y repartidores activos (logeados).
+                                El número de rutas depende del cálculo logístico que cumple con los estándares de tiempo.
+                                Cada ruta incluye paradas de compra en proveedores seguidas de entregas a clientes.
+                            </p>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 5: Administradores de Chat -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">💬 Administradores de Chat</h3>
+                        <p class="text-sm text-gray-500 mt-1">Asigna admins que recibirán notificaciones de pedidos</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white">
+
+                        <div class="mb-6">
+                            <p class="text-sm text-gray-600 mb-4">
+                                Los administradores seleccionados recibirán mensajes automáticos cuando los clientes realicen pedidos.
+                                Los mensajes se enviarán desde la cuenta del primer administrador de la lista.
+                            </p>
+
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Selecciona administradores</label>
+                            <select
+                                id="select-admins-chat"
+                                multiple
+                                size="5"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                style="min-height: 150px;">
+                                <!-- Se llenará dinámicamente con usuarios admin -->
+                            </select>
+                            <p class="text-xs text-gray-500 mt-2">Mantén presionada la tecla Ctrl (Cmd en Mac) para seleccionar múltiples admins</p>
+                        </div>
+
+                        <button
+                            onclick="guardarAdminsChat()"
+                            class="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition font-semibold">
+                            💾 Guardar Administradores
+                        </button>
+
+                        <div id="mensaje-admins-chat" class="mt-4 hidden">
+                            <!-- Mensajes de éxito/error -->
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -848,12 +962,264 @@
             }
         }
 
+        // ==================== COLABORADORES DE ENTREGA ====================
+
+        async function cargarColaboradores() {
+            try {
+                const res = await fetch('/api/colaboradores-entrega');
+                const data = await res.json();
+
+                if (data.ok && data.colaboradores) {
+                    renderizarColaboradores(data.colaboradores);
+                }
+            } catch (error) {
+                console.error('Error cargando colaboradores:', error);
+            }
+        }
+
+        function renderizarColaboradores(colaboradores) {
+            const container = document.getElementById('lista-colaboradores');
+
+            if (colaboradores.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-8">No hay repartidores registrados</p>';
+                return;
+            }
+
+            container.innerHTML = colaboradores.map(c => `
+                <div class="festivo-item">
+                    <div>
+                        <span class="font-semibold text-gray-800">${c.nombre}</span>
+                        <span class="text-gray-600 ml-3">- ${c.telefono}</span>
+                        ${c.activo ? '<span class="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Activo</span>' : '<span class="ml-2 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">Inactivo</span>'}
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="toggleEstadoColaborador(${c.id}, ${c.activo})" class="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded transition font-medium">
+                            ${c.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button onclick="eliminarColaborador(${c.id})" class="text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1 rounded transition font-medium">
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function buscarTercero() {
+            const query = document.getElementById('buscar-tercero').value.trim();
+            if (!query) {
+                alert('Ingresa un nombre o teléfono para buscar');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/terceros/buscar?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+
+                const container = document.getElementById('resultados-busqueda');
+                if (data.ok && data.terceros.length > 0) {
+                    container.innerHTML = data.terceros.map(t => `
+                        <div class="p-2 bg-white border border-gray-200 rounded mt-1 flex justify-between items-center">
+                            <span class="text-sm">${t.nombre} - ${t.telefono || 'Sin teléfono'}</span>
+                            <button onclick="agregarColaborador(${t.id})" class="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                                Agregar
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p class="text-sm text-gray-500 mt-1">No se encontraron resultados</p>';
+                }
+            } catch (error) {
+                console.error('Error buscando tercero:', error);
+                alert('Error al buscar tercero');
+            }
+        }
+
+        async function agregarColaborador(terceroId) {
+            try {
+                const res = await fetch('/api/colaboradores-entrega', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tercero_id: terceroId })
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    document.getElementById('buscar-tercero').value = '';
+                    document.getElementById('resultados-busqueda').innerHTML = '';
+                    cargarColaboradores();
+                    alert('Colaborador agregado correctamente');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error agregando colaborador:', error);
+                alert('Error al agregar colaborador');
+            }
+        }
+
+        async function crearYAgregarColaborador() {
+            const nombre = document.getElementById('nuevo-nombre').value.trim();
+            const telefono = document.getElementById('nuevo-telefono').value.trim();
+
+            if (!nombre || !telefono) {
+                alert('Por favor completa nombre y teléfono');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/colaboradores-entrega/crear-y-agregar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, telefono })
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    document.getElementById('nuevo-nombre').value = '';
+                    document.getElementById('nuevo-telefono').value = '';
+                    cargarColaboradores();
+                    alert('Repartidor creado y agregado correctamente');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error creando repartidor:', error);
+                alert('Error al crear repartidor');
+            }
+        }
+
+        async function toggleEstadoColaborador(id, activoActual) {
+            try {
+                const res = await fetch(`/api/colaboradores-entrega/${id}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activo: !activoActual })
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    cargarColaboradores();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error cambiando estado:', error);
+                alert('Error al cambiar estado');
+            }
+        }
+
+        async function eliminarColaborador(id) {
+            if (!confirm('¿Estás seguro de eliminar este colaborador?')) return;
+
+            try {
+                const res = await fetch(`/api/colaboradores-entrega/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await res.json();
+
+                if (data.ok) {
+                    cargarColaboradores();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error eliminando colaborador:', error);
+                alert('Error al eliminar colaborador');
+            }
+        }
+
+        // ==========================================
+        // FUNCIONES PARA ADMINISTRADORES DE CHAT
+        // ==========================================
+
+        async function cargarAdminsChat() {
+            try {
+                // Cargar lista de todos los terceros con rol admin
+                const resAdmins = await fetch('/api/terceros/admins');
+                const dataAdmins = await resAdmins.json();
+
+                if (!dataAdmins.ok) {
+                    console.error('Error cargando admins:', dataAdmins.error);
+                    return;
+                }
+
+                // Cargar IDs seleccionados desde parámetros
+                const resParam = await fetch('/api/parametro-sistema/admins_chat_notificaciones');
+                const dataParam = await resParam.json();
+
+                let idsSeleccionados = [];
+                if (dataParam.ok && dataParam.valor) {
+                    idsSeleccionados = dataParam.valor.split(',').map(id => id.trim());
+                }
+
+                // Llenar el select
+                const select = document.getElementById('select-admins-chat');
+                select.innerHTML = dataAdmins.admins.map(admin => `
+                    <option value="${admin.id}" ${idsSeleccionados.includes(admin.id.toString()) ? 'selected' : ''}>
+                        ${admin.nombre} - ${admin.telefono}
+                    </option>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error cargando administradores de chat:', error);
+            }
+        }
+
+        async function guardarAdminsChat() {
+            const select = document.getElementById('select-admins-chat');
+            const idsSeleccionados = Array.from(select.selectedOptions).map(opt => opt.value);
+
+            if (idsSeleccionados.length === 0) {
+                alert('Debes seleccionar al menos un administrador');
+                return;
+            }
+
+            const valorTexto = idsSeleccionados.join(',');
+
+            try {
+                const res = await fetch('/api/parametro-sistema/admins_chat_notificaciones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ valor: valorTexto })
+                });
+
+                const data = await res.json();
+
+                const mensajeDiv = document.getElementById('mensaje-admins-chat');
+                mensajeDiv.classList.remove('hidden');
+
+                if (data.ok) {
+                    mensajeDiv.innerHTML = `
+                        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">
+                            ✅ Administradores guardados correctamente
+                        </div>
+                    `;
+                    setTimeout(() => mensajeDiv.classList.add('hidden'), 3000);
+                } else {
+                    mensajeDiv.innerHTML = `
+                        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+                            ❌ Error: ${data.error}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error guardando admins:', error);
+                alert('Error al guardar');
+            }
+        }
+
         // Listener para mostrar/ocultar input de días periódicos
         document.addEventListener('DOMContentLoaded', () => {
             cargarHorarios();
             cargarFestivos();
             cargarParametrosPrecios();
             cargarParametrosRevisionCotizaciones();
+            cargarColaboradores();
+            cargarAdminsChat();
 
             document.getElementById('frecuencia_alerta_cotizaciones').addEventListener('change', toggleDiasPeriodico);
         });

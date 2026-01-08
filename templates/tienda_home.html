@@ -2956,19 +2956,34 @@
                 }
             }
 
-            // Abrir modal de chat
-            document.getElementById('modal-chat').classList.add('active');
+            // Obtener admin principal desde parámetros
+            try {
+                const adminResponse = await fetch('/api/admin-chat-principal');
+                const adminData = await adminResponse.json();
 
-            // Abrir conversación directa con la empresa (ID 16)
-            abrirConversacion(16, 'Tuc Tuc');
-
-            // Conectar búsqueda
-            setTimeout(() => {
-                const inputBuscar = document.getElementById('input-buscar-usuario');
-                if (inputBuscar) {
-                    inputBuscar.addEventListener('input', buscarUsuarios);
+                if (!adminData.ok) {
+                    console.error('Error obteniendo admin principal:', adminData.error);
+                    alert('No se pudo conectar con el chat. Intenta más tarde.');
+                    return;
                 }
-            }, 100);
+
+                // Abrir modal de chat
+                document.getElementById('modal-chat').classList.add('active');
+
+                // Abrir conversación directa con el admin principal
+                abrirConversacion(adminData.admin_id, adminData.admin_nombre);
+
+                // Conectar búsqueda
+                setTimeout(() => {
+                    const inputBuscar = document.getElementById('input-buscar-usuario');
+                    if (inputBuscar) {
+                        inputBuscar.addEventListener('input', buscarUsuarios);
+                    }
+                }, 100);
+            } catch (error) {
+                console.error('Error al obtener admin:', error);
+                alert('Error al abrir chat. Intenta más tarde.');
+            }
         }
 
         function cargarConversaciones() {

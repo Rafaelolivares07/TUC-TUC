@@ -2959,6 +2959,35 @@ def test_sintoma():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
+@app.route('/api/temporal-listar-tablas', methods=['GET'])
+def temporal_listar_tablas():
+    """ENDPOINT TEMPORAL: Listar todas las tablas de PostgreSQL"""
+    try:
+        conn = get_db_connection()
+
+        tablas = conn.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'total': len(tablas),
+            'tablas': [t['table_name'] for t in tablas]
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/temporal-crear-parametro-admins-chat', methods=['GET'])
 def temporal_crear_parametro_admins_chat():
     """ENDPOINT TEMPORAL: Crear parámetro admins_chat_notificaciones"""

@@ -2988,24 +2988,31 @@ def temporal_listar_tablas():
         }), 500
 
 
-@app.route('/api/temporal-crear-parametro-admins-chat', methods=['GET'])
-def temporal_crear_parametro_admins_chat():
-    """ENDPOINT TEMPORAL: Crear parámetro admins_chat_notificaciones"""
+@app.route('/api/temporal-crear-tabla-parametros-sistema', methods=['GET'])
+def temporal_crear_tabla_parametros_sistema():
+    """ENDPOINT TEMPORAL: Crear tabla parametros_sistema e insertar parámetro inicial"""
     try:
         conn = get_db_connection()
+        pasos = []
 
-        # Verificar si ya existe
-        existe = conn.execute("""
-            SELECT nombre FROM parametros_sistema
-            WHERE nombre = 'admins_chat_notificaciones'
-        """).fetchone()
+        # 1. Crear tabla parametros_sistema
+        pasos.append("Creando tabla parametros_sistema...")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS parametros_sistema (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(255) UNIQUE NOT NULL,
+                valor_numerico NUMERIC,
+                valor_texto TEXT,
+                valor_booleano BOOLEAN,
+                tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('numerico', 'texto', 'booleano')),
+                descripcion TEXT,
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        pasos.append("✅ Tabla parametros_sistema creada")
 
-        if existe:
-            mensaje = "⚠️ El parámetro ya existe. Actualizando valor..."
-        else:
-            mensaje = "✅ Creando nuevo parámetro..."
-
-        # Insertar o actualizar
+        # 2. Insertar parámetro admins_chat_notificaciones
+        pasos.append("Insertando parámetro admins_chat_notificaciones...")
         conn.execute("""
             INSERT INTO parametros_sistema (nombre, valor_texto, tipo, descripcion, fecha_actualizacion)
             VALUES (
@@ -3022,8 +3029,9 @@ def temporal_crear_parametro_admins_chat():
                 descripcion = 'IDs de administradores que reciben notificaciones de pedidos (separados por comas)',
                 fecha_actualizacion = CURRENT_TIMESTAMP
         """)
+        pasos.append("✅ Parámetro admins_chat_notificaciones insertado")
 
-        # Verificar que se creó correctamente
+        # 3. Verificar que se creó correctamente
         verificar = conn.execute("""
             SELECT nombre, valor_texto, tipo, descripcion
             FROM parametros_sistema
@@ -3035,7 +3043,7 @@ def temporal_crear_parametro_admins_chat():
 
         return jsonify({
             'ok': True,
-            'mensaje': mensaje,
+            'pasos': pasos,
             'parametro_creado': dict(verificar) if verificar else None
         })
     except Exception as e:

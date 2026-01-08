@@ -2959,6 +2959,65 @@ def test_sintoma():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
+@app.route('/api/temporal-crear-parametro-admins-chat', methods=['POST'])
+def temporal_crear_parametro_admins_chat():
+    """ENDPOINT TEMPORAL: Crear parámetro admins_chat_notificaciones"""
+    try:
+        conn = get_db_connection()
+
+        # Verificar si ya existe
+        existe = conn.execute("""
+            SELECT nombre FROM parametros_sistema
+            WHERE nombre = 'admins_chat_notificaciones'
+        """).fetchone()
+
+        if existe:
+            mensaje = "⚠️ El parámetro ya existe. Actualizando valor..."
+        else:
+            mensaje = "✅ Creando nuevo parámetro..."
+
+        # Insertar o actualizar
+        conn.execute("""
+            INSERT INTO parametros_sistema (nombre, valor_texto, tipo, descripcion, fecha_actualizacion)
+            VALUES (
+                'admins_chat_notificaciones',
+                '16',
+                'texto',
+                'IDs de administradores que reciben notificaciones de pedidos (separados por comas)',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (nombre) DO UPDATE
+            SET
+                valor_texto = '16',
+                tipo = 'texto',
+                descripcion = 'IDs de administradores que reciben notificaciones de pedidos (separados por comas)',
+                fecha_actualizacion = CURRENT_TIMESTAMP
+        """)
+
+        # Verificar que se creó correctamente
+        verificar = conn.execute("""
+            SELECT nombre, valor_texto, tipo, descripcion
+            FROM parametros_sistema
+            WHERE nombre = 'admins_chat_notificaciones'
+        """).fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': mensaje,
+            'parametro_creado': dict(verificar) if verificar else None
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/debug-usuario/<int:user_id>', methods=['GET'])
 def debug_usuario(user_id):
     """ENDPOINT TEMPORAL: Ver datos de un usuario"""

@@ -1652,8 +1652,7 @@ def actualizar_cantidad_carrito():
         conn.execute("""
             UPDATE existencias
             SET cantidad = ?,
-                precio_total = ?,
-                fecha_actualizacion = CURRENT_TIMESTAMP
+                precio_total = ?
             WHERE id = ?
         """, (nueva_cantidad, nuevo_total, item_id))
 

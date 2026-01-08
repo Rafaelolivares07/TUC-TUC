@@ -2959,6 +2959,64 @@ def test_sintoma():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
+@app.route('/api/temporal-schema-usuarios-terceros', methods=['GET'])
+def temporal_schema_usuarios_terceros():
+    """ENDPOINT TEMPORAL: Ver estructura y relación entre usuarios y terceros"""
+    try:
+        conn = get_db_connection()
+        resultado = {}
+
+        # 1. Schema de USUARIOS
+        schema_usuarios = conn.execute("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'USUARIOS'
+            ORDER BY ordinal_position
+        """).fetchall()
+        resultado['schema_usuarios'] = [dict(c) for c in schema_usuarios]
+
+        # 2. Schema de terceros
+        schema_terceros = conn.execute("""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = 'terceros'
+            ORDER BY ordinal_position
+        """).fetchall()
+        resultado['schema_terceros'] = [dict(c) for c in schema_terceros]
+
+        # 3. Sample de USUARIOS con rol admin
+        sample_usuarios = conn.execute("""
+            SELECT *
+            FROM "USUARIOS"
+            WHERE rol = 'Administrador'
+            LIMIT 3
+        """).fetchall()
+        resultado['sample_usuarios_admin'] = [dict(u) for u in sample_usuarios]
+
+        # 4. Sample de terceros (primeros 5)
+        sample_terceros = conn.execute("""
+            SELECT *
+            FROM terceros
+            ORDER BY id
+            LIMIT 5
+        """).fetchall()
+        resultado['sample_terceros'] = [dict(t) for t in sample_terceros]
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'resultado': resultado
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 @app.route('/api/debug-usuario/<int:user_id>', methods=['GET'])
 def debug_usuario(user_id):
     """ENDPOINT TEMPORAL: Ver datos de un usuario"""

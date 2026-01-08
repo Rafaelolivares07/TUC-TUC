@@ -15945,13 +15945,14 @@ def obtener_admins():
     try:
         conn = get_db_connection()
 
-        # Buscar terceros con rol de administrador
+        # Obtener terceros que pueden ser administradores de chat
         admins = conn.execute("""
-            SELECT t.id, t.nombre, t.telefono
-            FROM terceros t
-            INNER JOIN usuarios u ON t.id = u.tercero_id
-            WHERE u.rol = 'Administrador'
-            ORDER BY t.nombre
+            SELECT id, nombre, telefono
+            FROM terceros
+            WHERE nombre IS NOT NULL
+            AND nombre != ''
+            ORDER BY nombre
+            LIMIT 50
         """).fetchall()
 
         conn.close()

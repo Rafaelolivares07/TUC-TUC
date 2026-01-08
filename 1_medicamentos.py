@@ -2227,7 +2227,7 @@ def confirmacion():
         SELECT p.*, t.nombre as cliente_nombre, t.telefono, t.direccion
         FROM pedidos p
         INNER JOIN terceros t ON p.id_tercero = t.id
-        WHERE p.id = ?
+        WHERE p.id = %s
     """, (pedido_id,)).fetchone()
     conn.close()
     

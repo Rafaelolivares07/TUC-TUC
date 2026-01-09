@@ -1068,10 +1068,15 @@ def enviar_codigo_whatsapp():
         session['codigo_telefono'] = telefono
         session['codigo_timestamp'] = time.time()
 
-        # Enviar por WhatsApp
-        conn = get_db_connection()
-        config = conn.execute('SELECT whatsapp_numero FROM "CONFIGURACION_SISTEMA" LIMIT 1').fetchone()
-        conn.close()
+        # Enviar por WhatsApp usando PostgreSQL nativo
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        pg_conn = psycopg2.connect(database_url)
+        cursor = pg_conn.cursor()
+        cursor.execute('SELECT whatsapp_numero FROM "CONFIGURACION_SISTEMA" LIMIT 1')
+        config = cursor.fetchone()
+        cursor.close()
+        pg_conn.close()
 
         numero_destino = telefono if not telefono.startswith('+') else telefono[1:]
         mensaje = f" Tu cdigo de verificacin TUC-TUC es: *{codigo}*\n\nVlido por 10 minutos."

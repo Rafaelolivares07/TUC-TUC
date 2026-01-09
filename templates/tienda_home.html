@@ -5398,6 +5398,44 @@
 
                     // Abrir pastillero automáticamente
                     abrirPastillero();
+                } else if (data.requiere_verificacion) {
+                    // Cuenta existente - requiere verificación por Telegram
+                    btnRegistrar.disabled = false;
+                    btnRegistrar.textContent = 'Crear cuenta';
+
+                    // Enviar código de verificación
+                    const respCodigo = await fetch('/api/enviar-codigo-whatsapp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telefono })
+                    });
+
+                    const dataCodigo = await respCodigo.json();
+
+                    if (dataCodigo.ok) {
+                        // Pedir código al usuario
+                        const codigo = prompt(`${data.mensaje}\n\nIngresa el código de 6 dígitos que recibiste por Telegram:`);
+
+                        if (codigo) {
+                            // Verificar código
+                            const respVerif = await fetch('/api/verificar-codigo', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ telefono, codigo })
+                            });
+
+                            const dataVerif = await respVerif.json();
+
+                            if (dataVerif.ok) {
+                                // Código correcto - reintentar crear cuenta
+                                registrarUsuarioPastillero();
+                            } else {
+                                alert('Código incorrecto: ' + (dataVerif.error || 'Inténtalo de nuevo'));
+                            }
+                        }
+                    } else {
+                        alert('Error al enviar código: ' + (dataCodigo.error || 'Inténtalo de nuevo'));
+                    }
                 } else {
                     alert('Error: ' + (data.error || 'No se pudo crear la cuenta'));
                     btnRegistrar.disabled = false;

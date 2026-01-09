@@ -13800,6 +13800,16 @@ def api_crear_usuario_pastillero():
             tercero_id = tercero_existente['id']
             print(f"OK: Tercero existente encontrado: ID {tercero_id} ({tercero_existente['nombre']})")
 
+            # SEGURIDAD: Verificar que el teléfono esté verificado en esta sesión
+            telefono_verificado = session.get('telefono_verificado')
+            if telefono_verificado != telefono:
+                conn.close()
+                return jsonify({
+                    'ok': False,
+                    'requiere_verificacion': True,
+                    'mensaje': 'Este número ya tiene una cuenta. Por favor verifica tu identidad con el código que te enviamos por Telegram.'
+                }), 403
+
             # Actualizar nombre si cambió
             if tercero_existente['nombre'] != nombre:
                 conn.execute("""

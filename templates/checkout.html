@@ -726,13 +726,16 @@
             btnConfirmar.innerHTML = '<span class="spinner"></span> Procesando...';
 
             try {
-                // Verificar si necesita código WhatsApp
+                // Verificar si necesita código de verificación por Telegram
                 const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
                 const domicilio = total >= 50000 ? 0 : 5000;
                 const totalFinal = total + domicilio;
 
-                // Si el total es mayor a $100,000 o si es un tercero existente accediendo desde nuevo dispositivo
-                const necesitaCodigo = totalFinal >= 100000 || (terceroExistente && !localStorage.getItem('telefono_usuario'));
+                // Necesita código si:
+                // 1. El total es mayor a $100,000 (verificación por monto alto)
+                // 2. O si es un tercero existente accediendo desde nuevo dispositivo (recuperación de cuenta)
+                const telefonoGuardado = localStorage.getItem('telefono_usuario');
+                const necesitaCodigo = totalFinal >= 100000 || (terceroExistente !== null && telefonoGuardado !== telefono);
 
                 if (necesitaCodigo && !requiereVerificacion) {
                     // Enviar código WhatsApp

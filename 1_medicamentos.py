@@ -403,6 +403,70 @@ def enviar_notificacion_telegram(mensaje):
         return False
 
 
+def enviar_telegram(telefono, mensaje):
+    """
+    Envía un mensaje de Telegram a un usuario identificado por su teléfono.
+    Busca el telegram_chat_id asociado al teléfono en la tabla terceros.
+    Retorna True si se envió correctamente, False si falló.
+    """
+    try:
+        # Buscar el telegram_chat_id del tercero con ese teléfono
+        import psycopg2
+        database_url = os.getenv('DATABASE_URL')
+        pg_conn = psycopg2.connect(database_url)
+        cursor = pg_conn.cursor()
+
+        cursor.execute('''
+            SELECT telegram_chat_id FROM terceros
+            WHERE telefono = %s AND telegram_chat_id IS NOT NULL
+            LIMIT 1
+        ''', (telefono,))
+        result = cursor.fetchone()
+
+        if not result or not result[0]:
+            print(f"⚠️ No se encontró telegram_chat_id para teléfono {telefono}")
+            cursor.close()
+            pg_conn.close()
+            return False
+
+        chat_id = result[0]
+
+        # Obtener token de Telegram
+        cursor.execute('SELECT telegram_token FROM "CONFIGURACION_SISTEMA" LIMIT 1')
+        config = cursor.fetchone()
+        cursor.close()
+        pg_conn.close()
+
+        if not config or not config[0]:
+            print("⚠️ Token de Telegram no configurado")
+            return False
+
+        token = config[0]
+
+        # Enviar mensaje a Telegram
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': mensaje,
+            'parse_mode': 'Markdown'
+        }
+
+        response = requests.post(url, json=data, timeout=10)
+
+        if response.status_code == 200:
+            print(f"✅ Mensaje Telegram enviado a {telefono} (chat_id: {chat_id})")
+            return True
+        else:
+            print(f"❌ Error enviando Telegram: {response.status_code} - {response.text}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Excepción enviando Telegram: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 # -------------------------------------------------------------------
 # --- FUNCIN DE RECORDATORIOS AUTOMTICOS (APScheduler) ---
 # -------------------------------------------------------------------
@@ -1068,23 +1132,15 @@ def enviar_codigo_whatsapp():
         session['codigo_telefono'] = telefono
         session['codigo_timestamp'] = time.time()
 
-        # Enviar por WhatsApp usando PostgreSQL nativo
-        import psycopg2
-        database_url = os.getenv('DATABASE_URL')
-        pg_conn = psycopg2.connect(database_url)
-        cursor = pg_conn.cursor()
-        cursor.execute('SELECT whatsapp_numero FROM "CONFIGURACION_SISTEMA" LIMIT 1')
-        config = cursor.fetchone()
-        cursor.close()
-        pg_conn.close()
+        # Enviar por Telegram
+        mensaje = f"🔐 Tu código de verificación TUC-TUC es: *{codigo}*\n\nVálido por 10 minutos."
 
-        numero_destino = telefono if not telefono.startswith('+') else telefono[1:]
-        mensaje = f" Tu cdigo de verificacin TUC-TUC es: *{codigo}*\n\nVlido por 10 minutos."
+        resultado = enviar_telegram(telefono, mensaje)
 
-        # Enviar WhatsApp
-        enviar_whatsapp(numero_destino, mensaje)
-
-        return jsonify({'ok': True, 'mensaje': 'Cdigo enviado por WhatsApp'})
+        if resultado:
+            return jsonify({'ok': True, 'mensaje': 'Código enviado por Telegram'})
+        else:
+            return jsonify({'ok': False, 'error': 'No se pudo enviar el código. Verifica que tengas Telegram vinculado.'}), 400
 
     except Exception as e:
         print(f"Error enviar-codigo-whatsapp: {e}")

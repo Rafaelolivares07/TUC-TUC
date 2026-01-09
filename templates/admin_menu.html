@@ -48,7 +48,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                <div class="p-4 mb-6 text-sm rounded-lg shadow-md 
+                <div class="p-4 mb-6 text-sm rounded-lg shadow-md
                     {% if category == 'success' %}bg-green-100 text-green-800 border border-green-300
                     {% elif category == 'danger' %}bg-red-100 text-red-800 border border-red-300
                     {% elif category == 'warning' %}bg-yellow-100 text-yellow-800 border border-yellow-300
@@ -59,6 +59,40 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+
+        <!-- Switch Base de Datos: Producción / Local -->
+        <div class="mb-8 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-200 shadow-lg">
+            <div class="flex items-center justify-between flex-col sm:flex-row">
+                <div class="mb-4 sm:mb-0">
+                    <h3 class="text-lg font-bold text-purple-800 mb-1">🗄️ Base de Datos Activa</h3>
+                    <p class="text-sm text-gray-600">
+                        Cambia entre <strong>Producción</strong> (Render - datos reales) y <strong>Local</strong> (Backup - para testing)
+                    </p>
+                </div>
+
+                <div class="flex items-center space-x-4">
+                    <!-- Indicador de estado -->
+                    <div id="db-status-text" class="text-right">
+                        <span id="db-mode-label" class="text-sm font-semibold">Cargando...</span>
+                        <p class="text-xs text-gray-500">Modo actual</p>
+                    </div>
+
+                    <!-- Toggle Switch -->
+                    <div class="relative inline-block w-16 h-8 align-middle select-none transition duration-200 ease-in">
+                        <input
+                            type="checkbox"
+                            id="db-toggle"
+                            class="toggle-checkbox absolute block w-8 h-8 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-300"
+                            style="transform: translateX(0); border-color: #dc2626;"
+                        />
+                        <label
+                            for="db-toggle"
+                            class="toggle-label block overflow-hidden h-8 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"
+                        ></label>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Menú Principal de Opciones -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -155,5 +189,93 @@
             </a>
         </div>
     </div>
+
+    <!-- Script para el Switch de Base de Datos -->
+    <style>
+        /* Estilos para el toggle switch */
+        .toggle-checkbox:checked {
+            transform: translateX(2rem) !important;
+            border-color: #10b981 !important;
+        }
+
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #10b981 !important;
+        }
+
+        .toggle-label {
+            transition: background-color 0.3s ease;
+        }
+    </style>
+
+    <script>
+        let currentMode = 'production'; // Estado inicial
+
+        // Cargar estado actual al cargar la página
+        async function loadDatabaseMode() {
+            try {
+                const response = await fetch('/admin/get-database-mode');
+                const data = await response.json();
+
+                if (data.ok) {
+                    currentMode = data.mode;
+                    updateUI(currentMode);
+                }
+            } catch (error) {
+                console.error('Error cargando modo BD:', error);
+            }
+        }
+
+        // Actualizar UI según el modo
+        function updateUI(mode) {
+            const toggle = document.getElementById('db-toggle');
+            const label = document.getElementById('db-mode-label');
+
+            if (mode === 'local') {
+                toggle.checked = true;
+                label.innerHTML = '<span class="text-green-600">🟢 Local (Backup)</span>';
+            } else {
+                toggle.checked = false;
+                label.innerHTML = '<span class="text-red-600">🔴 Producción (Render)</span>';
+            }
+        }
+
+        // Manejar cambio de toggle
+        document.getElementById('db-toggle').addEventListener('change', async function(e) {
+            const newMode = e.target.checked ? 'local' : 'production';
+
+            try {
+                const response = await fetch('/admin/switch-database', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: newMode })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    currentMode = newMode;
+                    updateUI(newMode);
+
+                    // Mostrar notificación
+                    alert(`✅ ${data.mensaje}\n\nLa siguiente consulta usará esta base de datos.`);
+
+                    // Opcional: recargar página para aplicar cambios
+                    // location.reload();
+                } else {
+                    alert('❌ Error: ' + data.error);
+                    // Revertir toggle
+                    e.target.checked = !e.target.checked;
+                }
+            } catch (error) {
+                console.error('Error cambiando modo:', error);
+                alert('❌ Error al cambiar de base de datos');
+                // Revertir toggle
+                e.target.checked = !e.target.checked;
+            }
+        });
+
+        // Cargar modo al iniciar
+        loadDatabaseMode();
+    </script>
 </body>
 </html>

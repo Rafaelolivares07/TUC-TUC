@@ -329,15 +329,28 @@ class PostgreSQLConnectionWrapper:
 
 def get_db_connection():
     """
-    Conexin a base de datos PostgreSQL.
-    - En produccin (Render): usa DATABASE_URL del entorno
-    - En local: usa conexion PostgreSQL local
+    Conexión a base de datos PostgreSQL con soporte para switch producción/local.
+    - Producción (Render): usa DATABASE_URL del entorno
+    - Local (Backup): usa DATABASE_URL_LOCAL del entorno
+    - El switch se controla vía session['db_mode']
     """
-    database_url = os.getenv('DATABASE_URL')
+    # Verificar si hay un switch activo en la sesión (solo para admins)
+    db_mode = session.get('db_mode', 'production')
 
-    if not database_url:
-        # LOCAL: PostgreSQL local
-        database_url = os.getenv('LOCAL_DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/medicamentos')
+    if db_mode == 'local':
+        # Modo LOCAL: Usar PostgreSQL local con backup
+        database_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
+        print(f"🟢 Usando BD LOCAL (backup): {database_url.split('@')[1]}")
+    else:
+        # Modo PRODUCCIÓN: Usar Render PostgreSQL
+        database_url = os.getenv('DATABASE_URL')
+
+        if not database_url:
+            # Fallback a local si no hay DATABASE_URL de producción
+            database_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
+            print(f"⚠️ No hay DATABASE_URL, usando local: {database_url.split('@')[1]}")
+        else:
+            print(f"🔴 Usando BD PRODUCCIÓN (Render)")
 
     # Render usa postgres://, pero psycopg2 necesita postgresql://
     if database_url.startswith('postgres://'):
@@ -347,7 +360,7 @@ def get_db_connection():
     # Conectar sin RealDictCursor para compatibilidad con el wrapper
     pg_conn = psycopg2.connect(database_url)
     pg_conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
-    # Envolver la conexin para que funcione como SQLite
+    # Envolver la conexión para que funcione como SQLite
     return PostgreSQLConnectionWrapper(pg_conn)
 
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif"}
@@ -5950,9 +5963,52 @@ def require_role(target_role):
 def admin_area():
     """Ruta principal para el Administrador. Muestra el men."""
     #  Renderizamos la plantilla admin_menu.html
-    return render_template('admin_menu.html', 
+    return render_template('admin_menu.html',
                            nombre=session['nombre'],
                            device_id=session['dispositivo_id'])
+
+
+@app.route('/admin/switch-database', methods=['POST'])
+@admin_required
+def admin_switch_database():
+    """
+    Switch entre base de datos de producción (Render) y local (backup).
+    Solo disponible para administradores.
+    """
+    try:
+        data = request.get_json()
+        mode = data.get('mode', 'production')  # 'production' o 'local'
+
+        if mode not in ['production', 'local']:
+            return jsonify({'ok': False, 'error': 'Modo inválido'}), 400
+
+        # Guardar el modo en la sesión
+        session['db_mode'] = mode
+
+        modo_texto = '🔴 Producción (Render)' if mode == 'production' else '🟢 Local (Backup)'
+
+        print(f"✅ Admin cambió a modo: {modo_texto}")
+
+        return jsonify({
+            'ok': True,
+            'mode': mode,
+            'mensaje': f'Cambiado a {modo_texto}'
+        })
+
+    except Exception as e:
+        print(f"❌ Error en switch-database: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/get-database-mode', methods=['GET'])
+@admin_required
+def admin_get_database_mode():
+    """Obtiene el modo actual de base de datos"""
+    mode = session.get('db_mode', 'production')
+    return jsonify({'ok': True, 'mode': mode})
+
 
 # --- RUTAS DEL MEN ADMINISTRADOR ---
 @app.route('/admin_menu')

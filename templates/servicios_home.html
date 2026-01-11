@@ -168,6 +168,7 @@
         let map = null;
         let routeControl = null;
         let datosCalculados = {};
+        let coordenadasOrigenActual = null; // Guardar coordenadas cuando se usa "ubicación actual"
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -202,6 +203,11 @@
             // Usar ubicación actual
             document.getElementById('btn-usar-ubicacion').addEventListener('click', function() {
                 usarUbicacionActual();
+            });
+
+            // Limpiar coordenadas guardadas si el usuario edita manualmente el campo de origen
+            document.getElementById('input-origen').addEventListener('input', function() {
+                coordenadasOrigenActual = null;
             });
         }
 
@@ -287,7 +293,13 @@
 
             alert('Buscando direcciones y calculando ruta...');
 
-            const coordsOrigen = await buscarDireccion(origen);
+            // Si ya tenemos coordenadas del origen (de "usar mi ubicación"), usarlas directamente
+            let coordsOrigen;
+            if (coordenadasOrigenActual) {
+                coordsOrigen = coordenadasOrigenActual;
+            } else {
+                coordsOrigen = await buscarDireccion(origen);
+            }
 
             // Esperar 1 segundo entre peticiones (rate limit de Nominatim)
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -518,6 +530,9 @@
                 navigator.geolocation.getCurrentPosition(async function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
+
+                    // Guardar coordenadas para usar directamente después
+                    coordenadasOrigenActual = { lat: lat, lon: lng };
 
                     const direccion = await obtenerDireccionReversa(lat, lng);
                     document.getElementById('input-origen').value = direccion;

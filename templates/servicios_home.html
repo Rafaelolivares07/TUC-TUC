@@ -69,10 +69,12 @@
                     </button>
                 </div>
 
-                <div>
+                <div class="relative">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Destino</label>
                     <input type="text" id="input-destino" class="w-full p-3 border rounded-lg"
-                           placeholder="Ej: Avenida 6 Norte 28-50, Cali">
+                           placeholder="Ej: Avenida 6 Norte 28-50, Cali" autocomplete="off">
+                    <div id="autocomplete-destino" class="hidden absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    </div>
                 </div>
 
                 <button id="btn-calcular-ruta" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
@@ -169,6 +171,8 @@
         let routeControl = null;
         let datosCalculados = {};
         let coordenadasOrigenActual = null; // Guardar coordenadas cuando se usa "ubicación actual"
+        let coordenadasDestinoSeleccionado = null; // Guardar coordenadas cuando se selecciona del autocomplete
+        let timeoutAutocomplete = null;
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -208,6 +212,19 @@
             // Limpiar coordenadas guardadas si el usuario edita manualmente el campo de origen
             document.getElementById('input-origen').addEventListener('input', function() {
                 coordenadasOrigenActual = null;
+            });
+
+            // Autocomplete para destino
+            document.getElementById('input-destino').addEventListener('input', function() {
+                coordenadasDestinoSeleccionado = null;
+                buscarDireccionesAutocomplete(this.value);
+            });
+
+            // Cerrar autocomplete si se hace clic fuera
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#input-destino') && !e.target.closest('#autocomplete-destino')) {
+                    document.getElementById('autocomplete-destino').classList.add('hidden');
+                }
             });
         }
 
@@ -301,10 +318,15 @@
                 coordsOrigen = await buscarDireccion(origen);
             }
 
-            // Esperar 1 segundo entre peticiones (rate limit de Nominatim)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            const coordsDestino = await buscarDireccion(destino);
+            // Si ya tenemos coordenadas del destino (del autocomplete), usarlas directamente
+            let coordsDestino;
+            if (coordenadasDestinoSeleccionado) {
+                coordsDestino = coordenadasDestinoSeleccionado;
+            } else {
+                // Esperar 1 segundo entre peticiones (rate limit de Nominatim)
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                coordsDestino = await buscarDireccion(destino);
+            }
 
             if (!coordsOrigen) {
                 alert('No se encontró la dirección de origen. Intenta con una dirección más específica (ej: Calle 5 Norte 23-45, Cali)');
@@ -523,6 +545,59 @@
                 console.error('Error en búsqueda reversa:', error);
                 return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
             }
+        }
+
+        function buscarDireccionesAutocomplete(texto) {
+            clearTimeout(timeoutAutocomplete);
+
+            if (texto.length < 3) {
+                document.getElementById('autocomplete-destino').classList.add('hidden');
+                return;
+            }
+
+            timeoutAutocomplete = setTimeout(async () => {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali, Colombia')}&countrycodes=co&limit=5`;
+
+                try {
+                    const response = await fetch(url, {
+                        headers: { 'User-Agent': 'TucTucApp/1.0' }
+                    });
+                    const resultados = await response.json();
+
+                    mostrarSugerencias(resultados);
+                } catch (error) {
+                    console.error('Error en autocomplete:', error);
+                }
+            }, 500);
+        }
+
+        function mostrarSugerencias(resultados) {
+            const contenedor = document.getElementById('autocomplete-destino');
+            contenedor.innerHTML = '';
+
+            if (resultados.length === 0) {
+                contenedor.classList.add('hidden');
+                return;
+            }
+
+            resultados.forEach(resultado => {
+                const opcion = document.createElement('div');
+                opcion.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200';
+                opcion.textContent = resultado.display_name;
+
+                opcion.addEventListener('click', function() {
+                    document.getElementById('input-destino').value = resultado.display_name;
+                    coordenadasDestinoSeleccionado = {
+                        lat: parseFloat(resultado.lat),
+                        lon: parseFloat(resultado.lon)
+                    };
+                    contenedor.classList.add('hidden');
+                });
+
+                contenedor.appendChild(opcion);
+            });
+
+            contenedor.classList.remove('hidden');
         }
 
         function usarUbicacionActual() {

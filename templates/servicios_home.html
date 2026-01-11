@@ -229,6 +229,40 @@
             document.getElementById('resumen').classList.add('hidden');
         }
 
+        async function buscarDireccion(direccion) {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Cali, Colombia')}&countrycodes=co`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.length > 0) {
+                    const resultado = data[0];
+                    return {
+                        lat: parseFloat(resultado.lat),
+                        lon: parseFloat(resultado.lon),
+                        nombre: resultado.display_name
+                    };
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                console.error('Error en búsqueda:', error);
+                return null;
+            }
+        }
+
+        function inicializarMapa() {
+            if (!map) {
+                map = L.map('map').setView([3.4516, -76.5320], 13);
+
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(map);
+            }
+        }
+
         async function calcularRutaTransporte() {
             const origen = document.getElementById('input-origen').value.trim();
             const destino = document.getElementById('input-destino').value.trim();
@@ -238,34 +272,99 @@
                 return;
             }
 
-            // Buscar coordenadas (simplificado - en producción usa geocoding API)
-            alert('Funcionalidad de mapa próximamente. Por ahora ingresa distancia estimada:');
-            const distanciaKm = parseFloat(prompt('¿Cuántos kilómetros aproximadamente?', '5'));
+            alert('Buscando direcciones y calculando ruta...');
 
-            if (!distanciaKm || distanciaKm <= 0) return;
+            const coordsOrigen = await buscarDireccion(origen);
+            const coordsDestino = await buscarDireccion(destino);
 
-            // Calcular tarifa
-            const response = await fetch('/api/calcular-tarifa', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tipo_servicio: 'transporte',
-                    distancia_km: distanciaKm
-                })
+            if (!coordsOrigen) {
+                alert('No se encontró la dirección de origen. Intenta con una dirección más específica (ej: Calle 5 Norte 23-45, Cali)');
+                return;
+            }
+
+            if (!coordsDestino) {
+                alert('No se encontró la dirección de destino. Intenta con una dirección más específica');
+                return;
+            }
+
+            document.getElementById('contenedor-mapa').classList.remove('hidden');
+            inicializarMapa();
+
+            if (routeControl) {
+                map.removeControl(routeControl);
+            }
+
+            const origenLatLng = L.latLng(coordsOrigen.lat, coordsOrigen.lon);
+            const destinoLatLng = L.latLng(coordsDestino.lat, coordsDestino.lon);
+
+            routeControl = L.Routing.control({
+                waypoints: [origenLatLng, destinoLatLng],
+                routeWhileDragging: false,
+
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1'
+                }),
+
+                lineOptions: {
+                    styles: [{color: '#3B82F6', weight: 6}]
+                },
+
+                createMarker: function(i, waypoint, n) {
+                    const marker = L.marker(waypoint.latLng, {
+                        draggable: false
+                    });
+
+                    if (i === 0) {
+                        marker.bindPopup("📍 Origen");
+                    } else if (i === n - 1) {
+                        marker.bindPopup("🎯 Destino");
+                    }
+
+                    return marker;
+                },
+
+                show: false,
+                addWaypoints: false,
+                draggableWaypoints: false
+            }).addTo(map);
+
+            routeControl.on('routesfound', async function(e) {
+                const routes = e.routes;
+                const summary = routes[0].summary;
+
+                const distanciaMetros = summary.totalDistance;
+                const distanciaKm = parseFloat((distanciaMetros / 1000).toFixed(2));
+
+                const tiempoSegundos = summary.totalTime;
+                const tiempoMinutos = Math.round(tiempoSegundos / 60);
+
+                const response = await fetch('/api/calcular-tarifa', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tipo_servicio: 'transporte',
+                        distancia_km: distanciaKm
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    mostrarResumen({
+                        tipo: 'transporte',
+                        distancia_km: distanciaKm,
+                        tiempo_estimado_minutos: tiempoMinutos,
+                        tarifa: data.tarifa
+                    });
+                } else {
+                    alert('Error: ' + data.error);
+                }
             });
 
-            const data = await response.json();
-
-            if (data.ok) {
-                mostrarResumen({
-                    tipo: 'transporte',
-                    distancia_km: distanciaKm,
-                    tiempo_estimado_minutos: Math.round(distanciaKm * 3), // Estimado: 3 min por km
-                    tarifa: data.tarifa
-                });
-            } else {
-                alert('Error: ' + data.error);
-            }
+            routeControl.on('routingerror', function(e) {
+                alert('No se pudo calcular la ruta. Verifica las direcciones ingresadas.');
+                console.error('Routing error:', e);
+            });
         }
 
         async function calcularTarifaAcompanamiento() {
@@ -379,14 +478,36 @@
             }
         }
 
+        async function obtenerDireccionReversa(lat, lng) {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&countrycodes=co`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.display_name) {
+                    return data.display_name;
+                } else {
+                    return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+                }
+            } catch (error) {
+                console.error('Error en búsqueda reversa:', error);
+                return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+            }
+        }
+
         function usarUbicacionActual() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
+                navigator.geolocation.getCurrentPosition(async function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
-                    document.getElementById('input-origen').value = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+
+                    const direccion = await obtenerDireccionReversa(lat, lng);
+                    document.getElementById('input-origen').value = direccion;
+
+                    alert('Ubicación detectada: ' + direccion);
                 }, function(error) {
-                    alert('No se pudo obtener tu ubicación');
+                    alert('No se pudo obtener tu ubicación. Verifica los permisos del navegador.');
                 });
             } else {
                 alert('Tu navegador no soporta geolocalización');

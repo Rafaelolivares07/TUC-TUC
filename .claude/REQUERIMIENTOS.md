@@ -27,6 +27,50 @@ Se enlaza con:
 
 ## ✅ Requerimientos Completados (2026-01)
 
+### REQ-005: Mejorar Detección de Suplementos y Deficiencias Nutricionales
+**Fecha:** 2026-01-02
+**Tipo:** Update
+**Prioridad:** Media
+
+**Descripción:**
+Mejorar el sistema de sugerencia de síntomas para detectar correctamente suplementos vitamínicos y minerales, así como sus indicaciones de prevención y tratamiento.
+
+**Problema identificado:**
+- Suplementos como Vitamina D3 no generaban síntomas sugeridos
+- No se detectaban patrones de prevención ("prevenir osteoporosis")
+- No se reconocían deficiencias nutricionales como diagnósticos
+- Keywords limitadas a síntomas comunes, sin cobertura ósea/nutricional
+
+**Solución implementada:**
+
+1. **Nuevas reglas de diagnóstico** (9 diagnósticos agregados):
+   - Condiciones óseas: osteoporosis, raquitismo, osteomalacia
+   - Deficiencias vitamínicas: vitamina D, C, B12
+   - Deficiencias minerales: calcio, hierro
+   - Condición endocrina: hipoparatiroidismo
+
+2. **Sistema de detección de patrones de prevención/tratamiento**:
+   - Detecta frases: "prevenir", "tratar", "usado para", "indicado para"
+   - Extrae enfermedad mencionada del contexto
+   - Asocia síntomas automáticamente desde REGLAS_DIAGNOSTICOS
+
+3. **Expansión de keywords de síntomas** (15 nuevos síntomas):
+   - Óseos: debilidad ósea, dolor óseo, fracturas, deformidades, pérdida de altura
+   - Musculares: debilidad muscular, calambres, espasmos
+   - Nutricionales: anemia, palidez, encías sangrantes
+   - Sistémicos: hormigueo, depresión, crecimiento deficiente, dolor de espalda
+
+**Resultado:**
+Ahora el sistema detecta correctamente:
+- "Vitamina D3 previene osteoporosis" → Síntomas: debilidad ósea, dolor óseo, fracturas
+- "Usado para tratar raquitismo" → Síntomas: deformidades óseas, crecimiento deficiente
+- "Deficiencia de vitamina C" → Síntomas: fatiga, encías sangrantes, anemia
+
+**Commit:** `f631823` - Update: Mejorar detección de suplementos y deficiencias nutricionales
+**Archivos:** [sugerir_sintomas_helpers.py](../sugerir_sintomas_helpers.py) (líneas 13-65, 212-268)
+
+---
+
 ### REQ-001: Sistema de Recordatorios Telegram sin Botones
 **Fecha:** 2026-01-02
 **Tipo:** Fix + Update
@@ -417,7 +461,7 @@ El proyecto incluye un módulo web completo para gestionar requerimientos:
 
 ## 📈 Estadísticas
 
-**Total requerimientos implementados:** 4
+**Total requerimientos implementados:** 5
 **Total migraciones ejecutadas:** 3
 **Último update:** 2026-01-02
 

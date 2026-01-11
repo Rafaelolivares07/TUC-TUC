@@ -335,12 +335,19 @@ def get_db_connection():
     - El switch se controla vía session['db_mode']
     """
     # Verificar si hay un switch activo en la sesión (solo para admins)
-    db_mode = session.get('db_mode', 'production')
+    # Usar has_request_context() para evitar errores fuera de contexto HTTP
+    from flask import has_request_context
+
+    if has_request_context():
+        db_mode = session.get('db_mode', 'production')
+    else:
+        # Sin contexto de request (ej: scheduler), usar producción por defecto
+        db_mode = 'production'
 
     if db_mode == 'local':
         # Modo LOCAL: Usar PostgreSQL local con backup
         database_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
-        print(f"🟢 Usando BD LOCAL (backup): {database_url.split('@')[1]}")
+        print("[LOCAL] Usando BD local (backup): " + database_url.split('@')[1])
     else:
         # Modo PRODUCCIÓN: Usar Render PostgreSQL
         database_url = os.getenv('DATABASE_URL')
@@ -348,9 +355,9 @@ def get_db_connection():
         if not database_url:
             # Fallback a local si no hay DATABASE_URL de producción
             database_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
-            print(f"⚠️ No hay DATABASE_URL, usando local: {database_url.split('@')[1]}")
+            print("[FALLBACK] No hay DATABASE_URL, usando local: " + database_url.split('@')[1])
         else:
-            print(f"🔴 Usando BD PRODUCCIÓN (Render)")
+            print("[PRODUCCION] Usando BD Render")
 
     # Render usa postgres://, pero psycopg2 necesita postgresql://
     if database_url.startswith('postgres://'):
@@ -5985,9 +5992,9 @@ def admin_switch_database():
         # Guardar el modo en la sesión
         session['db_mode'] = mode
 
-        modo_texto = '🔴 Producción (Render)' if mode == 'production' else '🟢 Local (Backup)'
+        modo_texto = '[PRODUCCION] Render' if mode == 'production' else '[LOCAL] Backup'
 
-        print(f"✅ Admin cambió a modo: {modo_texto}")
+        print(f"[SWITCH] Admin cambio a modo: {modo_texto}")
 
         return jsonify({
             'ok': True,
@@ -5996,7 +6003,7 @@ def admin_switch_database():
         })
 
     except Exception as e:
-        print(f"❌ Error en switch-database: {e}")
+        print(f"[ERROR] Error en switch-database: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -18320,9 +18327,201 @@ def diagnostico_sintomas():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ============================================================================
+# SERVICIOS DE TRANSPORTE Y ACOMPAÑAMIENTO (Tipo Uber/Didi)
+# ============================================================================
+
+@app.route('/servicios')
+def servicios_home():
+    """Página principal de servicios de transporte y acompañamiento"""
+    return render_template('servicios_home.html')
+
+
+@app.route('/api/calcular-tarifa', methods=['POST'])
+def api_calcular_tarifa():
+    """
+    Calcula tarifa estimada basada en distancia o horas
+
+    Body JSON:
+    {
+        "tipo_servicio": "transporte" | "acompanamiento",
+        "distancia_km": 5.2,  # Para transporte
+        "horas_acompanamiento": 3  # Para acompañamiento
+    }
+    """
+    try:
+        data = request.get_json()
+        tipo_servicio = data.get('tipo_servicio')
+        distancia_km = data.get('distancia_km', 0)
+        horas = data.get('horas_acompanamiento')
+
+        if tipo_servicio == 'transporte':
+            # Tarifa para transporte simple
+            TARIFA_BASE = 5000  # Arranque
+            TARIFA_POR_KM = 2000  # Por kilómetro
+
+            tarifa = TARIFA_BASE + (distancia_km * TARIFA_POR_KM)
+
+            desglose = {
+                'base': TARIFA_BASE,
+                'distancia': distancia_km * TARIFA_POR_KM,
+                'total': int(tarifa)
+            }
+
+        elif tipo_servicio == 'acompanamiento':
+            # Tarifa para acompañamiento (incluye espera)
+            TARIFA_POR_HORA = 15000  # $15,000 por hora
+            TARIFA_MINIMA = 30000  # Mínimo 2 horas
+
+            if not horas:
+                horas = 2  # Mínimo 2 horas
+
+            tarifa_tiempo = horas * TARIFA_POR_HORA
+            tarifa = max(tarifa_tiempo, TARIFA_MINIMA)
+
+            desglose = {
+                'horas': horas,
+                'tarifa_hora': TARIFA_POR_HORA,
+                'subtotal': tarifa_tiempo,
+                'minimo': TARIFA_MINIMA,
+                'total': int(tarifa)
+            }
+
+        else:
+            return jsonify({'ok': False, 'error': 'Tipo de servicio inválido'}), 400
+
+        return jsonify({
+            'ok': True,
+            'tarifa': int(tarifa),
+            'desglose': desglose
+        })
+
+    except Exception as e:
+        print(f"Error en calcular-tarifa: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/solicitar-servicio', methods=['POST'])
+def api_solicitar_servicio():
+    """
+    Crea una nueva solicitud de servicio de transporte
+
+    Body JSON:
+    {
+        "tipo_servicio": "transporte" | "acompanamiento",
+        "telefono": "3175718658",
+        "nombre": "Rafael Olivares",
+        "origen_texto": "Calle 5 Norte 23-45, Cali",
+        "destino_texto": "Avenida 6 Norte 28-50, Cali",
+        "distancia_km": 5.2,
+        "tiempo_estimado_minutos": 15,
+        "precio": 15400,
+        "horas_acompanamiento": null,  # Solo para acompañamiento
+        "notas": "Llevar silla de ruedas"
+    }
+    """
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+
+        # Obtener o crear tercero
+        telefono = data.get('telefono')
+        nombre = data.get('nombre')
+
+        if not telefono or not nombre:
+            return jsonify({'ok': False, 'error': 'Teléfono y nombre son requeridos'}), 400
+
+        # Buscar tercero existente
+        tercero = conn.execute("""
+            SELECT id FROM terceros WHERE telefono = %s
+        """, (telefono,)).fetchone()
+
+        if tercero:
+            tercero_id = tercero['id']
+        else:
+            # Crear nuevo tercero
+            tercero_id = conn.execute("""
+                INSERT INTO terceros (nombre, telefono, fecha_creacion)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                RETURNING id
+            """, (nombre, telefono)).fetchone()['id']
+            conn.commit()
+
+        # Crear solicitud
+        tipo_servicio = data.get('tipo_servicio')
+        origen_texto = data.get('origen_texto')
+        destino_texto = data.get('destino_texto')
+        distancia_km = data.get('distancia_km')
+        tiempo_estimado_minutos = data.get('tiempo_estimado_minutos')
+        precio = data.get('precio')
+        horas_acompanamiento = data.get('horas_acompanamiento')
+        notas = data.get('notas')
+
+        solicitud_id = conn.execute("""
+            INSERT INTO solicitudes_transporte (
+                tercero_id, tipo_servicio, origen_texto, destino_texto,
+                distancia_km, tiempo_estimado_minutos, precio,
+                horas_acompanamiento, notas, estado, fecha_solicitud, fecha_servicio
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+        """, (
+            tercero_id, tipo_servicio, origen_texto, destino_texto,
+            distancia_km, tiempo_estimado_minutos, precio,
+            horas_acompanamiento, notas
+        )).fetchone()['id']
+
+        conn.commit()
+
+        # Enviar notificación por Telegram
+        mensaje = f"""
+🚗 NUEVA SOLICITUD DE SERVICIO
+
+📋 Solicitud #{solicitud_id}
+👤 Cliente: {nombre}
+📞 Teléfono: {telefono}
+
+🔹 Tipo: {tipo_servicio.upper()}
+"""
+
+        if tipo_servicio == 'transporte':
+            mensaje += f"""
+📍 Origen: {origen_texto}
+📍 Destino: {destino_texto}
+📏 Distancia: {distancia_km} km
+⏱️ Tiempo estimado: {tiempo_estimado_minutos} min
+💰 Tarifa: ${precio:,.0f}
+"""
+        elif tipo_servicio == 'acompanamiento':
+            mensaje += f"""
+⏰ Horas: {horas_acompanamiento}
+💰 Tarifa: ${precio:,.0f}
+"""
+
+        if notas:
+            mensaje += f"\n📝 Notas: {notas}"
+
+        # Enviar notificación
+        enviar_telegram(mensaje, telefono=None)  # Envía al admin
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'solicitud_id': solicitud_id,
+            'mensaje': 'Solicitud creada exitosamente'
+        })
+
+    except Exception as e:
+        print(f"Error en solicitar-servicio: {e}")
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#
-    
+
     # Despus de inicializar, puedes ejecutar Flask
     app.run(debug=True, host='0.0.0.0')

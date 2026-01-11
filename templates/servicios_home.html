@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servicios de Transporte - TucTuc</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+</head>
+<body class="bg-gray-50">
+
+    <div class="max-w-4xl mx-auto p-4">
+
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">Servicios de Transporte</h1>
+            <p class="text-gray-600 mt-2">Solicita tu servicio de forma rápida y segura</p>
+        </div>
+
+        <!-- Botones de Tipo de Servicio -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-4">
+            <h2 class="text-xl font-semibold mb-4">¿Qué servicio necesitas?</h2>
+
+            <div class="grid grid-cols-2 gap-4">
+                <button id="btn-transporte" class="p-6 border-2 border-blue-500 bg-blue-50 rounded-lg transition">
+                    <div class="text-4xl mb-2">🚗</div>
+                    <div class="font-semibold text-lg">Transporte</div>
+                    <div class="text-sm text-gray-600">De un punto a otro</div>
+                </button>
+
+                <button id="btn-acompanamiento" class="p-6 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                    <div class="text-4xl mb-2">🤝</div>
+                    <div class="font-semibold text-lg">Acompañamiento</div>
+                    <div class="text-sm text-gray-600">Con espera incluida</div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Formulario de Transporte -->
+        <div id="form-transporte" class="bg-white rounded-lg shadow-lg p-6 mb-4">
+            <h2 class="text-xl font-semibold mb-4">Detalles del viaje</h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
+                    <input type="text" id="input-nombre" class="w-full p-3 border rounded-lg"
+                           placeholder="Tu nombre completo">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
+                    <input type="tel" id="input-telefono" class="w-full p-3 border rounded-lg"
+                           placeholder="Ej: 3175718658">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Origen</label>
+                    <input type="text" id="input-origen" class="w-full p-3 border rounded-lg"
+                           placeholder="Ej: Calle 5 Norte 23-45, Cali">
+                    <button id="btn-usar-ubicacion" class="text-sm text-blue-600 mt-1">
+                        📍 Usar mi ubicación actual
+                    </button>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Destino</label>
+                    <input type="text" id="input-destino" class="w-full p-3 border rounded-lg"
+                           placeholder="Ej: Avenida 6 Norte 28-50, Cali">
+                </div>
+
+                <button id="btn-calcular-ruta" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                    Calcular ruta y tarifa
+                </button>
+            </div>
+        </div>
+
+        <!-- Formulario de Acompañamiento -->
+        <div id="form-acompanamiento" class="bg-white rounded-lg shadow-lg p-6 mb-4 hidden">
+            <h2 class="text-xl font-semibold mb-4">Servicio de acompañamiento</h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
+                    <input type="text" id="input-nombre-acomp" class="w-full p-3 border rounded-lg"
+                           placeholder="Tu nombre completo">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
+                    <input type="tel" id="input-telefono-acomp" class="w-full p-3 border rounded-lg"
+                           placeholder="Ej: 3175718658">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">¿Cuántas horas necesitas?</label>
+                    <input type="number" id="input-horas" class="w-full p-3 border rounded-lg"
+                           placeholder="Ej: 3" min="2" value="2">
+                    <p class="text-sm text-gray-500 mt-1">Mínimo 2 horas</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notas (opcional)</label>
+                    <textarea id="input-notas-acomp" class="w-full p-3 border rounded-lg" rows="3"
+                              placeholder="Ej: Necesito ayuda con silla de ruedas"></textarea>
+                </div>
+
+                <button id="btn-calcular-acompanamiento" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                    Calcular tarifa
+                </button>
+            </div>
+        </div>
+
+        <!-- Mapa -->
+        <div id="contenedor-mapa" class="bg-white rounded-lg shadow-lg p-6 mb-4 hidden">
+            <h2 class="text-xl font-semibold mb-4">Mapa del recorrido</h2>
+            <div id="map" style="width: 100%; height: 400px; border-radius: 8px;"></div>
+        </div>
+
+        <!-- Resumen -->
+        <div id="resumen" class="bg-white rounded-lg shadow-lg p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Resumen del servicio</h2>
+
+            <div class="space-y-3">
+                <div id="info-distancia" class="flex justify-between hidden">
+                    <span class="text-gray-600">Distancia:</span>
+                    <span id="distancia" class="font-semibold">-</span>
+                </div>
+
+                <div id="info-tiempo" class="flex justify-between hidden">
+                    <span class="text-gray-600">Tiempo estimado:</span>
+                    <span id="tiempo" class="font-semibold">-</span>
+                </div>
+
+                <div id="info-horas" class="flex justify-between hidden">
+                    <span class="text-gray-600">Horas de acompañamiento:</span>
+                    <span id="horas-display" class="font-semibold">-</span>
+                </div>
+
+                <div class="flex justify-between text-xl font-bold border-t pt-3">
+                    <span>Tarifa:</span>
+                    <span id="tarifa" class="text-green-600">$0</span>
+                </div>
+            </div>
+
+            <button id="btn-confirmar" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition mt-6">
+                Confirmar solicitud
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet Routing Machine JavaScript -->
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        // Variables globales
+        let tipoServicioActual = 'transporte';
+        let map = null;
+        let routeControl = null;
+        let datosCalculados = {};
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function() {
+            configurarBotones();
+        });
+
+        function configurarBotones() {
+            // Selección de tipo de servicio
+            document.getElementById('btn-transporte').addEventListener('click', function() {
+                seleccionarTipoServicio('transporte');
+            });
+
+            document.getElementById('btn-acompanamiento').addEventListener('click', function() {
+                seleccionarTipoServicio('acompanamiento');
+            });
+
+            // Calcular ruta (transporte)
+            document.getElementById('btn-calcular-ruta').addEventListener('click', function() {
+                calcularRutaTransporte();
+            });
+
+            // Calcular tarifa (acompañamiento)
+            document.getElementById('btn-calcular-acompanamiento').addEventListener('click', function() {
+                calcularTarifaAcompanamiento();
+            });
+
+            // Confirmar solicitud
+            document.getElementById('btn-confirmar').addEventListener('click', function() {
+                confirmarSolicitud();
+            });
+
+            // Usar ubicación actual
+            document.getElementById('btn-usar-ubicacion').addEventListener('click', function() {
+                usarUbicacionActual();
+            });
+        }
+
+        function seleccionarTipoServicio(tipo) {
+            tipoServicioActual = tipo;
+
+            // Actualizar UI de botones
+            const btnTransporte = document.getElementById('btn-transporte');
+            const btnAcompanamiento = document.getElementById('btn-acompanamiento');
+
+            if (tipo === 'transporte') {
+                btnTransporte.className = 'p-6 border-2 border-blue-500 bg-blue-50 rounded-lg transition';
+                btnAcompanamiento.className = 'p-6 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition';
+                document.getElementById('form-transporte').classList.remove('hidden');
+                document.getElementById('form-acompanamiento').classList.add('hidden');
+            } else {
+                btnAcompanamiento.className = 'p-6 border-2 border-blue-500 bg-blue-50 rounded-lg transition';
+                btnTransporte.className = 'p-6 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition';
+                document.getElementById('form-acompanamiento').classList.remove('hidden');
+                document.getElementById('form-transporte').classList.add('hidden');
+            }
+
+            // Ocultar mapa y resumen
+            document.getElementById('contenedor-mapa').classList.add('hidden');
+            document.getElementById('resumen').classList.add('hidden');
+        }
+
+        async function calcularRutaTransporte() {
+            const origen = document.getElementById('input-origen').value.trim();
+            const destino = document.getElementById('input-destino').value.trim();
+
+            if (!origen || !destino) {
+                alert('Por favor ingresa origen y destino');
+                return;
+            }
+
+            // Buscar coordenadas (simplificado - en producción usa geocoding API)
+            alert('Funcionalidad de mapa próximamente. Por ahora ingresa distancia estimada:');
+            const distanciaKm = parseFloat(prompt('¿Cuántos kilómetros aproximadamente?', '5'));
+
+            if (!distanciaKm || distanciaKm <= 0) return;
+
+            // Calcular tarifa
+            const response = await fetch('/api/calcular-tarifa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipo_servicio: 'transporte',
+                    distancia_km: distanciaKm
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.ok) {
+                mostrarResumen({
+                    tipo: 'transporte',
+                    distancia_km: distanciaKm,
+                    tiempo_estimado_minutos: Math.round(distanciaKm * 3), // Estimado: 3 min por km
+                    tarifa: data.tarifa
+                });
+            } else {
+                alert('Error: ' + data.error);
+            }
+        }
+
+        async function calcularTarifaAcompanamiento() {
+            const horas = parseInt(document.getElementById('input-horas').value);
+
+            if (!horas || horas < 2) {
+                alert('Mínimo 2 horas de servicio');
+                return;
+            }
+
+            // Calcular tarifa
+            const response = await fetch('/api/calcular-tarifa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tipo_servicio: 'acompanamiento',
+                    horas_acompanamiento: horas
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.ok) {
+                mostrarResumen({
+                    tipo: 'acompanamiento',
+                    horas: horas,
+                    tarifa: data.tarifa
+                });
+            } else {
+                alert('Error: ' + data.error);
+            }
+        }
+
+        function mostrarResumen(datos) {
+            datosCalculados = datos;
+
+            // Mostrar sección de resumen
+            document.getElementById('resumen').classList.remove('hidden');
+
+            if (datos.tipo === 'transporte') {
+                document.getElementById('info-distancia').classList.remove('hidden');
+                document.getElementById('info-tiempo').classList.remove('hidden');
+                document.getElementById('info-horas').classList.add('hidden');
+
+                document.getElementById('distancia').textContent = datos.distancia_km + ' km';
+                document.getElementById('tiempo').textContent = datos.tiempo_estimado_minutos + ' min';
+            } else {
+                document.getElementById('info-horas').classList.remove('hidden');
+                document.getElementById('info-distancia').classList.add('hidden');
+                document.getElementById('info-tiempo').classList.add('hidden');
+
+                document.getElementById('horas-display').textContent = datos.horas + ' horas';
+            }
+
+            document.getElementById('tarifa').textContent = '$' + datos.tarifa.toLocaleString();
+
+            // Scroll al resumen
+            document.getElementById('resumen').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function confirmarSolicitud() {
+            let nombre, telefono, notas, origenTexto, destinoTexto;
+
+            if (tipoServicioActual === 'transporte') {
+                nombre = document.getElementById('input-nombre').value.trim();
+                telefono = document.getElementById('input-telefono').value.trim();
+                origenTexto = document.getElementById('input-origen').value.trim();
+                destinoTexto = document.getElementById('input-destino').value.trim();
+            } else {
+                nombre = document.getElementById('input-nombre-acomp').value.trim();
+                telefono = document.getElementById('input-telefono-acomp').value.trim();
+                notas = document.getElementById('input-notas-acomp').value.trim();
+            }
+
+            if (!nombre || !telefono) {
+                alert('Por favor completa nombre y teléfono');
+                return;
+            }
+
+            // Crear solicitud
+            const body = {
+                tipo_servicio: tipoServicioActual,
+                nombre: nombre,
+                telefono: telefono,
+                precio: datosCalculados.tarifa
+            };
+
+            if (tipoServicioActual === 'transporte') {
+                body.origen_texto = origenTexto;
+                body.destino_texto = destinoTexto;
+                body.distancia_km = datosCalculados.distancia_km;
+                body.tiempo_estimado_minutos = datosCalculados.tiempo_estimado_minutos;
+            } else {
+                body.horas_acompanamiento = datosCalculados.horas;
+                body.notas = notas;
+            }
+
+            const response = await fetch('/api/solicitar-servicio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            const data = await response.json();
+
+            if (data.ok) {
+                alert('¡Solicitud enviada! Te contactaremos pronto. Solicitud #' + data.solicitud_id);
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        }
+
+        function usarUbicacionActual() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    document.getElementById('input-origen').value = `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
+                }, function(error) {
+                    alert('No se pudo obtener tu ubicación');
+                });
+            } else {
+                alert('Tu navegador no soporta geolocalización');
+            }
+        }
+    </script>
+</body>
+</html>

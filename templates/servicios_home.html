@@ -230,10 +230,20 @@
         }
 
         async function buscarDireccion(direccion) {
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Cali, Colombia')}&countrycodes=co`;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Cali, Colombia')}&countrycodes=co&limit=1`;
 
             try {
-                const response = await fetch(url);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
+
+                const response = await fetch(url, {
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'TucTucApp/1.0'
+                    }
+                });
+
+                clearTimeout(timeoutId);
                 const data = await response.json();
 
                 if (data.length > 0) {
@@ -248,6 +258,9 @@
                 }
             } catch (error) {
                 console.error('Error en búsqueda:', error);
+                if (error.name === 'AbortError') {
+                    alert('La búsqueda de dirección tardó mucho. Intenta con una dirección más específica o usa coordenadas.');
+                }
                 return null;
             }
         }
@@ -275,6 +288,10 @@
             alert('Buscando direcciones y calculando ruta...');
 
             const coordsOrigen = await buscarDireccion(origen);
+
+            // Esperar 1 segundo entre peticiones (rate limit de Nominatim)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
             const coordsDestino = await buscarDireccion(destino);
 
             if (!coordsOrigen) {

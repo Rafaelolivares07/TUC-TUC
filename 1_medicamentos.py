@@ -18356,9 +18356,14 @@ def api_calcular_tarifa():
         horas = data.get('horas_acompanamiento')
 
         if tipo_servicio == 'transporte':
-            # Tarifa para transporte simple
+            # TODO: Hacer parametrizable por usuario (Rafael)
+            # Tarifa calculada para generar $30,000/hora considerando:
+            # - Velocidad promedio: 19 km/h en Cali (según Waze)
+            # - Tiempo muerto entre pasajeros: 8 min
+            # - Promedio: 2 viajes por hora de ~7 km cada uno
+            # Ejemplos: 5 min (~1.6 km) = $7,400 | 10 min (~3.2 km) = $9,800 | 60 min (19 km) = $33,500
             TARIFA_BASE = 5000  # Arranque
-            TARIFA_POR_KM = 2000  # Por kilómetro
+            TARIFA_POR_KM = 1500  # Por kilómetro
 
             tarifa = TARIFA_BASE + (distancia_km * TARIFA_POR_KM)
 
@@ -18369,12 +18374,13 @@ def api_calcular_tarifa():
             }
 
         elif tipo_servicio == 'acompanamiento':
-            # Tarifa para acompañamiento (incluye espera)
-            TARIFA_POR_HORA = 15000  # $15,000 por hora
-            TARIFA_MINIMA = 30000  # Mínimo 2 horas
+            # TODO: Hacer parametrizable por usuario (Rafael)
+            # Tarifa de $30,000 por hora, mínimo 1 hora
+            TARIFA_POR_HORA = 30000  # $30,000 por hora
+            TARIFA_MINIMA = 30000  # Mínimo 1 hora
 
             if not horas:
-                horas = 2  # Mínimo 2 horas
+                horas = 1  # Mínimo 1 hora
 
             tarifa_tiempo = horas * TARIFA_POR_HORA
             tarifa = max(tarifa_tiempo, TARIFA_MINIMA)

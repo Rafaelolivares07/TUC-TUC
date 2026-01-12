@@ -626,6 +626,18 @@
             }, 500);
         }
 
+        function calcularDistancia(lat1, lon1, lat2, lon2) {
+            // Fórmula de Haversine para calcular distancia en km
+            const R = 6371; // Radio de la Tierra en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
         function mostrarSugerenciasDestino(resultados) {
             const contenedor = document.getElementById('autocomplete-destino');
             const textoIngresado = document.getElementById('input-destino').value.trim().toLowerCase();
@@ -636,16 +648,28 @@
                 return;
             }
 
-            // NO filtrar - mostrar todos los resultados que Nominatim devuelve
-            // Nominatim ya hace el filtrado y ordenamiento por relevancia
-            const resultadosFiltrados = resultados;
+            // Ordenar por distancia desde el origen si tenemos coordenadas
+            let resultadosOrdenados = resultados;
+            if (coordenadasOrigenActual) {
+                resultadosOrdenados = resultados.slice().sort((a, b) => {
+                    const distA = calcularDistancia(
+                        coordenadasOrigenActual.lat, coordenadasOrigenActual.lon,
+                        parseFloat(a.lat), parseFloat(a.lon)
+                    );
+                    const distB = calcularDistancia(
+                        coordenadasOrigenActual.lat, coordenadasOrigenActual.lon,
+                        parseFloat(b.lat), parseFloat(b.lon)
+                    );
+                    return distA - distB; // Más cercanos primero
+                });
+            }
 
-            if (resultadosFiltrados.length === 0) {
+            if (resultadosOrdenados.length === 0) {
                 contenedor.classList.add('hidden');
                 return;
             }
 
-            resultadosFiltrados.forEach(resultado => {
+            resultadosOrdenados.forEach(resultado => {
                 const opcion = document.createElement('div');
                 opcion.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200';
                 opcion.textContent = resultado.display_name;

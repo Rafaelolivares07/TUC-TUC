@@ -674,12 +674,9 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Filtro geográfico usando viewbox (Valle del Cauca + Cauca)
-                    // Formato viewbox: left,top,right,bottom (oeste,norte,este,sur)
-                    // Coordenadas: oeste=-78.25, norte=5.082, este=-75.676, sur=0.92
-                    // viewbox da prioridad a resultados de la región, pero muestra otros si no hay suficientes
-                    const viewbox = '-78.25,5.082,-75.676,0.92';
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&limit=25`;
+                    // TEMPORAL: Mostrando muchos resultados para análisis
+                    // Buscar tal cual lo que el usuario escribió + "cali" para filtrar por ciudad
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', cali')}&countrycodes=co&limit=50`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();
@@ -704,19 +701,9 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Filtro geográfico usando viewbox (Valle del Cauca + Cauca)
-                    // Formato viewbox: left,top,right,bottom (oeste,norte,este,sur)
-                    // Coordenadas: oeste=-78.25, norte=5.082, este=-75.676, sur=0.92
-                    // viewbox da prioridad a resultados de la región, pero muestra otros si no hay suficientes
-                    const viewbox = '-78.25,5.082,-75.676,0.92';
-
-                    // Si tenemos ubicación GPS, usar búsqueda por proximidad
-                    let url;
-                    if (ubicacionGPSActual) {
-                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=25`;
-                    } else {
-                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&limit=25`;
-                    }
+                    // TEMPORAL: Mostrando muchos resultados para análisis
+                    // Buscar tal cual lo que el usuario escribió + "cali" para filtrar por ciudad
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', cali')}&countrycodes=co&limit=50`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();

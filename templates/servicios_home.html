@@ -60,16 +60,31 @@
                            placeholder="Ej: 3175718658">
                 </div>
 
-                <div class="relative">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Origen</label>
+                <!-- Card de ubicación detectada -->
+                <div id="card-ubicacion-detectada" class="border-2 border-gray-300 rounded-lg p-4 cursor-pointer transition hover:shadow-lg mb-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📍</span>
+                            <span class="font-medium text-gray-700">Tu ubicación detectada</span>
+                        </div>
+                        <span id="label-seleccion" class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Toca para usar</span>
+                    </div>
+                    <div id="texto-ubicacion-detectada" class="text-sm text-gray-600 ml-7">
+                        Detectando tu ubicación...
+                    </div>
+                </div>
+
+                <button id="btn-actualizar-ubicacion" class="mb-4 w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                    <span class="text-lg">🔄</span>
+                    <span>Actualizar ubicación</span>
+                </button>
+
+                <div class="relative mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">O ingresa otra dirección</label>
                     <input type="text" id="input-origen" class="w-full p-3 border rounded-lg"
                            placeholder="Ej: Calle 5 Norte 23-45" autocomplete="off">
                     <div id="autocomplete-origen" class="hidden absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
                     </div>
-                    <button id="btn-usar-ubicacion" class="mt-2 w-full bg-green-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-700 transition flex items-center justify-center gap-2">
-                        <span class="text-lg">📍</span>
-                        <span>Usar mi ubicación actual</span>
-                    </button>
                 </div>
 
                 <div class="relative">
@@ -179,10 +194,13 @@
         let timeoutAutocompleteDestino = null;
         let timeoutAutocompleteOrigen = null;
         let ubicacionGPSActual = null; // Guardar ubicación GPS para búsquedas por proximidad
+        let cardUbicacionSeleccionado = false; // Estado del card de ubicación detectada
+        let ubicacionDetectadaDireccion = ''; // Dirección detectada
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
             configurarBotones();
+            detectarUbicacionInicial(); // Detectar ubicación al cargar
         });
 
         function configurarBotones() {
@@ -210,13 +228,23 @@
                 confirmarSolicitud();
             });
 
-            // Usar ubicación actual
-            document.getElementById('btn-usar-ubicacion').addEventListener('click', function() {
-                usarUbicacionActual();
+            // Click en card de ubicación detectada (seleccionar/deseleccionar)
+            document.getElementById('card-ubicacion-detectada').addEventListener('click', function() {
+                toggleCardUbicacion();
+            });
+
+            // Botón actualizar ubicación
+            document.getElementById('btn-actualizar-ubicacion').addEventListener('click', function(e) {
+                e.stopPropagation(); // Evitar que dispare el click del card
+                detectarUbicacionInicial();
             });
 
             // Autocomplete para origen
             document.getElementById('input-origen').addEventListener('input', function() {
+                // Si usuario escribe, deseleccionar card
+                if (this.value.trim().length > 0 && cardUbicacionSeleccionado) {
+                    toggleCardUbicacion();
+                }
                 coordenadasOrigenActual = null;
                 coordenadasOrigenSeleccionado = null;
                 buscarDireccionesAutocompleteOrigen(this.value);
@@ -311,21 +339,33 @@
         }
 
         async function calcularRutaTransporte() {
-            const origen = document.getElementById('input-origen').value.trim();
             const destino = document.getElementById('input-destino').value.trim();
 
-            if (!origen || !destino) {
-                alert('Por favor ingresa origen y destino');
+            // Validar que haya un destino
+            if (!destino) {
+                alert('Por favor ingresa un destino');
+                return;
+            }
+
+            // Validar que haya un origen (card seleccionado O input con texto)
+            const origen = document.getElementById('input-origen').value.trim();
+            if (!cardUbicacionSeleccionado && !origen) {
+                alert('Por favor selecciona tu ubicación detectada o ingresa una dirección de origen diferente');
                 return;
             }
 
             alert('Buscando direcciones y calculando ruta...');
 
-            // Si ya tenemos coordenadas del origen (de "usar mi ubicación"), usarlas directamente
+            // Determinar coordenadas de origen
             let coordsOrigen;
-            if (coordenadasOrigenActual) {
+            if (cardUbicacionSeleccionado) {
+                // Usar coordenadas del card
                 coordsOrigen = coordenadasOrigenActual;
+            } else if (coordenadasOrigenSeleccionado) {
+                // Usar coordenadas del autocomplete
+                coordsOrigen = coordenadasOrigenSeleccionado;
             } else {
+                // Geocodificar el texto ingresado
                 coordsOrigen = await buscarDireccion(origen);
             }
 
@@ -798,6 +838,63 @@
             });
 
             contenedor.classList.remove('hidden');
+        }
+
+        function detectarUbicacionInicial() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async function(position) {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+
+                    // Guardar ubicación GPS para búsquedas por proximidad
+                    ubicacionGPSActual = { lat: lat, lon: lng };
+
+                    // Guardar coordenadas para el card
+                    coordenadasOrigenActual = { lat: lat, lon: lng };
+
+                    // Obtener dirección y llenar card
+                    const direccion = await obtenerDireccionReversa(lat, lng);
+                    ubicacionDetectadaDireccion = direccion;
+                    document.getElementById('texto-ubicacion-detectada').textContent = direccion;
+                }, function(error) {
+                    document.getElementById('texto-ubicacion-detectada').textContent = 'No se pudo detectar tu ubicación. Verifica los permisos del navegador.';
+                });
+            } else {
+                document.getElementById('texto-ubicacion-detectada').textContent = 'Tu navegador no soporta geolocalización.';
+            }
+        }
+
+        function toggleCardUbicacion() {
+            const card = document.getElementById('card-ubicacion-detectada');
+            const label = document.getElementById('label-seleccion');
+            const inputOrigen = document.getElementById('input-origen');
+
+            cardUbicacionSeleccionado = !cardUbicacionSeleccionado;
+
+            if (cardUbicacionSeleccionado) {
+                // Seleccionar card
+                card.classList.remove('border-gray-300');
+                card.classList.add('border-green-600', 'bg-green-50', 'border-4');
+                label.textContent = '✓ Toca para quitar';
+                label.classList.remove('bg-gray-100', 'text-gray-500');
+                label.classList.add('bg-green-200', 'text-green-800');
+
+                // Deshabilitar input origen
+                inputOrigen.disabled = true;
+                inputOrigen.classList.add('bg-gray-100', 'cursor-not-allowed');
+                inputOrigen.value = '';
+            } else {
+                // Deseleccionar card
+                card.classList.remove('border-green-600', 'bg-green-50', 'border-4');
+                card.classList.add('border-gray-300');
+                label.textContent = 'Toca para usar';
+                label.classList.remove('bg-green-200', 'text-green-800');
+                label.classList.add('bg-gray-100', 'text-gray-500');
+
+                // Habilitar input origen
+                inputOrigen.disabled = false;
+                inputOrigen.classList.remove('bg-gray-100', 'cursor-not-allowed');
+            }
         }
 
         function usarUbicacionActual() {

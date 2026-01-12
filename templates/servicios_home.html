@@ -600,15 +600,30 @@
 
             timeoutAutocompleteDestino = setTimeout(async () => {
                 const textoExpandido = expandirAbreviaturas(texto);
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=20`;
 
                 try {
-                    const response = await fetch(url, {
-                        headers: { 'User-Agent': 'TucTucApp/1.0' }
-                    });
-                    const resultados = await response.json();
+                    // Búsquedas en paralelo: Valle del Cauca y Cauca
+                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=15`;
+                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=10`;
 
-                    mostrarSugerenciasDestino(resultados);
+                    const [responseValle, responseCauca] = await Promise.all([
+                        fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
+                        fetch(urlCauca, { headers: { 'User-Agent': 'TucTucApp/1.0' } })
+                    ]);
+
+                    const resultadosValle = await responseValle.json();
+                    const resultadosCauca = await responseCauca.json();
+
+                    // Combinar resultados eliminando duplicados
+                    const resultadosCombinados = [...resultadosValle];
+                    resultadosCauca.forEach(rc => {
+                        const yaExiste = resultadosValle.some(rv => rv.place_id === rc.place_id);
+                        if (!yaExiste) {
+                            resultadosCombinados.push(rc);
+                        }
+                    });
+
+                    mostrarSugerenciasDestino(resultadosCombinados);
                 } catch (error) {
                     console.error('Error en autocomplete destino:', error);
                 }
@@ -627,14 +642,27 @@
                 // Expandir abreviaturas antes de buscar
                 const textoExpandido = expandirAbreviaturas(texto);
 
-                // Búsqueda por texto con contexto geográfico Valle del Cauca
-                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=15`;
-
                 try {
-                    const response = await fetch(urlTexto, {
-                        headers: { 'User-Agent': 'TucTucApp/1.0' }
+                    // Búsquedas en paralelo: Valle del Cauca y Cauca
+                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=10`;
+                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=5`;
+
+                    const [responseValle, responseCauca] = await Promise.all([
+                        fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
+                        fetch(urlCauca, { headers: { 'User-Agent': 'TucTucApp/1.0' } })
+                    ]);
+
+                    const resultadosValle = await responseValle.json();
+                    const resultadosCauca = await responseCauca.json();
+
+                    // Combinar resultados eliminando duplicados
+                    let resultados = [...resultadosValle];
+                    resultadosCauca.forEach(rc => {
+                        const yaExiste = resultadosValle.some(rv => rv.place_id === rc.place_id);
+                        if (!yaExiste) {
+                            resultados.push(rc);
+                        }
                     });
-                    let resultados = await response.json();
 
                     // Si tenemos ubicación GPS, agregar búsqueda por proximidad AL INICIO
                     if (ubicacionGPSActual) {

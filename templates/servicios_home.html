@@ -675,10 +675,10 @@
 
                 try {
                     // Filtro geográfico usando viewbox (Valle del Cauca + Cauca)
-                    // Coordenadas: oeste=-78.25, sur=0.92, este=-75.676, norte=5.082
-                    // viewbox da prioridad a resultados dentro del área, pero también muestra otros si es necesario
-                    const viewbox = '-78.25,0.92,-75.676,5.082';
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&limit=25`;
+                    // Formato viewbox: left,top,right,bottom (oeste,norte,este,sur)
+                    // Coordenadas: oeste=-78.25, norte=5.082, este=-75.676, sur=0.92
+                    const viewbox = '-78.25,5.082,-75.676,0.92';
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=25`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();
@@ -704,16 +704,16 @@
 
                 try {
                     // Filtro geográfico usando viewbox (Valle del Cauca + Cauca)
-                    // Coordenadas: oeste=-78.25, sur=0.92, este=-75.676, norte=5.082
-                    // viewbox da prioridad a resultados dentro del área, pero también muestra otros si es necesario
-                    const viewbox = '-78.25,0.92,-75.676,5.082';
+                    // Formato viewbox: left,top,right,bottom (oeste,norte,este,sur)
+                    // Coordenadas: oeste=-78.25, norte=5.082, este=-75.676, sur=0.92
+                    const viewbox = '-78.25,5.082,-75.676,0.92';
 
                     // Si tenemos ubicación GPS, usar búsqueda por proximidad
                     let url;
                     if (ubicacionGPSActual) {
-                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=25`;
+                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&bounded=1&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=25`;
                     } else {
-                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&limit=25`;
+                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=25`;
                     }
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });

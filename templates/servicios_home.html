@@ -636,23 +636,9 @@
                 return;
             }
 
-            // Filtrar y ordenar resultados
-            const resultadosFiltrados = resultados
-                .filter(r => r.display_name.toLowerCase().includes(textoIngresado))
-                .sort((a, b) => {
-                    const nombreA = a.display_name.toLowerCase();
-                    const nombreB = b.display_name.toLowerCase();
-
-                    // Los que empiezan con el texto van primero
-                    const aEmpieza = nombreA.startsWith(textoIngresado);
-                    const bEmpieza = nombreB.startsWith(textoIngresado);
-
-                    if (aEmpieza && !bEmpieza) return -1;
-                    if (!aEmpieza && bEmpieza) return 1;
-
-                    // Si ambos empiezan o ninguno empieza, mantener orden original
-                    return 0;
-                });
+            // NO filtrar - mostrar todos los resultados que Nominatim devuelve
+            // Nominatim ya hace el filtrado y ordenamiento por relevancia
+            const resultadosFiltrados = resultados;
 
             if (resultadosFiltrados.length === 0) {
                 contenedor.classList.add('hidden');
@@ -689,23 +675,9 @@
                 return;
             }
 
-            // Filtrar y ordenar resultados
-            const resultadosFiltrados = resultados
-                .filter(r => r.display_name.toLowerCase().includes(textoLower))
-                .sort((a, b) => {
-                    const nombreA = a.display_name.toLowerCase();
-                    const nombreB = b.display_name.toLowerCase();
-
-                    // Los que empiezan con el texto van primero
-                    const aEmpieza = nombreA.startsWith(textoLower);
-                    const bEmpieza = nombreB.startsWith(textoLower);
-
-                    if (aEmpieza && !bEmpieza) return -1;
-                    if (!aEmpieza && bEmpieza) return 1;
-
-                    // Si ambos empiezan o ninguno empieza, mantener orden original
-                    return 0;
-                });
+            // NO filtrar - mostrar todos los resultados que Nominatim devuelve
+            // Nominatim ya hace el filtrado y ordenamiento por relevancia
+            const resultadosFiltrados = resultados;
 
             if (resultadosFiltrados.length === 0) {
                 contenedor.classList.add('hidden');

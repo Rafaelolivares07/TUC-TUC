@@ -81,7 +81,7 @@
                 </div>
 
                 <button id="btn-actualizar-ubicacion" class="mb-3 w-full border-2 border-gray-800 text-gray-800 py-2 px-4 rounded font-medium transition hover:bg-gray-50">
-                    Actualizar ubicación
+                    Detectar nuevamente ubicación
                 </button>
 
                 <div class="relative">
@@ -674,9 +674,9 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Búsquedas en paralelo usando parámetro state (filtro geográfico correcto)
-                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Valle del Cauca&countrycodes=co&limit=15`;
-                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Cauca&countrycodes=co&limit=10`;
+                    // Búsquedas en paralelo con contexto geográfico en el texto
+                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=15`;
+                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=10`;
 
                     const [responseValle, responseCauca] = await Promise.all([
                         fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
@@ -715,9 +715,9 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Búsquedas en paralelo usando parámetro state (filtro geográfico correcto)
-                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Valle del Cauca&countrycodes=co&limit=10`;
-                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Cauca&countrycodes=co&limit=5`;
+                    // Búsquedas en paralelo con contexto geográfico en el texto
+                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=10`;
+                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=5`;
 
                     const [responseValle, responseCauca] = await Promise.all([
                         fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
@@ -903,9 +903,9 @@
             cardUbicacionSeleccionado = !cardUbicacionSeleccionado;
 
             if (cardUbicacionSeleccionado) {
-                // Seleccionar card (estilo minimalista)
-                card.classList.remove('border-gray-300');
-                card.classList.add('border-gray-800', 'border-4');
+                // Seleccionar card (mismo estilo que botón transporte)
+                card.classList.remove('border-gray-300', 'border-2');
+                card.classList.add('border-gray-800', 'border-2');
                 label.textContent = 'Toca para quitar';
                 label.classList.remove('border-gray-300', 'text-gray-600');
                 label.classList.add('border-gray-800', 'text-gray-800', 'font-medium');
@@ -916,8 +916,8 @@
                 inputOrigen.value = '';
             } else {
                 // Deseleccionar card
-                card.classList.remove('border-gray-800', 'border-4');
-                card.classList.add('border-gray-300');
+                card.classList.remove('border-gray-800');
+                card.classList.add('border-gray-300', 'border-2');
                 label.textContent = 'Toca para usar';
                 label.classList.remove('border-gray-800', 'text-gray-800', 'font-medium');
                 label.classList.add('border-gray-300', 'text-gray-600');

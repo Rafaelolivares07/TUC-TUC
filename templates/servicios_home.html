@@ -674,28 +674,16 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Búsquedas en paralelo con contexto geográfico en el texto
-                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=15`;
-                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=10`;
+                    // Filtro geográfico usando viewbox (Valle del Cauca + Cauca)
+                    // Coordenadas: oeste=-78.25, sur=0.92, este=-75.676, norte=5.082
+                    // viewbox da prioridad a resultados dentro del área, pero también muestra otros si es necesario
+                    const viewbox = '-78.25,0.92,-75.676,5.082';
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&limit=25`;
 
-                    const [responseValle, responseCauca] = await Promise.all([
-                        fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
-                        fetch(urlCauca, { headers: { 'User-Agent': 'TucTucApp/1.0' } })
-                    ]);
+                    const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
+                    const resultados = await response.json();
 
-                    const resultadosValle = await responseValle.json();
-                    const resultadosCauca = await responseCauca.json();
-
-                    // Combinar resultados eliminando duplicados
-                    const resultadosCombinados = [...resultadosValle];
-                    resultadosCauca.forEach(rc => {
-                        const yaExiste = resultadosValle.some(rv => rv.place_id === rc.place_id);
-                        if (!yaExiste) {
-                            resultadosCombinados.push(rc);
-                        }
-                    });
-
-                    mostrarSugerenciasDestino(resultadosCombinados);
+                    mostrarSugerenciasDestino(resultados);
                 } catch (error) {
                     console.error('Error en autocomplete destino:', error);
                 }
@@ -715,51 +703,21 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Búsquedas en paralelo con contexto geográfico en el texto
-                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=10`;
-                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=5`;
+                    // Filtro geográfico usando viewbox (Valle del Cauca + Cauca)
+                    // Coordenadas: oeste=-78.25, sur=0.92, este=-75.676, norte=5.082
+                    // viewbox da prioridad a resultados dentro del área, pero también muestra otros si es necesario
+                    const viewbox = '-78.25,0.92,-75.676,5.082';
 
-                    const [responseValle, responseCauca] = await Promise.all([
-                        fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
-                        fetch(urlCauca, { headers: { 'User-Agent': 'TucTucApp/1.0' } })
-                    ]);
-
-                    const resultadosValle = await responseValle.json();
-                    const resultadosCauca = await responseCauca.json();
-
-                    // Combinar resultados eliminando duplicados
-                    let resultados = [...resultadosValle];
-                    resultadosCauca.forEach(rc => {
-                        const yaExiste = resultadosValle.some(rv => rv.place_id === rc.place_id);
-                        if (!yaExiste) {
-                            resultados.push(rc);
-                        }
-                    });
-
-                    // Si tenemos ubicación GPS, agregar búsqueda por proximidad AL INICIO
+                    // Si tenemos ubicación GPS, usar búsqueda por proximidad
+                    let url;
                     if (ubicacionGPSActual) {
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
-
-                        const urlProximidad = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=10`;
-
-                        const responseProx = await fetch(urlProximidad, {
-                            headers: { 'User-Agent': 'TucTucApp/1.0' }
-                        });
-                        const resultadosProx = await responseProx.json();
-
-                        // Poner resultados de proximidad PRIMERO (cercanos al inicio)
-                        const resultadosCombinados = [...resultadosProx];
-
-                        // Agregar resultados de texto que no estén ya en proximidad
-                        resultados.forEach(r => {
-                            const yaExiste = resultadosProx.some(rp => rp.place_id === r.place_id);
-                            if (!yaExiste) {
-                                resultadosCombinados.push(r);
-                            }
-                        });
-
-                        resultados = resultadosCombinados;
+                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=25`;
+                    } else {
+                        url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&viewbox=${viewbox}&countrycodes=co&limit=25`;
                     }
+
+                    const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
+                    const resultados = await response.json();
 
                     mostrarSugerenciasOrigen(resultados, texto);
                 } catch (error) {

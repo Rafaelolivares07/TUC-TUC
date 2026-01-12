@@ -600,7 +600,7 @@
 
             timeoutAutocompleteDestino = setTimeout(async () => {
                 const textoExpandido = expandirAbreviaturas(texto);
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&countrycodes=co&limit=20`;
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=20`;
 
                 try {
                     const response = await fetch(url, {
@@ -627,8 +627,8 @@
                 // Expandir abreviaturas antes de buscar
                 const textoExpandido = expandirAbreviaturas(texto);
 
-                // Búsqueda por texto
-                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&countrycodes=co&limit=15`;
+                // Búsqueda por texto con contexto geográfico Valle del Cauca
+                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=15`;
 
                 try {
                     const response = await fetch(urlTexto, {

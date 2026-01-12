@@ -643,9 +643,9 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Búsquedas en paralelo: Valle del Cauca y Cauca
-                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=15`;
-                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=10`;
+                    // Búsquedas en paralelo usando parámetro state (filtro geográfico correcto)
+                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Valle del Cauca&countrycodes=co&limit=15`;
+                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Cauca&countrycodes=co&limit=10`;
 
                     const [responseValle, responseCauca] = await Promise.all([
                         fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),
@@ -684,9 +684,9 @@
                 const textoExpandido = expandirAbreviaturas(texto);
 
                 try {
-                    // Búsquedas en paralelo: Valle del Cauca y Cauca
-                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Valle del Cauca')}&countrycodes=co&limit=10`;
-                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido + ', Cauca')}&countrycodes=co&limit=5`;
+                    // Búsquedas en paralelo usando parámetro state (filtro geográfico correcto)
+                    const urlValle = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Valle del Cauca&countrycodes=co&limit=10`;
+                    const urlCauca = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&state=Cauca&countrycodes=co&limit=5`;
 
                     const [responseValle, responseCauca] = await Promise.all([
                         fetch(urlValle, { headers: { 'User-Agent': 'TucTucApp/1.0' } }),

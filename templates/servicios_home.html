@@ -573,6 +573,7 @@
 
         function mostrarSugerencias(resultados) {
             const contenedor = document.getElementById('autocomplete-destino');
+            const textoIngresado = document.getElementById('input-destino').value.trim().toLowerCase();
             contenedor.innerHTML = '';
 
             if (resultados.length === 0) {
@@ -580,7 +581,30 @@
                 return;
             }
 
-            resultados.forEach(resultado => {
+            // Filtrar y ordenar resultados
+            const resultadosFiltrados = resultados
+                .filter(r => r.display_name.toLowerCase().includes(textoIngresado))
+                .sort((a, b) => {
+                    const nombreA = a.display_name.toLowerCase();
+                    const nombreB = b.display_name.toLowerCase();
+
+                    // Los que empiezan con el texto van primero
+                    const aEmpieza = nombreA.startsWith(textoIngresado);
+                    const bEmpieza = nombreB.startsWith(textoIngresado);
+
+                    if (aEmpieza && !bEmpieza) return -1;
+                    if (!aEmpieza && bEmpieza) return 1;
+
+                    // Si ambos empiezan o ninguno empieza, mantener orden original
+                    return 0;
+                });
+
+            if (resultadosFiltrados.length === 0) {
+                contenedor.classList.add('hidden');
+                return;
+            }
+
+            resultadosFiltrados.forEach(resultado => {
                 const opcion = document.createElement('div');
                 opcion.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200';
                 opcion.textContent = resultado.display_name;

@@ -557,16 +557,50 @@
             }
         }
 
+        function expandirAbreviaturas(texto) {
+            const abreviaturas = {
+                'av': 'avenida',
+                'ave': 'avenida',
+                'aven': 'avenida',
+                'aveni': 'avenida',
+                'avenid': 'avenida',
+                'cl': 'calle',
+                'cll': 'calle',
+                'call': 'calle',
+                'calle': 'calle',
+                'cr': 'carrera',
+                'crr': 'carrera',
+                'carr': 'carrera',
+                'carre': 'carrera',
+                'carrer': 'carrera',
+                'carrera': 'carrera',
+                'dg': 'diagonal',
+                'diag': 'diagonal',
+                'diagonal': 'diagonal',
+                'tr': 'transversal',
+                'trans': 'transversal',
+                'transversal': 'transversal'
+            };
+
+            const palabras = texto.toLowerCase().split(' ');
+            const palabrasExpandidas = palabras.map(palabra => {
+                return abreviaturas[palabra] || palabra;
+            });
+
+            return palabrasExpandidas.join(' ');
+        }
+
         function buscarDireccionesAutocompleteDestino(texto) {
             clearTimeout(timeoutAutocompleteDestino);
 
-            if (texto.length < 3) {
+            if (texto.length < 2) {
                 document.getElementById('autocomplete-destino').classList.add('hidden');
                 return;
             }
 
             timeoutAutocompleteDestino = setTimeout(async () => {
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + '')}&countrycodes=co&limit=20`;
+                const textoExpandido = expandirAbreviaturas(texto);
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&countrycodes=co&limit=20`;
 
                 try {
                     const response = await fetch(url, {
@@ -584,14 +618,17 @@
         async function buscarDireccionesAutocompleteOrigen(texto) {
             clearTimeout(timeoutAutocompleteOrigen);
 
-            if (texto.length < 3) {
+            if (texto.length < 2) {
                 document.getElementById('autocomplete-origen').classList.add('hidden');
                 return;
             }
 
             timeoutAutocompleteOrigen = setTimeout(async () => {
+                // Expandir abreviaturas antes de buscar
+                const textoExpandido = expandirAbreviaturas(texto);
+
                 // Búsqueda por texto
-                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + '')}&countrycodes=co&limit=15`;
+                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&countrycodes=co&limit=15`;
 
                 try {
                     const response = await fetch(urlTexto, {
@@ -603,7 +640,7 @@
                     if (ubicacionGPSActual) {
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
 
-                        const urlProximidad = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=10`;
+                        const urlProximidad = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoExpandido)}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=10`;
 
                         const responseProx = await fetch(urlProximidad, {
                             headers: { 'User-Agent': 'TucTucApp/1.0' }

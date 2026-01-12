@@ -60,10 +60,12 @@
                            placeholder="Ej: 3175718658">
                 </div>
 
-                <div>
+                <div class="relative">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Origen</label>
                     <input type="text" id="input-origen" class="w-full p-3 border rounded-lg"
-                           placeholder="Ej: Calle 5 Norte 23-45, Cali">
+                           placeholder="Ej: Calle 5 Norte 23-45, Cali" autocomplete="off">
+                    <div id="autocomplete-origen" class="hidden absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                    </div>
                     <button id="btn-usar-ubicacion" class="text-sm text-blue-600 mt-1">
                         📍 Usar mi ubicación actual
                     </button>
@@ -172,7 +174,10 @@
         let datosCalculados = {};
         let coordenadasOrigenActual = null; // Guardar coordenadas cuando se usa "ubicación actual"
         let coordenadasDestinoSeleccionado = null; // Guardar coordenadas cuando se selecciona del autocomplete
-        let timeoutAutocomplete = null;
+        let coordenadasOrigenSeleccionado = null; // Guardar coordenadas cuando se selecciona origen del autocomplete
+        let timeoutAutocompleteDestino = null;
+        let timeoutAutocompleteOrigen = null;
+        let ubicacionGPSActual = null; // Guardar ubicación GPS para búsquedas por proximidad
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -209,19 +214,24 @@
                 usarUbicacionActual();
             });
 
-            // Limpiar coordenadas guardadas si el usuario edita manualmente el campo de origen
+            // Autocomplete para origen
             document.getElementById('input-origen').addEventListener('input', function() {
                 coordenadasOrigenActual = null;
+                coordenadasOrigenSeleccionado = null;
+                buscarDireccionesAutocompleteOrigen(this.value);
             });
 
             // Autocomplete para destino
             document.getElementById('input-destino').addEventListener('input', function() {
                 coordenadasDestinoSeleccionado = null;
-                buscarDireccionesAutocomplete(this.value);
+                buscarDireccionesAutocompleteDestino(this.value);
             });
 
             // Cerrar autocomplete si se hace clic fuera
             document.addEventListener('click', function(e) {
+                if (!e.target.closest('#input-origen') && !e.target.closest('#autocomplete-origen')) {
+                    document.getElementById('autocomplete-origen').classList.add('hidden');
+                }
                 if (!e.target.closest('#input-destino') && !e.target.closest('#autocomplete-destino')) {
                     document.getElementById('autocomplete-destino').classList.add('hidden');
                 }
@@ -547,15 +557,15 @@
             }
         }
 
-        function buscarDireccionesAutocomplete(texto) {
-            clearTimeout(timeoutAutocomplete);
+        function buscarDireccionesAutocompleteDestino(texto) {
+            clearTimeout(timeoutAutocompleteDestino);
 
             if (texto.length < 3) {
                 document.getElementById('autocomplete-destino').classList.add('hidden');
                 return;
             }
 
-            timeoutAutocomplete = setTimeout(async () => {
+            timeoutAutocompleteDestino = setTimeout(async () => {
                 const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali, Colombia')}&countrycodes=co&limit=5`;
 
                 try {
@@ -564,14 +574,59 @@
                     });
                     const resultados = await response.json();
 
-                    mostrarSugerencias(resultados);
+                    mostrarSugerenciasDestino(resultados);
                 } catch (error) {
-                    console.error('Error en autocomplete:', error);
+                    console.error('Error en autocomplete destino:', error);
                 }
             }, 500);
         }
 
-        function mostrarSugerencias(resultados) {
+        async function buscarDireccionesAutocompleteOrigen(texto) {
+            clearTimeout(timeoutAutocompleteOrigen);
+
+            if (texto.length < 3) {
+                document.getElementById('autocomplete-origen').classList.add('hidden');
+                return;
+            }
+
+            timeoutAutocompleteOrigen = setTimeout(async () => {
+                // Búsqueda por texto
+                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali, Colombia')}&countrycodes=co&limit=5`;
+
+                try {
+                    const response = await fetch(urlTexto, {
+                        headers: { 'User-Agent': 'TucTucApp/1.0' }
+                    });
+                    let resultados = await response.json();
+
+                    // Si tenemos ubicación GPS, agregar búsqueda por proximidad
+                    if (ubicacionGPSActual) {
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
+
+                        const urlProximidad = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=3`;
+
+                        const responseProx = await fetch(urlProximidad, {
+                            headers: { 'User-Agent': 'TucTucApp/1.0' }
+                        });
+                        const resultadosProx = await responseProx.json();
+
+                        // Agregar resultados de proximidad que no estén ya en la lista
+                        resultadosProx.forEach(rp => {
+                            const yaExiste = resultados.some(r => r.place_id === rp.place_id);
+                            if (!yaExiste) {
+                                resultados.push(rp);
+                            }
+                        });
+                    }
+
+                    mostrarSugerenciasOrigen(resultados, texto);
+                } catch (error) {
+                    console.error('Error en autocomplete origen:', error);
+                }
+            }, 500);
+        }
+
+        function mostrarSugerenciasDestino(resultados) {
             const contenedor = document.getElementById('autocomplete-destino');
             const textoIngresado = document.getElementById('input-destino').value.trim().toLowerCase();
             contenedor.innerHTML = '';
@@ -624,11 +679,68 @@
             contenedor.classList.remove('hidden');
         }
 
+        function mostrarSugerenciasOrigen(resultados, textoIngresado) {
+            const contenedor = document.getElementById('autocomplete-origen');
+            const textoLower = textoIngresado.trim().toLowerCase();
+            contenedor.innerHTML = '';
+
+            if (resultados.length === 0) {
+                contenedor.classList.add('hidden');
+                return;
+            }
+
+            // Filtrar y ordenar resultados
+            const resultadosFiltrados = resultados
+                .filter(r => r.display_name.toLowerCase().includes(textoLower))
+                .sort((a, b) => {
+                    const nombreA = a.display_name.toLowerCase();
+                    const nombreB = b.display_name.toLowerCase();
+
+                    // Los que empiezan con el texto van primero
+                    const aEmpieza = nombreA.startsWith(textoLower);
+                    const bEmpieza = nombreB.startsWith(textoLower);
+
+                    if (aEmpieza && !bEmpieza) return -1;
+                    if (!aEmpieza && bEmpieza) return 1;
+
+                    // Si ambos empiezan o ninguno empieza, mantener orden original
+                    return 0;
+                });
+
+            if (resultadosFiltrados.length === 0) {
+                contenedor.classList.add('hidden');
+                return;
+            }
+
+            resultadosFiltrados.forEach(resultado => {
+                const opcion = document.createElement('div');
+                opcion.className = 'p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-200';
+                opcion.textContent = resultado.display_name;
+
+                opcion.addEventListener('click', function() {
+                    document.getElementById('input-origen').value = resultado.display_name;
+                    coordenadasOrigenSeleccionado = {
+                        lat: parseFloat(resultado.lat),
+                        lon: parseFloat(resultado.lon)
+                    };
+                    coordenadasOrigenActual = coordenadasOrigenSeleccionado; // Usar estas coordenadas
+                    contenedor.classList.add('hidden');
+                });
+
+                contenedor.appendChild(opcion);
+            });
+
+            contenedor.classList.remove('hidden');
+        }
+
         function usarUbicacionActual() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(async function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
+
+                    // Guardar ubicación GPS para búsquedas por proximidad
+                    ubicacionGPSActual = { lat: lat, lon: lng };
 
                     // Guardar coordenadas para usar directamente después
                     coordenadasOrigenActual = { lat: lat, lon: lng };

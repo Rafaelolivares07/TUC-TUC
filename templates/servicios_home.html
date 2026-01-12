@@ -263,7 +263,7 @@
         }
 
         async function buscarDireccion(direccion) {
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Cali, Colombia')}&countrycodes=co&limit=1`;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Cali')}&countrycodes=co&limit=1`;
 
             try {
                 const controller = new AbortController();
@@ -566,7 +566,7 @@
             }
 
             timeoutAutocompleteDestino = setTimeout(async () => {
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali, Colombia')}&countrycodes=co&limit=5`;
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali')}&countrycodes=co&limit=20`;
 
                 try {
                     const response = await fetch(url, {
@@ -591,7 +591,7 @@
 
             timeoutAutocompleteOrigen = setTimeout(async () => {
                 // Búsqueda por texto
-                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali, Colombia')}&countrycodes=co&limit=5`;
+                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali')}&countrycodes=co&limit=15`;
 
                 try {
                     const response = await fetch(urlTexto, {
@@ -603,7 +603,7 @@
                     if (ubicacionGPSActual) {
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
 
-                        const urlProximidad = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=3`;
+                        const urlProximidad = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&countrycodes=co&lat=${ubicacionGPSActual.lat}&lon=${ubicacionGPSActual.lon}&limit=10`;
 
                         const responseProx = await fetch(urlProximidad, {
                             headers: { 'User-Agent': 'TucTucApp/1.0' }

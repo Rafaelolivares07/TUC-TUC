@@ -599,7 +599,7 @@
                     });
                     let resultados = await response.json();
 
-                    // Si tenemos ubicación GPS, agregar búsqueda por proximidad
+                    // Si tenemos ubicación GPS, agregar búsqueda por proximidad AL INICIO
                     if (ubicacionGPSActual) {
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
 
@@ -610,13 +610,18 @@
                         });
                         const resultadosProx = await responseProx.json();
 
-                        // Agregar resultados de proximidad que no estén ya en la lista
-                        resultadosProx.forEach(rp => {
-                            const yaExiste = resultados.some(r => r.place_id === rp.place_id);
+                        // Poner resultados de proximidad PRIMERO (cercanos al inicio)
+                        const resultadosCombinados = [...resultadosProx];
+
+                        // Agregar resultados de texto que no estén ya en proximidad
+                        resultados.forEach(r => {
+                            const yaExiste = resultadosProx.some(rp => rp.place_id === r.place_id);
                             if (!yaExiste) {
-                                resultados.push(rp);
+                                resultadosCombinados.push(r);
                             }
                         });
+
+                        resultados = resultadosCombinados;
                     }
 
                     mostrarSugerenciasOrigen(resultados, texto);

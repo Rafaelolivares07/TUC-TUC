@@ -63,7 +63,7 @@
                 <div class="relative">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Origen</label>
                     <input type="text" id="input-origen" class="w-full p-3 border rounded-lg"
-                           placeholder="Ej: Calle 5 Norte 23-45, Cali" autocomplete="off">
+                           placeholder="Ej: Calle 5 Norte 23-45" autocomplete="off">
                     <div id="autocomplete-origen" class="hidden absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
                     </div>
                     <button id="btn-usar-ubicacion" class="text-sm text-blue-600 mt-1">
@@ -74,7 +74,7 @@
                 <div class="relative">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Destino</label>
                     <input type="text" id="input-destino" class="w-full p-3 border rounded-lg"
-                           placeholder="Ej: Avenida 6 Norte 28-50, Cali" autocomplete="off">
+                           placeholder="Ej: Avenida 6 Norte 28-50" autocomplete="off">
                     <div id="autocomplete-destino" class="hidden absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
                     </div>
                 </div>
@@ -263,7 +263,7 @@
         }
 
         async function buscarDireccion(direccion) {
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + ', Cali')}&countrycodes=co&limit=1`;
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(direccion + '')}&countrycodes=co&limit=1`;
 
             try {
                 const controller = new AbortController();
@@ -339,7 +339,7 @@
             }
 
             if (!coordsOrigen) {
-                alert('No se encontró la dirección de origen. Intenta con una dirección más específica (ej: Calle 5 Norte 23-45, Cali)');
+                alert('No se encontró la dirección de origen. Intenta con una dirección más específica (ej: Calle 5 Norte 23-45)');
                 return;
             }
 
@@ -566,7 +566,7 @@
             }
 
             timeoutAutocompleteDestino = setTimeout(async () => {
-                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali')}&countrycodes=co&limit=20`;
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + '')}&countrycodes=co&limit=20`;
 
                 try {
                     const response = await fetch(url, {
@@ -591,7 +591,7 @@
 
             timeoutAutocompleteOrigen = setTimeout(async () => {
                 // Búsqueda por texto
-                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', Cali')}&countrycodes=co&limit=15`;
+                const urlTexto = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + '')}&countrycodes=co&limit=15`;
 
                 try {
                     const response = await fetch(urlTexto, {

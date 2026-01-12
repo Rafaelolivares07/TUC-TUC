@@ -675,8 +675,8 @@
 
                 try {
                     // TEMPORAL: Mostrando muchos resultados para análisis
-                    // Buscar tal cual lo que el usuario escribió + "cali" para filtrar por ciudad
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', cali')}&countrycodes=co&limit=50`;
+                    // Buscar texto literal, usar city=cali como parámetro separado
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&city=cali&countrycodes=co&limit=50`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();
@@ -702,8 +702,8 @@
 
                 try {
                     // TEMPORAL: Mostrando muchos resultados para análisis
-                    // Buscar tal cual lo que el usuario escribió + "cali" para filtrar por ciudad
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto + ', cali')}&countrycodes=co&limit=50`;
+                    // Buscar texto literal, usar city=cali como parámetro separado
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&city=cali&countrycodes=co&limit=50`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();

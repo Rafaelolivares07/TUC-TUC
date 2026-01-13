@@ -104,6 +104,10 @@
                     </div>
                 </div>
 
+                <button id="btn-seleccionar-mapa" class="mt-3 w-full border-2 border-gray-800 text-gray-800 py-2 px-4 rounded font-medium transition hover:bg-gray-50">
+                    Seleccionar en mapa
+                </button>
+
                 <button id="btn-calcular-ruta" class="mt-4 w-full border-2 border-gray-800 bg-gray-800 text-white py-3 rounded font-medium transition hover:bg-gray-700">
                     Calcular ruta y tarifa
                 </button>
@@ -205,6 +209,8 @@
         let ubicacionGPSActual = null; // Guardar ubicación GPS para búsquedas por proximidad
         let cardUbicacionSeleccionado = false; // Estado del card de ubicación detectada
         let ubicacionDetectadaDireccion = ''; // Dirección detectada
+        let seleccionandoEnMapa = false; // Estado de selección en mapa
+        let marcadorDestinoMapa = null; // Marcador temporal en el mapa
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -285,6 +291,11 @@
             document.getElementById('input-destino').addEventListener('input', function() {
                 coordenadasDestinoSeleccionado = null;
                 buscarDireccionesAutocompleteDestino(this.value);
+            });
+
+            // Botón seleccionar en mapa
+            document.getElementById('btn-seleccionar-mapa').addEventListener('click', function() {
+                activarSeleccionMapa();
             });
 
             // Cerrar autocomplete si se hace clic fuera
@@ -662,6 +673,22 @@
             return palabrasExpandidas.join(' ');
         }
 
+        function procesarTextoParaCali(texto) {
+            // Detectar patrón: av/avenida + número al inicio (ej: "av 6", "av 6 calle 44")
+            // En Cali todas las avenidas son en el Norte, agregar "n" automáticamente
+            const textoLimpio = texto.trim();
+            // Cambio: quitar $ del final para permitir texto adicional
+            const patron = /^(av|ave|aven|aveni|avenid|avenida)\s+(\d+)(\s|$)/i;
+            const match = textoLimpio.match(patron);
+
+            if (match) {
+                // Si encuentra "av/avenida + número", insertar "n" después del número
+                return textoLimpio.replace(patron, '$1 $2n$3');
+            }
+
+            return textoLimpio;
+        }
+
         function buscarDireccionesAutocompleteDestino(texto) {
             clearTimeout(timeoutAutocompleteDestino);
 
@@ -671,12 +698,13 @@
             }
 
             timeoutAutocompleteDestino = setTimeout(async () => {
-                const textoExpandido = expandirAbreviaturas(texto);
+                // Procesar texto para Cali (agrega "n" a avenidas con número)
+                const textoProcesado = procesarTextoParaCali(texto);
 
                 try {
-                    // TEMPORAL: Mostrando muchos resultados para análisis
-                    // Buscar texto literal, usar city=cali como parámetro separado
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&city=cali&countrycodes=co&limit=50`;
+                    // Filtro geográfico con viewbox de Cali y alrededores
+                    const viewbox = '-77.15,4.56,-76.07,2.4'; // oeste,norte,este,sur
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=50`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();
@@ -697,13 +725,13 @@
             }
 
             timeoutAutocompleteOrigen = setTimeout(async () => {
-                // Expandir abreviaturas antes de buscar
-                const textoExpandido = expandirAbreviaturas(texto);
+                // Procesar texto para Cali (agrega "n" a avenidas con número)
+                const textoProcesado = procesarTextoParaCali(texto);
 
                 try {
-                    // TEMPORAL: Mostrando muchos resultados para análisis
-                    // Buscar texto literal, usar city=cali como parámetro separado
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}&city=cali&countrycodes=co&limit=50`;
+                    // Filtro geográfico con viewbox de Cali y alrededores
+                    const viewbox = '-77.15,4.56,-76.07,2.4'; // oeste,norte,este,sur
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=50`;
 
                     const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultados = await response.json();
@@ -897,6 +925,67 @@
             } else {
                 alert('Tu navegador no soporta geolocalización');
             }
+        }
+
+        function activarSeleccionMapa() {
+            // Mostrar el mapa
+            document.getElementById('contenedor-mapa').classList.remove('hidden');
+
+            // Inicializar mapa si no existe
+            if (!map) {
+                map = L.map('map').setView([3.4516, -76.5320], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+            }
+
+            // Activar modo selección
+            seleccionandoEnMapa = true;
+
+            // Cambiar cursor del mapa
+            document.getElementById('map').style.cursor = 'crosshair';
+
+            // Cambiar texto del botón
+            document.getElementById('btn-seleccionar-mapa').textContent = 'Toca el mapa para seleccionar destino';
+            document.getElementById('btn-seleccionar-mapa').classList.add('bg-blue-100');
+
+            // Scroll al mapa
+            setTimeout(() => {
+                document.getElementById('contenedor-mapa').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+
+            // Listener para click en el mapa
+            map.once('click', async function(e) {
+                const lat = e.latlng.lat;
+                const lng = e.latlng.lng;
+
+                // Guardar coordenadas
+                coordenadasDestinoSeleccionado = { lat: lat, lon: lng };
+
+                // Agregar o mover marcador
+                if (marcadorDestinoMapa) {
+                    marcadorDestinoMapa.setLatLng([lat, lng]);
+                } else {
+                    marcadorDestinoMapa = L.marker([lat, lng]).addTo(map);
+                }
+
+                // Obtener dirección con geocodificación inversa
+                const direccion = await obtenerDireccionReversa(lat, lng);
+
+                // Llenar input de destino
+                document.getElementById('input-destino').value = direccion;
+
+                // Desactivar modo selección
+                seleccionandoEnMapa = false;
+                document.getElementById('map').style.cursor = '';
+                document.getElementById('btn-seleccionar-mapa').textContent = 'Seleccionar en mapa';
+                document.getElementById('btn-seleccionar-mapa').classList.remove('bg-blue-100');
+
+                // Scroll de vuelta al destino
+                setTimeout(() => {
+                    document.getElementById('seccion-destino').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 300);
+            });
         }
     </script>
 </body>

@@ -18549,7 +18549,7 @@ def api_usuario_actual():
     try:
         conn = get_db_connection()
         usuario = conn.execute("""
-            SELECT id, nombre, telefono, email
+            SELECT id, nombre, telefono
             FROM terceros
             WHERE id = %s
         """, (session['usuario_id'],)).fetchone()
@@ -18564,7 +18564,6 @@ def api_usuario_actual():
                     'id': usuario['id'],
                     'nombre': usuario['nombre'],
                     'telefono': usuario['telefono'] or '',
-                    'email': usuario['email'] or '',
                     'primer_nombre': primer_nombre
                 }
             })

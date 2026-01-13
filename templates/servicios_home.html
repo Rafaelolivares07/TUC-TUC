@@ -1128,6 +1128,8 @@
                 const response = await fetch('/api/usuario-actual');
                 const data = await response.json();
 
+                console.log('Respuesta completa del endpoint:', data);
+
                 if (data.ok && data.usuario) {
                     // Usuario logueado
                     const { nombre, telefono, primer_nombre } = data.usuario;

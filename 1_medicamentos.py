@@ -13966,6 +13966,11 @@ def api_restaurar_sesion():
     if not usuario_id:
         return jsonify({'ok': False, 'error': 'usuario_id requerido'}), 400
 
+    # IMPORTANTE: No sobrescribir sesiones de administrador
+    if session.get('rol') == 'Administrador':
+        print(f"Intento de restaurar sesion bloqueado: Ya hay un administrador logueado (ID: {session.get('usuario_id')})")
+        return jsonify({'ok': False, 'error': 'Sesión de administrador activa'}), 403
+
     try:
         conn = get_db_connection()
 

@@ -230,6 +230,7 @@
 
             // Calcular ruta (transporte)
             document.getElementById('btn-calcular-ruta').addEventListener('click', function() {
+                desactivarSeleccionMapa(); // Desactivar modo selección si está activo
                 calcularRutaTransporte();
             });
 
@@ -928,6 +929,11 @@
         }
 
         function activarSeleccionMapa() {
+            // Si ya está en modo selección, no hacer nada
+            if (seleccionandoEnMapa) {
+                return;
+            }
+
             // Mostrar el mapa
             document.getElementById('contenedor-mapa').classList.remove('hidden');
 
@@ -946,7 +952,7 @@
             document.getElementById('map').style.cursor = 'crosshair';
 
             // Cambiar texto del botón
-            document.getElementById('btn-seleccionar-mapa').textContent = 'Toca el mapa para seleccionar destino';
+            document.getElementById('btn-seleccionar-mapa').textContent = 'Toca el mapa las veces que necesites';
             document.getElementById('btn-seleccionar-mapa').classList.add('bg-blue-100');
 
             // Scroll al mapa
@@ -954,8 +960,10 @@
                 document.getElementById('contenedor-mapa').scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
 
-            // Listener para click en el mapa
-            map.once('click', async function(e) {
+            // Listener para clicks múltiples en el mapa (no usar .once())
+            map.on('click', async function(e) {
+                if (!seleccionandoEnMapa) return; // Ignorar si no está en modo selección
+
                 const lat = e.latlng.lat;
                 const lng = e.latlng.lng;
 
@@ -974,18 +982,19 @@
 
                 // Llenar input de destino
                 document.getElementById('input-destino').value = direccion;
+            });
+        }
 
-                // Desactivar modo selección
+        function desactivarSeleccionMapa() {
+            if (seleccionandoEnMapa) {
                 seleccionandoEnMapa = false;
                 document.getElementById('map').style.cursor = '';
                 document.getElementById('btn-seleccionar-mapa').textContent = 'Seleccionar en mapa';
                 document.getElementById('btn-seleccionar-mapa').classList.remove('bg-blue-100');
 
-                // Scroll de vuelta al destino
-                setTimeout(() => {
-                    document.getElementById('seccion-destino').scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 300);
-            });
+                // Remover listeners del mapa
+                map.off('click');
+            }
         }
     </script>
 </body>

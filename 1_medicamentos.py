@@ -18431,28 +18431,41 @@ def api_solicitar_servicio():
         data = request.get_json()
         conn = get_db_connection()
 
-        # Obtener o crear tercero
-        telefono = data.get('telefono')
-        nombre = data.get('nombre')
+        # Verificar si hay usuario logueado
+        if 'usuario_id' in session:
+            # Usuario logueado: usar su ID directamente
+            tercero_id = session['usuario_id']
 
-        if not telefono or not nombre:
-            return jsonify({'ok': False, 'error': 'Teléfono y nombre son requeridos'}), 400
+            # Obtener datos del usuario para la notificación
+            tercero_data = conn.execute("""
+                SELECT nombre, telefono FROM terceros WHERE id = %s
+            """, (tercero_id,)).fetchone()
 
-        # Buscar tercero existente
-        tercero = conn.execute("""
-            SELECT id FROM terceros WHERE telefono = %s
-        """, (telefono,)).fetchone()
-
-        if tercero:
-            tercero_id = tercero['id']
+            nombre = tercero_data['nombre']
+            telefono = tercero_data['telefono']
         else:
-            # Crear nuevo tercero
-            tercero_id = conn.execute("""
-                INSERT INTO terceros (nombre, telefono, fecha_creacion)
-                VALUES (%s, %s, CURRENT_TIMESTAMP)
-                RETURNING id
-            """, (nombre, telefono)).fetchone()['id']
-            conn.commit()
+            # Usuario no logueado: buscar o crear tercero por teléfono
+            telefono = data.get('telefono')
+            nombre = data.get('nombre')
+
+            if not telefono or not nombre:
+                return jsonify({'ok': False, 'error': 'Teléfono y nombre son requeridos'}), 400
+
+            # Buscar tercero existente
+            tercero = conn.execute("""
+                SELECT id FROM terceros WHERE telefono = %s
+            """, (telefono,)).fetchone()
+
+            if tercero:
+                tercero_id = tercero['id']
+            else:
+                # Crear nuevo tercero
+                tercero_id = conn.execute("""
+                    INSERT INTO terceros (nombre, telefono, fecha_creacion)
+                    VALUES (%s, %s, CURRENT_TIMESTAMP)
+                    RETURNING id
+                """, (nombre, telefono)).fetchone()['id']
+                conn.commit()
 
         # Crear solicitud
         tipo_servicio = data.get('tipo_servicio')
@@ -18525,9 +18538,47 @@ def api_solicitar_servicio():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/usuario-actual')
+def api_usuario_actual():
+    """
+    Retorna información del usuario actualmente logueado
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'usuario': None})
+
+    try:
+        conn = get_db_connection()
+        usuario = conn.execute("""
+            SELECT id, nombre, telefono, email
+            FROM terceros
+            WHERE id = %s
+        """, (session['usuario_id'],)).fetchone()
+
+        if usuario:
+            # Extraer primer nombre
+            primer_nombre = usuario['nombre'].split(' ')[0] if usuario['nombre'] else 'Usuario'
+
+            return jsonify({
+                'ok': True,
+                'usuario': {
+                    'id': usuario['id'],
+                    'nombre': usuario['nombre'],
+                    'telefono': usuario['telefono'] or '',
+                    'email': usuario['email'] or '',
+                    'primer_nombre': primer_nombre
+                }
+            })
+        else:
+            return jsonify({'ok': False, 'usuario': None})
+
+    except Exception as e:
+        print(f"Error al obtener usuario actual: {e}")
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#
 
-    # Despus de inicializar, puedes ejecutar Flask
+    # Despues de inicializar, puedes ejecutar Flask
     app.run(debug=True, host='0.0.0.0')

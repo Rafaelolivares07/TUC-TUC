@@ -18568,6 +18568,16 @@ def check_terceros():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/fix-terceros-seq-temp')
+def fix_terceros_seq():
+    try:
+        conn = get_db_connection()
+        result = conn.execute("SELECT setval('terceros_id_seq', (SELECT MAX(id) FROM terceros) + 1)").fetchone()
+        return jsonify({'ok': True, 'mensaje': 'Secuencia ajustada a MAX+1', 'new_value': result[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/usuario-actual')
 def api_usuario_actual():
     """

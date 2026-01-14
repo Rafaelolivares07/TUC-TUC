@@ -92,10 +92,6 @@
                     Seleccionar en mapa
                 </button>
 
-                <button id="btn-calcular-ruta" class="mt-4 w-full border-2 border-gray-800 bg-gray-800 text-white py-3 rounded font-medium transition hover:bg-gray-700">
-                    Calcular ruta y tarifa
-                </button>
-
                 <!-- Indicador de progreso -->
                 <div id="indicador-calculo" class="hidden mt-3">
                     <div class="bg-gray-100 rounded-lg p-4 border border-gray-300">
@@ -294,12 +290,6 @@
 
             document.getElementById('btn-acompanamiento').addEventListener('click', function() {
                 seleccionarTipoServicio('acompanamiento');
-            });
-
-            // Calcular ruta (transporte)
-            document.getElementById('btn-calcular-ruta').addEventListener('click', function() {
-                desactivarSeleccionMapa(); // Desactivar modo selección si está activo
-                calcularRutaTransporte();
             });
 
             // Calcular tarifa (acompañamiento)
@@ -967,6 +957,11 @@
                     const direccion = await obtenerDireccionReversa(lat, lng);
                     ubicacionDetectadaDireccion = direccion;
                     document.getElementById('texto-ubicacion-detectada').textContent = direccion;
+
+                    // Seleccionar automáticamente el card de ubicación detectada
+                    if (!cardUbicacionSeleccionado) {
+                        toggleCardUbicacion();
+                    }
                 }, function(error) {
                     document.getElementById('texto-ubicacion-detectada').textContent = 'No se pudo detectar tu ubicación. Verifica los permisos del navegador.';
                 });

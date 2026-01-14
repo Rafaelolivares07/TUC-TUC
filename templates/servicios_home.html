@@ -78,7 +78,7 @@
         <!-- Formulario de Transporte -->
         <div id="form-transporte">
             <!-- SECCIÓN 1: Destino -->
-            <div id="seccion-destino" class="bg-white rounded border border-gray-300 p-4 mb-6 transition-opacity duration-300">
+            <div id="seccion-destino" class="bg-white rounded border border-gray-300 p-4 mb-6">
                 <h2 class="text-base font-medium mb-3 text-gray-800">¿A dónde quieres ir?</h2>
 
                 <div class="relative">
@@ -150,7 +150,7 @@
             </div>
 
             <!-- SECCIÓN 2: Origen -->
-            <div id="seccion-origen" class="bg-white rounded border border-gray-300 p-4 mb-6 transition-opacity duration-300">
+            <div id="seccion-origen" class="bg-white rounded border border-gray-300 p-4 mb-6">
                 <h2 class="text-base font-medium mb-3 text-gray-800">Confirma desde dónde sales</h2>
 
                 <!-- Card de ubicación detectada -->
@@ -180,7 +180,7 @@
             </div>
 
             <!-- SECCIÓN 3: Tipo de Servicio -->
-            <div id="seccion-tipo-servicio" class="bg-white rounded border border-gray-300 p-4 mb-6 transition-opacity duration-300">
+            <div id="seccion-tipo-servicio" class="bg-white rounded border border-gray-300 p-4 mb-6">
                 <h2 class="text-base font-medium mb-3 text-gray-800">Tipo de servicio</h2>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -197,7 +197,7 @@
             </div>
 
             <!-- SECCIÓN 4: Datos personales -->
-            <div id="seccion-datos" class="bg-white rounded border border-gray-300 p-4 mb-6 transition-opacity duration-300">
+            <div id="seccion-datos" class="bg-white rounded border border-gray-300 p-4 mb-6">
                 <h2 class="text-base font-medium mb-3 text-gray-800">Tus datos</h2>
 
                 <div class="space-y-3">
@@ -283,23 +283,6 @@
         let seleccionandoEnMapa = false; // Estado de selección en mapa
         let marcadorDestinoMapa = null; // Marcador temporal en el mapa
 
-        // Función para destacar sección activa
-        function destacarSeccion(seccionId) {
-            // Todas las secciones
-            const secciones = ['seccion-destino', 'seccion-origen', 'seccion-tipo-servicio', 'seccion-datos'];
-
-            secciones.forEach(id => {
-                const elemento = document.getElementById(id);
-                if (elemento) {
-                    if (id === seccionId) {
-                        elemento.style.opacity = '1';
-                    } else {
-                        elemento.style.opacity = '0.5';
-                    }
-                }
-            });
-        }
-
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
             configurarBotones();
@@ -308,7 +291,6 @@
             // Focus automático en el campo de destino
             setTimeout(() => {
                 document.getElementById('input-destino').focus();
-                destacarSeccion('seccion-destino'); // Destacar primera sección
             }, 500);
         });
 
@@ -443,12 +425,6 @@
             // Ocultar mapa y resumen
             document.getElementById('contenedor-mapa').classList.add('hidden');
             document.getElementById('resumen').classList.add('hidden');
-
-            // Destacar y hacer scroll a la sección de datos personales
-            setTimeout(() => {
-                destacarSeccion('seccion-datos');
-                document.getElementById('seccion-datos').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 300);
         }
 
         async function buscarDireccion(direccion) {
@@ -682,12 +658,6 @@
 
             // Mostrar sección de resumen
             document.getElementById('resumen').classList.remove('hidden');
-
-            // Destacar y hacer scroll a la sección de tipo de servicio
-            setTimeout(() => {
-                destacarSeccion('seccion-tipo-servicio');
-                document.getElementById('seccion-tipo-servicio').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 600);
 
             if (datos.tipo === 'transporte') {
                 document.getElementById('info-distancia').classList.remove('hidden');

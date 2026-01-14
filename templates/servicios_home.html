@@ -314,8 +314,11 @@
                     contenedorMapa.classList.remove('hidden');
                     this.textContent = 'Ocultar mapa';
 
-                    // Scroll al mapa
+                    // Recalcular tamaño del mapa después de mostrarlo
                     setTimeout(() => {
+                        if (map) {
+                            map.invalidateSize();
+                        }
                         contenedorMapa.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }, 100);
                 } else {

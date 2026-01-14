@@ -142,9 +142,11 @@
             </div>
 
             <!-- Mapa -->
-            <div id="contenedor-mapa" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
-                <h2 class="text-xl font-semibold mb-4">Mapa del recorrido</h2>
-                <div id="map" style="width: 100%; height: 400px; border-radius: 8px;"></div>
+            <div id="contenedor-mapa" class="bg-white rounded-lg shadow-lg mb-6 overflow-hidden transition-all duration-300" style="max-height: 0; padding: 0;">
+                <div class="p-6">
+                    <h2 class="text-xl font-semibold mb-4">Mapa del recorrido</h2>
+                    <div id="map" style="width: 100%; height: 400px; border-radius: 8px;"></div>
+                </div>
             </div>
 
             <!-- SECCIÓN 2: Origen -->
@@ -310,19 +312,22 @@
             // Ver mapa
             document.getElementById('btn-ver-mapa').addEventListener('click', function() {
                 const contenedorMapa = document.getElementById('contenedor-mapa');
-                if (contenedorMapa.classList.contains('hidden')) {
-                    contenedorMapa.classList.remove('hidden');
+                const estaColapsado = contenedorMapa.style.maxHeight === '0px' || contenedorMapa.style.maxHeight === '0';
+
+                if (estaColapsado) {
+                    // Expandir
+                    contenedorMapa.style.maxHeight = '600px';
+                    contenedorMapa.style.padding = '';
                     this.textContent = 'Ocultar mapa';
 
-                    // Recalcular tamaño del mapa después de mostrarlo
+                    // Scroll al mapa
                     setTimeout(() => {
-                        if (map) {
-                            map.invalidateSize();
-                        }
                         contenedorMapa.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }, 100);
                 } else {
-                    contenedorMapa.classList.add('hidden');
+                    // Colapsar
+                    contenedorMapa.style.maxHeight = '0';
+                    contenedorMapa.style.padding = '0';
                     this.textContent = 'Ver ruta en mapa';
                 }
             });
@@ -526,7 +531,7 @@
             // Actualizar progreso
             actualizarProgreso(50);
 
-            // Inicializar mapa (pero mantenerlo oculto hasta que el usuario haga clic en "Ver ruta en mapa")
+            // Inicializar y renderizar el mapa (colapsado visualmente pero funcional)
             inicializarMapa();
 
             if (routeControl) {

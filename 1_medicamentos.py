@@ -18551,6 +18551,22 @@ def api_solicitar_servicio():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ENDPOINT TEMPORAL para ver info de terceros
+@app.route('/check-terceros-temp')
+def check_terceros():
+    try:
+        conn = get_db_connection()
+        max_id = conn.execute("SELECT MAX(id) FROM terceros").fetchone()[0]
+        seq_val = conn.execute("SELECT last_value FROM terceros_id_seq").fetchone()[0]
+        ultimos = conn.execute("SELECT id, nombre, telefono FROM terceros ORDER BY id DESC LIMIT 5").fetchall()
+        return jsonify({
+            'max_id': max_id,
+            'sequence_value': seq_val,
+            'ultimos_5': [dict(u) for u in ultimos]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/usuario-actual')
 def api_usuario_actual():

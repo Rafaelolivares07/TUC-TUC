@@ -18510,12 +18510,22 @@ def api_solicitar_servicio():
 """
 
         if tipo_servicio == 'transporte':
+            # Obtener coordenadas desde el frontend
+            origen_lat = data.get('origen_lat')
+            origen_lon = data.get('origen_lon')
+            destino_lat = data.get('destino_lat')
+            destino_lon = data.get('destino_lon')
+
             mensaje += f"""
 📍 Origen: {origen_texto}
 📍 Destino: {destino_texto}
 📏 Distancia: {distancia_km} km
 ⏱️ Tiempo estimado: {tiempo_estimado_minutos} min
 💰 Tarifa: ${precio:,.0f}
+
+🗺️ RUTAS WAZE:
+1️⃣ Tu ubicación → Cliente: https://waze.com/ul?ll={origen_lat},{origen_lon}&navigate=yes
+2️⃣ Cliente → Destino: https://waze.com/ul?ll={destino_lat},{destino_lon}&navigate=yes
 """
         elif tipo_servicio == 'acompanamiento':
             mensaje += f"""
@@ -18526,8 +18536,8 @@ def api_solicitar_servicio():
         if notas:
             mensaje += f"\n📝 Notas: {notas}"
 
-        # Enviar notificación
-        enviar_telegram(mensaje, telefono=None)  # Envía al admin
+        # Enviar notificación a Rafael (3175718658)
+        enviar_telegram('3175718658', mensaje)
 
         conn.close()
 

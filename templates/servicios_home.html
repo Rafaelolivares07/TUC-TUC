@@ -698,6 +698,11 @@
                 body.destino_texto = destinoTexto;
                 body.distancia_km = datosCalculados.distancia_km;
                 body.tiempo_estimado_minutos = datosCalculados.tiempo_estimado_minutos;
+                // Enviar coordenadas para Waze
+                body.origen_lat = coordenadasOrigenActual ? coordenadasOrigenActual.lat : (coordenadasOrigenSeleccionado ? coordenadasOrigenSeleccionado.lat : null);
+                body.origen_lon = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (coordenadasOrigenSeleccionado ? coordenadasOrigenSeleccionado.lon : null);
+                body.destino_lat = coordenadasDestinoSeleccionado ? coordenadasDestinoSeleccionado.lat : null;
+                body.destino_lon = coordenadasDestinoSeleccionado ? coordenadasDestinoSeleccionado.lon : null;
             } else {
                 body.horas_acompanamiento = datosCalculados.horas;
                 body.notas = notas;

@@ -18544,6 +18544,11 @@ def api_solicitar_servicio():
 # ==========================================
 # ENDPOINT TEMPORAL PARA CREAR TABLA
 # ==========================================
+@app.route('/setup-table-temp')
+def setup_table_page():
+    """Página temporal para ejecutar setup"""
+    return render_template('setup_temp.html')
+
 @app.route('/api/setup-solicitudes-table-temp', methods=['POST'])
 def setup_solicitudes_table():
     """

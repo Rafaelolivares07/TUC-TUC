@@ -323,6 +323,11 @@
                     contenedorMapa.style.maxHeight = '600px';
                     contenedorMapa.style.padding = '';
                     this.textContent = 'Ocultar mapa';
+
+                    // Scroll suave al resumen para mostrar tarifa + mapa juntos
+                    setTimeout(() => {
+                        document.getElementById('resumen').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
                 } else {
                     // Colapsar
                     contenedorMapa.style.maxHeight = '0';

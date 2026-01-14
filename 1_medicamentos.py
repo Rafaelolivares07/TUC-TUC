@@ -18580,6 +18580,47 @@ def api_usuario_actual():
         return jsonify({'ok': False, 'error': str(e)})
 
 
+# ==========================================
+# ENDPOINT TEMPORAL PARA CREAR TABLA
+# ==========================================
+@app.route('/api/setup-solicitudes-table-temp', methods=['POST'])
+def setup_solicitudes_table():
+    """
+    ENDPOINT TEMPORAL para crear la tabla solicitudes_transporte
+    Eliminar después de ejecutar
+    """
+    try:
+        data = request.get_json()
+        confirmacion = data.get('confirmar', '')
+
+        if confirmacion != 'CREAR_TABLA_SOLICITUDES':
+            return jsonify({
+                'ok': False,
+                'error': 'Confirmación incorrecta. Envía: {"confirmar": "CREAR_TABLA_SOLICITUDES"}'
+            }), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # Leer el archivo SQL
+        with open('crear_tabla_solicitudes_transporte.sql', 'r', encoding='utf-8') as f:
+            sql_script = f.read()
+
+        # Ejecutar el script
+        cursor.execute(sql_script)
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Tabla solicitudes_transporte creada exitosamente',
+            'nota': 'ELIMINA ESTE ENDPOINT AHORA'
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

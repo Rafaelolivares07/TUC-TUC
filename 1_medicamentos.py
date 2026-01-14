@@ -18551,18 +18551,6 @@ def api_solicitar_servicio():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-# ENDPOINT TEMPORAL para arreglar secuencia de terceros
-@app.route('/fix-terceros-sequence-temp')
-def fix_terceros_sequence():
-    """Resetea la secuencia de terceros_id_seq"""
-    try:
-        conn = get_db_connection()
-        conn.execute("SELECT setval('terceros_id_seq', (SELECT MAX(id) FROM terceros))")
-        conn.commit()
-        return jsonify({'ok': True, 'mensaje': 'Secuencia de terceros reseteada'})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
 
 @app.route('/api/usuario-actual')
 def api_usuario_actual():

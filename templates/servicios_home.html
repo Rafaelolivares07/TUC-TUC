@@ -279,6 +279,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             configurarBotones();
             detectarUbicacionInicial(); // Detectar ubicación al cargar
+
+            // Focus automático en el campo de destino
+            setTimeout(() => {
+                document.getElementById('input-destino').focus();
+            }, 500);
         });
 
         function configurarBotones() {
@@ -770,6 +775,19 @@
             return textoLimpio;
         }
 
+        // Función para verificar y calcular automáticamente
+        function verificarYCalcularAutomaticamente() {
+            const tieneOrigen = cardUbicacionSeleccionado || coordenadasOrigenSeleccionado;
+            const tieneDestino = coordenadasDestinoSeleccionado;
+
+            // Solo calcular si tenemos AMBOS: origen Y destino
+            if (tieneOrigen && tieneDestino) {
+                setTimeout(() => {
+                    calcularRutaTransporte();
+                }, 300);
+            }
+        }
+
         function buscarDireccionesAutocompleteDestino(texto) {
             clearTimeout(timeoutAutocompleteDestino);
 
@@ -879,6 +897,9 @@
                         lon: parseFloat(resultado.lon)
                     };
                     contenedor.classList.add('hidden');
+
+                    // Verificar si podemos calcular automáticamente
+                    verificarYCalcularAutomaticamente();
                 });
 
                 contenedor.appendChild(opcion);
@@ -919,6 +940,9 @@
                     };
                     coordenadasOrigenActual = coordenadasOrigenSeleccionado; // Usar estas coordenadas
                     contenedor.classList.add('hidden');
+
+                    // Verificar si podemos calcular automáticamente
+                    verificarYCalcularAutomaticamente();
                 });
 
                 contenedor.appendChild(opcion);
@@ -970,6 +994,9 @@
                 inputOrigen.disabled = true;
                 inputOrigen.classList.add('bg-gray-100', 'cursor-not-allowed');
                 inputOrigen.value = '';
+
+                // Verificar si podemos calcular automáticamente
+                verificarYCalcularAutomaticamente();
             } else {
                 // Deseleccionar card
                 card.classList.remove('border-gray-800');

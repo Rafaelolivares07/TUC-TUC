@@ -18566,16 +18566,14 @@ def setup_solicitudes_table():
             }), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
 
         # Leer el archivo SQL
         with open('crear_tabla_solicitudes_transporte.sql', 'r', encoding='utf-8') as f:
             sql_script = f.read()
 
         # Ejecutar el script
-        cursor.execute(sql_script)
+        conn.execute(sql_script)
         conn.commit()
-        conn.close()
 
         return jsonify({
             'ok': True,

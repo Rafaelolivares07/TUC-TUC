@@ -18565,7 +18565,7 @@ def setup_solicitudes_table():
                 'error': 'Confirmación incorrecta. Envía: {"confirmar": "CREAR_TABLA_SOLICITUDES"}'
             }), 400
 
-        conn = get_db()
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Leer el archivo SQL

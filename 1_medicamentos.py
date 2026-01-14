@@ -18538,46 +18538,7 @@ def api_solicitar_servicio():
         })
 
     except Exception as e:
-        print(f"Error en solicitar-servicio: {e}")
-        traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-@app.route('/api/usuario-actual')
-def api_usuario_actual():
-    """
-    Retorna información del usuario actualmente logueado
-    """
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'usuario': None})
-
-    try:
-        conn = get_db_connection()
-        usuario = conn.execute("""
-            SELECT id, nombre, telefono
-            FROM terceros
-            WHERE id = %s
-        """, (session['usuario_id'],)).fetchone()
-
-        if usuario:
-            # Extraer primer nombre
-            primer_nombre = usuario['nombre'].split(' ')[0] if usuario['nombre'] else 'Usuario'
-
-            return jsonify({
-                'ok': True,
-                'usuario': {
-                    'id': usuario['id'],
-                    'nombre': usuario['nombre'],
-                    'telefono': usuario['telefono'] or '',
-                    'primer_nombre': primer_nombre
-                }
-            })
-        else:
-            return jsonify({'ok': False, 'usuario': None})
-
-    except Exception as e:
-        print(f"Error al obtener usuario actual: {e}")
-        return jsonify({'ok': False, 'error': str(e)})
 
 
 # ==========================================
@@ -18618,7 +18579,46 @@ def setup_solicitudes_table():
         })
 
     except Exception as e:
+        print(f"Error en solicitar-servicio: {e}")
+        traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/usuario-actual')
+def api_usuario_actual():
+    """
+    Retorna información del usuario actualmente logueado
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'usuario': None})
+
+    try:
+        conn = get_db_connection()
+        usuario = conn.execute("""
+            SELECT id, nombre, telefono
+            FROM terceros
+            WHERE id = %s
+        """, (session['usuario_id'],)).fetchone()
+
+        if usuario:
+            # Extraer primer nombre
+            primer_nombre = usuario['nombre'].split(' ')[0] if usuario['nombre'] else 'Usuario'
+
+            return jsonify({
+                'ok': True,
+                'usuario': {
+                    'id': usuario['id'],
+                    'nombre': usuario['nombre'],
+                    'telefono': usuario['telefono'] or '',
+                    'primer_nombre': primer_nombre
+                }
+            })
+        else:
+            return jsonify({'ok': False, 'usuario': None})
+
+    except Exception as e:
+        print(f"Error al obtener usuario actual: {e}")
+        return jsonify({'ok': False, 'error': str(e)})
 
 
 if __name__ == '__main__':

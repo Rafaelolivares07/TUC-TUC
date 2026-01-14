@@ -71,8 +71,8 @@
 
         <!-- Header -->
         <div class="bg-white rounded-lg shadow-lg p-3 mb-4">
-            <h1 class="text-xl font-bold text-gray-800">Servicios de Transporte</h1>
-            <p class="text-sm text-gray-600 mt-1">Solicita tu servicio de forma rápida y segura</p>
+            <h1 class="text-xl font-bold text-gray-800">TUC TUC TE LLEVA!</h1>
+            <p id="saludo-usuario" class="text-sm text-gray-600 mt-1">Solicita tu servicio de forma rápida y segura</p>
         </div>
 
         <!-- Formulario de Transporte -->
@@ -291,12 +291,28 @@
         document.addEventListener('DOMContentLoaded', function() {
             configurarBotones();
             detectarUbicacionInicial(); // Detectar ubicación al cargar
+            cargarUsuarioActual(); // Cargar nombre del usuario si está logueado
 
             // Focus automático en el campo de destino
             setTimeout(() => {
                 document.getElementById('input-destino').focus();
             }, 500);
         });
+
+        // Función para cargar usuario actual
+        async function cargarUsuarioActual() {
+            try {
+                const response = await fetch('/api/usuario-actual');
+                const data = await response.json();
+
+                if (data.ok && data.usuario) {
+                    const primerNombre = data.usuario.primer_nombre || data.usuario.nombre.split(' ')[0];
+                    document.getElementById('saludo-usuario').textContent = `Hola ${primerNombre}!`;
+                }
+            } catch (error) {
+                console.log('Usuario no logueado');
+            }
+        }
 
         function configurarBotones() {
             // Selección de tipo de servicio
@@ -681,7 +697,30 @@
             }
 
             if (!nombre || !telefono) {
-                alert('Por favor completa nombre y teléfono');
+                // Mensaje sutil y amigable
+                const seccionDatos = document.getElementById('seccion-datos');
+                const inputNombre = document.getElementById('input-nombre');
+
+                // Destacar sección (cambiar a blanco)
+                seccionDatos.classList.remove('bg-gray-200');
+                seccionDatos.classList.add('bg-white', 'shadow-lg');
+
+                // Scroll suave a la sección
+                setTimeout(() => {
+                    seccionDatos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+
+                // Focus en el primer input vacío
+                setTimeout(() => {
+                    if (!nombre) {
+                        inputNombre.focus();
+                    } else {
+                        document.getElementById('input-telefono').focus();
+                    }
+                }, 600);
+
+                // Mensaje amigable
+                alert('👋 Para continuar, necesitamos conocer tu nombre y número de teléfono');
                 return;
             }
 

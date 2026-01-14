@@ -394,7 +394,14 @@
 
             // Botón seleccionar en mapa
             document.getElementById('btn-seleccionar-mapa').addEventListener('click', function() {
-                activarSeleccionMapa();
+                if (seleccionandoEnMapa) {
+                    // Si ya está en modo selección, confirmar destino y calcular
+                    desactivarSeleccionMapa();
+                    verificarYCalcularAutomaticamente();
+                } else {
+                    // Si no está en modo selección, activar el modo
+                    activarSeleccionMapa();
+                }
             });
 
             // Cerrar autocomplete si se hace clic fuera
@@ -1101,16 +1108,27 @@
                 return;
             }
 
-            // Mostrar el mapa
-            document.getElementById('contenedor-mapa').classList.remove('hidden');
+            // Expandir el contenedor del mapa
+            const contenedorMapa = document.getElementById('contenedor-mapa');
+            contenedorMapa.style.maxHeight = '600px';
+            contenedorMapa.style.padding = '';
+
+            // Scroll al mapa
+            setTimeout(() => {
+                contenedorMapa.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
 
             // Inicializar mapa si no existe
             if (!map) {
-                map = L.map('map').setView([3.4516, -76.5320], 13);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(map);
+                inicializarMapa();
             }
+
+            // Invalidar tamaño del mapa para que se muestre correctamente
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
 
             // Activar modo selección
             seleccionandoEnMapa = true;
@@ -1118,9 +1136,10 @@
             // Cambiar cursor del mapa
             document.getElementById('map').style.cursor = 'crosshair';
 
-            // Cambiar texto del botón
-            document.getElementById('btn-seleccionar-mapa').textContent = 'Toca el mapa las veces que necesites';
-            document.getElementById('btn-seleccionar-mapa').classList.add('bg-blue-100');
+            // Cambiar texto del botón a "Confirmar destino"
+            document.getElementById('btn-seleccionar-mapa').textContent = 'Confirmar destino';
+            document.getElementById('btn-seleccionar-mapa').classList.remove('bg-gray-100', 'text-gray-700');
+            document.getElementById('btn-seleccionar-mapa').classList.add('bg-green-500', 'text-white');
 
             // Listener para clicks múltiples en el mapa (no usar .once())
             map.on('click', async function(e) {
@@ -1152,7 +1171,8 @@
                 seleccionandoEnMapa = false;
                 document.getElementById('map').style.cursor = '';
                 document.getElementById('btn-seleccionar-mapa').textContent = 'Seleccionar en mapa';
-                document.getElementById('btn-seleccionar-mapa').classList.remove('bg-blue-100');
+                document.getElementById('btn-seleccionar-mapa').classList.remove('bg-green-500', 'text-white');
+                document.getElementById('btn-seleccionar-mapa').classList.add('bg-gray-100', 'text-gray-700');
 
                 // Remover listeners del mapa
                 map.off('click');

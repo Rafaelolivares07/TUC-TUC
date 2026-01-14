@@ -18541,51 +18541,6 @@ def api_solicitar_servicio():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-# ==========================================
-# ENDPOINT TEMPORAL PARA CREAR TABLA
-# ==========================================
-@app.route('/setup-table-temp')
-def setup_table_page():
-    """Página temporal para ejecutar setup"""
-    return render_template('setup_temp.html')
-
-@app.route('/api/setup-solicitudes-table-temp', methods=['POST'])
-def setup_solicitudes_table():
-    """
-    ENDPOINT TEMPORAL para crear la tabla solicitudes_transporte
-    Eliminar después de ejecutar
-    """
-    try:
-        data = request.get_json()
-        confirmacion = data.get('confirmar', '')
-
-        if confirmacion != 'CREAR_TABLA_SOLICITUDES':
-            return jsonify({
-                'ok': False,
-                'error': 'Confirmación incorrecta. Envía: {"confirmar": "CREAR_TABLA_SOLICITUDES"}'
-            }), 400
-
-        conn = get_db_connection()
-
-        # Leer el archivo SQL
-        with open('crear_tabla_solicitudes_transporte.sql', 'r', encoding='utf-8') as f:
-            sql_script = f.read()
-
-        # Ejecutar el script
-        conn.execute(sql_script)
-        conn.commit()
-
-        return jsonify({
-            'ok': True,
-            'mensaje': 'Tabla solicitudes_transporte creada exitosamente',
-            'nota': 'ELIMINA ESTE ENDPOINT AHORA'
-        })
-
-    except Exception as e:
-        print(f"Error en solicitar-servicio: {e}")
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
 
 @app.route('/api/usuario-actual')
 def api_usuario_actual():

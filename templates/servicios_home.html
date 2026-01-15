@@ -541,9 +541,6 @@
                 const distanciaMetros = summary.totalDistance;
                 const distanciaKm = parseFloat((distanciaMetros / 1000).toFixed(2));
 
-                const tiempoSegundos = summary.totalTime;
-                const tiempoMinutos = Math.round(tiempoSegundos / 60);
-
                 // Actualizar progreso
                 actualizarProgreso(75);
 
@@ -562,11 +559,15 @@
                     // Completar progreso
                     actualizarProgreso(100);
 
+                    // Usar el tiempo calculado por el backend (según parámetros de velocidad pico/valle)
+                    const tiempoMinutos = data.desglose ? Math.round(data.desglose.tiempo_total_min) : Math.round(summary.totalTime / 60);
+
                     mostrarResumen({
                         tipo: 'transporte',
                         distancia_km: distanciaKm,
                         tiempo_estimado_minutos: tiempoMinutos,
-                        tarifa: data.tarifa
+                        tarifa: data.tarifa,
+                        desglose: data.desglose  // Pasar el desglose completo
                     });
 
                     // Mostrar éxito y luego ocultar

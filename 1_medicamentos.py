@@ -1067,6 +1067,128 @@ def setup_promos_table():
         traceback.print_exc()
         return f"<h1> Error:</h1><pre>{str(e)}</pre>", 500
 
+@app.route('/admin/setup_tablas_parametros')
+@admin_required
+def setup_tablas_parametros():
+    """Crea TODAS las tablas de parámetros: horarios, festivos, parametros_sistema"""
+    try:
+        conn = get_db_connection()
+        resultados = []
+
+        # 1. Tabla parametros_horarios
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS parametros_horarios (
+                id SERIAL PRIMARY KEY,
+                tipo VARCHAR(50) NOT NULL,
+                hora_apertura_h INTEGER NOT NULL,
+                hora_apertura_m INTEGER NOT NULL DEFAULT 0,
+                hora_apertura_ampm VARCHAR(2) NOT NULL,
+                hora_cierre_h INTEGER NOT NULL,
+                hora_cierre_m INTEGER NOT NULL DEFAULT 0,
+                hora_cierre_ampm VARCHAR(2) NOT NULL,
+                activo BOOLEAN DEFAULT TRUE,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tipo)
+            );
+        """)
+        resultados.append("✅ Tabla parametros_horarios creada")
+
+        # Insertar horarios por defecto si no existen
+        existe_lun = conn.execute("SELECT id FROM parametros_horarios WHERE tipo = 'lun_sab'").fetchone()
+        if not existe_lun:
+            conn.execute("""
+                INSERT INTO parametros_horarios (tipo, hora_apertura_h, hora_apertura_m, hora_apertura_ampm, hora_cierre_h, hora_cierre_m, hora_cierre_ampm)
+                VALUES ('lun_sab', 7, 0, 'AM', 12, 0, 'AM')
+            """)
+            resultados.append("✅ Horario lun_sab insertado (7:00 AM - 12:00 AM)")
+
+        existe_dom = conn.execute("SELECT id FROM parametros_horarios WHERE tipo = 'dom_festivos'").fetchone()
+        if not existe_dom:
+            conn.execute("""
+                INSERT INTO parametros_horarios (tipo, hora_apertura_h, hora_apertura_m, hora_apertura_ampm, hora_cierre_h, hora_cierre_m, hora_cierre_ampm)
+                VALUES ('dom_festivos', 10, 0, 'AM', 2, 0, 'PM')
+            """)
+            resultados.append("✅ Horario dom_festivos insertado (10:00 AM - 2:00 PM)")
+
+        # 2. Tabla parametros_sistema
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS parametros_sistema (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL UNIQUE,
+                descripcion TEXT,
+                valor_numerico DECIMAL(10,2),
+                valor_texto TEXT,
+                valor_booleano BOOLEAN,
+                tipo VARCHAR(20) NOT NULL,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_parametros_nombre ON parametros_sistema(nombre);")
+        resultados.append("✅ Tabla parametros_sistema creada")
+
+        # 3. Tabla festivos
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS festivos (
+                id SERIAL PRIMARY KEY,
+                fecha DATE NOT NULL UNIQUE,
+                nombre VARCHAR(100) NOT NULL,
+                activo BOOLEAN DEFAULT TRUE,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_festivos_fecha ON festivos(fecha);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_festivos_activo ON festivos(activo);")
+        resultados.append("✅ Tabla festivos creada")
+
+        # Insertar festivos 2026 si no existen
+        festivos_2026 = [
+            ('2026-01-01', 'Año Nuevo'),
+            ('2026-01-12', 'Día de los Reyes Magos'),
+            ('2026-03-23', 'Día de San José'),
+            ('2026-04-02', 'Jueves Santo'),
+            ('2026-04-03', 'Viernes Santo'),
+            ('2026-05-01', 'Día del Trabajo'),
+            ('2026-05-18', 'Ascensión del Señor'),
+            ('2026-06-08', 'Corpus Christi'),
+            ('2026-06-15', 'Sagrado Corazón'),
+            ('2026-06-29', 'San Pedro y San Pablo'),
+            ('2026-07-20', 'Día de la Independencia'),
+            ('2026-08-07', 'Batalla de Boyacá'),
+            ('2026-08-17', 'Asunción de la Virgen'),
+            ('2026-10-12', 'Día de la Raza'),
+            ('2026-11-02', 'Todos los Santos'),
+            ('2026-11-16', 'Independencia de Cartagena'),
+            ('2026-12-08', 'Inmaculada Concepción'),
+            ('2026-12-25', 'Navidad')
+        ]
+        festivos_insertados = 0
+        for fecha, nombre in festivos_2026:
+            existe = conn.execute("SELECT id FROM festivos WHERE fecha = %s", (fecha,)).fetchone()
+            if not existe:
+                conn.execute("INSERT INTO festivos (fecha, nombre) VALUES (%s, %s)", (fecha, nombre))
+                festivos_insertados += 1
+        resultados.append(f"✅ Festivos 2026: {festivos_insertados} insertados")
+
+        conn.commit()
+        conn.close()
+
+        resultados_html = "<br>".join(resultados)
+        return f"""
+        <h1>✅ Tablas de parámetros configuradas</h1>
+        <div style="font-family: monospace; padding: 20px;">
+            {resultados_html}
+        </div>
+        <br>
+        <a href="/admin/parametros" style="padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Volver a Parámetros</a>
+        """
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<h1>❌ Error:</h1><pre>{str(e)}</pre>", 500
+
+
 @app.route('/admin/setup_festivos_table')
 @admin_required
 def setup_festivos_table():

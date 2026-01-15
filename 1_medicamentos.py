@@ -16518,28 +16518,22 @@ def parametro_sistema(nombre_parametro):
                     else:
                         tipo_auto = 'texto'
 
-                # Determinar sección basada en el nombre del parámetro
-                if nombre_parametro.startswith('transporte_') or nombre_parametro.startswith('acompanamiento_'):
-                    seccion = 'SERVICIOS DE TRANSPORTE'
-                else:
-                    seccion = 'GENERAL'
-
-                # Insertar nuevo parámetro
+                # Insertar nuevo parámetro (sin columna seccion que no existe en producción)
                 if tipo_auto == 'numerico':
                     conn.execute("""
-                        INSERT INTO parametros_sistema (nombre, seccion, tipo, valor_numerico)
-                        VALUES (%s, %s, %s, %s)
-                    """, (nombre_parametro, seccion, tipo_auto, float(valor)))
+                        INSERT INTO parametros_sistema (nombre, tipo, valor_numerico)
+                        VALUES (%s, %s, %s)
+                    """, (nombre_parametro, tipo_auto, float(valor)))
                 elif tipo_auto == 'texto':
                     conn.execute("""
-                        INSERT INTO parametros_sistema (nombre, seccion, tipo, valor_texto)
-                        VALUES (%s, %s, %s, %s)
-                    """, (nombre_parametro, seccion, tipo_auto, str(valor)))
+                        INSERT INTO parametros_sistema (nombre, tipo, valor_texto)
+                        VALUES (%s, %s, %s)
+                    """, (nombre_parametro, tipo_auto, str(valor)))
                 elif tipo_auto == 'booleano':
                     conn.execute("""
-                        INSERT INTO parametros_sistema (nombre, seccion, tipo, valor_booleano)
-                        VALUES (%s, %s, %s, %s)
-                    """, (nombre_parametro, seccion, tipo_auto, str(valor).lower() == 'true'))
+                        INSERT INTO parametros_sistema (nombre, tipo, valor_booleano)
+                        VALUES (%s, %s, %s)
+                    """, (nombre_parametro, tipo_auto, str(valor).lower() == 'true'))
 
                 conn.commit()
                 conn.close()

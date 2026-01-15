@@ -14,58 +14,8 @@
     <!-- Leaflet Routing Machine CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 
-    <style>
-        /* Botón flotante del chat */
-        .chat-flotante {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background: #3498db;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 50px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
-            transition: all 0.3s ease;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .chat-flotante:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(52, 152, 219, 0.5);
-        }
-
-        .chat-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #e74c3c;
-            color: white;
-            border-radius: 50%;
-            width: 22px;
-            height: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-        }
-    </style>
 </head>
 <body class="bg-gray-400">
-
-    <!-- Botón flotante del chat -->
-    <div id="chat-flotante" class="chat-flotante" onclick="abrirChat()" title="Mensajes" style="display: none;">
-        <span id="usuario-nombre-chat">Usuario</span>
-        <span style="margin-left: 0.3rem;">💬</span>
-        <span class="chat-badge" id="chatCount" style="display: none;">0</span>
-    </div>
 
     <div class="max-w-4xl mx-auto p-4">
 
@@ -1216,12 +1166,6 @@
             }, 300);
         }
 
-        // Función para abrir el chat (deshabilitada temporalmente)
-        function abrirChat() {
-            // Funcionalidad deshabilitada por ahora
-            console.log('Chat button clicked - funcionalidad deshabilitada');
-        }
-
         // Verificar si hay usuario logueado y pre-llenar datos
         async function verificarUsuarioLogueado() {
             try {
@@ -1247,13 +1191,6 @@
                     document.getElementById('input-telefono-acomp').disabled = true;
 
                     // Mostrar botón de chat con nombre
-                    const btnChat = document.getElementById('chat-flotante');
-                    const nombreChat = document.getElementById('usuario-nombre-chat');
-                    if (btnChat && nombreChat) {
-                        nombreChat.textContent = primer_nombre || nombre.split(' ')[0];
-                        btnChat.style.display = 'flex';
-                    }
-
                     console.log('Usuario logueado:', nombre);
                 } else {
                     // Usuario no logueado - campos habilitados

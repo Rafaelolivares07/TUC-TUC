@@ -29,7 +29,8 @@
         <div id="form-transporte">
             <!-- SECCIÓN 1: Destino -->
             <div id="seccion-destino" class="bg-white rounded border border-gray-400 p-4 mb-6 shadow-lg">
-                <h2 class="text-base font-medium mb-3 text-gray-800">¿A dónde quieres ir?</h2>
+                <h2 class="text-base font-medium mb-2 text-gray-800">¿A dónde quieres ir?</h2>
+                <p class="text-sm text-gray-600 mb-3">Puedes: <strong>1)</strong> Ingresar la dirección, o <strong>2)</strong> Seleccionar en el mapa</p>
 
                 <div class="relative">
                     <input type="text" id="input-destino" class="w-full p-3 border border-gray-300 rounded text-base"
@@ -60,23 +61,28 @@
             <div id="resumen" class="bg-white rounded-t-lg shadow-lg p-6 hidden">
                 <h2 class="text-xl font-semibold mb-4">Resumen del servicio</h2>
 
-                <div class="space-y-3">
+                <div class="space-y-1">
+                    <div id="info-origen" class="flex justify-between hidden">
+                        <span class="text-gray-600">Origen:</span>
+                        <span id="resumen-origen" class="font-semibold text-right truncate ml-2" style="max-width: 200px;">-</span>
+                    </div>
+                    <div id="info-destino" class="flex justify-between hidden">
+                        <span class="text-gray-600">Destino:</span>
+                        <span id="resumen-destino" class="font-semibold text-right truncate ml-2" style="max-width: 200px;">-</span>
+                    </div>
                     <div id="info-distancia" class="flex justify-between hidden">
                         <span class="text-gray-600">Distancia:</span>
                         <span id="distancia" class="font-semibold">-</span>
                     </div>
-
                     <div id="info-tiempo" class="flex justify-between hidden">
-                        <span class="text-gray-600">Tiempo estimado:</span>
+                        <span class="text-gray-600">Tiempo:</span>
                         <span id="tiempo" class="font-semibold">-</span>
                     </div>
-
                     <div id="info-horas" class="flex justify-between hidden">
                         <span class="text-gray-600">Horas de acompañamiento:</span>
                         <span id="horas-display" class="font-semibold">-</span>
                     </div>
-
-                    <div class="flex justify-between text-xl font-bold border-t pt-3">
+                    <div class="flex justify-between text-xl font-bold border-t pt-2 mt-2">
                         <span>Tarifa:</span>
                         <span id="tarifa" class="text-green-600">$0</span>
                     </div>
@@ -616,6 +622,13 @@
             }
         }
 
+        // Función para truncar direcciones (mantiene solo los primeros 2 segmentos separados por coma)
+        function truncarDireccion(direccion) {
+            if (!direccion) return '-';
+            const segmentos = direccion.split(',').map(s => s.trim());
+            return segmentos.slice(0, 2).join(', ');
+        }
+
         function mostrarResumen(datos) {
             datosCalculados = datos;
 
@@ -623,13 +636,32 @@
             document.getElementById('resumen').classList.remove('hidden');
 
             if (datos.tipo === 'transporte') {
+                // Mostrar origen y destino
+                const origenTexto = document.getElementById('input-origen').value.trim();
+                const destinoTexto = document.getElementById('input-destino').value.trim();
+
+                document.getElementById('info-origen').classList.remove('hidden');
+                document.getElementById('info-destino').classList.remove('hidden');
+                document.getElementById('resumen-origen').textContent = truncarDireccion(origenTexto);
+                document.getElementById('resumen-destino').textContent = truncarDireccion(destinoTexto);
+
                 document.getElementById('info-distancia').classList.remove('hidden');
                 document.getElementById('info-tiempo').classList.remove('hidden');
                 document.getElementById('info-horas').classList.add('hidden');
 
                 document.getElementById('distancia').textContent = datos.distancia_km + ' km';
-                document.getElementById('tiempo').textContent = datos.tiempo_estimado_minutos + ' min';
+
+                // Mostrar solo el tiempo de recorrido (sin tiempo de espera del conductor)
+                if (datos.desglose) {
+                    document.getElementById('tiempo').textContent = datos.desglose.tiempo_recorrido_min + ' min';
+                } else {
+                    document.getElementById('tiempo').textContent = datos.tiempo_estimado_minutos + ' min';
+                }
             } else {
+                // Ocultar origen y destino para acompañamiento
+                document.getElementById('info-origen').classList.add('hidden');
+                document.getElementById('info-destino').classList.add('hidden');
+
                 document.getElementById('info-horas').classList.remove('hidden');
                 document.getElementById('info-distancia').classList.add('hidden');
                 document.getElementById('info-tiempo').classList.add('hidden');

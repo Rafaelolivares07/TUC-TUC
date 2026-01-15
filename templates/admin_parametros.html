@@ -521,7 +521,258 @@
                 </div>
             </div>
 
-            <!-- Sección 5: Administradores de Chat -->
+            <!-- Sección 5: Servicios de Transporte -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">🚗 Servicios de Transporte</h3>
+                        <p class="text-sm text-gray-500 mt-1">Configura tarifas y horarios pico</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white">
+
+                        <!-- TARIFAS TRANSPORTE -->
+                        <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <h4 class="font-semibold text-gray-800 mb-4">TARIFAS TRANSPORTE</h4>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tarifa base</label>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-600">$</span>
+                                    <input type="number" id="transporte_tarifa_base" class="px-4 py-2 border border-gray-300 rounded-lg w-32 text-right" value="5000">
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Ingreso objetivo por hora</label>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-600">$</span>
+                                    <input type="number" id="transporte_ingreso_hora_objetivo" class="px-4 py-2 border border-gray-300 rounded-lg w-32 text-right" value="30000">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Velocidad PICO</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="transporte_velocidad_pico" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="10">
+                                        <span class="text-gray-600">km/h</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Velocidad VALLE</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="transporte_velocidad_valle" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="17">
+                                        <span class="text-gray-600">km/h</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tiempo de espera y recogida por viaje</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="transporte_tiempo_espera_recogida" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="8">
+                                    <span class="text-gray-600">min</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Viajes promedio por hora</label>
+                                <input type="number" id="transporte_viajes_promedio_hora" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="2">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Redondeo tarifa final</label>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-gray-600">$</span>
+                                    <input type="number" id="transporte_redondeo_tarifa" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="500">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TARIFAS CALCULADAS -->
+                        <div class="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-200">
+                            <h4 class="font-semibold text-gray-800 mb-4">📊 TARIFAS CALCULADAS</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-white p-3 rounded-lg border">
+                                    <p class="text-sm text-gray-600">Tarifa km PICO</p>
+                                    <p id="tarifa_km_pico_calculada" class="text-xl font-bold text-red-600">$ 3,000</p>
+                                </div>
+                                <div class="bg-white p-3 rounded-lg border">
+                                    <p class="text-sm text-gray-600">Tarifa km VALLE</p>
+                                    <p id="tarifa_km_valle_calculada" class="text-xl font-bold text-green-600">$ 1,765</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SIMULADOR -->
+                        <div class="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <h4 class="font-semibold text-gray-800 mb-4">🧪 SIMULADOR DE RECORRIDO DE UN VIAJE</h4>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Distancia de prueba</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="simulador_distancia" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="5" step="0.1">
+                                    <span class="text-gray-600">km</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <!-- Hora Pico -->
+                                <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+                                    <h5 class="font-semibold text-red-700 mb-3">🔴 HORA PICO</h5>
+                                    <div class="space-y-1 text-sm">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Recorrido:</span>
+                                            <span id="sim_pico_recorrido_tiempo" class="font-medium">30 min</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Espera:</span>
+                                            <span id="sim_pico_espera" class="font-medium">8 min</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Total:</span>
+                                            <span id="sim_pico_tiempo_total" class="font-medium">38 min</span>
+                                        </div>
+                                        <hr class="my-2 border-red-200">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Base:</span>
+                                            <span id="sim_pico_base" class="font-medium">$ 5,000</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Recorr:</span>
+                                            <span id="sim_pico_recorrido" class="font-medium">$ 15,000</span>
+                                        </div>
+                                        <hr class="my-2 border-red-200">
+                                        <div class="flex justify-between text-base">
+                                            <span class="font-semibold">TOTAL:</span>
+                                            <span id="sim_pico_total" class="font-bold text-red-700">$ 20,000</span>
+                                        </div>
+                                        <hr class="my-2 border-red-200">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">💰 Ingreso/hora:</span>
+                                            <span id="sim_pico_ingreso_hora" class="font-bold text-green-600">$ 31,579 ✅</span>
+                                        </div>
+                                        <p id="sim_pico_vs_objetivo" class="text-xs text-gray-500 text-right">(vs $30,000 obj)</p>
+                                    </div>
+                                </div>
+
+                                <!-- Hora Valle -->
+                                <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                                    <h5 class="font-semibold text-green-700 mb-3">🟢 HORA VALLE</h5>
+                                    <div class="space-y-1 text-sm">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Recorrido:</span>
+                                            <span id="sim_valle_recorrido_tiempo" class="font-medium">17.6 min</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Espera:</span>
+                                            <span id="sim_valle_espera" class="font-medium">8 min</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Total:</span>
+                                            <span id="sim_valle_tiempo_total" class="font-medium">25.6 min</span>
+                                        </div>
+                                        <hr class="my-2 border-green-200">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Base:</span>
+                                            <span id="sim_valle_base" class="font-medium">$ 5,000</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Recorr:</span>
+                                            <span id="sim_valle_recorrido" class="font-medium">$ 9,000</span>
+                                        </div>
+                                        <hr class="my-2 border-green-200">
+                                        <div class="flex justify-between text-base">
+                                            <span class="font-semibold">TOTAL:</span>
+                                            <span id="sim_valle_total" class="font-bold text-green-700">$ 14,000</span>
+                                        </div>
+                                        <hr class="my-2 border-green-200">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">💰 Ingreso/hora:</span>
+                                            <span id="sim_valle_ingreso_hora" class="font-bold text-green-600">$ 32,813 ✅</span>
+                                        </div>
+                                        <p id="sim_valle_vs_objetivo" class="text-xs text-gray-500 text-right">(vs $30,000 obj)</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- HORARIOS HORA PICO -->
+                        <div class="mb-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                            <h4 class="font-semibold text-gray-800 mb-4">HORARIOS HORA PICO</h4>
+
+                            <!-- Lunes a Viernes -->
+                            <div class="mb-4">
+                                <h5 class="font-medium text-gray-700 mb-2">Lunes a Viernes:</h5>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm">🌅 Mañana:</span>
+                                        <input type="time" id="transporte_pico_lv_am_inicio" class="px-2 py-1 border border-gray-300 rounded" value="07:00">
+                                        <span>a</span>
+                                        <input type="time" id="transporte_pico_lv_am_fin" class="px-2 py-1 border border-gray-300 rounded" value="08:30">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm">🌆 Tarde:</span>
+                                        <input type="time" id="transporte_pico_lv_pm_inicio" class="px-2 py-1 border border-gray-300 rounded" value="16:30">
+                                        <span>a</span>
+                                        <input type="time" id="transporte_pico_lv_pm_fin" class="px-2 py-1 border border-gray-300 rounded" value="19:30">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sábados -->
+                            <div class="mb-4">
+                                <h5 class="font-medium text-gray-700 mb-2">Sábados:</h5>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm">🌅 Mañana:</span>
+                                        <input type="time" id="transporte_pico_sab_am_inicio" class="px-2 py-1 border border-gray-300 rounded" value="07:00">
+                                        <span>a</span>
+                                        <input type="time" id="transporte_pico_sab_am_fin" class="px-2 py-1 border border-gray-300 rounded" value="09:00">
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm">🌆 Tarde:</span>
+                                        <input type="time" id="transporte_pico_sab_pm_inicio" class="px-2 py-1 border border-gray-300 rounded" value="12:00">
+                                        <span>a</span>
+                                        <input type="time" id="transporte_pico_sab_pm_fin" class="px-2 py-1 border border-gray-300 rounded" value="15:30">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p class="text-sm text-gray-600 italic">ℹ️ Domingos y festivos = hora valle todo el día</p>
+                        </div>
+
+                        <!-- ACOMPAÑAMIENTO -->
+                        <div class="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <h4 class="font-semibold text-gray-800 mb-4">ACOMPAÑAMIENTO</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Tarifa por hora</label>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-600">$</span>
+                                        <input type="number" id="acompanamiento_tarifa_hora" class="px-4 py-2 border border-gray-300 rounded-lg w-32 text-right" value="30000">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Horas mínimas</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="acompanamiento_horas_minimo" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="1" min="1">
+                                        <span class="text-gray-600">hora(s)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 6: Administradores de Chat -->
             <div class="accordion-section">
                 <div class="accordion-header" onclick="toggleAccordion(this)">
                     <div>
@@ -1220,9 +1471,160 @@
             cargarParametrosRevisionCotizaciones();
             cargarColaboradores();
             cargarAdminsChat();
+            cargarParametrosTransporte();
+            inicializarEventosTransporte();
 
             document.getElementById('frecuencia_alerta_cotizaciones').addEventListener('change', toggleDiasPeriodico);
         });
+
+        // ==================== SERVICIOS DE TRANSPORTE ====================
+
+        const parametrosTransporteIds = [
+            'transporte_tarifa_base',
+            'transporte_ingreso_hora_objetivo',
+            'transporte_velocidad_pico',
+            'transporte_velocidad_valle',
+            'transporte_tiempo_espera_recogida',
+            'transporte_viajes_promedio_hora',
+            'transporte_redondeo_tarifa',
+            'transporte_pico_lv_am_inicio',
+            'transporte_pico_lv_am_fin',
+            'transporte_pico_lv_pm_inicio',
+            'transporte_pico_lv_pm_fin',
+            'transporte_pico_sab_am_inicio',
+            'transporte_pico_sab_am_fin',
+            'transporte_pico_sab_pm_inicio',
+            'transporte_pico_sab_pm_fin',
+            'acompanamiento_tarifa_hora',
+            'acompanamiento_horas_minimo'
+        ];
+
+        async function cargarParametrosTransporte() {
+            for (const id of parametrosTransporteIds) {
+                try {
+                    const res = await fetch(`/api/parametro/${id}`);
+                    const data = await res.json();
+
+                    if (data.ok && data.valor !== null) {
+                        document.getElementById(id).value = data.valor;
+                    }
+                } catch (error) {
+                    console.log(`Parámetro ${id} no encontrado, usando valor por defecto`);
+                }
+            }
+            // Actualizar cálculos después de cargar
+            calcularTarifasTransporte();
+            actualizarSimulador();
+        }
+
+        function inicializarEventosTransporte() {
+            // Blur para guardar y recalcular en todos los inputs de transporte
+            parametrosTransporteIds.forEach(id => {
+                const elemento = document.getElementById(id);
+                if (elemento) {
+                    elemento.addEventListener('blur', async () => {
+                        await guardarParametroTransporte(id, elemento.value);
+                        calcularTarifasTransporte();
+                        actualizarSimulador();
+                    });
+                    elemento.addEventListener('input', () => {
+                        calcularTarifasTransporte();
+                        actualizarSimulador();
+                    });
+                }
+            });
+
+            // Simulador también recalcula en tiempo real
+            document.getElementById('simulador_distancia').addEventListener('input', actualizarSimulador);
+        }
+
+        async function guardarParametroTransporte(nombre, valor) {
+            try {
+                const res = await fetch(`/api/parametro/${nombre}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ valor: valor })
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    console.error(`Error guardando ${nombre}:`, data.error);
+                }
+            } catch (error) {
+                console.error(`Error guardando ${nombre}:`, error);
+            }
+        }
+
+        function calcularTarifasTransporte() {
+            const ingresoObjetivo = parseFloat(document.getElementById('transporte_ingreso_hora_objetivo').value) || 30000;
+            const velocidadPico = parseFloat(document.getElementById('transporte_velocidad_pico').value) || 10;
+            const velocidadValle = parseFloat(document.getElementById('transporte_velocidad_valle').value) || 17;
+
+            const tarifaKmPico = ingresoObjetivo / velocidadPico;
+            const tarifaKmValle = ingresoObjetivo / velocidadValle;
+
+            document.getElementById('tarifa_km_pico_calculada').textContent = '$ ' + Math.round(tarifaKmPico).toLocaleString('es-CO');
+            document.getElementById('tarifa_km_valle_calculada').textContent = '$ ' + Math.round(tarifaKmValle).toLocaleString('es-CO');
+        }
+
+        function actualizarSimulador() {
+            const distancia = parseFloat(document.getElementById('simulador_distancia').value) || 5;
+            const tarifaBase = parseFloat(document.getElementById('transporte_tarifa_base').value) || 5000;
+            const ingresoObjetivo = parseFloat(document.getElementById('transporte_ingreso_hora_objetivo').value) || 30000;
+            const velocidadPico = parseFloat(document.getElementById('transporte_velocidad_pico').value) || 10;
+            const velocidadValle = parseFloat(document.getElementById('transporte_velocidad_valle').value) || 17;
+            const tiempoEspera = parseFloat(document.getElementById('transporte_tiempo_espera_recogida').value) || 8;
+            const redondeo = parseFloat(document.getElementById('transporte_redondeo_tarifa').value) || 500;
+
+            // Tarifas por km
+            const tarifaKmPico = ingresoObjetivo / velocidadPico;
+            const tarifaKmValle = ingresoObjetivo / velocidadValle;
+
+            // Tiempos
+            const tiempoRecorridoPico = (distancia / velocidadPico) * 60; // en minutos
+            const tiempoRecorridoValle = (distancia / velocidadValle) * 60;
+            const tiempoTotalPico = tiempoRecorridoPico + tiempoEspera;
+            const tiempoTotalValle = tiempoRecorridoValle + tiempoEspera;
+
+            // Tarifas con redondeo
+            const recorridoPicoSinRedondeo = distancia * tarifaKmPico;
+            const recorridoValleSinRedondeo = distancia * tarifaKmValle;
+            const recorridoPico = Math.round(recorridoPicoSinRedondeo / redondeo) * redondeo;
+            const recorridoValle = Math.round(recorridoValleSinRedondeo / redondeo) * redondeo;
+            const totalPico = tarifaBase + recorridoPico;
+            const totalValle = tarifaBase + recorridoValle;
+
+            // Ingreso por hora
+            const ingresoPorHoraPico = (totalPico / tiempoTotalPico) * 60;
+            const ingresoPorHoraValle = (totalValle / tiempoTotalValle) * 60;
+
+            // Actualizar DOM - Hora Pico
+            document.getElementById('sim_pico_recorrido_tiempo').textContent = tiempoRecorridoPico.toFixed(1) + ' min';
+            document.getElementById('sim_pico_espera').textContent = tiempoEspera + ' min';
+            document.getElementById('sim_pico_tiempo_total').textContent = tiempoTotalPico.toFixed(1) + ' min';
+            document.getElementById('sim_pico_base').textContent = '$ ' + tarifaBase.toLocaleString('es-CO');
+            document.getElementById('sim_pico_recorrido').textContent = '$ ' + recorridoPico.toLocaleString('es-CO');
+            document.getElementById('sim_pico_total').textContent = '$ ' + totalPico.toLocaleString('es-CO');
+
+            const iconoPico = ingresoPorHoraPico >= ingresoObjetivo ? '✅' : '❌';
+            const colorPico = ingresoPorHoraPico >= ingresoObjetivo ? 'text-green-600' : 'text-red-600';
+            document.getElementById('sim_pico_ingreso_hora').textContent = '$ ' + Math.round(ingresoPorHoraPico).toLocaleString('es-CO') + ' ' + iconoPico;
+            document.getElementById('sim_pico_ingreso_hora').className = 'font-bold ' + colorPico;
+            document.getElementById('sim_pico_vs_objetivo').textContent = '(vs $' + ingresoObjetivo.toLocaleString('es-CO') + ' obj)';
+
+            // Actualizar DOM - Hora Valle
+            document.getElementById('sim_valle_recorrido_tiempo').textContent = tiempoRecorridoValle.toFixed(1) + ' min';
+            document.getElementById('sim_valle_espera').textContent = tiempoEspera + ' min';
+            document.getElementById('sim_valle_tiempo_total').textContent = tiempoTotalValle.toFixed(1) + ' min';
+            document.getElementById('sim_valle_base').textContent = '$ ' + tarifaBase.toLocaleString('es-CO');
+            document.getElementById('sim_valle_recorrido').textContent = '$ ' + recorridoValle.toLocaleString('es-CO');
+            document.getElementById('sim_valle_total').textContent = '$ ' + totalValle.toLocaleString('es-CO');
+
+            const iconoValle = ingresoPorHoraValle >= ingresoObjetivo ? '✅' : '❌';
+            const colorValle = ingresoPorHoraValle >= ingresoObjetivo ? 'text-green-600' : 'text-red-600';
+            document.getElementById('sim_valle_ingreso_hora').textContent = '$ ' + Math.round(ingresoPorHoraValle).toLocaleString('es-CO') + ' ' + iconoValle;
+            document.getElementById('sim_valle_ingreso_hora').className = 'font-bold ' + colorValle;
+            document.getElementById('sim_valle_vs_objetivo').textContent = '(vs $' + ingresoObjetivo.toLocaleString('es-CO') + ' obj)';
+        }
     </script>
 </body>
 </html>

@@ -18342,10 +18342,75 @@ def servicios_home():
     return render_template('servicios_home.html')
 
 
+def obtener_parametro_transporte(conn, nombre, valor_defecto):
+    """Obtiene un parámetro de transporte de la BD o retorna el valor por defecto"""
+    try:
+        row = conn.execute("""
+            SELECT valor_numerico, valor_texto, tipo
+            FROM parametros_sistema
+            WHERE nombre = %s
+        """, (nombre,)).fetchone()
+
+        if row:
+            if row['tipo'] == 'numerico':
+                return float(row['valor_numerico']) if row['valor_numerico'] is not None else valor_defecto
+            elif row['tipo'] == 'texto':
+                return row['valor_texto'] if row['valor_texto'] is not None else valor_defecto
+        return valor_defecto
+    except:
+        return valor_defecto
+
+
+def es_hora_pico(conn):
+    """Determina si la hora actual es hora pico según los parámetros configurados"""
+    from datetime import datetime
+
+    ahora = datetime.now()
+    dia_semana = ahora.weekday()  # 0=Lunes, 6=Domingo
+    hora_actual = ahora.strftime('%H:%M')
+
+    # Domingo = siempre valle
+    if dia_semana == 6:
+        return False
+
+    # Verificar si es festivo (usar la tabla de festivos existente)
+    try:
+        fecha_hoy = ahora.strftime('%Y-%m-%d')
+        festivo = conn.execute("""
+            SELECT id FROM festivos WHERE fecha = %s
+        """, (fecha_hoy,)).fetchone()
+        if festivo:
+            return False  # Festivo = hora valle
+    except:
+        pass
+
+    # Sábado
+    if dia_semana == 5:
+        pico_am_inicio = obtener_parametro_transporte(conn, 'transporte_pico_sab_am_inicio', '07:00')
+        pico_am_fin = obtener_parametro_transporte(conn, 'transporte_pico_sab_am_fin', '09:00')
+        pico_pm_inicio = obtener_parametro_transporte(conn, 'transporte_pico_sab_pm_inicio', '12:00')
+        pico_pm_fin = obtener_parametro_transporte(conn, 'transporte_pico_sab_pm_fin', '15:30')
+    else:
+        # Lunes a Viernes
+        pico_am_inicio = obtener_parametro_transporte(conn, 'transporte_pico_lv_am_inicio', '07:00')
+        pico_am_fin = obtener_parametro_transporte(conn, 'transporte_pico_lv_am_fin', '08:30')
+        pico_pm_inicio = obtener_parametro_transporte(conn, 'transporte_pico_lv_pm_inicio', '16:30')
+        pico_pm_fin = obtener_parametro_transporte(conn, 'transporte_pico_lv_pm_fin', '19:30')
+
+    # Verificar si está en rango de hora pico
+    if pico_am_inicio <= hora_actual <= pico_am_fin:
+        return True
+    if pico_pm_inicio <= hora_actual <= pico_pm_fin:
+        return True
+
+    return False
+
+
 @app.route('/api/calcular-tarifa', methods=['POST'])
 def api_calcular_tarifa():
     """
     Calcula tarifa estimada basada en distancia o horas
+    Usa parámetros configurables desde admin_parametros
 
     Body JSON:
     {
@@ -18360,46 +18425,69 @@ def api_calcular_tarifa():
         distancia_km = data.get('distancia_km', 0)
         horas = data.get('horas_acompanamiento')
 
-        if tipo_servicio == 'transporte':
-            # TODO: Hacer parametrizable por usuario (Rafael)
-            # Tarifa calculada para generar $30,000/hora considerando:
-            # - Velocidad promedio: 19 km/h en Cali (según Waze)
-            # - Tiempo muerto entre pasajeros: 8 min
-            # - Promedio: 2 viajes por hora de ~7 km cada uno
-            # Ejemplos: 5 min (~1.6 km) = $7,400 | 10 min (~3.2 km) = $9,800 | 60 min (19 km) = $33,500
-            TARIFA_BASE = 5000  # Arranque
-            TARIFA_POR_KM = 1500  # Por kilómetro
+        conn = get_db_connection()
 
-            tarifa = TARIFA_BASE + (distancia_km * TARIFA_POR_KM)
+        if tipo_servicio == 'transporte':
+            # Obtener parámetros configurables
+            tarifa_base = obtener_parametro_transporte(conn, 'transporte_tarifa_base', 5000)
+            ingreso_objetivo = obtener_parametro_transporte(conn, 'transporte_ingreso_hora_objetivo', 30000)
+            velocidad_pico = obtener_parametro_transporte(conn, 'transporte_velocidad_pico', 10)
+            velocidad_valle = obtener_parametro_transporte(conn, 'transporte_velocidad_valle', 17)
+            tiempo_espera = obtener_parametro_transporte(conn, 'transporte_tiempo_espera_recogida', 8)
+            redondeo = obtener_parametro_transporte(conn, 'transporte_redondeo_tarifa', 500)
+
+            # Determinar si es hora pico o valle
+            hora_pico = es_hora_pico(conn)
+
+            # Calcular tarifa por km según horario
+            if hora_pico:
+                velocidad = velocidad_pico
+                tarifa_km = ingreso_objetivo / velocidad_pico
+            else:
+                velocidad = velocidad_valle
+                tarifa_km = ingreso_objetivo / velocidad_valle
+
+            # Calcular tiempo estimado
+            tiempo_recorrido = (distancia_km / velocidad) * 60  # en minutos
+            tiempo_total = tiempo_recorrido + tiempo_espera
+
+            # Calcular tarifa con redondeo
+            recorrido_sin_redondeo = distancia_km * tarifa_km
+            recorrido_redondeado = round(recorrido_sin_redondeo / redondeo) * redondeo
+            tarifa = tarifa_base + recorrido_redondeado
 
             desglose = {
-                'base': TARIFA_BASE,
-                'distancia': distancia_km * TARIFA_POR_KM,
+                'base': int(tarifa_base),
+                'recorrido': int(recorrido_redondeado),
+                'tarifa_km': round(tarifa_km),
+                'hora_pico': hora_pico,
+                'tiempo_recorrido_min': round(tiempo_recorrido, 1),
+                'tiempo_total_min': round(tiempo_total, 1),
                 'total': int(tarifa)
             }
 
         elif tipo_servicio == 'acompanamiento':
-            # TODO: Hacer parametrizable por usuario (Rafael)
-            # Tarifa de $30,000 por hora, mínimo 1 hora
-            TARIFA_POR_HORA = 30000  # $30,000 por hora
-            TARIFA_MINIMA = 30000  # Mínimo 1 hora
+            # Obtener parámetros configurables
+            tarifa_hora = obtener_parametro_transporte(conn, 'acompanamiento_tarifa_hora', 30000)
+            horas_minimo = obtener_parametro_transporte(conn, 'acompanamiento_horas_minimo', 1)
 
-            if not horas:
-                horas = 1  # Mínimo 1 hora
+            if not horas or horas < horas_minimo:
+                horas = horas_minimo
 
-            tarifa_tiempo = horas * TARIFA_POR_HORA
-            tarifa = max(tarifa_tiempo, TARIFA_MINIMA)
+            tarifa = horas * tarifa_hora
 
             desglose = {
                 'horas': horas,
-                'tarifa_hora': TARIFA_POR_HORA,
-                'subtotal': tarifa_tiempo,
-                'minimo': TARIFA_MINIMA,
+                'tarifa_hora': int(tarifa_hora),
+                'horas_minimo': int(horas_minimo),
                 'total': int(tarifa)
             }
 
         else:
+            conn.close()
             return jsonify({'ok': False, 'error': 'Tipo de servicio inválido'}), 400
+
+        conn.close()
 
         return jsonify({
             'ok': True,

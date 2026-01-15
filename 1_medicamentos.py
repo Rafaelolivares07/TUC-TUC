@@ -16497,18 +16497,57 @@ def parametro_sistema(nombre_parametro):
 
             conn = get_db_connection()
 
-            # Primero verificar el tipo del parámetro
+            # Verificar si el parámetro existe
             row = conn.execute("""
                 SELECT tipo FROM parametros_sistema WHERE nombre = %s
             """, (nombre_parametro,)).fetchone()
 
             if not row:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'Parámetro no encontrado'}), 404
+                # UPSERT: Crear el parámetro si no existe
+                # Detectar tipo automáticamente
+                try:
+                    float(valor)
+                    # Si parece hora (HH:MM), es texto
+                    if ':' in str(valor):
+                        tipo_auto = 'texto'
+                    else:
+                        tipo_auto = 'numerico'
+                except (ValueError, TypeError):
+                    if str(valor).lower() in ('true', 'false'):
+                        tipo_auto = 'booleano'
+                    else:
+                        tipo_auto = 'texto'
 
+                # Determinar sección basada en el nombre del parámetro
+                if nombre_parametro.startswith('transporte_') or nombre_parametro.startswith('acompanamiento_'):
+                    seccion = 'SERVICIOS DE TRANSPORTE'
+                else:
+                    seccion = 'GENERAL'
+
+                # Insertar nuevo parámetro
+                if tipo_auto == 'numerico':
+                    conn.execute("""
+                        INSERT INTO parametros_sistema (nombre, seccion, tipo, valor_numerico)
+                        VALUES (%s, %s, %s, %s)
+                    """, (nombre_parametro, seccion, tipo_auto, float(valor)))
+                elif tipo_auto == 'texto':
+                    conn.execute("""
+                        INSERT INTO parametros_sistema (nombre, seccion, tipo, valor_texto)
+                        VALUES (%s, %s, %s, %s)
+                    """, (nombre_parametro, seccion, tipo_auto, str(valor)))
+                elif tipo_auto == 'booleano':
+                    conn.execute("""
+                        INSERT INTO parametros_sistema (nombre, seccion, tipo, valor_booleano)
+                        VALUES (%s, %s, %s, %s)
+                    """, (nombre_parametro, seccion, tipo_auto, str(valor).lower() == 'true'))
+
+                conn.commit()
+                conn.close()
+                return jsonify({'ok': True, 'message': 'Parámetro creado correctamente'})
+
+            # Si existe, actualizar según el tipo
             tipo = row['tipo']
 
-            # Actualizar según el tipo
             if tipo == 'numerico':
                 conn.execute("""
                     UPDATE parametros_sistema

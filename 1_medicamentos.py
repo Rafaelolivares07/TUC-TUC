@@ -19272,6 +19272,18 @@ def api_guardar_pois_nominatim():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/conteo_pois')
+def api_conteo_pois():
+    """Retorna el número total de POIs en la BD"""
+    try:
+        conn = get_db_connection()
+        row = conn.execute("SELECT COUNT(*) as total FROM pois_cali").fetchone()
+        conn.close()
+        return jsonify({'ok': True, 'total': row['total']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def obtener_parametro_transporte(conn, nombre, valor_defecto):
     """Obtiene un parámetro de transporte de la BD o retorna el valor por defecto"""
     try:

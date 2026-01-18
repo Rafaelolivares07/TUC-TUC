@@ -18730,17 +18730,19 @@ def api_buscar_interseccion():
     numeros = re.findall(r'\d+[a-zA-Z]?', texto)
 
     # Detectar tipos de vía (puede haber dos: "av 6 calle 12")
+    # Usar regex con word boundaries para evitar falsos positivos (ej: "clinica" no es "cl")
     tipos_via_keywords = ['av', 'avenida', 'carr', 'carrera', 'cra', 'kr', 'call', 'calle', 'cl', 'diag', 'diagonal', 'trans', 'transversal']
     tipos_via = []
-    if 'av' in texto or 'avenida' in texto:
+    palabras_texto = texto.split()
+    if any(p in ['av', 'avenida'] for p in palabras_texto):
         tipos_via.append('avenida')
-    if 'carr' in texto or 'carrera' in texto or 'cra' in texto or 'kr' in texto:
+    if any(p in ['carr', 'carrera', 'cra', 'kr'] for p in palabras_texto):
         tipos_via.append('carrera')
-    if 'call' in texto or 'calle' in texto or 'cl' in texto:
+    if any(p in ['call', 'calle', 'cl'] for p in palabras_texto):
         tipos_via.append('calle')
-    if 'diag' in texto or 'diagonal' in texto:
+    if any(p in ['diag', 'diagonal'] for p in palabras_texto):
         tipos_via.append('diagonal')
-    if 'trans' in texto or 'transversal' in texto:
+    if any(p in ['trans', 'transversal'] for p in palabras_texto):
         tipos_via.append('transversal')
 
     tipo_via = tipos_via[0] if tipos_via else None

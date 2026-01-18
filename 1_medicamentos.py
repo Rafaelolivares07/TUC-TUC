@@ -1218,6 +1218,11 @@ def cargar_pois():
         conn = get_db_connection()
         resultados = []
 
+        # 0. Crear extensiones necesarias para búsqueda
+        conn.execute("CREATE EXTENSION IF NOT EXISTS unaccent;")
+        conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+        resultados.append("✅ Extensiones unaccent y pg_trgm habilitadas")
+
         # 1. Crear tabla pois_cali
         conn.execute("""
             CREATE TABLE IF NOT EXISTS pois_cali (
@@ -18711,7 +18716,8 @@ def api_buscar_interseccion():
     """
     import math
 
-    texto = request.args.get('q', '').strip().lower()
+    texto_original = request.args.get('q', '').strip()
+    texto = normalizar_texto(texto_original)  # Quita tildes, minúsculas, caracteres especiales
 
     # Coordenadas opcionales del usuario para ordenar por cercanía
     user_lat = request.args.get('lat', type=float)
@@ -18773,17 +18779,18 @@ def api_buscar_interseccion():
             print(f"DEBUG: Buscando POIs con palabras={palabras_extra}")
 
             # Buscar con LIKE (coincidencia parcial) y trigram (similitud para errores ortográficos)
-            # LIKE: '%berc%' encuentra "Berchman's"
+            # Usamos unaccent() para ignorar tildes en la BD
+            # LIKE: '%clinica%' encuentra "Clínica"
             # Trigram: 'bercmans' % 'berchman' encuentra coincidencias similares
             condiciones = []
             params = []
 
             for palabra in palabras_extra:
-                # LIKE para coincidencia parcial
-                condiciones.append("LOWER(nombre) LIKE %s")
+                # LIKE para coincidencia parcial (sin tildes)
+                condiciones.append("LOWER(unaccent(nombre)) LIKE %s")
                 params.append(f'%{palabra}%')
                 # Trigram para similitud (errores ortográficos) - umbral 0.3
-                condiciones.append("LOWER(nombre) %% %s")
+                condiciones.append("LOWER(unaccent(nombre)) %% %s")
                 params.append(palabra)
 
             condiciones_sql = ' OR '.join(condiciones)
@@ -18804,11 +18811,12 @@ def api_buscar_interseccion():
                     pois_agregados.add(poi_key)
 
                     # Contar cuántas palabras coinciden en el nombre (parcial o similar)
-                    nombre_lower = row['nombre'].lower()
+                    # Normalizar el nombre del POI para comparar sin tildes
+                    nombre_normalizado = normalizar_texto(row['nombre'])
                     coincidencias = 0
                     for palabra in palabras_extra:
                         # Coincidencia parcial (contiene la palabra)
-                        if palabra in nombre_lower:
+                        if palabra in nombre_normalizado:
                             coincidencias += 1
 
                     # Prioridad: más coincidencias = menor número = mayor prioridad
@@ -19281,6 +19289,20 @@ def api_conteo_pois():
         row = conn.execute("SELECT COUNT(*) as total FROM pois_cali").fetchone()
         conn.close()
         return jsonify({'ok': True, 'total': row['total']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/habilitar_extensiones')
+def api_habilitar_extensiones():
+    """Habilita extensiones unaccent y pg_trgm para búsqueda normalizada"""
+    try:
+        conn = get_db_connection()
+        conn.execute("CREATE EXTENSION IF NOT EXISTS unaccent;")
+        conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Extensiones unaccent y pg_trgm habilitadas'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

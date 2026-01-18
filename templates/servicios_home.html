@@ -998,7 +998,7 @@
 
                     // 2. SEGUNDO: Siempre buscar en Nominatim también
                     const viewbox = '-77.15,4.56,-76.07,2.4';
-                    const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10`;
+                    const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10&addressdetails=1`;
                     const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultadosNominatim = await responseNominatim.json();
 
@@ -1023,6 +1023,15 @@
                             fuente: 'n'
                         });
                     });
+
+                    // 3. GUARDAR resultados de Nominatim en nuestra BD (en background)
+                    if (resultadosNominatim.length > 0) {
+                        fetch('/api/guardar_pois_nominatim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ resultados: resultadosNominatim })
+                        }).catch(err => console.log('Error guardando POIs:', err));
+                    }
 
                     mostrarSugerenciasDestino(resultadosCombinados);
                 } catch (error) {

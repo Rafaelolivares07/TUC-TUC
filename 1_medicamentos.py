@@ -19185,6 +19185,76 @@ def api_buscar_interseccion():
     })
 
 
+@app.route('/api/guardar_pois_nominatim', methods=['POST'])
+def api_guardar_pois_nominatim():
+    """
+    Guarda POIs de Nominatim en nuestra BD si no existen.
+    Recibe un array de resultados de Nominatim.
+    """
+    try:
+        data = request.get_json()
+        resultados = data.get('resultados', [])
+
+        if not resultados:
+            return jsonify({'ok': True, 'guardados': 0, 'duplicados': 0})
+
+        conn = get_db_connection()
+        guardados = 0
+        duplicados = 0
+
+        for r in resultados:
+            osm_id = r.get('osm_id')
+            if not osm_id:
+                continue
+
+            # Verificar si ya existe
+            existe = conn.execute("""
+                SELECT id FROM pois_cali WHERE osm_id = %s
+            """, (osm_id,)).fetchone()
+
+            if existe:
+                duplicados += 1
+                continue
+
+            # Extraer datos
+            nombre = r.get('name') or r.get('display_name', '').split(',')[0].strip()
+            if not nombre:
+                continue
+
+            lat = r.get('lat')
+            lon = r.get('lon')
+            if not lat or not lon:
+                continue
+
+            display_name = r.get('display_name', '')
+            categoria = r.get('class', r.get('type', 'nominatim'))
+            subcategoria = r.get('type', '')
+
+            # Insertar nuevo POI
+            try:
+                conn.execute("""
+                    INSERT INTO pois_cali (osm_id, nombre, lat, lon, categoria, subcategoria, display_name)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (osm_id, nombre[:255], lat, lon, categoria[:50] if categoria else None,
+                      subcategoria[:100] if subcategoria else None, display_name))
+                guardados += 1
+            except Exception as e:
+                print(f"Error guardando POI {nombre}: {e}")
+                continue
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'guardados': guardados,
+            'duplicados': duplicados
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def obtener_parametro_transporte(conn, nombre, valor_defecto):
     """Obtiene un parámetro de transporte de la BD o retorna el valor por defecto"""
     try:

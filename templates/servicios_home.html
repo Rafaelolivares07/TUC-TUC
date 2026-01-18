@@ -972,17 +972,17 @@
                 // Procesar texto para Cali (agrega "n" a avenidas con número)
                 const textoProcesado = procesarTextoParaCali(texto);
 
-                try {
-                    const latParam = coordenadasOrigenActual ? coordenadasOrigenActual.lat : (ubicacionGPSActual ? ubicacionGPSActual.lat : '');
-                    const lonParam = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (ubicacionGPSActual ? ubicacionGPSActual.lon : '');
+                const latParam = coordenadasOrigenActual ? coordenadasOrigenActual.lat : (ubicacionGPSActual ? ubicacionGPSActual.lat : '');
+                const lonParam = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (ubicacionGPSActual ? ubicacionGPSActual.lon : '');
 
-                    // 1. PRIMERO: Buscar en Nominatim (silencioso)
+                // 1. PRIMERO: Intentar buscar en Nominatim y guardar (no bloquea si falla)
+                try {
                     const viewbox = '-77.15,4.56,-76.07,2.4';
                     const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10&addressdetails=1`;
                     const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
                     const resultadosNominatim = await responseNominatim.json();
 
-                    // 2. SEGUNDO: Guardar nuevos en BD (esperar a que termine)
+                    // Guardar nuevos en BD (esperar a que termine)
                     if (resultadosNominatim.length > 0) {
                         await fetch('/api/guardar_pois_nominatim', {
                             method: 'POST',
@@ -990,8 +990,12 @@
                             body: JSON.stringify({ resultados: resultadosNominatim })
                         });
                     }
+                } catch (errorNominatim) {
+                    console.log('Nominatim no disponible, usando solo BD local');
+                }
 
-                    // 3. TERCERO: Buscar en BD local (ya incluye los recién guardados)
+                // 2. SEGUNDO: Buscar en BD local (SIEMPRE se ejecuta)
+                try {
                     const urlLocal = `/api/buscar_interseccion?q=${encodeURIComponent(textoProcesado)}&lat=${latParam}&lon=${lonParam}`;
                     const responseLocal = await fetch(urlLocal);
                     const dataLocal = await responseLocal.json();
@@ -1009,10 +1013,10 @@
                         });
                     }
 
-                    // 4. MOSTRAR solo resultados de BD local (p/i)
+                    // 3. MOSTRAR resultados de BD local (p/i)
                     mostrarSugerenciasDestino(resultados);
-                } catch (error) {
-                    console.error('Error en autocomplete destino:', error);
+                } catch (errorLocal) {
+                    console.error('Error buscando en BD local:', errorLocal);
                 }
             }, 500);
         }

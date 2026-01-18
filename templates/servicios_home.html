@@ -22,6 +22,7 @@
         <!-- Header -->
         <div class="bg-white rounded-lg shadow-lg p-3 mb-4">
             <h1 class="text-xl font-bold text-gray-800">TUC TUC TE LLEVA!</h1>
+            <p id="conteo-destinos" class="text-xs text-gray-500">a más de <span id="num-destinos">...</span> destinos conocidos en tu ciudad</p>
             <p id="saludo-usuario" class="text-sm text-gray-600 mt-1">Solicita tu servicio de forma rápida y segura</p>
         </div>
 
@@ -258,6 +259,7 @@
             configurarBotones();
             detectarUbicacionInicial(); // Detectar ubicación al cargar
             cargarUsuarioActual(); // Cargar nombre del usuario si está logueado
+            cargarConteoPOIs(); // Cargar número de destinos conocidos
 
             // Focus automático en el campo de destino
             setTimeout(() => {
@@ -277,6 +279,22 @@
                 }
             } catch (error) {
                 console.log('Usuario no logueado');
+            }
+        }
+
+        // Función para cargar conteo de POIs
+        async function cargarConteoPOIs() {
+            try {
+                const response = await fetch('/api/conteo_pois');
+                const data = await response.json();
+
+                if (data.ok && data.total) {
+                    // Formatear número con separador de miles
+                    const numFormateado = data.total.toLocaleString('es-CO');
+                    document.getElementById('num-destinos').textContent = numFormateado;
+                }
+            } catch (error) {
+                console.log('Error cargando conteo POIs:', error);
             }
         }
 

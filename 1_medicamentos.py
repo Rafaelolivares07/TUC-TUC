@@ -19247,18 +19247,20 @@ def api_guardar_pois_nominatim():
                 display_name
             ))
 
-        # 3. INSERT en lote
+        # 3. INSERT en lote (uno por uno con ON CONFLICT)
         guardados = 0
         if pois_nuevos:
-            from psycopg2.extras import execute_values
-            execute_values(
-                conn.cursor(),
-                """INSERT INTO pois_cali (osm_id, nombre, lat, lon, categoria, subcategoria, display_name)
-                   VALUES %s ON CONFLICT (osm_id) DO NOTHING""",
-                pois_nuevos
-            )
+            for poi in pois_nuevos:
+                try:
+                    conn.execute("""
+                        INSERT INTO pois_cali (osm_id, nombre, lat, lon, categoria, subcategoria, display_name)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (osm_id) DO NOTHING
+                    """, poi)
+                    guardados += 1
+                except Exception:
+                    pass  # Ignorar errores individuales
             conn.commit()
-            guardados = len(pois_nuevos)
 
         conn.close()
 

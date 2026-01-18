@@ -19189,7 +19189,10 @@ def api_buscar_interseccion():
 def api_guardar_pois_nominatim():
     """
     Guarda POIs de Nominatim en nuestra BD si no existen.
-    Recibe un array de resultados de Nominatim.
+    Proceso eficiente en lote:
+    1. Query ligero para obtener osm_ids existentes
+    2. Filtrar en memoria cuáles son nuevos
+    3. INSERT en lote solo los nuevos
     """
     try:
         data = request.get_json()
@@ -19198,25 +19201,29 @@ def api_guardar_pois_nominatim():
         if not resultados:
             return jsonify({'ok': True, 'guardados': 0, 'duplicados': 0})
 
-        conn = get_db_connection()
-        guardados = 0
-        duplicados = 0
+        # Extraer osm_ids de los resultados
+        osm_ids_nominatim = [r.get('osm_id') for r in resultados if r.get('osm_id')]
 
+        if not osm_ids_nominatim:
+            return jsonify({'ok': True, 'guardados': 0, 'duplicados': 0})
+
+        conn = get_db_connection()
+
+        # 1. Query ligero: obtener osm_ids que ya existen
+        placeholders = ','.join(['%s'] * len(osm_ids_nominatim))
+        rows = conn.execute(f"""
+            SELECT osm_id FROM pois_cali WHERE osm_id IN ({placeholders})
+        """, tuple(osm_ids_nominatim)).fetchall()
+
+        osm_ids_existentes = set(row['osm_id'] for row in rows)
+
+        # 2. Filtrar: cuáles son nuevos
+        pois_nuevos = []
         for r in resultados:
             osm_id = r.get('osm_id')
-            if not osm_id:
+            if not osm_id or osm_id in osm_ids_existentes:
                 continue
 
-            # Verificar si ya existe
-            existe = conn.execute("""
-                SELECT id FROM pois_cali WHERE osm_id = %s
-            """, (osm_id,)).fetchone()
-
-            if existe:
-                duplicados += 1
-                continue
-
-            # Extraer datos
             nombre = r.get('name') or r.get('display_name', '').split(',')[0].strip()
             if not nombre:
                 continue
@@ -19230,25 +19237,35 @@ def api_guardar_pois_nominatim():
             categoria = r.get('class', r.get('type', 'nominatim'))
             subcategoria = r.get('type', '')
 
-            # Insertar nuevo POI
-            try:
-                conn.execute("""
-                    INSERT INTO pois_cali (osm_id, nombre, lat, lon, categoria, subcategoria, display_name)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (osm_id, nombre[:255], lat, lon, categoria[:50] if categoria else None,
-                      subcategoria[:100] if subcategoria else None, display_name))
-                guardados += 1
-            except Exception as e:
-                print(f"Error guardando POI {nombre}: {e}")
-                continue
+            pois_nuevos.append((
+                osm_id,
+                nombre[:255],
+                lat,
+                lon,
+                categoria[:50] if categoria else None,
+                subcategoria[:100] if subcategoria else None,
+                display_name
+            ))
 
-        conn.commit()
+        # 3. INSERT en lote
+        guardados = 0
+        if pois_nuevos:
+            from psycopg2.extras import execute_values
+            execute_values(
+                conn.cursor(),
+                """INSERT INTO pois_cali (osm_id, nombre, lat, lon, categoria, subcategoria, display_name)
+                   VALUES %s ON CONFLICT (osm_id) DO NOTHING""",
+                pois_nuevos
+            )
+            conn.commit()
+            guardados = len(pois_nuevos)
+
         conn.close()
 
         return jsonify({
             'ok': True,
             'guardados': guardados,
-            'duplicados': duplicados
+            'duplicados': len(osm_ids_existentes)
         })
 
     except Exception as e:

@@ -973,20 +973,33 @@
                 const textoProcesado = procesarTextoParaCali(texto);
 
                 try {
-                    let resultadosCombinados = [];
-
-                    // 1. PRIMERO: Buscar en nuestra BD local (POIs + Intersecciones)
                     const latParam = coordenadasOrigenActual ? coordenadasOrigenActual.lat : (ubicacionGPSActual ? ubicacionGPSActual.lat : '');
                     const lonParam = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (ubicacionGPSActual ? ubicacionGPSActual.lon : '');
 
+                    // 1. PRIMERO: Buscar en Nominatim (silencioso)
+                    const viewbox = '-77.15,4.56,-76.07,2.4';
+                    const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10&addressdetails=1`;
+                    const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
+                    const resultadosNominatim = await responseNominatim.json();
+
+                    // 2. SEGUNDO: Guardar nuevos en BD (esperar a que termine)
+                    if (resultadosNominatim.length > 0) {
+                        await fetch('/api/guardar_pois_nominatim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ resultados: resultadosNominatim })
+                        });
+                    }
+
+                    // 3. TERCERO: Buscar en BD local (ya incluye los recién guardados)
                     const urlLocal = `/api/buscar_interseccion?q=${encodeURIComponent(textoProcesado)}&lat=${latParam}&lon=${lonParam}`;
                     const responseLocal = await fetch(urlLocal);
                     const dataLocal = await responseLocal.json();
 
+                    let resultados = [];
                     if (dataLocal.ok && dataLocal.resultados.length > 0) {
-                        // Convertir resultados locales al formato esperado
                         dataLocal.resultados.forEach(r => {
-                            resultadosCombinados.push({
+                            resultados.push({
                                 lat: r.lat,
                                 lon: r.lon,
                                 display_name: r.display_name,
@@ -996,44 +1009,8 @@
                         });
                     }
 
-                    // 2. SEGUNDO: Siempre buscar en Nominatim también
-                    const viewbox = '-77.15,4.56,-76.07,2.4';
-                    const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10&addressdetails=1`;
-                    const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
-                    const resultadosNominatim = await responseNominatim.json();
-
-                    // Agregar resultados de Nominatim con fuente 'n'
-                    resultadosNominatim.forEach(r => {
-                        // Calcular distancia si tenemos coordenadas
-                        let distanciaTexto = '(n)';
-                        if (latParam && lonParam) {
-                            const dist = calcularDistancia(parseFloat(latParam), parseFloat(lonParam), parseFloat(r.lat), parseFloat(r.lon));
-                            if (dist < 1) {
-                                distanciaTexto = `${Math.round(dist * 1000)} m n`;
-                            } else {
-                                distanciaTexto = `${dist.toFixed(1)} km n`;
-                            }
-                        }
-
-                        resultadosCombinados.push({
-                            lat: r.lat,
-                            lon: r.lon,
-                            display_name: r.display_name,
-                            distancia_texto: distanciaTexto,
-                            fuente: 'n'
-                        });
-                    });
-
-                    // 3. GUARDAR resultados de Nominatim en nuestra BD (en background)
-                    if (resultadosNominatim.length > 0) {
-                        fetch('/api/guardar_pois_nominatim', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ resultados: resultadosNominatim })
-                        }).catch(err => console.log('Error guardando POIs:', err));
-                    }
-
-                    mostrarSugerenciasDestino(resultadosCombinados);
+                    // 4. MOSTRAR solo resultados de BD local (p/i)
+                    mostrarSugerenciasDestino(resultados);
                 } catch (error) {
                     console.error('Error en autocomplete destino:', error);
                 }

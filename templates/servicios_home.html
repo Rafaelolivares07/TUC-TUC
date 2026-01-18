@@ -1087,6 +1087,7 @@
             const contenedor = document.getElementById('autocomplete-destino');
             const textoIngresado = document.getElementById('input-destino').value.trim().toLowerCase();
             contenedor.innerHTML = '';
+            contenedor.scrollTop = 0; // Siempre mostrar desde arriba al actualizar resultados
 
             if (resultados.length === 0) {
                 contenedor.classList.add('hidden');

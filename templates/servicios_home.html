@@ -287,14 +287,19 @@
             try {
                 const response = await fetch('/api/conteo_pois');
                 const data = await response.json();
+                console.log('Conteo POIs response:', data);
 
-                if (data.ok && data.total) {
+                if (data.ok && typeof data.total === 'number') {
                     // Formatear número con separador de miles
                     const numFormateado = data.total.toLocaleString('es-CO');
                     document.getElementById('num-destinos').textContent = numFormateado;
+                } else {
+                    // Ocultar la línea si hay error
+                    document.getElementById('conteo-destinos').style.display = 'none';
                 }
             } catch (error) {
                 console.log('Error cargando conteo POIs:', error);
+                document.getElementById('conteo-destinos').style.display = 'none';
             }
         }
 

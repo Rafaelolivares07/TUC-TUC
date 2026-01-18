@@ -19578,14 +19578,14 @@ def api_cancelar_viaje(viaje_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Viaje no encontrado'}), 404
 
-        if viaje['estado'] in ('completado', 'cancelado'):
+        if viaje['estado'] in ('completada', 'cancelada'):
             conn.close()
             return jsonify({'ok': False, 'error': 'El viaje ya está finalizado'}), 400
 
         # Cancelar viaje
         conn.execute("""
             UPDATE solicitudes_transporte
-            SET estado = 'cancelado', fecha_actualizacion = CURRENT_TIMESTAMP
+            SET estado = 'cancelada', fecha_actualizacion = CURRENT_TIMESTAMP
             WHERE id = %s
         """, (viaje_id,))
         conn.commit()

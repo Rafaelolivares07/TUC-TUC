@@ -58,17 +58,17 @@
             </div>
 
             <!-- Resumen -->
-            <div id="resumen" class="bg-white rounded-t-lg shadow-lg p-6 hidden">
-                <h2 class="text-xl font-semibold mb-4">Resumen del servicio</h2>
+            <div id="resumen" class="bg-white rounded-t-lg shadow-lg pt-3 px-6 pb-6 hidden">
+                <h2 class="text-xl font-semibold mb-2">Resumen del servicio</h2>
 
                 <div class="space-y-1">
                     <div id="info-origen" class="flex justify-between hidden">
                         <span class="text-gray-600">Origen:</span>
-                        <span id="resumen-origen" class="font-semibold text-right truncate ml-2" style="max-width: 200px;">-</span>
+                        <span id="resumen-origen" class="font-semibold text-right ml-2">-</span>
                     </div>
                     <div id="info-destino" class="flex justify-between hidden">
                         <span class="text-gray-600">Destino:</span>
-                        <span id="resumen-destino" class="font-semibold text-right truncate ml-2" style="max-width: 200px;">-</span>
+                        <span id="resumen-destino" class="font-semibold text-right ml-2">-</span>
                     </div>
                     <div id="info-distancia" class="flex justify-between hidden">
                         <span class="text-gray-600">Distancia:</span>
@@ -101,6 +101,14 @@
             <div id="contenedor-mapa" class="bg-white rounded-b-lg shadow-lg mb-6 overflow-hidden transition-all duration-300" style="max-height: 0; padding: 0;">
                 <div class="px-6 pb-6">
                     <div id="map" style="width: 100%; height: 400px; border-radius: 8px;"></div>
+                    <!-- Botón confirmar origen (solo visible en modo selección origen) -->
+                    <button id="btn-confirmar-origen-mapa" class="hidden w-full mt-3 py-3 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600 transition">
+                        ✓ Confirmar origen
+                    </button>
+                    <!-- Botón confirmar destino (solo visible en modo selección destino) -->
+                    <button id="btn-confirmar-destino-mapa" class="hidden w-full mt-3 py-3 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600 transition">
+                        ✓ Confirmar destino
+                    </button>
                 </div>
             </div>
 
@@ -240,8 +248,10 @@
         let ubicacionGPSActual = null; // Guardar ubicación GPS para búsquedas por proximidad
         let cardUbicacionSeleccionado = false; // Estado del card de ubicación detectada
         let ubicacionDetectadaDireccion = ''; // Dirección detectada
-        let seleccionandoEnMapa = false; // Estado de selección en mapa
-        let marcadorDestinoMapa = null; // Marcador temporal en el mapa
+        let seleccionandoEnMapa = false; // Estado de selección en mapa (destino)
+        let seleccionandoOrigenEnMapa = false; // Estado de selección en mapa (origen)
+        let marcadorDestinoMapa = null; // Marcador temporal en el mapa (destino)
+        let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -320,6 +330,18 @@
                 }
             });
 
+            // Auto-confirmar al completar teléfono (blur o Enter)
+            document.getElementById('input-telefono').addEventListener('blur', function() {
+                autoConfirmarSiDatosCompletos();
+            });
+
+            document.getElementById('input-telefono').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur(); // Disparar blur que ejecutará autoConfirmarSiDatosCompletos
+                }
+            });
+
             // Click en card de ubicación detectada (seleccionar/deseleccionar)
             document.getElementById('card-ubicacion-detectada').addEventListener('click', function() {
                 toggleCardUbicacion();
@@ -348,7 +370,7 @@
                 buscarDireccionesAutocompleteDestino(this.value);
             });
 
-            // Botón seleccionar en mapa
+            // Botón seleccionar en mapa (destino)
             document.getElementById('btn-seleccionar-mapa').addEventListener('click', function() {
                 if (seleccionandoEnMapa) {
                     // Si ya está en modo selección, confirmar destino y calcular
@@ -358,6 +380,30 @@
                     // Si no está en modo selección, activar el modo
                     activarSeleccionMapa();
                 }
+            });
+
+            // Botón seleccionar en mapa (origen)
+            document.getElementById('btn-seleccionar-origen-mapa').addEventListener('click', function() {
+                if (seleccionandoOrigenEnMapa) {
+                    // Si ya está en modo selección, confirmar origen y calcular
+                    desactivarSeleccionMapaOrigen();
+                    verificarYCalcularAutomaticamente();
+                } else {
+                    // Si no está en modo selección, activar el modo
+                    activarSeleccionMapaOrigen();
+                }
+            });
+
+            // Botón confirmar origen dentro del mapa
+            document.getElementById('btn-confirmar-origen-mapa').addEventListener('click', function() {
+                desactivarSeleccionMapaOrigen();
+                verificarYCalcularAutomaticamente();
+            });
+
+            // Botón confirmar destino dentro del mapa
+            document.getElementById('btn-confirmar-destino-mapa').addEventListener('click', function() {
+                desactivarSeleccionMapa();
+                verificarYCalcularAutomaticamente();
             });
 
             // Cerrar autocomplete si se hace clic fuera
@@ -622,11 +668,24 @@
             }
         }
 
-        // Función para truncar direcciones (mantiene solo los primeros 2 segmentos separados por coma)
+        // Función para truncar direcciones (muestra hasta el último segmento que contenga "ciudad")
         function truncarDireccion(direccion) {
             if (!direccion) return '-';
             const segmentos = direccion.split(',').map(s => s.trim());
-            return segmentos.slice(0, 2).join(', ');
+
+            // Buscar índice del último segmento que contenga "ciudad" (de derecha a izquierda)
+            let indiceCiudad = -1;
+            for (let i = segmentos.length - 1; i >= 0; i--) {
+                if (segmentos[i].toLowerCase().includes('ciudad')) {
+                    indiceCiudad = i;
+                    break;
+                }
+            }
+
+            // Si encontramos "ciudad", mostrar hasta ese segmento (inclusive)
+            // Si no, mostrar los primeros 5 como fallback
+            const limite = indiceCiudad >= 0 ? indiceCiudad + 1 : 5;
+            return segmentos.slice(0, limite).join(', ');
         }
 
         function mostrarResumen(datos) {
@@ -637,7 +696,13 @@
 
             if (datos.tipo === 'transporte') {
                 // Mostrar origen y destino
-                const origenTexto = document.getElementById('input-origen').value.trim();
+                // Si se usa la ubicación detectada, obtener del card; si no, del input
+                let origenTexto;
+                if (cardUbicacionSeleccionado) {
+                    origenTexto = document.getElementById('texto-ubicacion-detectada').textContent.trim();
+                } else {
+                    origenTexto = document.getElementById('input-origen').value.trim();
+                }
                 const destinoTexto = document.getElementById('input-destino').value.trim();
 
                 document.getElementById('info-origen').classList.remove('hidden');
@@ -670,9 +735,34 @@
             }
 
             document.getElementById('tarifa').textContent = '$' + datos.tarifa.toLocaleString();
+
+            // Scroll al resumen para que el usuario vea la tarifa calculada
+            setTimeout(() => {
+                document.getElementById('resumen').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         }
 
-        async function confirmarSolicitud() {
+        // Variable para evitar múltiples confirmaciones
+        let confirmacionEnProceso = false;
+
+        // Auto-confirmar cuando se completan nombre y teléfono
+        function autoConfirmarSiDatosCompletos() {
+            const nombre = document.getElementById('input-nombre').value.trim();
+            const telefono = document.getElementById('input-telefono').value.trim();
+
+            // Verificar que ambos campos estén llenos y tengamos datos calculados
+            if (nombre && telefono && telefono.length >= 7 && datosCalculados.tarifa) {
+                // Pequeño delay para que el usuario vea que se completó
+                setTimeout(() => {
+                    confirmarSolicitud(true); // true = auto-confirmación
+                }, 300);
+            }
+        }
+
+        async function confirmarSolicitud(esAutoConfirmacion = false) {
+            // Evitar múltiples confirmaciones
+            if (confirmacionEnProceso) return;
+
             let nombre, telefono, notas, origenTexto, destinoTexto;
 
             if (tipoServicioActual === 'transporte') {
@@ -687,32 +777,42 @@
             }
 
             if (!nombre || !telefono) {
-                // Mensaje sutil y amigable
-                const seccionDatos = document.getElementById('seccion-datos');
-                const inputNombre = document.getElementById('input-nombre');
+                // Solo mostrar mensaje si es clic manual (no auto-confirmación)
+                if (!esAutoConfirmacion) {
+                    const seccionDatos = document.getElementById('seccion-datos');
+                    const inputNombre = document.getElementById('input-nombre');
 
-                // Destacar sección (cambiar a blanco)
-                seccionDatos.classList.remove('bg-gray-200');
-                seccionDatos.classList.add('bg-white', 'shadow-lg');
+                    // Destacar sección
+                    seccionDatos.classList.remove('bg-gray-200');
+                    seccionDatos.classList.add('bg-white', 'shadow-lg');
 
-                // Scroll suave a la sección
-                setTimeout(() => {
-                    seccionDatos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
+                    // Scroll suave a la sección
+                    setTimeout(() => {
+                        seccionDatos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
 
-                // Focus en el primer input vacío
-                setTimeout(() => {
-                    if (!nombre) {
-                        inputNombre.focus();
-                    } else {
-                        document.getElementById('input-telefono').focus();
-                    }
-                }, 600);
+                    // Focus en el primer input vacío
+                    setTimeout(() => {
+                        if (!nombre) {
+                            inputNombre.focus();
+                        } else {
+                            document.getElementById('input-telefono').focus();
+                        }
+                    }, 600);
 
-                // Mensaje amigable
-                alert('👋 Para continuar, necesitamos conocer tu nombre y número de teléfono');
+                    mostrarModal('Datos requeridos', 'Para continuar, necesitamos conocer tu nombre y número de teléfono', 'info');
+                }
                 return;
             }
+
+            // Validar que haya tarifa calculada
+            if (!datosCalculados.tarifa) {
+                mostrarModalError('Sin tarifa', 'Por favor selecciona un destino para calcular la tarifa');
+                return;
+            }
+
+            confirmacionEnProceso = true;
+            mostrarModalCargando('Procesando tu solicitud...');
 
             // Crear solicitud
             const body = {
@@ -727,7 +827,6 @@
                 body.destino_texto = destinoTexto;
                 body.distancia_km = datosCalculados.distancia_km;
                 body.tiempo_estimado_minutos = datosCalculados.tiempo_estimado_minutos;
-                // Enviar coordenadas para Waze
                 body.origen_lat = coordenadasOrigenActual ? coordenadasOrigenActual.lat : (coordenadasOrigenSeleccionado ? coordenadasOrigenSeleccionado.lat : null);
                 body.origen_lon = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (coordenadasOrigenSeleccionado ? coordenadasOrigenSeleccionado.lon : null);
                 body.destino_lat = coordenadasDestinoSeleccionado ? coordenadasDestinoSeleccionado.lat : null;
@@ -737,19 +836,47 @@
                 body.notas = notas;
             }
 
-            const response = await fetch('/api/solicitar-servicio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
+            try {
+                const response = await fetch('/api/solicitar-servicio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
 
-            const data = await response.json();
+                const data = await response.json();
+                cerrarModal(null, false);
 
-            if (data.ok) {
-                alert('¡Solicitud enviada! Te contactaremos pronto. Solicitud #' + data.solicitud_id);
-                location.reload();
-            } else {
-                alert('Error: ' + data.error);
+                if (data.ok) {
+                    // Actualizar UI para mostrar que el usuario está logueado
+                    if (data.usuario) {
+                        const primerNombre = data.usuario.nombre.split(' ')[0];
+                        document.getElementById('saludo-usuario').textContent = `Hola ${primerNombre}!`;
+                    }
+
+                    // Mostrar mensaje de éxito y luego el viaje en curso
+                    const mensajeExito = data.usuario && data.usuario.nuevo
+                        ? `¡Bienvenido ${data.usuario.nombre.split(' ')[0]}! Tu cuenta ha sido creada y tu solicitud #${data.solicitud_id} está en proceso.`
+                        : `¡Solicitud #${data.solicitud_id} enviada! Te contactaremos pronto.`;
+
+                    mostrarModalExito('¡Listo!', mensajeExito, () => {
+                        // Mostrar el viaje en curso sin recargar la página
+                        mostrarViajeEnCurso({
+                            id: data.solicitud_id,
+                            tipo_servicio: tipoServicioActual,
+                            origen_texto: body.origen_texto,
+                            destino_texto: body.destino_texto,
+                            precio: body.precio,
+                            estado: 'pendiente'
+                        });
+                    });
+                } else {
+                    mostrarModalError('Error', data.error || 'No se pudo procesar la solicitud');
+                    confirmacionEnProceso = false;
+                }
+            } catch (error) {
+                cerrarModal(null, false);
+                mostrarModalError('Error de conexión', 'No se pudo conectar con el servidor. Intenta de nuevo.');
+                confirmacionEnProceso = false;
             }
         }
 
@@ -846,14 +973,60 @@
                 const textoProcesado = procesarTextoParaCali(texto);
 
                 try {
-                    // Filtro geográfico con viewbox de Cali y alrededores
-                    const viewbox = '-77.15,4.56,-76.07,2.4'; // oeste,norte,este,sur
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=50`;
+                    let resultadosCombinados = [];
 
-                    const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
-                    const resultados = await response.json();
+                    // 1. PRIMERO: Buscar en nuestra BD local (POIs + Intersecciones)
+                    const latParam = coordenadasOrigenActual ? coordenadasOrigenActual.lat : (ubicacionGPSActual ? ubicacionGPSActual.lat : '');
+                    const lonParam = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (ubicacionGPSActual ? ubicacionGPSActual.lon : '');
 
-                    mostrarSugerenciasDestino(resultados);
+                    const urlLocal = `/api/buscar_interseccion?q=${encodeURIComponent(textoProcesado)}&lat=${latParam}&lon=${lonParam}`;
+                    const responseLocal = await fetch(urlLocal);
+                    const dataLocal = await responseLocal.json();
+
+                    if (dataLocal.ok && dataLocal.resultados.length > 0) {
+                        // Convertir resultados locales al formato esperado
+                        dataLocal.resultados.forEach(r => {
+                            resultadosCombinados.push({
+                                lat: r.lat,
+                                lon: r.lon,
+                                display_name: r.display_name,
+                                distancia_texto: r.distancia_texto || '',
+                                fuente: r.fuente || 'i'
+                            });
+                        });
+                    }
+
+                    // 2. SEGUNDO: Si hay menos de 5 resultados locales, complementar con Nominatim
+                    if (resultadosCombinados.length < 5) {
+                        const viewbox = '-77.15,4.56,-76.07,2.4';
+                        const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10`;
+                        const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
+                        const resultadosNominatim = await responseNominatim.json();
+
+                        // Agregar resultados de Nominatim con fuente 'n'
+                        resultadosNominatim.forEach(r => {
+                            // Calcular distancia si tenemos coordenadas
+                            let distanciaTexto = '(n)';
+                            if (latParam && lonParam) {
+                                const dist = calcularDistancia(parseFloat(latParam), parseFloat(lonParam), parseFloat(r.lat), parseFloat(r.lon));
+                                if (dist < 1) {
+                                    distanciaTexto = `${Math.round(dist * 1000)} m n`;
+                                } else {
+                                    distanciaTexto = `${dist.toFixed(1)} km n`;
+                                }
+                            }
+
+                            resultadosCombinados.push({
+                                lat: r.lat,
+                                lon: r.lon,
+                                display_name: r.display_name,
+                                distancia_texto: distanciaTexto,
+                                fuente: 'n'
+                            });
+                        });
+                    }
+
+                    mostrarSugerenciasDestino(resultadosCombinados);
                 } catch (error) {
                     console.error('Error en autocomplete destino:', error);
                 }
@@ -909,9 +1082,10 @@
                 return;
             }
 
-            // Ordenar por distancia desde el origen si tenemos coordenadas
+            // Los resultados ya vienen ordenados del backend (por prioridad y distancia)
+            // Solo reordenar si son de Nominatim puro (no tienen distancia_texto del backend)
             let resultadosOrdenados = resultados;
-            if (coordenadasOrigenActual) {
+            if (!resultados[0].distancia_texto && coordenadasOrigenActual) {
                 resultadosOrdenados = resultados.slice().sort((a, b) => {
                     const distA = calcularDistancia(
                         coordenadasOrigenActual.lat, coordenadasOrigenActual.lon,
@@ -921,7 +1095,7 @@
                         coordenadasOrigenActual.lat, coordenadasOrigenActual.lon,
                         parseFloat(b.lat), parseFloat(b.lon)
                     );
-                    return distA - distB; // Más cercanos primero
+                    return distA - distB;
                 });
             }
 
@@ -932,11 +1106,25 @@
 
             resultadosOrdenados.forEach(resultado => {
                 const opcion = document.createElement('div');
-                opcion.className = 'p-3 hover:bg-gray-200 cursor-pointer border-b border-gray-200';
-                opcion.textContent = resultado.display_name;
+                opcion.className = 'p-3 hover:bg-gray-200 cursor-pointer border-b border-gray-200 flex justify-between items-center';
+
+                // Texto de la dirección (truncado)
+                const textoDiv = document.createElement('span');
+                textoDiv.className = 'flex-1 pr-2';
+                textoDiv.textContent = truncarDireccion(resultado.display_name);
+
+                // Distancia con fuente (si existe)
+                const distanciaSpan = document.createElement('span');
+                distanciaSpan.className = 'text-xs text-gray-500 whitespace-nowrap';
+                if (resultado.distancia_texto) {
+                    distanciaSpan.textContent = resultado.distancia_texto;
+                }
+
+                opcion.appendChild(textoDiv);
+                opcion.appendChild(distanciaSpan);
 
                 opcion.addEventListener('click', function() {
-                    document.getElementById('input-destino').value = resultado.display_name;
+                    document.getElementById('input-destino').value = truncarDireccion(resultado.display_name);
                     coordenadasDestinoSeleccionado = {
                         lat: parseFloat(resultado.lat),
                         lon: parseFloat(resultado.lon)
@@ -975,10 +1163,10 @@
             resultadosFiltrados.forEach(resultado => {
                 const opcion = document.createElement('div');
                 opcion.className = 'p-3 hover:bg-gray-200 cursor-pointer border-b border-gray-200';
-                opcion.textContent = resultado.display_name;
+                opcion.textContent = truncarDireccion(resultado.display_name);
 
                 opcion.addEventListener('click', function() {
-                    document.getElementById('input-origen').value = resultado.display_name;
+                    document.getElementById('input-origen').value = truncarDireccion(resultado.display_name);
                     coordenadasOrigenSeleccionado = {
                         lat: parseFloat(resultado.lat),
                         lon: parseFloat(resultado.lon)
@@ -1091,20 +1279,25 @@
                 return;
             }
 
+            // Desactivar modo origen si está activo
+            if (seleccionandoOrigenEnMapa) {
+                desactivarSeleccionMapaOrigen();
+            }
+
             // Expandir el contenedor del mapa
             const contenedorMapa = document.getElementById('contenedor-mapa');
             contenedorMapa.style.maxHeight = '600px';
             contenedorMapa.style.padding = '';
 
-            // Scroll al mapa
-            setTimeout(() => {
-                contenedorMapa.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-
             // Inicializar mapa si no existe
             if (!map) {
                 inicializarMapa();
             }
+
+            // Scroll al botón de confirmar (el mapa queda visible arriba)
+            setTimeout(() => {
+                document.getElementById('btn-confirmar-destino-mapa').scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 200);
 
             // Invalidar tamaño del mapa para que se muestre correctamente
             setTimeout(() => {
@@ -1119,10 +1312,13 @@
             // Cambiar cursor del mapa
             document.getElementById('map').style.cursor = 'crosshair';
 
-            // Cambiar texto del botón a "Confirmar destino"
-            document.getElementById('btn-seleccionar-mapa').textContent = 'Confirmar destino';
+            // Cambiar texto del botón original a "Seleccionando..."
+            document.getElementById('btn-seleccionar-mapa').textContent = 'Seleccionando en mapa...';
             document.getElementById('btn-seleccionar-mapa').classList.remove('bg-gray-100', 'text-gray-700');
-            document.getElementById('btn-seleccionar-mapa').classList.add('bg-green-500', 'text-white');
+            document.getElementById('btn-seleccionar-mapa').classList.add('bg-blue-100', 'text-blue-700');
+
+            // Mostrar botón de confirmar destino dentro del mapa
+            document.getElementById('btn-confirmar-destino-mapa').classList.remove('hidden');
 
             // Listener para clicks múltiples en el mapa (no usar .once())
             map.on('click', async function(e) {
@@ -1153,9 +1349,119 @@
             if (seleccionandoEnMapa) {
                 seleccionandoEnMapa = false;
                 document.getElementById('map').style.cursor = '';
+
+                // Restaurar botón original
                 document.getElementById('btn-seleccionar-mapa').textContent = 'Seleccionar en mapa';
-                document.getElementById('btn-seleccionar-mapa').classList.remove('bg-green-500', 'text-white');
+                document.getElementById('btn-seleccionar-mapa').classList.remove('bg-blue-100', 'text-blue-700');
                 document.getElementById('btn-seleccionar-mapa').classList.add('bg-gray-100', 'text-gray-700');
+
+                // Ocultar botón de confirmar destino dentro del mapa
+                document.getElementById('btn-confirmar-destino-mapa').classList.add('hidden');
+
+                // Remover listeners del mapa
+                map.off('click');
+            }
+        }
+
+        // ========== FUNCIONES DE SELECCIÓN EN MAPA - ORIGEN ==========
+        function activarSeleccionMapaOrigen() {
+            // Si ya está en modo selección origen, no hacer nada
+            if (seleccionandoOrigenEnMapa) {
+                return;
+            }
+
+            // Desactivar modo destino si está activo
+            if (seleccionandoEnMapa) {
+                desactivarSeleccionMapa();
+            }
+
+            // Deseleccionar la card de ubicación detectada
+            cardUbicacionSeleccionado = false;
+            const cardUbicacion = document.getElementById('card-ubicacion-detectada');
+            if (cardUbicacion) {
+                cardUbicacion.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50');
+            }
+
+            // Expandir el contenedor del mapa
+            const contenedorMapa = document.getElementById('contenedor-mapa');
+            contenedorMapa.style.maxHeight = '600px';
+            contenedorMapa.style.padding = '';
+
+            // Inicializar mapa si no existe
+            if (!map) {
+                inicializarMapa();
+            }
+
+            // Scroll al botón de confirmar (el mapa queda visible arriba)
+            setTimeout(() => {
+                document.getElementById('btn-confirmar-origen-mapa').scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 200);
+
+            // Invalidar tamaño del mapa para que se muestre correctamente
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
+
+            // Activar modo selección origen
+            seleccionandoOrigenEnMapa = true;
+
+            // Cambiar cursor del mapa
+            document.getElementById('map').style.cursor = 'crosshair';
+
+            // Cambiar texto del botón original a "Seleccionando..."
+            document.getElementById('btn-seleccionar-origen-mapa').textContent = 'Seleccionando en mapa...';
+            document.getElementById('btn-seleccionar-origen-mapa').classList.remove('bg-gray-100', 'text-gray-700');
+            document.getElementById('btn-seleccionar-origen-mapa').classList.add('bg-blue-100', 'text-blue-700');
+
+            // Mostrar botón de confirmar origen dentro del mapa
+            document.getElementById('btn-confirmar-origen-mapa').classList.remove('hidden');
+
+            // Listener para clicks múltiples en el mapa
+            map.on('click', async function(e) {
+                if (!seleccionandoOrigenEnMapa) return; // Ignorar si no está en modo selección origen
+
+                const lat = e.latlng.lat;
+                const lng = e.latlng.lng;
+
+                // Guardar coordenadas de origen
+                coordenadasOrigenSeleccionado = { lat: lat, lon: lng };
+
+                // Agregar o mover marcador de origen
+                if (marcadorOrigenMapa) {
+                    marcadorOrigenMapa.setLatLng([lat, lng]);
+                } else {
+                    // Marcador azul para origen (diferenciarlo del destino)
+                    const iconoOrigen = L.divIcon({
+                        className: 'marcador-origen',
+                        html: '<div style="background-color: #3B82F6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    });
+                    marcadorOrigenMapa = L.marker([lat, lng], { icon: iconoOrigen }).addTo(map);
+                }
+
+                // Obtener dirección con geocodificación inversa
+                const direccion = await obtenerDireccionReversa(lat, lng);
+
+                // Llenar input de origen
+                document.getElementById('input-origen').value = direccion;
+            });
+        }
+
+        function desactivarSeleccionMapaOrigen() {
+            if (seleccionandoOrigenEnMapa) {
+                seleccionandoOrigenEnMapa = false;
+                document.getElementById('map').style.cursor = '';
+
+                // Restaurar botón original
+                document.getElementById('btn-seleccionar-origen-mapa').textContent = 'Seleccionar en mapa';
+                document.getElementById('btn-seleccionar-origen-mapa').classList.remove('bg-blue-100', 'text-blue-700');
+                document.getElementById('btn-seleccionar-origen-mapa').classList.add('bg-gray-100', 'text-gray-700');
+
+                // Ocultar botón de confirmar origen dentro del mapa
+                document.getElementById('btn-confirmar-origen-mapa').classList.add('hidden');
 
                 // Remover listeners del mapa
                 map.off('click');
@@ -1237,7 +1543,195 @@
         // Ejecutar al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
             verificarUsuarioLogueado();
+            verificarViajeEnCurso();
         });
+
+        // =====================================================
+        // SISTEMA DE MODALES
+        // =====================================================
+        function mostrarModal(titulo, mensaje, tipo = 'info', callback = null) {
+            // tipo: 'info', 'success', 'error', 'loading'
+            const iconos = {
+                'info': '💬',
+                'success': '✅',
+                'error': '❌',
+                'loading': '⏳'
+            };
+            const colores = {
+                'info': 'bg-blue-500',
+                'success': 'bg-green-500',
+                'error': 'bg-red-500',
+                'loading': 'bg-gray-500'
+            };
+
+            // Crear modal
+            const modalHTML = `
+                <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="cerrarModal(event)">
+                    <div class="bg-white rounded-lg shadow-xl max-w-sm mx-4 overflow-hidden transform transition-all" onclick="event.stopPropagation()">
+                        <div class="${colores[tipo]} px-4 py-3 flex items-center gap-3">
+                            <span class="text-2xl">${iconos[tipo]}</span>
+                            <h3 class="text-white font-semibold text-lg">${titulo}</h3>
+                        </div>
+                        <div class="px-4 py-4">
+                            <p class="text-gray-700">${mensaje}</p>
+                        </div>
+                        ${tipo !== 'loading' ? `
+                        <div class="px-4 py-3 bg-gray-50 flex justify-end">
+                            <button onclick="cerrarModal(null, true)" class="px-4 py-2 bg-gray-800 text-white rounded font-medium hover:bg-gray-700 transition">
+                                Entendido
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Remover modal anterior si existe
+            const modalExistente = document.getElementById('modal-overlay');
+            if (modalExistente) modalExistente.remove();
+
+            // Insertar modal
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Guardar callback
+            window.modalCallback = callback;
+        }
+
+        function cerrarModal(event, ejecutarCallback = false) {
+            if (event && event.target.id !== 'modal-overlay') return;
+            const modal = document.getElementById('modal-overlay');
+            if (modal) modal.remove();
+            if (ejecutarCallback && window.modalCallback) {
+                window.modalCallback();
+                window.modalCallback = null;
+            }
+        }
+
+        function mostrarModalExito(titulo, mensaje, callback = null) {
+            mostrarModal(titulo, mensaje, 'success', callback);
+        }
+
+        function mostrarModalError(titulo, mensaje) {
+            mostrarModal(titulo, mensaje, 'error');
+        }
+
+        function mostrarModalCargando(mensaje) {
+            mostrarModal('Procesando', mensaje, 'loading');
+        }
+
+        // =====================================================
+        // VERIFICAR VIAJE EN CURSO
+        // =====================================================
+        async function verificarViajeEnCurso() {
+            try {
+                const response = await fetch('/api/mi-viaje-en-curso');
+                const data = await response.json();
+
+                if (data.ok && data.viaje) {
+                    mostrarViajeEnCurso(data.viaje);
+                }
+            } catch (error) {
+                console.log('Sin viaje en curso');
+            }
+        }
+
+        function mostrarViajeEnCurso(viaje) {
+            // Ocultar formulario y mostrar estado del viaje
+            document.getElementById('form-transporte').classList.add('hidden');
+
+            const estadoHTML = `
+                <div id="viaje-en-curso" class="bg-white rounded-lg shadow-lg p-6 mb-4">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <span class="text-2xl">🚗</span>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800">Viaje en curso</h2>
+                            <p class="text-sm text-gray-600">Solicitud #${viaje.id}</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 mb-4">
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-500 mt-1">📍</span>
+                            <div>
+                                <p class="text-sm text-gray-500">Origen</p>
+                                <p class="font-medium">${viaje.origen_texto || 'Tu ubicación'}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="text-red-500 mt-1">📍</span>
+                            <div>
+                                <p class="text-sm text-gray-500">Destino</p>
+                                <p class="font-medium">${viaje.destino_texto}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-100 rounded-lg p-4 mb-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Estado:</span>
+                            <span class="px-3 py-1 rounded-full text-sm font-medium ${getEstadoClase(viaje.estado)}">${getEstadoTexto(viaje.estado)}</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-600">Tarifa:</span>
+                            <span class="font-bold text-green-600">$${viaje.precio?.toLocaleString() || '0'}</span>
+                        </div>
+                    </div>
+
+                    <button onclick="cancelarViaje(${viaje.id})" class="w-full border-2 border-red-500 text-red-500 py-2 rounded font-medium hover:bg-red-50 transition">
+                        Cancelar viaje
+                    </button>
+                </div>
+            `;
+
+            // Insertar después del header
+            const header = document.querySelector('.max-w-4xl > .bg-white');
+            header.insertAdjacentHTML('afterend', estadoHTML);
+        }
+
+        function getEstadoClase(estado) {
+            const clases = {
+                'pendiente': 'bg-yellow-100 text-yellow-800',
+                'confirmado': 'bg-blue-100 text-blue-800',
+                'en_camino': 'bg-purple-100 text-purple-800',
+                'en_curso': 'bg-green-100 text-green-800',
+                'completado': 'bg-gray-100 text-gray-800',
+                'cancelado': 'bg-red-100 text-red-800'
+            };
+            return clases[estado] || 'bg-gray-100 text-gray-800';
+        }
+
+        function getEstadoTexto(estado) {
+            const textos = {
+                'pendiente': '⏳ Buscando conductor',
+                'confirmado': '✓ Conductor asignado',
+                'en_camino': '🚗 En camino hacia ti',
+                'en_curso': '🚗 Viaje en curso',
+                'completado': '✅ Completado',
+                'cancelado': '❌ Cancelado'
+            };
+            return textos[estado] || estado;
+        }
+
+        async function cancelarViaje(viajeId) {
+            if (!confirm('¿Estás seguro de cancelar el viaje?')) return;
+
+            try {
+                const response = await fetch(`/api/cancelar-viaje/${viajeId}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.ok) {
+                    mostrarModalExito('Viaje cancelado', 'Tu viaje ha sido cancelado.', () => {
+                        location.reload();
+                    });
+                } else {
+                    mostrarModalError('Error', data.error || 'No se pudo cancelar el viaje');
+                }
+            } catch (error) {
+                mostrarModalError('Error', 'Error de conexión');
+            }
+        }
     </script>
 </body>
 </html>

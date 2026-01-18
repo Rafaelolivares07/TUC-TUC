@@ -1171,6 +1171,25 @@ def setup_tablas_parametros():
                 festivos_insertados += 1
         resultados.append(f"✅ Festivos 2026: {festivos_insertados} insertados")
 
+        # 4. Parámetro límite de resultados de intersecciones
+        existe_limite = conn.execute(
+            "SELECT id FROM parametros_sistema WHERE nombre = %s",
+            ('limite_resultados_interseccion',)
+        ).fetchone()
+        if not existe_limite:
+            conn.execute("""
+                INSERT INTO parametros_sistema (nombre, descripcion, tipo, valor_numerico)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                'limite_resultados_interseccion',
+                'Cantidad máxima de resultados en búsqueda de intersecciones',
+                'numerico',
+                20
+            ))
+            resultados.append("✅ Parámetro limite_resultados_interseccion creado (default: 20)")
+        else:
+            resultados.append("ℹ️ Parámetro limite_resultados_interseccion ya existe")
+
         conn.commit()
         conn.close()
 
@@ -1183,6 +1202,103 @@ def setup_tablas_parametros():
         <br>
         <a href="/admin/parametros" style="padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Volver a Parámetros</a>
         """
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<h1>❌ Error:</h1><pre>{str(e)}</pre>", 500
+
+
+@app.route('/admin/cargar_pois')
+@admin_required
+def cargar_pois():
+    """Carga los POIs de Cali desde el archivo JSON a la base de datos"""
+    import json
+
+    try:
+        conn = get_db_connection()
+        resultados = []
+
+        # 1. Crear tabla pois_cali
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pois_cali (
+                id SERIAL PRIMARY KEY,
+                osm_id BIGINT,
+                nombre VARCHAR(255) NOT NULL,
+                lat DECIMAL(10, 8) NOT NULL,
+                lon DECIMAL(11, 8) NOT NULL,
+                categoria VARCHAR(50),
+                subcategoria VARCHAR(100),
+                direccion VARCHAR(255),
+                display_name TEXT,
+                barrio VARCHAR(100),
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        resultados.append("✅ Tabla pois_cali creada")
+
+        # 2. Crear índices
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pois_nombre ON pois_cali(LOWER(nombre));")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pois_categoria ON pois_cali(categoria);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pois_coords ON pois_cali(lat, lon);")
+        resultados.append("✅ Índices creados")
+
+        # 3. Cargar archivo JSON
+        archivo_json = 'scripts/pois_cali.json'
+        try:
+            with open(archivo_json, 'r', encoding='utf-8') as f:
+                pois = json.load(f)
+            resultados.append(f"✅ Archivo cargado: {len(pois)} POIs")
+        except FileNotFoundError:
+            conn.close()
+            return f"<h1>❌ Error:</h1><pre>Archivo {archivo_json} no encontrado</pre>", 404
+
+        # 4. Limpiar datos anteriores
+        conn.execute("DELETE FROM pois_cali;")
+        resultados.append("✅ Tabla limpiada")
+
+        # 5. Insertar POIs
+        insertados = 0
+        errores = 0
+
+        for poi in pois:
+            try:
+                conn.execute("""
+                    INSERT INTO pois_cali (osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    poi.get('osm_id'),
+                    poi.get('nombre', '')[:255],
+                    poi.get('lat'),
+                    poi.get('lon'),
+                    poi.get('categoria'),
+                    poi.get('subcategoria'),
+                    poi.get('direccion', '')[:255] if poi.get('direccion') else None,
+                    poi.get('display_name'),
+                    poi.get('barrio', '')[:100] if poi.get('barrio') else None
+                ))
+                insertados += 1
+            except Exception as e:
+                errores += 1
+                if errores <= 5:
+                    resultados.append(f"⚠️ Error en {poi.get('nombre', 'sin nombre')}: {str(e)[:50]}")
+
+        conn.commit()
+        conn.close()
+
+        resultados.append(f"✅ POIs insertados: {insertados}")
+        if errores > 0:
+            resultados.append(f"⚠️ Errores: {errores}")
+
+        resultados_html = "<br>".join(resultados)
+        return f"""
+        <h1>✅ POIs de Cali cargados</h1>
+        <div style="font-family: monospace; padding: 20px;">
+            {resultados_html}
+        </div>
+        <br>
+        <a href="/admin/parametros" style="padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">Volver a Parámetros</a>
+        """
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -18577,6 +18693,482 @@ def servicios_home():
     return render_template('servicios_home.html')
 
 
+@app.route('/servicios_prueba')
+def servicios_home_prueba():
+    """Página de prueba de servicios con búsqueda de intersecciones local"""
+    return render_template('servicios_home_prueba.html')
+
+
+@app.route('/api/buscar_interseccion')
+def api_buscar_interseccion():
+    """
+    Busca intersecciones y POIs en nuestra BD local por texto.
+    Ejemplo: /api/buscar_interseccion?q=carrera 56 calle 25&lat=3.45&lon=-76.53
+    Ejemplo con POI: /api/buscar_interseccion?q=dollarcity av 6&lat=3.45&lon=-76.53
+
+    Parámetros opcionales:
+    - lat, lon: Coordenadas del usuario para ordenar por cercanía
+    """
+    import math
+
+    texto = request.args.get('q', '').strip().lower()
+
+    # Coordenadas opcionales del usuario para ordenar por cercanía
+    user_lat = request.args.get('lat', type=float)
+    user_lon = request.args.get('lon', type=float)
+
+    if len(texto) < 2:
+        return jsonify({'ok': False, 'error': 'Texto muy corto', 'resultados': []})
+
+    conn = get_db_connection()
+
+    # Obtener límite de resultados desde parámetros (default 20)
+    limite = obtener_parametro_transporte(conn, 'limite_resultados_interseccion', 20)
+    limite = int(limite)
+
+    # Extraer números del texto
+    numeros = re.findall(r'\d+[a-zA-Z]?', texto)
+
+    # Detectar tipos de vía (puede haber dos: "av 6 calle 12")
+    tipos_via_keywords = ['av', 'avenida', 'carr', 'carrera', 'cra', 'kr', 'call', 'calle', 'cl', 'diag', 'diagonal', 'trans', 'transversal']
+    tipos_via = []
+    if 'av' in texto or 'avenida' in texto:
+        tipos_via.append('avenida')
+    if 'carr' in texto or 'carrera' in texto or 'cra' in texto or 'kr' in texto:
+        tipos_via.append('carrera')
+    if 'call' in texto or 'calle' in texto or 'cl' in texto:
+        tipos_via.append('calle')
+    if 'diag' in texto or 'diagonal' in texto:
+        tipos_via.append('diagonal')
+    if 'trans' in texto or 'transversal' in texto:
+        tipos_via.append('transversal')
+
+    tipo_via = tipos_via[0] if tipos_via else None
+    tipo_via_2 = tipos_via[1] if len(tipos_via) >= 2 else None
+
+    # Detectar "palabras extra" que podrían ser nombres de lugares (POIs)
+    palabras = texto.split()
+    palabras_extra = []
+    for palabra in palabras:
+        # Ignorar números
+        if re.match(r'^\d+[a-zA-Z]?$', palabra):
+            continue
+        # Ignorar tipos de vía
+        es_tipo_via = False
+        for kw in tipos_via_keywords:
+            if palabra == kw or palabra.startswith(kw):
+                es_tipo_via = True
+                break
+        if not es_tipo_via and len(palabra) >= 3:
+            palabras_extra.append(palabra)
+
+    resultados = []
+    resultados_pois = []
+
+    try:
+        ids_agregados = set()  # Para evitar duplicados de intersecciones
+        pois_agregados = set()  # Para evitar duplicados de POIs
+
+        # Si hay palabras extra, buscar primero en POIs
+        if palabras_extra:
+            print(f"DEBUG: Buscando POIs con palabras={palabras_extra}")
+
+            # Construir query que busque cualquier palabra (OR)
+            condiciones_or = ' OR '.join(['LOWER(nombre) LIKE %s' for _ in palabras_extra])
+            params_like = [f'%{palabra}%' for palabra in palabras_extra]
+
+            rows_pois = conn.execute(f"""
+                SELECT id, osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio
+                FROM pois_cali
+                WHERE {condiciones_or}
+                LIMIT %s
+            """, (*params_like, limite * 3)).fetchall()  # Traer más para ordenar después
+
+            print(f"DEBUG: Encontrados {len(rows_pois)} POIs")
+
+            # Calcular coincidencias por cada POI y asignar prioridad
+            for row in rows_pois:
+                poi_key = f"poi_{row['id']}"
+                if poi_key not in pois_agregados:
+                    pois_agregados.add(poi_key)
+
+                    # Contar cuántas palabras coinciden en el nombre
+                    nombre_lower = row['nombre'].lower()
+                    coincidencias = sum(1 for palabra in palabras_extra if palabra in nombre_lower)
+
+                    # Prioridad: más coincidencias = menor número = mayor prioridad
+                    # Ej: 2 palabras buscadas, 2 coincidencias -> prioridad 0
+                    #     2 palabras buscadas, 1 coincidencia -> prioridad 1
+                    prioridad_poi = len(palabras_extra) - coincidencias
+
+                    resultados_pois.append({
+                        'id': f"poi_{row['id']}",
+                        'osm_id': row['osm_id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'nombre': row['nombre'],
+                        'categoria': row['categoria'],
+                        'subcategoria': row['subcategoria'],
+                        'display_name': row['display_name'] or row['nombre'],
+                        'barrio': row['barrio'],
+                        'tipo': 'poi',
+                        'prioridad': prioridad_poi,
+                        'coincidencias': coincidencias
+                    })
+
+        # DEBUG: Imprimir lo que se detectó
+        print(f"DEBUG buscar_interseccion: texto='{texto}', numeros={numeros}, tipo_via={tipo_via}, tipo_via_2={tipo_via_2}, palabras_extra={palabras_extra}")
+
+        if len(numeros) >= 2 and tipo_via and tipo_via_2:
+            # CASO ESPECIAL: Dos tipos de vía con números (ej: "av 6 calle 12" -> Avenida 6 con Calle 12)
+            num1, num2 = numeros[0], numeros[1]
+            print(f"DEBUG: Entrando a caso 2 tipos + 2 números: {tipo_via} {num1} con {tipo_via_2} {num2}")
+
+            # NIVEL 1: Coincidencia exacta tipo1+num1 con tipo2+num2
+            rows = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s AND LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{tipo_via}%', f'%{num1}%', f'%{tipo_via_2}%', f'%{num2}%',
+                f'%{tipo_via}%', f'%{num1}%', f'%{tipo_via_2}%', f'%{num2}%'
+            )).fetchall()
+
+            print(f"DEBUG NIVEL 1: {len(rows)} resultados")
+            for row in rows:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa'],
+                        'prioridad': 1  # Coincidencia exacta
+                    })
+
+            # NIVEL 2: tipo1+num1 cruzando con algo que tenga num2
+            rows2 = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s AND LOWER(via_1) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{tipo_via}%', f'%{num1}%', f'%{num2}%',
+                f'%{tipo_via}%', f'%{num1}%', f'%{num2}%'
+            )).fetchall()
+
+            print(f"DEBUG NIVEL 2: {len(rows2)} resultados")
+            for row in rows2:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa'],
+                        'prioridad': 2  # tipo1+num1 con num2
+                    })
+
+            # NIVEL 3: tipo2+num2 cruzando con algo que tenga num1
+            rows3 = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s AND LOWER(via_1) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{tipo_via_2}%', f'%{num2}%', f'%{num1}%',
+                f'%{tipo_via_2}%', f'%{num2}%', f'%{num1}%'
+            )).fetchall()
+
+            print(f"DEBUG NIVEL 3: {len(rows3)} resultados")
+            for row in rows3:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa'],
+                        'prioridad': 3  # tipo2+num2 con num1
+                    })
+
+            # NIVEL 4: Fallback genérico con los dos números
+            rows4 = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{num1}%', f'%{num2}%',
+                f'%{num2}%', f'%{num1}%'
+            )).fetchall()
+
+            print(f"DEBUG NIVEL 4: {len(rows4)} resultados")
+            for row in rows4:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa'],
+                        'prioridad': 4  # Solo números
+                    })
+
+            print(f"DEBUG TOTAL después de 4 niveles: {len(resultados)} resultados")
+
+        elif len(numeros) >= 2 and tipo_via:
+            # UN tipo de vía + dos números (ej: "av 6 57" -> Avenida 6 con algo que tenga 57)
+            num1, num2 = numeros[0], numeros[1]
+
+            rows = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s AND LOWER(via_1) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{tipo_via}%', f'%{num1}%', f'%{num2}%',
+                f'%{tipo_via}%', f'%{num1}%', f'%{num2}%'
+            )).fetchall()
+
+            for row in rows:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa']
+                    })
+
+            # SEGUNDO: Buscar genérico (cualquier vía con num1 cruzando con num2)
+            rows2 = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{num1}%', f'%{num2}%',
+                f'%{num2}%', f'%{num1}%'
+            )).fetchall()
+
+            for row in rows2:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa']
+                    })
+
+        elif len(numeros) >= 2:
+            # Buscar intersección con los dos números (sin tipo de vía)
+            num1, num2 = numeros[0], numeros[1]
+
+            rows = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE (
+                    (LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                    OR (LOWER(via_1) LIKE %s AND LOWER(via_2) LIKE %s)
+                )
+                LIMIT {limite}
+            """, (
+                f'%{num1}%', f'%{num2}%',
+                f'%{num2}%', f'%{num1}%'
+            )).fetchall()
+
+            for row in rows:
+                resultados.append({
+                    'id': row['id'],
+                    'lat': float(row['lat']),
+                    'lon': float(row['lon']),
+                    'via_1': row['via_1'],
+                    'via_2': row['via_2'],
+                    'display_name': row['direccion_completa']
+                })
+
+        elif len(numeros) == 1 and tipo_via:
+            # Buscar tipo de vía + número (ej: "av 6" -> "Avenida 6")
+            num1 = numeros[0]
+            ids_agregados = set()
+
+            # PRIMERO: Buscar donde tipo+número está en via_1 (ej: "Avenida 6 con Calle X")
+            rows1 = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s
+                LIMIT {limite}
+            """, (f'%{tipo_via}%', f'%{num1}%')).fetchall()
+
+            for row in rows1:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa']
+                    })
+
+            # SEGUNDO: Buscar donde tipo+número está en via_2 (ej: "Calle X con Avenida 6")
+            rows2 = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s
+                LIMIT {limite}
+            """, (f'%{tipo_via}%', f'%{num1}%')).fetchall()
+
+            for row in rows2:
+                if row['id'] not in ids_agregados:
+                    ids_agregados.add(row['id'])
+                    resultados.append({
+                        'id': row['id'],
+                        'lat': float(row['lat']),
+                        'lon': float(row['lon']),
+                        'via_1': row['via_1'],
+                        'via_2': row['via_2'],
+                        'display_name': row['direccion_completa']
+                    })
+
+        elif len(numeros) == 1:
+            # Solo número, buscar cualquier vía con ese número
+            num1 = numeros[0]
+
+            rows = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE LOWER(via_1) LIKE %s OR LOWER(via_2) LIKE %s
+                LIMIT {limite}
+            """, (f'%{num1}%', f'%{num1}%')).fetchall()
+
+            for row in rows:
+                resultados.append({
+                    'id': row['id'],
+                    'lat': float(row['lat']),
+                    'lon': float(row['lon']),
+                    'via_1': row['via_1'],
+                    'via_2': row['via_2'],
+                    'display_name': row['direccion_completa']
+                })
+
+        elif tipo_via and len(numeros) == 0:
+            # Solo tipo de vía sin número (ej: "avenida", "av", "carrera")
+            rows = conn.execute(f"""
+                SELECT id, lat, lon, via_1, via_2, direccion_completa
+                FROM intersecciones_cali
+                WHERE LOWER(via_1) LIKE %s OR LOWER(via_2) LIKE %s
+                LIMIT {limite}
+            """, (f'%{tipo_via}%', f'%{tipo_via}%')).fetchall()
+
+            for row in rows:
+                resultados.append({
+                    'id': row['id'],
+                    'lat': float(row['lat']),
+                    'lon': float(row['lon']),
+                    'via_1': row['via_1'],
+                    'via_2': row['via_2'],
+                    'display_name': row['direccion_completa']
+                })
+
+    except Exception as e:
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e), 'resultados': []})
+
+    conn.close()
+
+    # Función para calcular distancia en metros (Haversine)
+    def calcular_distancia(lat1, lon1, lat2, lon2):
+        R = 6371000  # Radio de la Tierra en metros
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        delta_phi = math.radians(lat2 - lat1)
+        delta_lambda = math.radians(lon2 - lon1)
+        a = math.sin(delta_phi / 2) ** 2 + \
+            math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+
+    # Marcar fuente de cada resultado
+    for r in resultados_pois:
+        r['fuente'] = 'p'  # POI
+    for r in resultados:
+        r['fuente'] = 'i'  # Intersección
+
+    # Combinar POIs + Intersecciones
+    todos_resultados = resultados_pois + resultados
+
+    # Ordenar resultados
+    if todos_resultados:
+        # Agregar distancia si tenemos coordenadas del usuario
+        if user_lat is not None and user_lon is not None:
+            for r in todos_resultados:
+                r['distancia'] = calcular_distancia(user_lat, user_lon, r['lat'], r['lon'])
+
+            # Ordenar por PRIORIDAD primero, luego por DISTANCIA dentro de cada prioridad
+            todos_resultados.sort(key=lambda x: (x.get('prioridad', 99), x['distancia']))
+
+            # Formatear distancia con fuente para mostrar
+            for r in todos_resultados:
+                dist_metros = round(r['distancia'])
+                r['distancia_metros'] = dist_metros
+                if dist_metros < 1000:
+                    r['distancia_texto'] = f"{dist_metros} m {r['fuente']}"
+                else:
+                    dist_km = dist_metros / 1000
+                    r['distancia_texto'] = f"{dist_km:.1f} km {r['fuente']}"
+        else:
+            # Sin coordenadas, ordenar solo por prioridad y agregar solo la fuente
+            todos_resultados.sort(key=lambda x: x.get('prioridad', 99))
+            for r in todos_resultados:
+                r['distancia_texto'] = f"({r['fuente']})"
+
+    # Limitar resultados totales
+    todos_resultados = todos_resultados[:limite]
+
+    return jsonify({
+        'ok': True,
+        'resultados': todos_resultados,
+        'total': len(todos_resultados),
+        'pois_encontrados': len(resultados_pois),
+        'intersecciones_encontradas': len(resultados)
+    })
+
+
 def obtener_parametro_transporte(conn, nombre, valor_defecto):
     """Obtiene un parámetro de transporte de la BD o retorna el valor por defecto"""
     try:
@@ -18781,11 +19373,13 @@ def api_solicitar_servicio():
 
             # Buscar tercero existente
             tercero = conn.execute("""
-                SELECT id FROM terceros WHERE telefono = %s
+                SELECT id, nombre FROM terceros WHERE telefono = %s
             """, (telefono,)).fetchone()
 
+            usuario_nuevo = False
             if tercero:
                 tercero_id = tercero['id']
+                nombre = tercero['nombre']  # Usar nombre existente
             else:
                 # Crear nuevo tercero
                 tercero_id = conn.execute("""
@@ -18794,6 +19388,14 @@ def api_solicitar_servicio():
                     RETURNING id
                 """, (nombre, telefono)).fetchone()['id']
                 conn.commit()
+                usuario_nuevo = True
+
+            # LOGUEAR AL USUARIO AUTOMÁTICAMENTE
+            session['usuario_id'] = tercero_id
+            session['nombre'] = nombre
+            session['telefono'] = telefono
+            session['rol'] = 'Cliente'
+            session.permanent = True
 
         # Crear solicitud
         tipo_servicio = data.get('tipo_servicio')
@@ -18864,10 +19466,19 @@ def api_solicitar_servicio():
 
         conn.close()
 
+        # Determinar si el usuario fue creado o ya existía
+        usuario_info = {
+            'id': tercero_id,
+            'nombre': nombre,
+            'telefono': telefono,
+            'nuevo': usuario_nuevo if 'usuario_nuevo' in dir() else False
+        }
+
         return jsonify({
             'ok': True,
             'solicitud_id': solicitud_id,
-            'mensaje': 'Solicitud creada exitosamente'
+            'mensaje': 'Solicitud creada exitosamente',
+            'usuario': usuario_info
         })
 
     except Exception as e:
@@ -18899,6 +19510,91 @@ def fix_terceros_seq():
         return jsonify({'ok': True, 'mensaje': 'Secuencia ajustada a MAX+1', 'new_value': result[0]})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/mi-viaje-en-curso')
+def api_mi_viaje_en_curso():
+    """
+    Retorna el viaje en curso del usuario actual (si existe)
+    Estados activos: pendiente, confirmado, en_camino, en_curso
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'viaje': None, 'mensaje': 'No logueado'})
+
+    try:
+        conn = get_db_connection()
+        viaje = conn.execute("""
+            SELECT id, tipo_servicio, origen_texto, destino_texto,
+                   distancia_km, tiempo_estimado_minutos, precio, estado,
+                   fecha_solicitud
+            FROM solicitudes_transporte
+            WHERE tercero_id = %s
+            AND estado IN ('pendiente', 'confirmado', 'en_camino', 'en_curso')
+            ORDER BY fecha_solicitud DESC
+            LIMIT 1
+        """, (session['usuario_id'],)).fetchone()
+        conn.close()
+
+        if viaje:
+            return jsonify({
+                'ok': True,
+                'viaje': {
+                    'id': viaje['id'],
+                    'tipo_servicio': viaje['tipo_servicio'],
+                    'origen_texto': viaje['origen_texto'],
+                    'destino_texto': viaje['destino_texto'],
+                    'distancia_km': float(viaje['distancia_km']) if viaje['distancia_km'] else None,
+                    'tiempo_estimado_minutos': viaje['tiempo_estimado_minutos'],
+                    'precio': float(viaje['precio']) if viaje['precio'] else None,
+                    'estado': viaje['estado'],
+                    'fecha_solicitud': viaje['fecha_solicitud'].isoformat() if viaje['fecha_solicitud'] else None
+                }
+            })
+        else:
+            return jsonify({'ok': True, 'viaje': None})
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cancelar-viaje/<int:viaje_id>', methods=['POST'])
+def api_cancelar_viaje(viaje_id):
+    """
+    Cancela un viaje del usuario actual
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No logueado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el viaje pertenece al usuario
+        viaje = conn.execute("""
+            SELECT id, estado FROM solicitudes_transporte
+            WHERE id = %s AND tercero_id = %s
+        """, (viaje_id, session['usuario_id'])).fetchone()
+
+        if not viaje:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Viaje no encontrado'}), 404
+
+        if viaje['estado'] in ('completado', 'cancelado'):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'El viaje ya está finalizado'}), 400
+
+        # Cancelar viaje
+        conn.execute("""
+            UPDATE solicitudes_transporte
+            SET estado = 'cancelado', fecha_actualizacion = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (viaje_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Viaje cancelado'})
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/usuario-actual')

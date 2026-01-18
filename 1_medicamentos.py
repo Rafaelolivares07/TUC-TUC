@@ -18824,6 +18824,8 @@ def api_buscar_interseccion():
                     #     2 palabras buscadas, 1 coincidencia -> prioridad 1
                     prioridad_poi = len(palabras_extra) - coincidencias
 
+                    print(f"DEBUG POI: '{row['nombre']}' -> normalizado='{nombre_normalizado}' | palabras={palabras_extra} | coincidencias={coincidencias} | prioridad={prioridad_poi}")
+
                     resultados_pois.append({
                         'id': f"poi_{row['id']}",
                         'osm_id': row['osm_id'],

@@ -996,35 +996,33 @@
                         });
                     }
 
-                    // 2. SEGUNDO: Si hay menos de 5 resultados locales, complementar con Nominatim
-                    if (resultadosCombinados.length < 5) {
-                        const viewbox = '-77.15,4.56,-76.07,2.4';
-                        const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10`;
-                        const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
-                        const resultadosNominatim = await responseNominatim.json();
+                    // 2. SEGUNDO: Siempre buscar en Nominatim también
+                    const viewbox = '-77.15,4.56,-76.07,2.4';
+                    const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=10`;
+                    const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
+                    const resultadosNominatim = await responseNominatim.json();
 
-                        // Agregar resultados de Nominatim con fuente 'n'
-                        resultadosNominatim.forEach(r => {
-                            // Calcular distancia si tenemos coordenadas
-                            let distanciaTexto = '(n)';
-                            if (latParam && lonParam) {
-                                const dist = calcularDistancia(parseFloat(latParam), parseFloat(lonParam), parseFloat(r.lat), parseFloat(r.lon));
-                                if (dist < 1) {
-                                    distanciaTexto = `${Math.round(dist * 1000)} m n`;
-                                } else {
-                                    distanciaTexto = `${dist.toFixed(1)} km n`;
-                                }
+                    // Agregar resultados de Nominatim con fuente 'n'
+                    resultadosNominatim.forEach(r => {
+                        // Calcular distancia si tenemos coordenadas
+                        let distanciaTexto = '(n)';
+                        if (latParam && lonParam) {
+                            const dist = calcularDistancia(parseFloat(latParam), parseFloat(lonParam), parseFloat(r.lat), parseFloat(r.lon));
+                            if (dist < 1) {
+                                distanciaTexto = `${Math.round(dist * 1000)} m n`;
+                            } else {
+                                distanciaTexto = `${dist.toFixed(1)} km n`;
                             }
+                        }
 
-                            resultadosCombinados.push({
-                                lat: r.lat,
-                                lon: r.lon,
-                                display_name: r.display_name,
-                                distancia_texto: distanciaTexto,
-                                fuente: 'n'
-                            });
+                        resultadosCombinados.push({
+                            lat: r.lat,
+                            lon: r.lon,
+                            display_name: r.display_name,
+                            distancia_texto: distanciaTexto,
+                            fuente: 'n'
                         });
-                    }
+                    });
 
                     mostrarSugerenciasDestino(resultadosCombinados);
                 } catch (error) {

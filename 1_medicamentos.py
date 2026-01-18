@@ -18773,16 +18773,28 @@ def api_buscar_interseccion():
         if palabras_extra:
             print(f"DEBUG: Buscando POIs con palabras={palabras_extra}")
 
-            # Construir query que busque cualquier palabra (OR)
-            condiciones_or = ' OR '.join(['LOWER(nombre) LIKE %s' for _ in palabras_extra])
-            params_like = [f'%{palabra}%' for palabra in palabras_extra]
+            # Buscar con LIKE (coincidencia parcial) y trigram (similitud para errores ortográficos)
+            # LIKE: '%berc%' encuentra "Berchman's"
+            # Trigram: 'bercmans' % 'berchman' encuentra coincidencias similares
+            condiciones = []
+            params = []
+
+            for palabra in palabras_extra:
+                # LIKE para coincidencia parcial
+                condiciones.append("LOWER(nombre) LIKE %s")
+                params.append(f'%{palabra}%')
+                # Trigram para similitud (errores ortográficos) - umbral 0.3
+                condiciones.append("LOWER(nombre) %% %s")
+                params.append(palabra)
+
+            condiciones_sql = ' OR '.join(condiciones)
 
             rows_pois = conn.execute(f"""
                 SELECT id, osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio
                 FROM pois_cali
-                WHERE {condiciones_or}
+                WHERE {condiciones_sql}
                 LIMIT %s
-            """, (*params_like, limite * 3)).fetchall()  # Traer más para ordenar después
+            """, (*params, limite * 3)).fetchall()
 
             print(f"DEBUG: Encontrados {len(rows_pois)} POIs")
 
@@ -18792,9 +18804,13 @@ def api_buscar_interseccion():
                 if poi_key not in pois_agregados:
                     pois_agregados.add(poi_key)
 
-                    # Contar cuántas palabras coinciden en el nombre
+                    # Contar cuántas palabras coinciden en el nombre (parcial o similar)
                     nombre_lower = row['nombre'].lower()
-                    coincidencias = sum(1 for palabra in palabras_extra if palabra in nombre_lower)
+                    coincidencias = 0
+                    for palabra in palabras_extra:
+                        # Coincidencia parcial (contiene la palabra)
+                        if palabra in nombre_lower:
+                            coincidencias += 1
 
                     # Prioridad: más coincidencias = menor número = mayor prioridad
                     # Ej: 2 palabras buscadas, 2 coincidencias -> prioridad 0

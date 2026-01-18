@@ -18755,13 +18755,10 @@ def api_buscar_interseccion():
         # Ignorar números
         if re.match(r'^\d+[a-zA-Z]?$', palabra):
             continue
-        # Ignorar tipos de vía
-        es_tipo_via = False
-        for kw in tipos_via_keywords:
-            if palabra == kw or palabra.startswith(kw):
-                es_tipo_via = True
-                break
-        if not es_tipo_via and len(palabra) >= 3:
+        # Ignorar tipos de vía (solo si es exactamente igual, no startswith)
+        if palabra in tipos_via_keywords:
+            continue
+        if len(palabra) >= 3:
             palabras_extra.append(palabra)
 
     resultados = []

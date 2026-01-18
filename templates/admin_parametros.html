@@ -535,6 +535,19 @@
                 <div class="accordion-content">
                     <div class="p-6 bg-white">
 
+                        <!-- BÚSQUEDA DE DIRECCIONES -->
+                        <div class="mb-6 p-4 bg-green-50 rounded-lg border border-green-100">
+                            <h4 class="font-semibold text-gray-800 mb-4">📍 BÚSQUEDA DE DIRECCIONES</h4>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Límite de resultados en búsqueda de intersecciones</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="limite_resultados_interseccion" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" min="5" max="100" placeholder="...">
+                                    <span class="text-gray-600">resultados</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Cantidad máxima de sugerencias en el autocompletado de direcciones (5-100)</p>
+                            </div>
+                        </div>
+
                         <!-- TARIFAS TRANSPORTE -->
                         <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
                             <h4 class="font-semibold text-gray-800 mb-4">TARIFAS TRANSPORTE</h4>
@@ -1496,7 +1509,8 @@
             'transporte_pico_sab_pm_inicio',
             'transporte_pico_sab_pm_fin',
             'acompanamiento_tarifa_hora',
-            'acompanamiento_horas_minimo'
+            'acompanamiento_horas_minimo',
+            'limite_resultados_interseccion'
         ];
 
         async function cargarParametrosTransporte() {
@@ -1506,10 +1520,13 @@
                     const data = await res.json();
 
                     if (data.ok && data.valor !== null) {
-                        document.getElementById(id).value = data.valor;
+                        const elemento = document.getElementById(id);
+                        if (elemento) {
+                            elemento.value = data.valor;
+                        }
                     }
                 } catch (error) {
-                    console.log(`Parámetro ${id} no encontrado, usando valor por defecto`);
+                    // Parámetro no encontrado, usar valor por defecto del HTML
                 }
             }
             // Actualizar cálculos después de cargar

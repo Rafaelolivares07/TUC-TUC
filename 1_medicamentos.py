@@ -11921,36 +11921,36 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS modelo_vehiculo VARCHAR(20)")
         mensajes.append("✅ terceros.modelo_vehiculo")
 
-        # Campos en servicios para conductor
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_id INTEGER")
-        mensajes.append("✅ servicios.conductor_id")
+        # Campos en solicitudes_transporte para conductor
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_id INTEGER")
+        mensajes.append("✅ solicitudes_transporte.conductor_id")
 
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_placa VARCHAR(20)")
-        mensajes.append("✅ servicios.conductor_placa")
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_placa VARCHAR(20)")
+        mensajes.append("✅ solicitudes_transporte.conductor_placa")
 
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_color VARCHAR(50)")
-        mensajes.append("✅ servicios.conductor_color")
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_color VARCHAR(50)")
+        mensajes.append("✅ solicitudes_transporte.conductor_color")
 
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_marca VARCHAR(50)")
-        mensajes.append("✅ servicios.conductor_marca")
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_marca VARCHAR(50)")
+        mensajes.append("✅ solicitudes_transporte.conductor_marca")
 
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_modelo VARCHAR(20)")
-        mensajes.append("✅ servicios.conductor_modelo")
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_modelo VARCHAR(20)")
+        mensajes.append("✅ solicitudes_transporte.conductor_modelo")
 
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)")
-        mensajes.append("✅ servicios.metodo_pago")
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)")
+        mensajes.append("✅ solicitudes_transporte.metodo_pago")
 
-        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS fecha_completado TIMESTAMP")
-        mensajes.append("✅ servicios.fecha_completado")
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS fecha_completado TIMESTAMP")
+        mensajes.append("✅ solicitudes_transporte.fecha_completado")
 
         # Actualizar constraint de estado para incluir nuevos estados
         try:
-            conn.execute("ALTER TABLE servicios DROP CONSTRAINT IF EXISTS servicios_estado_check")
+            conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
             conn.execute("""
-                ALTER TABLE servicios ADD CONSTRAINT servicios_estado_check
+                ALTER TABLE solicitudes_transporte ADD CONSTRAINT solicitudes_transporte_estado_check
                 CHECK (estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso', 'completada', 'cancelada'))
             """)
-            mensajes.append("✅ servicios.estado constraint actualizado")
+            mensajes.append("✅ solicitudes_transporte.estado constraint actualizado")
         except Exception as e:
             mensajes.append(f"⚠️ Estado constraint: {str(e)}")
 
@@ -18820,10 +18820,10 @@ def api_conductor_servicios_disponibles():
         conn = get_db_connection()
         rows = conn.execute("""
             SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
-                   s.destino_lat, s.destino_lon, s.tarifa, s.fecha_solicitud,
+                   s.destino_lat, s.destino_lon, s.precio, s.fecha_solicitud,
                    t.nombre as usuario_nombre
-            FROM servicios s
-            JOIN terceros t ON s.usuario_id = t.id
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
             WHERE s.estado = 'pendiente' AND s.tipo_servicio = 'transporte'
             ORDER BY s.fecha_solicitud DESC
             LIMIT 20
@@ -18845,7 +18845,7 @@ def api_conductor_servicios_disponibles():
                 'origen_lon': float(row['origen_lon']),
                 'destino_lat': float(row['destino_lat']),
                 'destino_lon': float(row['destino_lon']),
-                'tarifa': row['tarifa'],
+                'tarifa': row['precio'],
                 'usuario_nombre': row['usuario_nombre'],
                 'distancia_metros': round(dist),
                 'distancia_texto': f"{dist_km:.1f} km · ~{tiempo_est} min"
@@ -18871,8 +18871,8 @@ def api_conductor_tomar_servicio(servicio_id):
         # Verificar que el servicio esté pendiente
         servicio = conn.execute("""
             SELECT s.*, t.nombre as usuario_nombre
-            FROM servicios s
-            JOIN terceros t ON s.usuario_id = t.id
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
             WHERE s.id = %s AND s.estado = 'pendiente'
         """, (servicio_id,)).fetchone()
 
@@ -18888,7 +18888,7 @@ def api_conductor_tomar_servicio(servicio_id):
 
         # Actualizar servicio
         conn.execute("""
-            UPDATE servicios
+            UPDATE solicitudes_transporte
             SET estado = 'aceptada', conductor_id = %s,
                 conductor_placa = %s, conductor_color = %s,
                 conductor_marca = %s, conductor_modelo = %s
@@ -18909,7 +18909,7 @@ def api_conductor_tomar_servicio(servicio_id):
                 'origen_lon': float(servicio['origen_lon']),
                 'destino_lat': float(servicio['destino_lat']),
                 'destino_lon': float(servicio['destino_lon']),
-                'tarifa': servicio['tarifa'],
+                'tarifa': servicio['precio'],
                 'usuario_nombre': servicio['usuario_nombre']
             }
         })
@@ -18927,8 +18927,8 @@ def api_conductor_viaje_activo():
         conn = get_db_connection()
         viaje = conn.execute("""
             SELECT s.*, t.nombre as usuario_nombre
-            FROM servicios s
-            JOIN terceros t ON s.usuario_id = t.id
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
             WHERE s.conductor_id = %s AND s.estado IN ('aceptada', 'recogiendo', 'en_curso')
             LIMIT 1
         """, (session['usuario_id'],)).fetchone()
@@ -18946,7 +18946,7 @@ def api_conductor_viaje_activo():
                     'origen_lon': float(viaje['origen_lon']),
                     'destino_lat': float(viaje['destino_lat']),
                     'destino_lon': float(viaje['destino_lon']),
-                    'tarifa': viaje['tarifa'],
+                    'tarifa': viaje['precio'],
                     'usuario_nombre': viaje['usuario_nombre']
                 }
             })
@@ -18964,7 +18964,7 @@ def api_conductor_llegue(servicio_id):
     try:
         conn = get_db_connection()
         conn.execute("""
-            UPDATE servicios SET estado = 'recogiendo'
+            UPDATE solicitudes_transporte SET estado = 'recogiendo'
             WHERE id = %s AND conductor_id = %s AND estado = 'aceptada'
         """, (servicio_id, session['usuario_id']))
         conn.commit()
@@ -18983,7 +18983,7 @@ def api_conductor_iniciar_viaje(servicio_id):
     try:
         conn = get_db_connection()
         conn.execute("""
-            UPDATE servicios SET estado = 'en_curso'
+            UPDATE solicitudes_transporte SET estado = 'en_curso'
             WHERE id = %s AND conductor_id = %s AND estado = 'recogiendo'
         """, (servicio_id, session['usuario_id']))
         conn.commit()
@@ -19005,7 +19005,7 @@ def api_conductor_finalizar_viaje(servicio_id):
     try:
         conn = get_db_connection()
         conn.execute("""
-            UPDATE servicios SET estado = 'completada', metodo_pago = %s, fecha_completado = NOW()
+            UPDATE solicitudes_transporte SET estado = 'completada', metodo_pago = %s, fecha_completado = NOW()
             WHERE id = %s AND conductor_id = %s AND estado = 'en_curso'
         """, (metodo_pago, servicio_id, session['usuario_id']))
         conn.commit()
@@ -19992,7 +19992,7 @@ def api_mi_viaje_en_curso():
                    distancia_km, tiempo_estimado_minutos, tarifa as precio, estado,
                    fecha_solicitud, conductor_placa, conductor_color,
                    conductor_marca, conductor_modelo
-            FROM servicios
+            FROM solicitudes_transporte
             WHERE usuario_id = %s
             AND estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso')
             ORDER BY fecha_solicitud DESC

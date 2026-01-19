@@ -11901,6 +11901,67 @@ def run_migration_endpoint():
         return f"ERROR: {str(e)}<br><pre>{traceback.format_exc()}</pre>", 500
 
 
+@app.route('/api/migrar-conductor')
+def migrar_conductor():
+    """Agrega campos necesarios para funcionalidad de conductor"""
+    try:
+        conn = get_db_connection()
+        mensajes = []
+
+        # Campos en terceros para vehículo
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS placa VARCHAR(20)")
+        mensajes.append("✅ terceros.placa")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS color_vehiculo VARCHAR(50)")
+        mensajes.append("✅ terceros.color_vehiculo")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS marca_vehiculo VARCHAR(50)")
+        mensajes.append("✅ terceros.marca_vehiculo")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS modelo_vehiculo VARCHAR(20)")
+        mensajes.append("✅ terceros.modelo_vehiculo")
+
+        # Campos en servicios para conductor
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_id INTEGER")
+        mensajes.append("✅ servicios.conductor_id")
+
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_placa VARCHAR(20)")
+        mensajes.append("✅ servicios.conductor_placa")
+
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_color VARCHAR(50)")
+        mensajes.append("✅ servicios.conductor_color")
+
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_marca VARCHAR(50)")
+        mensajes.append("✅ servicios.conductor_marca")
+
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS conductor_modelo VARCHAR(20)")
+        mensajes.append("✅ servicios.conductor_modelo")
+
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)")
+        mensajes.append("✅ servicios.metodo_pago")
+
+        conn.execute("ALTER TABLE servicios ADD COLUMN IF NOT EXISTS fecha_completado TIMESTAMP")
+        mensajes.append("✅ servicios.fecha_completado")
+
+        # Actualizar constraint de estado para incluir nuevos estados
+        try:
+            conn.execute("ALTER TABLE servicios DROP CONSTRAINT IF EXISTS servicios_estado_check")
+            conn.execute("""
+                ALTER TABLE servicios ADD CONSTRAINT servicios_estado_check
+                CHECK (estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso', 'completada', 'cancelada'))
+            """)
+            mensajes.append("✅ servicios.estado constraint actualizado")
+        except Exception as e:
+            mensajes.append(f"⚠️ Estado constraint: {str(e)}")
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensajes': mensajes})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/existencias/browse')
 @admin_required
 def browse_existencias():
@@ -18704,6 +18765,256 @@ def servicios_home_prueba():
     return render_template('servicios_home_prueba.html')
 
 
+@app.route('/conductor')
+def conductor_home():
+    """Página principal para conductores"""
+    return render_template('conductor.html')
+
+
+# ============================================================================
+# ENDPOINTS PARA CONDUCTORES
+# ============================================================================
+
+@app.route('/api/conductor/registrar-vehiculo', methods=['POST'])
+def api_conductor_registrar_vehiculo():
+    """Registra los datos del vehículo del conductor"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    placa = data.get('placa', '').strip().upper()
+    color = data.get('color', '').strip()
+    marca = data.get('marca', '').strip()
+    modelo = data.get('modelo', '').strip()
+
+    if not all([placa, color, marca, modelo]):
+        return jsonify({'ok': False, 'error': 'Todos los campos son requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE terceros
+            SET placa = %s, color_vehiculo = %s, marca_vehiculo = %s, modelo_vehiculo = %s
+            WHERE id = %s
+        """, (placa, color, marca, modelo, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/servicios-disponibles')
+def api_conductor_servicios_disponibles():
+    """Lista servicios pendientes ordenados por cercanía al conductor"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+
+    if not lat or not lon:
+        return jsonify({'ok': False, 'error': 'Ubicación requerida'}), 400
+
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
+                   s.destino_lat, s.destino_lon, s.tarifa, s.fecha_solicitud,
+                   t.nombre as usuario_nombre
+            FROM servicios s
+            JOIN terceros t ON s.usuario_id = t.id
+            WHERE s.estado = 'pendiente' AND s.tipo_servicio = 'transporte'
+            ORDER BY s.fecha_solicitud DESC
+            LIMIT 20
+        """).fetchall()
+        conn.close()
+
+        servicios = []
+        for row in rows:
+            # Calcular distancia del conductor al origen
+            dist = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            dist_km = dist / 1000
+            tiempo_est = round(dist_km * 3)  # ~3 min por km estimado
+
+            servicios.append({
+                'id': row['id'],
+                'origen_texto': row['origen_texto'],
+                'destino_texto': row['destino_texto'],
+                'origen_lat': float(row['origen_lat']),
+                'origen_lon': float(row['origen_lon']),
+                'destino_lat': float(row['destino_lat']),
+                'destino_lon': float(row['destino_lon']),
+                'tarifa': row['tarifa'],
+                'usuario_nombre': row['usuario_nombre'],
+                'distancia_metros': round(dist),
+                'distancia_texto': f"{dist_km:.1f} km · ~{tiempo_est} min"
+            })
+
+        # Ordenar por distancia
+        servicios.sort(key=lambda x: x['distancia_metros'])
+
+        return jsonify({'ok': True, 'servicios': servicios})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/tomar-servicio/<int:servicio_id>', methods=['POST'])
+def api_conductor_tomar_servicio(servicio_id):
+    """Conductor toma un servicio"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el servicio esté pendiente
+        servicio = conn.execute("""
+            SELECT s.*, t.nombre as usuario_nombre
+            FROM servicios s
+            JOIN terceros t ON s.usuario_id = t.id
+            WHERE s.id = %s AND s.estado = 'pendiente'
+        """, (servicio_id,)).fetchone()
+
+        if not servicio:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Servicio no disponible'}), 400
+
+        # Obtener datos del conductor
+        conductor = conn.execute("""
+            SELECT nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo
+            FROM terceros WHERE id = %s
+        """, (session['usuario_id'],)).fetchone()
+
+        # Actualizar servicio
+        conn.execute("""
+            UPDATE servicios
+            SET estado = 'aceptada', conductor_id = %s,
+                conductor_placa = %s, conductor_color = %s,
+                conductor_marca = %s, conductor_modelo = %s
+            WHERE id = %s
+        """, (session['usuario_id'], conductor['placa'], conductor['color_vehiculo'],
+              conductor['marca_vehiculo'], conductor['modelo_vehiculo'], servicio_id))
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'viaje': {
+                'id': servicio_id,
+                'estado': 'aceptada',
+                'origen_texto': servicio['origen_texto'],
+                'destino_texto': servicio['destino_texto'],
+                'origen_lat': float(servicio['origen_lat']),
+                'origen_lon': float(servicio['origen_lon']),
+                'destino_lat': float(servicio['destino_lat']),
+                'destino_lon': float(servicio['destino_lon']),
+                'tarifa': servicio['tarifa'],
+                'usuario_nombre': servicio['usuario_nombre']
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/viaje-activo')
+def api_conductor_viaje_activo():
+    """Obtiene el viaje activo del conductor (si tiene uno)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        viaje = conn.execute("""
+            SELECT s.*, t.nombre as usuario_nombre
+            FROM servicios s
+            JOIN terceros t ON s.usuario_id = t.id
+            WHERE s.conductor_id = %s AND s.estado IN ('aceptada', 'recogiendo', 'en_curso')
+            LIMIT 1
+        """, (session['usuario_id'],)).fetchone()
+        conn.close()
+
+        if viaje:
+            return jsonify({
+                'ok': True,
+                'viaje': {
+                    'id': viaje['id'],
+                    'estado': viaje['estado'],
+                    'origen_texto': viaje['origen_texto'],
+                    'destino_texto': viaje['destino_texto'],
+                    'origen_lat': float(viaje['origen_lat']),
+                    'origen_lon': float(viaje['origen_lon']),
+                    'destino_lat': float(viaje['destino_lat']),
+                    'destino_lon': float(viaje['destino_lon']),
+                    'tarifa': viaje['tarifa'],
+                    'usuario_nombre': viaje['usuario_nombre']
+                }
+            })
+        return jsonify({'ok': True, 'viaje': None})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/llegue/<int:servicio_id>', methods=['POST'])
+def api_conductor_llegue(servicio_id):
+    """Conductor indica que llegó al punto de recogida"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE servicios SET estado = 'recogiendo'
+            WHERE id = %s AND conductor_id = %s AND estado = 'aceptada'
+        """, (servicio_id, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/iniciar-viaje/<int:servicio_id>', methods=['POST'])
+def api_conductor_iniciar_viaje(servicio_id):
+    """Conductor inicia el viaje (usuario abordó)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE servicios SET estado = 'en_curso'
+            WHERE id = %s AND conductor_id = %s AND estado = 'recogiendo'
+        """, (servicio_id, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/finalizar-viaje/<int:servicio_id>', methods=['POST'])
+def api_conductor_finalizar_viaje(servicio_id):
+    """Conductor finaliza el viaje"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    metodo_pago = data.get('metodo_pago', 'efectivo')
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE servicios SET estado = 'completada', metodo_pago = %s, fecha_completado = NOW()
+            WHERE id = %s AND conductor_id = %s AND estado = 'en_curso'
+        """, (metodo_pago, servicio_id, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/buscar_interseccion')
 def api_buscar_interseccion():
     """
@@ -19669,7 +19980,7 @@ def fix_terceros_seq():
 def api_mi_viaje_en_curso():
     """
     Retorna el viaje en curso del usuario actual (si existe)
-    Estados activos: pendiente, confirmado, en_camino, en_curso
+    Busca en tabla servicios con estados activos
     """
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'viaje': None, 'mensaje': 'No logueado'})
@@ -19678,11 +19989,12 @@ def api_mi_viaje_en_curso():
         conn = get_db_connection()
         viaje = conn.execute("""
             SELECT id, tipo_servicio, origen_texto, destino_texto,
-                   distancia_km, tiempo_estimado_minutos, precio, estado,
-                   fecha_solicitud
-            FROM solicitudes_transporte
-            WHERE tercero_id = %s
-            AND estado IN ('pendiente', 'confirmado', 'en_camino', 'en_curso')
+                   distancia_km, tiempo_estimado_minutos, tarifa as precio, estado,
+                   fecha_solicitud, conductor_placa, conductor_color,
+                   conductor_marca, conductor_modelo
+            FROM servicios
+            WHERE usuario_id = %s
+            AND estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso')
             ORDER BY fecha_solicitud DESC
             LIMIT 1
         """, (session['usuario_id'],)).fetchone()
@@ -19700,7 +20012,11 @@ def api_mi_viaje_en_curso():
                     'tiempo_estimado_minutos': viaje['tiempo_estimado_minutos'],
                     'precio': float(viaje['precio']) if viaje['precio'] else None,
                     'estado': viaje['estado'],
-                    'fecha_solicitud': viaje['fecha_solicitud'].isoformat() if viaje['fecha_solicitud'] else None
+                    'fecha_solicitud': viaje['fecha_solicitud'].isoformat() if viaje['fecha_solicitud'] else None,
+                    'conductor_placa': viaje['conductor_placa'],
+                    'conductor_color': viaje['conductor_color'],
+                    'conductor_marca': viaje['conductor_marca'],
+                    'conductor_modelo': viaje['conductor_modelo']
                 }
             })
         else:
@@ -19761,7 +20077,7 @@ def api_usuario_actual():
     try:
         conn = get_db_connection()
         usuario = conn.execute("""
-            SELECT id, nombre, telefono
+            SELECT id, nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo
             FROM terceros
             WHERE id = %s
         """, (session['usuario_id'],)).fetchone()
@@ -19776,7 +20092,11 @@ def api_usuario_actual():
                     'id': usuario['id'],
                     'nombre': usuario['nombre'],
                     'telefono': usuario['telefono'] or '',
-                    'primer_nombre': primer_nombre
+                    'primer_nombre': primer_nombre,
+                    'placa': usuario['placa'],
+                    'color_vehiculo': usuario['color_vehiculo'],
+                    'marca_vehiculo': usuario['marca_vehiculo'],
+                    'modelo_vehiculo': usuario['modelo_vehiculo']
                 }
             })
         else:

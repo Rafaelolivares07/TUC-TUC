@@ -1636,9 +1636,26 @@
             }
         }
 
+        let intervaloPollingViaje = null;
+
         function mostrarViajeEnCurso(viaje) {
             // Ocultar formulario y mostrar estado del viaje
             document.getElementById('form-transporte').classList.add('hidden');
+
+            // Generar HTML del conductor si existe
+            let conductorHTML = '';
+            if (viaje.conductor_placa) {
+                conductorHTML = `
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h3 class="font-bold text-blue-800 mb-2">🚗 Tu conductor</h3>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div><span class="text-gray-600">Placa:</span> <strong>${viaje.conductor_placa}</strong></div>
+                            <div><span class="text-gray-600">Color:</span> <strong>${viaje.conductor_color || '-'}</strong></div>
+                            <div><span class="text-gray-600">Vehículo:</span> <strong>${viaje.conductor_marca || ''} ${viaje.conductor_modelo || ''}</strong></div>
+                        </div>
+                    </div>
+                `;
+            }
 
             const estadoHTML = `
                 <div id="viaje-en-curso" class="bg-white rounded-lg shadow-lg p-6 mb-4">
@@ -1669,6 +1686,8 @@
                         </div>
                     </div>
 
+                    ${conductorHTML}
+
                     <div class="bg-gray-100 rounded-lg p-4 mb-4">
                         <div class="flex justify-between items-center">
                             <span class="text-gray-600">Estado:</span>
@@ -1680,21 +1699,69 @@
                         </div>
                     </div>
 
-                    <button onclick="cancelarViaje(${viaje.id})" class="w-full border-2 border-red-500 text-red-500 py-2 rounded font-medium hover:bg-red-50 transition">
-                        Cancelar viaje
-                    </button>
+                    ${viaje.estado === 'pendiente' || viaje.estado === 'aceptada' ? `
+                        <button onclick="cancelarViaje(${viaje.id})" class="w-full border-2 border-red-500 text-red-500 py-2 rounded font-medium hover:bg-red-50 transition">
+                            Cancelar viaje
+                        </button>
+                    ` : ''}
+
+                    ${viaje.estado === 'completada' ? `
+                        <button onclick="cerrarViajeCompletado()" class="w-full bg-green-500 text-white py-2 rounded font-medium hover:bg-green-600 transition">
+                            ¡Gracias! Cerrar
+                        </button>
+                    ` : ''}
                 </div>
             `;
+
+            // Eliminar viaje anterior si existe
+            const viajeAnterior = document.getElementById('viaje-en-curso');
+            if (viajeAnterior) viajeAnterior.remove();
 
             // Insertar después del header
             const header = document.querySelector('.max-w-4xl > .bg-white');
             header.insertAdjacentHTML('afterend', estadoHTML);
+
+            // Iniciar polling si el viaje no está completado
+            if (viaje.estado !== 'completada' && viaje.estado !== 'cancelada') {
+                if (!intervaloPollingViaje) {
+                    intervaloPollingViaje = setInterval(actualizarEstadoViaje, 5000);
+                }
+            } else {
+                if (intervaloPollingViaje) {
+                    clearInterval(intervaloPollingViaje);
+                    intervaloPollingViaje = null;
+                }
+            }
+        }
+
+        async function actualizarEstadoViaje() {
+            try {
+                const response = await fetch('/api/mi-viaje-en-curso');
+                const data = await response.json();
+
+                if (data.ok && data.viaje) {
+                    mostrarViajeEnCurso(data.viaje);
+                }
+            } catch (error) {
+                console.log('Error actualizando estado del viaje');
+            }
+        }
+
+        function cerrarViajeCompletado() {
+            const viajeDiv = document.getElementById('viaje-en-curso');
+            if (viajeDiv) viajeDiv.remove();
+            document.getElementById('form-transporte').classList.remove('hidden');
+            if (intervaloPollingViaje) {
+                clearInterval(intervaloPollingViaje);
+                intervaloPollingViaje = null;
+            }
         }
 
         function getEstadoClase(estado) {
             const clases = {
                 'pendiente': 'bg-yellow-100 text-yellow-800',
                 'aceptada': 'bg-blue-100 text-blue-800',
+                'recogiendo': 'bg-orange-100 text-orange-800',
                 'en_curso': 'bg-green-100 text-green-800',
                 'completada': 'bg-gray-100 text-gray-800',
                 'cancelada': 'bg-red-100 text-red-800'
@@ -1704,10 +1771,11 @@
 
         function getEstadoTexto(estado) {
             const textos = {
-                'pendiente': '⏳ Buscando conductor',
-                'aceptada': '✓ Conductor asignado',
-                'en_curso': '🚗 Viaje en curso',
-                'completada': '✅ Completado',
+                'pendiente': '⏳ Buscando conductor...',
+                'aceptada': '🚗 Conductor en camino',
+                'recogiendo': '📍 ¡Tu conductor llegó!',
+                'en_curso': '🛣️ En viaje al destino',
+                'completada': '✅ ¡Llegaste a tu destino!',
                 'cancelada': '❌ Cancelado'
             };
             return textos[estado] || estado;

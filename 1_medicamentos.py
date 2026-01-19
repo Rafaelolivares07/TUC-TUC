@@ -19044,49 +19044,61 @@ def api_buscar_interseccion():
                 })
 
         elif len(numeros) == 1 and tipo_via:
-            # Buscar tipo de vía + número (ej: "av 6" -> "Avenida 6")
+            # Buscar tipo de vía + número (ej: "av 6" -> "Avenida 6" o "Av 6")
             num1 = numeros[0]
             ids_agregados = set()
 
-            # PRIMERO: Buscar donde tipo+número está en via_1 (ej: "Avenida 6 con Calle X")
-            rows1 = conn.execute(f"""
-                SELECT id, lat, lon, via_1, via_2, direccion_completa
-                FROM intersecciones_cali
-                WHERE LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s
-                LIMIT {limite}
-            """, (f'%{tipo_via}%', f'%{num1}%')).fetchall()
+            # Mapeo de abreviaturas para buscar ambas formas
+            tipo_via_variantes = {
+                'avenida': ['avenida', 'av'],
+                'carrera': ['carrera', 'cra', 'kr', 'carr'],
+                'calle': ['calle', 'cl', 'call'],
+                'diagonal': ['diagonal', 'diag'],
+                'transversal': ['transversal', 'trans']
+            }
+            variantes = tipo_via_variantes.get(tipo_via, [tipo_via])
 
-            for row in rows1:
-                if row['id'] not in ids_agregados:
-                    ids_agregados.add(row['id'])
-                    resultados.append({
-                        'id': row['id'],
-                        'lat': float(row['lat']),
-                        'lon': float(row['lon']),
-                        'via_1': row['via_1'],
-                        'via_2': row['via_2'],
-                        'display_name': row['direccion_completa']
-                    })
+            # PRIMERO: Buscar donde tipo+número está en via_1 (ej: "Avenida 6 con Calle X")
+            for variante in variantes:
+                rows1 = conn.execute(f"""
+                    SELECT id, lat, lon, via_1, via_2, direccion_completa
+                    FROM intersecciones_cali
+                    WHERE LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s
+                    LIMIT {limite}
+                """, (f'%{variante}%', f'%{num1}%')).fetchall()
+
+                for row in rows1:
+                    if row['id'] not in ids_agregados:
+                        ids_agregados.add(row['id'])
+                        resultados.append({
+                            'id': row['id'],
+                            'lat': float(row['lat']),
+                            'lon': float(row['lon']),
+                            'via_1': row['via_1'],
+                            'via_2': row['via_2'],
+                            'display_name': row['direccion_completa']
+                        })
 
             # SEGUNDO: Buscar donde tipo+número está en via_2 (ej: "Calle X con Avenida 6")
-            rows2 = conn.execute(f"""
-                SELECT id, lat, lon, via_1, via_2, direccion_completa
-                FROM intersecciones_cali
-                WHERE LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s
-                LIMIT {limite}
-            """, (f'%{tipo_via}%', f'%{num1}%')).fetchall()
+            for variante in variantes:
+                rows2 = conn.execute(f"""
+                    SELECT id, lat, lon, via_1, via_2, direccion_completa
+                    FROM intersecciones_cali
+                    WHERE LOWER(via_2) LIKE %s AND LOWER(via_2) LIKE %s
+                    LIMIT {limite}
+                """, (f'%{variante}%', f'%{num1}%')).fetchall()
 
-            for row in rows2:
-                if row['id'] not in ids_agregados:
-                    ids_agregados.add(row['id'])
-                    resultados.append({
-                        'id': row['id'],
-                        'lat': float(row['lat']),
-                        'lon': float(row['lon']),
-                        'via_1': row['via_1'],
-                        'via_2': row['via_2'],
-                        'display_name': row['direccion_completa']
-                    })
+                for row in rows2:
+                    if row['id'] not in ids_agregados:
+                        ids_agregados.add(row['id'])
+                        resultados.append({
+                            'id': row['id'],
+                            'lat': float(row['lat']),
+                            'lon': float(row['lon']),
+                            'via_1': row['via_1'],
+                            'via_2': row['via_2'],
+                            'display_name': row['direccion_completa']
+                        })
 
         elif len(numeros) == 1:
             # Solo número, buscar cualquier vía con ese número

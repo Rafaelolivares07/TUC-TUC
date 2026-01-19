@@ -19047,6 +19047,7 @@ def api_buscar_interseccion():
             # Buscar tipo de vía + número (ej: "av 6" -> "Avenida 6" o "Av 6")
             num1 = numeros[0]
             ids_agregados = set()
+            print(f"DEBUG caso 1 número + tipo_via: tipo_via={tipo_via}, num1={num1}")
 
             # Mapeo de abreviaturas para buscar ambas formas
             tipo_via_variantes = {
@@ -19060,12 +19061,14 @@ def api_buscar_interseccion():
 
             # PRIMERO: Buscar donde tipo+número está en via_1 (ej: "Avenida 6 con Calle X")
             for variante in variantes:
+                print(f"DEBUG buscando variante={variante} num1={num1}")
                 rows1 = conn.execute(f"""
                     SELECT id, lat, lon, via_1, via_2, direccion_completa
                     FROM intersecciones_cali
                     WHERE LOWER(via_1) LIKE %s AND LOWER(via_1) LIKE %s
                     LIMIT {limite}
                 """, (f'%{variante}%', f'%{num1}%')).fetchall()
+                print(f"DEBUG rows1 encontrados: {len(rows1)}")
 
                 for row in rows1:
                     if row['id'] not in ids_agregados:

@@ -955,19 +955,8 @@
         }
 
         function procesarTextoParaCali(texto) {
-            // Detectar patrón: av/avenida + número al inicio (ej: "av 6", "av 6 calle 44")
-            // En Cali todas las avenidas son en el Norte, agregar "n" automáticamente
-            const textoLimpio = texto.trim();
-            // Cambio: quitar $ del final para permitir texto adicional
-            const patron = /^(av|ave|aven|aveni|avenid|avenida)\s+(\d+)(\s|$)/i;
-            const match = textoLimpio.match(patron);
-
-            if (match) {
-                // Si encuentra "av/avenida + número", insertar "n" después del número
-                return textoLimpio.replace(patron, '$1 $2n$3');
-            }
-
-            return textoLimpio;
+            // Simplemente limpiar el texto, sin modificaciones
+            return texto.trim();
         }
 
         // Función para verificar y calcular automáticamente

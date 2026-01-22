@@ -11921,6 +11921,19 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS modelo_vehiculo VARCHAR(20)")
         mensajes.append("✅ terceros.modelo_vehiculo")
 
+        # Campos de coordenadas en solicitudes_transporte
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS origen_lat DECIMAL(10,8)")
+        mensajes.append("✅ solicitudes_transporte.origen_lat")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS origen_lon DECIMAL(11,8)")
+        mensajes.append("✅ solicitudes_transporte.origen_lon")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS destino_lat DECIMAL(10,8)")
+        mensajes.append("✅ solicitudes_transporte.destino_lat")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS destino_lon DECIMAL(11,8)")
+        mensajes.append("✅ solicitudes_transporte.destino_lon")
+
         # Campos en solicitudes_transporte para conductor
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_id INTEGER")
         mensajes.append("✅ solicitudes_transporte.conductor_id")
@@ -19865,6 +19878,10 @@ def api_solicitar_servicio():
         tipo_servicio = data.get('tipo_servicio')
         origen_texto = data.get('origen_texto')
         destino_texto = data.get('destino_texto')
+        origen_lat = data.get('origen_lat')
+        origen_lon = data.get('origen_lon')
+        destino_lat = data.get('destino_lat')
+        destino_lon = data.get('destino_lon')
         distancia_km = data.get('distancia_km')
         tiempo_estimado_minutos = data.get('tiempo_estimado_minutos')
         precio = data.get('precio')
@@ -19874,13 +19891,15 @@ def api_solicitar_servicio():
         solicitud_id = conn.execute("""
             INSERT INTO solicitudes_transporte (
                 tercero_id, tipo_servicio, origen_texto, destino_texto,
+                origen_lat, origen_lon, destino_lat, destino_lon,
                 distancia_km, tiempo_estimado_minutos, precio,
                 horas_acompanamiento, notas, estado, fecha_solicitud, fecha_servicio
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id
         """, (
             tercero_id, tipo_servicio, origen_texto, destino_texto,
+            origen_lat, origen_lon, destino_lat, destino_lon,
             distancia_km, tiempo_estimado_minutos, precio,
             horas_acompanamiento, notas
         )).fetchone()['id']

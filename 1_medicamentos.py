@@ -18851,6 +18851,8 @@ def api_conductor_servicios_disponibles():
             FROM solicitudes_transporte s
             JOIN terceros t ON s.tercero_id = t.id
             WHERE s.estado = 'pendiente' AND s.tipo_servicio = 'transporte'
+              AND s.origen_lat IS NOT NULL AND s.origen_lon IS NOT NULL
+              AND s.destino_lat IS NOT NULL AND s.destino_lon IS NOT NULL
             ORDER BY s.fecha_solicitud DESC
             LIMIT 20
         """).fetchall()

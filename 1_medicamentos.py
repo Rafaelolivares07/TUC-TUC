@@ -11948,6 +11948,13 @@ def migrar_conductor():
         mensajes.append("✅ solicitudes_transporte.destino_lon")
 
         # Campos en solicitudes_transporte para conductor
+        # Eliminar FK constraint vieja que apunta a colaboradores_entrega
+        try:
+            conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_conductor_id_fkey")
+            mensajes.append("✅ Eliminada FK constraint conductor_id -> colaboradores_entrega")
+        except:
+            pass
+
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_id INTEGER")
         mensajes.append("✅ solicitudes_transporte.conductor_id")
 

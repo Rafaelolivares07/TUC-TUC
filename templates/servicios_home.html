@@ -1637,8 +1637,63 @@
         }
 
         let intervaloPollingViaje = null;
+        let estadoAnteriorViaje = null;
+
+        // Función para reproducir sonido de alerta
+        function reproducirSonidoAlerta() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('No se pudo reproducir sonido');
+            }
+        }
+
+        // Sonido especial para cancelación (3 beeps)
+        function reproducirSonidoCancelado() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.2, 0.4].forEach(delay => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    oscillator.frequency.value = 400;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime + delay);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + delay + 0.15);
+                    oscillator.start(audioContext.currentTime + delay);
+                    oscillator.stop(audioContext.currentTime + delay + 0.15);
+                });
+            } catch (e) {
+                console.log('No se pudo reproducir sonido');
+            }
+        }
 
         function mostrarViajeEnCurso(viaje) {
+            // Detectar cambio de estado y reproducir sonido
+            if (estadoAnteriorViaje && estadoAnteriorViaje !== viaje.estado) {
+                if (viaje.estado === 'recogiendo') {
+                    // Doble sonido cuando el conductor llega
+                    reproducirSonidoAlerta();
+                    setTimeout(() => reproducirSonidoAlerta(), 600);
+                } else {
+                    reproducirSonidoAlerta();
+                }
+            }
+            estadoAnteriorViaje = viaje.estado;
             // Ocultar formulario y mostrar estado del viaje
             document.getElementById('form-transporte').classList.add('hidden');
 
@@ -1648,6 +1703,7 @@
                 conductorHTML = `
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                         <h3 class="font-bold text-blue-800 mb-2">🚗 Tu conductor</h3>
+                        ${viaje.conductor_nombre ? `<p class="text-lg font-bold text-gray-800 mb-2">${viaje.conductor_nombre}</p>` : ''}
                         <div class="grid grid-cols-2 gap-2 text-sm">
                             <div><span class="text-gray-600">Placa:</span> <strong>${viaje.conductor_placa}</strong></div>
                             <div><span class="text-gray-600">Color:</span> <strong>${viaje.conductor_color || '-'}</strong></div>
@@ -1705,6 +1761,12 @@
                         </button>
                     ` : ''}
 
+                    ${viaje.estado === 'cancelada_conductor' ? `
+                        <button onclick="cerrarViajeCompletado()" class="w-full bg-gray-500 text-white py-2 rounded font-medium hover:bg-gray-600 transition">
+                            Entendido, cerrar
+                        </button>
+                    ` : ''}
+
                     ${viaje.estado === 'completada' ? `
                         <button onclick="cerrarViajeCompletado()" class="w-full bg-green-500 text-white py-2 rounded font-medium hover:bg-green-600 transition">
                             ¡Gracias! Cerrar
@@ -1721,8 +1783,8 @@
             const header = document.querySelector('.max-w-4xl > .bg-white');
             header.insertAdjacentHTML('afterend', estadoHTML);
 
-            // Iniciar polling si el viaje no está completado
-            if (viaje.estado !== 'completada' && viaje.estado !== 'cancelada') {
+            // Iniciar polling si el viaje no está completado ni cancelado
+            if (viaje.estado !== 'completada' && viaje.estado !== 'cancelada' && viaje.estado !== 'cancelada_conductor') {
                 if (!intervaloPollingViaje) {
                     intervaloPollingViaje = setInterval(actualizarEstadoViaje, 5000);
                 }
@@ -1731,6 +1793,11 @@
                     clearInterval(intervaloPollingViaje);
                     intervaloPollingViaje = null;
                 }
+            }
+
+            // Si el conductor canceló, mostrar alerta especial
+            if (viaje.estado === 'cancelada_conductor') {
+                reproducirSonidoCancelado();
             }
         }
 
@@ -1764,7 +1831,8 @@
                 'recogiendo': 'bg-orange-100 text-orange-800',
                 'en_curso': 'bg-green-100 text-green-800',
                 'completada': 'bg-gray-100 text-gray-800',
-                'cancelada': 'bg-red-100 text-red-800'
+                'cancelada': 'bg-red-100 text-red-800',
+                'cancelada_conductor': 'bg-red-100 text-red-800'
             };
             return clases[estado] || 'bg-gray-100 text-gray-800';
         }
@@ -1776,7 +1844,8 @@
                 'recogiendo': '📍 ¡Tu conductor llegó!',
                 'en_curso': '🛣️ En viaje al destino',
                 'completada': '✅ ¡Llegaste a tu destino!',
-                'cancelada': '❌ Cancelado'
+                'cancelada': '❌ Cancelado',
+                'cancelada_conductor': '❌ El conductor canceló el viaje'
             };
             return textos[estado] || estado;
         }

@@ -18854,6 +18854,7 @@ def api_conductor_servicios_disponibles():
         rows = conn.execute("""
             SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
                    s.destino_lat, s.destino_lon, s.precio, s.fecha_solicitud,
+                   s.distancia_km, s.tiempo_estimado_minutos,
                    t.nombre as usuario_nombre
             FROM solicitudes_transporte s
             JOIN terceros t ON s.tercero_id = t.id
@@ -18882,12 +18883,14 @@ def api_conductor_servicios_disponibles():
                 'destino_lon': float(row['destino_lon']),
                 'tarifa': row['precio'],
                 'usuario_nombre': row['usuario_nombre'],
-                'distancia_metros': round(dist),
-                'distancia_texto': f"{dist_km:.1f} km · ~{tiempo_est} min"
+                'distancia_conductor': round(dist),
+                'distancia_conductor_texto': f"{dist_km:.1f} km · ~{tiempo_est} min",
+                'distancia_recorrido_km': float(row['distancia_km']) if row['distancia_km'] else None,
+                'tiempo_recorrido_min': row['tiempo_estimado_minutos']
             })
 
-        # Ordenar por distancia
-        servicios.sort(key=lambda x: x['distancia_metros'])
+        # Ordenar por distancia del conductor al origen
+        servicios.sort(key=lambda x: x['distancia_conductor'])
 
         return jsonify({'ok': True, 'servicios': servicios})
     except Exception as e:
@@ -19046,6 +19049,35 @@ def api_conductor_finalizar_viaje(servicio_id):
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/cancelar-viaje/<int:servicio_id>', methods=['POST'])
+def api_conductor_cancelar_viaje(servicio_id):
+    """Conductor cancela un viaje activo"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        # Solo cancelar si el conductor es el asignado y el viaje está en un estado cancelable
+        result = conn.execute("""
+            UPDATE solicitudes_transporte
+            SET estado = 'cancelada_conductor', conductor_id = NULL,
+                conductor_placa = NULL, conductor_color = NULL,
+                conductor_marca = NULL, conductor_modelo = NULL
+            WHERE id = %s AND conductor_id = %s AND estado IN ('aceptada', 'recogiendo', 'en_curso')
+            RETURNING id
+        """, (servicio_id, session['usuario_id']))
+        updated = result.fetchone()
+        conn.commit()
+        conn.close()
+
+        if updated:
+            return jsonify({'ok': True})
+        else:
+            return jsonify({'ok': False, 'error': 'No se pudo cancelar el viaje'}), 400
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -20029,14 +20061,16 @@ def api_mi_viaje_en_curso():
     try:
         conn = get_db_connection()
         viaje = conn.execute("""
-            SELECT id, tipo_servicio, origen_texto, destino_texto,
-                   distancia_km, tiempo_estimado_minutos, precio, estado,
-                   fecha_solicitud, conductor_placa, conductor_color,
-                   conductor_marca, conductor_modelo
-            FROM solicitudes_transporte
-            WHERE tercero_id = %s
-            AND estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso')
-            ORDER BY fecha_solicitud DESC
+            SELECT s.id, s.tipo_servicio, s.origen_texto, s.destino_texto,
+                   s.distancia_km, s.tiempo_estimado_minutos, s.precio, s.estado,
+                   s.fecha_solicitud, s.conductor_placa, s.conductor_color,
+                   s.conductor_marca, s.conductor_modelo, s.conductor_id,
+                   c.nombre as conductor_nombre, c.telefono as conductor_telefono
+            FROM solicitudes_transporte s
+            LEFT JOIN terceros c ON s.conductor_id = c.id
+            WHERE s.tercero_id = %s
+            AND s.estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso', 'cancelada_conductor')
+            ORDER BY s.fecha_solicitud DESC
             LIMIT 1
         """, (session['usuario_id'],)).fetchone()
         conn.close()
@@ -20057,7 +20091,9 @@ def api_mi_viaje_en_curso():
                     'conductor_placa': viaje['conductor_placa'],
                     'conductor_color': viaje['conductor_color'],
                     'conductor_marca': viaje['conductor_marca'],
-                    'conductor_modelo': viaje['conductor_modelo']
+                    'conductor_modelo': viaje['conductor_modelo'],
+                    'conductor_nombre': viaje['conductor_nombre'],
+                    'conductor_telefono': viaje['conductor_telefono']
                 }
             })
         else:

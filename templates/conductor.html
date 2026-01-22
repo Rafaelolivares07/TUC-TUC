@@ -57,32 +57,45 @@
                 <a id="btn-waze-origen" href="#" target="_blank" class="block w-full bg-blue-500 text-white py-3 px-4 rounded font-bold text-center mb-2 hover:bg-blue-600">
                     📍 Navegar con Waze
                 </a>
-                <button id="btn-llegue" class="w-full bg-yellow-500 text-gray-800 py-3 px-4 rounded font-bold hover:bg-yellow-600">
+                <button id="btn-llegue" class="w-full bg-yellow-500 text-gray-800 py-3 px-4 rounded font-bold hover:bg-yellow-600 mb-2">
                     ✓ Ya llegué
+                </button>
+                <button onclick="cancelarViajeConductor()" class="w-full border-2 border-red-500 text-red-500 py-2 rounded font-medium hover:bg-red-50">
+                    Cancelar viaje
                 </button>
             </div>
 
             <div id="viaje-estado-recogiendo" class="hidden">
                 <h2 class="text-lg font-bold text-orange-600 mb-2">⏳ Esperando al usuario</h2>
                 <div class="bg-yellow-100 rounded p-3 mb-3">
+                    <p class="text-sm text-gray-600">Usuario:</p>
+                    <p id="viaje-usuario-nombre-recogiendo" class="font-bold text-gray-800 mb-2">-</p>
                     <p class="text-center text-gray-700">El usuario ha sido notificado de tu llegada</p>
                 </div>
-                <button id="btn-iniciar-viaje" class="w-full bg-green-500 text-white py-3 px-4 rounded font-bold hover:bg-green-600">
+                <button id="btn-iniciar-viaje" class="w-full bg-green-500 text-white py-3 px-4 rounded font-bold hover:bg-green-600 mb-2">
                     🚀 Usuario abordó - Iniciar viaje
+                </button>
+                <button onclick="cancelarViajeConductor()" class="w-full border-2 border-red-500 text-red-500 py-2 rounded font-medium hover:bg-red-50">
+                    Cancelar viaje
                 </button>
             </div>
 
             <div id="viaje-estado-en-curso" class="hidden">
                 <h2 class="text-lg font-bold text-blue-600 mb-2">🚗 Viaje en curso</h2>
                 <div class="bg-gray-100 rounded p-3 mb-3">
+                    <p class="text-sm text-gray-600">Usuario:</p>
+                    <p id="viaje-usuario-nombre-encurso" class="font-bold text-gray-800 mb-2">-</p>
                     <p class="text-sm text-gray-600">Destino:</p>
                     <p id="viaje-destino" class="font-bold text-gray-800">-</p>
                 </div>
                 <a id="btn-waze-destino" href="#" target="_blank" class="block w-full bg-blue-500 text-white py-3 px-4 rounded font-bold text-center mb-2 hover:bg-blue-600">
                     📍 Navegar con Waze
                 </a>
-                <button id="btn-finalizar-viaje" class="w-full bg-red-500 text-white py-3 px-4 rounded font-bold hover:bg-red-600">
+                <button id="btn-finalizar-viaje" class="w-full bg-red-500 text-white py-3 px-4 rounded font-bold hover:bg-red-600 mb-2">
                     🏁 Llegamos al destino
+                </button>
+                <button onclick="cancelarViajeConductor()" class="w-full border-2 border-gray-400 text-gray-600 py-2 rounded font-medium hover:bg-gray-100">
+                    Cancelar viaje
                 </button>
             </div>
 
@@ -150,6 +163,52 @@
         let ubicacionConductor = null;
         let viajeActivo = null;
         let intervaloActualizacion = null;
+        let estadoAnteriorViaje = null;
+        let serviciosAnterioresIds = [];
+
+        // Función para reproducir sonido de alerta
+        function reproducirSonidoAlerta() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = 900;
+                oscillator.type = 'sine';
+                gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('No se pudo reproducir sonido');
+            }
+        }
+
+        // Sonido especial para viaje cancelado
+        function reproducirSonidoCancelado() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // Tres beeps cortos
+                [0, 0.2, 0.4].forEach(delay => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    oscillator.frequency.value = 400;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime + delay);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + delay + 0.15);
+                    oscillator.start(audioContext.currentTime + delay);
+                    oscillator.stop(audioContext.currentTime + delay + 0.15);
+                });
+            } catch (e) {
+                console.log('No se pudo reproducir sonido');
+            }
+        }
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -214,13 +273,36 @@
                 const data = await response.json();
 
                 if (data.ok && data.viaje) {
+                    // Detectar cambio de estado
+                    if (estadoAnteriorViaje && estadoAnteriorViaje !== data.viaje.estado) {
+                        reproducirSonidoAlerta();
+                    }
+                    estadoAnteriorViaje = data.viaje.estado;
+
                     viajeActivo = data.viaje;
                     mostrarViajeActivo();
+
+                    // Iniciar polling para detectar cancelación del usuario
+                    if (!intervaloActualizacion) {
+                        intervaloActualizacion = setInterval(verificarViajeActivo, 5000);
+                    }
                 } else {
+                    // Verificar si fue cancelado (tenía viaje antes y ahora no)
+                    if (estadoAnteriorViaje && estadoAnteriorViaje !== 'completada') {
+                        reproducirSonidoCancelado();
+                        alert('⚠️ El usuario canceló el viaje');
+                        estadoAnteriorViaje = null;
+                    }
+
                     // No tiene viaje activo, mostrar lista de servicios
+                    document.getElementById('seccion-viaje-activo').classList.add('hidden');
                     document.getElementById('seccion-servicios').classList.remove('hidden');
                     cargarServiciosDisponibles();
-                    // Actualizar cada 10 segundos
+
+                    // Limpiar intervalo anterior y crear nuevo para servicios
+                    if (intervaloActualizacion) {
+                        clearInterval(intervaloActualizacion);
+                    }
                     intervaloActualizacion = setInterval(cargarServiciosDisponibles, 10000);
                 }
             } catch (error) {
@@ -249,8 +331,10 @@
                 document.getElementById('btn-waze-origen').href = `https://waze.com/ul?ll=${viajeActivo.origen_lat},${viajeActivo.origen_lon}&navigate=yes`;
             } else if (estado === 'recogiendo') {
                 document.getElementById('viaje-estado-recogiendo').classList.remove('hidden');
+                document.getElementById('viaje-usuario-nombre-recogiendo').textContent = viajeActivo.usuario_nombre;
             } else if (estado === 'en_curso') {
                 document.getElementById('viaje-estado-en-curso').classList.remove('hidden');
+                document.getElementById('viaje-usuario-nombre-encurso').textContent = viajeActivo.usuario_nombre;
                 document.getElementById('viaje-destino').textContent = viajeActivo.destino_texto;
                 document.getElementById('btn-waze-destino').href = `https://waze.com/ul?ll=${viajeActivo.destino_lat},${viajeActivo.destino_lon}&navigate=yes`;
             } else if (estado === 'cobrar') {
@@ -282,27 +366,41 @@
                 const sinServicios = document.getElementById('sin-servicios');
 
                 if (data.ok && data.servicios && data.servicios.length > 0) {
+                    // Detectar nuevos servicios
+                    const nuevosIds = data.servicios.map(s => s.id);
+                    const hayNuevos = nuevosIds.some(id => !serviciosAnterioresIds.includes(id));
+                    if (hayNuevos && serviciosAnterioresIds.length > 0) {
+                        reproducirSonidoAlerta();
+                    }
+                    serviciosAnterioresIds = nuevosIds;
+
                     lista.innerHTML = '';
                     sinServicios.classList.add('hidden');
 
                     data.servicios.forEach(servicio => {
                         const comision = Math.round(servicio.tarifa * 0.05);
                         const ganancia = servicio.tarifa - comision;
+                        const distRecorrido = servicio.distancia_recorrido_km ? servicio.distancia_recorrido_km.toFixed(1) : '?';
+                        const tiempoRecorrido = servicio.tiempo_recorrido_min || '?';
 
                         const card = document.createElement('div');
                         card.className = 'border border-gray-300 rounded-lg p-3 hover:border-yellow-500 transition';
                         card.innerHTML = `
                             <div class="flex justify-between items-start mb-2">
                                 <div class="flex-1">
-                                    <p class="text-sm text-gray-600">📍 ${servicio.origen_texto}</p>
-                                    <p class="text-sm font-bold text-gray-800">→ ${servicio.destino_texto}</p>
+                                    <p class="text-xs text-gray-500 mb-1">🚗 Estás a ${servicio.distancia_conductor_texto}</p>
+                                    <p class="text-sm text-gray-700"><span class="font-medium">📍 Origen:</span> ${servicio.origen_texto}</p>
+                                    <p class="text-sm text-gray-700"><span class="font-medium">🏁 Destino:</span> ${servicio.destino_texto}</p>
                                 </div>
-                                <span class="text-xs bg-gray-200 px-2 py-1 rounded">${servicio.distancia_texto}</span>
                             </div>
-                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
+                            <div class="flex justify-between items-center text-xs text-gray-500 mb-2">
+                                <span>📏 Recorrido: ${distRecorrido} km</span>
+                                <span>⏱️ Tiempo est: ${tiempoRecorrido} min</span>
+                            </div>
+                            <div class="flex justify-between items-center pt-2 border-t border-gray-200">
                                 <div>
                                     <span class="font-bold text-gray-800">$${servicio.tarifa.toLocaleString('es-CO')}</span>
-                                    <span class="text-xs text-green-600 ml-2">Tu ganancia: $${ganancia.toLocaleString('es-CO')}</span>
+                                    <span class="text-xs text-green-600 ml-2">Ganas: $${ganancia.toLocaleString('es-CO')}</span>
                                 </div>
                                 <button onclick="tomarServicio(${servicio.id})" class="bg-yellow-500 text-gray-800 px-4 py-2 rounded font-bold text-sm hover:bg-yellow-600">
                                     TOMAR
@@ -423,6 +521,7 @@
 
                 if (data.ok) {
                     viajeActivo = null;
+                    estadoAnteriorViaje = 'completada';
                     document.getElementById('seccion-viaje-activo').classList.add('hidden');
                     document.getElementById('seccion-servicios').classList.remove('hidden');
                     cargarServiciosDisponibles();
@@ -430,6 +529,34 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
+            }
+        }
+
+        // Cancelar viaje por conductor
+        async function cancelarViajeConductor() {
+            if (!confirm('¿Estás seguro de cancelar este viaje?')) return;
+
+            try {
+                const response = await fetch(`/api/conductor/cancelar-viaje/${viajeActivo.id}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert('Viaje cancelado');
+                    viajeActivo = null;
+                    estadoAnteriorViaje = null;
+                    document.getElementById('seccion-viaje-activo').classList.add('hidden');
+                    document.getElementById('seccion-servicios').classList.remove('hidden');
+                    cargarServiciosDisponibles();
+                    if (intervaloActualizacion) clearInterval(intervaloActualizacion);
+                    intervaloActualizacion = setInterval(cargarServiciosDisponibles, 10000);
+                } else {
+                    alert(data.error || 'Error al cancelar');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al cancelar el viaje');
             }
         }
 

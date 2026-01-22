@@ -20030,11 +20030,11 @@ def api_mi_viaje_en_curso():
         conn = get_db_connection()
         viaje = conn.execute("""
             SELECT id, tipo_servicio, origen_texto, destino_texto,
-                   distancia_km, tiempo_estimado_minutos, tarifa as precio, estado,
+                   distancia_km, tiempo_estimado_minutos, precio, estado,
                    fecha_solicitud, conductor_placa, conductor_color,
                    conductor_marca, conductor_modelo
             FROM solicitudes_transporte
-            WHERE usuario_id = %s
+            WHERE tercero_id = %s
             AND estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso')
             ORDER BY fecha_solicitud DESC
             LIMIT 1

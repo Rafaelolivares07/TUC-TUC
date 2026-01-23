@@ -568,8 +568,11 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center justify-between">
-                                    <label class="text-sm font-medium text-gray-700">Viajes promedio por hora</label>
-                                    <input type="number" id="transporte_viajes_promedio_hora" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="2">
+                                    <label class="text-sm font-medium text-gray-700">Distancia promedio por viaje</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" id="transporte_km_promedio_viaje" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="10" step="0.1">
+                                        <span class="text-gray-600 text-sm">km</span>
+                                    </div>
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-medium text-gray-700">Redondeo tarifa</label>
@@ -618,15 +621,60 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-3 mb-3">
-                                <div class="bg-white p-2 rounded-lg border">
-                                    <p class="text-xs text-gray-600">Tarifa km PICO</p>
-                                    <p id="tarifa_km_pico_calculada" class="text-lg font-bold text-red-600">$ 3,000</p>
-                                </div>
-                                <div class="bg-white p-2 rounded-lg border">
-                                    <p class="text-xs text-gray-600">Tarifa km VALLE</p>
-                                    <p id="tarifa_km_valle_calculada" class="text-lg font-bold text-green-600">$ 1,765</p>
-                                </div>
+                            <!-- CÁLCULOS POR HORA (derivados) -->
+                            <div class="bg-white p-3 rounded-lg border mb-3">
+                                <h5 class="text-xs font-semibold text-gray-500 uppercase mb-2">Cálculos por hora</h5>
+                                <table class="w-full text-xs">
+                                    <thead>
+                                        <tr class="border-b">
+                                            <th class="text-left py-1 text-gray-600">Concepto</th>
+                                            <th class="text-right py-1 text-red-600">PICO</th>
+                                            <th class="text-right py-1 text-green-600">VALLE</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="py-0.5 text-gray-600">Viajes/hora (V÷D)</td>
+                                            <td id="calc_viajes_hora_pico" class="text-right font-medium">1.0</td>
+                                            <td id="calc_viajes_hora_valle" class="text-right font-medium">1.7</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-0.5 text-gray-600">Tarifa por km (I÷V)</td>
+                                            <td id="calc_tarifa_km_pico" class="text-right font-medium text-red-600">$ 3,000</td>
+                                            <td id="calc_tarifa_km_valle" class="text-right font-medium text-green-600">$ 1,765</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-0.5 text-gray-600">Km reales/hora</td>
+                                            <td id="calc_km_reales_pico" class="text-right font-medium">8.7</td>
+                                            <td id="calc_km_reales_valle" class="text-right font-medium">14.7</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-0.5 text-gray-600">Base/hora (B×N)</td>
+                                            <td id="calc_base_hora_pico" class="text-right font-medium">$ 5,000</td>
+                                            <td id="calc_base_hora_valle" class="text-right font-medium">$ 8,500</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-0.5 text-gray-600">Ingreso km/hora</td>
+                                            <td id="calc_km_hora_pico" class="text-right font-medium">$ 26,000</td>
+                                            <td id="calc_km_hora_valle" class="text-right font-medium">$ 26,000</td>
+                                        </tr>
+                                        <tr class="border-t">
+                                            <td class="py-0.5 font-medium text-gray-700">Subtotal/hora</td>
+                                            <td id="calc_subtotal_pico" class="text-right font-bold">$ 31,000</td>
+                                            <td id="calc_subtotal_valle" class="text-right font-bold">$ 34,500</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-0.5 text-gray-600">Comisión/hora</td>
+                                            <td id="calc_comision_hora_pico" class="text-right font-medium text-blue-600">-$ 1,550</td>
+                                            <td id="calc_comision_hora_valle" class="text-right font-medium text-blue-600">-$ 1,725</td>
+                                        </tr>
+                                        <tr class="border-t">
+                                            <td class="py-0.5 font-semibold text-gray-800">Neto conductor/hora</td>
+                                            <td id="calc_neto_hora_pico" class="text-right font-bold text-red-700">$ 29,450</td>
+                                            <td id="calc_neto_hora_valle" class="text-right font-bold text-green-700">$ 32,775</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
 
                             <div class="grid grid-cols-2 gap-3">
@@ -660,10 +708,18 @@
                                             <span class="font-semibold">TOTAL:</span>
                                             <span id="sim_pico_total" class="font-bold text-red-700">$ 20,000</span>
                                         </div>
+                                        <div class="flex justify-between">
+                                            <span id="sim_pico_comision_label" class="text-gray-600">Comisión 5%:</span>
+                                            <span id="sim_pico_comision" class="font-medium text-blue-600">-$ 1,000</span>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="font-semibold">Neto conductor:</span>
+                                            <span id="sim_pico_neto" class="font-bold text-red-700">$ 19,000</span>
+                                        </div>
                                         <hr class="my-1 border-red-200">
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Ingreso/h:</span>
-                                            <span id="sim_pico_ingreso_hora" class="font-bold text-green-600">$ 31,579 ✅</span>
+                                            <span id="sim_pico_ingreso_hora" class="font-bold text-green-600">$ 30,000 ✅</span>
                                         </div>
                                         <p id="sim_pico_vs_objetivo" class="text-xs text-gray-500 text-right">(vs $30,000 obj)</p>
                                     </div>
@@ -699,10 +755,18 @@
                                             <span class="font-semibold">TOTAL:</span>
                                             <span id="sim_valle_total" class="font-bold text-green-700">$ 14,000</span>
                                         </div>
+                                        <div class="flex justify-between">
+                                            <span id="sim_valle_comision_label" class="text-gray-600">Comisión 5%:</span>
+                                            <span id="sim_valle_comision" class="font-medium text-blue-600">-$ 700</span>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="font-semibold">Neto conductor:</span>
+                                            <span id="sim_valle_neto" class="font-bold text-green-700">$ 13,300</span>
+                                        </div>
                                         <hr class="my-1 border-green-200">
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Ingreso/h:</span>
-                                            <span id="sim_valle_ingreso_hora" class="font-bold text-green-600">$ 32,813 ✅</span>
+                                            <span id="sim_valle_ingreso_hora" class="font-bold text-green-600">$ 31,184 ✅</span>
                                         </div>
                                         <p id="sim_valle_vs_objetivo" class="text-xs text-gray-500 text-right">(vs $30,000 obj)</p>
                                     </div>
@@ -1493,7 +1557,7 @@
             'transporte_velocidad_pico',
             'transporte_velocidad_valle',
             'transporte_tiempo_espera_recogida',
-            'transporte_viajes_promedio_hora',
+            'transporte_km_promedio_viaje',
             'transporte_redondeo_tarifa',
             'transporte_comision_plataforma',
             'transporte_pico_lv_am_inicio',
@@ -1568,75 +1632,140 @@
         }
 
         function calcularTarifasTransporte() {
-            const ingresoObjetivo = parseFloat(document.getElementById('transporte_ingreso_hora_objetivo').value) || 30000;
-            const velocidadPico = parseFloat(document.getElementById('transporte_velocidad_pico').value) || 10;
-            const velocidadValle = parseFloat(document.getElementById('transporte_velocidad_valle').value) || 17;
+            const B = parseFloat(document.getElementById('transporte_tarifa_base').value) || 5000;
+            const D = parseFloat(document.getElementById('transporte_km_promedio_viaje').value) || 10;
+            const E = parseFloat(document.getElementById('transporte_tiempo_espera_recogida').value) || 8;
+            const C = parseFloat(document.getElementById('transporte_comision_plataforma').value) || 5;
+            const I = parseFloat(document.getElementById('transporte_ingreso_hora_objetivo').value) || 30000;
+            const Vp = parseFloat(document.getElementById('transporte_velocidad_pico').value) || 10;
+            const Vv = parseFloat(document.getElementById('transporte_velocidad_valle').value) || 17;
 
-            const tarifaKmPico = ingresoObjetivo / velocidadPico;
-            const tarifaKmValle = ingresoObjetivo / velocidadValle;
+            // Fórmulas del modelo (por hora)
+            const Np = Vp / D;  // viajes/hora pico
+            const Nv = Vv / D;  // viajes/hora valle
 
-            document.getElementById('tarifa_km_pico_calculada').textContent = '$ ' + Math.round(tarifaKmPico).toLocaleString('es-CO');
-            document.getElementById('tarifa_km_valle_calculada').textContent = '$ ' + Math.round(tarifaKmValle).toLocaleString('es-CO');
+            const tarifaKmPico = I / Vp;
+            const tarifaKmValle = I / Vv;
+
+            const kmRealesPico = (Vp / 60) * (60 - E);
+            const kmRealesValle = (Vv / 60) * (60 - E);
+
+            const baseHoraPico = B * Np;
+            const baseHoraValle = B * Nv;
+
+            const kmHoraPico = tarifaKmPico * kmRealesPico;
+            const kmHoraValle = tarifaKmValle * kmRealesValle;
+
+            const subtotalPico = baseHoraPico + kmHoraPico;
+            const subtotalValle = baseHoraValle + kmHoraValle;
+
+            const comisionHoraPico = subtotalPico * (C / 100);
+            const comisionHoraValle = subtotalValle * (C / 100);
+
+            const netoHoraPico = subtotalPico - comisionHoraPico;
+            const netoHoraValle = subtotalValle - comisionHoraValle;
+
+            // Actualizar tabla de cálculos
+            const fmt = (v) => '$ ' + Math.round(v).toLocaleString('es-CO');
+
+            document.getElementById('calc_viajes_hora_pico').textContent = Np.toFixed(1);
+            document.getElementById('calc_viajes_hora_valle').textContent = Nv.toFixed(1);
+
+            document.getElementById('calc_tarifa_km_pico').textContent = fmt(tarifaKmPico);
+            document.getElementById('calc_tarifa_km_valle').textContent = fmt(tarifaKmValle);
+
+            document.getElementById('calc_km_reales_pico').textContent = kmRealesPico.toFixed(1);
+            document.getElementById('calc_km_reales_valle').textContent = kmRealesValle.toFixed(1);
+
+            document.getElementById('calc_base_hora_pico').textContent = fmt(baseHoraPico);
+            document.getElementById('calc_base_hora_valle').textContent = fmt(baseHoraValle);
+
+            document.getElementById('calc_km_hora_pico').textContent = fmt(kmHoraPico);
+            document.getElementById('calc_km_hora_valle').textContent = fmt(kmHoraValle);
+
+            document.getElementById('calc_subtotal_pico').textContent = fmt(subtotalPico);
+            document.getElementById('calc_subtotal_valle').textContent = fmt(subtotalValle);
+
+            document.getElementById('calc_comision_hora_pico').textContent = '-' + fmt(comisionHoraPico);
+            document.getElementById('calc_comision_hora_valle').textContent = '-' + fmt(comisionHoraValle);
+
+            document.getElementById('calc_neto_hora_pico').textContent = fmt(netoHoraPico);
+            document.getElementById('calc_neto_hora_valle').textContent = fmt(netoHoraValle);
         }
 
         function actualizarSimulador() {
-            const distancia = parseFloat(document.getElementById('simulador_distancia').value) || 5;
-            const tarifaBase = parseFloat(document.getElementById('transporte_tarifa_base').value) || 5000;
-            const ingresoObjetivo = parseFloat(document.getElementById('transporte_ingreso_hora_objetivo').value) || 30000;
-            const velocidadPico = parseFloat(document.getElementById('transporte_velocidad_pico').value) || 10;
-            const velocidadValle = parseFloat(document.getElementById('transporte_velocidad_valle').value) || 17;
-            const tiempoEspera = parseFloat(document.getElementById('transporte_tiempo_espera_recogida').value) || 8;
+            const km = parseFloat(document.getElementById('simulador_distancia').value) || 5;
+            const B = parseFloat(document.getElementById('transporte_tarifa_base').value) || 5000;
+            const I = parseFloat(document.getElementById('transporte_ingreso_hora_objetivo').value) || 30000;
+            const Vp = parseFloat(document.getElementById('transporte_velocidad_pico').value) || 10;
+            const Vv = parseFloat(document.getElementById('transporte_velocidad_valle').value) || 17;
+            const E = parseFloat(document.getElementById('transporte_tiempo_espera_recogida').value) || 8;
             const redondeo = parseFloat(document.getElementById('transporte_redondeo_tarifa').value) || 500;
+            const C = parseFloat(document.getElementById('transporte_comision_plataforma').value) || 5;
 
-            // Tarifas por km
-            const tarifaKmPico = ingresoObjetivo / velocidadPico;
-            const tarifaKmValle = ingresoObjetivo / velocidadValle;
+            // Tarifas por km (del modelo)
+            const tarifaKmPico = I / Vp;
+            const tarifaKmValle = I / Vv;
 
-            // Tiempos
-            const tiempoRecorridoPico = (distancia / velocidadPico) * 60; // en minutos
-            const tiempoRecorridoValle = (distancia / velocidadValle) * 60;
-            const tiempoTotalPico = tiempoRecorridoPico + tiempoEspera;
-            const tiempoTotalValle = tiempoRecorridoValle + tiempoEspera;
+            // Tiempos del viaje simulado
+            const tiempoRecorridoPico = (km * 60) / Vp;
+            const tiempoRecorridoValle = (km * 60) / Vv;
+            const tiempoTotalPico = tiempoRecorridoPico + E;
+            const tiempoTotalValle = tiempoRecorridoValle + E;
 
-            // Tarifas con redondeo
-            const recorridoPicoSinRedondeo = distancia * tarifaKmPico;
-            const recorridoValleSinRedondeo = distancia * tarifaKmValle;
-            const recorridoPico = Math.round(recorridoPicoSinRedondeo / redondeo) * redondeo;
-            const recorridoValle = Math.round(recorridoValleSinRedondeo / redondeo) * redondeo;
-            const totalPico = tarifaBase + recorridoPico;
-            const totalValle = tarifaBase + recorridoValle;
+            // Valor km con CEILING (redondeo hacia arriba)
+            const valorKmPico = Math.ceil((km * tarifaKmPico) / redondeo) * redondeo;
+            const valorKmValle = Math.ceil((km * tarifaKmValle) / redondeo) * redondeo;
 
-            // Ingreso por hora
-            const ingresoPorHoraPico = (totalPico / tiempoTotalPico) * 60;
-            const ingresoPorHoraValle = (totalValle / tiempoTotalValle) * 60;
+            // Subtotal viaje
+            const subtotalPico = B + valorKmPico;
+            const subtotalValle = B + valorKmValle;
 
-            // Actualizar DOM - Hora Pico
+            // Comisión y neto
+            const comisionPico = subtotalPico * (C / 100);
+            const comisionValle = subtotalValle * (C / 100);
+            const netoPico = subtotalPico - comisionPico;
+            const netoValle = subtotalValle - comisionValle;
+
+            // Ingreso por hora (neto / tiempo total * 60)
+            const ingresoPorHoraPico = (netoPico / tiempoTotalPico) * 60;
+            const ingresoPorHoraValle = (netoValle / tiempoTotalValle) * 60;
+
+            const fmt = (v) => '$ ' + Math.round(v).toLocaleString('es-CO');
+
+            // DOM - Hora Pico
             document.getElementById('sim_pico_recorrido_tiempo').textContent = tiempoRecorridoPico.toFixed(1) + ' min';
-            document.getElementById('sim_pico_espera').textContent = tiempoEspera + ' min';
+            document.getElementById('sim_pico_espera').textContent = E + ' min';
             document.getElementById('sim_pico_tiempo_total').textContent = tiempoTotalPico.toFixed(1) + ' min';
-            document.getElementById('sim_pico_base').textContent = '$ ' + tarifaBase.toLocaleString('es-CO');
-            document.getElementById('sim_pico_recorrido').textContent = '$ ' + recorridoPico.toLocaleString('es-CO');
-            document.getElementById('sim_pico_total').textContent = '$ ' + totalPico.toLocaleString('es-CO');
+            document.getElementById('sim_pico_base').textContent = fmt(B);
+            document.getElementById('sim_pico_recorrido').textContent = fmt(valorKmPico);
+            document.getElementById('sim_pico_total').textContent = fmt(subtotalPico);
+            document.getElementById('sim_pico_comision_label').textContent = 'Comisión ' + C + '%:';
+            document.getElementById('sim_pico_comision').textContent = '-' + fmt(comisionPico);
+            document.getElementById('sim_pico_neto').textContent = fmt(netoPico);
 
-            const iconoPico = ingresoPorHoraPico >= ingresoObjetivo ? '✅' : '❌';
-            const colorPico = ingresoPorHoraPico >= ingresoObjetivo ? 'text-green-600' : 'text-red-600';
-            document.getElementById('sim_pico_ingreso_hora').textContent = '$ ' + Math.round(ingresoPorHoraPico).toLocaleString('es-CO') + ' ' + iconoPico;
+            const iconoPico = ingresoPorHoraPico >= I ? '✅' : '❌';
+            const colorPico = ingresoPorHoraPico >= I ? 'text-green-600' : 'text-red-600';
+            document.getElementById('sim_pico_ingreso_hora').textContent = fmt(ingresoPorHoraPico) + ' ' + iconoPico;
             document.getElementById('sim_pico_ingreso_hora').className = 'font-bold ' + colorPico;
-            document.getElementById('sim_pico_vs_objetivo').textContent = '(vs $' + ingresoObjetivo.toLocaleString('es-CO') + ' obj)';
+            document.getElementById('sim_pico_vs_objetivo').textContent = '(vs ' + fmt(I) + ' obj)';
 
-            // Actualizar DOM - Hora Valle
+            // DOM - Hora Valle
             document.getElementById('sim_valle_recorrido_tiempo').textContent = tiempoRecorridoValle.toFixed(1) + ' min';
-            document.getElementById('sim_valle_espera').textContent = tiempoEspera + ' min';
+            document.getElementById('sim_valle_espera').textContent = E + ' min';
             document.getElementById('sim_valle_tiempo_total').textContent = tiempoTotalValle.toFixed(1) + ' min';
-            document.getElementById('sim_valle_base').textContent = '$ ' + tarifaBase.toLocaleString('es-CO');
-            document.getElementById('sim_valle_recorrido').textContent = '$ ' + recorridoValle.toLocaleString('es-CO');
-            document.getElementById('sim_valle_total').textContent = '$ ' + totalValle.toLocaleString('es-CO');
+            document.getElementById('sim_valle_base').textContent = fmt(B);
+            document.getElementById('sim_valle_recorrido').textContent = fmt(valorKmValle);
+            document.getElementById('sim_valle_total').textContent = fmt(subtotalValle);
+            document.getElementById('sim_valle_comision_label').textContent = 'Comisión ' + C + '%:';
+            document.getElementById('sim_valle_comision').textContent = '-' + fmt(comisionValle);
+            document.getElementById('sim_valle_neto').textContent = fmt(netoValle);
 
-            const iconoValle = ingresoPorHoraValle >= ingresoObjetivo ? '✅' : '❌';
-            const colorValle = ingresoPorHoraValle >= ingresoObjetivo ? 'text-green-600' : 'text-red-600';
-            document.getElementById('sim_valle_ingreso_hora').textContent = '$ ' + Math.round(ingresoPorHoraValle).toLocaleString('es-CO') + ' ' + iconoValle;
+            const iconoValle = ingresoPorHoraValle >= I ? '✅' : '❌';
+            const colorValle = ingresoPorHoraValle >= I ? 'text-green-600' : 'text-red-600';
+            document.getElementById('sim_valle_ingreso_hora').textContent = fmt(ingresoPorHoraValle) + ' ' + iconoValle;
             document.getElementById('sim_valle_ingreso_hora').className = 'font-bold ' + colorValle;
-            document.getElementById('sim_valle_vs_objetivo').textContent = '(vs $' + ingresoObjetivo.toLocaleString('es-CO') + ' obj)';
+            document.getElementById('sim_valle_vs_objetivo').textContent = '(vs ' + fmt(I) + ' obj)';
         }
     </script>
 </body>

@@ -2030,6 +2030,13 @@
                         </div>
                     </div>
 
+                    ${viaje.estado === 'en_curso' && viaje.destino_lat && viaje.destino_lon ? `
+                        <a href="https://waze.com/ul?ll=${viaje.destino_lat},${viaje.destino_lon}&navigate=yes" target="_blank"
+                           class="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 mb-3">
+                            🗺️ Ver ruta en Waze
+                        </a>
+                    ` : ''}
+
                     ${viaje.estado === 'pendiente' || viaje.estado === 'aceptada' ? `
                         <button onclick="cancelarViaje(${viaje.id})" class="w-full border-2 border-red-500 text-red-500 py-2 rounded font-medium hover:bg-red-50 transition">
                             Cancelar viaje

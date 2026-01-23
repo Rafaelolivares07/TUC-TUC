@@ -20118,7 +20118,8 @@ def api_mi_viaje_en_curso():
                    s.distancia_km, s.tiempo_estimado_minutos, s.precio, s.estado,
                    s.fecha_solicitud, s.conductor_placa, s.conductor_color,
                    s.conductor_marca, s.conductor_modelo, s.conductor_id,
-                   s.origen_lat, s.origen_lon, s.conductor_lat, s.conductor_lon,
+                   s.origen_lat, s.origen_lon, s.destino_lat, s.destino_lon,
+                   s.conductor_lat, s.conductor_lon,
                    c.nombre as conductor_nombre, c.telefono as conductor_telefono
             FROM solicitudes_transporte s
             LEFT JOIN terceros c ON s.conductor_id = c.id
@@ -20150,6 +20151,8 @@ def api_mi_viaje_en_curso():
                     'conductor_telefono': viaje['conductor_telefono'],
                     'origen_lat': float(viaje['origen_lat']) if viaje['origen_lat'] else None,
                     'origen_lon': float(viaje['origen_lon']) if viaje['origen_lon'] else None,
+                    'destino_lat': float(viaje['destino_lat']) if viaje['destino_lat'] else None,
+                    'destino_lon': float(viaje['destino_lon']) if viaje['destino_lon'] else None,
                     'conductor_lat': float(viaje['conductor_lat']) if viaje['conductor_lat'] else None,
                     'conductor_lon': float(viaje['conductor_lon']) if viaje['conductor_lon'] else None
                 }

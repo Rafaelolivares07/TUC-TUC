@@ -11976,6 +11976,19 @@ def migrar_conductor():
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS fecha_completado TIMESTAMP")
         mensajes.append("✅ solicitudes_transporte.fecha_completado")
 
+        # Columnas de calificación
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS calificacion_usuario INTEGER")
+        mensajes.append("✅ solicitudes_transporte.calificacion_usuario")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS comentario_usuario VARCHAR(40)")
+        mensajes.append("✅ solicitudes_transporte.comentario_usuario")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS calificacion_conductor INTEGER")
+        mensajes.append("✅ solicitudes_transporte.calificacion_conductor")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS comentario_conductor VARCHAR(40)")
+        mensajes.append("✅ solicitudes_transporte.comentario_conductor")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -20139,6 +20152,60 @@ def api_cancelar_viaje(viaje_id):
 
         return jsonify({'ok': True, 'mensaje': 'Viaje cancelado'})
 
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/calificar-viaje/<int:viaje_id>', methods=['POST'])
+def api_calificar_viaje(viaje_id):
+    """Usuario califica al conductor"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    estrellas = data.get('estrellas', 0)
+    comentario = data.get('comentario', '')[:40]
+
+    if not (1 <= estrellas <= 5):
+        return jsonify({'ok': False, 'error': 'Calificación debe ser entre 1 y 5'}), 400
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE solicitudes_transporte
+            SET calificacion_usuario = %s, comentario_usuario = %s
+            WHERE id = %s AND tercero_id = %s AND estado = 'completada'
+        """, (estrellas, comentario, viaje_id, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/calificar-viaje/<int:servicio_id>', methods=['POST'])
+def api_conductor_calificar_viaje(servicio_id):
+    """Conductor califica al usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    estrellas = data.get('estrellas', 0)
+    comentario = data.get('comentario', '')[:40]
+
+    if not (1 <= estrellas <= 5):
+        return jsonify({'ok': False, 'error': 'Calificación debe ser entre 1 y 5'}), 400
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE solicitudes_transporte
+            SET calificacion_conductor = %s, comentario_conductor = %s
+            WHERE id = %s AND conductor_id = %s AND estado = 'completada'
+        """, (estrellas, comentario, servicio_id, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

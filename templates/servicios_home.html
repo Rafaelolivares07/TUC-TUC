@@ -14,6 +14,18 @@
     <!-- Leaflet Routing Machine CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 
+    <style>
+        .animate-bounce-in {
+            animation: bounceIn 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.08); opacity: 1; }
+            70% { transform: scale(0.95); }
+            100% { transform: scale(1); }
+        }
+    </style>
+
 </head>
 <body class="bg-gray-400">
 
@@ -913,8 +925,8 @@
 
                     // Mostrar mensaje de éxito y luego el viaje en curso
                     const mensajeExito = data.usuario && data.usuario.nuevo
-                        ? `¡Bienvenido ${data.usuario.nombre.split(' ')[0]}! Tu cuenta ha sido creada y tu solicitud #${data.solicitud_id} está en proceso.`
-                        : `¡Solicitud #${data.solicitud_id} enviada! Te contactaremos pronto.`;
+                        ? `¡Bienvenido ${data.usuario.nombre.split(' ')[0]}! Tu cuenta ha sido creada y tu solicitud está en proceso.`
+                        : `¡Solicitud enviada! Buscando conductor...`;
 
                     mostrarModalExito('¡Listo!', mensajeExito, () => {
                         // Mostrar el viaje en curso sin recargar la página
@@ -1753,13 +1765,142 @@
             }
         }
 
+        // Modal visual cuando el conductor llega
+        function mostrarModalConductorLlego() {
+            const modal = document.createElement('div');
+            modal.id = 'modal-conductor-llego';
+            modal.className = 'fixed inset-0 z-[9998] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-8 mx-6 text-center animate-bounce-in">
+                    <div class="text-6xl mb-4 animate-pulse">🚗</div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">¡Tu conductor llegó!</h2>
+                    <p class="text-gray-600 mb-4">Sal a su encuentro</p>
+                    <button onclick="cerrarModalConductorLlego()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg">
+                        Entendido
+                    </button>
+                </div>
+            `;
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) cerrarModalConductorLlego();
+            });
+            document.body.appendChild(modal);
+
+            // Auto-cerrar después de 7 segundos
+            setTimeout(() => cerrarModalConductorLlego(), 7000);
+        }
+
+        // Modal sutil que se cierra automáticamente
+        function mostrarModalSutil(emoji, mensaje) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 z-[9998] flex items-end justify-center pb-24';
+            modal.innerHTML = `
+                <div class="bg-gray-800 bg-opacity-90 text-white rounded-2xl shadow-2xl px-6 py-4 mx-6 text-center animate-bounce-in">
+                    <span class="text-3xl">${emoji}</span>
+                    <p class="text-lg font-medium mt-2">${mensaje}</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            setTimeout(() => {
+                modal.style.opacity = '0';
+                modal.style.transition = 'opacity 0.5s';
+                setTimeout(() => modal.remove(), 500);
+            }, 4000);
+        }
+
+        // Modal de calificación al terminar viaje
+        function mostrarModalCalificacion(viajeId) {
+            const modal = document.createElement('div');
+            modal.id = 'modal-calificacion';
+            modal.className = 'fixed inset-0 z-[9998] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-6 text-center animate-bounce-in w-full max-w-sm">
+                    <div class="text-4xl mb-2">✅</div>
+                    <h2 class="text-xl font-bold text-gray-800 mb-1">¡Tu viaje ha terminado!</h2>
+                    <p class="text-gray-500 text-sm mb-4">¿Cómo estuvo tu conductor?</p>
+                    <div id="estrellas-rating" class="flex justify-center gap-2 mb-4">
+                        ${[1,2,3,4,5].map(n => `
+                            <button onclick="seleccionarEstrella(${n})" class="text-4xl text-gray-300 hover:text-yellow-400 transition" data-star="${n}">★</button>
+                        `).join('')}
+                    </div>
+                    <input id="comentario-rating" type="text" maxlength="40" placeholder="Comentario opcional (máx 40 chars)"
+                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:border-yellow-500">
+                    <button id="btn-enviar-rating" onclick="enviarCalificacion(${viajeId})"
+                        class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-full text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Calificar
+                    </button>
+                    <button onclick="cerrarModalCalificacion()" class="mt-3 text-gray-400 text-sm hover:text-gray-600">Omitir</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        let calificacionSeleccionada = 0;
+
+        function seleccionarEstrella(n) {
+            calificacionSeleccionada = n;
+            const estrellas = document.querySelectorAll('#estrellas-rating button');
+            estrellas.forEach(btn => {
+                const star = parseInt(btn.dataset.star);
+                btn.className = star <= n
+                    ? 'text-4xl text-yellow-400 transition transform scale-110'
+                    : 'text-4xl text-gray-300 hover:text-yellow-400 transition';
+            });
+            document.getElementById('btn-enviar-rating').disabled = false;
+        }
+
+        async function enviarCalificacion(viajeId) {
+            const comentario = document.getElementById('comentario-rating').value.trim();
+            try {
+                await fetch(`/api/calificar-viaje/${viajeId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ estrellas: calificacionSeleccionada, comentario: comentario })
+                });
+            } catch (e) {
+                console.log('Error enviando calificación');
+            }
+            cerrarModalCalificacion();
+            mostrarModalSutil('⭐', '¡Gracias por tu calificación!');
+        }
+
+        function cerrarModalCalificacion() {
+            const modal = document.getElementById('modal-calificacion');
+            if (modal) {
+                modal.style.opacity = '0';
+                modal.style.transition = 'opacity 0.3s';
+                setTimeout(() => modal.remove(), 300);
+            }
+            calificacionSeleccionada = 0;
+        }
+
+        function cerrarModalConductorLlego() {
+            const modal = document.getElementById('modal-conductor-llego');
+            if (modal) {
+                modal.style.opacity = '0';
+                modal.style.transition = 'opacity 0.3s';
+                setTimeout(() => modal.remove(), 300);
+            }
+        }
+
         function mostrarViajeEnCurso(viaje) {
             // Detectar cambio de estado y reproducir sonido
             if (estadoAnteriorViaje && estadoAnteriorViaje !== viaje.estado) {
                 if (viaje.estado === 'recogiendo') {
-                    // Doble sonido cuando el conductor llega
+                    // Doble sonido repetido 4 veces cuando el conductor llega
+                    for (let i = 0; i < 4; i++) {
+                        const base = i * 1500;
+                        setTimeout(() => reproducirSonidoAlerta(), base);
+                        setTimeout(() => reproducirSonidoAlerta(), base + 600);
+                    }
+                    // Modal visual de aviso
+                    mostrarModalConductorLlego();
+                } else if (viaje.estado === 'en_curso') {
                     reproducirSonidoAlerta();
-                    setTimeout(() => reproducirSonidoAlerta(), 600);
+                    mostrarModalSutil('🛣️', 'Ahora relájate y disfruta tu viaje, ¡vamos!');
+                } else if (viaje.estado === 'completada') {
+                    reproducirSonidoAlerta();
+                    mostrarModalCalificacion(viaje.id);
                 } else {
                     reproducirSonidoAlerta();
                 }
@@ -1792,7 +1933,6 @@
                         </div>
                         <div>
                             <h2 class="text-xl font-bold text-gray-800">Viaje en curso</h2>
-                            <p class="text-sm text-gray-600">Solicitud #${viaje.id}</p>
                         </div>
                     </div>
 
@@ -1914,7 +2054,7 @@
                 'aceptada': '🚗 Conductor en camino',
                 'recogiendo': '📍 ¡Tu conductor llegó!',
                 'en_curso': '🛣️ En viaje al destino',
-                'completada': '✅ ¡Llegaste a tu destino!',
+                'completada': '✅ Tu viaje ha terminado',
                 'cancelada': '❌ Cancelado',
                 'cancelada_conductor': '❌ El conductor canceló el viaje'
             };

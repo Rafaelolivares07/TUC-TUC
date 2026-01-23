@@ -20123,7 +20123,7 @@ def api_mi_viaje_en_curso():
             FROM solicitudes_transporte s
             LEFT JOIN terceros c ON s.conductor_id = c.id
             WHERE s.tercero_id = %s
-            AND s.estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso', 'cancelada_conductor')
+            AND s.estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso', 'completada', 'cancelada_conductor')
             ORDER BY s.fecha_solicitud DESC
             LIMIT 1
         """, (session['usuario_id'],)).fetchone()

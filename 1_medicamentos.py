@@ -11977,6 +11977,12 @@ def migrar_conductor():
         mensajes.append("✅ solicitudes_transporte.fecha_completado")
 
         # Columnas de calificación
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_lat DECIMAL(10,8)")
+        mensajes.append("✅ solicitudes_transporte.conductor_lat")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS conductor_lon DECIMAL(11,8)")
+        mensajes.append("✅ solicitudes_transporte.conductor_lon")
+
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS calificacion_usuario INTEGER")
         mensajes.append("✅ solicitudes_transporte.calificacion_usuario")
 
@@ -18937,15 +18943,22 @@ def api_conductor_tomar_servicio(servicio_id):
             FROM terceros WHERE id = %s
         """, (session['usuario_id'],)).fetchone()
 
+        # Obtener ubicación del conductor si fue enviada
+        data = request.get_json() or {}
+        cond_lat = data.get('conductor_lat')
+        cond_lon = data.get('conductor_lon')
+
         # Actualizar servicio
         conn.execute("""
             UPDATE solicitudes_transporte
             SET estado = 'aceptada', conductor_id = %s,
                 conductor_placa = %s, conductor_color = %s,
-                conductor_marca = %s, conductor_modelo = %s
+                conductor_marca = %s, conductor_modelo = %s,
+                conductor_lat = %s, conductor_lon = %s
             WHERE id = %s
         """, (session['usuario_id'], conductor['placa'], conductor['color_vehiculo'],
-              conductor['marca_vehiculo'], conductor['modelo_vehiculo'], servicio_id))
+              conductor['marca_vehiculo'], conductor['modelo_vehiculo'],
+              cond_lat, cond_lon, servicio_id))
         conn.commit()
         conn.close()
 
@@ -19064,6 +19077,33 @@ def api_conductor_finalizar_viaje(servicio_id):
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/actualizar-ubicacion', methods=['POST'])
+def api_conductor_actualizar_ubicacion():
+    """Conductor actualiza su ubicación GPS en el viaje activo"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False}), 401
+
+    data = request.get_json()
+    lat = data.get('lat')
+    lon = data.get('lon')
+
+    if not lat or not lon:
+        return jsonify({'ok': False}), 400
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE solicitudes_transporte
+            SET conductor_lat = %s, conductor_lon = %s
+            WHERE conductor_id = %s AND estado IN ('aceptada', 'recogiendo', 'en_curso')
+        """, (lat, lon, session['usuario_id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False}), 500
 
 
 @app.route('/api/conductor/cancelar-viaje/<int:servicio_id>', methods=['POST'])
@@ -20078,6 +20118,7 @@ def api_mi_viaje_en_curso():
                    s.distancia_km, s.tiempo_estimado_minutos, s.precio, s.estado,
                    s.fecha_solicitud, s.conductor_placa, s.conductor_color,
                    s.conductor_marca, s.conductor_modelo, s.conductor_id,
+                   s.origen_lat, s.origen_lon, s.conductor_lat, s.conductor_lon,
                    c.nombre as conductor_nombre, c.telefono as conductor_telefono
             FROM solicitudes_transporte s
             LEFT JOIN terceros c ON s.conductor_id = c.id
@@ -20106,7 +20147,11 @@ def api_mi_viaje_en_curso():
                     'conductor_marca': viaje['conductor_marca'],
                     'conductor_modelo': viaje['conductor_modelo'],
                     'conductor_nombre': viaje['conductor_nombre'],
-                    'conductor_telefono': viaje['conductor_telefono']
+                    'conductor_telefono': viaje['conductor_telefono'],
+                    'origen_lat': float(viaje['origen_lat']) if viaje['origen_lat'] else None,
+                    'origen_lon': float(viaje['origen_lon']) if viaje['origen_lon'] else None,
+                    'conductor_lat': float(viaje['conductor_lat']) if viaje['conductor_lat'] else None,
+                    'conductor_lon': float(viaje['conductor_lon']) if viaje['conductor_lon'] else None
                 }
             })
         else:

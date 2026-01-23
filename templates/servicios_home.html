@@ -1092,17 +1092,49 @@
                 // Procesar texto para Cali (agrega "n" a avenidas con número)
                 const textoProcesado = procesarTextoParaCali(texto);
 
+                const latParam = ubicacionGPSActual ? ubicacionGPSActual.lat : '';
+                const lonParam = ubicacionGPSActual ? ubicacionGPSActual.lon : '';
+
+                // 1. PRIMERO: Intentar buscar en Nominatim y guardar
                 try {
-                    // Filtro geográfico con viewbox de Cali y alrededores
-                    const viewbox = '-77.15,4.56,-76.07,2.4'; // oeste,norte,este,sur
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=50`;
+                    const viewbox = '-77.15,4.56,-76.07,2.4';
+                    const urlNominatim = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(textoProcesado)}&viewbox=${viewbox}&bounded=1&countrycodes=co&limit=50&addressdetails=1`;
+                    const responseNominatim = await fetch(urlNominatim, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
+                    const resultadosNominatim = await responseNominatim.json();
 
-                    const response = await fetch(url, { headers: { 'User-Agent': 'TucTucApp/1.0' } });
-                    const resultados = await response.json();
+                    if (resultadosNominatim.length > 0) {
+                        await fetch('/api/guardar_pois_nominatim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ resultados: resultadosNominatim })
+                        });
+                    }
+                } catch (errorNominatim) {
+                    console.log('Nominatim no disponible, usando solo BD local');
+                }
 
-                    mostrarSugerenciasOrigen(resultados, texto);
-                } catch (error) {
-                    console.error('Error en autocomplete origen:', error);
+                // 2. SEGUNDO: Buscar en BD local (SIEMPRE se ejecuta)
+                try {
+                    const urlLocal = `/api/buscar_interseccion?q=${encodeURIComponent(textoProcesado)}&lat=${latParam}&lon=${lonParam}`;
+                    const responseLocal = await fetch(urlLocal);
+                    const dataLocal = await responseLocal.json();
+
+                    let resultados = [];
+                    if (dataLocal.ok && dataLocal.resultados.length > 0) {
+                        dataLocal.resultados.forEach(r => {
+                            resultados.push({
+                                lat: r.lat,
+                                lon: r.lon,
+                                display_name: r.display_name,
+                                distancia_texto: r.distancia_texto || '',
+                                fuente: r.fuente || 'i'
+                            });
+                        });
+                    }
+
+                    mostrarSugerenciasOrigen(resultados);
+                } catch (errorLocal) {
+                    console.error('Error buscando en BD local:', errorLocal);
                 }
             }, 500);
         }
@@ -1117,6 +1149,12 @@
                       Math.sin(dLon/2) * Math.sin(dLon/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return R * c;
+        }
+
+        function calcularMinutosConductor(condLat, condLon, origenLat, origenLon) {
+            const distKm = calcularDistancia(condLat, condLon, origenLat, origenLon);
+            const minutos = Math.round((distKm / 20) * 60); // 20 km/h promedio ciudad
+            return minutos < 1 ? 1 : minutos;
         }
 
         function mostrarSugerenciasDestino(resultados) {
@@ -1189,29 +1227,48 @@
             contenedor.classList.remove('hidden');
         }
 
-        function mostrarSugerenciasOrigen(resultados, textoIngresado) {
+        function mostrarSugerenciasOrigen(resultados) {
             const contenedor = document.getElementById('autocomplete-origen');
-            const textoLower = textoIngresado.trim().toLowerCase();
             contenedor.innerHTML = '';
+            contenedor.scrollTop = 0;
 
             if (resultados.length === 0) {
                 contenedor.classList.add('hidden');
                 return;
             }
 
-            // NO filtrar - mostrar todos los resultados que Nominatim devuelve
-            // Nominatim ya hace el filtrado y ordenamiento por relevancia
-            const resultadosFiltrados = resultados;
-
-            if (resultadosFiltrados.length === 0) {
-                contenedor.classList.add('hidden');
-                return;
+            // Ordenar por distancia si no vienen ordenados del backend
+            let resultadosOrdenados = resultados;
+            if (!resultados[0].distancia_texto && ubicacionGPSActual) {
+                resultadosOrdenados = resultados.slice().sort((a, b) => {
+                    const distA = calcularDistancia(
+                        ubicacionGPSActual.lat, ubicacionGPSActual.lon,
+                        parseFloat(a.lat), parseFloat(a.lon)
+                    );
+                    const distB = calcularDistancia(
+                        ubicacionGPSActual.lat, ubicacionGPSActual.lon,
+                        parseFloat(b.lat), parseFloat(b.lon)
+                    );
+                    return distA - distB;
+                });
             }
 
-            resultadosFiltrados.forEach(resultado => {
+            resultadosOrdenados.forEach(resultado => {
                 const opcion = document.createElement('div');
-                opcion.className = 'p-3 hover:bg-gray-200 cursor-pointer border-b border-gray-200';
-                opcion.textContent = truncarDireccion(resultado.display_name);
+                opcion.className = 'p-3 hover:bg-gray-200 cursor-pointer border-b border-gray-200 flex justify-between items-center';
+
+                const textoDiv = document.createElement('span');
+                textoDiv.className = 'flex-1 pr-2';
+                textoDiv.textContent = truncarDireccion(resultado.display_name);
+
+                const distanciaSpan = document.createElement('span');
+                distanciaSpan.className = 'text-xs text-gray-500 whitespace-nowrap';
+                if (resultado.distancia_texto) {
+                    distanciaSpan.textContent = resultado.distancia_texto;
+                }
+
+                opcion.appendChild(textoDiv);
+                opcion.appendChild(distanciaSpan);
 
                 opcion.addEventListener('click', function() {
                     document.getElementById('input-origen').value = truncarDireccion(resultado.display_name);
@@ -1219,10 +1276,9 @@
                         lat: parseFloat(resultado.lat),
                         lon: parseFloat(resultado.lon)
                     };
-                    coordenadasOrigenActual = coordenadasOrigenSeleccionado; // Usar estas coordenadas
+                    coordenadasOrigenActual = coordenadasOrigenSeleccionado;
                     contenedor.classList.add('hidden');
 
-                    // Verificar si podemos calcular automáticamente
                     verificarYCalcularAutomaticamente();
                 });
 
@@ -1960,6 +2016,12 @@
                             <span class="text-gray-600">Estado:</span>
                             <span class="px-3 py-1 rounded-full text-sm font-medium ${getEstadoClase(viaje.estado)}">${getEstadoTexto(viaje.estado)}</span>
                         </div>
+                        ${(viaje.estado === 'aceptada' || viaje.estado === 'recogiendo') && viaje.conductor_lat && viaje.origen_lat ? `
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-600">Distancia:</span>
+                            <span class="font-bold text-blue-600">~${calcularMinutosConductor(viaje.conductor_lat, viaje.conductor_lon, viaje.origen_lat, viaje.origen_lon)} min</span>
+                        </div>
+                        ` : ''}
                         <div class="flex justify-between items-center mt-2">
                             <span class="text-gray-600">Tarifa:</span>
                             <span class="font-bold text-green-600">$${viaje.precio?.toLocaleString() || '0'}</span>

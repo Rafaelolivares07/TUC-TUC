@@ -550,104 +550,90 @@
 
                         <!-- TARIFAS TRANSPORTE -->
                         <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                            <h4 class="font-semibold text-gray-800 mb-4">TARIFAS TRANSPORTE</h4>
+                            <h4 class="font-semibold text-gray-800 mb-3">TARIFAS TRANSPORTE</h4>
 
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Tarifa base</label>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-gray-600">$</span>
-                                    <input type="number" id="transporte_tarifa_base" class="px-4 py-2 border border-gray-300 rounded-lg w-32 text-right" value="5000">
+                            <div class="space-y-2 mb-3">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700">Tarifa base</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-600 text-sm">$</span>
+                                        <input type="number" id="transporte_tarifa_base" class="px-3 py-1.5 border border-gray-300 rounded-lg w-28 text-right text-sm" value="5000">
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700">Tiempo espera/recogida</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" id="transporte_tiempo_espera_recogida" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="8">
+                                        <span class="text-gray-600 text-sm">min</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700">Viajes promedio por hora</label>
+                                    <input type="number" id="transporte_viajes_promedio_hora" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="2">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700">Redondeo tarifa</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-600 text-sm">$</span>
+                                        <input type="number" id="transporte_redondeo_tarifa" class="px-3 py-1.5 border border-gray-300 rounded-lg w-24 text-right text-sm" value="500">
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-blue-800">💰 Comisión TUC TUC</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" id="transporte_comision_plataforma" class="px-3 py-1.5 border border-blue-300 rounded-lg w-20 text-right text-sm" value="5" min="0" max="100" step="0.5">
+                                        <span class="text-blue-600 text-sm">%</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700">Distancia de prueba</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" id="simulador_distancia" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="5" step="0.1">
+                                        <span class="text-gray-600 text-sm">km</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium text-gray-700">Ingreso objetivo por hora</label>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-gray-600 text-sm">$</span>
+                                        <input type="number" id="transporte_ingreso_hora_objetivo" class="px-3 py-1.5 border border-gray-300 rounded-lg w-28 text-right text-sm" value="30000">
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Ingreso objetivo por hora</label>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-gray-600">$</span>
-                                    <input type="number" id="transporte_ingreso_hora_objetivo" class="px-4 py-2 border border-gray-300 rounded-lg w-32 text-right" value="30000">
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div class="grid grid-cols-2 gap-3 mb-3">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Velocidad PICO</label>
-                                    <div class="flex items-center gap-2">
-                                        <input type="number" id="transporte_velocidad_pico" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="10">
-                                        <span class="text-gray-600">km/h</span>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Velocidad PICO</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" id="transporte_velocidad_pico" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="10">
+                                        <span class="text-gray-600 text-sm">km/h</span>
                                     </div>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Velocidad VALLE</label>
-                                    <div class="flex items-center gap-2">
-                                        <input type="number" id="transporte_velocidad_valle" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="17">
-                                        <span class="text-gray-600">km/h</span>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Velocidad VALLE</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="number" id="transporte_velocidad_valle" class="px-3 py-1.5 border border-gray-300 rounded-lg w-20 text-right text-sm" value="17">
+                                        <span class="text-gray-600 text-sm">km/h</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Tiempo de espera y recogida por viaje</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" id="transporte_tiempo_espera_recogida" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="8">
-                                    <span class="text-gray-600">min</span>
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <div class="bg-white p-2 rounded-lg border">
+                                    <p class="text-xs text-gray-600">Tarifa km PICO</p>
+                                    <p id="tarifa_km_pico_calculada" class="text-lg font-bold text-red-600">$ 3,000</p>
+                                </div>
+                                <div class="bg-white p-2 rounded-lg border">
+                                    <p class="text-xs text-gray-600">Tarifa km VALLE</p>
+                                    <p id="tarifa_km_valle_calculada" class="text-lg font-bold text-green-600">$ 1,765</p>
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Viajes promedio por hora</label>
-                                <input type="number" id="transporte_viajes_promedio_hora" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="2">
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Redondeo tarifa final</label>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-gray-600">$</span>
-                                    <input type="number" id="transporte_redondeo_tarifa" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="500">
-                                </div>
-                            </div>
-
-                            <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <label class="block text-sm font-medium text-blue-800 mb-2">💰 Comisión plataforma TUC TUC</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" id="transporte_comision_plataforma" class="px-4 py-2 border border-blue-300 rounded-lg w-24 text-right" value="5" min="0" max="100" step="0.5">
-                                    <span class="text-blue-600">%</span>
-                                </div>
-                                <p class="text-xs text-blue-600 mt-1">Porcentaje que retiene la plataforma de cada viaje</p>
-                            </div>
-                        </div>
-
-                        <!-- TARIFAS CALCULADAS -->
-                        <div class="mb-6 p-4 bg-gray-100 rounded-lg border border-gray-200">
-                            <h4 class="font-semibold text-gray-800 mb-4">📊 TARIFAS CALCULADAS</h4>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="bg-white p-3 rounded-lg border">
-                                    <p class="text-sm text-gray-600">Tarifa km PICO</p>
-                                    <p id="tarifa_km_pico_calculada" class="text-xl font-bold text-red-600">$ 3,000</p>
-                                </div>
-                                <div class="bg-white p-3 rounded-lg border">
-                                    <p class="text-sm text-gray-600">Tarifa km VALLE</p>
-                                    <p id="tarifa_km_valle_calculada" class="text-xl font-bold text-green-600">$ 1,765</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- SIMULADOR -->
-                        <div class="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                            <h4 class="font-semibold text-gray-800 mb-4">🧪 SIMULADOR DE RECORRIDO DE UN VIAJE</h4>
-
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Distancia de prueba</label>
-                                <div class="flex items-center gap-2">
-                                    <input type="number" id="simulador_distancia" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="5" step="0.1">
-                                    <span class="text-gray-600">km</span>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-2 gap-3">
                                 <!-- Hora Pico -->
-                                <div class="bg-red-50 p-4 rounded-lg border border-red-200">
-                                    <h5 class="font-semibold text-red-700 mb-3">🔴 HORA PICO</h5>
-                                    <div class="space-y-1 text-sm">
+                                <div class="bg-red-50 p-3 rounded-lg border border-red-200">
+                                    <h5 class="font-semibold text-red-700 mb-2 text-sm">🔴 HORA PICO</h5>
+                                    <div class="space-y-1 text-xs">
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Recorrido:</span>
                                             <span id="sim_pico_recorrido_tiempo" class="font-medium">30 min</span>
@@ -660,7 +646,7 @@
                                             <span class="text-gray-600">Total:</span>
                                             <span id="sim_pico_tiempo_total" class="font-medium">38 min</span>
                                         </div>
-                                        <hr class="my-2 border-red-200">
+                                        <hr class="my-1 border-red-200">
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Base:</span>
                                             <span id="sim_pico_base" class="font-medium">$ 5,000</span>
@@ -669,14 +655,14 @@
                                             <span class="text-gray-600">Recorr:</span>
                                             <span id="sim_pico_recorrido" class="font-medium">$ 15,000</span>
                                         </div>
-                                        <hr class="my-2 border-red-200">
-                                        <div class="flex justify-between text-base">
+                                        <hr class="my-1 border-red-200">
+                                        <div class="flex justify-between text-sm">
                                             <span class="font-semibold">TOTAL:</span>
                                             <span id="sim_pico_total" class="font-bold text-red-700">$ 20,000</span>
                                         </div>
-                                        <hr class="my-2 border-red-200">
+                                        <hr class="my-1 border-red-200">
                                         <div class="flex justify-between">
-                                            <span class="text-gray-600">💰 Ingreso/hora:</span>
+                                            <span class="text-gray-600">Ingreso/h:</span>
                                             <span id="sim_pico_ingreso_hora" class="font-bold text-green-600">$ 31,579 ✅</span>
                                         </div>
                                         <p id="sim_pico_vs_objetivo" class="text-xs text-gray-500 text-right">(vs $30,000 obj)</p>
@@ -684,9 +670,9 @@
                                 </div>
 
                                 <!-- Hora Valle -->
-                                <div class="bg-green-50 p-4 rounded-lg border border-green-200">
-                                    <h5 class="font-semibold text-green-700 mb-3">🟢 HORA VALLE</h5>
-                                    <div class="space-y-1 text-sm">
+                                <div class="bg-green-50 p-3 rounded-lg border border-green-200">
+                                    <h5 class="font-semibold text-green-700 mb-2 text-sm">🟢 HORA VALLE</h5>
+                                    <div class="space-y-1 text-xs">
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Recorrido:</span>
                                             <span id="sim_valle_recorrido_tiempo" class="font-medium">17.6 min</span>
@@ -699,7 +685,7 @@
                                             <span class="text-gray-600">Total:</span>
                                             <span id="sim_valle_tiempo_total" class="font-medium">25.6 min</span>
                                         </div>
-                                        <hr class="my-2 border-green-200">
+                                        <hr class="my-1 border-green-200">
                                         <div class="flex justify-between">
                                             <span class="text-gray-600">Base:</span>
                                             <span id="sim_valle_base" class="font-medium">$ 5,000</span>
@@ -708,14 +694,14 @@
                                             <span class="text-gray-600">Recorr:</span>
                                             <span id="sim_valle_recorrido" class="font-medium">$ 9,000</span>
                                         </div>
-                                        <hr class="my-2 border-green-200">
-                                        <div class="flex justify-between text-base">
+                                        <hr class="my-1 border-green-200">
+                                        <div class="flex justify-between text-sm">
                                             <span class="font-semibold">TOTAL:</span>
                                             <span id="sim_valle_total" class="font-bold text-green-700">$ 14,000</span>
                                         </div>
-                                        <hr class="my-2 border-green-200">
+                                        <hr class="my-1 border-green-200">
                                         <div class="flex justify-between">
-                                            <span class="text-gray-600">💰 Ingreso/hora:</span>
+                                            <span class="text-gray-600">Ingreso/h:</span>
                                             <span id="sim_valle_ingreso_hora" class="font-bold text-green-600">$ 32,813 ✅</span>
                                         </div>
                                         <p id="sim_valle_vs_objetivo" class="text-xs text-gray-500 text-right">(vs $30,000 obj)</p>

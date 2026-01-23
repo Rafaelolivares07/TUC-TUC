@@ -605,6 +605,15 @@
                                     <input type="number" id="transporte_redondeo_tarifa" class="px-4 py-2 border border-gray-300 rounded-lg w-24 text-right" value="500">
                                 </div>
                             </div>
+
+                            <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <label class="block text-sm font-medium text-blue-800 mb-2">💰 Comisión plataforma TUC TUC</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="transporte_comision_plataforma" class="px-4 py-2 border border-blue-300 rounded-lg w-24 text-right" value="5" min="0" max="100" step="0.5">
+                                    <span class="text-blue-600">%</span>
+                                </div>
+                                <p class="text-xs text-blue-600 mt-1">Porcentaje que retiene la plataforma de cada viaje</p>
+                            </div>
                         </div>
 
                         <!-- TARIFAS CALCULADAS -->
@@ -1500,6 +1509,7 @@
             'transporte_tiempo_espera_recogida',
             'transporte_viajes_promedio_hora',
             'transporte_redondeo_tarifa',
+            'transporte_comision_plataforma',
             'transporte_pico_lv_am_inicio',
             'transporte_pico_lv_am_fin',
             'transporte_pico_lv_pm_inicio',

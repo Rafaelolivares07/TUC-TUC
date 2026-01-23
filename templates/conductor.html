@@ -165,6 +165,7 @@
         let intervaloActualizacion = null;
         let estadoAnteriorViaje = null;
         let serviciosAnterioresIds = [];
+        let comisionPlataforma = 5; // Default 5%, se carga de BD
 
         // Función para reproducir sonido de alerta
         function reproducirSonidoAlerta() {
@@ -210,8 +211,22 @@
             }
         }
 
+        // Cargar comisión desde parámetros
+        async function cargarComisionPlataforma() {
+            try {
+                const res = await fetch('/api/parametro/transporte_comision_plataforma');
+                const data = await res.json();
+                if (data.ok && data.valor !== null) {
+                    comisionPlataforma = parseFloat(data.valor);
+                }
+            } catch (e) {
+                console.log('Usando comisión por defecto:', comisionPlataforma);
+            }
+        }
+
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
+            cargarComisionPlataforma();
             verificarSesion();
         });
 
@@ -346,7 +361,7 @@
         function mostrarPantallaCobro() {
             document.getElementById('viaje-estado-cobrar').classList.remove('hidden');
             const tarifa = viajeActivo.tarifa;
-            const comision = Math.round(tarifa * 0.05);
+            const comision = Math.round(tarifa * (comisionPlataforma / 100));
             const ganancia = tarifa - comision;
 
             document.getElementById('cobro-tarifa').textContent = `$${tarifa.toLocaleString('es-CO')}`;
@@ -378,7 +393,7 @@
                     sinServicios.classList.add('hidden');
 
                     data.servicios.forEach(servicio => {
-                        const comision = Math.round(servicio.tarifa * 0.05);
+                        const comision = Math.round(servicio.tarifa * (comisionPlataforma / 100));
                         const ganancia = servicio.tarifa - comision;
                         const distRecorrido = servicio.distancia_recorrido_km ? servicio.distancia_recorrido_km.toFixed(1) : '?';
                         const tiempoRecorrido = servicio.tiempo_recorrido_min || '?';

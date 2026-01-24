@@ -19165,23 +19165,39 @@ def api_conductor_cancelar_viaje(servicio_id):
 
     try:
         conn = get_db_connection()
-        # Solo cancelar si el conductor es el asignado y el viaje está en un estado cancelable
-        result = conn.execute("""
-            UPDATE solicitudes_transporte
-            SET estado = 'cancelada_conductor', conductor_id = NULL,
-                conductor_placa = NULL, conductor_color = NULL,
-                conductor_marca = NULL, conductor_modelo = NULL
+
+        # Verificar si es viaje programado
+        viaje = conn.execute("""
+            SELECT fecha_programada FROM solicitudes_transporte
             WHERE id = %s AND conductor_id = %s AND estado IN ('aceptada', 'recogiendo', 'en_curso')
-            RETURNING id
-        """, (servicio_id, session['usuario_id']))
-        updated = result.fetchone()
+        """, (servicio_id, session['usuario_id'])).fetchone()
+
+        if not viaje:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No se pudo cancelar el viaje'}), 400
+
+        if viaje['fecha_programada']:
+            # Viaje programado: volver a pendiente para que otros conductores lo tomen
+            conn.execute("""
+                UPDATE solicitudes_transporte
+                SET estado = 'pendiente', conductor_id = NULL,
+                    conductor_placa = NULL, conductor_color = NULL,
+                    conductor_marca = NULL, conductor_modelo = NULL
+                WHERE id = %s
+            """, (servicio_id,))
+        else:
+            # Viaje inmediato: marcar como cancelado por conductor
+            conn.execute("""
+                UPDATE solicitudes_transporte
+                SET estado = 'cancelada_conductor', conductor_id = NULL,
+                    conductor_placa = NULL, conductor_color = NULL,
+                    conductor_marca = NULL, conductor_modelo = NULL
+                WHERE id = %s
+            """, (servicio_id,))
+
         conn.commit()
         conn.close()
-
-        if updated:
-            return jsonify({'ok': True})
-        else:
-            return jsonify({'ok': False, 'error': 'No se pudo cancelar el viaje'}), 400
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

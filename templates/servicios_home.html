@@ -2341,8 +2341,9 @@
         // Cargar badge al iniciar
         actualizarBadgeProgramados();
 
-        // Polling condicional para viajes programados (solo corre si hay pendientes)
+        // Polling condicional para viajes programados
         let programadosPendientesIds = new Set();
+        let programadosAceptadosIds = new Set();  // Para detectar desasignaciones
         let intervaloProgramados = null;
 
         async function iniciarPollingProgramadosSiNecesario() {
@@ -2351,39 +2352,79 @@
                 const data = await response.json();
                 if (data.ok && data.viajes) {
                     const pendientes = data.viajes.filter(v => v.estado === 'pendiente');
-                    if (pendientes.length > 0) {
-                        programadosPendientesIds = new Set(pendientes.map(v => v.id));
-                        if (!intervaloProgramados) {
-                            intervaloProgramados = setInterval(verificarAceptacionProgramados, 5000);
-                        }
+                    const aceptados = data.viajes.filter(v => v.estado === 'aceptada' && v.conductor);
+                    programadosPendientesIds = new Set(pendientes.map(v => v.id));
+                    programadosAceptadosIds = new Set(aceptados.map(v => v.id));
+                    // Iniciar polling si hay viajes activos (pendientes o aceptados)
+                    if ((pendientes.length > 0 || aceptados.length > 0) && !intervaloProgramados) {
+                        intervaloProgramados = setInterval(verificarCambiosProgramados, 5000);
                     }
                 }
             } catch (e) {}
         }
 
-        async function verificarAceptacionProgramados() {
+        async function verificarCambiosProgramados() {
             try {
                 const response = await fetch('/api/mis-viajes-programados');
                 const data = await response.json();
                 if (!data.ok || !data.viajes) return;
 
                 data.viajes.forEach(v => {
+                    // Detectar nuevo conductor asignado
                     if (v.estado === 'aceptada' && v.conductor && programadosPendientesIds.has(v.id)) {
                         programadosPendientesIds.delete(v.id);
+                        programadosAceptadosIds.add(v.id);
                         mostrarModalConductorAceptoProgramado(v);
+                    }
+                    // Detectar conductor desasignado (volvió a pendiente)
+                    if (v.estado === 'pendiente' && programadosAceptadosIds.has(v.id)) {
+                        programadosAceptadosIds.delete(v.id);
+                        programadosPendientesIds.add(v.id);
+                        mostrarModalConductorDesasignado(v);
                     }
                 });
 
-                // Actualizar pendientes
+                // Actualizar sets
                 const pendientes = data.viajes.filter(v => v.estado === 'pendiente');
+                const aceptados = data.viajes.filter(v => v.estado === 'aceptada' && v.conductor);
                 programadosPendientesIds = new Set(pendientes.map(v => v.id));
+                programadosAceptadosIds = new Set(aceptados.map(v => v.id));
 
-                // Si ya no hay pendientes, detener polling
-                if (pendientes.length === 0 && intervaloProgramados) {
+                // Detener polling solo si no hay viajes activos
+                if (pendientes.length === 0 && aceptados.length === 0 && intervaloProgramados) {
                     clearInterval(intervaloProgramados);
                     intervaloProgramados = null;
                 }
+
+                cargarViajesProgramados();
             } catch (e) {}
+        }
+
+        function mostrarModalConductorDesasignado(viaje) {
+            reproducirSonidoCancelado();
+            const fecha = new Date(viaje.fecha_programada);
+            const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+            const fechaTexto = fecha.toLocaleDateString('es-CO', opciones);
+            const horaTexto = fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+            const modal = document.createElement('div');
+            modal.id = 'modal-conductor-desasignado';
+            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-6 text-center max-w-sm w-full">
+                    <div class="text-5xl mb-3">⚠️</div>
+                    <h2 class="text-lg font-bold text-gray-800 mb-2">Conductor no disponible</h2>
+                    <p class="text-sm text-blue-600 font-medium mb-3">📅 ${fechaTexto}, ${horaTexto}</p>
+                    <p class="text-sm text-gray-600 mb-4">El conductor se desasignó de tu viaje. Estamos buscando otro conductor.</p>
+                    <button onclick="this.closest('#modal-conductor-desasignado').remove()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-lg">
+                        Entendido
+                    </button>
+                </div>
+            `;
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) modal.remove();
+            });
+            document.body.appendChild(modal);
         }
 
         function mostrarModalConductorAceptoProgramado(viaje) {

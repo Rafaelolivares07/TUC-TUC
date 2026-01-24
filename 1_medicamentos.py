@@ -19024,7 +19024,8 @@ def api_conductor_tomar_servicio(servicio_id):
                 'destino_lat': float(servicio['destino_lat']),
                 'destino_lon': float(servicio['destino_lon']),
                 'tarifa': servicio['precio'],
-                'usuario_nombre': servicio['usuario_nombre']
+                'usuario_nombre': servicio['usuario_nombre'],
+                'fecha_programada': servicio['fecha_programada'].isoformat() if servicio['fecha_programada'] else None
             }
         })
     except Exception as e:
@@ -20279,19 +20280,23 @@ def api_mis_viajes_programados():
     try:
         conn = get_db_connection()
         viajes = conn.execute("""
-            SELECT id, origen_texto, destino_texto, distancia_km, precio,
-                   fecha_programada, hora_programada, estado
-            FROM solicitudes_transporte
-            WHERE tercero_id = %s
-            AND fecha_programada IS NOT NULL
-            AND estado IN ('pendiente', 'aceptada')
-            ORDER BY fecha_programada ASC
+            SELECT s.id, s.origen_texto, s.destino_texto, s.distancia_km, s.precio,
+                   s.fecha_programada, s.hora_programada, s.estado,
+                   s.conductor_id, s.conductor_placa, s.conductor_color,
+                   s.conductor_marca, s.conductor_modelo,
+                   t.nombre as conductor_nombre
+            FROM solicitudes_transporte s
+            LEFT JOIN terceros t ON s.conductor_id = t.id
+            WHERE s.tercero_id = %s
+            AND s.fecha_programada IS NOT NULL
+            AND s.estado IN ('pendiente', 'aceptada')
+            ORDER BY s.fecha_programada ASC
         """, (session['usuario_id'],)).fetchall()
         conn.close()
 
         resultado = []
         for v in viajes:
-            resultado.append({
+            item = {
                 'id': v['id'],
                 'origen_texto': v['origen_texto'],
                 'destino_texto': v['destino_texto'],
@@ -20300,7 +20305,16 @@ def api_mis_viajes_programados():
                 'fecha_programada': v['fecha_programada'].isoformat() if v['fecha_programada'] else None,
                 'hora_programada': str(v['hora_programada']) if v['hora_programada'] else None,
                 'estado': v['estado']
-            })
+            }
+            if v['conductor_id']:
+                item['conductor'] = {
+                    'nombre': v['conductor_nombre'],
+                    'placa': v['conductor_placa'],
+                    'color': v['conductor_color'],
+                    'marca': v['conductor_marca'],
+                    'modelo': v['conductor_modelo']
+                }
+            resultado.append(item)
 
         return jsonify({'ok': True, 'viajes': resultado})
 

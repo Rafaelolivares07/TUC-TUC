@@ -505,6 +505,7 @@
                         card.className = 'border border-blue-200 bg-blue-50 rounded-lg p-3';
                         card.innerHTML = `
                             <p class="text-xs font-bold text-blue-600 mb-1">📅 ${fechaTexto}, ${horaTexto}</p>
+                            <p class="text-sm text-gray-700"><span class="font-medium">👤</span> ${prog.usuario_nombre}</p>
                             <p class="text-sm text-gray-700"><span class="font-medium">📍</span> ${prog.origen_texto}</p>
                             <p class="text-sm text-gray-700"><span class="font-medium">🏁</span> ${prog.destino_texto}</p>
                             <div class="flex justify-between items-center text-xs text-gray-500 my-1">
@@ -516,7 +517,7 @@
                                     <span class="font-bold text-gray-800">$${prog.tarifa.toLocaleString('es-CO')}</span>
                                     <span class="text-xs text-green-600 ml-2">Ganas: $${ganancia.toLocaleString('es-CO')}</span>
                                 </div>
-                                <button onclick="tomarServicio(${prog.id})" class="bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm hover:bg-blue-600">
+                                <button onclick="tomarServicioProgramado(${prog.id}, '${fechaTexto}, ${horaTexto}')" class="bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm hover:bg-blue-600">
                                     TOMAR
                                 </button>
                             </div>
@@ -556,6 +557,33 @@
                 }
             } catch (error) {
                 console.error('Error tomando servicio:', error);
+                alert('Error de conexión');
+            }
+        }
+
+        // Tomar un viaje programado (no entra en modo viaje activo)
+        async function tomarServicioProgramado(servicioId, fechaTexto) {
+            try {
+                const body = {};
+                if (ubicacionConductor) {
+                    body.conductor_lat = ubicacionConductor.lat;
+                    body.conductor_lon = ubicacionConductor.lon;
+                }
+                const response = await fetch(`/api/conductor/tomar-servicio/${servicioId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert(`✅ Viaje programado aceptado\n📅 ${fechaTexto}\n\nEl pasajero será notificado.`);
+                    cargarServiciosDisponibles();
+                } else {
+                    alert(data.error || 'No se pudo tomar el servicio');
+                }
+            } catch (error) {
+                console.error('Error tomando servicio programado:', error);
                 alert('Error de conexión');
             }
         }

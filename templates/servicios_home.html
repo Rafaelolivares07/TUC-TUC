@@ -1767,7 +1767,7 @@
                 const response = await fetch('/api/mi-viaje-en-curso');
                 const data = await response.json();
 
-                if (data.ok && data.viaje) {
+                if (data.ok && data.viaje && data.viaje.estado !== 'completada') {
                     mostrarViajeEnCurso(data.viaje);
                 }
             } catch (error) {

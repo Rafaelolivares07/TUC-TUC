@@ -11995,6 +11995,15 @@ def migrar_conductor():
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS comentario_conductor VARCHAR(40)")
         mensajes.append("✅ solicitudes_transporte.comentario_conductor")
 
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS fecha_programada TIMESTAMP")
+        mensajes.append("✅ solicitudes_transporte.fecha_programada")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS hora_programada TIME")
+        mensajes.append("✅ solicitudes_transporte.hora_programada")
+
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS horas_programadas DECIMAL(4,1)")
+        mensajes.append("✅ solicitudes_transporte.horas_programadas")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -18870,6 +18879,8 @@ def api_conductor_servicios_disponibles():
 
     try:
         conn = get_db_connection()
+
+        # Servicios inmediatos (sin fecha programada)
         rows = conn.execute("""
             SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
                    s.destino_lat, s.destino_lon, s.precio, s.fecha_solicitud,
@@ -18878,19 +18889,18 @@ def api_conductor_servicios_disponibles():
             FROM solicitudes_transporte s
             JOIN terceros t ON s.tercero_id = t.id
             WHERE s.estado = 'pendiente' AND s.tipo_servicio = 'transporte'
+              AND s.fecha_programada IS NULL
               AND s.origen_lat IS NOT NULL AND s.origen_lon IS NOT NULL
               AND s.destino_lat IS NOT NULL AND s.destino_lon IS NOT NULL
             ORDER BY s.fecha_solicitud DESC
             LIMIT 20
         """).fetchall()
-        conn.close()
 
         servicios = []
         for row in rows:
-            # Calcular distancia del conductor al origen
             dist = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
             dist_km = dist / 1000
-            tiempo_est = round(dist_km * 3)  # ~3 min por km estimado
+            tiempo_est = round(dist_km * 3)
 
             servicios.append({
                 'id': row['id'],
@@ -18908,10 +18918,50 @@ def api_conductor_servicios_disponibles():
                 'tiempo_recorrido_min': row['tiempo_estimado_minutos']
             })
 
-        # Ordenar por distancia del conductor al origen
         servicios.sort(key=lambda x: x['distancia_conductor'])
 
-        return jsonify({'ok': True, 'servicios': servicios})
+        # Viajes programados (con fecha programada)
+        rows_prog = conn.execute("""
+            SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
+                   s.destino_lat, s.destino_lon, s.precio, s.fecha_programada,
+                   s.distancia_km, s.tiempo_estimado_minutos,
+                   t.nombre as usuario_nombre
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
+            WHERE s.estado = 'pendiente' AND s.tipo_servicio = 'transporte'
+              AND s.fecha_programada IS NOT NULL
+              AND s.origen_lat IS NOT NULL AND s.origen_lon IS NOT NULL
+              AND s.destino_lat IS NOT NULL AND s.destino_lon IS NOT NULL
+            ORDER BY s.fecha_programada ASC
+            LIMIT 20
+        """).fetchall()
+
+        programados = []
+        for row in rows_prog:
+            dist = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            dist_km = dist / 1000
+            tiempo_est = round(dist_km * 3)
+
+            programados.append({
+                'id': row['id'],
+                'origen_texto': row['origen_texto'],
+                'destino_texto': row['destino_texto'],
+                'origen_lat': float(row['origen_lat']),
+                'origen_lon': float(row['origen_lon']),
+                'destino_lat': float(row['destino_lat']),
+                'destino_lon': float(row['destino_lon']),
+                'tarifa': row['precio'],
+                'usuario_nombre': row['usuario_nombre'],
+                'fecha_programada': row['fecha_programada'].isoformat() if row['fecha_programada'] else None,
+                'distancia_conductor': round(dist),
+                'distancia_conductor_texto': f"{dist_km:.1f} km · ~{tiempo_est} min",
+                'distancia_recorrido_km': float(row['distancia_km']) if row['distancia_km'] else None,
+                'tiempo_recorrido_min': row['tiempo_estimado_minutos']
+            })
+
+        conn.close()
+
+        return jsonify({'ok': True, 'servicios': servicios, 'programados': programados})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -19772,11 +19822,12 @@ def obtener_parametro_transporte(conn, nombre, valor_defecto):
         return valor_defecto
 
 
-def es_hora_pico(conn):
-    """Determina si la hora actual es hora pico según los parámetros configurados"""
+def es_hora_pico(conn, fecha_hora=None):
+    """Determina si una fecha/hora es hora pico según los parámetros configurados.
+    Si fecha_hora es None, usa la hora actual."""
     from datetime import datetime
 
-    ahora = datetime.now()
+    ahora = fecha_hora if fecha_hora else datetime.now()
     dia_semana = ahora.weekday()  # 0=Lunes, 6=Domingo
     hora_actual = ahora.strftime('%H:%M')
 
@@ -19786,10 +19837,10 @@ def es_hora_pico(conn):
 
     # Verificar si es festivo (usar la tabla de festivos existente)
     try:
-        fecha_hoy = ahora.strftime('%Y-%m-%d')
+        fecha_evaluar = ahora.strftime('%Y-%m-%d')
         festivo = conn.execute("""
             SELECT id FROM festivos WHERE fecha = %s
-        """, (fecha_hoy,)).fetchone()
+        """, (fecha_evaluar,)).fetchone()
         if festivo:
             return False  # Festivo = hora valle
     except:
@@ -19835,6 +19886,7 @@ def api_calcular_tarifa():
         tipo_servicio = data.get('tipo_servicio')
         distancia_km = data.get('distancia_km', 0)
         horas = data.get('horas_acompanamiento')
+        fecha_programada_str = data.get('fecha_programada')
 
         conn = get_db_connection()
 
@@ -19847,8 +19899,15 @@ def api_calcular_tarifa():
             tiempo_espera = obtener_parametro_transporte(conn, 'transporte_tiempo_espera_recogida', 8)
             redondeo = obtener_parametro_transporte(conn, 'transporte_redondeo_tarifa', 500)
 
-            # Determinar si es hora pico o valle
-            hora_pico = es_hora_pico(conn)
+            # Determinar si es hora pico o valle (usa fecha programada si viene)
+            fecha_hora_evaluar = None
+            if fecha_programada_str:
+                from datetime import datetime
+                try:
+                    fecha_hora_evaluar = datetime.fromisoformat(fecha_programada_str)
+                except:
+                    pass
+            hora_pico = es_hora_pico(conn, fecha_hora_evaluar)
 
             # Calcular tarifa por km según horario
             if hora_pico:
@@ -19994,21 +20053,26 @@ def api_solicitar_servicio():
         precio = data.get('precio')
         horas_acompanamiento = data.get('horas_acompanamiento')
         notas = data.get('notas')
+        fecha_programada = data.get('fecha_programada')
+        hora_programada = data.get('hora_programada')
+        horas_programadas = data.get('horas_programadas')
 
         solicitud_id = conn.execute("""
             INSERT INTO solicitudes_transporte (
                 tercero_id, tipo_servicio, origen_texto, destino_texto,
                 origen_lat, origen_lon, destino_lat, destino_lon,
                 distancia_km, tiempo_estimado_minutos, precio,
-                horas_acompanamiento, notas, estado, fecha_solicitud, fecha_servicio
+                horas_acompanamiento, notas, estado, fecha_solicitud, fecha_servicio,
+                fecha_programada, hora_programada, horas_programadas
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %s, %s, %s)
             RETURNING id
         """, (
             tercero_id, tipo_servicio, origen_texto, destino_texto,
             origen_lat, origen_lon, destino_lat, destino_lon,
             distancia_km, tiempo_estimado_minutos, precio,
-            horas_acompanamiento, notas
+            horas_acompanamiento, notas,
+            fecha_programada, hora_programada, horas_programadas
         )).fetchone()['id']
 
         conn.commit()
@@ -20119,11 +20183,12 @@ def api_mi_viaje_en_curso():
                    s.fecha_solicitud, s.conductor_placa, s.conductor_color,
                    s.conductor_marca, s.conductor_modelo, s.conductor_id,
                    s.origen_lat, s.origen_lon, s.destino_lat, s.destino_lon,
-                   s.conductor_lat, s.conductor_lon,
+                   s.conductor_lat, s.conductor_lon, s.fecha_programada,
                    c.nombre as conductor_nombre, c.telefono as conductor_telefono
             FROM solicitudes_transporte s
             LEFT JOIN terceros c ON s.conductor_id = c.id
             WHERE s.tercero_id = %s
+            AND s.fecha_programada IS NULL
             AND s.estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso', 'completada', 'cancelada_conductor')
             ORDER BY s.fecha_solicitud DESC
             LIMIT 1
@@ -20154,7 +20219,8 @@ def api_mi_viaje_en_curso():
                     'destino_lat': float(viaje['destino_lat']) if viaje['destino_lat'] else None,
                     'destino_lon': float(viaje['destino_lon']) if viaje['destino_lon'] else None,
                     'conductor_lat': float(viaje['conductor_lat']) if viaje['conductor_lat'] else None,
-                    'conductor_lon': float(viaje['conductor_lon']) if viaje['conductor_lon'] else None
+                    'conductor_lon': float(viaje['conductor_lon']) if viaje['conductor_lon'] else None,
+                    'fecha_programada': viaje['fecha_programada'].isoformat() if viaje.get('fecha_programada') else None
                 }
             })
         else:
@@ -20199,6 +20265,44 @@ def api_cancelar_viaje(viaje_id):
         conn.close()
 
         return jsonify({'ok': True, 'mensaje': 'Viaje cancelado'})
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mis-viajes-programados')
+def api_mis_viajes_programados():
+    """Retorna los viajes programados del usuario actual"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No logueado'}), 401
+
+    try:
+        conn = get_db_connection()
+        viajes = conn.execute("""
+            SELECT id, origen_texto, destino_texto, distancia_km, precio,
+                   fecha_programada, hora_programada, estado
+            FROM solicitudes_transporte
+            WHERE tercero_id = %s
+            AND fecha_programada IS NOT NULL
+            AND estado IN ('pendiente', 'aceptada')
+            ORDER BY fecha_programada ASC
+        """, (session['usuario_id'],)).fetchall()
+        conn.close()
+
+        resultado = []
+        for v in viajes:
+            resultado.append({
+                'id': v['id'],
+                'origen_texto': v['origen_texto'],
+                'destino_texto': v['destino_texto'],
+                'distancia_km': float(v['distancia_km']) if v['distancia_km'] else None,
+                'precio': float(v['precio']) if v['precio'] else None,
+                'fecha_programada': v['fecha_programada'].isoformat() if v['fecha_programada'] else None,
+                'hora_programada': str(v['hora_programada']) if v['hora_programada'] else None,
+                'estado': v['estado']
+            })
+
+        return jsonify({'ok': True, 'viajes': resultado})
 
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

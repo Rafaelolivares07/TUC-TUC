@@ -152,6 +152,13 @@
                     <p class="text-gray-500">No hay servicios disponibles en este momento</p>
                     <p class="text-sm text-gray-400 mt-2">Los servicios se actualizan automáticamente</p>
                 </div>
+
+                <!-- Sección Viajes Programados -->
+                <div id="seccion-programados" class="hidden mt-6 border-t pt-4">
+                    <h3 class="text-base font-bold text-gray-700 mb-3">📅 Viajes Programados</h3>
+                    <div id="lista-programados" class="space-y-3">
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -475,6 +482,49 @@
                 } else {
                     lista.innerHTML = '';
                     sinServicios.classList.remove('hidden');
+                }
+
+                // Viajes programados
+                const seccionProg = document.getElementById('seccion-programados');
+                const listaProg = document.getElementById('lista-programados');
+
+                if (data.programados && data.programados.length > 0) {
+                    seccionProg.classList.remove('hidden');
+                    listaProg.innerHTML = '';
+
+                    data.programados.forEach(prog => {
+                        const fecha = new Date(prog.fecha_programada);
+                        const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+                        const fechaTexto = fecha.toLocaleDateString('es-CO', opciones);
+                        const horaTexto = fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                        const distRecorrido = prog.distancia_recorrido_km ? prog.distancia_recorrido_km.toFixed(1) : '?';
+                        const comision = Math.round(prog.tarifa * (comisionPlataforma / 100));
+                        const ganancia = prog.tarifa - comision;
+
+                        const card = document.createElement('div');
+                        card.className = 'border border-blue-200 bg-blue-50 rounded-lg p-3';
+                        card.innerHTML = `
+                            <p class="text-xs font-bold text-blue-600 mb-1">📅 ${fechaTexto}, ${horaTexto}</p>
+                            <p class="text-sm text-gray-700"><span class="font-medium">📍</span> ${prog.origen_texto}</p>
+                            <p class="text-sm text-gray-700"><span class="font-medium">🏁</span> ${prog.destino_texto}</p>
+                            <div class="flex justify-between items-center text-xs text-gray-500 my-1">
+                                <span>📏 ${distRecorrido} km</span>
+                                <span>🚗 A ${prog.distancia_conductor_texto}</span>
+                            </div>
+                            <div class="flex justify-between items-center pt-2 border-t border-blue-200">
+                                <div>
+                                    <span class="font-bold text-gray-800">$${prog.tarifa.toLocaleString('es-CO')}</span>
+                                    <span class="text-xs text-green-600 ml-2">Ganas: $${ganancia.toLocaleString('es-CO')}</span>
+                                </div>
+                                <button onclick="tomarServicio(${prog.id})" class="bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm hover:bg-blue-600">
+                                    TOMAR
+                                </button>
+                            </div>
+                        `;
+                        listaProg.appendChild(card);
+                    });
+                } else {
+                    seccionProg.classList.add('hidden');
                 }
             } catch (error) {
                 console.error('Error cargando servicios:', error);

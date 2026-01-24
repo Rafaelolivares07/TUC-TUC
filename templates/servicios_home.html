@@ -52,6 +52,17 @@
 
         <!-- Formulario de Transporte -->
         <div id="form-transporte">
+            <!-- BOTÓN PROGRAMAR VIAJE FUTURO -->
+            <div id="btn-programar-viaje" onclick="abrirModalProgramacion()" class="bg-white rounded border border-gray-300 p-3 mb-4 shadow cursor-pointer hover:bg-gray-50 transition flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">📅</span>
+                    <span id="texto-programar" class="text-sm font-medium text-gray-700">PROGRAMAR Y VER VIAJES FUTUROS</span>
+                    <span id="badge-programados" class="hidden bg-blue-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                </div>
+                <span id="flecha-programar" class="text-gray-400">›</span>
+                <span id="btn-cancelar-programacion" class="hidden text-red-500 font-bold text-lg" onclick="event.stopPropagation(); cancelarProgramacion()">✕</span>
+            </div>
+
             <!-- SECCIÓN 1: Destino -->
             <div id="seccion-destino" class="bg-white rounded border border-gray-400 p-4 mb-6 shadow-lg">
                 <h2 class="text-base font-medium mb-2 text-gray-800">¿A dónde quieres ir?</h2>
@@ -666,13 +677,17 @@
                 // Actualizar progreso
                 actualizarProgreso(75);
 
+                const bodyTarifa = {
+                    tipo_servicio: 'transporte',
+                    distancia_km: distanciaKm
+                };
+                if (fechaProgramadaSeleccionada) {
+                    bodyTarifa.fecha_programada = fechaProgramadaSeleccionada.fechaHora.toISOString();
+                }
                 const response = await fetch('/api/calcular-tarifa', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        tipo_servicio: 'transporte',
-                        distancia_km: distanciaKm
-                    })
+                    body: JSON.stringify(bodyTarifa)
                 });
 
                 const data = await response.json();
@@ -901,6 +916,10 @@
                 body.origen_lon = coordenadasOrigenActual ? coordenadasOrigenActual.lon : (coordenadasOrigenSeleccionado ? coordenadasOrigenSeleccionado.lon : null);
                 body.destino_lat = coordenadasDestinoSeleccionado ? coordenadasDestinoSeleccionado.lat : null;
                 body.destino_lon = coordenadasDestinoSeleccionado ? coordenadasDestinoSeleccionado.lon : null;
+                if (fechaProgramadaSeleccionada) {
+                    body.fecha_programada = fechaProgramadaSeleccionada.fechaHora.toISOString();
+                    body.hora_programada = fechaProgramadaSeleccionada.hora;
+                }
             } else {
                 body.horas_acompanamiento = datosCalculados.horas;
                 body.notas = notas;
@@ -923,22 +942,31 @@
                         document.getElementById('saludo-usuario').textContent = `Hola ${primerNombre}!`;
                     }
 
-                    // Mostrar mensaje de éxito y luego el viaje en curso
-                    const mensajeExito = data.usuario && data.usuario.nuevo
-                        ? `¡Bienvenido ${data.usuario.nombre.split(' ')[0]}! Tu cuenta ha sido creada y tu solicitud está en proceso.`
-                        : `¡Solicitud enviada! Buscando conductor...`;
+                    if (fechaProgramadaSeleccionada) {
+                        // Viaje programado: NO mostrar "buscando conductor"
+                        const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+                        const fechaTexto = fechaProgramadaSeleccionada.fechaHora.toLocaleDateString('es-CO', opciones);
+                        const horaTexto = fechaProgramadaSeleccionada.fechaHora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                        mostrarModalExito('¡Programado!', `Tu viaje fue programado para ${fechaTexto} a las ${horaTexto}`, null);
+                        cancelarProgramacion();
+                        actualizarBadgeProgramados();
+                    } else {
+                        // Viaje inmediato: flujo normal
+                        const mensajeExito = data.usuario && data.usuario.nuevo
+                            ? `¡Bienvenido ${data.usuario.nombre.split(' ')[0]}! Tu cuenta ha sido creada y tu solicitud está en proceso.`
+                            : `¡Solicitud enviada! Buscando conductor...`;
 
-                    mostrarModalExito('¡Listo!', mensajeExito, () => {
-                        // Mostrar el viaje en curso sin recargar la página
-                        mostrarViajeEnCurso({
-                            id: data.solicitud_id,
-                            tipo_servicio: tipoServicioActual,
-                            origen_texto: body.origen_texto,
-                            destino_texto: body.destino_texto,
-                            precio: body.precio,
-                            estado: 'pendiente'
+                        mostrarModalExito('¡Listo!', mensajeExito, () => {
+                            mostrarViajeEnCurso({
+                                id: data.solicitud_id,
+                                tipo_servicio: tipoServicioActual,
+                                origen_texto: body.origen_texto,
+                                destino_texto: body.destino_texto,
+                                precio: body.precio,
+                                estado: 'pendiente'
+                            });
                         });
-                    });
+                    }
                 } else {
                     mostrarModalError('Error', data.error || 'No se pudo procesar la solicitud');
                     confirmacionEnProceso = false;
@@ -2108,6 +2136,166 @@
                 intervaloPollingViaje = null;
             }
         }
+
+        // =====================================================
+        // VIAJES PROGRAMADOS
+        // =====================================================
+        let fechaProgramadaSeleccionada = null;
+
+        function abrirModalProgramacion() {
+            // Si ya tiene fecha programada, no abrir modal (usar el ✕ para cancelar)
+            if (fechaProgramadaSeleccionada) return;
+
+            const modal = document.createElement('div');
+            modal.id = 'modal-programacion';
+            modal.className = 'fixed inset-0 z-[9998] flex items-center justify-center bg-black bg-opacity-60';
+
+            const hoy = new Date().toISOString().split('T')[0];
+
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm max-h-[80vh] overflow-y-auto">
+                    <h2 class="text-lg font-bold text-gray-800 text-center mb-4">📅 Programar Viaje Futuro</h2>
+
+                    <div class="space-y-3 mb-4">
+                        <div>
+                            <label class="text-sm text-gray-600">Fecha</label>
+                            <input type="date" id="prog-fecha" min="${hoy}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-600">Hora</label>
+                            <input type="time" id="prog-hora" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+
+                    <button onclick="confirmarProgramacion()" class="w-full bg-blue-500 text-white py-2.5 rounded-lg font-medium hover:bg-blue-600 transition mb-3">
+                        Confirmar fecha/hora
+                    </button>
+
+                    <div id="lista-programados-modal" class="border-t pt-3 mt-3">
+                        <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Mis viajes programados</p>
+                        <div id="contenedor-programados" class="space-y-2">
+                            <p class="text-sm text-gray-400 text-center">Cargando...</p>
+                        </div>
+                    </div>
+
+                    <button onclick="cerrarModalProgramacion()" class="mt-4 w-full text-gray-400 text-sm hover:text-gray-600">
+                        Cerrar
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            cargarViajesProgramados();
+        }
+
+        function cerrarModalProgramacion() {
+            const modal = document.getElementById('modal-programacion');
+            if (modal) {
+                modal.style.opacity = '0';
+                modal.style.transition = 'opacity 0.3s';
+                setTimeout(() => modal.remove(), 300);
+            }
+        }
+
+        function confirmarProgramacion() {
+            const fecha = document.getElementById('prog-fecha').value;
+            const hora = document.getElementById('prog-hora').value;
+
+            if (!fecha || !hora) {
+                alert('Selecciona fecha y hora');
+                return;
+            }
+
+            // Validar que sea futuro
+            const fechaHora = new Date(fecha + 'T' + hora);
+            if (fechaHora <= new Date()) {
+                alert('La fecha y hora debe ser futura');
+                return;
+            }
+
+            fechaProgramadaSeleccionada = { fecha, hora, fechaHora };
+
+            // Actualizar botón
+            const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+            const fechaTexto = fechaHora.toLocaleDateString('es-CO', opciones);
+            const horaTexto = fechaHora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+            document.getElementById('texto-programar').textContent = `${fechaTexto}, ${horaTexto}`;
+            document.getElementById('flecha-programar').classList.add('hidden');
+            document.getElementById('btn-cancelar-programacion').classList.remove('hidden');
+            document.getElementById('badge-programados').classList.add('hidden');
+
+            cerrarModalProgramacion();
+        }
+
+        function cancelarProgramacion() {
+            fechaProgramadaSeleccionada = null;
+            document.getElementById('texto-programar').textContent = 'PROGRAMAR Y VER VIAJES FUTUROS';
+            document.getElementById('flecha-programar').classList.remove('hidden');
+            document.getElementById('btn-cancelar-programacion').classList.add('hidden');
+            actualizarBadgeProgramados();
+        }
+
+        async function cargarViajesProgramados() {
+            try {
+                const response = await fetch('/api/mis-viajes-programados');
+                const data = await response.json();
+                const contenedor = document.getElementById('contenedor-programados');
+
+                if (!data.ok || !data.viajes || data.viajes.length === 0) {
+                    contenedor.innerHTML = '<p class="text-sm text-gray-400 text-center">No hay viajes programados</p>';
+                    return;
+                }
+
+                contenedor.innerHTML = data.viajes.map(v => {
+                    const fecha = new Date(v.fecha_programada);
+                    const opciones = { weekday: 'short', day: 'numeric', month: 'short' };
+                    const fechaTexto = fecha.toLocaleDateString('es-CO', opciones);
+                    const horaTexto = fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                    const precio = v.precio ? '$' + Math.round(v.precio).toLocaleString('es-CO') : '';
+
+                    return `
+                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-200 flex justify-between items-center">
+                            <div class="flex-1">
+                                <p class="text-xs font-medium text-blue-600">📅 ${fechaTexto}, ${horaTexto}</p>
+                                <p class="text-xs text-gray-600 truncate">${v.origen_texto || '?'} → ${v.destino_texto || '?'}</p>
+                                <p class="text-xs text-gray-500">${precio}</p>
+                            </div>
+                            <button onclick="cancelarViajeProgramado(${v.id})" class="text-red-400 hover:text-red-600 text-lg ml-2">✕</button>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.log('Error cargando viajes programados');
+            }
+        }
+
+        async function cancelarViajeProgramado(viajeId) {
+            if (!confirm('¿Cancelar este viaje programado?')) return;
+            try {
+                await fetch(`/api/cancelar-viaje/${viajeId}`, { method: 'POST' });
+                cargarViajesProgramados();
+                actualizarBadgeProgramados();
+            } catch (e) {
+                console.log('Error cancelando viaje programado');
+            }
+        }
+
+        async function actualizarBadgeProgramados() {
+            try {
+                const response = await fetch('/api/mis-viajes-programados');
+                const data = await response.json();
+                const badge = document.getElementById('badge-programados');
+                if (data.ok && data.viajes && data.viajes.length > 0) {
+                    badge.textContent = data.viajes.length;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            } catch (e) {}
+        }
+
+        // Cargar badge al iniciar
+        actualizarBadgeProgramados();
 
         function getEstadoClase(estado) {
             const clases = {

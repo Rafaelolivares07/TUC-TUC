@@ -2287,14 +2287,40 @@
             }
         }
 
-        async function cancelarViajeProgramado(viajeId) {
-            if (!confirm('¿Cancelar este viaje programado?')) return;
+        function cancelarViajeProgramado(viajeId) {
+            const modal = document.createElement('div');
+            modal.id = 'modal-eliminar-programado';
+            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-6 text-center max-w-sm w-full">
+                    <div class="text-4xl mb-3">🗑️</div>
+                    <h2 class="text-lg font-bold text-gray-800 mb-2">¿Eliminar este viaje programado?</h2>
+                    <p class="text-sm text-gray-500 mb-4">Esta acción no se puede deshacer</p>
+                    <div class="flex gap-3">
+                        <button onclick="document.getElementById('modal-eliminar-programado').remove()" class="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-300">
+                            Volver
+                        </button>
+                        <button onclick="confirmarEliminarProgramado(${viajeId})" class="flex-1 bg-red-500 text-white py-2.5 rounded-lg font-bold hover:bg-red-600">
+                            Sí, eliminar
+                        </button>
+                    </div>
+                </div>
+            `;
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) modal.remove();
+            });
+            document.body.appendChild(modal);
+        }
+
+        async function confirmarEliminarProgramado(viajeId) {
+            const modal = document.getElementById('modal-eliminar-programado');
+            if (modal) modal.remove();
             try {
                 await fetch(`/api/cancelar-viaje/${viajeId}`, { method: 'POST' });
                 cargarViajesProgramados();
                 actualizarBadgeProgramados();
             } catch (e) {
-                console.log('Error cancelando viaje programado');
+                console.log('Error eliminando viaje programado');
             }
         }
 

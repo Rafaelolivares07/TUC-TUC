@@ -1158,6 +1158,8 @@
         }
 
         function mostrarSugerenciasDestino(resultados) {
+            if (coordenadasDestinoSeleccionado) return; // Ya seleccionó, no mostrar dropdown
+
             const contenedor = document.getElementById('autocomplete-destino');
             const textoIngresado = document.getElementById('input-destino').value.trim().toLowerCase();
             contenedor.innerHTML = '';
@@ -1210,6 +1212,7 @@
                 opcion.appendChild(distanciaSpan);
 
                 opcion.addEventListener('click', function() {
+                    clearTimeout(timeoutAutocompleteDestino);
                     document.getElementById('input-destino').value = truncarDireccion(resultado.display_name);
                     coordenadasDestinoSeleccionado = {
                         lat: parseFloat(resultado.lat),

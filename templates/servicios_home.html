@@ -1715,6 +1715,18 @@
         document.addEventListener('DOMContentLoaded', function() {
             verificarUsuarioLogueado();
             verificarViajeEnCurso();
+            // Iniciar polling unificado (viaje en curso + programados)
+            setInterval(actualizarEstadoViaje, 5000);
+            // Cargar IDs pendientes iniciales para detectar cambios
+            fetch('/api/mis-viajes-programados')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok && data.viajes) {
+                        programadosPendientesIds = new Set(
+                            data.viajes.filter(v => v.estado === 'pendiente').map(v => v.id)
+                        );
+                    }
+                }).catch(() => {});
         });
 
         // =====================================================
@@ -1806,7 +1818,6 @@
             }
         }
 
-        let intervaloPollingViaje = null;
         let estadoAnteriorViaje = null;
 
         // Función para reproducir sonido de alerta
@@ -2096,18 +2107,6 @@
             const header = document.querySelector('.max-w-4xl > .bg-white');
             header.insertAdjacentHTML('afterend', estadoHTML);
 
-            // Iniciar polling si el viaje no está completado ni cancelado
-            if (viaje.estado !== 'completada' && viaje.estado !== 'cancelada' && viaje.estado !== 'cancelada_conductor') {
-                if (!intervaloPollingViaje) {
-                    intervaloPollingViaje = setInterval(actualizarEstadoViaje, 5000);
-                }
-            } else {
-                if (intervaloPollingViaje) {
-                    clearInterval(intervaloPollingViaje);
-                    intervaloPollingViaje = null;
-                }
-            }
-
             // Si el conductor canceló, mostrar alerta especial
             if (viaje.estado === 'cancelada_conductor') {
                 reproducirSonidoCancelado();
@@ -2116,25 +2115,37 @@
 
         async function actualizarEstadoViaje() {
             try {
+                // Verificar viaje inmediato en curso
                 const response = await fetch('/api/mi-viaje-en-curso');
                 const data = await response.json();
-
                 if (data.ok && data.viaje) {
                     mostrarViajeEnCurso(data.viaje);
                 }
-            } catch (error) {
-                console.log('Error actualizando estado del viaje');
-            }
+            } catch (error) {}
+
+            try {
+                // Verificar aceptación de viajes programados
+                const resp = await fetch('/api/mis-viajes-programados');
+                const prog = await resp.json();
+                if (prog.ok && prog.viajes) {
+                    prog.viajes.forEach(v => {
+                        if (v.estado === 'aceptada' && v.conductor && programadosPendientesIds.has(v.id)) {
+                            programadosPendientesIds.delete(v.id);
+                            mostrarModalConductorAceptoProgramado(v);
+                        }
+                    });
+                    // Actualizar lista de pendientes
+                    programadosPendientesIds = new Set(
+                        prog.viajes.filter(v => v.estado === 'pendiente').map(v => v.id)
+                    );
+                }
+            } catch (error) {}
         }
 
         function cerrarViajeCompletado() {
             const viajeDiv = document.getElementById('viaje-en-curso');
             if (viajeDiv) viajeDiv.remove();
             document.getElementById('form-transporte').classList.remove('hidden');
-            if (intervaloPollingViaje) {
-                clearInterval(intervaloPollingViaje);
-                intervaloPollingViaje = null;
-            }
         }
 
         // =====================================================
@@ -2314,46 +2325,8 @@
         // Cargar badge al iniciar
         actualizarBadgeProgramados();
 
-        // Polling para detectar cuando un conductor acepta un viaje programado
+        // Variable para detectar aceptación de viajes programados
         let programadosPendientesIds = new Set();
-        let pollingProgramadosIniciado = false;
-
-        async function verificarAceptacionProgramados() {
-            try {
-                const response = await fetch('/api/mis-viajes-programados');
-                const data = await response.json();
-                if (!data.ok || !data.viajes) return;
-
-                data.viajes.forEach(v => {
-                    if (v.estado === 'aceptada' && v.conductor && programadosPendientesIds.has(v.id)) {
-                        // Este viaje cambió de pendiente a aceptada
-                        programadosPendientesIds.delete(v.id);
-                        mostrarModalConductorAceptoProgramado(v);
-                    }
-                });
-
-                // Actualizar lista de pendientes
-                programadosPendientesIds = new Set(
-                    data.viajes.filter(v => v.estado === 'pendiente').map(v => v.id)
-                );
-            } catch (e) {}
-        }
-
-        function iniciarPollingProgramados() {
-            if (pollingProgramadosIniciado) return;
-            pollingProgramadosIniciado = true;
-            // Cargar IDs pendientes iniciales
-            fetch('/api/mis-viajes-programados')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.ok && data.viajes) {
-                        programadosPendientesIds = new Set(
-                            data.viajes.filter(v => v.estado === 'pendiente').map(v => v.id)
-                        );
-                    }
-                });
-            setInterval(verificarAceptacionProgramados, 10000);
-        }
 
         function mostrarModalConductorAceptoProgramado(viaje) {
             reproducirSonidoAlerta();
@@ -2388,9 +2361,6 @@
             document.body.appendChild(modal);
             actualizarBadgeProgramados();
         }
-
-        // Iniciar polling de programados
-        iniciarPollingProgramados();
 
         function getEstadoClase(estado) {
             const clases = {

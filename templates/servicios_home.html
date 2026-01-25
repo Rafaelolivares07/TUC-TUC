@@ -2270,15 +2270,16 @@
 
                     return `
                         <div class="${bgColor} rounded-lg p-2 border ${borderColor}">
-                            <div class="flex justify-between items-start">
-                                <div class="flex-1">
-                                    <p class="text-xs font-medium text-blue-600">📅 ${fechaTexto}, ${horaTexto}</p>
-                                    <p class="text-xs text-gray-600 truncate">${v.origen_texto || '?'} → ${v.destino_texto || '?'}</p>
-                                    <p class="text-xs text-gray-500">${precio}</p>
-                                </div>
-                                <button onclick="cancelarViajeProgramado(${v.id})" class="text-red-400 hover:text-red-600 text-lg ml-2">✕</button>
-                            </div>
+                            <p class="text-xs font-medium text-blue-600">📅 ${fechaTexto}, ${horaTexto}</p>
+                            <p class="text-xs text-gray-600">${v.origen_texto || '?'}</p>
+                            <p class="text-xs text-gray-600">→ ${v.destino_texto || '?'}</p>
+                            <p class="text-xs text-gray-500">${precio}</p>
                             ${conductorHtml}
+                            <div class="mt-2 pt-2 border-t ${v.conductor ? 'border-green-200' : 'border-gray-200'} text-right">
+                                <button onclick="cancelarViajeProgramado(${v.id})" class="text-xs text-red-500 hover:text-red-700 font-medium">
+                                    🗑️ Eliminar viaje
+                                </button>
+                            </div>
                         </div>
                     `;
                 }).join('');

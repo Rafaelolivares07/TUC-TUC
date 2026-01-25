@@ -42,14 +42,33 @@ cloudinary.config(
 import firebase_admin
 from firebase_admin import credentials, messaging
 
-firebase_cred_path = os.path.join(os.path.dirname(__file__), 'firebase-credentials.json')
-if os.path.exists(firebase_cred_path):
+# Intentar cargar credenciales de variable de entorno (Render) o archivo local
+firebase_initialized = False
+firebase_creds_json = os.getenv('FIREBASE_CREDENTIALS')
+if firebase_creds_json:
     try:
-        cred = credentials.Certificate(firebase_cred_path)
+        import json
+        cred_dict = json.loads(firebase_creds_json)
+        cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
-        print("Firebase Admin SDK inicializado correctamente")
+        firebase_initialized = True
+        print("Firebase Admin SDK inicializado desde variable de entorno")
     except Exception as e:
-        print(f"Error inicializando Firebase: {e}")
+        print(f"Error inicializando Firebase desde env: {e}")
+
+if not firebase_initialized:
+    firebase_cred_path = os.path.join(os.path.dirname(__file__), 'firebase-credentials.json')
+    if os.path.exists(firebase_cred_path):
+        try:
+            cred = credentials.Certificate(firebase_cred_path)
+            firebase_admin.initialize_app(cred)
+            firebase_initialized = True
+            print("Firebase Admin SDK inicializado desde archivo")
+        except Exception as e:
+            print(f"Error inicializando Firebase desde archivo: {e}")
+
+if not firebase_initialized:
+    print("AVISO: Firebase no inicializado - Push notifications deshabilitadas")
 
 
 def enviar_push_notification(push_token, titulo, mensaje, url='/'):

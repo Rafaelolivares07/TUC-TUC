@@ -875,7 +875,7 @@
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            if (!localStorage.getItem('bannerInstalacionCerrado')) {
+            if (!localStorage.getItem('bannerInstalacionConductor')) {
                 document.getElementById('banner-instalar').classList.remove('hidden');
             }
         });
@@ -889,7 +889,7 @@
         }
         function cerrarBannerInstalar() {
             document.getElementById('banner-instalar').classList.add('hidden');
-            localStorage.setItem('bannerInstalacionCerrado', 'true');
+            localStorage.setItem('bannerInstalacionConductor', 'true');
         }
     </script>
 

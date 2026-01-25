@@ -1,6 +1,6 @@
 {
   "name": "TUC TUC - Conductor",
-  "short_name": "TUC TUC",
+  "short_name": "TUC TUC Driver",
   "description": "App para conductores",
   "start_url": "/conductor",
   "display": "standalone",

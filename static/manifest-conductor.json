@@ -1,0 +1,21 @@
+{
+  "name": "TUC TUC - Conductor",
+  "short_name": "TUC TUC",
+  "description": "App para conductores",
+  "start_url": "/conductor",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#EAB308",
+  "icons": [
+    {
+      "src": "/static/TUCTUC%20192X192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/TUCTUC%20512X512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -38,6 +38,45 @@ cloudinary.config(
     api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
 
+# Configurar Firebase Admin SDK para push notifications
+import firebase_admin
+from firebase_admin import credentials, messaging
+
+firebase_cred_path = os.path.join(os.path.dirname(__file__), 'firebase-credentials.json')
+if os.path.exists(firebase_cred_path):
+    try:
+        cred = credentials.Certificate(firebase_cred_path)
+        firebase_admin.initialize_app(cred)
+        print("Firebase Admin SDK inicializado correctamente")
+    except Exception as e:
+        print(f"Error inicializando Firebase: {e}")
+
+
+def enviar_push_notification(push_token, titulo, mensaje, url='/'):
+    """Envía una notificación push a un dispositivo específico"""
+    if not push_token:
+        return False
+    try:
+        message = messaging.Message(
+            notification=messaging.Notification(
+                title=titulo,
+                body=mensaje,
+            ),
+            data={
+                'url': url,
+                'titulo': titulo,
+                'mensaje': mensaje
+            },
+            token=push_token,
+        )
+        response = messaging.send(message)
+        print(f"Push enviado exitosamente: {response}")
+        return True
+    except Exception as e:
+        print(f"Error enviando push: {e}")
+        return False
+
+
 # -------------------------------------------------------------------
 # --- ZONA 1: CONFIGURACIN INICIAL Y CONEXIN A LA BASE DE DATOS ---
 # -------------------------------------------------------------------
@@ -12004,6 +12043,10 @@ def migrar_conductor():
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS horas_programadas DECIMAL(4,1)")
         mensajes.append("✅ solicitudes_transporte.horas_programadas")
 
+        # Columna para push token en terceros
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS push_token TEXT")
+        mensajes.append("✅ terceros.push_token")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -18977,7 +19020,7 @@ def api_conductor_tomar_servicio(servicio_id):
 
         # Verificar que el servicio esté pendiente
         servicio = conn.execute("""
-            SELECT s.*, t.nombre as usuario_nombre
+            SELECT s.*, t.nombre as usuario_nombre, t.push_token as usuario_push_token
             FROM solicitudes_transporte s
             JOIN terceros t ON s.tercero_id = t.id
             WHERE s.id = %s AND s.estado = 'pendiente'
@@ -19011,6 +19054,17 @@ def api_conductor_tomar_servicio(servicio_id):
               cond_lat, cond_lon, servicio_id))
         conn.commit()
         conn.close()
+
+        # Enviar push notification al pasajero
+        if servicio.get('usuario_push_token'):
+            es_programado = servicio['fecha_programada'] is not None
+            if es_programado:
+                titulo = "Un conductor aceptó tu viaje"
+                mensaje = f"{conductor['nombre']} ({conductor['placa']}) tomó tu viaje programado"
+            else:
+                titulo = "Conductor en camino"
+                mensaje = f"{conductor['nombre']} va en camino a recogerte"
+            enviar_push_notification(servicio['usuario_push_token'], titulo, mensaje, '/servicios')
 
         return jsonify({
             'ok': True,
@@ -19105,6 +19159,31 @@ def api_conductor_mis_programados():
             })
 
         return jsonify({'ok': True, 'viajes': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/guardar-push-token', methods=['POST'])
+def api_guardar_push_token():
+    """Guarda el token de push notifications del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        data = request.get_json() or {}
+        token = data.get('token')
+
+        if not token:
+            return jsonify({'ok': False, 'error': 'Token requerido'}), 400
+
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE terceros SET push_token = %s WHERE id = %s
+        """, (token, session['usuario_id']))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

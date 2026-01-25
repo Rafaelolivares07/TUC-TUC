@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Servicios de Transporte - TucTuc</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#EAB308">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -853,7 +855,12 @@
             if (tipoServicioActual === 'transporte') {
                 nombre = document.getElementById('input-nombre').value.trim();
                 telefono = document.getElementById('input-telefono').value.trim();
-                origenTexto = document.getElementById('input-origen').value.trim();
+                // Si usa ubicación detectada, obtener de ahí; si no, del input
+                if (cardUbicacionSeleccionado) {
+                    origenTexto = document.getElementById('texto-ubicacion-detectada').textContent.trim();
+                } else {
+                    origenTexto = document.getElementById('input-origen').value.trim();
+                }
                 destinoTexto = document.getElementById('input-destino').value.trim();
             } else {
                 nombre = document.getElementById('input-nombre-acomp').value.trim();
@@ -2164,7 +2171,19 @@
                         </div>
                         <div>
                             <label class="text-sm text-gray-600">Hora</label>
-                            <input type="time" id="prog-hora" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <div class="flex gap-2">
+                                <select id="prog-hora" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                    <option value="">Hora</option>
+                                    ${[...Array(24)].map((_, i) => `<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('')}
+                                </select>
+                                <select id="prog-minuto" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                    <option value="">Min</option>
+                                    <option value="00">00</option>
+                                    <option value="15">15</option>
+                                    <option value="30">30</option>
+                                    <option value="45">45</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -2199,12 +2218,15 @@
 
         function confirmarProgramacion() {
             const fecha = document.getElementById('prog-fecha').value;
-            const hora = document.getElementById('prog-hora').value;
+            const horaVal = document.getElementById('prog-hora').value;
+            const minutoVal = document.getElementById('prog-minuto').value;
 
-            if (!fecha || !hora) {
-                alert('Selecciona fecha y hora');
+            if (!fecha || !horaVal || !minutoVal) {
+                alert('Selecciona fecha, hora y minutos');
                 return;
             }
+
+            const hora = horaVal + ':' + minutoVal;
 
             // Validar que sea futuro
             const fechaHora = new Date(fecha + 'T' + hora);
@@ -2544,6 +2566,61 @@
                 onConfirmar();
             });
         }
+
+        // =====================================================
+        // PWA - INSTALAR EN PANTALLA DE INICIO
+        // =====================================================
+        let deferredPrompt = null;
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js');
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('banner-instalar').classList.remove('hidden');
+        });
+
+        function instalarApp() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((result) => {
+                if (result.outcome === 'accepted') {
+                    document.getElementById('banner-instalar').classList.add('hidden');
+                }
+                deferredPrompt = null;
+            });
+        }
+
+        function cerrarBannerInstalar() {
+            document.getElementById('banner-instalar').classList.add('hidden');
+            localStorage.setItem('bannerInstalacionCerrado', 'true');
+        }
+
+        // No mostrar si ya lo cerró antes
+        if (localStorage.getItem('bannerInstalacionCerrado')) {
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+            });
+        }
     </script>
+
+    <!-- Banner Instalar App -->
+    <div id="banner-instalar" class="hidden fixed bottom-0 left-0 right-0 bg-yellow-500 text-gray-900 p-3 shadow-lg z-[9999]">
+        <div class="max-w-md mx-auto flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">📲</span>
+                <div>
+                    <p class="font-bold text-sm">Instalar TUC TUC</p>
+                    <p class="text-xs opacity-80">Acceso rápido desde tu pantalla</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="cerrarBannerInstalar()" class="text-xs px-2 py-1 opacity-70 hover:opacity-100">No</button>
+                <button onclick="instalarApp()" class="bg-gray-900 text-yellow-500 text-sm font-bold px-4 py-1.5 rounded-lg">Instalar</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

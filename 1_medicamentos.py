@@ -19040,11 +19040,13 @@ def api_conductor_viaje_activo():
 
     try:
         conn = get_db_connection()
+        # Solo viajes inmediatos O programados cuya hora ya llegó (con 15 min de anticipación)
         viaje = conn.execute("""
             SELECT s.*, t.nombre as usuario_nombre
             FROM solicitudes_transporte s
             JOIN terceros t ON s.tercero_id = t.id
             WHERE s.conductor_id = %s AND s.estado IN ('aceptada', 'recogiendo', 'en_curso')
+              AND (s.fecha_programada IS NULL OR s.fecha_programada <= NOW() + INTERVAL '15 minutes')
             LIMIT 1
         """, (session['usuario_id'],)).fetchone()
         conn.close()
@@ -19066,6 +19068,43 @@ def api_conductor_viaje_activo():
                 }
             })
         return jsonify({'ok': True, 'viaje': None})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/mis-programados')
+def api_conductor_mis_programados():
+    """Retorna los viajes programados que el conductor ha aceptado"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        viajes = conn.execute("""
+            SELECT s.id, s.origen_texto, s.destino_texto, s.precio, s.fecha_programada,
+                   t.nombre as usuario_nombre
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
+            WHERE s.conductor_id = %s
+              AND s.estado = 'aceptada'
+              AND s.fecha_programada IS NOT NULL
+              AND s.fecha_programada > NOW() + INTERVAL '15 minutes'
+            ORDER BY s.fecha_programada ASC
+        """, (session['usuario_id'],)).fetchall()
+        conn.close()
+
+        resultado = []
+        for v in viajes:
+            resultado.append({
+                'id': v['id'],
+                'origen_texto': v['origen_texto'],
+                'destino_texto': v['destino_texto'],
+                'precio': float(v['precio']) if v['precio'] else 0,
+                'fecha_programada': v['fecha_programada'].isoformat() if v['fecha_programada'] else None,
+                'usuario_nombre': v['usuario_nombre']
+            })
+
+        return jsonify({'ok': True, 'viajes': resultado})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

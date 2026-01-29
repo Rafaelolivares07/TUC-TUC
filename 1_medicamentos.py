@@ -20416,7 +20416,7 @@ def api_mi_viaje_en_curso():
                     'destino_lon': float(viaje['destino_lon']) if viaje['destino_lon'] else None,
                     'conductor_lat': float(viaje['conductor_lat']) if viaje['conductor_lat'] else None,
                     'conductor_lon': float(viaje['conductor_lon']) if viaje['conductor_lon'] else None,
-                    'fecha_programada': viaje['fecha_programada'].isoformat() if viaje.get('fecha_programada') else None
+                    'fecha_programada': viaje['fecha_programada'].isoformat() if viaje['fecha_programada'] else None
                 }
             })
         else:

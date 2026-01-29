@@ -282,6 +282,11 @@
                 if (data.ok) {
                     estadoConexion = data.estado || 'desconectado';
                     actualizarUIConexion();
+
+                    // Si ya está conectado, iniciar tracking de ubicación
+                    if (estadoConexion === 'conectado') {
+                        iniciarTrackingUbicacion();
+                    }
                 }
             } catch (error) {
                 console.error('Error cargando estado de conexión:', error);
@@ -316,6 +321,13 @@
                 if (data.ok) {
                     estadoConexion = data.estado;
                     actualizarUIConexion();
+
+                    // Iniciar/detener tracking de ubicación según conexión
+                    if (estadoConexion === 'conectado') {
+                        iniciarTrackingUbicacion();
+                    } else {
+                        detenerTrackingUbicacion();
+                    }
                 } else {
                     alert(data.error || 'Error al cambiar estado');
                     actualizarUIConexion();

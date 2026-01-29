@@ -136,6 +136,11 @@
                     </div>
                 </div>
 
+                <!-- Tiempo de espera del conductor -->
+                <div id="info-conductor-cercano" class="mt-3 p-3 rounded-lg text-center hidden">
+                    <span id="texto-conductor-cercano" class="font-medium"></span>
+                </div>
+
                 <button id="btn-confirmar" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition mt-4">
                     Confirmar solicitud
                 </button>
@@ -835,10 +840,48 @@
 
             document.getElementById('tarifa').textContent = '$' + datos.tarifa.toLocaleString();
 
+            // Buscar conductor cercano para mostrar tiempo de espera
+            if (datos.tipo === 'transporte' && coordenadasOrigenSeleccionado) {
+                buscarConductorCercano(coordenadasOrigenSeleccionado.lat, coordenadasOrigenSeleccionado.lon);
+            } else {
+                // Ocultar info de conductor si no hay coordenadas
+                document.getElementById('info-conductor-cercano').classList.add('hidden');
+            }
+
             // Scroll al resumen para que el usuario vea la tarifa calculada
             setTimeout(() => {
                 document.getElementById('resumen').scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 100);
+        }
+
+        async function buscarConductorCercano(lat, lon) {
+            const infoDiv = document.getElementById('info-conductor-cercano');
+            const textoSpan = document.getElementById('texto-conductor-cercano');
+
+            // Mostrar estado de carga
+            infoDiv.classList.remove('hidden');
+            infoDiv.className = 'mt-3 p-3 rounded-lg text-center bg-gray-100';
+            textoSpan.textContent = 'Buscando conductores...';
+
+            try {
+                const response = await fetch(`/api/conductor-cercano?lat=${lat}&lon=${lon}`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    if (data.hay_conductores) {
+                        infoDiv.className = 'mt-3 p-3 rounded-lg text-center bg-green-100';
+                        textoSpan.innerHTML = `<span class="text-green-700">🚗 Conductor más cercano a ~${data.tiempo_estimado_minutos} min</span>`;
+                    } else {
+                        infoDiv.className = 'mt-3 p-3 rounded-lg text-center bg-yellow-100';
+                        textoSpan.innerHTML = `<span class="text-yellow-700">⚠️ No hay conductores disponibles en este momento</span>`;
+                    }
+                } else {
+                    infoDiv.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error buscando conductor cercano:', error);
+                infoDiv.classList.add('hidden');
+            }
         }
 
         // Variable para evitar múltiples confirmaciones
@@ -2183,7 +2226,8 @@
             document.getElementById('input-origen').value = '';
             document.getElementById('input-nombre').value = '';
             document.getElementById('input-telefono').value = '';
-            document.getElementById('input-notas').value = '';
+            const notasInput = document.getElementById('input-notas-acomp');
+            if (notasInput) notasInput.value = '';
 
             // Resetear coordenadas
             coordenadasDestinoSeleccionado = null;
@@ -2193,6 +2237,9 @@
 
             // Ocultar resumen
             document.getElementById('resumen').classList.add('hidden');
+
+            // Ocultar info de conductor cercano
+            document.getElementById('info-conductor-cercano').classList.add('hidden');
 
             // Limpiar ruta del mapa si existe
             if (routeControl) {

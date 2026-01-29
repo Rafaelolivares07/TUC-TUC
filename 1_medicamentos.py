@@ -219,6 +219,28 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
     return R * c
 
 
+def obtener_distancia_osrm(lat1, lon1, lat2, lon2):
+    """
+    Obtiene distancia real por calles usando OSRM.
+    Retorna dict con 'distancia_metros', o None si falla.
+    """
+    import requests
+    try:
+        url = f"https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('code') == 'Ok' and data.get('routes'):
+                route = data['routes'][0]
+                return {
+                    'distancia_metros': route['distance']
+                }
+        return None
+    except Exception as e:
+        print(f"Error OSRM: {e}")
+        return None
+
+
 def normalizar_texto(texto):
     """
     Normaliza texto: quita tildes, convierte a minsculas, quita caracteres especiales
@@ -12073,6 +12095,13 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS ultima_actividad TIMESTAMP")
         mensajes.append("✅ terceros.ultima_actividad")
 
+        # Columnas para ubicación del conductor conectado
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS ubicacion_lat DECIMAL(10,8)")
+        mensajes.append("✅ terceros.ubicacion_lat")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS ubicacion_lon DECIMAL(11,8)")
+        mensajes.append("✅ terceros.ubicacion_lon")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -18999,6 +19028,84 @@ def api_conductor_estado_conexion():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/conductor-cercano')
+def api_conductor_cercano():
+    """Busca el conductor más cercano activo para mostrar tiempo estimado de espera"""
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+
+    if not lat or not lon:
+        return jsonify({'ok': False, 'error': 'Ubicación requerida'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Conductores conectados con dashboard activo (última actividad < 25 seg)
+        conductores = conn.execute("""
+            SELECT id, nombre, ubicacion_lat, ubicacion_lon
+            FROM terceros
+            WHERE estado_conexion = 'conectado'
+              AND ultima_actividad > NOW() - INTERVAL '25 seconds'
+              AND ubicacion_lat IS NOT NULL
+              AND ubicacion_lon IS NOT NULL
+              AND placa IS NOT NULL
+        """).fetchall()
+
+        if not conductores:
+            conn.close()
+            return jsonify({
+                'ok': True,
+                'hay_conductores': False,
+                'mensaje': 'No hay conductores disponibles en este momento'
+            })
+
+        # Encontrar el conductor más cercano (primero con Haversine para rapidez)
+        conductor_cercano = None
+        menor_distancia = float('inf')
+        for c in conductores:
+            dist = calcular_distancia(lat, lon, float(c['ubicacion_lat']), float(c['ubicacion_lon']))
+            if dist < menor_distancia:
+                menor_distancia = dist
+                conductor_cercano = c
+
+        # Obtener distancia real por calles con OSRM
+        osrm_data = obtener_distancia_osrm(
+            float(conductor_cercano['ubicacion_lat']),
+            float(conductor_cercano['ubicacion_lon']),
+            lat, lon
+        )
+
+        if osrm_data:
+            distancia_km = osrm_data['distancia_metros'] / 1000
+        else:
+            # Fallback a Haversine si OSRM falla
+            distancia_km = menor_distancia / 1000
+
+        # Obtener velocidad según horario (pico/valle)
+        velocidad_pico = obtener_parametro_transporte(conn, 'transporte_velocidad_pico', 10)
+        velocidad_valle = obtener_parametro_transporte(conn, 'transporte_velocidad_valle', 17)
+        hora_pico = es_hora_pico(conn)
+
+        velocidad = velocidad_pico if hora_pico else velocidad_valle
+
+        # Calcular tiempo: (distancia / velocidad) * 60 minutos
+        tiempo_minutos = max(1, round((distancia_km / velocidad) * 60))
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'hay_conductores': True,
+            'conductores_activos': len(conductores),
+            'tiempo_estimado_minutos': tiempo_minutos,
+            'distancia_km': round(distancia_km, 1),
+            'hora_pico': hora_pico
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/conductor/servicios-disponibles')
 def api_conductor_servicios_disponibles():
     """Lista servicios pendientes ordenados por cercanía al conductor"""
@@ -19368,7 +19475,7 @@ def api_conductor_finalizar_viaje(servicio_id):
 
 @app.route('/api/conductor/actualizar-ubicacion', methods=['POST'])
 def api_conductor_actualizar_ubicacion():
-    """Conductor actualiza su ubicación GPS en el viaje activo"""
+    """Conductor actualiza su ubicación GPS - guarda en terceros y en viaje activo si existe"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False}), 401
 
@@ -19381,11 +19488,21 @@ def api_conductor_actualizar_ubicacion():
 
     try:
         conn = get_db_connection()
+
+        # Siempre actualizar ubicación del conductor en terceros (mientras esté conectado)
+        conn.execute("""
+            UPDATE terceros
+            SET ubicacion_lat = %s, ubicacion_lon = %s, ultima_actividad = NOW()
+            WHERE id = %s AND estado_conexion = 'conectado'
+        """, (lat, lon, session['usuario_id']))
+
+        # También actualizar en viaje activo si tiene uno
         conn.execute("""
             UPDATE solicitudes_transporte
             SET conductor_lat = %s, conductor_lon = %s
             WHERE conductor_id = %s AND estado IN ('aceptada', 'recogiendo', 'en_curso')
         """, (lat, lon, session['usuario_id']))
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

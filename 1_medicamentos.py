@@ -19075,7 +19075,7 @@ def api_conductor_tomar_servicio(servicio_id):
         conn.close()
 
         # Enviar push notification al pasajero
-        if servicio.get('usuario_push_token'):
+        if servicio['usuario_push_token']:
             es_programado = servicio['fecha_programada'] is not None
             if es_programado:
                 titulo = "Un conductor aceptó tu viaje"
@@ -19232,7 +19232,7 @@ def api_conductor_llegue(servicio_id):
         conn.close()
 
         # Enviar push notification al pasajero
-        if servicio and servicio.get('push_token'):
+        if servicio and servicio['push_token']:
             enviar_push_notification(
                 servicio['push_token'],
                 "Tu conductor llegó",
@@ -19335,7 +19335,7 @@ def api_conductor_cancelar_viaje(servicio_id):
             return jsonify({'ok': False, 'error': 'No se pudo cancelar el viaje'}), 400
 
         es_programado = viaje['fecha_programada'] is not None
-        push_token = viaje.get('push_token')
+        push_token = viaje['push_token']
 
         if es_programado:
             # Viaje programado: volver a pendiente para que otros conductores lo tomen

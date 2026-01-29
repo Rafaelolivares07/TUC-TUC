@@ -841,8 +841,9 @@
             document.getElementById('tarifa').textContent = '$' + datos.tarifa.toLocaleString();
 
             // Buscar conductor cercano para mostrar tiempo de espera
-            if (datos.tipo === 'transporte' && coordenadasOrigenSeleccionado) {
-                buscarConductorCercano(coordenadasOrigenSeleccionado.lat, coordenadasOrigenSeleccionado.lon);
+            const coordsParaConductor = coordenadasOrigenSeleccionado || coordenadasOrigenActual;
+            if (datos.tipo === 'transporte' && coordsParaConductor) {
+                buscarConductorCercano(coordsParaConductor.lat, coordsParaConductor.lon);
             } else {
                 // Ocultar info de conductor si no hay coordenadas
                 document.getElementById('info-conductor-cercano').classList.add('hidden');

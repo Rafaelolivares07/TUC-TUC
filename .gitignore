@@ -42,3 +42,7 @@ debug*.png
 # VS Code
 .vscode/
 *.code-workspace
+
+# Firebase credentials
+firebase-credentials.json
+static/tuc-tuc-4f1e5-firebase-adminsdk-fbsvc-*.json

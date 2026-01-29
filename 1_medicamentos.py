@@ -19215,12 +19215,31 @@ def api_conductor_llegue(servicio_id):
 
     try:
         conn = get_db_connection()
+
+        # Obtener datos del pasajero para push notification
+        servicio = conn.execute("""
+            SELECT s.tercero_id, t.push_token, t.nombre as pasajero_nombre
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
+            WHERE s.id = %s AND s.conductor_id = %s
+        """, (servicio_id, session['usuario_id'])).fetchone()
+
         conn.execute("""
             UPDATE solicitudes_transporte SET estado = 'recogiendo'
             WHERE id = %s AND conductor_id = %s AND estado = 'aceptada'
         """, (servicio_id, session['usuario_id']))
         conn.commit()
         conn.close()
+
+        # Enviar push notification al pasajero
+        if servicio and servicio.get('push_token'):
+            enviar_push_notification(
+                servicio['push_token'],
+                "Tu conductor llegó",
+                "Sal a encontrarte con tu conductor",
+                '/servicios'
+            )
+
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -19303,17 +19322,22 @@ def api_conductor_cancelar_viaje(servicio_id):
     try:
         conn = get_db_connection()
 
-        # Verificar si es viaje programado
+        # Verificar si es viaje programado y obtener datos para push
         viaje = conn.execute("""
-            SELECT fecha_programada FROM solicitudes_transporte
-            WHERE id = %s AND conductor_id = %s AND estado IN ('aceptada', 'recogiendo', 'en_curso')
+            SELECT s.fecha_programada, t.push_token
+            FROM solicitudes_transporte s
+            JOIN terceros t ON s.tercero_id = t.id
+            WHERE s.id = %s AND s.conductor_id = %s AND s.estado IN ('aceptada', 'recogiendo', 'en_curso')
         """, (servicio_id, session['usuario_id'])).fetchone()
 
         if not viaje:
             conn.close()
             return jsonify({'ok': False, 'error': 'No se pudo cancelar el viaje'}), 400
 
-        if viaje['fecha_programada']:
+        es_programado = viaje['fecha_programada'] is not None
+        push_token = viaje.get('push_token')
+
+        if es_programado:
             # Viaje programado: volver a pendiente para que otros conductores lo tomen
             conn.execute("""
                 UPDATE solicitudes_transporte
@@ -19334,6 +19358,24 @@ def api_conductor_cancelar_viaje(servicio_id):
 
         conn.commit()
         conn.close()
+
+        # Enviar push notification al pasajero
+        if push_token:
+            if es_programado:
+                enviar_push_notification(
+                    push_token,
+                    "Conductor desasignado",
+                    "Tu viaje programado vuelve a estar disponible para otros conductores",
+                    '/servicios'
+                )
+            else:
+                enviar_push_notification(
+                    push_token,
+                    "Viaje cancelado",
+                    "El conductor canceló el viaje. Puedes solicitar otro.",
+                    '/servicios'
+                )
+
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

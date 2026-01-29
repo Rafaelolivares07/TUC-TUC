@@ -11,7 +11,7 @@
     <style>
         body { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); min-height: 100vh; }
         .imagen-compartir { position: relative; }
-        .qr-overlay { position: absolute; bottom: 20px; right: 20px; background: white; padding: 8px; border-radius: 8px; }
+        .qr-overlay { position: absolute; bottom: 50%; left: 50%; transform: translate(-50%, 50%); background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body class="pb-8">
@@ -100,8 +100,8 @@
         function generarQR() {
             new QRCode(document.getElementById('qrcode'), {
                 text: enlaceReferido,
-                width: 80,
-                height: 80,
+                width: 160,
+                height: 160,
                 colorDark: '#000000',
                 colorLight: '#ffffff'
             });

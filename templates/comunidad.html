@@ -10,8 +10,10 @@
     <meta name="theme-color" content="#EAB308">
     <style>
         body { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); min-height: 100vh; }
-        .imagen-compartir { position: relative; }
-        .qr-overlay { position: absolute; bottom: 50%; left: 50%; transform: translate(-50%, 50%); background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .contenedor-compartir { position: relative; background: white; }
+        .imagen-recortada { width: 100%; margin-top: -30px; }
+        .qr-overlay { position: absolute; bottom: -80px; left: 50%; transform: translateX(-50%); background: white; padding: 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .espacio-qr { height: 100px; background: white; }
     </style>
 </head>
 <body class="pb-8">
@@ -29,12 +31,15 @@
 
     <div class="max-w-4xl mx-auto p-4">
         <!-- Imagen + QR para compartir -->
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-4">
-            <div class="imagen-compartir" id="contenedor-imagen">
-                <img src="/static/splash_tuctuc.png" alt="TUC TUC" class="w-full">
+        <div class="rounded-xl shadow-lg overflow-hidden mb-4" id="contenedor-imagen">
+            <div class="contenedor-compartir">
+                <div style="overflow: hidden;">
+                    <img src="/static/splash_tuctuc.png" alt="TUC TUC" class="imagen-recortada">
+                </div>
                 <div class="qr-overlay">
                     <div id="qrcode"></div>
                 </div>
+                <div class="espacio-qr"></div>
             </div>
         </div>
 
@@ -128,24 +133,39 @@
             // Intentar Web Share API con imagen
             if (navigator.share && navigator.canShare) {
                 try {
-                    // Capturar imagen con QR usando canvas
-                    const contenedor = document.getElementById('contenedor-imagen');
-                    const canvas = document.createElement('canvas');
-                    const img = contenedor.querySelector('img');
-
-                    canvas.width = img.naturalWidth || 800;
-                    canvas.height = img.naturalHeight || 600;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                    // Dibujar QR en esquina
+                    const img = document.querySelector('#contenedor-imagen img');
                     const qrCanvas = document.querySelector('#qrcode canvas');
+
+                    const imgWidth = img.naturalWidth || 800;
+                    const imgHeight = img.naturalHeight || 600;
+                    const recorteArriba = 50; // Recortar arriba
+                    const espacioBlanco = 120; // Espacio para QR abajo
+                    const qrSize = 180;
+                    const qrPadding = 15;
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = imgWidth;
+                    canvas.height = imgHeight - recorteArriba + espacioBlanco;
+                    const ctx = canvas.getContext('2d');
+
+                    // Fondo blanco
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Dibujar imagen recortada
+                    ctx.drawImage(img, 0, recorteArriba, imgWidth, imgHeight - recorteArriba, 0, 0, imgWidth, imgHeight - recorteArriba);
+
+                    // Dibujar QR centrado abajo, parcialmente sobre imagen
                     if (qrCanvas) {
-                        const qrSize = 100;
-                        const margin = 20;
+                        const qrX = (canvas.width - qrSize - qrPadding * 2) / 2;
+                        const qrY = imgHeight - recorteArriba - qrSize / 2;
+
+                        // Fondo blanco del QR
                         ctx.fillStyle = 'white';
-                        ctx.fillRect(canvas.width - qrSize - margin - 10, canvas.height - qrSize - margin - 10, qrSize + 20, qrSize + 20);
-                        ctx.drawImage(qrCanvas, canvas.width - qrSize - margin, canvas.height - qrSize - margin, qrSize, qrSize);
+                        ctx.fillRect(qrX, qrY, qrSize + qrPadding * 2, qrSize + qrPadding * 2);
+
+                        // QR
+                        ctx.drawImage(qrCanvas, qrX + qrPadding, qrY + qrPadding, qrSize, qrSize);
                     }
 
                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));

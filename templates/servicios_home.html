@@ -300,6 +300,7 @@
         let seleccionandoOrigenEnMapa = false; // Estado de selección en mapa (origen)
         let marcadorDestinoMapa = null; // Marcador temporal en el mapa (destino)
         let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
+        let pendienteProgramarViaje = false; // Flag para saber si el usuario quería programar antes de registrarse
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -425,6 +426,7 @@
 
             // Auto-confirmar al completar teléfono (blur o Enter)
             document.getElementById('input-telefono').addEventListener('blur', function() {
+                verificarRegistroYProgramacion();
                 autoConfirmarSiDatosCompletos();
             });
 
@@ -853,6 +855,23 @@
                 setTimeout(() => {
                     confirmarSolicitud(true); // true = auto-confirmación
                 }, 300);
+            }
+        }
+
+        function verificarRegistroYProgramacion() {
+            // Si el usuario tenía pendiente programar un viaje y ahora tiene datos completos
+            if (pendienteProgramarViaje) {
+                const nombre = document.getElementById('input-nombre').value.trim();
+                const telefono = document.getElementById('input-telefono').value.trim();
+
+                if (nombre && telefono && telefono.length >= 7) {
+                    // Limpiar la bandera
+                    pendienteProgramarViaje = false;
+                    // Mostrar modal de bienvenida después de un pequeño delay
+                    setTimeout(() => {
+                        mostrarModalBienvenidaProgramacion();
+                    }, 500);
+                }
             }
         }
 
@@ -2153,6 +2172,52 @@
                 clearInterval(intervaloPollingViaje);
                 intervaloPollingViaje = null;
             }
+
+            // Limpiar formulario completo para nuevo viaje
+            limpiarFormularioViaje();
+        }
+
+        function limpiarFormularioViaje() {
+            // Limpiar inputs
+            document.getElementById('input-destino').value = '';
+            document.getElementById('input-origen').value = '';
+            document.getElementById('input-nombre').value = '';
+            document.getElementById('input-telefono').value = '';
+            document.getElementById('input-notas').value = '';
+
+            // Resetear coordenadas
+            coordenadasDestinoSeleccionado = null;
+            coordenadasOrigenSeleccionado = null;
+            datosCalculados = {};
+            estadoAnteriorViaje = null;
+
+            // Ocultar resumen
+            document.getElementById('resumen').classList.add('hidden');
+
+            // Limpiar ruta del mapa si existe
+            if (routeControl) {
+                map.removeControl(routeControl);
+                routeControl = null;
+            }
+
+            // Limpiar marcadores temporales del mapa
+            if (marcadorDestinoMapa) {
+                map.removeLayer(marcadorDestinoMapa);
+                marcadorDestinoMapa = null;
+            }
+            if (marcadorOrigenMapa) {
+                map.removeLayer(marcadorOrigenMapa);
+                marcadorOrigenMapa = null;
+            }
+
+            // Resetear estado de programación
+            if (fechaProgramadaSeleccionada) {
+                fechaProgramadaSeleccionada = null;
+                actualizarBotonProgramacion();
+            }
+
+            // Focus en el input de destino
+            document.getElementById('input-destino').focus();
         }
 
         // =====================================================
@@ -2160,9 +2225,83 @@
         // =====================================================
         let fechaProgramadaSeleccionada = null;
 
+        function mostrarModalRegistroRequerido() {
+            const modal = document.createElement('div');
+            modal.id = 'modal-registro-requerido';
+            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm text-center">
+                    <div class="text-5xl mb-4">📝</div>
+                    <h2 class="text-lg font-bold text-gray-800 mb-3">¡Primero ingresa tus datos!</h2>
+                    <p class="text-gray-600 mb-5">Para programar viajes necesitamos conocerte. Ingresa tu nombre y teléfono para continuar.</p>
+                    <button onclick="cerrarModalYEnfocarDatos()" class="w-full bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 transition">
+                        Entendido
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function cerrarModalYEnfocarDatos() {
+            // Cerrar modal
+            const modal = document.getElementById('modal-registro-requerido');
+            if (modal) modal.remove();
+
+            // Scroll suave a la sección de datos
+            document.getElementById('seccion-datos').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Focus en el input del nombre después del scroll
+            setTimeout(() => {
+                document.getElementById('input-nombre').focus();
+            }, 500);
+        }
+
+        function mostrarModalBienvenidaProgramacion() {
+            const modal = document.createElement('div');
+            modal.id = 'modal-bienvenida-programacion';
+            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm text-center">
+                    <div class="text-5xl mb-4">🎉</div>
+                    <h2 class="text-lg font-bold text-gray-800 mb-3">¡Gracias por registrarte!</h2>
+                    <p class="text-gray-600 mb-5">Ahora puedes programar viajes para cuando los necesites. ¡Vamos a programar tu primer viaje!</p>
+                    <button onclick="cerrarBienvenidaYAbrirProgramacion()" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 transition">
+                        ¡Programar viaje!
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function cerrarBienvenidaYAbrirProgramacion() {
+            const modal = document.getElementById('modal-bienvenida-programacion');
+            if (modal) modal.remove();
+
+            // Pequeño delay y abrir modal de programación
+            setTimeout(() => {
+                abrirModalProgramacion();
+            }, 300);
+        }
+
         function abrirModalProgramacion() {
             // Si ya tiene fecha programada, no abrir modal (usar el ✕ para cancelar)
             if (fechaProgramadaSeleccionada) return;
+
+            // Verificar si el usuario tiene datos ingresados
+            const inputNombre = document.getElementById('input-nombre');
+            const inputTelefono = document.getElementById('input-telefono');
+            const nombre = inputNombre.value.trim();
+            const telefono = inputTelefono.value.trim();
+
+            // Si el input está deshabilitado, el usuario ya está registrado
+            const usuarioRegistrado = inputNombre.disabled || (nombre && telefono && telefono.length >= 7);
+
+            if (!usuarioRegistrado) {
+                // Marcar que quiere programar viaje después de registrarse
+                pendienteProgramarViaje = true;
+                mostrarModalRegistroRequerido();
+                return;
+            }
 
             const modal = document.createElement('div');
             modal.id = 'modal-programacion';

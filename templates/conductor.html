@@ -34,6 +34,14 @@
             <p id="saludo-conductor" class="text-sm text-gray-700 mt-1">Cargando...</p>
         </div>
 
+        <!-- Botón de Conexión/Desconexión -->
+        <div id="seccion-conexion" class="hidden mb-4">
+            <button id="btn-conexion" onclick="toggleConexion()" class="w-full py-4 rounded-lg font-bold text-xl shadow-lg transition-all duration-300">
+                <!-- Contenido dinámico según estado -->
+            </button>
+            <p id="estado-conexion-texto" class="text-center text-sm mt-2"></p>
+        </div>
+
         <!-- Sección: Registro de Vehículo (si no tiene datos) -->
         <div id="seccion-registro-vehiculo" class="hidden bg-white rounded-lg shadow-lg p-4 mb-4">
             <h2 class="text-lg font-bold text-gray-800 mb-3">Registra tu vehículo</h2>
@@ -199,6 +207,7 @@
         let estadoAnteriorViaje = null;
         let serviciosAnterioresIds = [];
         let comisionPlataforma = 5; // Default 5%, se carga de BD
+        let estadoConexion = 'desconectado'; // Estado de conexión del conductor
 
         // Función para reproducir sonido de alerta
         function reproducirSonidoAlerta() {
@@ -263,6 +272,63 @@
             verificarSesion();
         });
 
+        // =====================================================
+        // GESTIÓN DE ESTADO DE CONEXIÓN
+        // =====================================================
+        async function cargarEstadoConexion() {
+            try {
+                const response = await fetch('/api/conductor/estado-conexion');
+                const data = await response.json();
+                if (data.ok) {
+                    estadoConexion = data.estado || 'desconectado';
+                    actualizarUIConexion();
+                }
+            } catch (error) {
+                console.error('Error cargando estado de conexión:', error);
+            }
+        }
+
+        function actualizarUIConexion() {
+            const btn = document.getElementById('btn-conexion');
+            const texto = document.getElementById('estado-conexion-texto');
+
+            if (estadoConexion === 'conectado') {
+                btn.innerHTML = '🟢 CONECTADO - Toca para desconectarte';
+                btn.className = 'w-full py-4 rounded-lg font-bold text-xl shadow-lg transition-all duration-300 bg-green-500 text-white hover:bg-green-600';
+                texto.innerHTML = '<span class="text-green-600 font-medium">Estás recibiendo solicitudes de viajes</span>';
+            } else {
+                btn.innerHTML = '⚪ DESCONECTADO - Toca para conectarte';
+                btn.className = 'w-full py-4 rounded-lg font-bold text-xl shadow-lg transition-all duration-300 bg-gray-400 text-white hover:bg-gray-500';
+                texto.innerHTML = '<span class="text-gray-500">No estás recibiendo notificaciones de nuevos viajes</span>';
+            }
+        }
+
+        async function toggleConexion() {
+            const nuevoEstado = estadoConexion === 'conectado' ? 'desconectar' : 'conectar';
+            const btn = document.getElementById('btn-conexion');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Cambiando...';
+
+            try {
+                const response = await fetch(`/api/conductor/${nuevoEstado}`, { method: 'POST' });
+                const data = await response.json();
+
+                if (data.ok) {
+                    estadoConexion = data.estado;
+                    actualizarUIConexion();
+                } else {
+                    alert(data.error || 'Error al cambiar estado');
+                    actualizarUIConexion();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión');
+                actualizarUIConexion();
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         // Verificar si hay sesión de usuario
         async function verificarSesion() {
             try {
@@ -275,7 +341,9 @@
 
                     // Verificar si tiene datos de vehículo
                     if (data.usuario.placa) {
-                        // Ya tiene vehículo registrado, obtener ubicación y mostrar servicios
+                        // Ya tiene vehículo registrado, mostrar sección de conexión y obtener ubicación
+                        document.getElementById('seccion-conexion').classList.remove('hidden');
+                        cargarEstadoConexion();
                         obtenerUbicacion();
                     } else {
                         // Mostrar formulario de registro de vehículo
@@ -567,6 +635,9 @@
 
                 if (data.ok) {
                     viajeActivo = data.viaje;
+                    // Auto-conectar al tomar servicio
+                    estadoConexion = 'conectado';
+                    actualizarUIConexion();
                     clearInterval(intervaloActualizacion);
                     iniciarTrackingUbicacion();
                     mostrarViajeActivo();
@@ -595,6 +666,9 @@
                 const data = await response.json();
 
                 if (data.ok) {
+                    // Auto-conectar al tomar servicio programado
+                    estadoConexion = 'conectado';
+                    actualizarUIConexion();
                     alert(`✅ Viaje programado aceptado\n📅 ${fechaTexto}\n\nEl pasajero será notificado.`);
                     cargarServiciosDisponibles();
                     cargarMisProgramados();
@@ -694,6 +768,8 @@
 
                 if (data.ok) {
                     document.getElementById('seccion-registro-vehiculo').classList.add('hidden');
+                    document.getElementById('seccion-conexion').classList.remove('hidden');
+                    cargarEstadoConexion();
                     obtenerUbicacion();
                 } else {
                     alert(data.error || 'Error al guardar');

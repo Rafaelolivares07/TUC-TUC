@@ -12066,6 +12066,13 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS push_token TEXT")
         mensajes.append("✅ terceros.push_token")
 
+        # Columnas para estado de conexión del conductor
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS estado_conexion VARCHAR(20) DEFAULT 'desconectado'")
+        mensajes.append("✅ terceros.estado_conexion")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS ultima_actividad TIMESTAMP")
+        mensajes.append("✅ terceros.ultima_actividad")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -18927,6 +18934,71 @@ def api_conductor_registrar_vehiculo():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/conductor/conectar', methods=['POST'])
+def api_conductor_conectar():
+    """Marca al conductor como conectado y disponible para recibir servicios"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE terceros
+            SET estado_conexion = 'conectado', ultima_actividad = NOW()
+            WHERE id = %s
+        """, (session['usuario_id'],))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'estado': 'conectado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/desconectar', methods=['POST'])
+def api_conductor_desconectar():
+    """Marca al conductor como desconectado"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE terceros
+            SET estado_conexion = 'desconectado', ultima_actividad = NOW()
+            WHERE id = %s
+        """, (session['usuario_id'],))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'estado': 'desconectado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/estado-conexion')
+def api_conductor_estado_conexion():
+    """Obtiene el estado de conexión actual del conductor"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        row = conn.execute("""
+            SELECT estado_conexion, ultima_actividad
+            FROM terceros WHERE id = %s
+        """, (session['usuario_id'],)).fetchone()
+        conn.close()
+
+        if row:
+            return jsonify({
+                'ok': True,
+                'estado': row['estado_conexion'] or 'desconectado',
+                'ultima_actividad': row['ultima_actividad'].isoformat() if row['ultima_actividad'] else None
+            })
+        return jsonify({'ok': False, 'error': 'Conductor no encontrado'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/conductor/servicios-disponibles')
 def api_conductor_servicios_disponibles():
     """Lista servicios pendientes ordenados por cercanía al conductor"""
@@ -19071,6 +19143,14 @@ def api_conductor_tomar_servicio(servicio_id):
         """, (session['usuario_id'], conductor['placa'], conductor['color_vehiculo'],
               conductor['marca_vehiculo'], conductor['modelo_vehiculo'],
               cond_lat, cond_lon, servicio_id))
+
+        # Auto-conectar al conductor cuando toma un servicio
+        conn.execute("""
+            UPDATE terceros
+            SET estado_conexion = 'conectado', ultima_actividad = NOW()
+            WHERE id = %s
+        """, (session['usuario_id'],))
+
         conn.commit()
         conn.close()
 

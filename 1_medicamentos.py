@@ -12102,6 +12102,16 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS ubicacion_lon DECIMAL(11,8)")
         mensajes.append("✅ terceros.ubicacion_lon")
 
+        # Campos para sistema de referidos
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS referido_por INTEGER")
+        mensajes.append("✅ terceros.referido_por")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS credito_referidos INTEGER DEFAULT 0")
+        mensajes.append("✅ terceros.credito_referidos")
+
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS primer_viaje_completado BOOLEAN DEFAULT FALSE")
+        mensajes.append("✅ terceros.primer_viaje_completado")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -18930,6 +18940,71 @@ def conductor_home():
     return render_template('conductor.html')
 
 
+@app.route('/comunidad')
+def comunidad_home():
+    """Página de la comunidad TUC TUC"""
+    return render_template('comunidad.html')
+
+
+@app.route('/api/comunidad/estadisticas')
+def api_comunidad_estadisticas():
+    """Estadísticas de la comunidad TUC TUC"""
+    try:
+        conn = get_db_connection()
+
+        # Contar usuarios (terceros)
+        usuarios = conn.execute("SELECT COUNT(*) as total FROM terceros").fetchone()
+
+        # Contar conductores (terceros con placa)
+        conductores = conn.execute("SELECT COUNT(*) as total FROM terceros WHERE placa IS NOT NULL").fetchone()
+
+        # Contar viajes completados
+        viajes = conn.execute("SELECT COUNT(*) as total FROM solicitudes_transporte WHERE estado = 'completada'").fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'usuarios': usuarios['total'] if usuarios else 0,
+            'conductores': conductores['total'] if conductores else 0,
+            'viajes': viajes['total'] if viajes else 0
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/comunidad/mis-referidos')
+def api_comunidad_mis_referidos():
+    """Obtiene estadísticas de referidos del usuario actual"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        # Obtener crédito del usuario
+        usuario = conn.execute(
+            "SELECT credito_referidos FROM terceros WHERE id = %s",
+            (session['usuario_id'],)
+        ).fetchone()
+
+        # Contar referidos
+        referidos = conn.execute(
+            "SELECT COUNT(*) as total FROM terceros WHERE referido_por = %s",
+            (session['usuario_id'],)
+        ).fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'credito': usuario['credito_referidos'] if usuario and usuario['credito_referidos'] else 0,
+            'total_referidos': referidos['total'] if referidos else 0
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # ENDPOINTS PARA CONDUCTORES
 # ============================================================================
@@ -19500,10 +19575,42 @@ def api_conductor_finalizar_viaje(servicio_id):
 
     try:
         conn = get_db_connection()
+
+        # Obtener info del viaje antes de completar
+        viaje = conn.execute("""
+            SELECT tercero_id FROM solicitudes_transporte
+            WHERE id = %s AND conductor_id = %s AND estado = 'en_curso'
+        """, (servicio_id, session['usuario_id'])).fetchone()
+
+        if not viaje:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Viaje no encontrado'}), 404
+
+        # Completar viaje
         conn.execute("""
             UPDATE solicitudes_transporte SET estado = 'completada', metodo_pago = %s, fecha_completado = NOW()
             WHERE id = %s AND conductor_id = %s AND estado = 'en_curso'
         """, (metodo_pago, servicio_id, session['usuario_id']))
+
+        # Sistema de referidos: dar crédito si es primer viaje
+        pasajero_id = viaje['tercero_id']
+        pasajero = conn.execute("""
+            SELECT referido_por, primer_viaje_completado FROM terceros WHERE id = %s
+        """, (pasajero_id,)).fetchone()
+
+        if pasajero and pasajero['referido_por'] and not pasajero['primer_viaje_completado']:
+            # Marcar primer viaje como completado
+            conn.execute("""
+                UPDATE terceros SET primer_viaje_completado = TRUE WHERE id = %s
+            """, (pasajero_id,))
+
+            # Dar crédito al referidor (máximo $10,000)
+            conn.execute("""
+                UPDATE terceros
+                SET credito_referidos = LEAST(credito_referidos + 1000, 10000)
+                WHERE id = %s
+            """, (pasajero['referido_por'],))
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -20455,12 +20562,20 @@ def api_solicitar_servicio():
                 tercero_id = tercero['id']
                 nombre = tercero['nombre']  # Usar nombre existente
             else:
-                # Crear nuevo tercero
-                tercero_id = conn.execute("""
-                    INSERT INTO terceros (nombre, telefono, fecha_creacion)
-                    VALUES (%s, %s, CURRENT_TIMESTAMP)
-                    RETURNING id
-                """, (nombre, telefono)).fetchone()['id']
+                # Crear nuevo tercero con referido si existe
+                referido_por = data.get('referido_por')
+                if referido_por:
+                    tercero_id = conn.execute("""
+                        INSERT INTO terceros (nombre, telefono, fecha_creacion, referido_por)
+                        VALUES (%s, %s, CURRENT_TIMESTAMP, %s)
+                        RETURNING id
+                    """, (nombre, telefono, referido_por)).fetchone()['id']
+                else:
+                    tercero_id = conn.execute("""
+                        INSERT INTO terceros (nombre, telefono, fecha_creacion)
+                        VALUES (%s, %s, CURRENT_TIMESTAMP)
+                        RETURNING id
+                    """, (nombre, telefono)).fetchone()['id']
                 conn.commit()
                 usuario_nuevo = True
 

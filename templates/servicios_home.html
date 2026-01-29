@@ -307,8 +307,20 @@
         let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
         let pendienteProgramarViaje = false; // Flag para saber si el usuario quería programar antes de registrarse
 
+        // Ir a la página de comunidad
+        function goToComunidad() {
+            window.location.href = '/comunidad';
+        }
+
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
+            // Detectar código de referido en URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCode = urlParams.get('ref');
+            if (refCode) {
+                localStorage.setItem('tuctuc_referido_por', refCode);
+            }
+
             configurarBotones();
             cargarUsuarioActual(); // Cargar nombre del usuario si está logueado
             cargarConteoPOIs(); // Cargar número de destinos conocidos
@@ -986,6 +998,12 @@
                 telefono: telefono,
                 precio: datosCalculados.tarifa
             };
+
+            // Agregar código de referido si existe
+            const refCode = localStorage.getItem('tuctuc_referido_por');
+            if (refCode) {
+                body.referido_por = parseInt(refCode);
+            }
 
             if (tipoServicioActual === 'transporte') {
                 body.origen_texto = origenTexto;

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Comunidad TUC TUC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#EAB308">
+    <style>
+        body { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); min-height: 100vh; }
+        .imagen-compartir { position: relative; }
+        .qr-overlay { position: absolute; bottom: 20px; right: 20px; background: white; padding: 8px; border-radius: 8px; }
+    </style>
+</head>
+<body class="pb-8">
+    <!-- Header -->
+    <div class="bg-yellow-500 text-gray-900 p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-4xl mx-auto flex items-center gap-3">
+            <button onclick="window.location.href='/servicios'" class="p-2 rounded-full hover:bg-yellow-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <h1 class="text-xl font-bold">Comunidad TUC TUC</h1>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto p-4">
+        <!-- Imagen + QR para compartir -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-4">
+            <div class="imagen-compartir" id="contenedor-imagen">
+                <img src="/static/splash_tuctuc.png" alt="TUC TUC" class="w-full">
+                <div class="qr-overlay">
+                    <div id="qrcode"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enlace -->
+        <div class="bg-white rounded-xl shadow-lg p-4 mb-4">
+            <p class="text-xs text-gray-500 mb-1">Tu enlace de invitación:</p>
+            <p id="enlace-referido" class="text-sm font-mono text-blue-600 break-all">Cargando...</p>
+        </div>
+
+        <!-- Botón Compartir -->
+        <button onclick="compartir()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            Compartir invitación
+        </button>
+
+        <!-- Info del programa -->
+        <div class="bg-yellow-100 rounded-xl p-4 mb-4">
+            <h3 class="font-bold text-gray-800 mb-2">Gana $1,000 por cada amigo</h3>
+            <p class="text-sm text-gray-600">Cuando un amigo se registre con tu enlace y complete su primer viaje, recibes $1,000 de crédito para tus próximos viajes.</p>
+        </div>
+
+        <!-- Saldo y referidos -->
+        <div class="bg-white rounded-xl shadow-lg p-4">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-gray-600">Tu saldo de referidos:</span>
+                <span class="text-2xl font-bold text-green-600">$<span id="saldo-referidos">0</span></span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div id="barra-progreso" class="bg-green-500 h-3 rounded-full" style="width: 0%"></div>
+            </div>
+            <p class="text-xs text-gray-500 text-right">Máximo: $10,000</p>
+            <div class="mt-4 pt-4 border-t">
+                <span class="text-gray-600">Amigos referidos:</span>
+                <span class="font-bold text-gray-800 ml-2" id="total-referidos">0</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let usuarioActual = null;
+        let enlaceReferido = '';
+
+        async function verificarSesion() {
+            try {
+                const response = await fetch('/api/usuario-actual');
+                const data = await response.json();
+                if (!data.ok || !data.usuario) {
+                    window.location.href = '/servicios';
+                    return;
+                }
+                usuarioActual = data.usuario;
+                enlaceReferido = `${window.location.origin}/servicios?ref=${usuarioActual.id}`;
+                document.getElementById('enlace-referido').textContent = enlaceReferido;
+                generarQR();
+                cargarEstadisticas();
+            } catch (error) {
+                window.location.href = '/servicios';
+            }
+        }
+
+        function generarQR() {
+            new QRCode(document.getElementById('qrcode'), {
+                text: enlaceReferido,
+                width: 80,
+                height: 80,
+                colorDark: '#000000',
+                colorLight: '#ffffff'
+            });
+        }
+
+        async function cargarEstadisticas() {
+            try {
+                const response = await fetch('/api/comunidad/mis-referidos');
+                const data = await response.json();
+                if (data.ok) {
+                    document.getElementById('saldo-referidos').textContent = (data.credito || 0).toLocaleString();
+                    document.getElementById('total-referidos').textContent = data.total_referidos || 0;
+                    const porcentaje = Math.min(100, ((data.credito || 0) / 10000) * 100);
+                    document.getElementById('barra-progreso').style.width = porcentaje + '%';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function compartir() {
+            const texto = `🚗 ¡Únete a TUC TUC!\nViaja seguro y económico.\n👉 ${enlaceReferido}`;
+
+            // Intentar Web Share API con imagen
+            if (navigator.share && navigator.canShare) {
+                try {
+                    // Capturar imagen con QR usando canvas
+                    const contenedor = document.getElementById('contenedor-imagen');
+                    const canvas = document.createElement('canvas');
+                    const img = contenedor.querySelector('img');
+
+                    canvas.width = img.naturalWidth || 800;
+                    canvas.height = img.naturalHeight || 600;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // Dibujar QR en esquina
+                    const qrCanvas = document.querySelector('#qrcode canvas');
+                    if (qrCanvas) {
+                        const qrSize = 100;
+                        const margin = 20;
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(canvas.width - qrSize - margin - 10, canvas.height - qrSize - margin - 10, qrSize + 20, qrSize + 20);
+                        ctx.drawImage(qrCanvas, canvas.width - qrSize - margin, canvas.height - qrSize - margin, qrSize, qrSize);
+                    }
+
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                    const file = new File([blob], 'tuctuc-invitacion.png', { type: 'image/png' });
+
+                    if (navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                            files: [file],
+                            text: texto
+                        });
+                        return;
+                    }
+                } catch (e) {
+                    console.log('Compartir con imagen falló, usando solo texto');
+                }
+            }
+
+            // Fallback: WhatsApp directo
+            const urlWhatsApp = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+            window.open(urlWhatsApp, '_blank');
+        }
+
+        document.addEventListener('DOMContentLoaded', verificarSesion);
+    </script>
+</body>
+</html>

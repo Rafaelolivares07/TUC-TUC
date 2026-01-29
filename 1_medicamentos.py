@@ -19040,12 +19040,12 @@ def api_conductor_cercano():
     try:
         conn = get_db_connection()
 
-        # Conductores conectados con dashboard activo (última actividad < 25 seg)
+        # Conductores conectados con dashboard activo (última actividad < 60 seg)
         conductores = conn.execute("""
             SELECT id, nombre, ubicacion_lat, ubicacion_lon
             FROM terceros
             WHERE estado_conexion = 'conectado'
-              AND ultima_actividad > NOW() - INTERVAL '25 seconds'
+              AND ultima_actividad > NOW() - INTERVAL '60 seconds'
               AND ubicacion_lat IS NOT NULL
               AND ubicacion_lon IS NOT NULL
               AND placa IS NOT NULL

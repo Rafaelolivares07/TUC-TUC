@@ -19124,8 +19124,8 @@ def api_conductor_servicios_disponibles():
         # Obtener velocidad según hora pico/valle
         hora_pico = es_hora_pico(conn)
         param_vel = 'transporte_velocidad_pico' if hora_pico else 'transporte_velocidad_valle'
-        vel_row = conn.execute("SELECT valor FROM parametros WHERE nombre = %s", (param_vel,)).fetchone()
-        velocidad = float(vel_row['valor']) if vel_row else 25.0
+        vel_row = conn.execute("SELECT valor_numerico FROM parametros_sistema WHERE nombre = %s", (param_vel,)).fetchone()
+        velocidad = float(vel_row['valor_numerico']) if vel_row and vel_row['valor_numerico'] else 25.0
 
         # Servicios inmediatos - traer más para pre-filtrar con Haversine
         rows = conn.execute("""

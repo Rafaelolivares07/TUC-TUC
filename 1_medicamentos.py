@@ -19108,7 +19108,7 @@ def api_conductor_cercano():
 
 @app.route('/api/conductor/servicios-disponibles')
 def api_conductor_servicios_disponibles():
-    """Lista servicios pendientes ordenados por cercanía al conductor"""
+    """Lista servicios pendientes ordenados por cercanía al conductor (OSRM)"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
@@ -19121,7 +19121,13 @@ def api_conductor_servicios_disponibles():
     try:
         conn = get_db_connection()
 
-        # Servicios inmediatos (sin fecha programada)
+        # Obtener velocidad según hora pico/valle
+        hora_pico = es_hora_pico(conn)
+        param_vel = 'transporte_velocidad_pico' if hora_pico else 'transporte_velocidad_valle'
+        vel_row = conn.execute("SELECT valor FROM parametros WHERE nombre = %s", (param_vel,)).fetchone()
+        velocidad = float(vel_row['valor']) if vel_row else 25.0
+
+        # Servicios inmediatos - traer más para pre-filtrar con Haversine
         rows = conn.execute("""
             SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
                    s.destino_lat, s.destino_lon, s.precio, s.fecha_solicitud,
@@ -19134,14 +19140,29 @@ def api_conductor_servicios_disponibles():
               AND s.origen_lat IS NOT NULL AND s.origen_lon IS NOT NULL
               AND s.destino_lat IS NOT NULL AND s.destino_lon IS NOT NULL
             ORDER BY s.fecha_solicitud DESC
-            LIMIT 20
+            LIMIT 50
         """).fetchall()
 
-        servicios = []
+        # Pre-filtrar con Haversine para obtener los 14 más cercanos
+        candidatos = []
         for row in rows:
-            dist = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
-            dist_km = dist / 1000
-            tiempo_est = round(dist_km * 3)
+            dist_haversine = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            candidatos.append({'row': row, 'dist_pre': dist_haversine})
+
+        candidatos.sort(key=lambda x: x['dist_pre'])
+        candidatos = candidatos[:14]
+
+        # Aplicar OSRM a los 14 candidatos
+        servicios = []
+        for c in candidatos:
+            row = c['row']
+            osrm = obtener_distancia_osrm(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            if osrm:
+                dist_km = osrm['distancia_metros'] / 1000
+            else:
+                dist_km = c['dist_pre'] / 1000
+
+            tiempo_est = round((dist_km / velocidad) * 60)
 
             servicios.append({
                 'id': row['id'],
@@ -19153,7 +19174,7 @@ def api_conductor_servicios_disponibles():
                 'destino_lon': float(row['destino_lon']),
                 'tarifa': row['precio'],
                 'usuario_nombre': row['usuario_nombre'],
-                'distancia_conductor': round(dist),
+                'distancia_conductor': round(dist_km * 1000),
                 'distancia_conductor_texto': f"{dist_km:.1f} km · ~{tiempo_est} min",
                 'distancia_recorrido_km': float(row['distancia_km']) if row['distancia_km'] else None,
                 'tiempo_recorrido_min': row['tiempo_estimado_minutos']
@@ -19161,7 +19182,7 @@ def api_conductor_servicios_disponibles():
 
         servicios.sort(key=lambda x: x['distancia_conductor'])
 
-        # Viajes programados (con fecha programada)
+        # Viajes programados - mismo proceso
         rows_prog = conn.execute("""
             SELECT s.id, s.origen_texto, s.destino_texto, s.origen_lat, s.origen_lon,
                    s.destino_lat, s.destino_lon, s.precio, s.fecha_programada,
@@ -19174,14 +19195,29 @@ def api_conductor_servicios_disponibles():
               AND s.origen_lat IS NOT NULL AND s.origen_lon IS NOT NULL
               AND s.destino_lat IS NOT NULL AND s.destino_lon IS NOT NULL
             ORDER BY s.fecha_programada ASC
-            LIMIT 20
+            LIMIT 50
         """).fetchall()
 
-        programados = []
+        # Pre-filtrar programados con Haversine
+        candidatos_prog = []
         for row in rows_prog:
-            dist = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
-            dist_km = dist / 1000
-            tiempo_est = round(dist_km * 3)
+            dist_haversine = calcular_distancia(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            candidatos_prog.append({'row': row, 'dist_pre': dist_haversine})
+
+        candidatos_prog.sort(key=lambda x: x['dist_pre'])
+        candidatos_prog = candidatos_prog[:14]
+
+        # Aplicar OSRM a programados
+        programados = []
+        for c in candidatos_prog:
+            row = c['row']
+            osrm = obtener_distancia_osrm(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            if osrm:
+                dist_km = osrm['distancia_metros'] / 1000
+            else:
+                dist_km = c['dist_pre'] / 1000
+
+            tiempo_est = round((dist_km / velocidad) * 60)
 
             programados.append({
                 'id': row['id'],
@@ -19194,15 +19230,17 @@ def api_conductor_servicios_disponibles():
                 'tarifa': row['precio'],
                 'usuario_nombre': row['usuario_nombre'],
                 'fecha_programada': row['fecha_programada'].isoformat() if row['fecha_programada'] else None,
-                'distancia_conductor': round(dist),
+                'distancia_conductor': round(dist_km * 1000),
                 'distancia_conductor_texto': f"{dist_km:.1f} km · ~{tiempo_est} min",
                 'distancia_recorrido_km': float(row['distancia_km']) if row['distancia_km'] else None,
                 'tiempo_recorrido_min': row['tiempo_estimado_minutos']
             })
 
+        programados.sort(key=lambda x: x['distancia_conductor'])
+
         conn.close()
 
-        return jsonify({'ok': True, 'servicios': servicios, 'programados': programados})
+        return jsonify({'ok': True, 'servicios': servicios, 'programados': programados, 'hora_pico': hora_pico})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

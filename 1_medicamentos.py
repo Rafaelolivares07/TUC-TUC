@@ -19556,6 +19556,147 @@ def api_conductor_servicios_disponibles():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def validar_solapamiento_viajes(conn, conductor_id, nuevo_servicio):
+    """
+    Valida que el conductor pueda tomar un nuevo viaje sin solaparse con sus viajes existentes.
+    Usa OSRM para calcular tiempo de traslado entre destino de viaje A y origen de viaje B.
+    Aplica margen de seguridad de 10 minutos.
+
+    Retorna: (puede_tomar: bool, mensaje_error: str o None)
+    """
+    from datetime import datetime, timedelta
+
+    nuevo_origen_lat = float(nuevo_servicio['origen_lat'])
+    nuevo_origen_lon = float(nuevo_servicio['origen_lon'])
+    nuevo_fecha_programada = nuevo_servicio.get('fecha_programada')
+
+    # Determinar hora del nuevo viaje
+    if nuevo_fecha_programada:
+        # Viaje programado
+        hora_nuevo_viaje = nuevo_fecha_programada
+    else:
+        # Viaje inmediato - se considera NOW
+        hora_nuevo_viaje = datetime.now()
+
+    # Obtener velocidad según horario
+    velocidad_pico = obtener_parametro_transporte(conn, 'transporte_velocidad_pico', 10)
+    velocidad_valle = obtener_parametro_transporte(conn, 'transporte_velocidad_valle', 17)
+    hora_pico = es_hora_pico(conn)
+    velocidad = velocidad_pico if hora_pico else velocidad_valle
+
+    MARGEN_SEGURIDAD_MINUTOS = 10
+
+    viajes_a_verificar = []
+
+    # 1. Buscar viaje en curso del conductor
+    viaje_en_curso = conn.execute("""
+        SELECT id, destino_lat, destino_lon, tiempo_estimado_minutos,
+               fecha_inicio_viaje, fecha_solicitud, 'en_curso' as tipo
+        FROM solicitudes_transporte
+        WHERE conductor_id = %s AND estado = 'en_curso'
+    """, (conductor_id,)).fetchone()
+
+    if viaje_en_curso:
+        viajes_a_verificar.append(viaje_en_curso)
+
+    # 2. Buscar viaje en estado 'aceptada' o 'recogiendo' (viaje activo no en curso aún)
+    viaje_activo = conn.execute("""
+        SELECT id, destino_lat, destino_lon, tiempo_estimado_minutos,
+               fecha_programada, fecha_solicitud, 'activo' as tipo
+        FROM solicitudes_transporte
+        WHERE conductor_id = %s AND estado IN ('aceptada', 'recogiendo')
+          AND (fecha_programada IS NULL OR fecha_programada <= NOW() + INTERVAL '15 minutes')
+    """, (conductor_id,)).fetchone()
+
+    if viaje_activo:
+        viajes_a_verificar.append(viaje_activo)
+
+    # 3. Buscar viajes programados del conductor (futuros)
+    viajes_programados = conn.execute("""
+        SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
+               tiempo_estimado_minutos, fecha_programada, 'programado' as tipo
+        FROM solicitudes_transporte
+        WHERE conductor_id = %s
+          AND estado = 'aceptada'
+          AND fecha_programada IS NOT NULL
+          AND fecha_programada > NOW()
+        ORDER BY fecha_programada ASC
+    """, (conductor_id,)).fetchall()
+
+    viajes_a_verificar.extend(viajes_programados)
+
+    # Verificar cada viaje existente contra el nuevo
+    for viaje in viajes_a_verificar:
+        destino_lat = float(viaje['destino_lat'])
+        destino_lon = float(viaje['destino_lon'])
+        tiempo_estimado = viaje['tiempo_estimado_minutos'] or 30  # Default 30 min si no hay dato
+
+        # Calcular hora de fin del viaje existente
+        if viaje['tipo'] == 'en_curso':
+            # Viaje en curso: hora_fin = fecha_inicio + tiempo_estimado
+            fecha_inicio = viaje['fecha_inicio_viaje'] or viaje['fecha_solicitud']
+            if fecha_inicio:
+                hora_fin_viaje = fecha_inicio + timedelta(minutes=tiempo_estimado)
+            else:
+                hora_fin_viaje = datetime.now() + timedelta(minutes=tiempo_estimado)
+        elif viaje['tipo'] == 'activo':
+            # Viaje activo (aceptado/recogiendo): estimamos que terminará pronto + tiempo de viaje
+            hora_fin_viaje = datetime.now() + timedelta(minutes=tiempo_estimado + 10)  # +10 para recogida
+        else:
+            # Viaje programado: hora_fin = fecha_programada + tiempo_estimado
+            hora_fin_viaje = viaje['fecha_programada'] + timedelta(minutes=tiempo_estimado)
+
+        # Calcular tiempo de traslado con OSRM (destino viaje A → origen nuevo viaje)
+        osrm_data = obtener_distancia_osrm(destino_lat, destino_lon, nuevo_origen_lat, nuevo_origen_lon)
+
+        if osrm_data:
+            distancia_km = osrm_data['distancia_metros'] / 1000
+        else:
+            # Fallback a Haversine si OSRM falla
+            distancia_metros = calcular_distancia(destino_lat, destino_lon, nuevo_origen_lat, nuevo_origen_lon)
+            distancia_km = distancia_metros / 1000
+
+        # Tiempo de traslado en minutos = (distancia / velocidad) * 60
+        tiempo_traslado_min = (distancia_km / velocidad) * 60
+
+        # Hora en que el conductor estaría disponible para el nuevo viaje
+        hora_disponible = hora_fin_viaje + timedelta(minutes=tiempo_traslado_min + MARGEN_SEGURIDAD_MINUTOS)
+
+        # Verificar solapamiento
+        if hora_disponible > hora_nuevo_viaje:
+            # Hay solapamiento
+            diferencia_min = int((hora_disponible - hora_nuevo_viaje).total_seconds() / 60)
+
+            if viaje['tipo'] == 'programado':
+                # Si es viaje programado contra programado, verificar también al revés
+                # (el nuevo viaje podría terminar cuando empieza el programado)
+                if nuevo_fecha_programada:
+                    nuevo_tiempo_estimado = nuevo_servicio.get('tiempo_estimado_minutos', 30)
+                    hora_fin_nuevo = nuevo_fecha_programada + timedelta(minutes=nuevo_tiempo_estimado)
+
+                    # Tiempo de traslado inverso (destino nuevo → origen programado)
+                    nuevo_destino_lat = float(nuevo_servicio['destino_lat'])
+                    nuevo_destino_lon = float(nuevo_servicio['destino_lon'])
+                    origen_prog_lat = float(viaje['origen_lat'])
+                    origen_prog_lon = float(viaje['origen_lon'])
+
+                    osrm_inv = obtener_distancia_osrm(nuevo_destino_lat, nuevo_destino_lon, origen_prog_lat, origen_prog_lon)
+                    if osrm_inv:
+                        dist_inv_km = osrm_inv['distancia_metros'] / 1000
+                    else:
+                        dist_inv_km = calcular_distancia(nuevo_destino_lat, nuevo_destino_lon, origen_prog_lat, origen_prog_lon) / 1000
+
+                    tiempo_traslado_inv = (dist_inv_km / velocidad) * 60
+                    hora_disponible_inv = hora_fin_nuevo + timedelta(minutes=tiempo_traslado_inv + MARGEN_SEGURIDAD_MINUTOS)
+
+                    if hora_disponible_inv > viaje['fecha_programada']:
+                        return (False, f"Este viaje terminaría muy tarde para tu viaje programado de las {viaje['fecha_programada'].strftime('%H:%M')}")
+
+            return (False, f"No podrías llegar a tiempo. Estarías disponible en {diferencia_min} minutos después de la hora solicitada.")
+
+    return (True, None)
+
+
 @app.route('/api/conductor/tomar-servicio/<int:servicio_id>', methods=['POST'])
 def api_conductor_tomar_servicio(servicio_id):
     """Conductor toma un servicio"""
@@ -19576,6 +19717,12 @@ def api_conductor_tomar_servicio(servicio_id):
         if not servicio:
             conn.close()
             return jsonify({'ok': False, 'error': 'Servicio no disponible'}), 400
+
+        # Validar que no haya solapamiento con viajes existentes del conductor
+        puede_tomar, mensaje_error = validar_solapamiento_viajes(conn, session['usuario_id'], servicio)
+        if not puede_tomar:
+            conn.close()
+            return jsonify({'ok': False, 'error': mensaje_error}), 400
 
         # Obtener datos del conductor
         conductor = conn.execute("""

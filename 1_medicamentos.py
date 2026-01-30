@@ -19750,14 +19750,14 @@ def validar_solapamiento_pasajero(conn, tercero_id, fecha_programada_str, tiempo
         viaje_tiempo = viaje['tiempo_estimado_minutos'] or 30
         viaje_fin = viaje_inicio + timedelta(minutes=viaje_tiempo)
 
-        # Margen de 30 minutos entre viajes
-        MARGEN_MINUTOS = 30
+        # Margen de 5 minutos entre viajes (pasajero puede hacer varias vueltas)
+        MARGEN_MINUTOS = 5
 
         # Verificar solapamiento: nuevo viaje no puede empezar antes de que termine el existente + margen
         # ni terminar después de que empiece el existente - margen
         if not (hora_fin_nuevo + timedelta(minutes=MARGEN_MINUTOS) <= viaje_inicio or
                 fecha_programada >= viaje_fin + timedelta(minutes=MARGEN_MINUTOS)):
-            return (False, f"Ya tienes un viaje programado a las {viaje_inicio.strftime('%H:%M')} ({viaje['destino_texto']}). Debe haber al menos 30 minutos entre viajes.")
+            return (False, f"Ya tienes un viaje programado a las {viaje_inicio.strftime('%H:%M')} ({viaje['destino_texto']}). Los viajes no pueden solaparse.")
 
     return (True, None)
 

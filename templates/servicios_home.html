@@ -335,9 +335,8 @@
             }
 
             configurarBotones();
-            cargarUsuarioActual(); // Cargar nombre del usuario si está logueado
+            cargarUsuarioActual(); // Cargar nombre del usuario si está logueado (y luego carga lugares)
             cargarConteoPOIs(); // Cargar número de destinos conocidos
-            cargarMisLugares(); // Cargar lugares frecuentes del usuario
 
             // Splash screen con detección de ubicación
             const splash = document.getElementById('splash-screen');
@@ -379,6 +378,8 @@
                     usuarioLogueado = true;
                     const primerNombre = data.usuario.primer_nombre || data.usuario.nombre.split(' ')[0];
                     document.getElementById('saludo-usuario').textContent = `Hola ${primerNombre}!`;
+                    // Cargar lugares después de confirmar que está logueado
+                    cargarMisLugares();
                 }
             } catch (error) {
                 console.log('Usuario no logueado');

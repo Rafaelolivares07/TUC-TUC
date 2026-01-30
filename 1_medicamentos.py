@@ -12112,6 +12112,29 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS primer_viaje_completado BOOLEAN DEFAULT FALSE")
         mensajes.append("✅ terceros.primer_viaje_completado")
 
+        # Tabla lugares_usuario para lugares frecuentes del usuario
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS lugares_usuario (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL,
+                nombre VARCHAR(100) NOT NULL,
+                lat DECIMAL(10, 8) NOT NULL,
+                lon DECIMAL(11, 8) NOT NULL,
+                icono VARCHAR(20) DEFAULT '📍',
+                es_sugerido_publico BOOLEAN DEFAULT FALSE,
+                aprobado BOOLEAN DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        mensajes.append("✅ Tabla lugares_usuario creada")
+
+        # Campos para POIs sugeridos por usuarios
+        conn.execute("ALTER TABLE pois_cali ADD COLUMN IF NOT EXISTS origen VARCHAR(20) DEFAULT 'osm'")
+        mensajes.append("✅ pois_cali.origen")
+
+        conn.execute("ALTER TABLE pois_cali ADD COLUMN IF NOT EXISTS sugerido_por INTEGER")
+        mensajes.append("✅ pois_cali.sugerido_por")
+
         # Actualizar constraint de estado para incluir nuevos estados
         try:
             conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_estado_check")
@@ -19001,6 +19024,186 @@ def api_comunidad_mis_referidos():
             'credito': usuario['credito_referidos'] if usuario and usuario['credito_referidos'] else 0,
             'total_referidos': referidos['total'] if referidos else 0
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# ENDPOINTS PARA LUGARES FRECUENTES DEL USUARIO
+# ============================================================================
+
+@app.route('/api/mis-lugares')
+def api_mis_lugares():
+    """Obtiene los lugares frecuentes del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        lugares = conn.execute("""
+            SELECT id, nombre, lat, lon, icono, es_sugerido_publico, aprobado
+            FROM lugares_usuario
+            WHERE usuario_id = %s
+            ORDER BY created_at DESC
+        """, (session['usuario_id'],)).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'lugares': [dict(l) for l in lugares]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/lugares/crear', methods=['POST'])
+def api_crear_lugar():
+    """Crea un nuevo lugar frecuente para el usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    lat = data.get('lat')
+    lon = data.get('lon')
+    icono = data.get('icono', '📍')
+    es_publico = data.get('es_publico', False)
+
+    if not nombre or not lat or not lon:
+        return jsonify({'ok': False, 'error': 'Faltan datos requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar límite de lugares (máximo 10 por usuario)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM lugares_usuario WHERE usuario_id = %s",
+            (session['usuario_id'],)
+        ).fetchone()[0]
+
+        if count >= 10:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Máximo 10 lugares permitidos'}), 400
+
+        lugar = conn.execute("""
+            INSERT INTO lugares_usuario (usuario_id, nombre, lat, lon, icono, es_sugerido_publico)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, nombre, lat, lon, icono, es_sugerido_publico, aprobado
+        """, (session['usuario_id'], nombre, lat, lon, icono, es_publico)).fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'lugar': dict(lugar)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/lugares/eliminar/<int:lugar_id>', methods=['DELETE'])
+def api_eliminar_lugar(lugar_id):
+    """Elimina un lugar frecuente del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el lugar pertenece al usuario
+        lugar = conn.execute(
+            "SELECT id FROM lugares_usuario WHERE id = %s AND usuario_id = %s",
+            (lugar_id, session['usuario_id'])
+        ).fetchone()
+
+        if not lugar:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Lugar no encontrado'}), 404
+
+        conn.execute("DELETE FROM lugares_usuario WHERE id = %s", (lugar_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/lugares-sugeridos')
+@admin_required
+def api_admin_lugares_sugeridos():
+    """Lista lugares sugeridos pendientes de aprobación (admin)"""
+    try:
+        conn = get_db_connection()
+        lugares = conn.execute("""
+            SELECT l.id, l.nombre, l.lat, l.lon, l.icono, l.created_at,
+                   t.nombre as usuario_nombre, t.telefono as usuario_telefono
+            FROM lugares_usuario l
+            JOIN terceros t ON l.usuario_id = t.id
+            WHERE l.es_sugerido_publico = TRUE AND l.aprobado IS NULL
+            ORDER BY l.created_at DESC
+        """).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'lugares': [dict(l) for l in lugares]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/lugares/aprobar/<int:lugar_id>', methods=['POST'])
+@admin_required
+def api_admin_aprobar_lugar(lugar_id):
+    """Aprueba un lugar sugerido y lo copia a pois_cali"""
+    try:
+        conn = get_db_connection()
+
+        lugar = conn.execute(
+            "SELECT * FROM lugares_usuario WHERE id = %s AND es_sugerido_publico = TRUE",
+            (lugar_id,)
+        ).fetchone()
+
+        if not lugar:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Lugar no encontrado'}), 404
+
+        # Copiar a pois_cali
+        conn.execute("""
+            INSERT INTO pois_cali (nombre, lat, lon, categoria, display_name, origen, sugerido_por)
+            VALUES (%s, %s, %s, 'sugerido', %s, 'usuario', %s)
+        """, (lugar['nombre'], lugar['lat'], lugar['lon'], lugar['nombre'], lugar['usuario_id']))
+
+        # Marcar como aprobado
+        conn.execute(
+            "UPDATE lugares_usuario SET aprobado = TRUE WHERE id = %s",
+            (lugar_id,)
+        )
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Lugar aprobado y agregado a POIs'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/lugares/rechazar/<int:lugar_id>', methods=['POST'])
+@admin_required
+def api_admin_rechazar_lugar(lugar_id):
+    """Rechaza un lugar sugerido"""
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE lugares_usuario SET aprobado = FALSE WHERE id = %s",
+            (lugar_id,)
+        )
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Lugar rechazado'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

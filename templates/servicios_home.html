@@ -87,6 +87,14 @@
                     </div>
                 </div>
 
+                <!-- Carrusel de lugares frecuentes -->
+                <div id="carrusel-lugares" class="mt-3 hidden">
+                    <p class="text-xs text-gray-500 mb-2">Mis lugares:</p>
+                    <div class="flex gap-2 overflow-x-auto pb-2" id="lista-lugares">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+
                 <button id="btn-seleccionar-mapa" class="mt-3 w-full border-2 border-gray-800 text-gray-800 py-2 px-4 rounded font-medium transition hover:bg-gray-50">
                     Seleccionar en mapa
                 </button>
@@ -306,6 +314,11 @@
         let marcadorDestinoMapa = null; // Marcador temporal en el mapa (destino)
         let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
         let pendienteProgramarViaje = false; // Flag para saber si el usuario quería programar antes de registrarse
+        let lugaresUsuario = []; // Lugares frecuentes del usuario
+        let iconoLugarSeleccionado = '📍'; // Icono seleccionado para nuevo lugar
+        let ubicacionNuevoLugar = null; // Coordenadas del nuevo lugar
+        let seleccionandoUbicacionLugar = false; // Flag para selección de ubicación de nuevo lugar
+        let usuarioLogueado = false; // Flag para saber si el usuario está logueado
 
         // Ir a la página de comunidad
         function goToComunidad() {
@@ -324,6 +337,7 @@
             configurarBotones();
             cargarUsuarioActual(); // Cargar nombre del usuario si está logueado
             cargarConteoPOIs(); // Cargar número de destinos conocidos
+            cargarMisLugares(); // Cargar lugares frecuentes del usuario
 
             // Splash screen con detección de ubicación
             const splash = document.getElementById('splash-screen');
@@ -362,6 +376,7 @@
                 const data = await response.json();
 
                 if (data.ok && data.usuario) {
+                    usuarioLogueado = true;
                     const primerNombre = data.usuario.primer_nombre || data.usuario.nombre.split(' ')[0];
                     document.getElementById('saludo-usuario').textContent = `Hola ${primerNombre}!`;
                 }
@@ -515,7 +530,13 @@
             // Botón confirmar destino dentro del mapa
             document.getElementById('btn-confirmar-destino-mapa').addEventListener('click', function() {
                 desactivarSeleccionMapa();
-                verificarYCalcularAutomaticamente();
+                // Si el usuario está logueado, mostrar opción de guardar lugar
+                if (usuarioLogueado && coordenadasDestinoSeleccionado) {
+                    const direccion = document.getElementById('input-destino').value;
+                    mostrarModalGuardarLugarMapa(direccion);
+                } else {
+                    verificarYCalcularAutomaticamente();
+                }
             });
 
             // Cerrar autocomplete si se hace clic fuera
@@ -2240,11 +2261,9 @@
         }
 
         function limpiarFormularioViaje() {
-            // Limpiar inputs
+            // Limpiar inputs de viaje (NO nombre ni teléfono)
             document.getElementById('input-destino').value = '';
             document.getElementById('input-origen').value = '';
-            document.getElementById('input-nombre').value = '';
-            document.getElementById('input-telefono').value = '';
             const notasInput = document.getElementById('input-notas-acomp');
             if (notasInput) notasInput.value = '';
 
@@ -2863,6 +2882,249 @@
         // Inicializar push después de un pequeño delay para no bloquear la carga
         setTimeout(inicializarPushNotifications, 3000);
 
+        // =====================================================
+        // FUNCIONES DE LUGARES FRECUENTES
+        // =====================================================
+
+        async function cargarMisLugares() {
+            try {
+                const response = await fetch('/api/mis-lugares');
+                const data = await response.json();
+                if (data.ok && data.lugares.length > 0) {
+                    lugaresUsuario = data.lugares;
+                    renderizarCarruselLugares();
+                }
+            } catch (error) {
+                console.log('No se pudieron cargar lugares');
+            }
+        }
+
+        function renderizarCarruselLugares() {
+            const contenedor = document.getElementById('lista-lugares');
+            const carrusel = document.getElementById('carrusel-lugares');
+
+            if (lugaresUsuario.length === 0) {
+                carrusel.classList.add('hidden');
+                return;
+            }
+
+            contenedor.innerHTML = '';
+
+            // Agregar lugares del usuario
+            lugaresUsuario.forEach(lugar => {
+                const item = document.createElement('button');
+                item.className = 'flex-shrink-0 flex flex-col items-center p-2 bg-gray-100 rounded-lg hover:bg-yellow-100 transition min-w-[70px]';
+                item.innerHTML = `
+                    <span class="text-2xl">${lugar.icono}</span>
+                    <span class="text-xs text-gray-700 mt-1 truncate max-w-[60px]">${lugar.nombre}</span>
+                `;
+                item.onclick = () => seleccionarLugarFrecuente(lugar);
+                contenedor.appendChild(item);
+            });
+
+            // Botón agregar nuevo (si tiene menos de 10)
+            if (lugaresUsuario.length < 10) {
+                const btnNuevo = document.createElement('button');
+                btnNuevo.className = 'flex-shrink-0 flex flex-col items-center p-2 bg-yellow-100 rounded-lg hover:bg-yellow-200 transition min-w-[70px] border-2 border-dashed border-yellow-400';
+                btnNuevo.innerHTML = `
+                    <span class="text-2xl">➕</span>
+                    <span class="text-xs text-gray-700 mt-1">Nuevo</span>
+                `;
+                btnNuevo.onclick = abrirModalNuevoLugar;
+                contenedor.appendChild(btnNuevo);
+            }
+
+            carrusel.classList.remove('hidden');
+        }
+
+        function seleccionarLugarFrecuente(lugar) {
+            // Llenar el input de destino con el lugar seleccionado
+            document.getElementById('input-destino').value = lugar.nombre;
+            coordenadasDestinoSeleccionado = {
+                lat: parseFloat(lugar.lat),
+                lon: parseFloat(lugar.lon)
+            };
+            // Verificar si puede calcular automáticamente
+            verificarYCalcularAutomaticamente();
+        }
+
+        function abrirModalNuevoLugar() {
+            document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
+            document.getElementById('input-nombre-lugar').value = '';
+            document.getElementById('check-lugar-publico').checked = false;
+            ubicacionNuevoLugar = null;
+            iconoLugarSeleccionado = '📍';
+            actualizarIconosSeleccion();
+            document.getElementById('ubicacion-lugar-texto').textContent = 'Selecciona en el mapa';
+
+            // Si hay ubicación actual, usarla por defecto
+            if (ubicacionGPSActual) {
+                ubicacionNuevoLugar = { lat: ubicacionGPSActual.lat, lon: ubicacionGPSActual.lon };
+                document.getElementById('ubicacion-lugar-texto').textContent = 'Usando tu ubicación actual';
+            }
+        }
+
+        function cerrarModalNuevoLugar() {
+            document.getElementById('modal-nuevo-lugar').classList.add('hidden');
+            seleccionandoUbicacionLugar = false;
+        }
+
+        function seleccionarIcono(icono) {
+            iconoLugarSeleccionado = icono;
+            actualizarIconosSeleccion();
+        }
+
+        function actualizarIconosSeleccion() {
+            document.querySelectorAll('.icono-opcion').forEach(btn => {
+                if (btn.dataset.icono === iconoLugarSeleccionado) {
+                    btn.classList.add('border-yellow-500', 'bg-yellow-50');
+                } else {
+                    btn.classList.remove('border-yellow-500', 'bg-yellow-50');
+                }
+            });
+        }
+
+        function seleccionarUbicacionLugar() {
+            cerrarModalNuevoLugar();
+            seleccionandoUbicacionLugar = true;
+
+            // Mostrar mapa si no está visible
+            const contenedorMapa = document.getElementById('contenedor-mapa');
+            if (contenedorMapa.classList.contains('hidden')) {
+                contenedorMapa.classList.remove('hidden');
+                if (!map) {
+                    inicializarMapa();
+                }
+            }
+
+            // Centrar en ubicación actual si existe
+            if (ubicacionGPSActual && map) {
+                map.setView([ubicacionGPSActual.lat, ubicacionGPSActual.lon], 16);
+            }
+
+            alert('Toca el mapa para seleccionar la ubicación del lugar');
+
+            // Agregar listener temporal para click en mapa
+            map.once('click', function(e) {
+                ubicacionNuevoLugar = { lat: e.latlng.lat, lon: e.latlng.lng };
+
+                // Geocodificación inversa para obtener dirección
+                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        const direccion = data.display_name || `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+                        document.getElementById('ubicacion-lugar-texto').textContent = truncarDireccion(direccion);
+                    })
+                    .catch(() => {
+                        document.getElementById('ubicacion-lugar-texto').textContent = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+                    });
+
+                seleccionandoUbicacionLugar = false;
+                document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
+            });
+        }
+
+        async function guardarNuevoLugar() {
+            const nombre = document.getElementById('input-nombre-lugar').value.trim();
+            const esPublico = document.getElementById('check-lugar-publico').checked;
+
+            if (!nombre) {
+                alert('Por favor ingresa un nombre para el lugar');
+                return;
+            }
+
+            if (!ubicacionNuevoLugar) {
+                alert('Por favor selecciona la ubicación en el mapa');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/lugares/crear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nombre: nombre,
+                        lat: ubicacionNuevoLugar.lat,
+                        lon: ubicacionNuevoLugar.lon,
+                        icono: iconoLugarSeleccionado,
+                        es_publico: esPublico
+                    })
+                });
+
+                const data = await response.json();
+                if (data.ok) {
+                    cerrarModalNuevoLugar();
+                    cargarMisLugares(); // Recargar lista
+                    if (esPublico) {
+                        alert('¡Lugar guardado! Tu sugerencia será revisada para compartirla con la comunidad.');
+                    } else {
+                        alert('¡Lugar guardado!');
+                    }
+                } else {
+                    alert(data.error || 'Error al guardar el lugar');
+                }
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+
+        // Checkbox para mostrar/ocultar opciones de guardar lugar en mapa
+        document.getElementById('check-guardar-lugar-mapa')?.addEventListener('change', function() {
+            const opciones = document.getElementById('opciones-guardar-lugar-mapa');
+            if (this.checked) {
+                opciones.classList.remove('hidden');
+            } else {
+                opciones.classList.add('hidden');
+            }
+        });
+
+        async function confirmarDestinoMapa() {
+            const guardarLugar = document.getElementById('check-guardar-lugar-mapa').checked;
+
+            if (guardarLugar) {
+                const nombre = document.getElementById('nombre-lugar-mapa').value.trim();
+                const esPublico = document.getElementById('check-publico-mapa').checked;
+
+                if (!nombre) {
+                    alert('Por favor ingresa un nombre para guardar el lugar');
+                    return;
+                }
+
+                // Guardar el lugar
+                try {
+                    await fetch('/api/lugares/crear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            nombre: nombre,
+                            lat: coordenadasDestinoSeleccionado.lat,
+                            lon: coordenadasDestinoSeleccionado.lon,
+                            icono: '📍',
+                            es_publico: esPublico
+                        })
+                    });
+                    cargarMisLugares();
+                } catch (e) {
+                    console.log('Error guardando lugar');
+                }
+            }
+
+            // Cerrar modal y continuar
+            document.getElementById('modal-guardar-lugar-mapa').classList.add('hidden');
+            document.getElementById('check-guardar-lugar-mapa').checked = false;
+            document.getElementById('opciones-guardar-lugar-mapa').classList.add('hidden');
+            document.getElementById('nombre-lugar-mapa').value = '';
+            document.getElementById('check-publico-mapa').checked = false;
+
+            // Continuar con el cálculo
+            verificarYCalcularAutomaticamente();
+        }
+
+        function mostrarModalGuardarLugarMapa(direccion) {
+            document.getElementById('direccion-lugar-mapa').textContent = truncarDireccion(direccion);
+            document.getElementById('modal-guardar-lugar-mapa').classList.remove('hidden');
+        }
+
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
@@ -2907,6 +3169,96 @@
                 <button onclick="cerrarBannerInstalar()" class="text-xs px-2 py-1 opacity-70 hover:opacity-100">No</button>
                 <button onclick="instalarApp()" class="bg-gray-900 text-yellow-500 text-sm font-bold px-4 py-1.5 rounded-lg">Instalar</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Lugar -->
+    <div id="modal-nuevo-lugar" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 mx-4 max-w-md w-full shadow-2xl">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">Nuevo Lugar</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Nombre del lugar</label>
+                    <input type="text" id="input-nombre-lugar" class="w-full p-3 border-2 border-gray-300 rounded focus:border-yellow-500 focus:outline-none" placeholder="Ej: Casa, Trabajo, Gimnasio...">
+                </div>
+
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Icono</label>
+                    <div class="flex gap-2 flex-wrap" id="iconos-lugar">
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏠" onclick="seleccionarIcono('🏠')">🏠</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="💼" onclick="seleccionarIcono('💼')">💼</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏥" onclick="seleccionarIcono('🏥')">🏥</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏫" onclick="seleccionarIcono('🏫')">🏫</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🛒" onclick="seleccionarIcono('🛒')">🛒</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="⛪" onclick="seleccionarIcono('⛪')">⛪</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🍽️" onclick="seleccionarIcono('🍽️')">🍽️</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="📍" onclick="seleccionarIcono('📍')">📍</button>
+                    </div>
+                </div>
+
+                <div id="ubicacion-lugar-info" class="bg-gray-100 rounded p-3">
+                    <p class="text-sm text-gray-600">Ubicación:</p>
+                    <p id="ubicacion-lugar-texto" class="text-sm font-medium">Selecciona en el mapa</p>
+                </div>
+
+                <button type="button" id="btn-seleccionar-ubicacion-lugar" class="w-full border-2 border-gray-800 text-gray-800 py-2 rounded font-medium" onclick="seleccionarUbicacionLugar()">
+                    Seleccionar ubicación en mapa
+                </button>
+
+                <div class="border-t pt-4">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" id="check-lugar-publico" class="mt-1 w-5 h-5 text-yellow-500">
+                        <div>
+                            <span class="font-medium text-gray-800">Compartir con la comunidad</span>
+                            <p class="text-xs text-gray-500">Ayuda a otros usuarios a encontrar este lugar</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+                <button onclick="cerrarModalNuevoLugar()" class="flex-1 py-3 border-2 border-gray-300 rounded-lg font-medium text-gray-600">
+                    Cancelar
+                </button>
+                <button onclick="guardarNuevoLugar()" class="flex-1 py-3 bg-yellow-500 text-gray-900 rounded-lg font-bold">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Guardar Lugar (aparece después de seleccionar destino en mapa) -->
+    <div id="modal-guardar-lugar-mapa" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-5 mx-4 max-w-sm w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-2xl">📍</span>
+                <div>
+                    <h3 class="font-bold text-gray-800">Destino seleccionado</h3>
+                    <p class="text-sm text-gray-500" id="direccion-lugar-mapa">-</p>
+                </div>
+            </div>
+
+            <label class="flex items-start gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg mb-4">
+                <input type="checkbox" id="check-guardar-lugar-mapa" class="mt-1 w-5 h-5 text-yellow-500">
+                <div>
+                    <span class="font-medium text-gray-800">Guardar este lugar</span>
+                    <p class="text-xs text-gray-500">Para usarlo de nuevo fácilmente</p>
+                </div>
+            </label>
+
+            <div id="opciones-guardar-lugar-mapa" class="hidden space-y-3 mb-4">
+                <input type="text" id="nombre-lugar-mapa" class="w-full p-3 border-2 border-gray-300 rounded focus:border-yellow-500 focus:outline-none" placeholder="Nombre del lugar (ej: Casa)">
+
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="check-publico-mapa" class="w-4 h-4">
+                    <span>Compartir con la comunidad</span>
+                </label>
+            </div>
+
+            <button onclick="confirmarDestinoMapa()" class="w-full py-3 bg-yellow-500 text-gray-900 rounded-lg font-bold">
+                Continuar
+            </button>
         </div>
     </div>
 </body>

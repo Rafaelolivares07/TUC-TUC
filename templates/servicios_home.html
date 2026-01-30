@@ -2890,12 +2890,15 @@
             try {
                 const response = await fetch('/api/mis-lugares');
                 const data = await response.json();
-                if (data.ok && data.lugares.length > 0) {
-                    lugaresUsuario = data.lugares;
+                if (data.ok) {
+                    lugaresUsuario = data.lugares || [];
                     renderizarCarruselLugares();
                 }
             } catch (error) {
-                console.log('No se pudieron cargar lugares');
+                // Si falla (usuario no logueado), igual intentar mostrar si está logueado
+                if (usuarioLogueado) {
+                    renderizarCarruselLugares();
+                }
             }
         }
 
@@ -2903,14 +2906,15 @@
             const contenedor = document.getElementById('lista-lugares');
             const carrusel = document.getElementById('carrusel-lugares');
 
-            if (lugaresUsuario.length === 0) {
+            // Solo mostrar si el usuario está logueado
+            if (!usuarioLogueado) {
                 carrusel.classList.add('hidden');
                 return;
             }
 
             contenedor.innerHTML = '';
 
-            // Agregar lugares del usuario
+            // Agregar lugares del usuario (si tiene)
             lugaresUsuario.forEach(lugar => {
                 const item = document.createElement('button');
                 item.className = 'flex-shrink-0 flex flex-col items-center p-2 bg-gray-100 rounded-lg hover:bg-yellow-100 transition min-w-[70px]';
@@ -2922,7 +2926,7 @@
                 contenedor.appendChild(item);
             });
 
-            // Botón agregar nuevo (si tiene menos de 10)
+            // Botón agregar nuevo (siempre visible si tiene menos de 10)
             if (lugaresUsuario.length < 10) {
                 const btnNuevo = document.createElement('button');
                 btnNuevo.className = 'flex-shrink-0 flex flex-col items-center p-2 bg-yellow-100 rounded-lg hover:bg-yellow-200 transition min-w-[70px] border-2 border-dashed border-yellow-400';
@@ -3188,12 +3192,12 @@
                     <div class="flex gap-2 flex-wrap" id="iconos-lugar">
                         <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏠" onclick="seleccionarIcono('🏠')">🏠</button>
                         <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="💼" onclick="seleccionarIcono('💼')">💼</button>
-                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏥" onclick="seleccionarIcono('🏥')">🏥</button>
-                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏫" onclick="seleccionarIcono('🏫')">🏫</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏋️" onclick="seleccionarIcono('🏋️')">🏋️</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🎓" onclick="seleccionarIcono('🎓')">🎓</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🏦" onclick="seleccionarIcono('🏦')">🏦</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🌳" onclick="seleccionarIcono('🌳')">🌳</button>
+                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🎬" onclick="seleccionarIcono('🎬')">🎬</button>
                         <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🛒" onclick="seleccionarIcono('🛒')">🛒</button>
-                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="⛪" onclick="seleccionarIcono('⛪')">⛪</button>
-                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="🍽️" onclick="seleccionarIcono('🍽️')">🍽️</button>
-                        <button type="button" class="icono-opcion p-2 text-2xl border-2 rounded hover:border-yellow-500" data-icono="📍" onclick="seleccionarIcono('📍')">📍</button>
                     </div>
                 </div>
 

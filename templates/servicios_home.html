@@ -3141,7 +3141,6 @@
 
         async function guardarNuevoLugar() {
             const nombre = document.getElementById('input-nombre-lugar').value.trim();
-            const esPublico = document.getElementById('check-lugar-publico').checked;
 
             if (!nombre) {
                 alert('Por favor ingresa un nombre para el lugar');
@@ -3162,23 +3161,20 @@
                         lat: ubicacionNuevoLugar.lat,
                         lon: ubicacionNuevoLugar.lon,
                         icono: iconoLugarSeleccionado,
-                        es_publico: esPublico
+                        es_publico: false
                     })
                 });
 
                 const data = await response.json();
                 if (data.ok) {
                     cerrarModalNuevoLugar();
-                    cargarMisLugares(); // Recargar lista
-                    if (esPublico) {
-                        alert('¡Lugar guardado! Tu sugerencia será revisada para compartirla con la comunidad.');
-                    } else {
-                        alert('¡Lugar guardado!');
-                    }
+                    await cargarMisLugares(); // Recargar lista
+                    alert('¡Lugar guardado!');
                 } else {
                     alert(data.error || 'Error al guardar el lugar');
                 }
             } catch (error) {
+                console.error('Error:', error);
                 alert('Error de conexión');
             }
         }

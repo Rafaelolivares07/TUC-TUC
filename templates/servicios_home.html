@@ -315,7 +315,7 @@
         let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
         let pendienteProgramarViaje = false; // Flag para saber si el usuario quería programar antes de registrarse
         let lugaresUsuario = []; // Lugares frecuentes del usuario
-        let iconoLugarSeleccionado = '📍'; // Icono seleccionado para nuevo lugar
+        let iconoLugarSeleccionado = '🏠'; // Icono seleccionado para nuevo lugar (casa por defecto)
         let ubicacionNuevoLugar = null; // Coordenadas del nuevo lugar
         let seleccionandoUbicacionLugar = false; // Flag para selección de ubicación de nuevo lugar
         let usuarioLogueado = false; // Flag para saber si el usuario está logueado
@@ -2917,13 +2917,29 @@
 
             // Agregar lugares del usuario (si tiene)
             lugaresUsuario.forEach(lugar => {
-                const item = document.createElement('button');
-                item.className = 'flex-shrink-0 flex flex-col items-center p-2 bg-gray-100 rounded-lg hover:bg-yellow-100 transition min-w-[70px]';
-                item.innerHTML = `
-                    <span class="text-2xl">${lugar.icono}</span>
+                const item = document.createElement('div');
+                item.className = 'flex-shrink-0 relative';
+
+                // Botón principal del lugar
+                const btn = document.createElement('button');
+                btn.className = 'flex flex-col items-center p-2 bg-gray-100 rounded-lg hover:bg-yellow-100 transition min-w-[70px]';
+                btn.innerHTML = `
+                    <span class="text-2xl">${lugar.icono || '📍'}</span>
                     <span class="text-xs text-gray-700 mt-1 truncate max-w-[60px]">${lugar.nombre}</span>
                 `;
-                item.onclick = () => seleccionarLugarFrecuente(lugar);
+                btn.onclick = () => seleccionarLugarFrecuente(lugar);
+
+                // Botón eliminar (X)
+                const btnEliminar = document.createElement('button');
+                btnEliminar.className = 'absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs font-bold flex items-center justify-center shadow';
+                btnEliminar.textContent = '✕';
+                btnEliminar.onclick = (e) => {
+                    e.stopPropagation();
+                    eliminarLugar(lugar.id, lugar.nombre);
+                };
+
+                item.appendChild(btn);
+                item.appendChild(btnEliminar);
                 contenedor.appendChild(item);
             });
 
@@ -2953,12 +2969,32 @@
             verificarYCalcularAutomaticamente();
         }
 
+        async function eliminarLugar(lugarId, nombreLugar) {
+            if (!confirm(`¿Eliminar "${nombreLugar}" de tus lugares frecuentes?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/lugares/eliminar/${lugarId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    cargarMisLugares(); // Recargar lista
+                } else {
+                    alert(data.error || 'Error al eliminar');
+                }
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+
         function abrirModalNuevoLugar() {
             document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
             document.getElementById('input-nombre-lugar').value = '';
             document.getElementById('check-lugar-publico').checked = false;
             ubicacionNuevoLugar = null;
-            iconoLugarSeleccionado = '📍';
+            iconoLugarSeleccionado = '🏠'; // Casa por defecto
             actualizarIconosSeleccion();
             document.getElementById('ubicacion-lugar-texto').textContent = 'Selecciona en el mapa';
 

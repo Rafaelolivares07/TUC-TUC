@@ -318,6 +318,7 @@
         let iconoLugarSeleccionado = 'casa'; // Icono seleccionado para nuevo lugar (casa por defecto)
         let ubicacionNuevoLugar = null; // Coordenadas del nuevo lugar
         let seleccionandoUbicacionLugar = false; // Flag para selección de ubicación de nuevo lugar
+        let marcadorNuevoLugar = null; // Marcador temporal para nuevo lugar
         let usuarioLogueado = false; // Flag para saber si el usuario está logueado
 
         // Ir a la página de comunidad
@@ -2999,11 +3000,12 @@
                 const data = await response.json();
                 if (data.ok) {
                     cargarMisLugares(); // Recargar lista
+                    mostrarToast('Lugar eliminado');
                 } else {
-                    alert(data.error || 'Error al eliminar');
+                    mostrarToast(data.error || 'Error al eliminar', 'error');
                 }
             } catch (error) {
-                alert('Error de conexión');
+                mostrarToast('Error de conexión', 'error');
             }
         }
 
@@ -3092,6 +3094,12 @@
         function cerrarModalNuevoLugar() {
             document.getElementById('modal-nuevo-lugar').classList.add('hidden');
             seleccionandoUbicacionLugar = false;
+            // Limpiar marcador temporal si existe
+            if (marcadorNuevoLugar && map) {
+                map.removeLayer(marcadorNuevoLugar);
+                marcadorNuevoLugar = null;
+            }
+            ocultarBannerSeleccion();
         }
 
         function seleccionarIcono(icono) {
@@ -3133,11 +3141,37 @@
                 map.setView([ubicacionGPSActual.lat, ubicacionGPSActual.lon], 16);
             }
 
-            alert('Toca el mapa para seleccionar la ubicación del lugar');
+            // Remover marcador anterior si existe
+            if (marcadorNuevoLugar) {
+                map.removeLayer(marcadorNuevoLugar);
+                marcadorNuevoLugar = null;
+            }
+
+            // Mostrar banner flotante en lugar de alert
+            mostrarBannerSeleccion('Toca el mapa para seleccionar la ubicación');
 
             // Agregar listener temporal para click en mapa
             map.once('click', function(e) {
                 ubicacionNuevoLugar = { lat: e.latlng.lat, lon: e.latlng.lng };
+
+                // Ocultar banner de instrucción
+                ocultarBannerSeleccion();
+
+                // Agregar marcador visual en el punto seleccionado
+                if (marcadorNuevoLugar) {
+                    map.removeLayer(marcadorNuevoLugar);
+                }
+                marcadorNuevoLugar = L.marker([e.latlng.lat, e.latlng.lng], {
+                    icon: L.divIcon({
+                        html: '<div style="background: #3B82F6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+                        className: '',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(map);
+
+                // Mostrar banner de confirmación
+                mostrarBannerSeleccion('Ubicación seleccionada', 'success');
 
                 // Geocodificación inversa para obtener dirección
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
@@ -3145,26 +3179,97 @@
                     .then(data => {
                         const direccion = data.display_name || `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
                         document.getElementById('ubicacion-lugar-texto').textContent = truncarDireccion(direccion);
+
+                        // Esperar un momento y abrir modal
+                        setTimeout(() => {
+                            ocultarBannerSeleccion();
+                            seleccionandoUbicacionLugar = false;
+                            document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
+                        }, 800);
                     })
                     .catch(() => {
                         document.getElementById('ubicacion-lugar-texto').textContent = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+                        setTimeout(() => {
+                            ocultarBannerSeleccion();
+                            seleccionandoUbicacionLugar = false;
+                            document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
+                        }, 800);
                     });
-
-                seleccionandoUbicacionLugar = false;
-                document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
             });
+        }
+
+        // Banner flotante para instrucciones/confirmaciones
+        function mostrarBannerSeleccion(mensaje, tipo = 'info') {
+            let banner = document.getElementById('banner-seleccion-lugar');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'banner-seleccion-lugar';
+                banner.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 12px 24px; border-radius: 12px; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.3s;';
+                document.body.appendChild(banner);
+            }
+
+            if (tipo === 'success') {
+                banner.style.background = '#10B981';
+                banner.style.color = 'white';
+                banner.innerHTML = '✓ ' + mensaje;
+            } else {
+                banner.style.background = '#3B82F6';
+                banner.style.color = 'white';
+                banner.innerHTML = '📍 ' + mensaje;
+            }
+            banner.style.display = 'block';
+        }
+
+        function ocultarBannerSeleccion() {
+            const banner = document.getElementById('banner-seleccion-lugar');
+            if (banner) {
+                banner.style.display = 'none';
+            }
+        }
+
+        // Toast para mensajes temporales
+        function mostrarToast(mensaje, tipo = 'success') {
+            let toast = document.getElementById('toast-lugares');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast-lugares';
+                toast.style.cssText = 'position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 14px 28px; border-radius: 12px; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.25); transition: opacity 0.3s;';
+                document.body.appendChild(toast);
+            }
+
+            if (tipo === 'success') {
+                toast.style.background = '#10B981';
+                toast.style.color = 'white';
+                toast.innerHTML = '✓ ' + mensaje;
+            } else if (tipo === 'error') {
+                toast.style.background = '#EF4444';
+                toast.style.color = 'white';
+                toast.innerHTML = '✗ ' + mensaje;
+            } else {
+                toast.style.background = '#3B82F6';
+                toast.style.color = 'white';
+                toast.innerHTML = mensaje;
+            }
+
+            toast.style.opacity = '1';
+            toast.style.display = 'block';
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => { toast.style.display = 'none'; }, 300);
+            }, 2500);
         }
 
         async function guardarNuevoLugar() {
             const nombre = document.getElementById('input-nombre-lugar').value.trim();
 
             if (!nombre) {
-                alert('Por favor ingresa un nombre para el lugar');
+                mostrarToast('Ingresa un nombre para el lugar', 'error');
                 return;
             }
 
             if (!ubicacionNuevoLugar) {
-                alert('Por favor selecciona la ubicación en el mapa');
+                mostrarToast('Selecciona la ubicación en el mapa', 'error');
                 return;
             }
 
@@ -3185,13 +3290,13 @@
                 if (data.ok) {
                     cerrarModalNuevoLugar();
                     await cargarMisLugares(); // Recargar lista
-                    alert('¡Lugar guardado!');
+                    mostrarToast('Lugar guardado');
                 } else {
-                    alert(data.error || 'Error al guardar el lugar');
+                    mostrarToast(data.error || 'Error al guardar', 'error');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error de conexión');
+                mostrarToast('Error de conexión', 'error');
             }
         }
 

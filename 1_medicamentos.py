@@ -19697,6 +19697,71 @@ def validar_solapamiento_viajes(conn, conductor_id, nuevo_servicio):
     return (True, None)
 
 
+def validar_solapamiento_pasajero(conn, tercero_id, fecha_programada_str, tiempo_estimado_minutos):
+    """
+    Valida que el pasajero pueda solicitar un nuevo viaje sin solaparse con viajes existentes.
+
+    - Viaje inmediato: no puede tener viajes activos
+    - Viaje programado: no puede solaparse con otros viajes programados
+
+    Retorna: (puede_solicitar: bool, mensaje_error: str o None)
+    """
+    from datetime import datetime, timedelta
+
+    # 1. Verificar si tiene viaje activo (pendiente, aceptada, recogiendo, en_curso)
+    viaje_activo = conn.execute("""
+        SELECT id, estado, origen_texto, destino_texto, fecha_programada
+        FROM solicitudes_transporte
+        WHERE tercero_id = %s
+          AND estado IN ('pendiente', 'aceptada', 'recogiendo', 'en_curso')
+          AND (fecha_programada IS NULL OR fecha_programada <= NOW() + INTERVAL '15 minutes')
+        LIMIT 1
+    """, (tercero_id,)).fetchone()
+
+    # Si es viaje inmediato (no programado)
+    if not fecha_programada_str:
+        if viaje_activo:
+            return (False, f"Ya tienes un viaje activo en curso. Complétalo antes de solicitar otro.")
+        return (True, None)
+
+    # Es viaje programado - parsear fecha
+    try:
+        fecha_programada = datetime.fromisoformat(fecha_programada_str.replace('Z', '+00:00'))
+        if fecha_programada.tzinfo:
+            fecha_programada = fecha_programada.replace(tzinfo=None)
+    except:
+        fecha_programada = datetime.strptime(fecha_programada_str, '%Y-%m-%d %H:%M:%S')
+
+    tiempo_nuevo = tiempo_estimado_minutos or 30
+    hora_fin_nuevo = fecha_programada + timedelta(minutes=tiempo_nuevo)
+
+    # 2. Verificar solapamiento con viajes programados existentes
+    viajes_programados = conn.execute("""
+        SELECT id, fecha_programada, tiempo_estimado_minutos, origen_texto, destino_texto
+        FROM solicitudes_transporte
+        WHERE tercero_id = %s
+          AND estado IN ('pendiente', 'aceptada')
+          AND fecha_programada IS NOT NULL
+          AND fecha_programada > NOW()
+    """, (tercero_id,)).fetchall()
+
+    for viaje in viajes_programados:
+        viaje_inicio = viaje['fecha_programada']
+        viaje_tiempo = viaje['tiempo_estimado_minutos'] or 30
+        viaje_fin = viaje_inicio + timedelta(minutes=viaje_tiempo)
+
+        # Margen de 30 minutos entre viajes
+        MARGEN_MINUTOS = 30
+
+        # Verificar solapamiento: nuevo viaje no puede empezar antes de que termine el existente + margen
+        # ni terminar después de que empiece el existente - margen
+        if not (hora_fin_nuevo + timedelta(minutes=MARGEN_MINUTOS) <= viaje_inicio or
+                fecha_programada >= viaje_fin + timedelta(minutes=MARGEN_MINUTOS)):
+            return (False, f"Ya tienes un viaje programado a las {viaje_inicio.strftime('%H:%M')} ({viaje['destino_texto']}). Debe haber al menos 30 minutos entre viajes.")
+
+    return (True, None)
+
+
 @app.route('/api/conductor/tomar-servicio/<int:servicio_id>', methods=['POST'])
 def api_conductor_tomar_servicio(servicio_id):
     """Conductor toma un servicio"""
@@ -20985,6 +21050,14 @@ def api_solicitar_servicio():
         fecha_programada = data.get('fecha_programada')
         hora_programada = data.get('hora_programada')
         horas_programadas = data.get('horas_programadas')
+
+        # Validar que no tenga viajes que se solapen
+        puede_solicitar, mensaje_error = validar_solapamiento_pasajero(
+            conn, tercero_id, fecha_programada, tiempo_estimado_minutos
+        )
+        if not puede_solicitar:
+            conn.close()
+            return jsonify({'ok': False, 'error': mensaje_error}), 400
 
         solicitud_id = conn.execute("""
             INSERT INTO solicitudes_transporte (

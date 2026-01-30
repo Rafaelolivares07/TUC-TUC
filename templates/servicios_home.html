@@ -175,7 +175,7 @@
 
             <!-- SECCIÓN 2: Origen -->
             <div id="seccion-origen" class="bg-gray-200 rounded border border-gray-300 p-4 mb-6">
-                <h2 class="text-base font-medium mb-2 text-gray-800">Tu origen está determinado por tu ubicación actual</h2>
+                <h2 id="titulo-seccion-origen" class="text-base font-medium mb-2 text-gray-800">Tu origen está determinado por tu ubicación actual</h2>
                 <p class="text-sm text-gray-600 mb-3">Puedes: <strong>1)</strong> Volver a detectarla, <strong>2)</strong> Ingresar una dirección diferente, o <strong>3)</strong> Seleccionar en el mapa</p>
 
                 <!-- Card de ubicación detectada -->
@@ -1516,6 +1516,9 @@
                     coordenadasOrigenActual = coordenadasOrigenSeleccionado;
                     contenedor.classList.add('hidden');
 
+                    // Actualizar título
+                    actualizarTituloOrigen('direccion');
+
                     verificarYCalcularAutomaticamente();
                 });
 
@@ -1590,6 +1593,22 @@
             }
         }
 
+        // Función para actualizar dinámicamente el título de la sección origen
+        function actualizarTituloOrigen(estado) {
+            const titulo = document.getElementById('titulo-seccion-origen');
+            if (estado === 'detectado') {
+                titulo.textContent = 'Ubicación detectada';
+            } else if (estado === 'mapa') {
+                titulo.textContent = '¡ORIGEN SELECCIONADO DEL MAPA!';
+            } else if (estado === 'direccion') {
+                titulo.textContent = '¡ORIGEN SELECCIONADO POR DIRECCION O NOMBRE!';
+            } else if (estado === 'sin-origen') {
+                titulo.textContent = 'Viaje sin origen determinado - Determina tu origen';
+            } else {
+                titulo.textContent = 'Tu origen está determinado por tu ubicación actual';
+            }
+        }
+
         function toggleCardUbicacion() {
             const card = document.getElementById('card-ubicacion-detectada');
             const label = document.getElementById('label-seleccion');
@@ -1610,6 +1629,9 @@
                 inputOrigen.classList.add('bg-gray-200', 'cursor-not-allowed');
                 inputOrigen.value = '';
 
+                // Actualizar título
+                actualizarTituloOrigen('detectado');
+
                 // Verificar si podemos calcular automáticamente
                 verificarYCalcularAutomaticamente();
             } else {
@@ -1623,6 +1645,9 @@
                 // Habilitar input origen
                 inputOrigen.disabled = false;
                 inputOrigen.classList.remove('bg-gray-200', 'cursor-not-allowed');
+
+                // Actualizar título
+                actualizarTituloOrigen('sin-origen');
             }
         }
 
@@ -1791,6 +1816,9 @@
                 const contenedorMapa = document.getElementById('contenedor-mapa');
                 contenedorMapa.style.maxHeight = '0';
                 contenedorMapa.style.padding = '0';
+
+                // Actualizar título
+                actualizarTituloOrigen('mapa');
             }
         }
 

@@ -1710,6 +1710,11 @@
 
                 // Ocultar botón de confirmar destino dentro del mapa
                 document.getElementById('btn-confirmar-destino-mapa').classList.add('hidden');
+
+                // Ocultar el mapa
+                const contenedorMapa = document.getElementById('contenedor-mapa');
+                contenedorMapa.style.maxHeight = '0';
+                contenedorMapa.style.padding = '0';
             }
         }
 
@@ -1781,6 +1786,11 @@
 
                 // Ocultar botón de confirmar origen dentro del mapa
                 document.getElementById('btn-confirmar-origen-mapa').classList.add('hidden');
+
+                // Ocultar el mapa
+                const contenedorMapa = document.getElementById('contenedor-mapa');
+                contenedorMapa.style.maxHeight = '0';
+                contenedorMapa.style.padding = '0';
             }
         }
 
@@ -3164,6 +3174,11 @@
                 inicializarMapa();
             }
 
+            // Scroll suave al mapa para centrarlo en la vista
+            setTimeout(() => {
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+
             // Invalidar tamaño del mapa
             setTimeout(() => {
                 if (map) {
@@ -3283,6 +3298,15 @@
                 const data = await response.json();
                 if (data.ok) {
                     cerrarModalNuevoLugar();
+                    // Ocultar el mapa
+                    const contenedorMapa = document.getElementById('contenedor-mapa');
+                    contenedorMapa.style.maxHeight = '0';
+                    contenedorMapa.style.padding = '0';
+                    // Limpiar marcador
+                    if (marcadorNuevoLugar && map) {
+                        map.removeLayer(marcadorNuevoLugar);
+                        marcadorNuevoLugar = null;
+                    }
                     await cargarMisLugares(); // Recargar lista
                     mostrarToast('Lugar guardado');
                 } else {

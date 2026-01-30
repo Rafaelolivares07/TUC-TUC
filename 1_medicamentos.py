@@ -12084,6 +12084,9 @@ def migrar_conductor():
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS horas_programadas DECIMAL(4,1)")
         mensajes.append("✅ solicitudes_transporte.horas_programadas")
 
+        conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS fecha_inicio_viaje TIMESTAMP")
+        mensajes.append("✅ solicitudes_transporte.fecha_inicio_viaje")
+
         # Columna para push token en terceros
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS push_token TEXT")
         mensajes.append("✅ terceros.push_token")
@@ -19318,33 +19321,69 @@ def api_conductor_cercano():
     try:
         conn = get_db_connection()
 
-        # Conductores conectados con dashboard activo (última actividad < 60 seg)
-        conductores = conn.execute("""
-            SELECT id, nombre, ubicacion_lat, ubicacion_lon
-            FROM terceros
-            WHERE estado_conexion = 'conectado'
-              AND ultima_actividad > NOW() - INTERVAL '60 seconds'
-              AND ubicacion_lat IS NOT NULL
-              AND ubicacion_lon IS NOT NULL
-              AND placa IS NOT NULL
+        # 1. Buscar conductores LIBRES (conectados y sin viaje activo)
+        conductores_libres = conn.execute("""
+            SELECT t.id, t.nombre, t.ubicacion_lat, t.ubicacion_lon, 'libre' as estado_conductor, 0 as minutos_extra
+            FROM terceros t
+            WHERE t.estado_conexion = 'conectado'
+              AND t.ultima_actividad > NOW() - INTERVAL '60 seconds'
+              AND t.ubicacion_lat IS NOT NULL
+              AND t.ubicacion_lon IS NOT NULL
+              AND t.placa IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM solicitudes_transporte s
+                  WHERE s.conductor_id = t.id
+                  AND s.estado IN ('aceptada', 'recogiendo', 'en_curso')
+              )
         """).fetchall()
+
+        # 2. Buscar conductores EN VIAJE que terminen pronto (< 30 min restantes)
+        conductores_en_viaje = conn.execute("""
+            SELECT t.id, t.nombre, s.destino_lat as ubicacion_lat, s.destino_lon as ubicacion_lon,
+                   'en_viaje' as estado_conductor,
+                   GREATEST(0, s.tiempo_estimado_minutos - EXTRACT(EPOCH FROM (NOW() - COALESCE(s.fecha_inicio_viaje, s.fecha_solicitud)))/60)::int as minutos_extra
+            FROM terceros t
+            JOIN solicitudes_transporte s ON s.conductor_id = t.id
+            WHERE t.estado_conexion = 'conectado'
+              AND t.ultima_actividad > NOW() - INTERVAL '60 seconds'
+              AND t.placa IS NOT NULL
+              AND s.estado = 'en_curso'
+              AND s.destino_lat IS NOT NULL
+              AND s.destino_lon IS NOT NULL
+              AND (s.tiempo_estimado_minutos - EXTRACT(EPOCH FROM (NOW() - COALESCE(s.fecha_inicio_viaje, s.fecha_solicitud)))/60) < 30
+        """).fetchall()
+
+        # Combinar conductores libres y en viaje
+        conductores = list(conductores_libres) + list(conductores_en_viaje)
 
         if not conductores:
             conn.close()
             return jsonify({
                 'ok': True,
                 'hay_conductores': False,
-                'mensaje': 'No hay conductores disponibles en este momento'
+                'mensaje': 'Buscando conductor'
             })
 
-        # Encontrar el conductor más cercano (primero con Haversine para rapidez)
+        # Encontrar el conductor más cercano (considerando tiempo total: desplazamiento + minutos_extra si está en viaje)
         conductor_cercano = None
-        menor_distancia = float('inf')
+        menor_tiempo_total = float('inf')
+
+        # Obtener velocidad según horario (pico/valle)
+        velocidad_pico = obtener_parametro_transporte(conn, 'transporte_velocidad_pico', 10)
+        velocidad_valle = obtener_parametro_transporte(conn, 'transporte_velocidad_valle', 17)
+        hora_pico = es_hora_pico(conn)
+        velocidad = velocidad_pico if hora_pico else velocidad_valle
+
         for c in conductores:
             dist = calcular_distancia(lat, lon, float(c['ubicacion_lat']), float(c['ubicacion_lon']))
-            if dist < menor_distancia:
-                menor_distancia = dist
+            tiempo_desplazamiento = (dist / 1000 / velocidad) * 60  # en minutos
+            minutos_extra = c['minutos_extra'] if c['minutos_extra'] else 0
+            tiempo_total = tiempo_desplazamiento + minutos_extra
+
+            if tiempo_total < menor_tiempo_total:
+                menor_tiempo_total = tiempo_total
                 conductor_cercano = c
+                conductor_cercano_dist = dist
 
         # Obtener distancia real por calles con OSRM
         osrm_data = obtener_distancia_osrm(
@@ -19357,17 +19396,11 @@ def api_conductor_cercano():
             distancia_km = osrm_data['distancia_metros'] / 1000
         else:
             # Fallback a Haversine si OSRM falla
-            distancia_km = menor_distancia / 1000
+            distancia_km = conductor_cercano_dist / 1000
 
-        # Obtener velocidad según horario (pico/valle)
-        velocidad_pico = obtener_parametro_transporte(conn, 'transporte_velocidad_pico', 10)
-        velocidad_valle = obtener_parametro_transporte(conn, 'transporte_velocidad_valle', 17)
-        hora_pico = es_hora_pico(conn)
-
-        velocidad = velocidad_pico if hora_pico else velocidad_valle
-
-        # Calcular tiempo: (distancia / velocidad) * 60 minutos
-        tiempo_minutos = max(1, round((distancia_km / velocidad) * 60))
+        # Calcular tiempo: (distancia / velocidad) * 60 minutos + minutos extra si está en viaje
+        minutos_extra = conductor_cercano['minutos_extra'] if conductor_cercano['minutos_extra'] else 0
+        tiempo_minutos = max(1, round((distancia_km / velocidad) * 60) + minutos_extra)
 
         conn.close()
 
@@ -19757,7 +19790,7 @@ def api_conductor_iniciar_viaje(servicio_id):
     try:
         conn = get_db_connection()
         conn.execute("""
-            UPDATE solicitudes_transporte SET estado = 'en_curso'
+            UPDATE solicitudes_transporte SET estado = 'en_curso', fecha_inicio_viaje = NOW()
             WHERE id = %s AND conductor_id = %s AND estado = 'recogiendo'
         """, (servicio_id, session['usuario_id']))
         conn.commit()

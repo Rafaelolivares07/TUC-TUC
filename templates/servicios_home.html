@@ -992,8 +992,8 @@
                         infoDiv.className = 'mt-3 p-3 rounded-lg text-center bg-green-100';
                         textoSpan.innerHTML = `<span class="text-green-700">🚗 Conductor más cercano a ~${data.tiempo_estimado_minutos} min</span>`;
                     } else {
-                        infoDiv.className = 'mt-3 p-3 rounded-lg text-center bg-yellow-100';
-                        textoSpan.innerHTML = `<span class="text-yellow-700">⚠️ No hay conductores disponibles en este momento</span>`;
+                        infoDiv.className = 'mt-3 p-3 rounded-lg text-center bg-blue-100';
+                        textoSpan.innerHTML = `<span class="text-blue-700">🔍 Buscando conductor...</span>`;
                     }
                 } else {
                     infoDiv.classList.add('hidden');

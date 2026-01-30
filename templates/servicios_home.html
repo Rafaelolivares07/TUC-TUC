@@ -702,6 +702,7 @@
             setTimeout(() => {
                 ocultarBannerSeleccion();
                 modoSeleccionMapa = 'ninguno';
+                document.getElementById('map').style.cursor = '';
                 document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
             }, 800);
         }
@@ -3115,9 +3116,10 @@
 
         function cerrarModalNuevoLugar() {
             document.getElementById('modal-nuevo-lugar').classList.add('hidden');
-            // Si estaba en modo lugar, volver a ninguno
+            // Si estaba en modo lugar, volver a ninguno y restaurar cursor
             if (modoSeleccionMapa === 'lugar') {
                 modoSeleccionMapa = 'ninguno';
+                document.getElementById('map').style.cursor = '';
             }
             // Limpiar marcador temporal si existe
             if (marcadorNuevoLugar && map) {
@@ -3152,14 +3154,22 @@
             // Cerrar modal sin cambiar modo (lo cambiaremos después)
             document.getElementById('modal-nuevo-lugar').classList.add('hidden');
 
-            // Mostrar mapa si no está visible
+            // Expandir el contenedor del mapa (igual que destino/origen)
             const contenedorMapa = document.getElementById('contenedor-mapa');
-            if (contenedorMapa.classList.contains('hidden')) {
-                contenedorMapa.classList.remove('hidden');
-                if (!map) {
-                    inicializarMapa();
-                }
+            contenedorMapa.style.maxHeight = '600px';
+            contenedorMapa.style.padding = '';
+
+            // Inicializar mapa si no existe
+            if (!map) {
+                inicializarMapa();
             }
+
+            // Invalidar tamaño del mapa
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
 
             // Centrar en ubicación actual si existe
             if (ubicacionGPSActual && map) {
@@ -3174,6 +3184,9 @@
 
             // Activar modo LUGAR (centralizado)
             modoSeleccionMapa = 'lugar';
+
+            // Cambiar cursor del mapa
+            document.getElementById('map').style.cursor = 'crosshair';
 
             // Mostrar banner flotante
             mostrarBannerSeleccion('Toca el mapa para seleccionar la ubicación');

@@ -309,15 +309,14 @@
         let ubicacionGPSActual = null; // Guardar ubicación GPS para búsquedas por proximidad
         let cardUbicacionSeleccionado = false; // Estado del card de ubicación detectada
         let ubicacionDetectadaDireccion = ''; // Dirección detectada
-        let seleccionandoEnMapa = false; // Estado de selección en mapa (destino)
-        let seleccionandoOrigenEnMapa = false; // Estado de selección en mapa (origen)
+        // MODO DE SELECCIÓN EN MAPA: 'ninguno' | 'destino' | 'origen' | 'lugar'
+        let modoSeleccionMapa = 'ninguno';
         let marcadorDestinoMapa = null; // Marcador temporal en el mapa (destino)
         let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
         let pendienteProgramarViaje = false; // Flag para saber si el usuario quería programar antes de registrarse
         let lugaresUsuario = []; // Lugares frecuentes del usuario
         let iconoLugarSeleccionado = 'casa'; // Icono seleccionado para nuevo lugar (casa por defecto)
         let ubicacionNuevoLugar = null; // Coordenadas del nuevo lugar
-        let seleccionandoUbicacionLugar = false; // Flag para selección de ubicación de nuevo lugar
         let marcadorNuevoLugar = null; // Marcador temporal para nuevo lugar
         let usuarioLogueado = false; // Flag para saber si el usuario está logueado
 
@@ -501,7 +500,7 @@
 
             // Botón seleccionar en mapa (destino)
             document.getElementById('btn-seleccionar-mapa').addEventListener('click', function() {
-                if (seleccionandoEnMapa) {
+                if (modoSeleccionMapa === 'destino') {
                     // Si ya está en modo selección, confirmar destino y calcular
                     desactivarSeleccionMapa();
                     verificarYCalcularAutomaticamente();
@@ -513,7 +512,7 @@
 
             // Botón seleccionar en mapa (origen)
             document.getElementById('btn-seleccionar-origen-mapa').addEventListener('click', function() {
-                if (seleccionandoOrigenEnMapa) {
+                if (modoSeleccionMapa === 'origen') {
                     // Si ya está en modo selección, confirmar origen y calcular
                     desactivarSeleccionMapaOrigen();
                     verificarYCalcularAutomaticamente();
@@ -620,7 +619,91 @@
                     attribution: '© OpenStreetMap contributors',
                     maxZoom: 19
                 }).addTo(map);
+
+                // HANDLER CENTRALIZADO DE CLICKS EN MAPA
+                map.on('click', function(e) {
+                    if (modoSeleccionMapa === 'ninguno') return;
+
+                    const lat = e.latlng.lat;
+                    const lng = e.latlng.lng;
+
+                    if (modoSeleccionMapa === 'destino') {
+                        handleClickDestino(lat, lng);
+                    } else if (modoSeleccionMapa === 'origen') {
+                        handleClickOrigen(lat, lng);
+                    } else if (modoSeleccionMapa === 'lugar') {
+                        handleClickLugar(lat, lng);
+                    }
+                });
             }
+        }
+
+        // ========== HANDLERS DE CLICK CENTRALIZADOS ==========
+        async function handleClickDestino(lat, lng) {
+            coordenadasDestinoSeleccionado = { lat: lat, lon: lng };
+
+            if (marcadorDestinoMapa) {
+                marcadorDestinoMapa.setLatLng([lat, lng]);
+            } else {
+                marcadorDestinoMapa = L.marker([lat, lng]).addTo(map);
+            }
+
+            const direccion = await obtenerDireccionReversa(lat, lng);
+            document.getElementById('input-destino').value = direccion;
+        }
+
+        async function handleClickOrigen(lat, lng) {
+            coordenadasOrigenSeleccionado = { lat: lat, lon: lng };
+
+            if (marcadorOrigenMapa) {
+                marcadorOrigenMapa.setLatLng([lat, lng]);
+            } else {
+                const iconoOrigen = L.divIcon({
+                    className: 'marcador-origen',
+                    html: '<div style="background-color: #3B82F6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+                marcadorOrigenMapa = L.marker([lat, lng], { icon: iconoOrigen }).addTo(map);
+            }
+
+            const direccion = await obtenerDireccionReversa(lat, lng);
+            document.getElementById('input-origen').value = direccion;
+        }
+
+        async function handleClickLugar(lat, lng) {
+            ubicacionNuevoLugar = { lat: lat, lon: lng };
+
+            ocultarBannerSeleccion();
+
+            if (marcadorNuevoLugar) {
+                map.removeLayer(marcadorNuevoLugar);
+            }
+            marcadorNuevoLugar = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    html: '<div style="background: #3B82F6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+                    className: '',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(map);
+
+            mostrarBannerSeleccion('Ubicación seleccionada', 'success');
+
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                const data = await response.json();
+                const direccion = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                document.getElementById('ubicacion-lugar-texto').textContent = truncarDireccion(direccion);
+            } catch {
+                document.getElementById('ubicacion-lugar-texto').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            }
+
+            setTimeout(() => {
+                ocultarBannerSeleccion();
+                modoSeleccionMapa = 'ninguno';
+                document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
+            }, 800);
         }
 
         async function calcularRutaTransporte() {
@@ -1567,13 +1650,13 @@
         }
 
         function activarSeleccionMapa() {
-            // Si ya está en modo selección, no hacer nada
-            if (seleccionandoEnMapa) {
+            // Si ya está en modo selección destino, no hacer nada
+            if (modoSeleccionMapa === 'destino') {
                 return;
             }
 
             // Desactivar modo origen si está activo
-            if (seleccionandoOrigenEnMapa) {
+            if (modoSeleccionMapa === 'origen') {
                 desactivarSeleccionMapaOrigen();
             }
 
@@ -1599,8 +1682,8 @@
                 }
             }, 300);
 
-            // Activar modo selección
-            seleccionandoEnMapa = true;
+            // Activar modo selección DESTINO (centralizado)
+            modoSeleccionMapa = 'destino';
 
             // Cambiar cursor del mapa
             document.getElementById('map').style.cursor = 'crosshair';
@@ -1612,35 +1695,11 @@
 
             // Mostrar botón de confirmar destino dentro del mapa
             document.getElementById('btn-confirmar-destino-mapa').classList.remove('hidden');
-
-            // Listener para clicks múltiples en el mapa (no usar .once())
-            map.on('click', async function(e) {
-                if (!seleccionandoEnMapa) return; // Ignorar si no está en modo selección
-
-                const lat = e.latlng.lat;
-                const lng = e.latlng.lng;
-
-                // Guardar coordenadas
-                coordenadasDestinoSeleccionado = { lat: lat, lon: lng };
-
-                // Agregar o mover marcador
-                if (marcadorDestinoMapa) {
-                    marcadorDestinoMapa.setLatLng([lat, lng]);
-                } else {
-                    marcadorDestinoMapa = L.marker([lat, lng]).addTo(map);
-                }
-
-                // Obtener dirección con geocodificación inversa
-                const direccion = await obtenerDireccionReversa(lat, lng);
-
-                // Llenar input de destino
-                document.getElementById('input-destino').value = direccion;
-            });
         }
 
         function desactivarSeleccionMapa() {
-            if (seleccionandoEnMapa) {
-                seleccionandoEnMapa = false;
+            if (modoSeleccionMapa === 'destino') {
+                modoSeleccionMapa = 'ninguno';
                 document.getElementById('map').style.cursor = '';
 
                 // Restaurar botón original
@@ -1650,21 +1709,18 @@
 
                 // Ocultar botón de confirmar destino dentro del mapa
                 document.getElementById('btn-confirmar-destino-mapa').classList.add('hidden');
-
-                // Remover listeners del mapa
-                map.off('click');
             }
         }
 
         // ========== FUNCIONES DE SELECCIÓN EN MAPA - ORIGEN ==========
         function activarSeleccionMapaOrigen() {
             // Si ya está en modo selección origen, no hacer nada
-            if (seleccionandoOrigenEnMapa) {
+            if (modoSeleccionMapa === 'origen') {
                 return;
             }
 
             // Desactivar modo destino si está activo
-            if (seleccionandoEnMapa) {
+            if (modoSeleccionMapa === 'destino') {
                 desactivarSeleccionMapa();
             }
 
@@ -1697,8 +1753,8 @@
                 }
             }, 300);
 
-            // Activar modo selección origen
-            seleccionandoOrigenEnMapa = true;
+            // Activar modo selección ORIGEN (centralizado)
+            modoSeleccionMapa = 'origen';
 
             // Cambiar cursor del mapa
             document.getElementById('map').style.cursor = 'crosshair';
@@ -1710,42 +1766,11 @@
 
             // Mostrar botón de confirmar origen dentro del mapa
             document.getElementById('btn-confirmar-origen-mapa').classList.remove('hidden');
-
-            // Listener para clicks múltiples en el mapa
-            map.on('click', async function(e) {
-                if (!seleccionandoOrigenEnMapa) return; // Ignorar si no está en modo selección origen
-
-                const lat = e.latlng.lat;
-                const lng = e.latlng.lng;
-
-                // Guardar coordenadas de origen
-                coordenadasOrigenSeleccionado = { lat: lat, lon: lng };
-
-                // Agregar o mover marcador de origen
-                if (marcadorOrigenMapa) {
-                    marcadorOrigenMapa.setLatLng([lat, lng]);
-                } else {
-                    // Marcador azul para origen (diferenciarlo del destino)
-                    const iconoOrigen = L.divIcon({
-                        className: 'marcador-origen',
-                        html: '<div style="background-color: #3B82F6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12]
-                    });
-                    marcadorOrigenMapa = L.marker([lat, lng], { icon: iconoOrigen }).addTo(map);
-                }
-
-                // Obtener dirección con geocodificación inversa
-                const direccion = await obtenerDireccionReversa(lat, lng);
-
-                // Llenar input de origen
-                document.getElementById('input-origen').value = direccion;
-            });
         }
 
         function desactivarSeleccionMapaOrigen() {
-            if (seleccionandoOrigenEnMapa) {
-                seleccionandoOrigenEnMapa = false;
+            if (modoSeleccionMapa === 'origen') {
+                modoSeleccionMapa = 'ninguno';
                 document.getElementById('map').style.cursor = '';
 
                 // Restaurar botón original
@@ -1755,9 +1780,6 @@
 
                 // Ocultar botón de confirmar origen dentro del mapa
                 document.getElementById('btn-confirmar-origen-mapa').classList.add('hidden');
-
-                // Remover listeners del mapa
-                map.off('click');
             }
         }
 
@@ -3093,7 +3115,10 @@
 
         function cerrarModalNuevoLugar() {
             document.getElementById('modal-nuevo-lugar').classList.add('hidden');
-            seleccionandoUbicacionLugar = false;
+            // Si estaba en modo lugar, volver a ninguno
+            if (modoSeleccionMapa === 'lugar') {
+                modoSeleccionMapa = 'ninguno';
+            }
             // Limpiar marcador temporal si existe
             if (marcadorNuevoLugar && map) {
                 map.removeLayer(marcadorNuevoLugar);
@@ -3124,8 +3149,8 @@
         }
 
         function seleccionarUbicacionLugar() {
-            cerrarModalNuevoLugar();
-            seleccionandoUbicacionLugar = true;
+            // Cerrar modal sin cambiar modo (lo cambiaremos después)
+            document.getElementById('modal-nuevo-lugar').classList.add('hidden');
 
             // Mostrar mapa si no está visible
             const contenedorMapa = document.getElementById('contenedor-mapa');
@@ -3147,55 +3172,11 @@
                 marcadorNuevoLugar = null;
             }
 
-            // Mostrar banner flotante en lugar de alert
+            // Activar modo LUGAR (centralizado)
+            modoSeleccionMapa = 'lugar';
+
+            // Mostrar banner flotante
             mostrarBannerSeleccion('Toca el mapa para seleccionar la ubicación');
-
-            // Agregar listener temporal para click en mapa
-            map.once('click', function(e) {
-                ubicacionNuevoLugar = { lat: e.latlng.lat, lon: e.latlng.lng };
-
-                // Ocultar banner de instrucción
-                ocultarBannerSeleccion();
-
-                // Agregar marcador visual en el punto seleccionado
-                if (marcadorNuevoLugar) {
-                    map.removeLayer(marcadorNuevoLugar);
-                }
-                marcadorNuevoLugar = L.marker([e.latlng.lat, e.latlng.lng], {
-                    icon: L.divIcon({
-                        html: '<div style="background: #3B82F6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
-                        className: '',
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12]
-                    })
-                }).addTo(map);
-
-                // Mostrar banner de confirmación
-                mostrarBannerSeleccion('Ubicación seleccionada', 'success');
-
-                // Geocodificación inversa para obtener dirección
-                fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        const direccion = data.display_name || `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
-                        document.getElementById('ubicacion-lugar-texto').textContent = truncarDireccion(direccion);
-
-                        // Esperar un momento y abrir modal
-                        setTimeout(() => {
-                            ocultarBannerSeleccion();
-                            seleccionandoUbicacionLugar = false;
-                            document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
-                        }, 800);
-                    })
-                    .catch(() => {
-                        document.getElementById('ubicacion-lugar-texto').textContent = `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
-                        setTimeout(() => {
-                            ocultarBannerSeleccion();
-                            seleccionandoUbicacionLugar = false;
-                            document.getElementById('modal-nuevo-lugar').classList.remove('hidden');
-                        }, 800);
-                    });
-            });
         }
 
         // Banner flotante para instrucciones/confirmaciones

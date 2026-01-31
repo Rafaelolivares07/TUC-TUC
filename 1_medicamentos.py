@@ -19762,6 +19762,103 @@ def validar_solapamiento_pasajero(conn, tercero_id, fecha_programada_str, tiempo
     return (True, None)
 
 
+def validar_pico_placa(conn, placa, fecha_hora_viaje=None):
+    """
+    Valida si un vehículo puede circular según las restricciones de Pico y Placa.
+
+    Args:
+        conn: Conexión a BD
+        placa: Placa del vehículo (ej: "ABC123")
+        fecha_hora_viaje: datetime del viaje (None = ahora)
+
+    Retorna: (puede_circular: bool, mensaje_error: str o None)
+    """
+    from datetime import datetime
+
+    # Verificar si Pico y Placa está activo
+    pico_placa_activo = conn.execute("""
+        SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'pico_placa_activo'
+    """).fetchone()
+
+    if not pico_placa_activo or not pico_placa_activo['valor_booleano']:
+        return (True, None)  # Pico y Placa no está activo
+
+    # Obtener fecha/hora del viaje
+    if fecha_hora_viaje is None:
+        fecha_hora_viaje = datetime.now()
+    elif isinstance(fecha_hora_viaje, str):
+        try:
+            fecha_hora_viaje = datetime.fromisoformat(fecha_hora_viaje.replace('Z', '+00:00'))
+            if fecha_hora_viaje.tzinfo:
+                fecha_hora_viaje = fecha_hora_viaje.replace(tzinfo=None)
+        except:
+            fecha_hora_viaje = datetime.now()
+
+    # Sábado (5) y Domingo (6) no tienen restricción
+    dia_semana = fecha_hora_viaje.weekday()
+    if dia_semana >= 5:
+        return (True, None)
+
+    # Obtener horario de restricción
+    hora_inicio_param = conn.execute("""
+        SELECT valor_texto FROM parametros_sistema WHERE nombre = 'pico_placa_hora_inicio'
+    """).fetchone()
+    hora_fin_param = conn.execute("""
+        SELECT valor_texto FROM parametros_sistema WHERE nombre = 'pico_placa_hora_fin'
+    """).fetchone()
+
+    hora_inicio_str = hora_inicio_param['valor_texto'] if hora_inicio_param else '06:00'
+    hora_fin_str = hora_fin_param['valor_texto'] if hora_fin_param else '19:00'
+
+    # Parsear horas
+    try:
+        hora_inicio = datetime.strptime(hora_inicio_str, '%H:%M').time()
+        hora_fin = datetime.strptime(hora_fin_str, '%H:%M').time()
+    except:
+        hora_inicio = datetime.strptime('06:00', '%H:%M').time()
+        hora_fin = datetime.strptime('19:00', '%H:%M').time()
+
+    # Verificar si está dentro del horario de restricción
+    hora_viaje = fecha_hora_viaje.time()
+    if not (hora_inicio <= hora_viaje <= hora_fin):
+        return (True, None)  # Fuera del horario de restricción
+
+    # Obtener último dígito de la placa
+    if not placa:
+        return (True, None)  # Sin placa, no se puede validar
+
+    ultimo_digito = None
+    for char in reversed(placa):
+        if char.isdigit():
+            ultimo_digito = char
+            break
+
+    if ultimo_digito is None:
+        return (True, None)  # No se encontró dígito en la placa
+
+    # Obtener dígitos restringidos para el día
+    dias_param = ['pico_placa_lunes', 'pico_placa_martes', 'pico_placa_miercoles',
+                  'pico_placa_jueves', 'pico_placa_viernes']
+    dia_param = dias_param[dia_semana]
+
+    digitos_restringidos_param = conn.execute("""
+        SELECT valor_texto FROM parametros_sistema WHERE nombre = %s
+    """, (dia_param,)).fetchone()
+
+    if not digitos_restringidos_param or not digitos_restringidos_param['valor_texto']:
+        return (True, None)  # No hay restricción configurada para este día
+
+    # Parsear dígitos restringidos (ej: "1,2" -> ['1', '2'])
+    digitos_restringidos = [d.strip() for d in digitos_restringidos_param['valor_texto'].split(',')]
+
+    # Verificar si el último dígito está restringido
+    if ultimo_digito in digitos_restringidos:
+        dias_nombres = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']
+        return (False, f"Tu vehículo tiene Pico y Placa hoy ({dias_nombres[dia_semana]}). Placas terminadas en {', '.join(digitos_restringidos)} no pueden circular entre {hora_inicio_str} y {hora_fin_str}.")
+
+    return (True, None)
+
+
 @app.route('/api/conductor/tomar-servicio/<int:servicio_id>', methods=['POST'])
 def api_conductor_tomar_servicio(servicio_id):
     """Conductor toma un servicio"""
@@ -19794,6 +19891,13 @@ def api_conductor_tomar_servicio(servicio_id):
             SELECT nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo
             FROM terceros WHERE id = %s
         """, (session['usuario_id'],)).fetchone()
+
+        # Validar Pico y Placa
+        fecha_viaje = servicio['fecha_programada'] if servicio['fecha_programada'] else None
+        puede_circular, mensaje_pico_placa = validar_pico_placa(conn, conductor['placa'], fecha_viaje)
+        if not puede_circular:
+            conn.close()
+            return jsonify({'ok': False, 'error': mensaje_pico_placa}), 400
 
         # Obtener ubicación del conductor si fue enviada
         data = request.get_json() or {}

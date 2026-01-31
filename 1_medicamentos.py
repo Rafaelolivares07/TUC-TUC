@@ -12392,6 +12392,26 @@ def migrar_conductor():
         """)
         mensajes.append("✅ Tabla semaforos creada")
 
+        # Agregar dirección a semáforos (para detectar solo en el sentido correcto)
+        conn.execute("ALTER TABLE semaforos ADD COLUMN IF NOT EXISTS direccion INTEGER DEFAULT 0")
+        mensajes.append("✅ semaforos.direccion")
+
+        # Tabla de cámaras de fotomultas
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS camaras_fotomulta (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                lat DECIMAL(10, 8) NOT NULL,
+                lon DECIMAL(11, 8) NOT NULL,
+                direccion INTEGER DEFAULT 0,
+                velocidad_maxima INTEGER NOT NULL DEFAULT 60,
+                radio_deteccion INTEGER DEFAULT 30,
+                activo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        mensajes.append("✅ Tabla camaras_fotomulta creada")
+
         conn.commit()
         conn.close()
 
@@ -19629,7 +19649,7 @@ def api_admin_listar_semaforos():
     try:
         conn = get_db_connection()
         semaforos = conn.execute("""
-            SELECT id, nombre, lat, lon, tiempo_rojo_seg, radio_deteccion, activo, created_at
+            SELECT id, nombre, lat, lon, tiempo_rojo_seg, direccion, radio_deteccion, activo, created_at
             FROM semaforos
             ORDER BY nombre
         """).fetchall()
@@ -19653,6 +19673,7 @@ def api_admin_crear_semaforo():
         lat = data.get('lat')
         lon = data.get('lon')
         tiempo_rojo = data.get('tiempo_rojo_seg', 60)
+        direccion = data.get('direccion', 0)
         radio = data.get('radio_deteccion', 30)
 
         if lat is None or lon is None:
@@ -19660,10 +19681,10 @@ def api_admin_crear_semaforo():
 
         conn = get_db_connection()
         semaforo = conn.execute("""
-            INSERT INTO semaforos (nombre, lat, lon, tiempo_rojo_seg, radio_deteccion)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, nombre, lat, lon, tiempo_rojo_seg, radio_deteccion, activo
-        """, (nombre or None, lat, lon, tiempo_rojo, radio)).fetchone()
+            INSERT INTO semaforos (nombre, lat, lon, tiempo_rojo_seg, direccion, radio_deteccion)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, nombre, lat, lon, tiempo_rojo_seg, direccion, radio_deteccion, activo
+        """, (nombre or None, lat, lon, tiempo_rojo, direccion, radio)).fetchone()
         conn.commit()
         conn.close()
 
@@ -19695,6 +19716,9 @@ def api_admin_actualizar_semaforo(semaforo_id):
         if 'tiempo_rojo_seg' in data:
             campos.append("tiempo_rojo_seg = %s")
             valores.append(data['tiempo_rojo_seg'])
+        if 'direccion' in data:
+            campos.append("direccion = %s")
+            valores.append(data['direccion'])
         if 'radio_deteccion' in data:
             campos.append("radio_deteccion = %s")
             valores.append(data['radio_deteccion'])
@@ -19728,6 +19752,126 @@ def api_admin_eliminar_semaforo(semaforo_id):
         conn.close()
 
         return jsonify({'ok': True, 'mensaje': 'Semáforo eliminado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# CÁMARAS DE FOTOMULTA (CRUD)
+# ============================================================================
+
+@app.route('/api/admin/camaras')
+@admin_required
+def api_admin_listar_camaras():
+    """Lista todas las cámaras de fotomulta"""
+    try:
+        conn = get_db_connection()
+        camaras = conn.execute("""
+            SELECT id, nombre, lat, lon, direccion, velocidad_maxima, radio_deteccion, activo, created_at
+            FROM camaras_fotomulta
+            ORDER BY nombre
+        """).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'camaras': [dict(c) for c in camaras]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/camaras', methods=['POST'])
+@admin_required
+def api_admin_crear_camara():
+    """Crea una nueva cámara de fotomulta"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        lat = data.get('lat')
+        lon = data.get('lon')
+        direccion = data.get('direccion', 0)
+        velocidad = data.get('velocidad_maxima', 60)
+        radio = data.get('radio_deteccion', 30)
+
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'El nombre es requerido'}), 400
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas son requeridas'}), 400
+
+        conn = get_db_connection()
+        camara = conn.execute("""
+            INSERT INTO camaras_fotomulta (nombre, lat, lon, direccion, velocidad_maxima, radio_deteccion)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, nombre, lat, lon, direccion, velocidad_maxima, radio_deteccion, activo
+        """, (nombre, lat, lon, direccion, velocidad, radio)).fetchone()
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'camara': dict(camara)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/camaras/<int:camara_id>', methods=['PUT'])
+@admin_required
+def api_admin_actualizar_camara(camara_id):
+    """Actualiza una cámara de fotomulta existente"""
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+
+        campos = []
+        valores = []
+
+        if 'nombre' in data:
+            campos.append("nombre = %s")
+            valores.append(data['nombre'])
+        if 'lat' in data:
+            campos.append("lat = %s")
+            valores.append(data['lat'])
+        if 'lon' in data:
+            campos.append("lon = %s")
+            valores.append(data['lon'])
+        if 'direccion' in data:
+            campos.append("direccion = %s")
+            valores.append(data['direccion'])
+        if 'velocidad_maxima' in data:
+            campos.append("velocidad_maxima = %s")
+            valores.append(data['velocidad_maxima'])
+        if 'radio_deteccion' in data:
+            campos.append("radio_deteccion = %s")
+            valores.append(data['radio_deteccion'])
+        if 'activo' in data:
+            campos.append("activo = %s")
+            valores.append(data['activo'])
+
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay campos para actualizar'}), 400
+
+        valores.append(camara_id)
+        query = f"UPDATE camaras_fotomulta SET {', '.join(campos)} WHERE id = %s"
+        conn.execute(query, tuple(valores))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Cámara actualizada'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/camaras/<int:camara_id>', methods=['DELETE'])
+@admin_required
+def api_admin_eliminar_camara(camara_id):
+    """Elimina una cámara de fotomulta"""
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM camaras_fotomulta WHERE id = %s", (camara_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Cámara eliminada'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

@@ -1164,8 +1164,12 @@
                                 <input type="text" id="semaforo-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Latitud (clic en mapa)" readonly>
                                 <input type="text" id="semaforo-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Longitud (clic en mapa)" readonly>
                                 <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Dirección (grados 0-360)</label>
+                                    <input type="number" id="semaforo-direccion" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="0" min="0" max="360">
+                                </div>
+                                <div>
                                     <label class="block text-xs text-gray-500 mb-1">Radio detección (metros)</label>
-                                    <input type="number" id="semaforo-radio" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="30" value="30">
+                                    <input type="number" id="semaforo-radio" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="15" value="15">
                                 </div>
                             </div>
                             <button onclick="agregarSemaforo()" class="mt-3 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold">
@@ -1179,6 +1183,70 @@
                         </div>
 
                         <div id="mensaje-semaforos" class="hidden p-3 rounded-lg text-center"></div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 11: Cámaras de Fotomulta -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">📷 Cámaras de Fotomulta</h3>
+                        <p class="text-sm text-gray-500 mt-1">Registra cámaras de velocidad para alertar a los conductores</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white space-y-4">
+
+                        <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <p class="text-sm text-yellow-700">
+                                <strong>⚠️ Importante:</strong> Las cámaras detectan por dirección de viaje. Solo se alertará al conductor si va en el sentido de la cámara.
+                            </p>
+                        </div>
+
+                        <!-- Formulario nueva cámara -->
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-gray-800 mb-3">Agregar nueva cámara</h4>
+
+                            <!-- Mapa para seleccionar ubicación -->
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">📍 Selecciona la ubicación en el mapa</label>
+                                <div id="mapa-camara" class="mapa-selector"></div>
+                                <p class="mapa-instrucciones">Haz clic en el mapa para seleccionar las coordenadas de la cámara</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <input type="text" id="camara-nombre" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Nombre (ej: Cámara Av 3N con Calle 52)">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Velocidad máxima (km/h)</label>
+                                    <input type="number" id="camara-velocidad" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="60" value="60">
+                                </div>
+                                <input type="text" id="camara-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Latitud (clic en mapa)" readonly>
+                                <input type="text" id="camara-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Longitud (clic en mapa)" readonly>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Dirección (grados 0-360)</label>
+                                    <input type="number" id="camara-direccion" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="0" min="0" max="360">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Radio detección (metros)</label>
+                                    <input type="number" id="camara-radio" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="20" value="20">
+                                </div>
+                            </div>
+                            <button onclick="agregarCamara()" class="mt-3 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold">
+                                + Agregar Cámara
+                            </button>
+                        </div>
+
+                        <!-- Lista de cámaras -->
+                        <div id="lista-camaras">
+                            <div class="text-center py-4 text-gray-500">Cargando cámaras...</div>
+                        </div>
+
+                        <div id="mensaje-camaras" class="hidden p-3 rounded-lg text-center"></div>
 
                     </div>
                 </div>
@@ -2480,6 +2548,7 @@
 
         function renderSemaforo(semaforo) {
             const nombre = semaforo.nombre || `Semáforo #${semaforo.id}`;
+            const direccionTexto = obtenerDireccionTexto(semaforo.direccion || 0);
             return `
                 <div class="festivo-item mb-2" id="semaforo-${semaforo.id}">
                     <div class="flex-1">
@@ -2488,7 +2557,8 @@
                             ${semaforo.activo ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Activo</span>' : '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Inactivo</span>'}
                         </div>
                         <div class="text-sm text-gray-500 mt-1">
-                            Tiempo en rojo: <strong>${semaforo.tiempo_rojo_seg} seg</strong> |
+                            Tiempo rojo: <strong>${semaforo.tiempo_rojo_seg}s</strong> |
+                            Dir: ${direccionTexto} (${semaforo.direccion || 0}°) |
                             Radio: ${semaforo.radio_deteccion}m
                         </div>
                         <div class="text-xs text-gray-400">
@@ -2514,7 +2584,8 @@
             const tiempo = parseInt(document.getElementById('semaforo-tiempo').value) || 60;
             const lat = parseFloat(document.getElementById('semaforo-lat').value);
             const lon = parseFloat(document.getElementById('semaforo-lon').value);
-            const radio = parseInt(document.getElementById('semaforo-radio').value) || 30;
+            const direccion = parseInt(document.getElementById('semaforo-direccion').value) || 0;
+            const radio = parseInt(document.getElementById('semaforo-radio').value) || 15;
 
             if (isNaN(lat) || isNaN(lon)) {
                 alert('Ingresa coordenadas válidas');
@@ -2525,7 +2596,7 @@
                 const res = await fetch('/api/admin/semaforos', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nombre, tiempo_rojo_seg: tiempo, lat, lon, radio_deteccion: radio })
+                    body: JSON.stringify({ nombre, tiempo_rojo_seg: tiempo, lat, lon, direccion, radio_deteccion: radio })
                 });
                 const data = await res.json();
 
@@ -2538,7 +2609,8 @@
                     document.getElementById('semaforo-tiempo').value = '60';
                     document.getElementById('semaforo-lat').value = '';
                     document.getElementById('semaforo-lon').value = '';
-                    document.getElementById('semaforo-radio').value = '30';
+                    document.getElementById('semaforo-direccion').value = '';
+                    document.getElementById('semaforo-radio').value = '15';
                     // Limpiar marcador del mapa y recargar
                     limpiarMarcadorSemaforo();
                     // Recargar lista
@@ -2907,6 +2979,269 @@
                 });
             });
             observer.observe(lugaresAccordion, observerConfig);
+        }
+
+        // Cámaras
+        const camarasAccordion = document.querySelector('#mapa-camara')?.closest('.accordion-content');
+        if (camarasAccordion) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.target.classList.contains('expanded')) {
+                        setTimeout(initMapaCamara, 100);
+                    }
+                });
+            });
+            observer.observe(camarasAccordion, observerConfig);
+        }
+
+        // ==================== CÁMARAS DE FOTOMULTA ====================
+
+        let mapaCamara = null;
+        let marcadorCamara = null;
+        let mapasCamarasActivas = [];
+
+        // Cargar cámaras al iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarCamaras();
+        });
+
+        function initMapaCamara() {
+            if (mapaCamara) return; // Ya inicializado
+
+            mapaCamara = L.map('mapa-camara').setView(CALI_CENTER, ZOOM_INICIAL);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(mapaCamara);
+
+            // Cargar cámaras existentes en el mapa
+            cargarCamarasEnMapa();
+
+            // Click para seleccionar ubicación
+            mapaCamara.on('click', function(e) {
+                const lat = e.latlng.lat.toFixed(6);
+                const lon = e.latlng.lng.toFixed(6);
+
+                // Actualizar inputs
+                document.getElementById('camara-lat').value = lat;
+                document.getElementById('camara-lon').value = lon;
+
+                // Mover o crear marcador
+                if (marcadorCamara) {
+                    marcadorCamara.setLatLng(e.latlng);
+                } else {
+                    marcadorCamara = L.marker(e.latlng, {
+                        icon: L.icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).addTo(mapaCamara);
+                    marcadorCamara.bindPopup('<strong>Nueva cámara</strong><br>Seleccionada').openPopup();
+                }
+            });
+        }
+
+        async function cargarCamarasEnMapa() {
+            try {
+                const res = await fetch('/api/admin/camaras');
+                const data = await res.json();
+
+                if (data.ok && data.camaras) {
+                    // Limpiar marcadores anteriores
+                    mapasCamarasActivas.forEach(m => mapaCamara.removeLayer(m));
+                    mapasCamarasActivas = [];
+
+                    data.camaras.forEach(camara => {
+                        const marcador = L.circleMarker([camara.lat, camara.lon], {
+                            radius: 8,
+                            fillColor: camara.activo ? '#f97316' : '#9ca3af',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(mapaCamara);
+
+                        const direccionTexto = obtenerDireccionTexto(camara.direccion);
+                        marcador.bindPopup(`
+                            <strong>📷 ${camara.nombre}</strong><br>
+                            Vel. máx: ${camara.velocidad_maxima} km/h<br>
+                            Dirección: ${direccionTexto}<br>
+                            ${camara.activo ? '✅ Activa' : '⏸️ Inactiva'}
+                        `);
+
+                        mapasCamarasActivas.push(marcador);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando cámaras en mapa:', error);
+            }
+        }
+
+        async function cargarCamaras() {
+            try {
+                const res = await fetch('/api/admin/camaras');
+                const data = await res.json();
+
+                const container = document.getElementById('lista-camaras');
+
+                if (!data.ok) {
+                    container.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar cámaras</div>';
+                    return;
+                }
+
+                const camaras = data.camaras || [];
+
+                if (camaras.length === 0) {
+                    container.innerHTML = '<div class="text-center py-4 text-gray-500">No hay cámaras registradas</div>';
+                    return;
+                }
+
+                container.innerHTML = camaras.map(c => renderCamara(c)).join('');
+            } catch (error) {
+                console.error('Error cargando cámaras:', error);
+                document.getElementById('lista-camaras').innerHTML =
+                    '<div class="text-center py-4 text-red-500">Error de conexión</div>';
+            }
+        }
+
+        function renderCamara(camara) {
+            const direccionTexto = obtenerDireccionTexto(camara.direccion || 0);
+            return `
+                <div class="festivo-item mb-2" id="camara-${camara.id}">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-gray-800">📷 ${camara.nombre}</span>
+                            ${camara.activo ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Activa</span>' : '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Inactiva</span>'}
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Vel. máx: <strong>${camara.velocidad_maxima} km/h</strong> |
+                            Dir: ${direccionTexto} (${camara.direccion || 0}°) |
+                            Radio: ${camara.radio_deteccion}m
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            Lat: ${camara.lat}, Lon: ${camara.lon}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                        <button onclick="toggleCamaraActiva(${camara.id}, ${!camara.activo})"
+                            class="px-3 py-1.5 ${camara.activo ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white text-sm rounded-lg transition">
+                            ${camara.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button onclick="eliminarCamara(${camara.id}, '${camara.nombre}')"
+                            class="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition">
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function agregarCamara() {
+            const nombre = document.getElementById('camara-nombre').value.trim();
+            const velocidad = parseInt(document.getElementById('camara-velocidad').value) || 60;
+            const lat = parseFloat(document.getElementById('camara-lat').value);
+            const lon = parseFloat(document.getElementById('camara-lon').value);
+            const direccion = parseInt(document.getElementById('camara-direccion').value) || 0;
+            const radio = parseInt(document.getElementById('camara-radio').value) || 20;
+
+            if (!nombre) {
+                alert('Ingresa el nombre de la cámara');
+                return;
+            }
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Selecciona la ubicación en el mapa');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/camaras', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, velocidad_maxima: velocidad, lat, lon, direccion, radio_deteccion: radio })
+                });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-camaras');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Cámara agregada';
+                    // Limpiar formulario
+                    document.getElementById('camara-nombre').value = '';
+                    document.getElementById('camara-velocidad').value = '60';
+                    document.getElementById('camara-lat').value = '';
+                    document.getElementById('camara-lon').value = '';
+                    document.getElementById('camara-direccion').value = '';
+                    document.getElementById('camara-radio').value = '20';
+                    // Limpiar marcador del mapa y recargar
+                    limpiarMarcadorCamara();
+                    // Recargar lista
+                    cargarCamaras();
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error agregando cámara:', error);
+            }
+        }
+
+        async function toggleCamaraActiva(camaraId, nuevoEstado) {
+            try {
+                const res = await fetch(`/api/admin/camaras/${camaraId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activo: nuevoEstado })
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    cargarCamaras();
+                    if (mapaCamara) cargarCamarasEnMapa();
+                }
+            } catch (error) {
+                console.error('Error actualizando cámara:', error);
+            }
+        }
+
+        async function eliminarCamara(camaraId, nombre) {
+            if (!confirm(`¿Eliminar la cámara "${nombre}"?`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/camaras/${camaraId}`, { method: 'DELETE' });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-camaras');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Cámara eliminada';
+                    document.getElementById(`camara-${camaraId}`)?.remove();
+                    cargarCamaras();
+                    if (mapaCamara) cargarCamarasEnMapa();
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error eliminando cámara:', error);
+            }
+        }
+
+        function limpiarMarcadorCamara() {
+            if (marcadorCamara) {
+                mapaCamara.removeLayer(marcadorCamara);
+                marcadorCamara = null;
+            }
+            // Recargar cámaras existentes en el mapa
+            if (mapaCamara) {
+                cargarCamarasEnMapa();
+            }
         }
     </script>
 </body>

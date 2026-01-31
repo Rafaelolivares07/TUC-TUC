@@ -3166,9 +3166,9 @@
             // Cerrar modal sin cambiar modo (lo cambiaremos después)
             document.getElementById('modal-nuevo-lugar').classList.add('hidden');
 
-            // Expandir el contenedor del mapa (igual que destino/origen)
+            // Expandir el contenedor del mapa (un poco más pequeño para no tapar botones)
             const contenedorMapa = document.getElementById('contenedor-mapa');
-            contenedorMapa.style.maxHeight = '600px';
+            contenedorMapa.style.maxHeight = '550px';
             contenedorMapa.style.padding = '';
 
             // Inicializar mapa si no existe

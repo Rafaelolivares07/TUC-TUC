@@ -208,24 +208,7 @@
                 </button>
             </div>
 
-            <!-- SECCIÓN 3: Tipo de Servicio -->
-            <div id="seccion-tipo-servicio" class="bg-gray-200 rounded border border-gray-300 p-4 mb-6">
-                <h2 class="text-base font-medium mb-3 text-gray-800">Tipo de servicio</h2>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <button id="btn-transporte" class="p-3 border-2 border-gray-800 rounded text-center transition">
-                        <div class="font-medium text-sm">Transporte</div>
-                        <div class="text-xs text-gray-600 mt-1">Punto a punto</div>
-                    </button>
-
-                    <button id="btn-acompanamiento" class="p-3 border-2 border-gray-300 rounded text-center transition hover:border-gray-400">
-                        <div class="font-medium text-sm">Acompañamiento</div>
-                        <div class="text-xs text-gray-600 mt-1">Con espera</div>
-                    </button>
-                </div>
-            </div>
-
-            <!-- SECCIÓN 4: Datos personales -->
+            <!-- SECCIÓN 3: Datos personales -->
             <div id="seccion-datos" class="bg-gray-200 rounded border border-gray-300 p-4 mb-6">
                 <h2 class="text-base font-medium mb-3 text-gray-800">Tus datos</h2>
 
@@ -242,42 +225,6 @@
                                placeholder="Ej: 3175718658">
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Formulario de Acompañamiento -->
-        <div id="form-acompanamiento" class="bg-white rounded-lg shadow-lg p-6 mb-4 hidden">
-            <h2 class="text-xl font-semibold mb-4">Servicio de acompañamiento</h2>
-
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Nombre</label>
-                    <input type="text" id="input-nombre-acomp" class="w-full p-3 border rounded-lg"
-                           placeholder="Tu nombre completo">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
-                    <input type="tel" id="input-telefono-acomp" class="w-full p-3 border rounded-lg"
-                           placeholder="Ej: 3175718658">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">¿Cuántas horas necesitas?</label>
-                    <input type="number" id="input-horas" class="w-full p-3 border rounded-lg"
-                           placeholder="Ej: 3" min="2" value="2">
-                    <p class="text-sm text-gray-500 mt-1">Mínimo 2 horas</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Notas (opcional)</label>
-                    <textarea id="input-notas-acomp" class="w-full p-3 border rounded-lg" rows="3"
-                              placeholder="Ej: Necesito ayuda con silla de ruedas"></textarea>
-                </div>
-
-                <button id="btn-calcular-acompanamiento" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
-                    Calcular tarifa
-                </button>
             </div>
         </div>
 
@@ -313,16 +260,172 @@
         let modoSeleccionMapa = 'ninguno';
         let marcadorDestinoMapa = null; // Marcador temporal en el mapa (destino)
         let marcadorOrigenMapa = null; // Marcador temporal en el mapa (origen)
-        let pendienteProgramarViaje = false; // Flag para saber si el usuario quería programar antes de registrarse
+        let intencionRegistro = null; // 'viaje' | 'programar' | 'comunidad' | null
         let lugaresUsuario = []; // Lugares frecuentes del usuario
         let iconoLugarSeleccionado = 'casa'; // Icono seleccionado para nuevo lugar (casa por defecto)
         let ubicacionNuevoLugar = null; // Coordenadas del nuevo lugar
         let marcadorNuevoLugar = null; // Marcador temporal para nuevo lugar
         let usuarioLogueado = false; // Flag para saber si el usuario está logueado
 
-        // Ir a la página de comunidad
+        // Ir a la página de comunidad (verifica registro primero)
         function goToComunidad() {
+            if (!verificarUsuarioRegistrado()) {
+                intencionRegistro = 'comunidad';
+                mostrarModalRegistro();
+                return;
+            }
             window.location.href = '/comunidad';
+        }
+
+        // Verificar si usuario está registrado
+        function verificarUsuarioRegistrado() {
+            const inputNombre = document.getElementById('input-nombre');
+            const inputTelefono = document.getElementById('input-telefono');
+            const nombre = inputNombre.value.trim();
+            const telefono = inputTelefono.value.trim();
+            return inputNombre.disabled || (nombre && telefono && telefono.length >= 7);
+        }
+
+        // Modal unificado de registro
+        function mostrarModalRegistro() {
+            // Remover modal existente si hay
+            const existente = document.getElementById('modal-registro-unificado');
+            if (existente) existente.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'modal-registro-unificado';
+            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm">
+                    <div class="text-center mb-4">
+                        <div class="text-5xl mb-2">👤</div>
+                        <h2 class="text-lg font-bold text-gray-800">Ingresa tus datos</h2>
+                        <p class="text-sm text-gray-500">Para continuar necesitamos conocerte</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                            <div class="relative">
+                                <input type="text" id="modal-input-nombre"
+                                    class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-yellow-500 focus:outline-none pr-10"
+                                    placeholder="Tu nombre completo">
+                                <span id="modal-check-nombre" class="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-xl hidden">✓</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                            <div class="relative">
+                                <input type="tel" id="modal-input-telefono"
+                                    class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-yellow-500 focus:outline-none pr-10"
+                                    placeholder="Ej: 3175718658">
+                                <span id="modal-check-telefono" class="absolute right-3 top-1/2 -translate-y-1/2 text-green-500 text-xl hidden">✓</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="btn-continuar-registro" onclick="completarRegistroModal()"
+                        class="w-full mt-6 bg-gray-300 text-gray-500 py-3 rounded-lg font-bold cursor-not-allowed transition"
+                        disabled>
+                        Continuar
+                    </button>
+
+                    <button onclick="cerrarModalRegistro()" class="w-full mt-2 text-gray-400 text-sm hover:text-gray-600">
+                        Cancelar
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Configurar eventos de los inputs del modal
+            const inputNombre = document.getElementById('modal-input-nombre');
+            const inputTelefono = document.getElementById('modal-input-telefono');
+
+            inputNombre.addEventListener('blur', validarCampoModal);
+            inputNombre.addEventListener('input', actualizarBotonContinuar);
+            inputTelefono.addEventListener('blur', validarCampoModal);
+            inputTelefono.addEventListener('input', actualizarBotonContinuar);
+            inputTelefono.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') completarRegistroModal();
+            });
+
+            // Focus en nombre
+            setTimeout(() => inputNombre.focus(), 100);
+        }
+
+        function validarCampoModal(e) {
+            const input = e.target;
+            const valor = input.value.trim();
+            const esNombre = input.id === 'modal-input-nombre';
+            const checkSpan = document.getElementById(esNombre ? 'modal-check-nombre' : 'modal-check-telefono');
+
+            if (esNombre && valor.length > 0) {
+                checkSpan.classList.remove('hidden');
+                input.classList.remove('border-gray-300');
+                input.classList.add('border-green-500');
+                // Auto-focus a teléfono
+                setTimeout(() => document.getElementById('modal-input-telefono').focus(), 100);
+            } else if (!esNombre && valor.length >= 7) {
+                checkSpan.classList.remove('hidden');
+                input.classList.remove('border-gray-300');
+                input.classList.add('border-green-500');
+            }
+
+            actualizarBotonContinuar();
+        }
+
+        function actualizarBotonContinuar() {
+            const nombre = document.getElementById('modal-input-nombre').value.trim();
+            const telefono = document.getElementById('modal-input-telefono').value.trim();
+            const btn = document.getElementById('btn-continuar-registro');
+
+            if (nombre.length > 0 && telefono.length >= 7) {
+                btn.disabled = false;
+                btn.className = 'w-full mt-6 bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 transition cursor-pointer';
+            } else {
+                btn.disabled = true;
+                btn.className = 'w-full mt-6 bg-gray-300 text-gray-500 py-3 rounded-lg font-bold cursor-not-allowed transition';
+            }
+        }
+
+        function completarRegistroModal() {
+            const nombre = document.getElementById('modal-input-nombre').value.trim();
+            const telefono = document.getElementById('modal-input-telefono').value.trim();
+
+            if (!nombre || telefono.length < 7) return;
+
+            // Copiar datos a los inputs principales
+            document.getElementById('input-nombre').value = nombre;
+            document.getElementById('input-telefono').value = telefono;
+
+            // Cerrar modal
+            cerrarModalRegistro();
+
+            // Ejecutar intención según contexto
+            const intencion = intencionRegistro;
+            intencionRegistro = null;
+
+            setTimeout(() => {
+                if (intencion === 'comunidad') {
+                    window.location.href = '/comunidad';
+                } else if (intencion === 'programar') {
+                    abrirModalProgramacion();
+                } else if (intencion === 'viaje') {
+                    // Scroll al resumen y confirmar
+                    document.getElementById('resumen').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 300);
+        }
+
+        function cerrarModalRegistro() {
+            const modal = document.getElementById('modal-registro-unificado');
+            if (modal) {
+                modal.style.opacity = '0';
+                modal.style.transition = 'opacity 0.2s';
+                setTimeout(() => modal.remove(), 200);
+            }
+            intencionRegistro = null;
         }
 
         // Inicializar
@@ -408,20 +511,6 @@
         }
 
         function configurarBotones() {
-            // Selección de tipo de servicio
-            document.getElementById('btn-transporte').addEventListener('click', function() {
-                seleccionarTipoServicio('transporte');
-            });
-
-            document.getElementById('btn-acompanamiento').addEventListener('click', function() {
-                seleccionarTipoServicio('acompanamiento');
-            });
-
-            // Calcular tarifa (acompañamiento)
-            document.getElementById('btn-calcular-acompanamiento').addEventListener('click', function() {
-                calcularTarifaAcompanamiento();
-            });
-
             // Ver mapa
             document.getElementById('btn-ver-mapa').addEventListener('click', function() {
                 const contenedorMapa = document.getElementById('contenedor-mapa');
@@ -459,7 +548,6 @@
 
             // Auto-confirmar al completar teléfono (blur o Enter)
             document.getElementById('input-telefono').addEventListener('blur', function() {
-                verificarRegistroYProgramacion();
                 autoConfirmarSiDatosCompletos();
             });
 
@@ -549,30 +637,6 @@
                     document.getElementById('autocomplete-destino').classList.add('hidden');
                 }
             });
-        }
-
-        function seleccionarTipoServicio(tipo) {
-            tipoServicioActual = tipo;
-
-            // Actualizar UI de botones
-            const btnTransporte = document.getElementById('btn-transporte');
-            const btnAcompanamiento = document.getElementById('btn-acompanamiento');
-
-            if (tipo === 'transporte') {
-                btnTransporte.className = 'p-6 border-2 border-blue-500 bg-blue-50 rounded-lg transition';
-                btnAcompanamiento.className = 'p-6 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition';
-                document.getElementById('form-transporte').classList.remove('hidden');
-                document.getElementById('form-acompanamiento').classList.add('hidden');
-            } else {
-                btnAcompanamiento.className = 'p-6 border-2 border-blue-500 bg-blue-50 rounded-lg transition';
-                btnTransporte.className = 'p-6 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition';
-                document.getElementById('form-acompanamiento').classList.remove('hidden');
-                document.getElementById('form-transporte').classList.add('hidden');
-            }
-
-            // Ocultar mapa y resumen
-            document.getElementById('contenedor-mapa').classList.add('hidden');
-            document.getElementById('resumen').classList.add('hidden');
         }
 
         async function buscarDireccion(direccion) {
@@ -860,37 +924,6 @@
             });
         }
 
-        async function calcularTarifaAcompanamiento() {
-            const horas = parseInt(document.getElementById('input-horas').value);
-
-            if (!horas || horas < 2) {
-                alert('Mínimo 2 horas de servicio');
-                return;
-            }
-
-            // Calcular tarifa
-            const response = await fetch('/api/calcular-tarifa', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tipo_servicio: 'acompanamiento',
-                    horas_acompanamiento: horas
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.ok) {
-                mostrarResumen({
-                    tipo: 'acompanamiento',
-                    horas: horas,
-                    tarifa: data.tarifa
-                });
-            } else {
-                alert('Error: ' + data.error);
-            }
-        }
-
         // Función para truncar direcciones (muestra hasta el último segmento que contenga "ciudad")
         function truncarDireccion(direccion) {
             if (!direccion) return '-';
@@ -1021,32 +1054,16 @@
             }
         }
 
-        function verificarRegistroYProgramacion() {
-            // Si el usuario tenía pendiente programar un viaje y ahora tiene datos completos
-            if (pendienteProgramarViaje) {
-                const nombre = document.getElementById('input-nombre').value.trim();
-                const telefono = document.getElementById('input-telefono').value.trim();
-
-                if (nombre && telefono && telefono.length >= 7) {
-                    // Limpiar la bandera
-                    pendienteProgramarViaje = false;
-                    // Mostrar modal de bienvenida después de un pequeño delay
-                    setTimeout(() => {
-                        mostrarModalBienvenidaProgramacion();
-                    }, 500);
-                }
-            }
-        }
-
         async function confirmarSolicitud(esAutoConfirmacion = false) {
             // Evitar múltiples confirmaciones
             if (confirmacionEnProceso) return;
 
             let nombre, telefono, notas, origenTexto, destinoTexto;
 
+            nombre = document.getElementById('input-nombre').value.trim();
+            telefono = document.getElementById('input-telefono').value.trim();
+
             if (tipoServicioActual === 'transporte') {
-                nombre = document.getElementById('input-nombre').value.trim();
-                telefono = document.getElementById('input-telefono').value.trim();
                 // Si usa ubicación detectada, obtener de ahí; si no, del input
                 if (cardUbicacionSeleccionado) {
                     origenTexto = document.getElementById('texto-ubicacion-detectada').textContent.trim();
@@ -1054,37 +1071,13 @@
                     origenTexto = document.getElementById('input-origen').value.trim();
                 }
                 destinoTexto = document.getElementById('input-destino').value.trim();
-            } else {
-                nombre = document.getElementById('input-nombre-acomp').value.trim();
-                telefono = document.getElementById('input-telefono-acomp').value.trim();
-                notas = document.getElementById('input-notas-acomp').value.trim();
             }
 
-            if (!nombre || !telefono) {
-                // Solo mostrar mensaje si es clic manual (no auto-confirmación)
+            if (!nombre || !telefono || telefono.length < 7) {
+                // Solo mostrar modal si es clic manual (no auto-confirmación)
                 if (!esAutoConfirmacion) {
-                    const seccionDatos = document.getElementById('seccion-datos');
-                    const inputNombre = document.getElementById('input-nombre');
-
-                    // Destacar sección
-                    seccionDatos.classList.remove('bg-gray-200');
-                    seccionDatos.classList.add('bg-white', 'shadow-lg');
-
-                    // Scroll suave a la sección
-                    setTimeout(() => {
-                        seccionDatos.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 100);
-
-                    // Focus en el primer input vacío
-                    setTimeout(() => {
-                        if (!nombre) {
-                            inputNombre.focus();
-                        } else {
-                            document.getElementById('input-telefono').focus();
-                        }
-                    }, 600);
-
-                    mostrarModal('Datos requeridos', 'Para continuar, necesitamos conocer tu nombre y número de teléfono', 'info');
+                    intencionRegistro = 'viaje';
+                    mostrarModalRegistro();
                 }
                 return;
             }
@@ -1877,12 +1870,6 @@
                     document.getElementById('input-telefono').value = telefono;
                     document.getElementById('input-telefono').disabled = true;
 
-                    // Pre-llenar campos de acompañamiento
-                    document.getElementById('input-nombre-acomp').value = nombre;
-                    document.getElementById('input-nombre-acomp').disabled = true;
-                    document.getElementById('input-telefono-acomp').value = telefono;
-                    document.getElementById('input-telefono-acomp').disabled = true;
-
                     // Mostrar botón de chat con nombre
                     console.log('Usuario logueado:', nombre);
                 } else {
@@ -2373,81 +2360,14 @@
         // =====================================================
         let fechaProgramadaSeleccionada = null;
 
-        function mostrarModalRegistroRequerido() {
-            const modal = document.createElement('div');
-            modal.id = 'modal-registro-requerido';
-            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
-            modal.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm text-center">
-                    <div class="text-5xl mb-4">📝</div>
-                    <h2 class="text-lg font-bold text-gray-800 mb-3">¡Primero ingresa tus datos!</h2>
-                    <p class="text-gray-600 mb-5">Para programar viajes necesitamos conocerte. Ingresa tu nombre y teléfono para continuar.</p>
-                    <button onclick="cerrarModalYEnfocarDatos()" class="w-full bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 transition">
-                        Entendido
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-
-        function cerrarModalYEnfocarDatos() {
-            // Cerrar modal
-            const modal = document.getElementById('modal-registro-requerido');
-            if (modal) modal.remove();
-
-            // Scroll suave a la sección de datos
-            document.getElementById('seccion-datos').scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-            // Focus en el input del nombre después del scroll
-            setTimeout(() => {
-                document.getElementById('input-nombre').focus();
-            }, 500);
-        }
-
-        function mostrarModalBienvenidaProgramacion() {
-            const modal = document.createElement('div');
-            modal.id = 'modal-bienvenida-programacion';
-            modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60';
-            modal.innerHTML = `
-                <div class="bg-white rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm text-center">
-                    <div class="text-5xl mb-4">🎉</div>
-                    <h2 class="text-lg font-bold text-gray-800 mb-3">¡Gracias por registrarte!</h2>
-                    <p class="text-gray-600 mb-5">Ahora puedes programar viajes para cuando los necesites. ¡Vamos a programar tu primer viaje!</p>
-                    <button onclick="cerrarBienvenidaYAbrirProgramacion()" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 transition">
-                        ¡Programar viaje!
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-
-        function cerrarBienvenidaYAbrirProgramacion() {
-            const modal = document.getElementById('modal-bienvenida-programacion');
-            if (modal) modal.remove();
-
-            // Pequeño delay y abrir modal de programación
-            setTimeout(() => {
-                abrirModalProgramacion();
-            }, 300);
-        }
-
         function abrirModalProgramacion() {
             // Si ya tiene fecha programada, no abrir modal (usar el ✕ para cancelar)
             if (fechaProgramadaSeleccionada) return;
 
             // Verificar si el usuario tiene datos ingresados
-            const inputNombre = document.getElementById('input-nombre');
-            const inputTelefono = document.getElementById('input-telefono');
-            const nombre = inputNombre.value.trim();
-            const telefono = inputTelefono.value.trim();
-
-            // Si el input está deshabilitado, el usuario ya está registrado
-            const usuarioRegistrado = inputNombre.disabled || (nombre && telefono && telefono.length >= 7);
-
-            if (!usuarioRegistrado) {
-                // Marcar que quiere programar viaje después de registrarse
-                pendienteProgramarViaje = true;
-                mostrarModalRegistroRequerido();
+            if (!verificarUsuarioRegistrado()) {
+                intencionRegistro = 'programar';
+                mostrarModalRegistro();
                 return;
             }
 
@@ -2471,7 +2391,7 @@
                             <div class="flex gap-2">
                                 <select id="prog-hora" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
                                     <option value="">Hora</option>
-                                    ${[...Array(24)].map((_, i) => `<option value="${String(i).padStart(2,'0')}">${String(i).padStart(2,'0')}</option>`).join('')}
+                                    ${[...Array(12)].map((_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}
                                 </select>
                                 <select id="prog-minuto" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
                                     <option value="">Min</option>
@@ -2479,6 +2399,10 @@
                                     <option value="15">15</option>
                                     <option value="30">30</option>
                                     <option value="45">45</option>
+                                </select>
+                                <select id="prog-ampm" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
                                 </select>
                             </div>
                         </div>
@@ -2517,13 +2441,21 @@
             const fecha = document.getElementById('prog-fecha').value;
             const horaVal = document.getElementById('prog-hora').value;
             const minutoVal = document.getElementById('prog-minuto').value;
+            const ampm = document.getElementById('prog-ampm').value;
 
             if (!fecha || !horaVal || !minutoVal) {
                 alert('Selecciona fecha, hora y minutos');
                 return;
             }
 
-            const hora = horaVal + ':' + minutoVal;
+            // Convertir hora 12h a 24h
+            let hora24 = parseInt(horaVal);
+            if (ampm === 'PM' && hora24 !== 12) {
+                hora24 += 12;
+            } else if (ampm === 'AM' && hora24 === 12) {
+                hora24 = 0;
+            }
+            const hora = String(hora24).padStart(2, '0') + ':' + minutoVal;
 
             // Validar que sea futuro
             const fechaHora = new Date(fecha + 'T' + hora);

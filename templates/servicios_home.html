@@ -3336,14 +3336,13 @@
 
             if (guardarLugar) {
                 const nombre = document.getElementById('nombre-lugar-mapa').value.trim();
-                const esPublico = document.getElementById('check-publico-mapa').checked;
 
                 if (!nombre) {
                     alert('Por favor ingresa un nombre para guardar el lugar');
                     return;
                 }
 
-                // Guardar el lugar
+                // Guardar el lugar (sin compartir, puede hacerlo después desde Mis Lugares)
                 try {
                     await fetch('/api/lugares/crear', {
                         method: 'POST',
@@ -3353,7 +3352,7 @@
                             lat: coordenadasDestinoSeleccionado.lat,
                             lon: coordenadasDestinoSeleccionado.lon,
                             icono: '📍',
-                            es_publico: esPublico
+                            es_publico: false
                         })
                     });
                     cargarMisLugares();
@@ -3367,7 +3366,6 @@
             document.getElementById('check-guardar-lugar-mapa').checked = false;
             document.getElementById('opciones-guardar-lugar-mapa').classList.add('hidden');
             document.getElementById('nombre-lugar-mapa').value = '';
-            document.getElementById('check-publico-mapa').checked = false;
 
             // Continuar con el cálculo
             verificarYCalcularAutomaticamente();
@@ -3517,11 +3515,6 @@
 
             <div id="opciones-guardar-lugar-mapa" class="hidden space-y-3 mb-4">
                 <input type="text" id="nombre-lugar-mapa" class="w-full p-3 border-2 border-gray-300 rounded focus:border-yellow-500 focus:outline-none" placeholder="Nombre del lugar (ej: Casa)">
-
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" id="check-publico-mapa" class="w-4 h-4">
-                    <span>Compartir con la comunidad</span>
-                </label>
             </div>
 
             <button onclick="confirmarDestinoMapa()" class="w-full py-3 bg-yellow-500 text-gray-900 rounded-lg font-bold">

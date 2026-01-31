@@ -19799,6 +19799,15 @@ def validar_pico_placa(conn, placa, fecha_hora_viaje=None):
     if dia_semana >= 5:
         return (True, None)
 
+    # Verificar si es día festivo
+    fecha_viaje = fecha_hora_viaje.date()
+    es_festivo = conn.execute("""
+        SELECT id FROM festivos WHERE fecha = %s AND activo = true
+    """, (fecha_viaje,)).fetchone()
+
+    if es_festivo:
+        return (True, None)  # Festivos no tienen restricción
+
     # Obtener horario de restricción
     hora_inicio_param = conn.execute("""
         SELECT valor_texto FROM parametros_sistema WHERE nombre = 'pico_placa_hora_inicio'

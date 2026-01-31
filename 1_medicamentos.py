@@ -20569,18 +20569,19 @@ def api_buscar_interseccion():
             # Usamos unaccent() para ignorar tildes en la BD
             # LIKE: '%clinica%' encuentra "Clínica"
             # Trigram: 'bercmans' % 'berchman' encuentra coincidencias similares
-            condiciones = []
+            # Usamos AND entre palabras para que el POI contenga TODAS las palabras buscadas
+            grupos_condiciones = []
             params = []
 
             for palabra in palabras_extra:
-                # LIKE para coincidencia parcial (sin tildes)
-                condiciones.append("LOWER(unaccent(nombre)) LIKE %s")
+                # Cada palabra: (LIKE OR Trigram) - para manejar errores ortográficos
+                grupo = "(LOWER(unaccent(nombre)) LIKE %s OR LOWER(unaccent(nombre)) %% %s)"
+                grupos_condiciones.append(grupo)
                 params.append(f'%{palabra}%')
-                # Trigram para similitud (errores ortográficos) - umbral 0.3
-                condiciones.append("LOWER(unaccent(nombre)) %% %s")
                 params.append(palabra)
 
-            condiciones_sql = ' OR '.join(condiciones)
+            # Unir grupos con AND: debe contener TODAS las palabras
+            condiciones_sql = ' AND '.join(grupos_condiciones)
 
             rows_pois = conn.execute(f"""
                 SELECT id, osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio

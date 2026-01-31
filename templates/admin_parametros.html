@@ -6,6 +6,9 @@
     <title>Parámetros del Sistema</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS y JS para mapas interactivos -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
 
@@ -92,6 +95,41 @@
         .festivo-item:hover {
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             border-color: #d1d5db;
+        }
+
+        .mapa-selector {
+            height: 300px;
+            width: 100%;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            cursor: crosshair;
+            margin-top: 0.5rem;
+        }
+
+        .mapa-selector-lugares {
+            height: 350px;
+            width: 100%;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+
+        .mapa-instrucciones {
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+
+        .leaflet-popup-content {
+            margin: 8px 12px;
+        }
+
+        .marker-aprobado {
+            filter: hue-rotate(120deg);
+        }
+
+        .marker-pendiente {
+            filter: hue-rotate(0deg) saturate(2);
         }
     </style>
 </head>
@@ -1001,6 +1039,18 @@
                             </p>
                         </div>
 
+                        <!-- Mapa de lugares sugeridos -->
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-sm font-medium text-gray-700">🗺️ Mapa de lugares</label>
+                                <div class="flex items-center gap-4 text-xs">
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-green-500"></span> Aprobados</span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-orange-500"></span> Pendientes</span>
+                                </div>
+                            </div>
+                            <div id="mapa-lugares" class="mapa-selector-lugares"></div>
+                        </div>
+
                         <div id="lista-lugares-sugeridos">
                             <div class="text-center py-8 text-gray-500">
                                 Cargando lugares sugeridos...
@@ -1036,11 +1086,19 @@
                         <!-- Formulario nuevo peaje -->
                         <div class="p-4 bg-gray-50 rounded-lg border">
                             <h4 class="font-semibold text-gray-800 mb-3">Agregar nuevo peaje</h4>
+
+                            <!-- Mapa para seleccionar ubicación -->
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">📍 Selecciona la ubicación en el mapa</label>
+                                <div id="mapa-peaje" class="mapa-selector"></div>
+                                <p class="mapa-instrucciones">Haz clic en el mapa para seleccionar las coordenadas del peaje</p>
+                            </div>
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <input type="text" id="peaje-nombre" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Nombre (ej: Peaje Rozo → Costa)">
                                 <input type="number" id="peaje-tarifa" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Tarifa ($)">
-                                <input type="text" id="peaje-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Latitud (ej: 3.5123)">
-                                <input type="text" id="peaje-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Longitud (ej: -76.412)">
+                                <input type="text" id="peaje-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Latitud (clic en mapa)" readonly>
+                                <input type="text" id="peaje-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Longitud (clic en mapa)" readonly>
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1">Dirección (grados 0-360)</label>
                                     <input type="number" id="peaje-direccion" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="270" min="0" max="360">
@@ -1089,14 +1147,22 @@
                         <!-- Formulario nuevo semáforo -->
                         <div class="p-4 bg-gray-50 rounded-lg border">
                             <h4 class="font-semibold text-gray-800 mb-3">Agregar nuevo semáforo</h4>
+
+                            <!-- Mapa para seleccionar ubicación -->
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">📍 Selecciona la ubicación en el mapa</label>
+                                <div id="mapa-semaforo" class="mapa-selector"></div>
+                                <p class="mapa-instrucciones">Haz clic en el mapa para seleccionar las coordenadas del semáforo</p>
+                            </div>
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <input type="text" id="semaforo-nombre" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Nombre (opcional, ej: Av 6 con Calle 15)">
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1">Tiempo en rojo (segundos)</label>
                                     <input type="number" id="semaforo-tiempo" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="60" value="60">
                                 </div>
-                                <input type="text" id="semaforo-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Latitud (ej: 3.4567)">
-                                <input type="text" id="semaforo-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Longitud (ej: -76.5234)">
+                                <input type="text" id="semaforo-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Latitud (clic en mapa)" readonly>
+                                <input type="text" id="semaforo-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-green-50" placeholder="Longitud (clic en mapa)" readonly>
                                 <div>
                                     <label class="block text-xs text-gray-500 mb-1">Radio detección (metros)</label>
                                     <input type="number" id="semaforo-radio" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="30" value="30">
@@ -2160,6 +2226,8 @@
                         badge.classList.add('hidden');
                         cargarLugaresSugeridos(); // Recargar para mostrar mensaje vacío
                     }
+                    // Refrescar mapa de lugares
+                    cargarLugaresEnMapa();
                 } else {
                     msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
                     msgDiv.textContent = '❌ Error: ' + data.error;
@@ -2193,6 +2261,8 @@
                         badge.classList.add('hidden');
                         cargarLugaresSugeridos(); // Recargar para mostrar mensaje vacío
                     }
+                    // Refrescar mapa de lugares
+                    cargarLugaresEnMapa();
                 } else {
                     msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
                     msgDiv.textContent = '❌ Error: ' + data.error;
@@ -2318,6 +2388,8 @@
                     document.getElementById('peaje-lon').value = '';
                     document.getElementById('peaje-direccion').value = '';
                     document.getElementById('peaje-radio').value = '50';
+                    // Limpiar marcador del mapa y recargar
+                    limpiarMarcadorPeaje();
                     // Recargar lista
                     cargarPeajes();
                 } else {
@@ -2467,6 +2539,8 @@
                     document.getElementById('semaforo-lat').value = '';
                     document.getElementById('semaforo-lon').value = '';
                     document.getElementById('semaforo-radio').value = '30';
+                    // Limpiar marcador del mapa y recargar
+                    limpiarMarcadorSemaforo();
                     // Recargar lista
                     cargarSemaforos();
                 } else {
@@ -2519,6 +2593,320 @@
             } catch (error) {
                 console.error('Error eliminando semáforo:', error);
             }
+        }
+
+        // ==================== MAPAS INTERACTIVOS ====================
+
+        // Variables globales para mapas
+        let mapaPeaje = null;
+        let mapaSemaforo = null;
+        let mapaLugares = null;
+        let marcadorPeaje = null;
+        let marcadorSemaforo = null;
+        let marcadoresLugares = [];
+        let mapasPeajesActivos = []; // Para mostrar peajes existentes
+
+        // Centro de Cali por defecto
+        const CALI_CENTER = [3.4516, -76.5320];
+        const ZOOM_INICIAL = 12;
+        const ZOOM_DETALLE = 16;
+
+        // Inicializar mapas cuando se abre el acordeón correspondiente
+        function initMapaPeaje() {
+            if (mapaPeaje) return; // Ya inicializado
+
+            mapaPeaje = L.map('mapa-peaje').setView(CALI_CENTER, ZOOM_INICIAL);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(mapaPeaje);
+
+            // Cargar peajes existentes en el mapa
+            cargarPeajesEnMapa();
+
+            // Click para seleccionar ubicación
+            mapaPeaje.on('click', function(e) {
+                const lat = e.latlng.lat.toFixed(6);
+                const lon = e.latlng.lng.toFixed(6);
+
+                // Actualizar inputs
+                document.getElementById('peaje-lat').value = lat;
+                document.getElementById('peaje-lon').value = lon;
+
+                // Mover o crear marcador
+                if (marcadorPeaje) {
+                    marcadorPeaje.setLatLng(e.latlng);
+                } else {
+                    marcadorPeaje = L.marker(e.latlng, {
+                        icon: L.icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).addTo(mapaPeaje);
+                    marcadorPeaje.bindPopup('<strong>Nuevo peaje</strong><br>Seleccionado').openPopup();
+                }
+            });
+        }
+
+        async function cargarPeajesEnMapa() {
+            try {
+                const res = await fetch('/api/admin/peajes');
+                const data = await res.json();
+
+                if (data.ok && data.peajes) {
+                    // Limpiar marcadores anteriores
+                    mapasPeajesActivos.forEach(m => mapaPeaje.removeLayer(m));
+                    mapasPeajesActivos = [];
+
+                    data.peajes.forEach(peaje => {
+                        const marcador = L.circleMarker([peaje.lat, peaje.lon], {
+                            radius: 8,
+                            fillColor: peaje.activo ? '#16a34a' : '#9ca3af',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(mapaPeaje);
+
+                        marcador.bindPopup(`
+                            <strong>${peaje.nombre}</strong><br>
+                            Tarifa: $${peaje.tarifa?.toLocaleString() || 0}<br>
+                            ${peaje.activo ? '✅ Activo' : '⏸️ Inactivo'}
+                        `);
+
+                        mapasPeajesActivos.push(marcador);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando peajes en mapa:', error);
+            }
+        }
+
+        function initMapaSemaforo() {
+            if (mapaSemaforo) return; // Ya inicializado
+
+            mapaSemaforo = L.map('mapa-semaforo').setView(CALI_CENTER, ZOOM_INICIAL);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(mapaSemaforo);
+
+            // Cargar semáforos existentes en el mapa
+            cargarSemaforosEnMapa();
+
+            // Click para seleccionar ubicación
+            mapaSemaforo.on('click', function(e) {
+                const lat = e.latlng.lat.toFixed(6);
+                const lon = e.latlng.lng.toFixed(6);
+
+                // Actualizar inputs
+                document.getElementById('semaforo-lat').value = lat;
+                document.getElementById('semaforo-lon').value = lon;
+
+                // Mover o crear marcador
+                if (marcadorSemaforo) {
+                    marcadorSemaforo.setLatLng(e.latlng);
+                } else {
+                    marcadorSemaforo = L.marker(e.latlng, {
+                        icon: L.icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).addTo(mapaSemaforo);
+                    marcadorSemaforo.bindPopup('<strong>Nuevo semáforo</strong><br>Seleccionado').openPopup();
+                }
+            });
+        }
+
+        let mapasSemaforosActivos = [];
+
+        async function cargarSemaforosEnMapa() {
+            try {
+                const res = await fetch('/api/admin/semaforos');
+                const data = await res.json();
+
+                if (data.ok && data.semaforos) {
+                    // Limpiar marcadores anteriores
+                    mapasSemaforosActivos.forEach(m => mapaSemaforo.removeLayer(m));
+                    mapasSemaforosActivos = [];
+
+                    data.semaforos.forEach(semaforo => {
+                        const marcador = L.circleMarker([semaforo.lat, semaforo.lon], {
+                            radius: 6,
+                            fillColor: semaforo.activo ? '#dc2626' : '#9ca3af',
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(mapaSemaforo);
+
+                        marcador.bindPopup(`
+                            <strong>${semaforo.nombre || 'Semáforo #' + semaforo.id}</strong><br>
+                            Tiempo rojo: ${semaforo.tiempo_rojo_seg}s<br>
+                            ${semaforo.activo ? '✅ Activo' : '⏸️ Inactivo'}
+                        `);
+
+                        mapasSemaforosActivos.push(marcador);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando semáforos en mapa:', error);
+            }
+        }
+
+        function initMapaLugares() {
+            if (mapaLugares) return; // Ya inicializado
+
+            mapaLugares = L.map('mapa-lugares').setView(CALI_CENTER, ZOOM_INICIAL);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(mapaLugares);
+
+            cargarLugaresEnMapa();
+        }
+
+        async function cargarLugaresEnMapa() {
+            if (!mapaLugares) return;
+
+            try {
+                // Cargar lugares sugeridos (pendientes)
+                const resPendientes = await fetch('/api/admin/lugares-sugeridos');
+                const dataPendientes = await resPendientes.json();
+
+                // Limpiar marcadores anteriores
+                marcadoresLugares.forEach(m => mapaLugares.removeLayer(m));
+                marcadoresLugares = [];
+
+                // Marcadores naranjas para pendientes
+                if (dataPendientes.ok && dataPendientes.lugares) {
+                    dataPendientes.lugares.forEach(lugar => {
+                        if (lugar.lat && lugar.lon) {
+                            const marcador = L.circleMarker([lugar.lat, lugar.lon], {
+                                radius: 8,
+                                fillColor: '#f97316', // naranja
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.9
+                            }).addTo(mapaLugares);
+
+                            marcador.bindPopup(`
+                                <strong>${lugar.nombre}</strong><br>
+                                <span style="color: #f97316;">⏳ Pendiente de aprobación</span><br>
+                                <small>Por: ${lugar.usuario_nombre || 'Usuario'}</small><br>
+                                <button onclick="aprobarLugar(${lugar.id})" style="background:#16a34a;color:#fff;padding:4px 8px;border-radius:4px;margin-top:4px;cursor:pointer;">✓ Aprobar</button>
+                            `);
+
+                            marcadoresLugares.push(marcador);
+                        }
+                    });
+                }
+
+                // También cargar POIs aprobados de origen usuario
+                const resPois = await fetch('/api/pois?q=');
+                const dataPois = await resPois.json();
+
+                if (dataPois.ok && dataPois.pois) {
+                    // Filtrar solo los de origen usuario
+                    const poisUsuario = dataPois.pois.filter(p => p.origen === 'usuario');
+
+                    poisUsuario.forEach(poi => {
+                        if (poi.lat && poi.lon) {
+                            const marcador = L.circleMarker([poi.lat, poi.lon], {
+                                radius: 8,
+                                fillColor: '#16a34a', // verde
+                                color: '#fff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.9
+                            }).addTo(mapaLugares);
+
+                            marcador.bindPopup(`
+                                <strong>${poi.nombre}</strong><br>
+                                <span style="color: #16a34a;">✅ Aprobado</span><br>
+                                <small>${poi.categoria || ''}</small>
+                            `);
+
+                            marcadoresLugares.push(marcador);
+                        }
+                    });
+                }
+
+            } catch (error) {
+                console.error('Error cargando lugares en mapa:', error);
+            }
+        }
+
+        // Limpiar marcador de peaje después de agregar exitosamente
+        function limpiarMarcadorPeaje() {
+            if (marcadorPeaje) {
+                mapaPeaje.removeLayer(marcadorPeaje);
+                marcadorPeaje = null;
+            }
+            // Recargar peajes existentes en el mapa
+            if (mapaPeaje) {
+                cargarPeajesEnMapa();
+            }
+        }
+
+        // Limpiar marcador de semáforo después de agregar exitosamente
+        function limpiarMarcadorSemaforo() {
+            if (marcadorSemaforo) {
+                mapaSemaforo.removeLayer(marcadorSemaforo);
+                marcadorSemaforo = null;
+            }
+            // Recargar semáforos existentes en el mapa
+            if (mapaSemaforo) {
+                cargarSemaforosEnMapa();
+            }
+        }
+
+        // Observar cuando se abren los acordeones para inicializar mapas
+        const observerConfig = { attributes: true, attributeFilter: ['class'] };
+
+        // Peajes
+        const peajesAccordion = document.querySelector('#mapa-peaje')?.closest('.accordion-content');
+        if (peajesAccordion) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.target.classList.contains('expanded')) {
+                        setTimeout(initMapaPeaje, 100);
+                    }
+                });
+            });
+            observer.observe(peajesAccordion, observerConfig);
+        }
+
+        // Semáforos
+        const semaforosAccordion = document.querySelector('#mapa-semaforo')?.closest('.accordion-content');
+        if (semaforosAccordion) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.target.classList.contains('expanded')) {
+                        setTimeout(initMapaSemaforo, 100);
+                    }
+                });
+            });
+            observer.observe(semaforosAccordion, observerConfig);
+        }
+
+        // Lugares
+        const lugaresAccordion = document.querySelector('#mapa-lugares')?.closest('.accordion-content');
+        if (lugaresAccordion) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.target.classList.contains('expanded')) {
+                        setTimeout(initMapaLugares, 100);
+                    }
+                });
+            });
+            observer.observe(lugaresAccordion, observerConfig);
         }
     </script>
 </body>

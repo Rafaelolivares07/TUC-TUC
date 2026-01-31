@@ -96,6 +96,20 @@
                 </div>
             </div>
 
+            <!-- Botón seleccionar contacto (si el navegador lo soporta) -->
+            <button onclick="seleccionarContacto()" id="btn-seleccionar-contacto" class="hidden w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Seleccionar de mis contactos
+            </button>
+
+            <div id="separador-contactos" class="hidden flex items-center gap-3 mb-3">
+                <div class="flex-1 border-t border-gray-300"></div>
+                <span class="text-xs text-gray-500">o escribe manualmente</span>
+                <div class="flex-1 border-t border-gray-300"></div>
+            </div>
+
             <div class="space-y-3">
                 <div>
                     <label class="block text-sm text-gray-600 mb-1">Nombre del amigo</label>
@@ -248,6 +262,45 @@
             }
         }
 
+        function verificarContactPicker() {
+            // Verificar si el navegador soporta Contact Picker API
+            if ('contacts' in navigator && 'ContactsManager' in window) {
+                document.getElementById('btn-seleccionar-contacto').classList.remove('hidden');
+                document.getElementById('separador-contactos').classList.remove('hidden');
+            }
+        }
+
+        async function seleccionarContacto() {
+            try {
+                const propiedades = ['name', 'tel'];
+                const opciones = { multiple: false };
+
+                const contactos = await navigator.contacts.select(propiedades, opciones);
+
+                if (contactos && contactos.length > 0) {
+                    const contacto = contactos[0];
+
+                    // Obtener nombre
+                    if (contacto.name && contacto.name.length > 0) {
+                        document.getElementById('input-nombre-invitado').value = contacto.name[0];
+                    }
+
+                    // Obtener teléfono (limpiar caracteres no numéricos)
+                    if (contacto.tel && contacto.tel.length > 0) {
+                        let telefono = contacto.tel[0].replace(/\D/g, '');
+                        // Remover código de país si está
+                        if (telefono.startsWith('57') && telefono.length > 10) {
+                            telefono = telefono.substring(2);
+                        }
+                        document.getElementById('input-telefono-invitado').value = telefono;
+                    }
+                }
+            } catch (error) {
+                console.error('Error seleccionando contacto:', error);
+                // Si el usuario cancela o hay error, no hacer nada
+            }
+        }
+
         async function enviarInvitacionWhatsApp() {
             const nombre = document.getElementById('input-nombre-invitado').value.trim();
             const telefono = document.getElementById('input-telefono-invitado').value.trim();
@@ -336,6 +389,7 @@ Solo haz clic aquí y ya estás listo:
         document.addEventListener('DOMContentLoaded', function() {
             verificarSesion();
             cargarInvitaciones();
+            verificarContactPicker();
         });
     </script>
 </body>

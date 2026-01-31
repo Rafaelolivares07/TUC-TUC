@@ -219,26 +219,194 @@ def calcular_distancia(lat1, lon1, lat2, lon2):
     return R * c
 
 
-def obtener_distancia_osrm(lat1, lon1, lat2, lon2):
+def obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=False):
     """
     Obtiene distancia real por calles usando OSRM.
-    Retorna dict con 'distancia_metros', o None si falla.
+    Retorna dict con 'distancia_metros' y opcionalmente 'geometria' (lista de coordenadas).
     """
     import requests
     try:
-        url = f"https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+        overview = 'full' if con_geometria else 'false'
+        url = f"https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview={overview}&geometries=geojson"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             if data.get('code') == 'Ok' and data.get('routes'):
                 route = data['routes'][0]
-                return {
-                    'distancia_metros': route['distance']
+                resultado = {
+                    'distancia_metros': route['distance'],
+                    'duracion_segundos': route.get('duration', 0)
                 }
+                if con_geometria and 'geometry' in route:
+                    # GeoJSON: coordinates son [lon, lat], convertimos a [lat, lon]
+                    coords = route['geometry'].get('coordinates', [])
+                    resultado['geometria'] = [[c[1], c[0]] for c in coords]
+                return resultado
         return None
     except Exception as e:
         print(f"Error OSRM: {e}")
         return None
+
+
+def calcular_bearing(lat1, lon1, lat2, lon2):
+    """
+    Calcula el bearing (dirección) en grados de punto A a punto B.
+    0° = Norte, 90° = Este, 180° = Sur, 270° = Oeste
+    """
+    import math
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    diff_lon = math.radians(lon2 - lon1)
+
+    x = math.sin(diff_lon) * math.cos(lat2_rad)
+    y = math.cos(lat1_rad) * math.sin(lat2_rad) - math.sin(lat1_rad) * math.cos(lat2_rad) * math.cos(diff_lon)
+
+    bearing = math.atan2(x, y)
+    bearing = math.degrees(bearing)
+    bearing = (bearing + 360) % 360
+
+    return bearing
+
+
+def distancia_punto_a_punto(lat1, lon1, lat2, lon2):
+    """Calcula distancia en metros entre dos puntos usando Haversine"""
+    import math
+    R = 6371000  # Radio de la Tierra en metros
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+
+def detectar_peajes_en_ruta(geometria, conn=None):
+    """
+    Detecta qué peajes atraviesa una ruta basándose en la geometría y dirección.
+    Retorna lista de peajes detectados con sus tarifas.
+    """
+    if not geometria or len(geometria) < 2:
+        return []
+
+    cerrar_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cerrar_conn = True
+
+    try:
+        # Obtener peajes activos
+        peajes = conn.execute("""
+            SELECT id, nombre, lat, lon, tarifa, direccion, radio_deteccion
+            FROM peajes WHERE activo = TRUE
+        """).fetchall()
+
+        if not peajes:
+            return []
+
+        peajes_detectados = []
+        peajes_ya_detectados = set()
+
+        # Recorrer cada segmento de la ruta
+        for i in range(len(geometria) - 1):
+            lat1, lon1 = geometria[i]
+            lat2, lon2 = geometria[i + 1]
+
+            # Calcular bearing del segmento
+            bearing_segmento = calcular_bearing(lat1, lon1, lat2, lon2)
+
+            # Verificar cada peaje
+            for peaje in peajes:
+                if peaje['id'] in peajes_ya_detectados:
+                    continue
+
+                peaje_lat = float(peaje['lat'])
+                peaje_lon = float(peaje['lon'])
+                radio = peaje['radio_deteccion'] or 50
+
+                # Verificar si el segmento pasa cerca del peaje
+                dist = distancia_punto_a_punto(lat1, lon1, peaje_lat, peaje_lon)
+
+                if dist <= radio:
+                    # Verificar dirección (tolerancia de ±45°)
+                    direccion_peaje = peaje['direccion'] or 0
+                    diff_direccion = abs(bearing_segmento - direccion_peaje)
+                    if diff_direccion > 180:
+                        diff_direccion = 360 - diff_direccion
+
+                    if diff_direccion <= 45:
+                        peajes_detectados.append({
+                            'id': peaje['id'],
+                            'nombre': peaje['nombre'],
+                            'tarifa': peaje['tarifa']
+                        })
+                        peajes_ya_detectados.add(peaje['id'])
+
+        return peajes_detectados
+
+    finally:
+        if cerrar_conn:
+            conn.close()
+
+
+def guardar_segmentos_ruta(geometria, conn=None):
+    """
+    Guarda los segmentos de una ruta para construir el grafo de calles.
+    Asocia cada segmento con las intersecciones más cercanas.
+    """
+    if not geometria or len(geometria) < 2:
+        return
+
+    cerrar_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cerrar_conn = True
+
+    try:
+        # Para cada punto de la ruta, encontrar la intersección más cercana
+        intersecciones_ruta = []
+
+        for lat, lon in geometria:
+            # Buscar intersección más cercana (dentro de 100m)
+            interseccion = conn.execute("""
+                SELECT id,
+                    (6371000 * acos(cos(radians(%s)) * cos(radians(lat)) * cos(radians(lon) - radians(%s)) + sin(radians(%s)) * sin(radians(lat)))) as distancia
+                FROM intersecciones_cali
+                HAVING distancia < 100
+                ORDER BY distancia
+                LIMIT 1
+            """, (lat, lon, lat)).fetchone()
+
+            if interseccion:
+                if not intersecciones_ruta or intersecciones_ruta[-1] != interseccion['id']:
+                    intersecciones_ruta.append(interseccion['id'])
+
+        # Guardar segmentos entre intersecciones consecutivas
+        for i in range(len(intersecciones_ruta) - 1):
+            int_a = intersecciones_ruta[i]
+            int_b = intersecciones_ruta[i + 1]
+
+            if int_a == int_b:
+                continue
+
+            # Upsert: insertar o actualizar contador
+            conn.execute("""
+                INSERT INTO segmentos_via (interseccion_a, interseccion_b, veces_transitado, ultima_vez)
+                VALUES (%s, %s, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT (interseccion_a, interseccion_b)
+                DO UPDATE SET
+                    veces_transitado = segmentos_via.veces_transitado + 1,
+                    ultima_vez = CURRENT_TIMESTAMP
+            """, (int_a, int_b))
+
+        conn.commit()
+
+    except Exception as e:
+        print(f"Error guardando segmentos: {e}")
+
+    finally:
+        if cerrar_conn:
+            conn.close()
 
 
 def normalizar_texto(texto):
@@ -12170,6 +12338,45 @@ def migrar_conductor():
                     conn.execute("INSERT INTO parametros_sistema (nombre, tipo, valor_texto) VALUES (%s, %s, %s)", (nombre, tipo, valor))
                 mensajes.append(f"✅ parametros_sistema.{nombre}")
 
+        # Tabla de peajes
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS peajes (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                lat DECIMAL(10, 8) NOT NULL,
+                lon DECIMAL(11, 8) NOT NULL,
+                tarifa INTEGER NOT NULL DEFAULT 0,
+                direccion INTEGER DEFAULT 0,
+                radio_deteccion INTEGER DEFAULT 50,
+                activo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        mensajes.append("✅ Tabla peajes creada")
+
+        # Tabla de segmentos de vía (para construir grafo de calles)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS segmentos_via (
+                id SERIAL PRIMARY KEY,
+                interseccion_a INTEGER NOT NULL,
+                interseccion_b INTEGER NOT NULL,
+                distancia_metros INTEGER,
+                tiempo_segundos INTEGER,
+                veces_transitado INTEGER DEFAULT 1,
+                primera_vez TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                ultima_vez TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(interseccion_a, interseccion_b)
+            )
+        """)
+        mensajes.append("✅ Tabla segmentos_via creada")
+
+        # Campo para semáforos en intersecciones
+        conn.execute("ALTER TABLE intersecciones_cali ADD COLUMN IF NOT EXISTS tiene_semaforo BOOLEAN DEFAULT FALSE")
+        mensajes.append("✅ intersecciones_cali.tiene_semaforo")
+
+        conn.execute("ALTER TABLE intersecciones_cali ADD COLUMN IF NOT EXISTS tiempo_semaforo_seg INTEGER DEFAULT 0")
+        mensajes.append("✅ intersecciones_cali.tiempo_semaforo_seg")
+
         conn.commit()
         conn.close()
 
@@ -19278,6 +19485,125 @@ def api_admin_rechazar_lugar(lugar_id):
 
 
 # ============================================================================
+# ENDPOINTS PARA PEAJES
+# ============================================================================
+
+@app.route('/api/admin/peajes')
+@admin_required
+def api_admin_listar_peajes():
+    """Lista todos los peajes"""
+    try:
+        conn = get_db_connection()
+        peajes = conn.execute("""
+            SELECT id, nombre, lat, lon, tarifa, direccion, radio_deteccion, activo, created_at
+            FROM peajes
+            ORDER BY nombre
+        """).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'peajes': [dict(p) for p in peajes]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/peajes', methods=['POST'])
+@admin_required
+def api_admin_crear_peaje():
+    """Crea un nuevo peaje"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        lat = data.get('lat')
+        lon = data.get('lon')
+        tarifa = data.get('tarifa', 0)
+        direccion = data.get('direccion', 0)
+        radio = data.get('radio_deteccion', 50)
+
+        if not nombre or lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Nombre y coordenadas son requeridos'}), 400
+
+        conn = get_db_connection()
+        peaje = conn.execute("""
+            INSERT INTO peajes (nombre, lat, lon, tarifa, direccion, radio_deteccion)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, nombre, lat, lon, tarifa, direccion, radio_deteccion, activo
+        """, (nombre, lat, lon, tarifa, direccion, radio)).fetchone()
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'peaje': dict(peaje)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/peajes/<int:peaje_id>', methods=['PUT'])
+@admin_required
+def api_admin_actualizar_peaje(peaje_id):
+    """Actualiza un peaje existente"""
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+
+        # Construir query dinámicamente según los campos enviados
+        campos = []
+        valores = []
+
+        if 'nombre' in data:
+            campos.append("nombre = %s")
+            valores.append(data['nombre'])
+        if 'lat' in data:
+            campos.append("lat = %s")
+            valores.append(data['lat'])
+        if 'lon' in data:
+            campos.append("lon = %s")
+            valores.append(data['lon'])
+        if 'tarifa' in data:
+            campos.append("tarifa = %s")
+            valores.append(data['tarifa'])
+        if 'direccion' in data:
+            campos.append("direccion = %s")
+            valores.append(data['direccion'])
+        if 'radio_deteccion' in data:
+            campos.append("radio_deteccion = %s")
+            valores.append(data['radio_deteccion'])
+        if 'activo' in data:
+            campos.append("activo = %s")
+            valores.append(data['activo'])
+
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay campos para actualizar'}), 400
+
+        valores.append(peaje_id)
+        query = f"UPDATE peajes SET {', '.join(campos)} WHERE id = %s"
+        conn.execute(query, tuple(valores))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Peaje actualizado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/peajes/<int:peaje_id>', methods=['DELETE'])
+@admin_required
+def api_admin_eliminar_peaje(peaje_id):
+    """Elimina un peaje"""
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM peajes WHERE id = %s", (peaje_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Peaje eliminado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================================================
 # ENDPOINTS PARA CONDUCTORES
 # ============================================================================
 
@@ -21185,7 +21511,11 @@ def api_calcular_tarifa():
     {
         "tipo_servicio": "transporte" | "acompanamiento",
         "distancia_km": 5.2,  # Para transporte
-        "horas_acompanamiento": 3  # Para acompañamiento
+        "horas_acompanamiento": 3,  # Para acompañamiento
+        "origen_lat": 3.45,  # Opcional, para detectar peajes
+        "origen_lon": -76.53,
+        "destino_lat": 3.48,
+        "destino_lon": -76.55
     }
     """
     try:
@@ -21195,7 +21525,32 @@ def api_calcular_tarifa():
         horas = data.get('horas_acompanamiento')
         fecha_programada_str = data.get('fecha_programada')
 
+        # Coordenadas para detectar peajes
+        origen_lat = data.get('origen_lat')
+        origen_lon = data.get('origen_lon')
+        destino_lat = data.get('destino_lat')
+        destino_lon = data.get('destino_lon')
+
         conn = get_db_connection()
+
+        # Detectar peajes si tenemos coordenadas
+        peajes_detectados = []
+        total_peajes = 0
+        geometria_ruta = None
+
+        if origen_lat and origen_lon and destino_lat and destino_lon:
+            # Obtener ruta con geometría para detectar peajes
+            osrm_data = obtener_distancia_osrm(origen_lat, origen_lon, destino_lat, destino_lon, con_geometria=True)
+            if osrm_data and 'geometria' in osrm_data:
+                geometria_ruta = osrm_data['geometria']
+                peajes_detectados = detectar_peajes_en_ruta(geometria_ruta, conn)
+                total_peajes = sum(p['tarifa'] for p in peajes_detectados)
+
+                # Guardar segmentos de la ruta en segundo plano (sin bloquear)
+                try:
+                    guardar_segmentos_ruta(geometria_ruta, conn)
+                except:
+                    pass  # No bloquear si falla
 
         if tipo_servicio == 'transporte':
             # Obtener parámetros configurables
@@ -21231,7 +21586,7 @@ def api_calcular_tarifa():
             # Calcular tarifa con redondeo
             recorrido_sin_redondeo = distancia_km * tarifa_km
             recorrido_redondeado = round(recorrido_sin_redondeo / redondeo) * redondeo
-            tarifa = tarifa_base + recorrido_redondeado
+            tarifa = tarifa_base + recorrido_redondeado + total_peajes
 
             desglose = {
                 'base': int(tarifa_base),
@@ -21240,6 +21595,8 @@ def api_calcular_tarifa():
                 'hora_pico': hora_pico,
                 'tiempo_recorrido_min': round(tiempo_recorrido, 1),
                 'tiempo_total_min': round(tiempo_total, 1),
+                'peajes': peajes_detectados,
+                'total_peajes': int(total_peajes),
                 'total': int(tarifa)
             }
 

@@ -1013,6 +1013,59 @@
                 </div>
             </div>
 
+            <!-- Sección 9: Peajes -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">🛣️ Peajes</h3>
+                        <p class="text-sm text-gray-500 mt-1">Configura los peajes para incluir en las tarifas de viaje</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white space-y-4">
+
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <p class="text-sm text-blue-700">
+                                <strong>ℹ️ Info:</strong> Cada punto de cobro se guarda por sentido. Si un peaje tiene casetas en ambos sentidos, crea 2 registros con las coordenadas y dirección de cada uno.
+                            </p>
+                        </div>
+
+                        <!-- Formulario nuevo peaje -->
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-gray-800 mb-3">Agregar nuevo peaje</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <input type="text" id="peaje-nombre" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Nombre (ej: Peaje Rozo → Costa)">
+                                <input type="number" id="peaje-tarifa" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Tarifa ($)">
+                                <input type="text" id="peaje-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Latitud (ej: 3.5123)">
+                                <input type="text" id="peaje-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Longitud (ej: -76.412)">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Dirección (grados 0-360)</label>
+                                    <input type="number" id="peaje-direccion" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="270" min="0" max="360">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Radio detección (metros)</label>
+                                    <input type="number" id="peaje-radio" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="50" value="50">
+                                </div>
+                            </div>
+                            <button onclick="agregarPeaje()" class="mt-3 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold">
+                                + Agregar Peaje
+                            </button>
+                        </div>
+
+                        <!-- Lista de peajes -->
+                        <div id="lista-peajes">
+                            <div class="text-center py-4 text-gray-500">Cargando peajes...</div>
+                        </div>
+
+                        <div id="mensaje-peajes" class="hidden p-3 rounded-lg text-center"></div>
+
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -2096,6 +2149,174 @@
                 setTimeout(() => msgDiv.classList.add('hidden'), 3000);
             } catch (error) {
                 console.error('Error rechazando lugar:', error);
+            }
+        }
+
+        // ==================== PEAJES ====================
+
+        // Cargar peajes al iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarPeajes();
+        });
+
+        async function cargarPeajes() {
+            try {
+                const res = await fetch('/api/admin/peajes');
+                const data = await res.json();
+
+                const container = document.getElementById('lista-peajes');
+
+                if (!data.ok) {
+                    container.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar peajes</div>';
+                    return;
+                }
+
+                const peajes = data.peajes || [];
+
+                if (peajes.length === 0) {
+                    container.innerHTML = '<div class="text-center py-4 text-gray-500">No hay peajes configurados</div>';
+                    return;
+                }
+
+                container.innerHTML = peajes.map(p => renderPeaje(p)).join('');
+            } catch (error) {
+                console.error('Error cargando peajes:', error);
+                document.getElementById('lista-peajes').innerHTML =
+                    '<div class="text-center py-4 text-red-500">Error de conexión</div>';
+            }
+        }
+
+        function renderPeaje(peaje) {
+            const direccionTexto = obtenerDireccionTexto(peaje.direccion);
+            return `
+                <div class="festivo-item mb-2" id="peaje-${peaje.id}">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-gray-800">${peaje.nombre}</span>
+                            ${peaje.activo ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Activo</span>' : '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Inactivo</span>'}
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Tarifa: <strong>$${peaje.tarifa?.toLocaleString() || 0}</strong> |
+                            Dir: ${direccionTexto} (${peaje.direccion}°) |
+                            Radio: ${peaje.radio_deteccion}m
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            Lat: ${peaje.lat}, Lon: ${peaje.lon}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                        <button onclick="togglePeajeActivo(${peaje.id}, ${!peaje.activo})"
+                            class="px-3 py-1.5 ${peaje.activo ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white text-sm rounded-lg transition">
+                            ${peaje.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button onclick="eliminarPeaje(${peaje.id}, '${peaje.nombre}')"
+                            class="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition">
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function obtenerDireccionTexto(grados) {
+            if (grados >= 337.5 || grados < 22.5) return 'N';
+            if (grados >= 22.5 && grados < 67.5) return 'NE';
+            if (grados >= 67.5 && grados < 112.5) return 'E';
+            if (grados >= 112.5 && grados < 157.5) return 'SE';
+            if (grados >= 157.5 && grados < 202.5) return 'S';
+            if (grados >= 202.5 && grados < 247.5) return 'SO';
+            if (grados >= 247.5 && grados < 292.5) return 'O';
+            if (grados >= 292.5 && grados < 337.5) return 'NO';
+            return '?';
+        }
+
+        async function agregarPeaje() {
+            const nombre = document.getElementById('peaje-nombre').value.trim();
+            const tarifa = parseInt(document.getElementById('peaje-tarifa').value) || 0;
+            const lat = parseFloat(document.getElementById('peaje-lat').value);
+            const lon = parseFloat(document.getElementById('peaje-lon').value);
+            const direccion = parseInt(document.getElementById('peaje-direccion').value) || 0;
+            const radio = parseInt(document.getElementById('peaje-radio').value) || 50;
+
+            if (!nombre) {
+                alert('Ingresa el nombre del peaje');
+                return;
+            }
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Ingresa coordenadas válidas');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/peajes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, tarifa, lat, lon, direccion, radio_deteccion: radio })
+                });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-peajes');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Peaje agregado';
+                    // Limpiar formulario
+                    document.getElementById('peaje-nombre').value = '';
+                    document.getElementById('peaje-tarifa').value = '';
+                    document.getElementById('peaje-lat').value = '';
+                    document.getElementById('peaje-lon').value = '';
+                    document.getElementById('peaje-direccion').value = '';
+                    document.getElementById('peaje-radio').value = '50';
+                    // Recargar lista
+                    cargarPeajes();
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error agregando peaje:', error);
+            }
+        }
+
+        async function togglePeajeActivo(peajeId, nuevoEstado) {
+            try {
+                const res = await fetch(`/api/admin/peajes/${peajeId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activo: nuevoEstado })
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    cargarPeajes();
+                }
+            } catch (error) {
+                console.error('Error actualizando peaje:', error);
+            }
+        }
+
+        async function eliminarPeaje(peajeId, nombre) {
+            if (!confirm(`¿Eliminar el peaje "${nombre}"?`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/peajes/${peajeId}`, { method: 'DELETE' });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-peajes');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Peaje eliminado';
+                    document.getElementById(`peaje-${peajeId}`)?.remove();
+                    cargarPeajes();
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error eliminando peaje:', error);
             }
         }
     </script>

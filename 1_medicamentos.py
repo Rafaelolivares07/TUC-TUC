@@ -21168,7 +21168,8 @@ def api_buscar_interseccion():
             # Usamos unaccent() para ignorar tildes en la BD
             # LIKE: '%clinica%' encuentra "Clínica"
             # Trigram: 'bercmans' % 'berchman' encuentra coincidencias similares
-            # Usamos AND entre palabras para que el POI contenga TODAS las palabras buscadas
+            # AND FLEXIBLE: Usamos OR para obtener resultados parciales también,
+            # pero la prioridad se calcula después para que los que tienen TODAS las palabras salgan primero
             grupos_condiciones = []
             params = []
 
@@ -21179,8 +21180,9 @@ def api_buscar_interseccion():
                 params.append(f'%{palabra}%')
                 params.append(palabra)
 
-            # Unir grupos con AND: debe contener TODAS las palabras
-            condiciones_sql = ' AND '.join(grupos_condiciones)
+            # Unir grupos con OR: puede contener ALGUNA de las palabras (flexibilidad)
+            # La prioridad después ordenará: primero los que tienen TODAS, luego los parciales
+            condiciones_sql = ' OR '.join(grupos_condiciones)
 
             rows_pois = conn.execute(f"""
                 SELECT id, osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio

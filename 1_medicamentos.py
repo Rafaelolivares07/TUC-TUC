@@ -19303,6 +19303,144 @@ def api_comunidad_mis_referidos():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/comunidad/mis-invitaciones')
+def api_comunidad_mis_invitaciones():
+    """Obtiene estadísticas de invitaciones pre-creadas del usuario"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        usuario_id = session['usuario_id']
+
+        # Contar invitados que AÚN NO han hecho su primer viaje (pendientes)
+        pendientes = conn.execute("""
+            SELECT COUNT(*) as total FROM terceros
+            WHERE referido_por = %s AND primer_viaje_completado = FALSE
+        """, (usuario_id,)).fetchone()
+
+        # Contar invitados que YA hicieron su primer viaje (completados)
+        completados = conn.execute("""
+            SELECT COUNT(*) as total FROM terceros
+            WHERE referido_por = %s AND primer_viaje_completado = TRUE
+        """, (usuario_id,)).fetchone()
+
+        conn.close()
+
+        total_pendientes = pendientes['total'] if pendientes else 0
+        total_completados = completados['total'] if completados else 0
+        slots_disponibles = max(0, 50 - total_pendientes)
+
+        return jsonify({
+            'ok': True,
+            'pendientes': total_pendientes,
+            'completados': total_completados,
+            'slots_disponibles': slots_disponibles,
+            'limite': 50
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/comunidad/invitar', methods=['POST'])
+def api_comunidad_invitar():
+    """Crea un usuario pre-invitado y retorna el ID para el enlace de WhatsApp"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        telefono = data.get('telefono', '').strip()
+
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'El nombre es requerido'}), 400
+        if not telefono:
+            return jsonify({'ok': False, 'error': 'El teléfono es requerido'}), 400
+
+        # Limpiar teléfono (solo números)
+        telefono_limpio = ''.join(filter(str.isdigit, telefono))
+        if len(telefono_limpio) < 10:
+            return jsonify({'ok': False, 'error': 'Teléfono inválido'}), 400
+
+        conn = get_db_connection()
+        usuario_id = session['usuario_id']
+
+        # Verificar slots disponibles
+        pendientes = conn.execute("""
+            SELECT COUNT(*) as total FROM terceros
+            WHERE referido_por = %s AND primer_viaje_completado = FALSE
+        """, (usuario_id,)).fetchone()
+
+        if pendientes and pendientes['total'] >= 50:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Has alcanzado el límite de 50 invitaciones pendientes'}), 400
+
+        # Verificar si el teléfono ya existe
+        existente = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono = %s",
+            (telefono_limpio,)
+        ).fetchone()
+
+        if existente:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'Este número ya está registrado como "{existente["nombre"]}"'
+            }), 400
+
+        # Crear el usuario pre-invitado
+        nuevo = conn.execute("""
+            INSERT INTO terceros (nombre, telefono, referido_por, primer_viaje_completado)
+            VALUES (%s, %s, %s, FALSE)
+            RETURNING id
+        """, (nombre, telefono_limpio, usuario_id)).fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'invitado_id': nuevo['id'],
+            'nombre': nombre,
+            'telefono': telefono_limpio
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/auth/invite/<int:invitado_id>')
+def api_auth_invite(invitado_id):
+    """Loguea automáticamente a un usuario pre-invitado"""
+    try:
+        conn = get_db_connection()
+
+        # Buscar el usuario invitado
+        invitado = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE id = %s",
+            (invitado_id,)
+        ).fetchone()
+
+        conn.close()
+
+        if not invitado:
+            return jsonify({'ok': False, 'error': 'Invitación no válida'}), 404
+
+        # Loguear al usuario
+        session['usuario_id'] = invitado['id']
+
+        return jsonify({
+            'ok': True,
+            'usuario': {
+                'id': invitado['id'],
+                'nombre': invitado['nombre'],
+                'telefono': invitado['telefono']
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # ENDPOINTS PARA LUGARES FRECUENTES DEL USUARIO
 # ============================================================================

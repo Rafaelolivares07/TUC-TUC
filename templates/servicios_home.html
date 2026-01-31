@@ -437,12 +437,28 @@
         }
 
         // Inicializar
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             // Detectar código de referido en URL
             const urlParams = new URLSearchParams(window.location.search);
             const refCode = urlParams.get('ref');
             if (refCode) {
                 localStorage.setItem('tuctuc_referido_por', refCode);
+            }
+
+            // Detectar invitación directa (usuario pre-creado)
+            const inviteId = urlParams.get('invite');
+            if (inviteId) {
+                try {
+                    const response = await fetch(`/api/auth/invite/${inviteId}`);
+                    const data = await response.json();
+                    if (data.ok) {
+                        // Limpiar URL sin recargar
+                        window.history.replaceState({}, document.title, '/servicios');
+                        console.log('Usuario invitado logueado:', data.usuario.nombre);
+                    }
+                } catch (error) {
+                    console.error('Error al procesar invitación:', error);
+                }
             }
 
             configurarBotones();

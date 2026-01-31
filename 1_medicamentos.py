@@ -17025,17 +17025,17 @@ def parametro_sistema(nombre_parametro):
             if not row:
                 # UPSERT: Crear el parámetro si no existe
                 # Detectar tipo automáticamente
-                try:
-                    float(valor)
+                # Primero verificar si es booleano (antes de float porque float(True)=1.0)
+                if isinstance(valor, bool) or str(valor).lower() in ('true', 'false'):
+                    tipo_auto = 'booleano'
+                elif ':' in str(valor):
                     # Si parece hora (HH:MM), es texto
-                    if ':' in str(valor):
-                        tipo_auto = 'texto'
-                    else:
+                    tipo_auto = 'texto'
+                else:
+                    try:
+                        float(valor)
                         tipo_auto = 'numerico'
-                except (ValueError, TypeError):
-                    if str(valor).lower() in ('true', 'false'):
-                        tipo_auto = 'booleano'
-                    else:
+                    except (ValueError, TypeError):
                         tipo_auto = 'texto'
 
                 # Insertar nuevo parámetro (sin columna seccion que no existe en producción)
@@ -17062,7 +17062,14 @@ def parametro_sistema(nombre_parametro):
             # Si existe, actualizar según el tipo
             tipo = row['tipo']
 
-            if tipo == 'numerico':
+            # Si el valor enviado es booleano pero el tipo guardado no lo es, corregir
+            if isinstance(valor, bool) and tipo != 'booleano':
+                conn.execute("""
+                    UPDATE parametros_sistema
+                    SET tipo = 'booleano', valor_booleano = %s, fecha_actualizacion = CURRENT_TIMESTAMP
+                    WHERE nombre = %s
+                """, (valor, nombre_parametro))
+            elif tipo == 'numerico':
                 conn.execute("""
                     UPDATE parametros_sistema
                     SET valor_numerico = %s, fecha_actualizacion = CURRENT_TIMESTAMP
@@ -17075,11 +17082,13 @@ def parametro_sistema(nombre_parametro):
                     WHERE nombre = %s
                 """, (str(valor), nombre_parametro))
             elif tipo == 'booleano':
+                # Manejar tanto booleanos Python como strings 'true'/'false'
+                valor_bool = valor if isinstance(valor, bool) else str(valor).lower() == 'true'
                 conn.execute("""
                     UPDATE parametros_sistema
                     SET valor_booleano = %s, fecha_actualizacion = CURRENT_TIMESTAMP
                     WHERE nombre = %s
-                """, (bool(valor), nombre_parametro))
+                """, (valor_bool, nombre_parametro))
 
             conn.commit()
             conn.close()

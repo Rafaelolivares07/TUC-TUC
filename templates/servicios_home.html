@@ -3039,19 +3039,61 @@
             lugaresUsuario.forEach(lugar => {
                 const item = document.createElement('div');
                 item.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+
+                // Estado de compartir
+                let estadoCompartir = '';
+                let botonCompartir = '';
+                if (lugar.aprobado === true) {
+                    estadoCompartir = '<span class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded">Público</span>';
+                } else if (lugar.es_sugerido_publico === true) {
+                    estadoCompartir = '<span class="text-xs text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded">Pendiente</span>';
+                } else {
+                    botonCompartir = `
+                        <button onclick="compartirLugar(${lugar.id})" class="text-blue-500 hover:text-blue-700 p-1" title="Compartir con la comunidad">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+                            </svg>
+                        </button>
+                    `;
+                }
+
                 item.innerHTML = `
                     <div class="flex items-center gap-3">
                         <div class="w-6 h-6 text-blue-900">${obtenerIconoSVG(lugar.icono)}</div>
-                        <span class="font-medium text-gray-800">${lugar.nombre}</span>
+                        <div>
+                            <span class="font-medium text-gray-800">${lugar.nombre}</span>
+                            ${estadoCompartir}
+                        </div>
                     </div>
-                    <button onclick="eliminarLugarDesdeModal(${lugar.id}, '${lugar.nombre}')" class="text-red-500 hover:text-red-700 p-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                        </svg>
-                    </button>
+                    <div class="flex items-center gap-1">
+                        ${botonCompartir}
+                        <button onclick="eliminarLugarDesdeModal(${lugar.id}, '${lugar.nombre}')" class="text-red-500 hover:text-red-700 p-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                        </button>
+                    </div>
                 `;
                 contenedor.appendChild(item);
             });
+        }
+
+        async function compartirLugar(lugarId) {
+            if (!confirm('¿Compartir este lugar con la comunidad? Quedará pendiente de aprobación.')) return;
+
+            try {
+                const response = await fetch(`/api/lugares/compartir/${lugarId}`, { method: 'POST' });
+                const data = await response.json();
+                if (data.ok) {
+                    mostrarToast('Lugar enviado para aprobación');
+                    await cargarMisLugares();
+                    renderizarLugaresEnModal();
+                } else {
+                    mostrarToast(data.error || 'Error al compartir', 'error');
+                }
+            } catch (error) {
+                mostrarToast('Error de conexión', 'error');
+            }
         }
 
         function renderizarIconosSelector() {
@@ -3231,6 +3273,7 @@
 
         async function guardarNuevoLugar() {
             const nombre = document.getElementById('input-nombre-lugar').value.trim();
+            const esPublico = document.getElementById('check-publico-nuevo-lugar')?.checked || false;
 
             if (!nombre) {
                 mostrarToast('Ingresa un nombre para el lugar', 'error');
@@ -3251,7 +3294,7 @@
                         lat: ubicacionNuevoLugar.lat,
                         lon: ubicacionNuevoLugar.lon,
                         icono: iconoLugarSeleccionado,
-                        es_publico: false
+                        es_publico: esPublico
                     })
                 });
 
@@ -3436,6 +3479,14 @@
                     <button type="button" onclick="seleccionarUbicacionLugar()" class="w-full py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-medium text-sm">
                         Cambiar ubicación en mapa
                     </button>
+
+                    <label class="flex items-center gap-2 text-sm p-3 bg-blue-50 rounded-lg cursor-pointer">
+                        <input type="checkbox" id="check-publico-nuevo-lugar" class="w-4 h-4">
+                        <div>
+                            <span class="font-medium text-gray-800">Compartir con la comunidad</span>
+                            <p class="text-xs text-gray-500">Otros usuarios podrán encontrar este lugar</p>
+                        </div>
+                    </label>
 
                     <button onclick="guardarNuevoLugar()" class="w-full py-3 bg-yellow-500 text-gray-900 rounded-lg font-bold">
                         Guardar lugar

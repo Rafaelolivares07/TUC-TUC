@@ -19163,6 +19163,42 @@ def api_eliminar_lugar(lugar_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/lugares/compartir/<int:lugar_id>', methods=['POST'])
+def api_compartir_lugar(lugar_id):
+    """Marca un lugar existente para compartir con la comunidad"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que el lugar pertenece al usuario
+        lugar = conn.execute(
+            "SELECT id, es_sugerido_publico FROM lugares_usuario WHERE id = %s AND usuario_id = %s",
+            (lugar_id, session['usuario_id'])
+        ).fetchone()
+
+        if not lugar:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Lugar no encontrado'}), 404
+
+        if lugar['es_sugerido_publico']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Este lugar ya fue enviado para aprobación'}), 400
+
+        # Marcar como sugerido público
+        conn.execute(
+            "UPDATE lugares_usuario SET es_sugerido_publico = TRUE, aprobado = NULL WHERE id = %s",
+            (lugar_id,)
+        )
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Lugar enviado para aprobación'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/lugares-sugeridos')
 @admin_required
 def api_admin_lugares_sugeridos():

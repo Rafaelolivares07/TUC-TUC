@@ -978,6 +978,41 @@
                 </div>
             </div>
 
+            <!-- Sección 8: Lugares Sugeridos por Usuarios -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">📍 Lugares Sugeridos por Usuarios</h3>
+                        <p class="text-sm text-gray-500 mt-1">Aprueba o rechaza lugares sugeridos por pasajeros para hacerlos públicos</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="badge-lugares-pendientes" class="hidden bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">0</span>
+                        <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white space-y-4">
+
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <p class="text-sm text-blue-700">
+                                <strong>ℹ️ Info:</strong> Los lugares aprobados aparecerán en el autocompletado de origen/destino para todos los usuarios.
+                            </p>
+                        </div>
+
+                        <div id="lista-lugares-sugeridos">
+                            <div class="text-center py-8 text-gray-500">
+                                Cargando lugares sugeridos...
+                            </div>
+                        </div>
+
+                        <div id="mensaje-lugares" class="hidden p-3 rounded-lg text-center"></div>
+
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -1893,10 +1928,10 @@
 
         async function guardarParametroPicoPlaca(nombre, valor) {
             try {
-                const res = await fetch('/api/parametro', {
+                const res = await fetch(`/api/parametro/${nombre}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nombre, valor })
+                    body: JSON.stringify({ valor })
                 });
                 const data = await res.json();
 
@@ -1918,7 +1953,151 @@
         // Cargar parámetros de Pico y Placa al iniciar
         document.addEventListener('DOMContentLoaded', function() {
             cargarParametrosPicoPlaca();
+            cargarLugaresSugeridos();
         });
+
+        // ==================== LUGARES SUGERIDOS ====================
+
+        async function cargarLugaresSugeridos() {
+            try {
+                const res = await fetch('/api/admin/lugares-sugeridos');
+                const data = await res.json();
+
+                const container = document.getElementById('lista-lugares-sugeridos');
+                const badge = document.getElementById('badge-lugares-pendientes');
+
+                if (!data.ok) {
+                    container.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar lugares</div>';
+                    return;
+                }
+
+                const lugares = data.lugares || [];
+
+                // Actualizar badge
+                if (lugares.length > 0) {
+                    badge.textContent = lugares.length;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+
+                if (lugares.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p>No hay lugares pendientes de aprobación</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = `
+                    <p class="text-sm font-medium text-gray-700 mb-3">Pendientes de aprobación: ${lugares.length}</p>
+                    <div class="space-y-3">
+                        ${lugares.map(lugar => renderLugarSugerido(lugar)).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error cargando lugares sugeridos:', error);
+                document.getElementById('lista-lugares-sugeridos').innerHTML =
+                    '<div class="text-center py-4 text-red-500">Error de conexión</div>';
+            }
+        }
+
+        function renderLugarSugerido(lugar) {
+            const fecha = lugar.created_at ? new Date(lugar.created_at).toLocaleDateString('es-CO') : 'Sin fecha';
+            return `
+                <div class="festivo-item" id="lugar-${lugar.id}">
+                    <div class="flex-1">
+                        <div class="font-medium text-gray-800">${lugar.nombre || 'Sin nombre'}</div>
+                        <div class="text-sm text-gray-500">
+                            ${lugar.direccion || `Lat: ${lugar.lat}, Lon: ${lugar.lon}`}
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">
+                            Sugerido por: ${lugar.usuario_nombre || 'Usuario'} ${lugar.usuario_telefono ? `(${lugar.usuario_telefono})` : ''} • ${fecha}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                        <button onclick="aprobarLugar(${lugar.id})"
+                            class="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition">
+                            ✓ Aprobar
+                        </button>
+                        <button onclick="rechazarLugar(${lugar.id})"
+                            class="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition">
+                            ✗ Rechazar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function aprobarLugar(lugarId) {
+            if (!confirm('¿Aprobar este lugar? Aparecerá en el autocompletado de todos los usuarios.')) return;
+
+            try {
+                const res = await fetch(`/api/admin/lugares/aprobar/${lugarId}`, { method: 'POST' });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-lugares');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Lugar aprobado y agregado a POIs públicos';
+                    // Remover el elemento de la lista
+                    document.getElementById(`lugar-${lugarId}`)?.remove();
+                    // Actualizar contador
+                    const badge = document.getElementById('badge-lugares-pendientes');
+                    const count = parseInt(badge.textContent) - 1;
+                    if (count > 0) {
+                        badge.textContent = count;
+                    } else {
+                        badge.classList.add('hidden');
+                        cargarLugaresSugeridos(); // Recargar para mostrar mensaje vacío
+                    }
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error aprobando lugar:', error);
+            }
+        }
+
+        async function rechazarLugar(lugarId) {
+            if (!confirm('¿Rechazar este lugar? No se hará público.')) return;
+
+            try {
+                const res = await fetch(`/api/admin/lugares/rechazar/${lugarId}`, { method: 'POST' });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-lugares');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-yellow-100 text-yellow-700';
+                    msgDiv.textContent = '⚠️ Lugar rechazado';
+                    // Remover el elemento de la lista
+                    document.getElementById(`lugar-${lugarId}`)?.remove();
+                    // Actualizar contador
+                    const badge = document.getElementById('badge-lugares-pendientes');
+                    const count = parseInt(badge.textContent) - 1;
+                    if (count > 0) {
+                        badge.textContent = count;
+                    } else {
+                        badge.classList.add('hidden');
+                        cargarLugaresSugeridos(); // Recargar para mostrar mensaje vacío
+                    }
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error rechazando lugar:', error);
+            }
+        }
     </script>
 </body>
 </html>

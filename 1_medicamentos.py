@@ -12149,6 +12149,27 @@ def migrar_conductor():
         except Exception as e:
             mensajes.append(f"⚠️ Estado constraint: {str(e)}")
 
+        # Parámetros de Pico y Placa
+        parametros_pico_placa = [
+            ('pico_placa_activo', 'booleano', True),
+            ('pico_placa_hora_inicio', 'texto', '06:00'),
+            ('pico_placa_hora_fin', 'texto', '19:00'),
+            ('pico_placa_lunes', 'texto', '1,2'),
+            ('pico_placa_martes', 'texto', '3,4'),
+            ('pico_placa_miercoles', 'texto', '5,6'),
+            ('pico_placa_jueves', 'texto', '7,8'),
+            ('pico_placa_viernes', 'texto', '9,0'),
+        ]
+
+        for nombre, tipo, valor in parametros_pico_placa:
+            existe = conn.execute("SELECT id FROM parametros_sistema WHERE nombre = %s", (nombre,)).fetchone()
+            if not existe:
+                if tipo == 'booleano':
+                    conn.execute("INSERT INTO parametros_sistema (nombre, tipo, valor_booleano) VALUES (%s, %s, %s)", (nombre, tipo, valor))
+                else:
+                    conn.execute("INSERT INTO parametros_sistema (nombre, tipo, valor_texto) VALUES (%s, %s, %s)", (nombre, tipo, valor))
+                mensajes.append(f"✅ parametros_sistema.{nombre}")
+
         conn.commit()
         conn.close()
 

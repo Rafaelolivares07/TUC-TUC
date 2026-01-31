@@ -42,6 +42,13 @@
             <p id="estado-conexion-texto" class="text-center text-sm mt-2"></p>
         </div>
 
+        <!-- Sección: Pico y Placa -->
+        <div id="seccion-pico-placa" class="hidden mb-4">
+            <div id="pico-placa-content" class="rounded-lg shadow-lg p-4">
+                <!-- Contenido dinámico según estado de pico y placa -->
+            </div>
+        </div>
+
         <!-- Sección: Registro de Vehículo (si no tiene datos) -->
         <div id="seccion-registro-vehiculo" class="hidden bg-white rounded-lg shadow-lg p-4 mb-4">
             <h2 class="text-lg font-bold text-gray-800 mb-3">Registra tu vehículo</h2>
@@ -293,6 +300,64 @@
             }
         }
 
+        // =====================================================
+        // PICO Y PLACA
+        // =====================================================
+        async function cargarPicoPlaca() {
+            try {
+                const response = await fetch('/api/conductor/pico-placa');
+                const data = await response.json();
+
+                if (data.ok && data.activo) {
+                    const seccion = document.getElementById('seccion-pico-placa');
+                    const content = document.getElementById('pico-placa-content');
+
+                    let bgColor, borderColor, textColor, icon;
+
+                    switch(data.tipo_alerta) {
+                        case 'danger':
+                            bgColor = 'bg-red-100';
+                            borderColor = 'border-red-500';
+                            textColor = 'text-red-800';
+                            icon = '🚫';
+                            break;
+                        case 'warning':
+                            bgColor = 'bg-yellow-100';
+                            borderColor = 'border-yellow-500';
+                            textColor = 'text-yellow-800';
+                            icon = '⚠️';
+                            break;
+                        case 'success':
+                            bgColor = 'bg-green-100';
+                            borderColor = 'border-green-500';
+                            textColor = 'text-green-800';
+                            icon = '✅';
+                            break;
+                        default:
+                            bgColor = 'bg-blue-100';
+                            borderColor = 'border-blue-500';
+                            textColor = 'text-blue-800';
+                            icon = 'ℹ️';
+                    }
+
+                    content.className = `rounded-lg shadow-lg p-4 border-l-4 ${bgColor} ${borderColor}`;
+                    content.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <span class="text-2xl">${icon}</span>
+                            <div>
+                                <h3 class="font-bold ${textColor}">Pico y Placa - Placa: ${data.placa}</h3>
+                                <p class="${textColor} text-sm mt-1">${data.mensaje}</p>
+                            </div>
+                        </div>
+                    `;
+
+                    seccion.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error cargando pico y placa:', error);
+            }
+        }
+
         function actualizarUIConexion() {
             const btn = document.getElementById('btn-conexion');
             const texto = document.getElementById('estado-conexion-texto');
@@ -356,6 +421,7 @@
                         // Ya tiene vehículo registrado, mostrar sección de conexión y obtener ubicación
                         document.getElementById('seccion-conexion').classList.remove('hidden');
                         cargarEstadoConexion();
+                        cargarPicoPlaca();
                         obtenerUbicacion();
                     } else {
                         // Mostrar formulario de registro de vehículo

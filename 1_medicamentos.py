@@ -19309,6 +19309,147 @@ def api_conductor_estado_conexion():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/conductor/pico-placa')
+def api_conductor_pico_placa():
+    """Obtiene información de Pico y Placa para el conductor actual"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    from datetime import datetime
+
+    try:
+        conn = get_db_connection()
+
+        # Obtener placa del conductor
+        conductor = conn.execute("""
+            SELECT placa FROM terceros WHERE id = %s
+        """, (session['usuario_id'],)).fetchone()
+
+        if not conductor or not conductor['placa']:
+            conn.close()
+            return jsonify({'ok': True, 'activo': False, 'mensaje': 'Sin placa registrada'})
+
+        placa = conductor['placa']
+
+        # Verificar si Pico y Placa está activo
+        pico_placa_activo = conn.execute("""
+            SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'pico_placa_activo'
+        """).fetchone()
+
+        if not pico_placa_activo or not pico_placa_activo['valor_booleano']:
+            conn.close()
+            return jsonify({'ok': True, 'activo': False, 'mensaje': 'Pico y Placa no está activo en la ciudad'})
+
+        # Obtener último dígito de la placa
+        ultimo_digito = None
+        for char in reversed(placa):
+            if char.isdigit():
+                ultimo_digito = char
+                break
+
+        if ultimo_digito is None:
+            conn.close()
+            return jsonify({'ok': True, 'activo': False, 'mensaje': 'No se pudo determinar el dígito de tu placa'})
+
+        # Obtener horario de restricción
+        hora_inicio_param = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema WHERE nombre = 'pico_placa_hora_inicio'
+        """).fetchone()
+        hora_fin_param = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema WHERE nombre = 'pico_placa_hora_fin'
+        """).fetchone()
+
+        hora_inicio_str = hora_inicio_param['valor_texto'] if hora_inicio_param else '06:00'
+        hora_fin_str = hora_fin_param['valor_texto'] if hora_fin_param else '19:00'
+
+        # Obtener configuración de días
+        dias_config = {}
+        dias_nombres = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes']
+        dias_display = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
+
+        for i, dia in enumerate(dias_nombres):
+            param = conn.execute("""
+                SELECT valor_texto FROM parametros_sistema WHERE nombre = %s
+            """, (f'pico_placa_{dia}',)).fetchone()
+            if param and param['valor_texto']:
+                digitos = [d.strip() for d in param['valor_texto'].split(',')]
+                dias_config[i] = digitos
+
+        # Encontrar qué día tiene restricción este conductor
+        dia_restriccion = None
+        dia_restriccion_nombre = None
+        for dia_idx, digitos in dias_config.items():
+            if ultimo_digito in digitos:
+                dia_restriccion = dia_idx
+                dia_restriccion_nombre = dias_display[dia_idx]
+                break
+
+        # Verificar estado actual
+        ahora = datetime.now()
+        dia_semana_actual = ahora.weekday()
+        hora_actual = ahora.time()
+
+        # Parsear horas
+        try:
+            hora_inicio = datetime.strptime(hora_inicio_str, '%H:%M').time()
+            hora_fin = datetime.strptime(hora_fin_str, '%H:%M').time()
+        except:
+            hora_inicio = datetime.strptime('06:00', '%H:%M').time()
+            hora_fin = datetime.strptime('19:00', '%H:%M').time()
+
+        # Verificar si hoy es festivo
+        fecha_hoy = ahora.date()
+        es_festivo = conn.execute("""
+            SELECT id FROM festivos WHERE fecha = %s AND activo = true
+        """, (fecha_hoy,)).fetchone()
+
+        conn.close()
+
+        # Construir respuesta
+        resultado = {
+            'ok': True,
+            'activo': True,
+            'placa': placa,
+            'ultimo_digito': ultimo_digito,
+            'hora_inicio': hora_inicio_str,
+            'hora_fin': hora_fin_str,
+            'dia_restriccion': dia_restriccion_nombre,
+            'es_hoy': False,
+            'en_horario_restriccion': False,
+            'es_fin_semana': dia_semana_actual >= 5,
+            'es_festivo': es_festivo is not None,
+            'tipo_alerta': 'info',
+            'mensaje': ''
+        }
+
+        if dia_semana_actual >= 5:
+            resultado['mensaje'] = f'🎉 Hoy es fin de semana, no hay Pico y Placa. Tu día de restricción es el {dia_restriccion_nombre}.'
+            resultado['tipo_alerta'] = 'success'
+        elif es_festivo:
+            resultado['mensaje'] = f'🎉 Hoy es festivo, no hay Pico y Placa. Tu día de restricción es el {dia_restriccion_nombre}.'
+            resultado['tipo_alerta'] = 'success'
+        elif dia_restriccion is not None and dia_semana_actual == dia_restriccion:
+            resultado['es_hoy'] = True
+            if hora_inicio <= hora_actual <= hora_fin:
+                resultado['en_horario_restriccion'] = True
+                resultado['tipo_alerta'] = 'danger'
+                resultado['mensaje'] = f'⚠️ ¡HOY TIENES PICO Y PLACA! Tu placa termina en {ultimo_digito}. Restricción hasta las {hora_fin_str}.'
+            elif hora_actual < hora_inicio:
+                resultado['tipo_alerta'] = 'warning'
+                resultado['mensaje'] = f'⏰ Hoy tienes Pico y Placa desde las {hora_inicio_str} hasta las {hora_fin_str}. Placa termina en {ultimo_digito}.'
+            else:
+                resultado['tipo_alerta'] = 'success'
+                resultado['mensaje'] = f'✅ Ya pasó el horario de Pico y Placa (terminó a las {hora_fin_str}). ¡Puedes circular libremente!'
+        else:
+            resultado['mensaje'] = f'✅ Hoy NO tienes Pico y Placa. Tu día de restricción es el {dia_restriccion_nombre} ({hora_inicio_str} - {hora_fin_str}).'
+            resultado['tipo_alerta'] = 'success'
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/conductor-cercano')
 def api_conductor_cercano():
     """Busca el conductor más cercano activo para mostrar tiempo estimado de espera"""

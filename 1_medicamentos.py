@@ -21164,55 +21164,34 @@ def api_buscar_interseccion():
         if palabras_extra:
             print(f"DEBUG: Buscando POIs con palabras={palabras_extra}")
 
-            # Buscar con LIKE (coincidencia parcial) y trigram (similitud para errores ortográficos)
-            # Usamos unaccent() para ignorar tildes en la BD
-            # LIKE: '%clinica%' encuentra "Clínica"
-            # Trigram: 'bercmans' % 'berchman' encuentra coincidencias similares
-            # AND FLEXIBLE: Usamos OR para obtener resultados parciales también,
-            # pero la prioridad se calcula después para que los que tienen TODAS las palabras salgan primero
+            # AND FLEXIBLE: Dos búsquedas
+            # 1. Primero buscar con AND (POIs que tienen TODAS las palabras) - prioridad 0
+            # 2. Después buscar con OR (POIs que tienen ALGUNA palabra) - prioridad según coincidencias
+
             grupos_condiciones = []
-            params = []
+            params_and = []
 
             for palabra in palabras_extra:
-                # Cada palabra: (LIKE OR Trigram) - para manejar errores ortográficos
                 grupo = "(LOWER(unaccent(nombre)) LIKE %s OR LOWER(unaccent(nombre)) %% %s)"
                 grupos_condiciones.append(grupo)
-                params.append(f'%{palabra}%')
-                params.append(palabra)
+                params_and.append(f'%{palabra}%')
+                params_and.append(palabra)
 
-            # Unir grupos con OR: puede contener ALGUNA de las palabras (flexibilidad)
-            # La prioridad después ordenará: primero los que tienen TODAS, luego los parciales
-            condiciones_sql = ' OR '.join(grupos_condiciones)
-
-            rows_pois = conn.execute(f"""
+            # BÚSQUEDA 1: AND - POIs con TODAS las palabras (prioridad 0)
+            condiciones_and = ' AND '.join(grupos_condiciones)
+            rows_pois_and = conn.execute(f"""
                 SELECT id, osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio
                 FROM pois_cali
-                WHERE {condiciones_sql}
+                WHERE {condiciones_and}
                 LIMIT %s
-            """, (*params, limite * 3)).fetchall()
+            """, (*params_and, limite)).fetchall()
 
-            print(f"DEBUG: Encontrados {len(rows_pois)} POIs")
+            print(f"DEBUG: Encontrados {len(rows_pois_and)} POIs con AND (todas las palabras)")
 
-            # Calcular coincidencias por cada POI y asignar prioridad
-            for row in rows_pois:
+            for row in rows_pois_and:
                 poi_key = f"poi_{row['id']}"
                 if poi_key not in pois_agregados:
                     pois_agregados.add(poi_key)
-
-                    # Contar cuántas palabras coinciden en el nombre (parcial o similar)
-                    # Normalizar el nombre del POI para comparar sin tildes
-                    nombre_normalizado = normalizar_texto(row['nombre'])
-                    coincidencias = 0
-                    for palabra in palabras_extra:
-                        # Coincidencia parcial (contiene la palabra)
-                        if palabra in nombre_normalizado:
-                            coincidencias += 1
-
-                    # Prioridad: más coincidencias = menor número = mayor prioridad
-                    # Ej: 2 palabras buscadas, 2 coincidencias -> prioridad 0
-                    #     2 palabras buscadas, 1 coincidencia -> prioridad 1
-                    prioridad_poi = len(palabras_extra) - coincidencias
-
                     resultados_pois.append({
                         'id': f"poi_{row['id']}",
                         'osm_id': row['osm_id'],
@@ -21224,9 +21203,57 @@ def api_buscar_interseccion():
                         'display_name': row['display_name'] or row['nombre'],
                         'barrio': row['barrio'],
                         'tipo': 'poi',
-                        'prioridad': prioridad_poi,
-                        'coincidencias': coincidencias
+                        'prioridad': 0,  # Máxima prioridad: tiene TODAS las palabras
+                        'coincidencias': len(palabras_extra)
                     })
+
+            # BÚSQUEDA 2: OR - POIs con ALGUNA palabra (para completar resultados)
+            # Solo si no llenamos el límite con la búsqueda AND
+            if len(resultados_pois) < limite:
+                condiciones_or = ' OR '.join(grupos_condiciones)
+                params_or = params_and.copy()
+
+                rows_pois_or = conn.execute(f"""
+                    SELECT id, osm_id, nombre, lat, lon, categoria, subcategoria, direccion, display_name, barrio
+                    FROM pois_cali
+                    WHERE {condiciones_or}
+                    LIMIT %s
+                """, (*params_or, limite * 2)).fetchall()
+
+                print(f"DEBUG: Encontrados {len(rows_pois_or)} POIs con OR (alguna palabra)")
+
+                for row in rows_pois_or:
+                    poi_key = f"poi_{row['id']}"
+                    if poi_key not in pois_agregados:
+                        pois_agregados.add(poi_key)
+
+                        # Contar coincidencias para calcular prioridad
+                        nombre_normalizado = normalizar_texto(row['nombre'])
+                        coincidencias = 0
+                        for palabra in palabras_extra:
+                            if palabra in nombre_normalizado:
+                                coincidencias += 1
+
+                        # Prioridad: más coincidencias = menor número = mayor prioridad
+                        # Pero siempre > 0 porque los de prioridad 0 ya están de la búsqueda AND
+                        prioridad_poi = len(palabras_extra) - coincidencias
+                        if prioridad_poi == 0:
+                            prioridad_poi = 1  # Evitar duplicar prioridad 0
+
+                        resultados_pois.append({
+                            'id': f"poi_{row['id']}",
+                            'osm_id': row['osm_id'],
+                            'lat': float(row['lat']),
+                            'lon': float(row['lon']),
+                            'nombre': row['nombre'],
+                            'categoria': row['categoria'],
+                            'subcategoria': row['subcategoria'],
+                            'display_name': row['display_name'] or row['nombre'],
+                            'barrio': row['barrio'],
+                            'tipo': 'poi',
+                            'prioridad': prioridad_poi,
+                            'coincidencias': coincidencias
+                        })
 
         # DEBUG: Imprimir lo que se detectó
         print(f"DEBUG buscar_interseccion: texto='{texto}', numeros={numeros}, tipo_via={tipo_via}, tipo_via_2={tipo_via_2}, palabras_extra={palabras_extra}")

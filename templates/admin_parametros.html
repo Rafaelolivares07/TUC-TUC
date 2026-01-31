@@ -1066,6 +1066,58 @@
                 </div>
             </div>
 
+            <!-- Sección 10: Semáforos -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">🚦 Semáforos</h3>
+                        <p class="text-sm text-gray-500 mt-1">Registra semáforos para estimar tiempos de viaje más precisos</p>
+                    </div>
+                    <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white space-y-4">
+
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <p class="text-sm text-blue-700">
+                                <strong>ℹ️ Info:</strong> El tiempo en rojo es el tiempo máximo de espera en ese semáforo. Se usará para calcular tiempos de viaje más precisos.
+                            </p>
+                        </div>
+
+                        <!-- Formulario nuevo semáforo -->
+                        <div class="p-4 bg-gray-50 rounded-lg border">
+                            <h4 class="font-semibold text-gray-800 mb-3">Agregar nuevo semáforo</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <input type="text" id="semaforo-nombre" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Nombre (opcional, ej: Av 6 con Calle 15)">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Tiempo en rojo (segundos)</label>
+                                    <input type="number" id="semaforo-tiempo" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="60" value="60">
+                                </div>
+                                <input type="text" id="semaforo-lat" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Latitud (ej: 3.4567)">
+                                <input type="text" id="semaforo-lon" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Longitud (ej: -76.5234)">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">Radio detección (metros)</label>
+                                    <input type="number" id="semaforo-radio" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="30" value="30">
+                                </div>
+                            </div>
+                            <button onclick="agregarSemaforo()" class="mt-3 w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold">
+                                + Agregar Semáforo
+                            </button>
+                        </div>
+
+                        <!-- Lista de semáforos -->
+                        <div id="lista-semaforos">
+                            <div class="text-center py-4 text-gray-500">Cargando semáforos...</div>
+                        </div>
+
+                        <div id="mensaje-semaforos" class="hidden p-3 rounded-lg text-center"></div>
+
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -2317,6 +2369,155 @@
                 setTimeout(() => msgDiv.classList.add('hidden'), 3000);
             } catch (error) {
                 console.error('Error eliminando peaje:', error);
+            }
+        }
+
+        // ==================== SEMÁFOROS ====================
+
+        // Cargar semáforos al iniciar
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarSemaforos();
+        });
+
+        async function cargarSemaforos() {
+            try {
+                const res = await fetch('/api/admin/semaforos');
+                const data = await res.json();
+
+                const container = document.getElementById('lista-semaforos');
+
+                if (!data.ok) {
+                    container.innerHTML = '<div class="text-center py-4 text-red-500">Error al cargar semáforos</div>';
+                    return;
+                }
+
+                const semaforos = data.semaforos || [];
+
+                if (semaforos.length === 0) {
+                    container.innerHTML = '<div class="text-center py-4 text-gray-500">No hay semáforos registrados</div>';
+                    return;
+                }
+
+                container.innerHTML = semaforos.map(s => renderSemaforo(s)).join('');
+            } catch (error) {
+                console.error('Error cargando semáforos:', error);
+                document.getElementById('lista-semaforos').innerHTML =
+                    '<div class="text-center py-4 text-red-500">Error de conexión</div>';
+            }
+        }
+
+        function renderSemaforo(semaforo) {
+            const nombre = semaforo.nombre || `Semáforo #${semaforo.id}`;
+            return `
+                <div class="festivo-item mb-2" id="semaforo-${semaforo.id}">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-gray-800">${nombre}</span>
+                            ${semaforo.activo ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Activo</span>' : '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Inactivo</span>'}
+                        </div>
+                        <div class="text-sm text-gray-500 mt-1">
+                            Tiempo en rojo: <strong>${semaforo.tiempo_rojo_seg} seg</strong> |
+                            Radio: ${semaforo.radio_deteccion}m
+                        </div>
+                        <div class="text-xs text-gray-400">
+                            Lat: ${semaforo.lat}, Lon: ${semaforo.lon}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                        <button onclick="toggleSemaforoActivo(${semaforo.id}, ${!semaforo.activo})"
+                            class="px-3 py-1.5 ${semaforo.activo ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'} text-white text-sm rounded-lg transition">
+                            ${semaforo.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button onclick="eliminarSemaforo(${semaforo.id}, '${nombre}')"
+                            class="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition">
+                            Eliminar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function agregarSemaforo() {
+            const nombre = document.getElementById('semaforo-nombre').value.trim();
+            const tiempo = parseInt(document.getElementById('semaforo-tiempo').value) || 60;
+            const lat = parseFloat(document.getElementById('semaforo-lat').value);
+            const lon = parseFloat(document.getElementById('semaforo-lon').value);
+            const radio = parseInt(document.getElementById('semaforo-radio').value) || 30;
+
+            if (isNaN(lat) || isNaN(lon)) {
+                alert('Ingresa coordenadas válidas');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/semaforos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, tiempo_rojo_seg: tiempo, lat, lon, radio_deteccion: radio })
+                });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-semaforos');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Semáforo agregado';
+                    // Limpiar formulario
+                    document.getElementById('semaforo-nombre').value = '';
+                    document.getElementById('semaforo-tiempo').value = '60';
+                    document.getElementById('semaforo-lat').value = '';
+                    document.getElementById('semaforo-lon').value = '';
+                    document.getElementById('semaforo-radio').value = '30';
+                    // Recargar lista
+                    cargarSemaforos();
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error agregando semáforo:', error);
+            }
+        }
+
+        async function toggleSemaforoActivo(semaforoId, nuevoEstado) {
+            try {
+                const res = await fetch(`/api/admin/semaforos/${semaforoId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activo: nuevoEstado })
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    cargarSemaforos();
+                }
+            } catch (error) {
+                console.error('Error actualizando semáforo:', error);
+            }
+        }
+
+        async function eliminarSemaforo(semaforoId, nombre) {
+            if (!confirm(`¿Eliminar el semáforo "${nombre}"?`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/semaforos/${semaforoId}`, { method: 'DELETE' });
+                const data = await res.json();
+
+                const msgDiv = document.getElementById('mensaje-semaforos');
+                if (data.ok) {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Semáforo eliminado';
+                    document.getElementById(`semaforo-${semaforoId}`)?.remove();
+                    cargarSemaforos();
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                    msgDiv.textContent = '❌ Error: ' + data.error;
+                }
+                msgDiv.classList.remove('hidden');
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+            } catch (error) {
+                console.error('Error eliminando semáforo:', error);
             }
         }
     </script>

@@ -12370,12 +12370,27 @@ def migrar_conductor():
         """)
         mensajes.append("✅ Tabla segmentos_via creada")
 
-        # Campo para semáforos en intersecciones
+        # Campo para semáforos en intersecciones (legacy)
         conn.execute("ALTER TABLE intersecciones_cali ADD COLUMN IF NOT EXISTS tiene_semaforo BOOLEAN DEFAULT FALSE")
         mensajes.append("✅ intersecciones_cali.tiene_semaforo")
 
         conn.execute("ALTER TABLE intersecciones_cali ADD COLUMN IF NOT EXISTS tiempo_semaforo_seg INTEGER DEFAULT 0")
         mensajes.append("✅ intersecciones_cali.tiempo_semaforo_seg")
+
+        # Tabla de semáforos independiente
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS semaforos (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100),
+                lat DECIMAL(10, 8) NOT NULL,
+                lon DECIMAL(11, 8) NOT NULL,
+                tiempo_rojo_seg INTEGER NOT NULL DEFAULT 60,
+                radio_deteccion INTEGER DEFAULT 30,
+                activo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        mensajes.append("✅ Tabla semaforos creada")
 
         conn.commit()
         conn.close()
@@ -19599,6 +19614,120 @@ def api_admin_eliminar_peaje(peaje_id):
         conn.close()
 
         return jsonify({'ok': True, 'mensaje': 'Peaje eliminado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# ENDPOINTS PARA SEMÁFOROS
+# ============================================================================
+
+@app.route('/api/admin/semaforos')
+@admin_required
+def api_admin_listar_semaforos():
+    """Lista todos los semáforos"""
+    try:
+        conn = get_db_connection()
+        semaforos = conn.execute("""
+            SELECT id, nombre, lat, lon, tiempo_rojo_seg, radio_deteccion, activo, created_at
+            FROM semaforos
+            ORDER BY nombre
+        """).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'semaforos': [dict(s) for s in semaforos]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/semaforos', methods=['POST'])
+@admin_required
+def api_admin_crear_semaforo():
+    """Crea un nuevo semáforo"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        lat = data.get('lat')
+        lon = data.get('lon')
+        tiempo_rojo = data.get('tiempo_rojo_seg', 60)
+        radio = data.get('radio_deteccion', 30)
+
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas son requeridas'}), 400
+
+        conn = get_db_connection()
+        semaforo = conn.execute("""
+            INSERT INTO semaforos (nombre, lat, lon, tiempo_rojo_seg, radio_deteccion)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, nombre, lat, lon, tiempo_rojo_seg, radio_deteccion, activo
+        """, (nombre or None, lat, lon, tiempo_rojo, radio)).fetchone()
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'semaforo': dict(semaforo)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/semaforos/<int:semaforo_id>', methods=['PUT'])
+@admin_required
+def api_admin_actualizar_semaforo(semaforo_id):
+    """Actualiza un semáforo existente"""
+    try:
+        data = request.get_json()
+        conn = get_db_connection()
+
+        campos = []
+        valores = []
+
+        if 'nombre' in data:
+            campos.append("nombre = %s")
+            valores.append(data['nombre'])
+        if 'lat' in data:
+            campos.append("lat = %s")
+            valores.append(data['lat'])
+        if 'lon' in data:
+            campos.append("lon = %s")
+            valores.append(data['lon'])
+        if 'tiempo_rojo_seg' in data:
+            campos.append("tiempo_rojo_seg = %s")
+            valores.append(data['tiempo_rojo_seg'])
+        if 'radio_deteccion' in data:
+            campos.append("radio_deteccion = %s")
+            valores.append(data['radio_deteccion'])
+        if 'activo' in data:
+            campos.append("activo = %s")
+            valores.append(data['activo'])
+
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay campos para actualizar'}), 400
+
+        valores.append(semaforo_id)
+        query = f"UPDATE semaforos SET {', '.join(campos)} WHERE id = %s"
+        conn.execute(query, tuple(valores))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Semáforo actualizado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/semaforos/<int:semaforo_id>', methods=['DELETE'])
+@admin_required
+def api_admin_eliminar_semaforo(semaforo_id):
+    """Elimina un semáforo"""
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM semaforos WHERE id = %s", (semaforo_id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Semáforo eliminado'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

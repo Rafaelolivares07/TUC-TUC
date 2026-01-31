@@ -138,6 +138,14 @@
                         <span class="text-gray-600">Horas de acompañamiento:</span>
                         <span id="horas-display" class="font-semibold">-</span>
                     </div>
+                    <!-- Peajes detectados -->
+                    <div id="info-peajes" class="hidden mt-2 pt-2 border-t border-dashed">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">🛣️ Peajes en ruta:</span>
+                            <span id="total-peajes" class="font-semibold text-orange-600">$0</span>
+                        </div>
+                        <div id="lista-peajes-ruta" class="text-xs text-gray-500 mt-1"></div>
+                    </div>
                     <div class="flex justify-between text-xl font-bold border-t pt-2 mt-2">
                         <span>Tarifa:</span>
                         <span id="tarifa" class="text-green-600">$0</span>
@@ -881,7 +889,11 @@
 
                 const bodyTarifa = {
                     tipo_servicio: 'transporte',
-                    distancia_km: distanciaKm
+                    distancia_km: distanciaKm,
+                    origen_lat: coordsOrigen.lat,
+                    origen_lon: coordsOrigen.lon,
+                    destino_lat: coordsDestino.lat,
+                    destino_lon: coordsDestino.lon
                 };
                 if (fechaProgramadaSeleccionada) {
                     bodyTarifa.fecha_programada = fechaProgramadaSeleccionada.fechaHora.toISOString();
@@ -991,6 +1003,17 @@
             }
 
             document.getElementById('tarifa').textContent = '$' + datos.tarifa.toLocaleString();
+
+            // Mostrar peajes si hay
+            const infoPeajes = document.getElementById('info-peajes');
+            if (datos.desglose && datos.desglose.peajes && datos.desglose.peajes.length > 0) {
+                infoPeajes.classList.remove('hidden');
+                document.getElementById('total-peajes').textContent = '$' + datos.desglose.total_peajes.toLocaleString();
+                const listaPeajes = datos.desglose.peajes.map(p => p.nombre).join(', ');
+                document.getElementById('lista-peajes-ruta').textContent = listaPeajes;
+            } else {
+                infoPeajes.classList.add('hidden');
+            }
 
             // Buscar conductor cercano para mostrar tiempo de espera
             const coordsParaConductor = coordenadasOrigenSeleccionado || coordenadasOrigenActual;

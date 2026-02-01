@@ -131,6 +131,32 @@
         .marker-pendiente {
             filter: hue-rotate(0deg) saturate(2);
         }
+
+        /* Fullscreen mode para el mapa del grafo */
+        .mapa-grafo-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 9999 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white;
+        }
+
+        .mapa-grafo-fullscreen #mapa-grafo {
+            height: 100vh !important;
+            width: 100vw !important;
+            border-radius: 0 !important;
+        }
+
+        .mapa-grafo-fullscreen #btn-fullscreen-grafo {
+            position: fixed !important;
+            top: 10px !important;
+            right: 10px !important;
+            z-index: 10001 !important;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -1172,7 +1198,12 @@
                         </div>
 
                         <!-- Mapa del grafo -->
-                        <div class="mb-4">
+                        <div id="mapa-grafo-wrapper" class="mb-4 relative">
+                            <button onclick="toggleFullscreenGrafo()" id="btn-fullscreen-grafo"
+                                class="absolute top-2 right-2 z-[1000] bg-white px-3 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-100 border-2 border-gray-300 flex items-center gap-2">
+                                <span id="icono-fullscreen">⛶</span>
+                                <span id="texto-fullscreen">Expandir</span>
+                            </button>
                             <div id="mapa-grafo" style="height: 500px; border-radius: 8px; border: 1px solid #ddd;"></div>
                         </div>
 
@@ -3045,6 +3076,42 @@
         let grafoCapaPeajes = [];
         let grafoCapaPois = [];
         let grafoCapaIntersecciones = [];
+        let grafoFullscreen = false;
+
+        // Toggle fullscreen del mapa del grafo
+        function toggleFullscreenGrafo() {
+            const wrapper = document.getElementById('mapa-grafo-wrapper');
+            const icono = document.getElementById('icono-fullscreen');
+            const texto = document.getElementById('texto-fullscreen');
+
+            grafoFullscreen = !grafoFullscreen;
+
+            if (grafoFullscreen) {
+                wrapper.classList.add('mapa-grafo-fullscreen');
+                icono.textContent = '✕';
+                texto.textContent = 'Cerrar';
+                document.body.style.overflow = 'hidden'; // Evitar scroll
+            } else {
+                wrapper.classList.remove('mapa-grafo-fullscreen');
+                icono.textContent = '⛶';
+                texto.textContent = 'Expandir';
+                document.body.style.overflow = '';
+            }
+
+            // Invalidar tamaño del mapa para que Leaflet recalcule
+            setTimeout(() => {
+                if (mapaGrafo) {
+                    mapaGrafo.invalidateSize();
+                }
+            }, 350);
+        }
+
+        // Cerrar fullscreen con tecla Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && grafoFullscreen) {
+                toggleFullscreenGrafo();
+            }
+        });
 
         function initMapaGrafo() {
             if (mapaGrafo) return; // Ya inicializado

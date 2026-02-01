@@ -249,6 +249,53 @@ def obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=False):
         return None
 
 
+def guardar_conexiones_osrm(geometria, conn=None):
+    """
+    Guarda las conexiones entre puntos consecutivos de una ruta OSRM.
+    Cada par de puntos consecutivos es una conexión direccional.
+    Si la conexión ya existe, incrementa veces_transitado.
+    """
+    if not geometria or len(geometria) < 2:
+        return 0
+
+    cerrar_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cerrar_conn = True
+
+    conexiones_guardadas = 0
+
+    try:
+        for i in range(len(geometria) - 1):
+            origen_lat, origen_lon = geometria[i]
+            destino_lat, destino_lon = geometria[i + 1]
+
+            # Calcular distancia entre estos dos puntos
+            distancia = int(distancia_punto_a_punto(origen_lat, origen_lon, destino_lat, destino_lon))
+
+            # Insertar o actualizar (incrementar contador si existe)
+            conn.execute("""
+                INSERT INTO conexiones_via (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (origen_lat, origen_lon, destino_lat, destino_lon)
+                DO UPDATE SET veces_transitado = conexiones_via.veces_transitado + 1
+            """, (origen_lat, origen_lon, destino_lat, destino_lon, distancia))
+
+            conexiones_guardadas += 1
+
+        conn.commit()
+        print(f"✅ Guardadas {conexiones_guardadas} conexiones de ruta")
+
+    except Exception as e:
+        print(f"Error guardando conexiones: {e}")
+
+    finally:
+        if cerrar_conn:
+            conn.close()
+
+    return conexiones_guardadas
+
+
 def calcular_bearing(lat1, lon1, lat2, lon2):
     """
     Calcula el bearing (dirección) en grados de punto A a punto B.
@@ -12355,7 +12402,7 @@ def migrar_conductor():
         """)
         mensajes.append("✅ Tabla peajes creada")
 
-        # Tabla de segmentos de vía (para construir grafo de calles)
+        # Tabla de segmentos de vía (legacy - no usar)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS segmentos_via (
                 id SERIAL PRIMARY KEY,
@@ -12369,7 +12416,36 @@ def migrar_conductor():
                 UNIQUE(interseccion_a, interseccion_b)
             )
         """)
-        mensajes.append("✅ Tabla segmentos_via creada")
+        mensajes.append("✅ Tabla segmentos_via creada (legacy)")
+
+        # Tabla de conexiones de vía (grafo de rutas desde OSRM)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conexiones_via (
+                id SERIAL PRIMARY KEY,
+                origen_lat DECIMAL(10, 8) NOT NULL,
+                origen_lon DECIMAL(11, 8) NOT NULL,
+                destino_lat DECIMAL(10, 8) NOT NULL,
+                destino_lon DECIMAL(11, 8) NOT NULL,
+                distancia_metros INTEGER,
+                veces_transitado INTEGER DEFAULT 1,
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        mensajes.append("✅ Tabla conexiones_via creada")
+
+        # Índices para búsqueda espacial eficiente
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_conexiones_origen ON conexiones_via(origen_lat, origen_lon)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_conexiones_destino ON conexiones_via(destino_lat, destino_lon)
+        """)
+        # Índice único para evitar duplicados (misma conexión en mismo sentido)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_conexiones_unico
+            ON conexiones_via(origen_lat, origen_lon, destino_lat, destino_lon)
+        """)
+        mensajes.append("✅ Índices conexiones_via creados")
 
         # Campo para semáforos en intersecciones (legacy)
         conn.execute("ALTER TABLE intersecciones_cali ADD COLUMN IF NOT EXISTS tiene_semaforo BOOLEAN DEFAULT FALSE")
@@ -22119,9 +22195,9 @@ def api_calcular_tarifa():
                 peajes_detectados = detectar_peajes_en_ruta(geometria_ruta, conn)
                 total_peajes = sum(p['tarifa'] for p in peajes_detectados)
 
-                # Guardar segmentos de la ruta en segundo plano (sin bloquear)
+                # Guardar conexiones de la ruta para construir grafo
                 try:
-                    guardar_segmentos_ruta(geometria_ruta, conn)
+                    guardar_conexiones_osrm(geometria_ruta, conn)
                 except:
                     pass  # No bloquear si falla
 

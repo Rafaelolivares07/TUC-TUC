@@ -589,7 +589,10 @@ class PostgreSQLConnectionWrapper:
             'componentes_activos_sugerencias', 'indicaciones_rechazadas',
             'medicamentos_top', 'navegacion_anonima', 'pastillero_usuarios',
             'sugerir_sintomas', 'pedidos', 'promos_carousel',
-            'categorias', 'medicamento_categoria'
+            'categorias', 'medicamento_categoria',
+            'solicitudes_transporte', 'conexiones_via', 'intersecciones_cali',
+            'segmentos_via', 'pois_cali', 'lugares_usuario', 'semaforos',
+            'camaras_fotomulta', 'peajes', 'parametros_sistema', 'log_cambios_db'
         ]
 
         # Convertir tablas que deben ir en MAYSCULAS (solo si no están ya entre comillas)

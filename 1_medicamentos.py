@@ -3,6 +3,7 @@ import sqlalchemy
 import decimal
 import pandas
 import psycopg2
+from psycopg2 import sql as psycopg2_sql
 import uuid
 import json
 import os
@@ -591,14 +592,15 @@ class PostgreSQLConnectionWrapper:
             'categorias', 'medicamento_categoria'
         ]
 
-        # Convertir tablas que deben ir en MAYSCULAS
+        # Convertir tablas que deben ir en MAYSCULAS (solo si no están ya entre comillas)
         for tabla in tablas_mayusculas:
-            pattern = r'\b' + tabla + r'\b'
+            # Negative lookbehind/lookahead para no tocar nombres ya entre comillas
+            pattern = r'(?<!")\b' + tabla + r'\b(?!")'
             query = re.sub(pattern, f'"{tabla.upper()}"', query, flags=re.IGNORECASE)
 
-        # Convertir tablas que deben permanecer en minsculas
+        # Convertir tablas que deben permanecer en minsculas (solo si no están ya entre comillas)
         for tabla in tablas_minusculas:
-            pattern = r'\b' + tabla + r'\b'
+            pattern = r'(?<!")\b' + tabla + r'\b(?!")'
             query = re.sub(pattern, f'"{tabla}"', query, flags=re.IGNORECASE)
 
         cursor = self._conn.cursor()

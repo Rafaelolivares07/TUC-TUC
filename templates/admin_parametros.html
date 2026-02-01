@@ -1159,32 +1159,60 @@
 
                         <!-- Capas del mapa -->
                         <div class="p-3 bg-gray-50 rounded-lg">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">🗂️ Capas visibles:</label>
-                            <div class="flex flex-wrap items-center gap-4">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="toggle-mapa-base" checked onchange="toggleCapaGrafo('base')" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-sm">🗺️ Mapa</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="toggle-semaforos" onchange="toggleCapaGrafo('semaforos')" class="w-4 h-4 text-green-600 rounded">
-                                    <span class="text-sm">🚦 Semáforos</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="toggle-camaras" onchange="toggleCapaGrafo('camaras')" class="w-4 h-4 text-red-600 rounded">
-                                    <span class="text-sm">📷 Cámaras</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="toggle-peajes" onchange="toggleCapaGrafo('peajes')" class="w-4 h-4 text-yellow-600 rounded">
-                                    <span class="text-sm">🛣️ Peajes</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="toggle-pois" onchange="toggleCapaGrafo('pois')" class="w-4 h-4 text-purple-600 rounded">
-                                    <span class="text-sm">📍 POIs</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="toggle-intersecciones" onchange="toggleCapaGrafo('intersecciones')" class="w-4 h-4 text-orange-600 rounded">
-                                    <span class="text-sm">🔀 Intersecciones</span>
-                                </label>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">🗂️ Capas visibles:</label>
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                <!-- Mapa base -->
+                                <div class="bg-white p-2 rounded border text-center">
+                                    <label class="flex items-center justify-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="toggle-mapa-base" checked onchange="toggleCapaGrafo('base')" class="w-4 h-4 text-blue-600 rounded">
+                                        <span class="text-sm font-medium">🗺️ Mapa</span>
+                                    </label>
+                                </div>
+                                <!-- Semáforos -->
+                                <div class="bg-white p-2 rounded border text-center">
+                                    <label class="flex items-center justify-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="toggle-semaforos" onchange="toggleCapaGrafo('semaforos')" class="w-4 h-4 text-green-600 rounded">
+                                        <span class="text-sm font-medium">🚦 Semáforos</span>
+                                    </label>
+                                    <input type="number" id="limite-semaforos" value="500" min="0" max="10000"
+                                        class="w-full mt-1 px-2 py-1 text-xs border rounded text-center" placeholder="Límite">
+                                </div>
+                                <!-- Cámaras -->
+                                <div class="bg-white p-2 rounded border text-center">
+                                    <label class="flex items-center justify-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="toggle-camaras" onchange="toggleCapaGrafo('camaras')" class="w-4 h-4 text-red-600 rounded">
+                                        <span class="text-sm font-medium">📷 Cámaras</span>
+                                    </label>
+                                    <input type="number" id="limite-camaras" value="500" min="0" max="10000"
+                                        class="w-full mt-1 px-2 py-1 text-xs border rounded text-center" placeholder="Límite">
+                                </div>
+                                <!-- Peajes -->
+                                <div class="bg-white p-2 rounded border text-center">
+                                    <label class="flex items-center justify-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="toggle-peajes" onchange="toggleCapaGrafo('peajes')" class="w-4 h-4 text-yellow-600 rounded">
+                                        <span class="text-sm font-medium">🛣️ Peajes</span>
+                                    </label>
+                                    <input type="number" id="limite-peajes" value="100" min="0" max="1000"
+                                        class="w-full mt-1 px-2 py-1 text-xs border rounded text-center" placeholder="Límite">
+                                </div>
+                                <!-- POIs -->
+                                <div class="bg-white p-2 rounded border text-center">
+                                    <label class="flex items-center justify-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="toggle-pois" onchange="toggleCapaGrafo('pois')" class="w-4 h-4 text-purple-600 rounded">
+                                        <span class="text-sm font-medium">📍 POIs</span>
+                                    </label>
+                                    <input type="number" id="limite-pois" value="500" min="0" max="50000"
+                                        class="w-full mt-1 px-2 py-1 text-xs border rounded text-center" placeholder="Límite">
+                                </div>
+                                <!-- Intersecciones -->
+                                <div class="bg-white p-2 rounded border text-center">
+                                    <label class="flex items-center justify-center gap-2 cursor-pointer">
+                                        <input type="checkbox" id="toggle-intersecciones" onchange="toggleCapaGrafo('intersecciones')" class="w-4 h-4 text-orange-600 rounded">
+                                        <span class="text-sm font-medium">🔀 Intersec.</span>
+                                    </label>
+                                    <input type="number" id="limite-intersecciones" value="5000" min="0" max="50000"
+                                        class="w-full mt-1 px-2 py-1 text-xs border rounded text-center" placeholder="Límite">
+                                </div>
                             </div>
                         </div>
 
@@ -3189,10 +3217,12 @@
         // Cargar semáforos en el grafo
         async function cargarSemaforosEnGrafo() {
             try {
-                const res = await fetch('/api/admin/semaforos');
+                const limite = document.getElementById('limite-semaforos')?.value || 500;
+                const res = await fetch(`/api/admin/semaforos?limite=${limite}`);
                 const data = await res.json();
                 if (data.ok && data.semaforos) {
-                    data.semaforos.forEach(s => {
+                    const items = data.semaforos.slice(0, limite);
+                    items.forEach(s => {
                         const marker = L.circleMarker([s.lat, s.lon], {
                             radius: 6,
                             fillColor: '#22c55e',
@@ -3210,10 +3240,12 @@
         // Cargar cámaras en el grafo
         async function cargarCamarasEnGrafo() {
             try {
-                const res = await fetch('/api/admin/camaras');
+                const limite = document.getElementById('limite-camaras')?.value || 500;
+                const res = await fetch(`/api/admin/camaras?limite=${limite}`);
                 const data = await res.json();
                 if (data.ok && data.camaras) {
-                    data.camaras.forEach(c => {
+                    const items = data.camaras.slice(0, limite);
+                    items.forEach(c => {
                         const marker = L.circleMarker([c.lat, c.lon], {
                             radius: 6,
                             fillColor: '#ef4444',
@@ -3231,10 +3263,12 @@
         // Cargar peajes en el grafo
         async function cargarPeajesEnGrafo() {
             try {
-                const res = await fetch('/api/admin/peajes');
+                const limite = document.getElementById('limite-peajes')?.value || 100;
+                const res = await fetch(`/api/admin/peajes?limite=${limite}`);
                 const data = await res.json();
                 if (data.ok && data.peajes) {
-                    data.peajes.forEach(p => {
+                    const items = data.peajes.slice(0, limite);
+                    items.forEach(p => {
                         const marker = L.circleMarker([p.lat, p.lon], {
                             radius: 8,
                             fillColor: '#eab308',
@@ -3252,7 +3286,8 @@
         // Cargar POIs en el grafo
         async function cargarPoisEnGrafo() {
             try {
-                const res = await fetch('/api/pois?q=&limit=500');
+                const limite = document.getElementById('limite-pois')?.value || 500;
+                const res = await fetch(`/api/pois?q=&limit=${limite}`);
                 const data = await res.json();
                 if (data.ok && data.pois) {
                     data.pois.forEach(p => {
@@ -3273,7 +3308,8 @@
         // Cargar intersecciones en el grafo
         async function cargarInterseccionesEnGrafo() {
             try {
-                const res = await fetch('/api/admin/intersecciones');
+                const limite = document.getElementById('limite-intersecciones')?.value || 5000;
+                const res = await fetch(`/api/admin/intersecciones?limite=${limite}`);
                 const data = await res.json();
                 if (data.ok && data.intersecciones) {
                     data.intersecciones.forEach(i => {

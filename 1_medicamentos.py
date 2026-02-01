@@ -22804,7 +22804,7 @@ def api_admin_db_registros(nombre):
     try:
         pagina = int(request.args.get('pagina', 1))
         limite = int(request.args.get('limite', 50))
-        orden = request.args.get('orden', 'id')
+        orden = request.args.get('orden', '')
         direccion = request.args.get('direccion', 'DESC')
         filtro_columna = request.args.get('filtro_columna')
         filtro_valor = request.args.get('filtro_valor', '')
@@ -22816,6 +22816,15 @@ def api_admin_db_registros(nombre):
             direccion = 'DESC'
 
         conn = get_db_connection()
+
+        # Obtener primera columna si no se especifica orden
+        if not orden:
+            primera_col = conn.execute("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = %s
+                ORDER BY ordinal_position LIMIT 1
+            """, (nombre,)).fetchone()
+            orden = primera_col['column_name'] if primera_col else 'ctid'
 
         # Construir query
         query_base = f'FROM "{nombre}"'

@@ -360,7 +360,7 @@
         let registrosSeleccionados = new Set();
         let paginaActual = 1;
         let totalPaginas = 1;
-        let ordenActual = 'id';
+        let ordenActual = '';
         let direccionOrden = 'DESC';
         let logPagina = 1;
 
@@ -446,6 +446,9 @@
                     // Actualizar total
                     document.getElementById('total-registros').textContent = data.total_registros.toLocaleString();
 
+                    // Establecer columna de orden (PK o primera columna)
+                    ordenActual = data.primary_key[0] || data.columnas[0]?.column_name || '';
+
                     // Mostrar estructura en tab
                     mostrarEstructura(data);
                 }
@@ -530,12 +533,12 @@
             }
 
             const columnas = estructuraActual.columnas.map(c => c.column_name);
-            const pkColumn = estructuraActual.primary_key[0] || 'id';
+            const pkColumn = estructuraActual.primary_key[0] || columnas[0];
 
             let html = '';
-            registros.forEach(reg => {
-                const id = reg[pkColumn];
-                const seleccionado = registrosSeleccionados.has(id);
+            registros.forEach((reg, idx) => {
+                const id = reg[pkColumn] !== undefined ? reg[pkColumn] : idx;
+                const seleccionado = registrosSeleccionados.has(String(id));
 
                 html += `<tr class="${seleccionado ? 'selected' : ''}" data-id="${id}">`;
                 html += `<td class="text-center"><input type="checkbox" ${seleccionado ? 'checked' : ''} onchange="toggleSelect('${id}')"></td>`;
@@ -557,16 +560,17 @@
         }
 
         function toggleSelect(id) {
-            if (registrosSeleccionados.has(id)) {
-                registrosSeleccionados.delete(id);
+            const idStr = String(id);
+            if (registrosSeleccionados.has(idStr)) {
+                registrosSeleccionados.delete(idStr);
             } else {
-                registrosSeleccionados.add(id);
+                registrosSeleccionados.add(idStr);
             }
 
             // Actualizar visual
             const row = document.querySelector(`tr[data-id="${id}"]`);
             if (row) {
-                row.classList.toggle('selected', registrosSeleccionados.has(id));
+                row.classList.toggle('selected', registrosSeleccionados.has(idStr));
             }
 
             actualizarContadorSeleccionados();

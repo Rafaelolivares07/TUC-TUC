@@ -22762,6 +22762,9 @@ def api_admin_db_estructura(nombre):
     try:
         conn = get_db_connection()
 
+        # PostgreSQL guarda nombres en minúsculas en information_schema
+        nombre_lower = nombre.lower()
+
         # Obtener columnas
         columnas = conn.execute("""
             SELECT column_name, data_type, is_nullable, column_default,
@@ -22769,7 +22772,7 @@ def api_admin_db_estructura(nombre):
             FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name = %s
             ORDER BY ordinal_position
-        """, (nombre,)).fetchall()
+        """, (nombre_lower,)).fetchall()
 
         if not columnas:
             if conn:
@@ -22784,12 +22787,12 @@ def api_admin_db_estructura(nombre):
                 ON tc.constraint_name = kcu.constraint_name
                 AND tc.table_schema = kcu.table_schema
             WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY'
-        """, (nombre,)).fetchall()
+        """, (nombre_lower,)).fetchall()
 
         pk_columns = [p['column_name'] for p in pk]
 
-        # Contar registros
-        count = conn.execute(f'SELECT COUNT(*) as total FROM "{nombre}"').fetchone()
+        # Contar registros (usar nombre en minúsculas)
+        count = conn.execute(f'SELECT COUNT(*) as total FROM {nombre_lower}').fetchone()
 
         conn.close()
 
@@ -22824,6 +22827,9 @@ def api_admin_db_registros(nombre):
 
         offset = (pagina - 1) * limite
 
+        # PostgreSQL guarda nombres en minúsculas
+        nombre_lower = nombre.lower()
+
         # Validar dirección
         if direccion.upper() not in ['ASC', 'DESC']:
             direccion = 'DESC'
@@ -22836,14 +22842,14 @@ def api_admin_db_registros(nombre):
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = %s
                 ORDER BY ordinal_position LIMIT 1
-            """, (nombre,)).fetchone()
+            """, (nombre_lower,)).fetchone()
             if not primera_col:
                 conn.close()
                 return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no encontrada'}), 404
             orden = primera_col['column_name']
 
-        # Construir query
-        query_base = f'FROM "{nombre}"'
+        # Construir query (usar nombre en minúsculas sin comillas)
+        query_base = f'FROM {nombre_lower}'
         params_count = []
         params_select = []
 

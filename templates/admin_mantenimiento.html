@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mantenimiento de Base de Datos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+
+        .tabla-container {
+            overflow-x: auto;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .tabla-datos {
+            min-width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tabla-datos th {
+            position: sticky;
+            top: 0;
+            background: #1f2937;
+            color: white;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .tabla-datos th:hover {
+            background: #374151;
+        }
+
+        .tabla-datos td {
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tabla-datos tr:hover {
+            background: #f3f4f6;
+        }
+
+        .tabla-datos tr.selected {
+            background: #dbeafe !important;
+        }
+
+        .celda-editable {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .celda-editable:hover {
+            background: #fef3c7;
+        }
+
+        .celda-editando {
+            background: #fff !important;
+            padding: 0 !important;
+        }
+
+        .celda-editando input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px solid #3b82f6;
+            outline: none;
+        }
+
+        .badge-tipo {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 500;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: #1f2937;
+            background: #f3f4f6;
+        }
+
+        .tab-btn.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        .log-entry {
+            border-left: 3px solid #e5e7eb;
+            padding-left: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .log-entry.INSERT { border-left-color: #22c55e; }
+        .log-entry.UPDATE { border-left-color: #f59e0b; }
+        .log-entry.DELETE { border-left-color: #ef4444; }
+        .log-entry.EXPORT { border-left-color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-gray-800 to-gray-900 text-white p-4 shadow-lg">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/admin" class="text-gray-300 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                </a>
+                <h1 class="text-xl font-bold">Mantenimiento de Base de Datos</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="status-indicator" class="w-3 h-3 rounded-full bg-green-400"></span>
+                <span class="text-sm text-gray-300">Conectado</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white border-b">
+        <div class="max-w-7xl mx-auto flex">
+            <button class="tab-btn active" onclick="cambiarTab('datos')">
+                <span class="flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    Datos
+                </span>
+            </button>
+            <button class="tab-btn" onclick="cambiarTab('estructura')">
+                <span class="flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    Estructura
+                </span>
+            </button>
+            <button class="tab-btn" onclick="cambiarTab('log')">
+                <span class="flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Log de Cambios
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto p-4">
+        <!-- Panel de Control -->
+        <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <div class="flex flex-wrap gap-4 items-center">
+                <!-- Selector de Tabla -->
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tabla</label>
+                    <select id="select-tabla" onchange="cargarTabla()" class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Selecciona una tabla...</option>
+                    </select>
+                </div>
+
+                <!-- Filtro -->
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Filtrar por columna</label>
+                    <div class="flex gap-2">
+                        <select id="select-filtro-columna" class="p-2 border rounded-lg">
+                            <option value="">Columna...</option>
+                        </select>
+                        <input type="text" id="input-filtro-valor" placeholder="Buscar..."
+                               class="flex-1 p-2 border rounded-lg" onkeyup="if(event.key==='Enter') aplicarFiltro()">
+                        <button onclick="aplicarFiltro()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                            Buscar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info de tabla -->
+            <div id="info-tabla" class="hidden mt-4 p-3 bg-gray-50 rounded-lg">
+                <div class="flex flex-wrap gap-4 text-sm">
+                    <span><strong>Total registros:</strong> <span id="total-registros">0</span></span>
+                    <span><strong>Mostrando:</strong> <span id="mostrando-registros">0</span></span>
+                    <span><strong>Seleccionados:</strong> <span id="seleccionados-count">0</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Datos -->
+        <div id="tab-datos" class="tab-content">
+            <!-- Acciones -->
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="nuevoRegistro()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Nuevo
+                    </button>
+                    <button onclick="eliminarSeleccionados()" id="btn-eliminar" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-2 disabled:opacity-50" disabled>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        Eliminar (<span id="eliminar-count">0</span>)
+                    </button>
+                    <button onclick="exportarCSV()" class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Exportar CSV
+                    </button>
+                    <button onclick="recargarTabla()" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Recargar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla de Datos -->
+            <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+                <div class="tabla-container">
+                    <table class="tabla-datos" id="tabla-datos">
+                        <thead id="tabla-header">
+                            <tr>
+                                <th class="w-12 text-center">
+                                    <input type="checkbox" id="check-all" onchange="toggleSelectAll()">
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-body">
+                            <tr>
+                                <td colspan="100" class="text-center py-12 text-gray-500">
+                                    Selecciona una tabla para ver sus datos
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginación -->
+                <div class="p-4 border-t flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm text-gray-600">Registros por página:</span>
+                        <select id="select-limite" onchange="cambiarLimite()" class="p-1 border rounded">
+                            <option value="25">25</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                            <option value="500">500</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="paginaAnterior()" id="btn-prev" class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50" disabled>
+                            &laquo; Anterior
+                        </button>
+                        <span id="info-pagina" class="text-sm text-gray-600">Página 1 de 1</span>
+                        <button onclick="paginaSiguiente()" id="btn-next" class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50" disabled>
+                            Siguiente &raquo;
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Estructura -->
+        <div id="tab-estructura" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <h3 class="text-lg font-bold mb-4">Estructura de la tabla</h3>
+                <div id="estructura-contenido">
+                    <p class="text-gray-500">Selecciona una tabla para ver su estructura</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Log -->
+        <div id="tab-log" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold">Log de Cambios</h3>
+                    <button onclick="cargarLog()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                        Actualizar
+                    </button>
+                </div>
+                <div id="log-contenido" class="space-y-2">
+                    <p class="text-gray-500">Cargando log...</p>
+                </div>
+                <div class="mt-4 flex justify-center">
+                    <button onclick="cargarMasLog()" id="btn-mas-log" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                        Cargar más
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo/Editar -->
+    <div id="modal-editar" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold" id="modal-titulo">Nuevo Registro</h3>
+                <button onclick="cerrarModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-4" id="modal-contenido">
+                <!-- Campos dinámicos -->
+            </div>
+            <div class="p-4 border-t flex justify-end gap-2">
+                <button onclick="cerrarModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                    Cancelar
+                </button>
+                <button onclick="guardarRegistro()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmar Eliminación -->
+    <div id="modal-confirmar" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="p-4 border-b">
+                <h3 class="text-lg font-bold text-red-600">Confirmar Eliminación</h3>
+            </div>
+            <div class="p-4">
+                <p id="confirmar-mensaje">¿Estás seguro de que deseas eliminar los registros seleccionados?</p>
+                <p class="text-sm text-gray-500 mt-2">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="p-4 border-t flex justify-end gap-2">
+                <button onclick="cerrarConfirmar()" class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                    Cancelar
+                </button>
+                <button onclick="confirmarEliminacion()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Estado global
+        let tablaActual = '';
+        let estructuraActual = null;
+        let registrosSeleccionados = new Set();
+        let paginaActual = 1;
+        let totalPaginas = 1;
+        let ordenActual = 'id';
+        let direccionOrden = 'DESC';
+        let logPagina = 1;
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', async function() {
+            await cargarTablas();
+        });
+
+        async function cargarTablas() {
+            try {
+                const response = await fetch('/api/admin/db/tablas');
+                const data = await response.json();
+
+                if (data.ok) {
+                    const select = document.getElementById('select-tabla');
+                    select.innerHTML = '<option value="">Selecciona una tabla...</option>';
+
+                    data.tablas.forEach(tabla => {
+                        const option = document.createElement('option');
+                        option.value = tabla;
+                        option.textContent = tabla;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando tablas:', error);
+            }
+        }
+
+        async function cargarTabla() {
+            const tabla = document.getElementById('select-tabla').value;
+            if (!tabla) return;
+
+            tablaActual = tabla;
+            paginaActual = 1;
+            registrosSeleccionados.clear();
+            actualizarContadorSeleccionados();
+
+            // Cargar estructura
+            await cargarEstructura();
+
+            // Cargar datos
+            await cargarDatos();
+
+            document.getElementById('info-tabla').classList.remove('hidden');
+        }
+
+        async function cargarEstructura() {
+            try {
+                const response = await fetch(`/api/admin/db/tabla/${tablaActual}/estructura`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    estructuraActual = data;
+
+                    // Actualizar selector de filtro
+                    const selectFiltro = document.getElementById('select-filtro-columna');
+                    selectFiltro.innerHTML = '<option value="">Columna...</option>';
+
+                    data.columnas.forEach(col => {
+                        const option = document.createElement('option');
+                        option.value = col.column_name;
+                        option.textContent = col.column_name;
+                        selectFiltro.appendChild(option);
+                    });
+
+                    // Actualizar header de tabla
+                    const header = document.getElementById('tabla-header');
+                    let headerHTML = `<tr><th class="w-12 text-center"><input type="checkbox" id="check-all" onchange="toggleSelectAll()"></th>`;
+
+                    data.columnas.forEach(col => {
+                        const esPK = data.primary_key.includes(col.column_name);
+                        headerHTML += `<th onclick="ordenarPor('${col.column_name}')">
+                            ${col.column_name}
+                            ${esPK ? '<span class="badge-tipo bg-yellow-500 text-white">PK</span>' : ''}
+                            <span class="badge-tipo bg-gray-600 text-white">${col.data_type}</span>
+                        </th>`;
+                    });
+
+                    headerHTML += '</tr>';
+                    header.innerHTML = headerHTML;
+
+                    // Actualizar total
+                    document.getElementById('total-registros').textContent = data.total_registros.toLocaleString();
+
+                    // Mostrar estructura en tab
+                    mostrarEstructura(data);
+                }
+            } catch (error) {
+                console.error('Error cargando estructura:', error);
+            }
+        }
+
+        function mostrarEstructura(data) {
+            const contenido = document.getElementById('estructura-contenido');
+            let html = `
+                <div class="mb-4">
+                    <span class="font-medium">Primary Key:</span>
+                    <span class="text-blue-600">${data.primary_key.join(', ') || 'N/A'}</span>
+                </div>
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-2 text-left border">Columna</th>
+                            <th class="p-2 text-left border">Tipo</th>
+                            <th class="p-2 text-left border">Nullable</th>
+                            <th class="p-2 text-left border">Default</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.columnas.forEach(col => {
+                html += `
+                    <tr>
+                        <td class="p-2 border font-mono text-sm">${col.column_name}</td>
+                        <td class="p-2 border">
+                            ${col.data_type}
+                            ${col.character_maximum_length ? `(${col.character_maximum_length})` : ''}
+                        </td>
+                        <td class="p-2 border">${col.is_nullable === 'YES' ? 'Sí' : 'No'}</td>
+                        <td class="p-2 border text-sm text-gray-600">${col.column_default || '-'}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            contenido.innerHTML = html;
+        }
+
+        async function cargarDatos() {
+            const limite = document.getElementById('select-limite').value;
+            const filtroColumna = document.getElementById('select-filtro-columna').value;
+            const filtroValor = document.getElementById('input-filtro-valor').value;
+
+            try {
+                let url = `/api/admin/db/tabla/${tablaActual}/registros?pagina=${paginaActual}&limite=${limite}&orden=${ordenActual}&direccion=${direccionOrden}`;
+
+                if (filtroColumna && filtroValor) {
+                    url += `&filtro_columna=${filtroColumna}&filtro_valor=${encodeURIComponent(filtroValor)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.ok) {
+                    mostrarDatos(data.registros);
+                    totalPaginas = data.total_paginas;
+
+                    document.getElementById('mostrando-registros').textContent = data.registros.length;
+                    document.getElementById('info-pagina').textContent = `Página ${paginaActual} de ${totalPaginas}`;
+
+                    document.getElementById('btn-prev').disabled = paginaActual <= 1;
+                    document.getElementById('btn-next').disabled = paginaActual >= totalPaginas;
+                }
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+            }
+        }
+
+        function mostrarDatos(registros) {
+            const tbody = document.getElementById('tabla-body');
+
+            if (!registros || registros.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="100" class="text-center py-8 text-gray-500">No hay registros</td></tr>`;
+                return;
+            }
+
+            const columnas = estructuraActual.columnas.map(c => c.column_name);
+            const pkColumn = estructuraActual.primary_key[0] || 'id';
+
+            let html = '';
+            registros.forEach(reg => {
+                const id = reg[pkColumn];
+                const seleccionado = registrosSeleccionados.has(id);
+
+                html += `<tr class="${seleccionado ? 'selected' : ''}" data-id="${id}">`;
+                html += `<td class="text-center"><input type="checkbox" ${seleccionado ? 'checked' : ''} onchange="toggleSelect('${id}')"></td>`;
+
+                columnas.forEach(col => {
+                    const valor = reg[col];
+                    const valorMostrar = valor === null ? '<span class="text-gray-400">NULL</span>' :
+                                        (String(valor).length > 50 ? String(valor).substring(0, 50) + '...' : valor);
+
+                    html += `<td class="celda-editable"
+                                ondblclick="editarCelda(this, '${id}', '${col}', '${pkColumn}')"
+                                title="${String(valor).replace(/"/g, '&quot;')}">${valorMostrar}</td>`;
+                });
+
+                html += '</tr>';
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function toggleSelect(id) {
+            if (registrosSeleccionados.has(id)) {
+                registrosSeleccionados.delete(id);
+            } else {
+                registrosSeleccionados.add(id);
+            }
+
+            // Actualizar visual
+            const row = document.querySelector(`tr[data-id="${id}"]`);
+            if (row) {
+                row.classList.toggle('selected', registrosSeleccionados.has(id));
+            }
+
+            actualizarContadorSeleccionados();
+        }
+
+        function toggleSelectAll() {
+            const checkAll = document.getElementById('check-all');
+            const checkboxes = document.querySelectorAll('#tabla-body input[type="checkbox"]');
+
+            checkboxes.forEach(cb => {
+                const id = cb.closest('tr').dataset.id;
+                if (checkAll.checked) {
+                    registrosSeleccionados.add(id);
+                } else {
+                    registrosSeleccionados.delete(id);
+                }
+                cb.checked = checkAll.checked;
+                cb.closest('tr').classList.toggle('selected', checkAll.checked);
+            });
+
+            actualizarContadorSeleccionados();
+        }
+
+        function actualizarContadorSeleccionados() {
+            const count = registrosSeleccionados.size;
+            document.getElementById('seleccionados-count').textContent = count;
+            document.getElementById('eliminar-count').textContent = count;
+            document.getElementById('btn-eliminar').disabled = count === 0;
+        }
+
+        function editarCelda(td, id, campo, pkColumn) {
+            const valorActual = td.textContent;
+            const esNull = td.innerHTML.includes('NULL');
+
+            td.classList.add('celda-editando');
+            td.innerHTML = `<input type="text" value="${esNull ? '' : valorActual}"
+                                   onblur="guardarCelda(this, '${id}', '${campo}', '${pkColumn}')"
+                                   onkeydown="if(event.key==='Enter') this.blur(); if(event.key==='Escape') cancelarEdicion(this, '${valorActual}');">`;
+            td.querySelector('input').focus();
+            td.querySelector('input').select();
+        }
+
+        async function guardarCelda(input, id, campo, pkColumn) {
+            const nuevoValor = input.value;
+            const td = input.parentElement;
+
+            try {
+                const response = await fetch(`/api/admin/db/tabla/${tablaActual}/actualizar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: id,
+                        campo: campo,
+                        valor: nuevoValor || null,
+                        pk_column: pkColumn
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    td.classList.remove('celda-editando');
+                    td.innerHTML = nuevoValor || '<span class="text-gray-400">NULL</span>';
+                    td.style.background = '#d1fae5';
+                    setTimeout(() => td.style.background = '', 1000);
+                } else {
+                    alert('Error: ' + data.error);
+                    td.classList.remove('celda-editando');
+                    td.innerHTML = data.valor_anterior || nuevoValor;
+                }
+            } catch (error) {
+                console.error('Error guardando:', error);
+                alert('Error de conexión');
+            }
+        }
+
+        function cancelarEdicion(input, valorOriginal) {
+            const td = input.parentElement;
+            td.classList.remove('celda-editando');
+            td.textContent = valorOriginal;
+        }
+
+        function nuevoRegistro() {
+            if (!estructuraActual) {
+                alert('Selecciona una tabla primero');
+                return;
+            }
+
+            const contenido = document.getElementById('modal-contenido');
+            let html = '<div class="space-y-4">';
+
+            estructuraActual.columnas.forEach(col => {
+                // Omitir campos auto-generados
+                if (col.column_default && col.column_default.includes('nextval')) {
+                    return;
+                }
+
+                const requerido = col.is_nullable === 'NO' && !col.column_default;
+
+                html += `
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            ${col.column_name}
+                            ${requerido ? '<span class="text-red-500">*</span>' : ''}
+                            <span class="text-gray-400 font-normal">(${col.data_type})</span>
+                        </label>
+                        <input type="text" name="${col.column_name}"
+                               class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                               placeholder="${col.column_default || ''}">
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            contenido.innerHTML = html;
+
+            document.getElementById('modal-titulo').textContent = 'Nuevo Registro';
+            document.getElementById('modal-editar').classList.remove('hidden');
+        }
+
+        async function guardarRegistro() {
+            const inputs = document.querySelectorAll('#modal-contenido input');
+            const campos = {};
+
+            inputs.forEach(input => {
+                if (input.value.trim()) {
+                    campos[input.name] = input.value.trim();
+                }
+            });
+
+            if (Object.keys(campos).length === 0) {
+                alert('Ingresa al menos un valor');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/db/tabla/${tablaActual}/insertar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ campos })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    cerrarModal();
+                    recargarTabla();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error guardando:', error);
+                alert('Error de conexión');
+            }
+        }
+
+        function cerrarModal() {
+            document.getElementById('modal-editar').classList.add('hidden');
+        }
+
+        function eliminarSeleccionados() {
+            if (registrosSeleccionados.size === 0) return;
+
+            document.getElementById('confirmar-mensaje').textContent =
+                `¿Estás seguro de que deseas eliminar ${registrosSeleccionados.size} registro(s)?`;
+            document.getElementById('modal-confirmar').classList.remove('hidden');
+        }
+
+        function cerrarConfirmar() {
+            document.getElementById('modal-confirmar').classList.add('hidden');
+        }
+
+        async function confirmarEliminacion() {
+            const pkColumn = estructuraActual.primary_key[0] || 'id';
+
+            try {
+                const response = await fetch(`/api/admin/db/tabla/${tablaActual}/eliminar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ids: Array.from(registrosSeleccionados),
+                        pk_column: pkColumn
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    cerrarConfirmar();
+                    registrosSeleccionados.clear();
+                    actualizarContadorSeleccionados();
+                    recargarTabla();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error eliminando:', error);
+                alert('Error de conexión');
+            }
+        }
+
+        function exportarCSV() {
+            if (!tablaActual) {
+                alert('Selecciona una tabla primero');
+                return;
+            }
+
+            const filtroColumna = document.getElementById('select-filtro-columna').value;
+            const filtroValor = document.getElementById('input-filtro-valor').value;
+
+            let url = `/api/admin/db/tabla/${tablaActual}/exportar`;
+
+            if (filtroColumna && filtroValor) {
+                url += `?filtro_columna=${filtroColumna}&filtro_valor=${encodeURIComponent(filtroValor)}`;
+            }
+
+            window.location.href = url;
+        }
+
+        function ordenarPor(columna) {
+            if (ordenActual === columna) {
+                direccionOrden = direccionOrden === 'ASC' ? 'DESC' : 'ASC';
+            } else {
+                ordenActual = columna;
+                direccionOrden = 'ASC';
+            }
+            cargarDatos();
+        }
+
+        function aplicarFiltro() {
+            paginaActual = 1;
+            cargarDatos();
+        }
+
+        function recargarTabla() {
+            if (tablaActual) {
+                cargarDatos();
+            }
+        }
+
+        function cambiarLimite() {
+            paginaActual = 1;
+            cargarDatos();
+        }
+
+        function paginaAnterior() {
+            if (paginaActual > 1) {
+                paginaActual--;
+                cargarDatos();
+            }
+        }
+
+        function paginaSiguiente() {
+            if (paginaActual < totalPaginas) {
+                paginaActual++;
+                cargarDatos();
+            }
+        }
+
+        function cambiarTab(tab) {
+            // Ocultar todos los tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            // Mostrar tab seleccionado
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            event.currentTarget.classList.add('active');
+
+            // Cargar log si es necesario
+            if (tab === 'log') {
+                cargarLog();
+            }
+        }
+
+        async function cargarLog() {
+            logPagina = 1;
+            const contenido = document.getElementById('log-contenido');
+            contenido.innerHTML = '<p class="text-gray-500">Cargando...</p>';
+
+            await cargarLogPagina();
+        }
+
+        async function cargarLogPagina() {
+            try {
+                let url = `/api/admin/db/log-cambios?pagina=${logPagina}&limite=50`;
+                if (tablaActual) {
+                    url += `&tabla=${tablaActual}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.ok) {
+                    const contenido = document.getElementById('log-contenido');
+
+                    if (logPagina === 1) {
+                        contenido.innerHTML = '';
+                    }
+
+                    if (data.cambios.length === 0 && logPagina === 1) {
+                        contenido.innerHTML = '<p class="text-gray-500">No hay cambios registrados</p>';
+                        return;
+                    }
+
+                    data.cambios.forEach(cambio => {
+                        const fecha = new Date(cambio.fecha).toLocaleString();
+                        const html = `
+                            <div class="log-entry ${cambio.accion}">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <span class="font-medium">${cambio.accion}</span>
+                                        en <span class="font-mono text-sm bg-gray-100 px-1 rounded">${cambio.tabla}</span>
+                                        ${cambio.registro_id ? `(ID: ${cambio.registro_id})` : ''}
+                                        ${cambio.campo ? `<br><span class="text-sm">Campo: <strong>${cambio.campo}</strong></span>` : ''}
+                                    </div>
+                                    <span class="text-xs text-gray-500">${fecha}</span>
+                                </div>
+                                ${cambio.valor_anterior || cambio.valor_nuevo ? `
+                                    <div class="text-sm mt-1">
+                                        ${cambio.valor_anterior ? `<div class="text-red-600 line-through">${cambio.valor_anterior.substring(0, 100)}${cambio.valor_anterior.length > 100 ? '...' : ''}</div>` : ''}
+                                        ${cambio.valor_nuevo ? `<div class="text-green-600">${cambio.valor_nuevo.substring(0, 100)}${cambio.valor_nuevo.length > 100 ? '...' : ''}</div>` : ''}
+                                    </div>
+                                ` : ''}
+                                <div class="text-xs text-gray-400 mt-1">
+                                    Por: ${cambio.usuario_nombre || 'Sistema'} ${cambio.ip_address ? `(${cambio.ip_address})` : ''}
+                                </div>
+                            </div>
+                        `;
+                        contenido.insertAdjacentHTML('beforeend', html);
+                    });
+
+                    document.getElementById('btn-mas-log').style.display = data.cambios.length < 50 ? 'none' : 'block';
+                }
+            } catch (error) {
+                console.error('Error cargando log:', error);
+            }
+        }
+
+        function cargarMasLog() {
+            logPagina++;
+            cargarLogPagina();
+        }
+    </script>
+</body>
+</html>

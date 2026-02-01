@@ -374,13 +374,134 @@
                 input.classList.add('border-green-500');
                 // Auto-focus a teléfono
                 setTimeout(() => document.getElementById('modal-input-telefono').focus(), 100);
-            } else if (!esNombre && valor.length >= 7) {
+            } else if (!esNombre && valor.length >= 10) {
                 checkSpan.classList.remove('hidden');
                 input.classList.remove('border-gray-300');
                 input.classList.add('border-green-500');
+                // Intentar registro/login cuando teléfono está completo
+                intentarRegistroRapido();
             }
 
             actualizarBotonContinuar();
+        }
+
+        async function intentarRegistroRapido(codigo = null) {
+            const nombre = document.getElementById('modal-input-nombre').value.trim();
+            const telefono = document.getElementById('modal-input-telefono').value.trim();
+            const btn = document.getElementById('btn-continuar-registro');
+            const checkTelefono = document.getElementById('modal-check-telefono');
+
+            if (!nombre || telefono.length < 10) return;
+
+            // Mostrar loading
+            checkTelefono.textContent = '⏳';
+            checkTelefono.classList.remove('hidden');
+            btn.disabled = true;
+            btn.textContent = 'Verificando...';
+
+            try {
+                const referido_por = localStorage.getItem('tuctuc_referido_por');
+                const body = { nombre, telefono };
+                if (referido_por) body.referido_por = referido_por;
+                if (codigo) body.codigo = codigo;
+
+                const response = await fetch('/api/auth/registro-rapido', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+
+                if (data.ok) {
+                    if (data.requiere_verificacion) {
+                        // Mostrar campo para código
+                        mostrarCampoCodigoVerificacion();
+                    } else {
+                        // Logueado exitosamente
+                        checkTelefono.textContent = '✓';
+                        checkTelefono.classList.add('text-green-500');
+                        btn.textContent = '¡Listo!';
+                        btn.className = 'w-full mt-6 bg-green-500 text-white py-3 rounded-lg font-bold';
+
+                        // Limpiar referido
+                        localStorage.removeItem('tuctuc_referido_por');
+
+                        // Actualizar UI
+                        usuarioLogueado = true;
+                        document.getElementById('input-nombre').value = data.usuario.nombre;
+                        document.getElementById('input-nombre').disabled = true;
+                        document.getElementById('input-telefono').value = data.usuario.telefono;
+                        document.getElementById('input-telefono').disabled = true;
+
+                        // Cerrar modal después de un momento
+                        setTimeout(() => {
+                            completarRegistroModal();
+                        }, 500);
+                    }
+                } else {
+                    checkTelefono.textContent = '✗';
+                    checkTelefono.classList.remove('text-green-500');
+                    checkTelefono.classList.add('text-red-500');
+                    btn.textContent = data.error || 'Error';
+                    btn.className = 'w-full mt-6 bg-red-500 text-white py-3 rounded-lg font-bold';
+                    setTimeout(() => {
+                        btn.textContent = 'Continuar';
+                        btn.className = 'w-full mt-6 bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 transition cursor-pointer';
+                        btn.disabled = false;
+                        checkTelefono.textContent = '✓';
+                        checkTelefono.classList.remove('text-red-500');
+                        checkTelefono.classList.add('text-green-500');
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Error registro rápido:', error);
+                checkTelefono.textContent = '✗';
+                btn.textContent = 'Error de conexión';
+                setTimeout(() => {
+                    btn.textContent = 'Continuar';
+                    btn.disabled = false;
+                    checkTelefono.textContent = '✓';
+                }, 2000);
+            }
+        }
+
+        function mostrarCampoCodigoVerificacion() {
+            const container = document.querySelector('#modal-registro-unificado .space-y-4');
+            const btn = document.getElementById('btn-continuar-registro');
+
+            // Agregar campo de código si no existe
+            if (!document.getElementById('modal-input-codigo')) {
+                const codigoHTML = `
+                    <div id="campo-codigo-verificacion">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Código de verificación</label>
+                        <p class="text-xs text-gray-500 mb-2">Te enviamos un código por Telegram</p>
+                        <div class="relative">
+                            <input type="text" id="modal-input-codigo" maxlength="6"
+                                class="w-full p-3 border-2 border-yellow-500 rounded-lg focus:border-yellow-600 focus:outline-none text-center text-2xl tracking-widest"
+                                placeholder="000000">
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', codigoHTML);
+
+                const inputCodigo = document.getElementById('modal-input-codigo');
+                inputCodigo.focus();
+                inputCodigo.addEventListener('input', function() {
+                    if (this.value.length === 6) {
+                        intentarRegistroRapido(this.value);
+                    }
+                });
+            }
+
+            btn.textContent = 'Verificar código';
+            btn.disabled = false;
+            btn.className = 'w-full mt-6 bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 transition cursor-pointer';
+            btn.onclick = function() {
+                const codigo = document.getElementById('modal-input-codigo').value.trim();
+                if (codigo.length === 6) {
+                    intentarRegistroRapido(codigo);
+                }
+            };
         }
 
         function actualizarBotonContinuar() {
@@ -388,7 +509,7 @@
             const telefono = document.getElementById('modal-input-telefono').value.trim();
             const btn = document.getElementById('btn-continuar-registro');
 
-            if (nombre.length > 0 && telefono.length >= 7) {
+            if (nombre.length > 0 && telefono.length >= 10) {
                 btn.disabled = false;
                 btn.className = 'w-full mt-6 bg-yellow-500 text-white py-3 rounded-lg font-bold hover:bg-yellow-600 transition cursor-pointer';
             } else {

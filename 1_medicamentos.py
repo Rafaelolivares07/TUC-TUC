@@ -1,5 +1,6 @@
-from flask import Flask, request, redirect, url_for,send_from_directory, jsonify, render_template, session, flash, send_file, make_response
+from flask import Flask, request, redirect, url_for, send_from_directory, jsonify, render_template, session, flash, send_file, make_response, Response
 import sqlalchemy
+import decimal
 import pandas
 import psycopg2
 import uuid
@@ -9,7 +10,7 @@ import re
 from werkzeug.utils import secure_filename
 import hashlib
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_class
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from io import BytesIO
@@ -19441,6 +19442,138 @@ def api_auth_invite(invitado_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/auth/registro-rapido', methods=['POST'])
+def api_auth_registro_rapido():
+    """Registra o loguea un usuario por teléfono"""
+    try:
+        data = request.get_json()
+        nombre = data.get('nombre', '').strip()
+        telefono = data.get('telefono', '').strip()
+        codigo = data.get('codigo')  # Código de verificación (solo si requiere_verificacion)
+
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+        if not telefono:
+            return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+
+        # Limpiar teléfono (solo números)
+        telefono_limpio = ''.join(filter(str.isdigit, telefono))
+        if len(telefono_limpio) < 10:
+            return jsonify({'ok': False, 'error': 'Teléfono inválido'}), 400
+
+        conn = get_db_connection()
+
+        # Buscar si ya existe
+        existente = conn.execute(
+            "SELECT id, nombre, telefono, referido_por, telegram_chat_id FROM terceros WHERE telefono = %s",
+            (telefono_limpio,)
+        ).fetchone()
+
+        if existente:
+            # Usuario existe
+            if existente['telegram_chat_id']:
+                # Tiene Telegram vinculado - requiere verificación
+                if not codigo:
+                    # Enviar código
+                    import random
+                    import time
+                    codigo_nuevo = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+                    session['codigo_verificacion'] = codigo_nuevo
+                    session['codigo_telefono'] = telefono_limpio
+                    session['codigo_timestamp'] = time.time()
+
+                    mensaje = f"🔐 Tu código de verificación TUC-TUC es: *{codigo_nuevo}*\n\nVálido por 10 minutos."
+                    resultado = enviar_telegram(telefono_limpio, mensaje)
+
+                    conn.close()
+
+                    if resultado:
+                        return jsonify({
+                            'ok': True,
+                            'requiere_verificacion': True,
+                            'mensaje': 'Código enviado por Telegram'
+                        })
+                    else:
+                        return jsonify({
+                            'ok': False,
+                            'error': 'No se pudo enviar el código por Telegram'
+                        }), 400
+                else:
+                    # Verificar código
+                    import time
+                    codigo_guardado = session.get('codigo_verificacion')
+                    telefono_guardado = session.get('codigo_telefono')
+                    timestamp = session.get('codigo_timestamp', 0)
+
+                    if not codigo_guardado:
+                        conn.close()
+                        return jsonify({'ok': False, 'error': 'No hay código pendiente'}), 400
+
+                    if time.time() - timestamp > 600:
+                        conn.close()
+                        return jsonify({'ok': False, 'error': 'Código expirado'}), 400
+
+                    if codigo != codigo_guardado or telefono_limpio != telefono_guardado:
+                        conn.close()
+                        return jsonify({'ok': False, 'error': 'Código incorrecto'}), 400
+
+                    # Código válido - limpiar
+                    session.pop('codigo_verificacion', None)
+                    session.pop('codigo_telefono', None)
+                    session.pop('codigo_timestamp', None)
+
+            # Loguear (ya sea sin Telegram o con código verificado)
+            usuario_id = existente['id']
+            nombre_usuario = existente['nombre']
+            es_nuevo = False
+            conn.close()
+        else:
+            # No existe - crear sin fricción
+            referido_por = data.get('referido_por')
+
+            if referido_por:
+                nuevo = conn.execute("""
+                    INSERT INTO terceros (nombre, telefono, referido_por, primer_viaje_completado, fecha_creacion)
+                    VALUES (%s, %s, %s, FALSE, CURRENT_TIMESTAMP)
+                    RETURNING id
+                """, (nombre, telefono_limpio, referido_por)).fetchone()
+            else:
+                nuevo = conn.execute("""
+                    INSERT INTO terceros (nombre, telefono, fecha_creacion)
+                    VALUES (%s, %s, CURRENT_TIMESTAMP)
+                    RETURNING id
+                """, (nombre, telefono_limpio)).fetchone()
+
+            conn.commit()
+            conn.close()
+            usuario_id = nuevo['id']
+            nombre_usuario = nombre
+            es_nuevo = True
+
+        # Establecer sesión
+        session['usuario_id'] = usuario_id
+        session['nombre'] = nombre_usuario
+        session['telefono'] = telefono_limpio
+        session['rol'] = 'Cliente'
+        session.permanent = True
+
+        return jsonify({
+            'ok': True,
+            'es_nuevo': es_nuevo,
+            'requiere_verificacion': False,
+            'usuario': {
+                'id': usuario_id,
+                'nombre': nombre_usuario,
+                'telefono': telefono_limpio
+            }
+        })
+    except Exception as e:
+        print(f"Error registro-rapido: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # ENDPOINTS PARA LUGARES FRECUENTES DEL USUARIO
 # ============================================================================
@@ -22534,6 +22667,425 @@ def api_usuario_actual():
     except Exception as e:
         print(f"Error al obtener usuario actual: {e}")
         return jsonify({'ok': False, 'error': str(e)})
+
+
+# ============================================================================
+# PANEL DE MANTENIMIENTO DE BASE DE DATOS (ADMIN)
+# ============================================================================
+
+@app.route('/api/migrar-log-cambios', methods=['GET'])
+def migrar_log_cambios():
+    """Crea tabla de log de cambios si no existe"""
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS log_cambios_db (
+                id SERIAL PRIMARY KEY,
+                tabla VARCHAR(100) NOT NULL,
+                registro_id VARCHAR(100),
+                accion VARCHAR(20) NOT NULL,
+                campo VARCHAR(100),
+                valor_anterior TEXT,
+                valor_nuevo TEXT,
+                usuario_id INTEGER,
+                usuario_nombre VARCHAR(200),
+                ip_address VARCHAR(50),
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_log_cambios_tabla ON log_cambios_db(tabla)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_log_cambios_fecha ON log_cambios_db(fecha)
+        """)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Tabla log_cambios_db creada'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def registrar_cambio_db(tabla, registro_id, accion, campo=None, valor_anterior=None, valor_nuevo=None):
+    """Registra un cambio en el log de auditoría"""
+    try:
+        conn = get_db_connection()
+        usuario_id = session.get('usuario_id')
+        usuario_nombre = session.get('nombre', 'Sistema')
+        ip_address = request.remote_addr if request else None
+
+        conn.execute("""
+            INSERT INTO log_cambios_db (tabla, registro_id, accion, campo, valor_anterior, valor_nuevo, usuario_id, usuario_nombre, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (tabla, str(registro_id), accion, campo, str(valor_anterior) if valor_anterior is not None else None,
+              str(valor_nuevo) if valor_nuevo is not None else None, usuario_id, usuario_nombre, ip_address))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error registrando cambio: {e}")
+
+
+@app.route('/admin/mantenimiento')
+@admin_required
+def admin_mantenimiento():
+    """Panel de mantenimiento de base de datos"""
+    return render_template('admin_mantenimiento.html')
+
+
+@app.route('/api/admin/db/tablas')
+@admin_required
+def api_admin_db_tablas():
+    """Lista todas las tablas de la base de datos"""
+    try:
+        conn = get_db_connection()
+        tablas = conn.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'tablas': [t['table_name'] for t in tablas]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/tabla/<nombre>/estructura')
+@admin_required
+def api_admin_db_estructura(nombre):
+    """Obtiene la estructura de una tabla"""
+    try:
+        conn = get_db_connection()
+
+        # Obtener columnas
+        columnas = conn.execute("""
+            SELECT column_name, data_type, is_nullable, column_default,
+                   character_maximum_length, numeric_precision
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+            ORDER BY ordinal_position
+        """, (nombre,)).fetchall()
+
+        # Obtener primary key
+        pk = conn.execute("""
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY'
+        """, (nombre,)).fetchall()
+
+        pk_columns = [p['column_name'] for p in pk]
+
+        # Contar registros
+        count = conn.execute(f'SELECT COUNT(*) as total FROM "{nombre}"').fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'tabla': nombre,
+            'columnas': [dict(c) for c in columnas],
+            'primary_key': pk_columns,
+            'total_registros': count['total']
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/tabla/<nombre>/registros')
+@admin_required
+def api_admin_db_registros(nombre):
+    """Obtiene registros de una tabla con paginación y filtros"""
+    try:
+        pagina = int(request.args.get('pagina', 1))
+        limite = int(request.args.get('limite', 50))
+        orden = request.args.get('orden', 'id')
+        direccion = request.args.get('direccion', 'DESC')
+        filtro_columna = request.args.get('filtro_columna')
+        filtro_valor = request.args.get('filtro_valor', '')
+
+        offset = (pagina - 1) * limite
+
+        # Validar dirección
+        if direccion.upper() not in ['ASC', 'DESC']:
+            direccion = 'DESC'
+
+        conn = get_db_connection()
+
+        # Construir query
+        query_base = f'FROM "{nombre}"'
+        params = []
+
+        if filtro_columna and filtro_valor:
+            query_base += f' WHERE CAST("{filtro_columna}" AS TEXT) ILIKE %s'
+            params.append(f'%{filtro_valor}%')
+
+        # Contar total
+        count_query = f'SELECT COUNT(*) as total {query_base}'
+        total = conn.execute(count_query, params).fetchone()['total']
+
+        # Obtener registros
+        query = f'SELECT * {query_base} ORDER BY "{orden}" {direccion} LIMIT %s OFFSET %s'
+        params.extend([limite, offset])
+
+        registros = conn.execute(query, params).fetchall()
+        conn.close()
+
+        # Convertir a dict y manejar tipos especiales
+        registros_dict = []
+        for r in registros:
+            registro = {}
+            for key, value in dict(r).items():
+                if isinstance(value, (datetime, date_class)):
+                    registro[key] = value.isoformat()
+                elif isinstance(value, decimal.Decimal):
+                    registro[key] = float(value)
+                else:
+                    registro[key] = value
+            registros_dict.append(registro)
+
+        return jsonify({
+            'ok': True,
+            'registros': registros_dict,
+            'total': total,
+            'pagina': pagina,
+            'limite': limite,
+            'total_paginas': (total + limite - 1) // limite
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/tabla/<nombre>/insertar', methods=['POST'])
+@admin_required
+def api_admin_db_insertar(nombre):
+    """Inserta un nuevo registro en una tabla"""
+    try:
+        data = request.get_json()
+        campos = data.get('campos', {})
+
+        if not campos:
+            return jsonify({'ok': False, 'error': 'No hay campos para insertar'}), 400
+
+        conn = get_db_connection()
+
+        columnas = ', '.join([f'"{k}"' for k in campos.keys()])
+        placeholders = ', '.join(['%s'] * len(campos))
+        valores = list(campos.values())
+
+        query = f'INSERT INTO "{nombre}" ({columnas}) VALUES ({placeholders}) RETURNING *'
+        resultado = conn.execute(query, valores).fetchone()
+        conn.commit()
+
+        # Registrar cambio
+        registro_id = resultado['id'] if 'id' in dict(resultado) else 'nuevo'
+        registrar_cambio_db(nombre, registro_id, 'INSERT', None, None, str(campos))
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Registro insertado',
+            'registro': dict(resultado) if resultado else None
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/tabla/<nombre>/actualizar', methods=['POST'])
+@admin_required
+def api_admin_db_actualizar(nombre):
+    """Actualiza un campo específico de un registro"""
+    try:
+        data = request.get_json()
+        registro_id = data.get('id')
+        campo = data.get('campo')
+        valor_nuevo = data.get('valor')
+        pk_column = data.get('pk_column', 'id')
+
+        if not registro_id or not campo:
+            return jsonify({'ok': False, 'error': 'ID y campo son requeridos'}), 400
+
+        conn = get_db_connection()
+
+        # Obtener valor anterior
+        query_anterior = f'SELECT "{campo}" FROM "{nombre}" WHERE "{pk_column}" = %s'
+        anterior = conn.execute(query_anterior, (registro_id,)).fetchone()
+        valor_anterior = anterior[campo] if anterior else None
+
+        # Actualizar
+        query = f'UPDATE "{nombre}" SET "{campo}" = %s WHERE "{pk_column}" = %s'
+        conn.execute(query, (valor_nuevo, registro_id))
+        conn.commit()
+
+        # Registrar cambio
+        registrar_cambio_db(nombre, registro_id, 'UPDATE', campo, valor_anterior, valor_nuevo)
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Campo actualizado',
+            'valor_anterior': str(valor_anterior) if valor_anterior is not None else None,
+            'valor_nuevo': valor_nuevo
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/tabla/<nombre>/eliminar', methods=['POST'])
+@admin_required
+def api_admin_db_eliminar(nombre):
+    """Elimina registros de una tabla"""
+    try:
+        data = request.get_json()
+        ids = data.get('ids', [])
+        pk_column = data.get('pk_column', 'id')
+
+        if not ids:
+            return jsonify({'ok': False, 'error': 'No hay IDs para eliminar'}), 400
+
+        conn = get_db_connection()
+
+        # Obtener registros antes de eliminar (para log)
+        placeholders = ', '.join(['%s'] * len(ids))
+        registros_anteriores = conn.execute(
+            f'SELECT * FROM "{nombre}" WHERE "{pk_column}" IN ({placeholders})', ids
+        ).fetchall()
+
+        # Eliminar
+        query = f'DELETE FROM "{nombre}" WHERE "{pk_column}" IN ({placeholders})'
+        conn.execute(query, ids)
+        conn.commit()
+
+        # Registrar cambios
+        for reg in registros_anteriores:
+            registrar_cambio_db(nombre, dict(reg).get(pk_column, '?'), 'DELETE', None, str(dict(reg)), None)
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'{len(ids)} registro(s) eliminado(s)'
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/tabla/<nombre>/exportar')
+@admin_required
+def api_admin_db_exportar(nombre):
+    """Exporta una tabla a CSV"""
+    try:
+        filtro_columna = request.args.get('filtro_columna')
+        filtro_valor = request.args.get('filtro_valor', '')
+
+        conn = get_db_connection()
+
+        # Construir query
+        query = f'SELECT * FROM "{nombre}"'
+        params = []
+
+        if filtro_columna and filtro_valor:
+            query += f' WHERE CAST("{filtro_columna}" AS TEXT) ILIKE %s'
+            params.append(f'%{filtro_valor}%')
+
+        registros = conn.execute(query, params).fetchall()
+        conn.close()
+
+        if not registros:
+            return jsonify({'ok': False, 'error': 'No hay registros para exportar'}), 400
+
+        # Generar CSV
+        import io
+        import csv
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Headers
+        columnas = list(dict(registros[0]).keys())
+        writer.writerow(columnas)
+
+        # Data
+        for reg in registros:
+            row = []
+            for col in columnas:
+                valor = dict(reg)[col]
+                if isinstance(valor, (datetime, date_class)):
+                    row.append(valor.isoformat())
+                elif isinstance(valor, decimal.Decimal):
+                    row.append(float(valor))
+                else:
+                    row.append(valor)
+            writer.writerow(row)
+
+        csv_content = output.getvalue()
+        output.close()
+
+        # Registrar exportación
+        registrar_cambio_db(nombre, None, 'EXPORT', None, None, f'{len(registros)} registros')
+
+        response = Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={nombre}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'}
+        )
+        return response
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/db/log-cambios')
+@admin_required
+def api_admin_db_log_cambios():
+    """Obtiene el log de cambios"""
+    try:
+        pagina = int(request.args.get('pagina', 1))
+        limite = int(request.args.get('limite', 100))
+        tabla_filtro = request.args.get('tabla')
+
+        offset = (pagina - 1) * limite
+
+        conn = get_db_connection()
+
+        query_base = 'FROM log_cambios_db'
+        params = []
+
+        if tabla_filtro:
+            query_base += ' WHERE tabla = %s'
+            params.append(tabla_filtro)
+
+        total = conn.execute(f'SELECT COUNT(*) as total {query_base}', params).fetchone()['total']
+
+        query = f'SELECT * {query_base} ORDER BY fecha DESC LIMIT %s OFFSET %s'
+        params.extend([limite, offset])
+
+        cambios = conn.execute(query, params).fetchall()
+        conn.close()
+
+        cambios_dict = []
+        for c in cambios:
+            cambio = dict(c)
+            if cambio.get('fecha'):
+                cambio['fecha'] = cambio['fecha'].isoformat()
+            cambios_dict.append(cambio)
+
+        return jsonify({
+            'ok': True,
+            'cambios': cambios_dict,
+            'total': total,
+            'pagina': pagina
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 if __name__ == '__main__':

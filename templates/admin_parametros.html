@@ -1063,7 +1063,95 @@
                 </div>
             </div>
 
-            <!-- Sección 9: Peajes -->
+            <!-- Sección 9: Grafo de Rutas -->
+            <div class="accordion-section">
+                <div class="accordion-header" onclick="toggleAccordion(this)">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">🗺️ Grafo de Rutas</h3>
+                        <p class="text-sm text-gray-500 mt-1">Visualiza las conexiones de vía registradas con flechas de dirección</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="badge-conexiones" class="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full">0</span>
+                        <svg class="accordion-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
+                </div>
+                <div class="accordion-content">
+                    <div class="p-6 bg-white space-y-4">
+
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <p class="text-sm text-blue-700">
+                                <strong>ℹ️ Info:</strong> Este mapa muestra las conexiones de vía capturadas desde OSRM. Las flechas indican la dirección del tránsito. Los colores representan la frecuencia de uso.
+                            </p>
+                        </div>
+
+                        <!-- Estadísticas -->
+                        <div id="stats-conexiones" class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-blue-600" id="stat-total-conexiones">-</div>
+                                <div class="text-xs text-gray-500">Conexiones</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-green-600" id="stat-nodos">-</div>
+                                <div class="text-xs text-gray-500">Nodos únicos</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-purple-600" id="stat-distancia">-</div>
+                                <div class="text-xs text-gray-500">Km totales</div>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-orange-600" id="stat-max-transitado">-</div>
+                                <div class="text-xs text-gray-500">Máx. transitado</div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm text-gray-600">Mín. veces transitado:</label>
+                                <select id="filtro-min-transitado" class="px-3 py-1 border rounded text-sm" onchange="cargarConexionesEnMapa()">
+                                    <option value="1">1+ (todos)</option>
+                                    <option value="2" selected>2+ (rutas confirmadas)</option>
+                                    <option value="5">5+ (rutas frecuentes)</option>
+                                    <option value="10">10+ (rutas muy usadas)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="text-sm text-gray-600">Límite:</label>
+                                <select id="filtro-limite-conexiones" class="px-3 py-1 border rounded text-sm" onchange="cargarConexionesEnMapa()">
+                                    <option value="1000">1,000</option>
+                                    <option value="2500">2,500</option>
+                                    <option value="5000" selected>5,000</option>
+                                    <option value="10000">10,000</option>
+                                </select>
+                            </div>
+                            <button onclick="cargarConexionesEnMapa()" class="px-4 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+                                🔄 Recargar
+                            </button>
+                        </div>
+
+                        <!-- Leyenda de colores -->
+                        <div class="flex items-center justify-center gap-6 text-xs">
+                            <span class="flex items-center gap-1"><span class="w-4 h-1 bg-blue-400"></span> 1x transitado</span>
+                            <span class="flex items-center gap-1"><span class="w-4 h-1 bg-green-500"></span> 2-4x</span>
+                            <span class="flex items-center gap-1"><span class="w-4 h-1 bg-yellow-500"></span> 5-9x</span>
+                            <span class="flex items-center gap-1"><span class="w-4 h-1 bg-orange-500"></span> 10-19x</span>
+                            <span class="flex items-center gap-1"><span class="w-4 h-1 bg-red-600"></span> 20+x</span>
+                        </div>
+
+                        <!-- Mapa del grafo -->
+                        <div class="mb-4">
+                            <div id="mapa-grafo" style="height: 500px; border-radius: 8px; border: 1px solid #ddd;"></div>
+                        </div>
+
+                        <div id="mensaje-grafo" class="hidden p-3 rounded-lg text-center"></div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 10: Peajes -->
             <div class="accordion-section">
                 <div class="accordion-header" onclick="toggleAccordion(this)">
                     <div>
@@ -2673,10 +2761,12 @@
         let mapaPeaje = null;
         let mapaSemaforo = null;
         let mapaLugares = null;
+        let mapaGrafo = null;
         let marcadorPeaje = null;
         let marcadorSemaforo = null;
         let marcadoresLugares = [];
         let mapasPeajesActivos = []; // Para mostrar peajes existentes
+        let polylinesGrafo = []; // Líneas del grafo de rutas
 
         // Centro de Cali por defecto
         const CALI_CENTER = [3.4516, -76.5320];
@@ -2915,6 +3005,156 @@
             }
         }
 
+        // ==================== MAPA GRAFO DE RUTAS ====================
+
+        function initMapaGrafo() {
+            if (mapaGrafo) return; // Ya inicializado
+
+            mapaGrafo = L.map('mapa-grafo').setView(CALI_CENTER, ZOOM_INICIAL);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(mapaGrafo);
+
+            cargarStatsConexiones();
+            cargarConexionesEnMapa();
+        }
+
+        async function cargarStatsConexiones() {
+            try {
+                const res = await fetch('/api/admin/conexiones-via/stats');
+                const data = await res.json();
+
+                if (data.ok && data.stats) {
+                    const s = data.stats;
+                    document.getElementById('stat-total-conexiones').textContent = (s.total_conexiones || 0).toLocaleString();
+                    document.getElementById('stat-nodos').textContent = (s.nodos_unicos || 0).toLocaleString();
+                    document.getElementById('stat-distancia').textContent = ((s.distancia_total_metros || 0) / 1000).toFixed(1);
+                    document.getElementById('stat-max-transitado').textContent = s.max_transitado || 0;
+                    document.getElementById('badge-conexiones').textContent = (s.total_conexiones || 0).toLocaleString();
+                }
+            } catch (error) {
+                console.error('Error cargando stats:', error);
+            }
+        }
+
+        function getColorByTransitado(veces) {
+            if (veces >= 20) return '#dc2626'; // rojo
+            if (veces >= 10) return '#f97316'; // naranja
+            if (veces >= 5) return '#eab308';  // amarillo
+            if (veces >= 2) return '#22c55e';  // verde
+            return '#60a5fa'; // azul claro
+        }
+
+        function getWeightByTransitado(veces) {
+            if (veces >= 20) return 5;
+            if (veces >= 10) return 4;
+            if (veces >= 5) return 3;
+            if (veces >= 2) return 2;
+            return 1.5;
+        }
+
+        // Función para crear flecha de dirección
+        function crearFlecha(inicio, fin, color) {
+            const lat1 = inicio[0], lon1 = inicio[1];
+            const lat2 = fin[0], lon2 = fin[1];
+
+            // Calcular punto medio
+            const midLat = (lat1 + lat2) / 2;
+            const midLon = (lon1 + lon2) / 2;
+
+            // Calcular ángulo de dirección
+            const angle = Math.atan2(lat2 - lat1, lon2 - lon1) * (180 / Math.PI);
+
+            // Crear icono de flecha rotado
+            const arrowIcon = L.divIcon({
+                className: 'arrow-icon',
+                html: `<div style="transform: rotate(${90 - angle}deg); color: ${color}; font-size: 10px; font-weight: bold;">▲</div>`,
+                iconSize: [10, 10],
+                iconAnchor: [5, 5]
+            });
+
+            return L.marker([midLat, midLon], { icon: arrowIcon });
+        }
+
+        async function cargarConexionesEnMapa() {
+            if (!mapaGrafo) return;
+
+            const minTransitado = document.getElementById('filtro-min-transitado')?.value || 2;
+            const limite = document.getElementById('filtro-limite-conexiones')?.value || 5000;
+
+            // Mostrar loading
+            const msgDiv = document.getElementById('mensaje-grafo');
+            msgDiv.className = 'p-3 rounded-lg text-center bg-blue-100 text-blue-700';
+            msgDiv.textContent = '⏳ Cargando conexiones...';
+            msgDiv.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`/api/admin/conexiones-via?min_transitado=${minTransitado}&limite=${limite}`);
+                const data = await res.json();
+
+                // Limpiar polylines anteriores
+                polylinesGrafo.forEach(item => mapaGrafo.removeLayer(item));
+                polylinesGrafo = [];
+
+                if (data.ok && data.conexiones && data.conexiones.length > 0) {
+                    // Agrupar por frecuencia para dibujar primero los menos transitados
+                    const conexiones = data.conexiones.sort((a, b) => a.veces_transitado - b.veces_transitado);
+
+                    conexiones.forEach(c => {
+                        const inicio = [parseFloat(c.origen_lat), parseFloat(c.origen_lon)];
+                        const fin = [parseFloat(c.destino_lat), parseFloat(c.destino_lon)];
+                        const color = getColorByTransitado(c.veces_transitado);
+                        const weight = getWeightByTransitado(c.veces_transitado);
+
+                        // Dibujar línea
+                        const polyline = L.polyline([inicio, fin], {
+                            color: color,
+                            weight: weight,
+                            opacity: 0.8
+                        }).addTo(mapaGrafo);
+
+                        // Agregar popup con info
+                        polyline.bindPopup(`
+                            <strong>Conexión de vía</strong><br>
+                            📍 Origen: ${c.origen_lat}, ${c.origen_lon}<br>
+                            🎯 Destino: ${c.destino_lat}, ${c.destino_lon}<br>
+                            📏 Distancia: ${c.distancia_metros}m<br>
+                            🔄 Veces transitado: <strong>${c.veces_transitado}</strong>
+                        `);
+
+                        polylinesGrafo.push(polyline);
+
+                        // Agregar flecha de dirección cada ciertos segmentos para no sobrecargar
+                        // Solo para conexiones transitadas 2+ veces y si la distancia es > 20m
+                        if (c.veces_transitado >= 2 && c.distancia_metros > 20) {
+                            const flecha = crearFlecha(inicio, fin, color);
+                            flecha.addTo(mapaGrafo);
+                            polylinesGrafo.push(flecha);
+                        }
+                    });
+
+                    // Ajustar vista al grafo
+                    if (polylinesGrafo.length > 0) {
+                        const bounds = L.latLngBounds(conexiones.map(c => [c.origen_lat, c.origen_lon]));
+                        mapaGrafo.fitBounds(bounds, { padding: [20, 20] });
+                    }
+
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = `✅ ${data.conexiones.length.toLocaleString()} conexiones cargadas`;
+                } else {
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-yellow-100 text-yellow-700';
+                    msgDiv.textContent = '⚠️ No hay conexiones con los filtros seleccionados';
+                }
+
+                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+
+            } catch (error) {
+                console.error('Error cargando conexiones:', error);
+                msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
+                msgDiv.textContent = '❌ Error cargando conexiones: ' + error.message;
+            }
+        }
+
         // Limpiar marcador de peaje después de agregar exitosamente
         function limpiarMarcadorPeaje() {
             if (marcadorPeaje) {
@@ -2979,6 +3219,19 @@
                 });
             });
             observer.observe(lugaresAccordion, observerConfig);
+        }
+
+        // Grafo de Rutas
+        const grafoAccordion = document.querySelector('#mapa-grafo')?.closest('.accordion-content');
+        if (grafoAccordion) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.target.classList.contains('expanded')) {
+                        setTimeout(initMapaGrafo, 100);
+                    }
+                });
+            });
+            observer.observe(grafoAccordion, observerConfig);
         }
 
         // Cámaras

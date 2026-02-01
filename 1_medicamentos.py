@@ -19814,6 +19814,60 @@ def api_admin_lugares_sugeridos():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/conexiones-via')
+@admin_required
+def api_admin_conexiones_via():
+    """Obtiene conexiones de vía para visualizar el grafo de rutas"""
+    try:
+        # Parámetros opcionales de filtro
+        min_transitado = request.args.get('min_transitado', 1, type=int)
+        limite = request.args.get('limite', 5000, type=int)  # Limitar para no sobrecargar
+
+        conn = get_db_connection()
+        conexiones = conn.execute("""
+            SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
+                   distancia_metros, veces_transitado
+            FROM conexiones_via
+            WHERE veces_transitado >= %s
+            ORDER BY veces_transitado DESC, id DESC
+            LIMIT %s
+        """, (min_transitado, limite)).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'conexiones': [dict(c) for c in conexiones],
+            'total': len(conexiones)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/conexiones-via/stats')
+@admin_required
+def api_admin_conexiones_via_stats():
+    """Estadísticas del grafo de rutas"""
+    try:
+        conn = get_db_connection()
+        stats = conn.execute("""
+            SELECT
+                COUNT(*) as total_conexiones,
+                SUM(distancia_metros) as distancia_total_metros,
+                AVG(veces_transitado) as promedio_transitado,
+                MAX(veces_transitado) as max_transitado,
+                COUNT(DISTINCT CONCAT(origen_lat, ',', origen_lon)) as nodos_unicos
+            FROM conexiones_via
+        """).fetchone()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'stats': dict(stats) if stats else {}
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/lugares/aprobar/<int:lugar_id>', methods=['POST'])
 @admin_required
 def api_admin_aprobar_lugar(lugar_id):

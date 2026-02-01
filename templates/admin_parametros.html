@@ -1131,6 +1131,37 @@
                             </button>
                         </div>
 
+                        <!-- Capas del mapa -->
+                        <div class="p-3 bg-gray-50 rounded-lg">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">🗂️ Capas visibles:</label>
+                            <div class="flex flex-wrap items-center gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggle-mapa-base" checked onchange="toggleCapaGrafo('base')" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-sm">🗺️ Mapa</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggle-semaforos" onchange="toggleCapaGrafo('semaforos')" class="w-4 h-4 text-green-600 rounded">
+                                    <span class="text-sm">🚦 Semáforos</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggle-camaras" onchange="toggleCapaGrafo('camaras')" class="w-4 h-4 text-red-600 rounded">
+                                    <span class="text-sm">📷 Cámaras</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggle-peajes" onchange="toggleCapaGrafo('peajes')" class="w-4 h-4 text-yellow-600 rounded">
+                                    <span class="text-sm">🛣️ Peajes</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggle-pois" onchange="toggleCapaGrafo('pois')" class="w-4 h-4 text-purple-600 rounded">
+                                    <span class="text-sm">📍 POIs</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggle-intersecciones" onchange="toggleCapaGrafo('intersecciones')" class="w-4 h-4 text-orange-600 rounded">
+                                    <span class="text-sm">🔀 Intersecciones</span>
+                                </label>
+                            </div>
+                        </div>
+
                         <!-- Leyenda de colores -->
                         <div class="flex items-center justify-center gap-6 text-xs">
                             <span class="flex items-center gap-1"><span class="w-4 h-1 bg-blue-400"></span> 1x transitado</span>
@@ -3007,16 +3038,190 @@
 
         // ==================== MAPA GRAFO DE RUTAS ====================
 
+        // Capas del grafo
+        let grafoTileLayer = null;
+        let grafoCapaSemaforos = [];
+        let grafoCapaCamaras = [];
+        let grafoCapaPeajes = [];
+        let grafoCapaPois = [];
+        let grafoCapaIntersecciones = [];
+
         function initMapaGrafo() {
             if (mapaGrafo) return; // Ya inicializado
 
             mapaGrafo = L.map('mapa-grafo').setView(CALI_CENTER, ZOOM_INICIAL);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            grafoTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(mapaGrafo);
 
             cargarStatsConexiones();
             cargarConexionesEnMapa();
+        }
+
+        // Toggle de capas del grafo
+        async function toggleCapaGrafo(capa) {
+            if (!mapaGrafo) return;
+
+            switch(capa) {
+                case 'base':
+                    const checked = document.getElementById('toggle-mapa-base').checked;
+                    if (checked) {
+                        grafoTileLayer.addTo(mapaGrafo);
+                    } else {
+                        mapaGrafo.removeLayer(grafoTileLayer);
+                    }
+                    break;
+
+                case 'semaforos':
+                    if (document.getElementById('toggle-semaforos').checked) {
+                        await cargarSemaforosEnGrafo();
+                    } else {
+                        grafoCapaSemaforos.forEach(m => mapaGrafo.removeLayer(m));
+                        grafoCapaSemaforos = [];
+                    }
+                    break;
+
+                case 'camaras':
+                    if (document.getElementById('toggle-camaras').checked) {
+                        await cargarCamarasEnGrafo();
+                    } else {
+                        grafoCapaCamaras.forEach(m => mapaGrafo.removeLayer(m));
+                        grafoCapaCamaras = [];
+                    }
+                    break;
+
+                case 'peajes':
+                    if (document.getElementById('toggle-peajes').checked) {
+                        await cargarPeajesEnGrafo();
+                    } else {
+                        grafoCapaPeajes.forEach(m => mapaGrafo.removeLayer(m));
+                        grafoCapaPeajes = [];
+                    }
+                    break;
+
+                case 'pois':
+                    if (document.getElementById('toggle-pois').checked) {
+                        await cargarPoisEnGrafo();
+                    } else {
+                        grafoCapaPois.forEach(m => mapaGrafo.removeLayer(m));
+                        grafoCapaPois = [];
+                    }
+                    break;
+
+                case 'intersecciones':
+                    if (document.getElementById('toggle-intersecciones').checked) {
+                        await cargarInterseccionesEnGrafo();
+                    } else {
+                        grafoCapaIntersecciones.forEach(m => mapaGrafo.removeLayer(m));
+                        grafoCapaIntersecciones = [];
+                    }
+                    break;
+            }
+        }
+
+        // Cargar semáforos en el grafo
+        async function cargarSemaforosEnGrafo() {
+            try {
+                const res = await fetch('/api/admin/semaforos');
+                const data = await res.json();
+                if (data.ok && data.semaforos) {
+                    data.semaforos.forEach(s => {
+                        const marker = L.circleMarker([s.lat, s.lon], {
+                            radius: 6,
+                            fillColor: '#22c55e',
+                            color: '#166534',
+                            weight: 2,
+                            fillOpacity: 0.9
+                        }).addTo(mapaGrafo);
+                        marker.bindPopup(`<strong>🚦 ${s.nombre || 'Semáforo'}</strong><br>Tiempo rojo: ${s.tiempo_rojo_seg}s`);
+                        grafoCapaSemaforos.push(marker);
+                    });
+                }
+            } catch (e) { console.error('Error cargando semáforos:', e); }
+        }
+
+        // Cargar cámaras en el grafo
+        async function cargarCamarasEnGrafo() {
+            try {
+                const res = await fetch('/api/admin/camaras');
+                const data = await res.json();
+                if (data.ok && data.camaras) {
+                    data.camaras.forEach(c => {
+                        const marker = L.circleMarker([c.lat, c.lon], {
+                            radius: 6,
+                            fillColor: '#ef4444',
+                            color: '#991b1b',
+                            weight: 2,
+                            fillOpacity: 0.9
+                        }).addTo(mapaGrafo);
+                        marker.bindPopup(`<strong>📷 ${c.nombre || 'Cámara'}</strong><br>Vel. máx: ${c.velocidad_maxima || '?'} km/h`);
+                        grafoCapaCamaras.push(marker);
+                    });
+                }
+            } catch (e) { console.error('Error cargando cámaras:', e); }
+        }
+
+        // Cargar peajes en el grafo
+        async function cargarPeajesEnGrafo() {
+            try {
+                const res = await fetch('/api/admin/peajes');
+                const data = await res.json();
+                if (data.ok && data.peajes) {
+                    data.peajes.forEach(p => {
+                        const marker = L.circleMarker([p.lat, p.lon], {
+                            radius: 8,
+                            fillColor: '#eab308',
+                            color: '#854d0e',
+                            weight: 2,
+                            fillOpacity: 0.9
+                        }).addTo(mapaGrafo);
+                        marker.bindPopup(`<strong>🛣️ ${p.nombre}</strong><br>Tarifa: $${p.tarifa?.toLocaleString() || '?'}`);
+                        grafoCapaPeajes.push(marker);
+                    });
+                }
+            } catch (e) { console.error('Error cargando peajes:', e); }
+        }
+
+        // Cargar POIs en el grafo
+        async function cargarPoisEnGrafo() {
+            try {
+                const res = await fetch('/api/pois?q=&limit=500');
+                const data = await res.json();
+                if (data.ok && data.pois) {
+                    data.pois.forEach(p => {
+                        const marker = L.circleMarker([p.lat, p.lon], {
+                            radius: 4,
+                            fillColor: '#a855f7',
+                            color: '#6b21a8',
+                            weight: 1,
+                            fillOpacity: 0.7
+                        }).addTo(mapaGrafo);
+                        marker.bindPopup(`<strong>📍 ${p.nombre}</strong><br><small>${p.categoria || ''}</small>`);
+                        grafoCapaPois.push(marker);
+                    });
+                }
+            } catch (e) { console.error('Error cargando POIs:', e); }
+        }
+
+        // Cargar intersecciones en el grafo
+        async function cargarInterseccionesEnGrafo() {
+            try {
+                const res = await fetch('/api/admin/intersecciones');
+                const data = await res.json();
+                if (data.ok && data.intersecciones) {
+                    data.intersecciones.forEach(i => {
+                        const marker = L.circleMarker([i.lat, i.lon], {
+                            radius: 5,
+                            fillColor: '#f97316',
+                            color: '#c2410c',
+                            weight: 1,
+                            fillOpacity: 0.8
+                        }).addTo(mapaGrafo);
+                        marker.bindPopup(`<strong>🔀 Intersección</strong><br>${i.nombre || `${i.lat.toFixed(5)}, ${i.lon.toFixed(5)}`}`);
+                        grafoCapaIntersecciones.push(marker);
+                    });
+                }
+            } catch (e) { console.error('Error cargando intersecciones:', e); }
         }
 
         async function cargarStatsConexiones() {

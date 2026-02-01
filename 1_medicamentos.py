@@ -19868,6 +19868,39 @@ def api_admin_conexiones_via_stats():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/intersecciones')
+@admin_required
+def api_admin_intersecciones():
+    """Obtiene todas las intersecciones para visualizar en el grafo"""
+    try:
+        limite = request.args.get('limite', 5000, type=int)
+
+        conn = get_db_connection()
+        intersecciones = conn.execute("""
+            SELECT id, lat, lon, via_1, via_2, direccion_completa as nombre,
+                   tiene_semaforo, tiempo_semaforo_seg
+            FROM intersecciones_cali
+            ORDER BY id
+            LIMIT %s
+        """, (limite,)).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'intersecciones': [{
+                'id': i['id'],
+                'lat': float(i['lat']),
+                'lon': float(i['lon']),
+                'nombre': i['nombre'] or f"{i['via_1']} con {i['via_2']}",
+                'tiene_semaforo': i['tiene_semaforo'],
+                'tiempo_semaforo': i['tiempo_semaforo_seg']
+            } for i in intersecciones],
+            'total': len(intersecciones)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/lugares/aprobar/<int:lugar_id>', methods=['POST'])
 @admin_required
 def api_admin_aprobar_lugar(lugar_id):

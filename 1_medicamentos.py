@@ -22758,6 +22758,7 @@ def api_admin_db_tablas():
 @admin_required
 def api_admin_db_estructura(nombre):
     """Obtiene la estructura de una tabla"""
+    conn = None
     try:
         conn = get_db_connection()
 
@@ -22770,13 +22771,19 @@ def api_admin_db_estructura(nombre):
             ORDER BY ordinal_position
         """, (nombre,)).fetchall()
 
+        if not columnas:
+            if conn:
+                conn.close()
+            return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no encontrada'}), 404
+
         # Obtener primary key
         pk = conn.execute("""
             SELECT kcu.column_name
             FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY'
+                AND tc.table_schema = kcu.table_schema
+            WHERE tc.table_schema = 'public' AND tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY'
         """, (nombre,)).fetchall()
 
         pk_columns = [p['column_name'] for p in pk]
@@ -22791,9 +22798,14 @@ def api_admin_db_estructura(nombre):
             'tabla': nombre,
             'columnas': [dict(c) for c in columnas],
             'primary_key': pk_columns,
-            'total_registros': count['total']
+            'total_registros': count['total'] if count else 0
         })
     except Exception as e:
+        print(f"Error en estructura tabla {nombre}: {e}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -22801,6 +22813,7 @@ def api_admin_db_estructura(nombre):
 @admin_required
 def api_admin_db_registros(nombre):
     """Obtiene registros de una tabla con paginación y filtros"""
+    conn = None
     try:
         pagina = int(request.args.get('pagina', 1))
         limite = int(request.args.get('limite', 50))
@@ -22824,25 +22837,30 @@ def api_admin_db_registros(nombre):
                 WHERE table_schema = 'public' AND table_name = %s
                 ORDER BY ordinal_position LIMIT 1
             """, (nombre,)).fetchone()
-            orden = primera_col['column_name'] if primera_col else 'ctid'
+            if not primera_col:
+                conn.close()
+                return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no encontrada'}), 404
+            orden = primera_col['column_name']
 
         # Construir query
         query_base = f'FROM "{nombre}"'
-        params = []
+        params_count = []
+        params_select = []
 
         if filtro_columna and filtro_valor:
             query_base += f' WHERE CAST("{filtro_columna}" AS TEXT) ILIKE %s'
-            params.append(f'%{filtro_valor}%')
+            params_count.append(f'%{filtro_valor}%')
+            params_select.append(f'%{filtro_valor}%')
 
         # Contar total
         count_query = f'SELECT COUNT(*) as total {query_base}'
-        total = conn.execute(count_query, params).fetchone()['total']
+        total = conn.execute(count_query, params_count if params_count else None).fetchone()['total']
 
         # Obtener registros
         query = f'SELECT * {query_base} ORDER BY "{orden}" {direccion} LIMIT %s OFFSET %s'
-        params.extend([limite, offset])
+        params_select.extend([limite, offset])
 
-        registros = conn.execute(query, params).fetchall()
+        registros = conn.execute(query, params_select).fetchall()
         conn.close()
 
         # Convertir a dict y manejar tipos especiales
@@ -22867,8 +22885,11 @@ def api_admin_db_registros(nombre):
             'total_paginas': (total + limite - 1) // limite
         })
     except Exception as e:
+        print(f"Error en registros tabla {nombre}: {e}")
         import traceback
         traceback.print_exc()
+        if conn:
+            conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

@@ -22160,6 +22160,54 @@ def api_conteo_pois():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/pois')
+def api_pois():
+    """Retorna lista de POIs con filtro opcional"""
+    try:
+        q = request.args.get('q', '').strip()
+        limite = request.args.get('limit', 100, type=int)
+        categoria = request.args.get('categoria', '')
+        origen = request.args.get('origen', '')  # 'osm', 'usuario', etc.
+
+        conn = get_db_connection()
+
+        query = "SELECT id, nombre, lat, lon, categoria, origen, display_name FROM pois_cali WHERE 1=1"
+        params = []
+
+        if q:
+            query += " AND LOWER(nombre) LIKE LOWER(%s)"
+            params.append(f'%{q}%')
+
+        if categoria:
+            query += " AND categoria = %s"
+            params.append(categoria)
+
+        if origen:
+            query += " AND origen = %s"
+            params.append(origen)
+
+        query += " ORDER BY nombre LIMIT %s"
+        params.append(limite)
+
+        pois = conn.execute(query, params).fetchall()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'pois': [{
+                'id': p['id'],
+                'nombre': p['nombre'],
+                'lat': float(p['lat']),
+                'lon': float(p['lon']),
+                'categoria': p['categoria'],
+                'origen': p['origen'],
+                'display_name': p['display_name']
+            } for p in pois]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/habilitar_extensiones')
 def api_habilitar_extensiones():
     """Habilita extensiones unaccent y pg_trgm para búsqueda normalizada"""

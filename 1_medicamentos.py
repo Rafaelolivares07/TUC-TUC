@@ -23084,11 +23084,14 @@ def api_admin_db_registros(nombre):
         conn.close()
 
         # Convertir a dict y manejar tipos especiales
+        from datetime import time as time_class
         registros_dict = []
         for r in registros:
             registro = {}
             for key, value in dict(r).items():
                 if isinstance(value, (datetime, date_class)):
+                    registro[key] = value.isoformat()
+                elif isinstance(value, time_class):
                     registro[key] = value.isoformat()
                 elif isinstance(value, decimal.Decimal):
                     registro[key] = float(value)

@@ -3298,7 +3298,7 @@
                             weight: 1,
                             fillOpacity: 0.7
                         }).addTo(mapaGrafo);
-                        marker.bindPopup(`<strong>📍 ${p.nombre}</strong><br><small>${p.categoria || ''}</small>`);
+                        marker.bindTooltip(p.nombre, { direction: 'top', offset: [0, -5] });
                         grafoCapaPois.push(marker);
                     });
                 }

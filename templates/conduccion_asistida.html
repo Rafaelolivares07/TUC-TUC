@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Conducción Asistida</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #mapa {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Velocímetro flotante */
+        #velocimetro {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 15px 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        #velocidad-actual {
+            font-size: 72px;
+            font-weight: 700;
+            line-height: 1;
+            transition: color 0.3s;
+        }
+
+        #velocidad-unidad {
+            font-size: 18px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        #limite-zona {
+            display: none;
+            margin-top: 10px;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 24px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            border: 3px solid currentColor;
+        }
+
+        /* Alerta de cámara */
+        #alerta-camara {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 16px;
+            padding: 15px 25px;
+            backdrop-filter: blur(10px);
+            border: 3px solid #f59e0b;
+            animation: pulse-alert 1s infinite;
+        }
+
+        @keyframes pulse-alert {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.05); }
+        }
+
+        #alerta-camara.peligro {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        #alerta-icono {
+            font-size: 40px;
+            margin-bottom: 5px;
+        }
+
+        #alerta-distancia {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        #alerta-limite {
+            font-size: 20px;
+            opacity: 0.8;
+        }
+
+        /* Barra de proximidad */
+        #barra-proximidad {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.3);
+            display: none;
+        }
+
+        #barra-proximidad-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s, background 0.3s;
+            background: #22c55e;
+        }
+
+        /* Botón salir */
+        #btn-salir {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Info de viaje activo */
+        #info-viaje {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 12px;
+            padding: 12px 16px;
+            backdrop-filter: blur(10px);
+            display: none;
+        }
+
+        #info-viaje-destino {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        #info-viaje-eta {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        /* Estado de conexión */
+        #estado-gps {
+            position: absolute;
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #gps-indicador {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #22c55e;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        #gps-indicador.error {
+            background: #ef4444;
+            animation: none;
+        }
+
+        /* Colores de velocidad */
+        .velocidad-ok { color: #22c55e; }
+        .velocidad-cerca { color: #f59e0b; }
+        .velocidad-exceso { color: #ef4444; }
+
+        /* Flash de alerta en bordes */
+        #flash-alerta {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        #flash-alerta.activo {
+            opacity: 1;
+            animation: flash-border 0.5s ease-out;
+        }
+
+        @keyframes flash-border {
+            0% { box-shadow: inset 0 0 100px rgba(239, 68, 68, 0.8); }
+            100% { box-shadow: inset 0 0 100px rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Mapa fullscreen -->
+    <div id="mapa"></div>
+
+    <!-- Flash de alerta -->
+    <div id="flash-alerta"></div>
+
+    <!-- Barra de proximidad superior -->
+    <div id="barra-proximidad">
+        <div id="barra-proximidad-fill"></div>
+    </div>
+
+    <!-- Botón salir -->
+    <button id="btn-salir" onclick="salir()">✕</button>
+
+    <!-- Alerta de cámara -->
+    <div id="alerta-camara">
+        <div id="alerta-icono">📷</div>
+        <div id="alerta-distancia">500m</div>
+        <div id="alerta-limite">Límite: 60 km/h</div>
+    </div>
+
+    <!-- Info viaje (si hay destino) -->
+    <div id="info-viaje">
+        <div id="info-viaje-destino">Destino</div>
+        <div id="info-viaje-eta">12 min</div>
+    </div>
+
+    <!-- Velocímetro -->
+    <div id="velocimetro">
+        <div id="velocidad-actual" class="velocidad-ok">0</div>
+        <div id="velocidad-unidad">km/h</div>
+        <div id="limite-zona">60</div>
+    </div>
+
+    <!-- Estado GPS -->
+    <div id="estado-gps">
+        <div id="gps-indicador"></div>
+        <span id="gps-texto">Conectando GPS...</span>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Variables globales
+        let mapa = null;
+        let marcadorConductor = null;
+        let watchId = null;
+        let ubicacionActual = null;
+        let velocidadActual = 0;
+        let headingActual = 0;
+        let camarasCercanas = [];
+        let camarasEnMapa = [];
+        let viajeActivo = null;
+
+        // Configuración
+        const CONFIG = {
+            DISTANCIA_ALERTA_CAMARA: 500, // metros
+            DISTANCIA_PELIGRO_CAMARA: 200, // metros
+            INTERVALO_BUSCAR_CAMARAS: 5000, // ms
+            ZOOM_DEFAULT: 17
+        };
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', async function() {
+            await inicializarMapa();
+            iniciarWatchPosition();
+            verificarViajeActivo();
+
+            // Buscar cámaras periódicamente
+            setInterval(buscarCamarasCercanas, CONFIG.INTERVALO_BUSCAR_CAMARAS);
+        });
+
+        async function inicializarMapa() {
+            // Centrar en Cali por defecto
+            mapa = L.map('mapa', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([3.4516, -76.5320], CONFIG.ZOOM_DEFAULT);
+
+            // Estilo oscuro para conducción nocturna
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19
+            }).addTo(mapa);
+
+            // Marcador del conductor (flecha direccional)
+            const iconoConductor = L.divIcon({
+                className: 'conductor-marker',
+                html: `<div style="
+                    width: 30px;
+                    height: 30px;
+                    background: #3b82f6;
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <div id="flecha-direccion" style="
+                        width: 0;
+                        height: 0;
+                        border-left: 6px solid transparent;
+                        border-right: 6px solid transparent;
+                        border-bottom: 12px solid white;
+                        transform: rotate(0deg);
+                        transition: transform 0.3s;
+                    "></div>
+                </div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+
+            marcadorConductor = L.marker([3.4516, -76.5320], { icon: iconoConductor }).addTo(mapa);
+        }
+
+        function iniciarWatchPosition() {
+            if (!navigator.geolocation) {
+                mostrarErrorGPS('GPS no disponible');
+                return;
+            }
+
+            watchId = navigator.geolocation.watchPosition(
+                posicionActualizada,
+                errorGPS,
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
+                }
+            );
+        }
+
+        function posicionActualizada(position) {
+            const { latitude, longitude, speed, heading, accuracy } = position.coords;
+
+            ubicacionActual = { lat: latitude, lon: longitude };
+            velocidadActual = speed ? Math.round(speed * 3.6) : 0; // m/s a km/h
+            headingActual = heading || 0;
+
+            // Actualizar UI
+            actualizarMarcador(latitude, longitude, heading);
+            actualizarVelocimetro(velocidadActual);
+            actualizarEstadoGPS(accuracy);
+
+            // Verificar alertas
+            verificarAlertaCamaras();
+
+            // Enviar ubicación al servidor
+            enviarUbicacionServidor(latitude, longitude, velocidadActual, headingActual);
+        }
+
+        function actualizarMarcador(lat, lon, heading) {
+            marcadorConductor.setLatLng([lat, lon]);
+            mapa.setView([lat, lon], mapa.getZoom(), { animate: true });
+
+            // Rotar flecha según heading
+            const flecha = document.getElementById('flecha-direccion');
+            if (flecha && heading !== null) {
+                flecha.style.transform = `rotate(${heading}deg)`;
+            }
+        }
+
+        function actualizarVelocimetro(velocidad) {
+            const elem = document.getElementById('velocidad-actual');
+            elem.textContent = velocidad;
+
+            // Color según límite cercano
+            const limite = obtenerLimiteCercano();
+            if (limite) {
+                document.getElementById('limite-zona').style.display = 'block';
+                document.getElementById('limite-zona').textContent = limite;
+
+                if (velocidad > limite) {
+                    elem.className = 'velocidad-exceso';
+                } else if (velocidad > limite - 10) {
+                    elem.className = 'velocidad-cerca';
+                } else {
+                    elem.className = 'velocidad-ok';
+                }
+            } else {
+                document.getElementById('limite-zona').style.display = 'none';
+                elem.className = 'velocidad-ok';
+            }
+        }
+
+        function obtenerLimiteCercano() {
+            if (camarasCercanas.length === 0) return null;
+
+            // Retornar el límite de la cámara más cercana
+            const camaraMasCercana = camarasCercanas.reduce((a, b) =>
+                a.distancia < b.distancia ? a : b
+            );
+
+            return camaraMasCercana.velocidad_maxima || 60;
+        }
+
+        function actualizarEstadoGPS(accuracy) {
+            const indicador = document.getElementById('gps-indicador');
+            const texto = document.getElementById('gps-texto');
+
+            indicador.classList.remove('error');
+
+            if (accuracy < 10) {
+                texto.textContent = 'GPS preciso';
+            } else if (accuracy < 30) {
+                texto.textContent = 'GPS bueno';
+            } else {
+                texto.textContent = `GPS ±${Math.round(accuracy)}m`;
+            }
+        }
+
+        function errorGPS(error) {
+            mostrarErrorGPS(error.message);
+        }
+
+        function mostrarErrorGPS(mensaje) {
+            const indicador = document.getElementById('gps-indicador');
+            const texto = document.getElementById('gps-texto');
+
+            indicador.classList.add('error');
+            texto.textContent = mensaje;
+        }
+
+        async function buscarCamarasCercanas() {
+            if (!ubicacionActual) return;
+
+            try {
+                const res = await fetch(`/api/camaras-cercanas?lat=${ubicacionActual.lat}&lon=${ubicacionActual.lon}&radio=1000`);
+                const data = await res.json();
+
+                if (data.ok) {
+                    camarasCercanas = data.camaras || [];
+                    actualizarCamarasEnMapa();
+                }
+            } catch (e) {
+                console.error('Error buscando cámaras:', e);
+            }
+        }
+
+        function actualizarCamarasEnMapa() {
+            // Limpiar cámaras anteriores
+            camarasEnMapa.forEach(m => mapa.removeLayer(m));
+            camarasEnMapa = [];
+
+            // Agregar nuevas
+            camarasCercanas.forEach(cam => {
+                const icono = L.divIcon({
+                    className: 'camara-marker',
+                    html: `<div style="
+                        background: #ef4444;
+                        color: white;
+                        width: 35px;
+                        height: 35px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 18px;
+                        border: 2px solid white;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    ">📷</div>`,
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17]
+                });
+
+                const marker = L.marker([cam.lat, cam.lon], { icon: icono }).addTo(mapa);
+                camarasEnMapa.push(marker);
+            });
+        }
+
+        function verificarAlertaCamaras() {
+            if (!ubicacionActual || camarasCercanas.length === 0) {
+                ocultarAlertaCamara();
+                return;
+            }
+
+            // Encontrar cámara más cercana
+            let camaraMasCercana = null;
+            let distanciaMinima = Infinity;
+
+            camarasCercanas.forEach(cam => {
+                const dist = calcularDistancia(
+                    ubicacionActual.lat, ubicacionActual.lon,
+                    cam.lat, cam.lon
+                );
+
+                if (dist < distanciaMinima) {
+                    distanciaMinima = dist;
+                    camaraMasCercana = { ...cam, distancia: dist };
+                }
+            });
+
+            if (camaraMasCercana && distanciaMinima < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                mostrarAlertaCamara(camaraMasCercana, distanciaMinima);
+            } else {
+                ocultarAlertaCamara();
+            }
+        }
+
+        function mostrarAlertaCamara(camara, distancia) {
+            const alerta = document.getElementById('alerta-camara');
+            const barra = document.getElementById('barra-proximidad');
+            const barraFill = document.getElementById('barra-proximidad-fill');
+
+            alerta.style.display = 'flex';
+            barra.style.display = 'block';
+
+            // Actualizar contenido
+            document.getElementById('alerta-distancia').textContent =
+                distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
+            document.getElementById('alerta-limite').textContent =
+                `Límite: ${camara.velocidad_maxima || 60} km/h`;
+
+            // Barra de proximidad
+            const porcentaje = Math.max(0, 100 - (distancia / CONFIG.DISTANCIA_ALERTA_CAMARA * 100));
+            barraFill.style.width = `${porcentaje}%`;
+
+            // Colores según peligro
+            const esPeligro = distancia < CONFIG.DISTANCIA_PELIGRO_CAMARA;
+            const limite = camara.velocidad_maxima || 60;
+            const exceso = velocidadActual > limite;
+
+            if (esPeligro || exceso) {
+                alerta.classList.add('peligro');
+                barraFill.style.background = '#ef4444';
+
+                if (exceso && esPeligro) {
+                    flashAlerta();
+                }
+            } else {
+                alerta.classList.remove('peligro');
+                barraFill.style.background = distancia < 300 ? '#f59e0b' : '#22c55e';
+            }
+        }
+
+        function ocultarAlertaCamara() {
+            document.getElementById('alerta-camara').style.display = 'none';
+            document.getElementById('barra-proximidad').style.display = 'none';
+        }
+
+        function flashAlerta() {
+            const flash = document.getElementById('flash-alerta');
+            flash.classList.add('activo');
+            setTimeout(() => flash.classList.remove('activo'), 500);
+        }
+
+        function calcularDistancia(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // metros
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        async function verificarViajeActivo() {
+            try {
+                const res = await fetch('/api/conductor/viaje-activo');
+                const data = await res.json();
+
+                if (data.ok && data.viaje) {
+                    viajeActivo = data.viaje;
+                    mostrarInfoViaje();
+                }
+            } catch (e) {
+                console.log('Sin viaje activo');
+            }
+        }
+
+        function mostrarInfoViaje() {
+            if (!viajeActivo) return;
+
+            const info = document.getElementById('info-viaje');
+            info.style.display = 'block';
+
+            document.getElementById('info-viaje-destino').textContent =
+                viajeActivo.destino_nombre || 'Destino';
+            document.getElementById('info-viaje-eta').textContent =
+                viajeActivo.eta || '--';
+        }
+
+        async function enviarUbicacionServidor(lat, lon, velocidad, heading) {
+            try {
+                await fetch('/api/conductor/ubicacion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat, lon, velocidad, heading })
+                });
+            } catch (e) {
+                // Silencioso
+            }
+        }
+
+        function salir() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+            window.location.href = '/conductor';
+        }
+
+        // Prevenir que la pantalla se apague
+        if ('wakeLock' in navigator) {
+            navigator.wakeLock.request('screen').catch(() => {});
+        }
+    </script>
+</body>
+</html>

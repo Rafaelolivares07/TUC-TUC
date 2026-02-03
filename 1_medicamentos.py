@@ -19320,6 +19320,54 @@ def conductor_home():
     return render_template('conductor.html')
 
 
+@app.route('/conduccion-asistida')
+def conduccion_asistida():
+    """Modo de conducción asistida con alertas de cámaras"""
+    return render_template('conduccion_asistida.html')
+
+
+@app.route('/api/camaras-cercanas')
+def api_camaras_cercanas():
+    """Retorna cámaras de fotomulta cercanas a una ubicación"""
+    try:
+        lat = request.args.get('lat', type=float)
+        lon = request.args.get('lon', type=float)
+        radio = request.args.get('radio', 1000, type=int)  # metros
+
+        if not lat or not lon:
+            return jsonify({'ok': False, 'error': 'Faltan coordenadas'}), 400
+
+        conn = get_db_connection()
+
+        # Buscar cámaras dentro del radio usando distancia aproximada
+        # 0.00001 grados ≈ 1.11 metros en el ecuador
+        grados_radio = radio / 111000
+
+        camaras = conn.execute("""
+            SELECT id, lat, lon, velocidad_maxima, direccion, tipo,
+                   (6371000 * acos(cos(radians(%s)) * cos(radians(lat)) *
+                   cos(radians(lon) - radians(%s)) + sin(radians(%s)) *
+                   sin(radians(lat)))) AS distancia
+            FROM camaras_fotomulta
+            WHERE lat BETWEEN %s - %s AND %s + %s
+              AND lon BETWEEN %s - %s AND %s + %s
+            ORDER BY distancia
+            LIMIT 20
+        """, (lat, lon, lat, lat, grados_radio, lat, grados_radio,
+              lon, grados_radio, lon, grados_radio)).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'camaras': [dict(c) for c in camaras]
+        })
+
+    except Exception as e:
+        print(f"Error en camaras cercanas: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/comunidad')
 def comunidad_home():
     """Página de la comunidad TUC TUC"""

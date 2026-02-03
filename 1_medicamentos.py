@@ -19433,11 +19433,15 @@ def api_conductor_segmento():
 
         existente = conn.execute("""
             SELECT id, veces_transitado FROM conexiones_via
-            WHERE ABS(origen_lat - %s) < %s AND ABS(origen_lon - %s) < %s
-              AND ABS(destino_lat - %s) < %s AND ABS(destino_lon - %s) < %s
+            WHERE origen_lat BETWEEN %s - %s AND %s + %s
+              AND origen_lon BETWEEN %s - %s AND %s + %s
+              AND destino_lat BETWEEN %s - %s AND %s + %s
+              AND destino_lon BETWEEN %s - %s AND %s + %s
             LIMIT 1
-        """, (origen_lat, tolerancia, origen_lon, tolerancia,
-              destino_lat, tolerancia, destino_lon, tolerancia)).fetchone()
+        """, (origen_lat, tolerancia, origen_lat, tolerancia,
+              origen_lon, tolerancia, origen_lon, tolerancia,
+              destino_lat, tolerancia, destino_lat, tolerancia,
+              destino_lon, tolerancia, destino_lon, tolerancia)).fetchone()
 
         if existente:
             # Actualizar contador de veces transitado

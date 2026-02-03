@@ -19368,6 +19368,110 @@ def api_camaras_cercanas():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/segmentos-cercanos')
+def api_segmentos_cercanos():
+    """Retorna segmentos de vía cercanos a una ubicación (rutas conocidas)"""
+    try:
+        lat = request.args.get('lat', type=float)
+        lon = request.args.get('lon', type=float)
+        radio = request.args.get('radio', 500, type=int)  # metros
+
+        if not lat or not lon:
+            return jsonify({'ok': False, 'error': 'Faltan coordenadas'}), 400
+
+        conn = get_db_connection()
+
+        grados_radio = radio / 111000
+
+        # Buscar conexiones cercanas (segmentos ya transitados)
+        segmentos = conn.execute("""
+            SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
+                   distancia_metros, veces_transitado
+            FROM conexiones_via
+            WHERE (origen_lat BETWEEN %s - %s AND %s + %s
+                   AND origen_lon BETWEEN %s - %s AND %s + %s)
+               OR (destino_lat BETWEEN %s - %s AND %s + %s
+                   AND destino_lon BETWEEN %s - %s AND %s + %s)
+            LIMIT 200
+        """, (lat, grados_radio, lat, grados_radio,
+              lon, grados_radio, lon, grados_radio,
+              lat, grados_radio, lat, grados_radio,
+              lon, grados_radio, lon, grados_radio)).fetchall()
+
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'segmentos': [dict(s) for s in segmentos]
+        })
+
+    except Exception as e:
+        print(f"Error en segmentos cercanos: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/segmento', methods=['POST'])
+def api_conductor_segmento():
+    """Guarda un nuevo segmento de vía transitado por el conductor"""
+    try:
+        data = request.get_json()
+
+        origen_lat = data.get('origen_lat')
+        origen_lon = data.get('origen_lon')
+        destino_lat = data.get('destino_lat')
+        destino_lon = data.get('destino_lon')
+        distancia = data.get('distancia_metros', 0)
+        viaje_id = data.get('viaje_id')
+
+        if not all([origen_lat, origen_lon, destino_lat, destino_lon]):
+            return jsonify({'ok': False, 'error': 'Faltan coordenadas'}), 400
+
+        conn = get_db_connection()
+
+        # Verificar si ya existe este segmento (tolerancia de ~10m)
+        tolerancia = 0.0001  # ~10 metros
+
+        existente = conn.execute("""
+            SELECT id, veces_transitado FROM conexiones_via
+            WHERE ABS(origen_lat - %s) < %s AND ABS(origen_lon - %s) < %s
+              AND ABS(destino_lat - %s) < %s AND ABS(destino_lon - %s) < %s
+            LIMIT 1
+        """, (origen_lat, tolerancia, origen_lon, tolerancia,
+              destino_lat, tolerancia, destino_lon, tolerancia)).fetchone()
+
+        if existente:
+            # Actualizar contador de veces transitado
+            conn.execute("""
+                UPDATE conexiones_via
+                SET veces_transitado = veces_transitado + 1,
+                    ultimo_transito = NOW()
+                WHERE id = %s
+            """, (existente['id'],))
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'nuevo': False, 'id': existente['id']})
+        else:
+            # Insertar nuevo segmento
+            result = conn.execute("""
+                INSERT INTO conexiones_via
+                (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros,
+                 veces_transitado, viaje_id_origen, fecha_creacion, ultimo_transito)
+                VALUES (%s, %s, %s, %s, %s, 1, %s, NOW(), NOW())
+                RETURNING id
+            """, (origen_lat, origen_lon, destino_lat, destino_lon,
+                  distancia, viaje_id))
+            nuevo_id = result.fetchone()['id']
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'nuevo': True, 'id': nuevo_id})
+
+    except Exception as e:
+        print(f"Error guardando segmento: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/comunidad')
 def comunidad_home():
     """Página de la comunidad TUC TUC"""

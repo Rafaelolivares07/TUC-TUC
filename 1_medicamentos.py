@@ -19366,12 +19366,13 @@ def api_camaras_cercanas():
         grados_radio = radio / 111000
 
         camaras = conn.execute("""
-            SELECT id, lat, lon, velocidad_maxima, direccion, tipo,
+            SELECT id, nombre, lat, lon, velocidad_maxima, direccion, radio_deteccion,
                    (6371000 * acos(cos(radians(%s)) * cos(radians(lat)) *
                    cos(radians(lon) - radians(%s)) + sin(radians(%s)) *
                    sin(radians(lat)))) AS distancia
             FROM camaras_fotomulta
-            WHERE lat BETWEEN %s - %s AND %s + %s
+            WHERE activo = TRUE
+              AND lat BETWEEN %s - %s AND %s + %s
               AND lon BETWEEN %s - %s AND %s + %s
             ORDER BY distancia
             LIMIT 20

@@ -887,7 +887,7 @@
 
         async function enviarUbicacionServidor(lat, lon, velocidad, heading) {
             try {
-                await fetch('/api/conductor/ubicacion', {
+                await fetch('/api/conductor/actualizar-ubicacion', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ lat, lon, velocidad, heading })

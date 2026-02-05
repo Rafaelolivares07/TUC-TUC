@@ -438,19 +438,22 @@
             actualizarMarcadorConductor();
         }
 
-        function actualizarMarcadorConductor() {
+        function actualizarMarcadorConductor(contraRotacion = 0) {
+            // Flecha menos puntiaguda (más ancha) que contra-rota para siempre apuntar arriba
             const iconoConductor = L.divIcon({
                 className: 'conductor-marker',
-                html: `<div style="
+                html: `<div id="flecha-conductor" style="
                     width: 0;
                     height: 0;
-                    border-left: 15px solid transparent;
-                    border-right: 15px solid transparent;
-                    border-bottom: 35px solid #3b82f6;
+                    border-left: 18px solid transparent;
+                    border-right: 18px solid transparent;
+                    border-bottom: 28px solid #3b82f6;
                     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+                    transform: rotate(${contraRotacion}deg);
+                    transition: transform 0.3s ease-out;
                 "></div>`,
-                iconSize: [30, 35],
-                iconAnchor: [15, 35]
+                iconSize: [36, 28],
+                iconAnchor: [18, 28]
             });
 
             if (marcadorConductor) {
@@ -483,6 +486,7 @@
         function posicionActualizada(position) {
             const { latitude, longitude, speed, heading, accuracy } = position.coords;
 
+            const esPrimeraUbicacion = !ubicacionActual;
             ubicacionAnterior = ubicacionActual;
             ubicacionActual = { lat: latitude, lon: longitude };
             velocidadActual = speed ? Math.round(speed * 3.6) : 0;
@@ -494,6 +498,12 @@
             actualizarVelocimetro(velocidadActual);
             actualizarEstadoGPS(accuracy);
             actualizarBrujula(heading);
+
+            // Primera ubicación: buscar cámaras y segmentos inmediatamente
+            if (esPrimeraUbicacion) {
+                buscarCamarasCercanas();
+                cargarSegmentosConocidos();
+            }
 
             // Verificar alertas
             verificarAlertaCamaras();
@@ -516,6 +526,9 @@
             const container = document.getElementById('mapa-container');
             // Rotar el contenedor del mapa para que el heading apunte arriba
             container.style.transform = `rotate(${-heading}deg)`;
+
+            // Contra-rotar la flecha del conductor para que siempre apunte arriba
+            actualizarMarcadorConductor(heading);
 
             // Actualizar brújula para mostrar el norte
             document.getElementById('brujula').style.transform = `rotate(${heading}deg)`;

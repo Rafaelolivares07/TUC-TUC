@@ -213,6 +213,7 @@
         // Variables globales
         let conductorActual = null;
         let ubicacionConductor = null;
+        let ubicacionAnteriorConductor = null; // Para tracking de segmentos
         let viajeActivo = null;
         let intervaloActualizacion = null;
         let intervaloUbicacion = null;
@@ -220,6 +221,38 @@
         let serviciosAnterioresIds = [];
         let comisionPlataforma = 5; // Default 5%, se carga de BD
         let estadoConexion = 'desconectado'; // Estado de conexión del conductor
+
+        // Calcular distancia entre dos puntos (Haversine) en metros
+        function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Radio de la Tierra en metros
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Guardar segmento de ruta transitado
+        async function guardarSegmentoTransitado(origen, destino, distancia) {
+            try {
+                await fetch('/api/conductor/segmento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origen_lat: origen.lat,
+                        origen_lon: origen.lon,
+                        destino_lat: destino.lat,
+                        destino_lon: destino.lon,
+                        distancia_metros: distancia,
+                        viaje_id: viajeActivo?.id
+                    })
+                });
+            } catch (e) {
+                // Silencioso - no bloquear si falla
+            }
+        }
 
         // Función para reproducir sonido de alerta
         function reproducirSonidoAlerta() {
@@ -465,37 +498,58 @@
             }
         }
 
-        // Enviar ubicación del conductor al servidor periódicamente
+        // Tracking continuo con watchPosition (como Conducción Asistida)
+        let watchIdConductor = null;
+        let ultimoEnvioServidor = 0;
+
         function iniciarTrackingUbicacion() {
-            if (intervaloUbicacion) return;
-            enviarUbicacion();
-            intervaloUbicacion = setInterval(enviarUbicacion, 10000);
-        }
-
-        function detenerTrackingUbicacion() {
-            if (intervaloUbicacion) {
-                clearInterval(intervaloUbicacion);
-                intervaloUbicacion = null;
-            }
-        }
-
-        function enviarUbicacion() {
+            if (watchIdConductor) return;
             if (!navigator.geolocation) return;
-            navigator.geolocation.getCurrentPosition(
+
+            watchIdConductor = navigator.geolocation.watchPosition(
                 function(position) {
-                    ubicacionConductor = {
+                    const nuevaUbicacion = {
                         lat: position.coords.latitude,
                         lon: position.coords.longitude
                     };
-                    fetch('/api/conductor/actualizar-ubicacion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ lat: ubicacionConductor.lat, lon: ubicacionConductor.lon })
-                    }).catch(() => {});
+
+                    // Guardar segmento si se movió más de 10 metros
+                    if (ubicacionConductor) {
+                        const distancia = calcularDistanciaMetros(
+                            ubicacionConductor.lat, ubicacionConductor.lon,
+                            nuevaUbicacion.lat, nuevaUbicacion.lon
+                        );
+                        if (distancia >= 10) {
+                            guardarSegmentoTransitado(ubicacionConductor, nuevaUbicacion, distancia);
+                            ubicacionConductor = nuevaUbicacion;
+                        }
+                    } else {
+                        ubicacionConductor = nuevaUbicacion;
+                    }
+
+                    // Enviar ubicación al servidor cada 5 segundos (no saturar)
+                    const ahora = Date.now();
+                    if (ahora - ultimoEnvioServidor >= 5000) {
+                        ultimoEnvioServidor = ahora;
+                        fetch('/api/conductor/actualizar-ubicacion', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lat: nuevaUbicacion.lat, lon: nuevaUbicacion.lon })
+                        }).catch(() => {});
+                    }
                 },
-                () => {},
-                { enableHighAccuracy: true }
+                function(error) {
+                    console.error('Error GPS:', error);
+                },
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
             );
+        }
+
+        function detenerTrackingUbicacion() {
+            if (watchIdConductor) {
+                navigator.geolocation.clearWatch(watchIdConductor);
+                watchIdConductor = null;
+            }
         }
 
         // Verificar si el conductor tiene un viaje activo

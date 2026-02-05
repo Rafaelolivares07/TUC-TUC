@@ -254,7 +254,7 @@ def guardar_conexiones_osrm(geometria, conn=None):
     """
     Guarda las conexiones entre puntos consecutivos de una ruta OSRM.
     Cada par de puntos consecutivos es una conexión direccional.
-    Si la conexión ya existe, incrementa veces_transitado.
+    Si la conexión ya existe (con tolerancia ~10m), incrementa veces_transitado.
     """
     if not geometria or len(geometria) < 2:
         return 0
@@ -265,6 +265,8 @@ def guardar_conexiones_osrm(geometria, conn=None):
         cerrar_conn = True
 
     conexiones_guardadas = 0
+    conexiones_actualizadas = 0
+    tolerancia = 0.0001  # ~10 metros
 
     try:
         for i in range(len(geometria) - 1):
@@ -274,27 +276,47 @@ def guardar_conexiones_osrm(geometria, conn=None):
             # Calcular distancia entre estos dos puntos
             distancia = int(distancia_punto_a_punto(origen_lat, origen_lon, destino_lat, destino_lon))
 
-            # Insertar o actualizar (incrementar contador si existe)
-            conn.execute("""
-                INSERT INTO conexiones_via (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (origen_lat, origen_lon, destino_lat, destino_lon)
-                DO UPDATE SET veces_transitado = conexiones_via.veces_transitado + 1
-            """, (origen_lat, origen_lon, destino_lat, destino_lon, distancia))
+            # Verificar si ya existe con tolerancia
+            existente = conn.execute("""
+                SELECT id FROM conexiones_via
+                WHERE origen_lat BETWEEN %s - %s AND %s + %s
+                  AND origen_lon BETWEEN %s - %s AND %s + %s
+                  AND destino_lat BETWEEN %s - %s AND %s + %s
+                  AND destino_lon BETWEEN %s - %s AND %s + %s
+                LIMIT 1
+            """, (origen_lat, tolerancia, origen_lat, tolerancia,
+                  origen_lon, tolerancia, origen_lon, tolerancia,
+                  destino_lat, tolerancia, destino_lat, tolerancia,
+                  destino_lon, tolerancia, destino_lon, tolerancia)).fetchone()
 
-            conexiones_guardadas += 1
+            if existente:
+                # Actualizar contador
+                conn.execute("""
+                    UPDATE conexiones_via
+                    SET veces_transitado = veces_transitado + 1
+                    WHERE id = %s
+                """, (existente['id'],))
+                conexiones_actualizadas += 1
+            else:
+                # Insertar nueva
+                conn.execute("""
+                    INSERT INTO conexiones_via
+                    (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros, veces_transitado, fecha_creacion)
+                    VALUES (%s, %s, %s, %s, %s, 1, NOW())
+                """, (origen_lat, origen_lon, destino_lat, destino_lon, distancia))
+                conexiones_guardadas += 1
 
         conn.commit()
-        print(f"✅ Guardadas {conexiones_guardadas} conexiones de ruta")
+        print(f"✅ OSRM: {conexiones_guardadas} nuevas, {conexiones_actualizadas} actualizadas")
 
     except Exception as e:
-        print(f"Error guardando conexiones: {e}")
+        print(f"Error guardando conexiones OSRM: {e}")
 
     finally:
         if cerrar_conn:
             conn.close()
 
-    return conexiones_guardadas
+    return conexiones_guardadas + conexiones_actualizadas
 
 
 def calcular_bearing(lat1, lon1, lat2, lon2):
@@ -19447,8 +19469,7 @@ def api_conductor_segmento():
             # Actualizar contador de veces transitado
             conn.execute("""
                 UPDATE conexiones_via
-                SET veces_transitado = veces_transitado + 1,
-                    ultimo_transito = NOW()
+                SET veces_transitado = veces_transitado + 1
                 WHERE id = %s
             """, (existente['id'],))
             conn.commit()
@@ -19459,11 +19480,10 @@ def api_conductor_segmento():
             result = conn.execute("""
                 INSERT INTO conexiones_via
                 (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros,
-                 veces_transitado, viaje_id_origen, fecha_creacion, ultimo_transito)
-                VALUES (%s, %s, %s, %s, %s, 1, %s, NOW(), NOW())
+                 veces_transitado, fecha_creacion)
+                VALUES (%s, %s, %s, %s, %s, 1, NOW())
                 RETURNING id
-            """, (origen_lat, origen_lon, destino_lat, destino_lon,
-                  distancia, viaje_id))
+            """, (origen_lat, origen_lon, destino_lat, destino_lon, distancia))
             nuevo_id = result.fetchone()['id']
             conn.commit()
             conn.close()
@@ -20969,7 +20989,7 @@ def validar_solapamiento_viajes(conn, conductor_id, nuevo_servicio):
 
     nuevo_origen_lat = float(nuevo_servicio['origen_lat'])
     nuevo_origen_lon = float(nuevo_servicio['origen_lon'])
-    nuevo_fecha_programada = nuevo_servicio.get('fecha_programada')
+    nuevo_fecha_programada = nuevo_servicio['fecha_programada']
 
     # Determinar hora del nuevo viaje
     if nuevo_fecha_programada:

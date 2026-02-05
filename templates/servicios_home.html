@@ -183,7 +183,7 @@
 
             <!-- SECCIÓN 2: Origen -->
             <div id="seccion-origen" class="bg-gray-200 rounded border border-gray-300 p-4 mb-6">
-                <h2 id="titulo-seccion-origen" class="text-base font-medium mb-2 text-gray-800">Tu origen está determinado por tu ubicación actual</h2>
+                <h2 id="titulo-seccion-origen" class="text-base font-medium mb-2 text-gray-800">SU ORIGEN: Determinado por ubicación actual</h2>
                 <p class="text-sm text-gray-600 mb-3">Puedes: <strong>1)</strong> Volver a detectarla, <strong>2)</strong> Ingresar una dirección diferente, o <strong>3)</strong> Seleccionar en el mapa</p>
 
                 <!-- Card de ubicación detectada -->
@@ -1662,10 +1662,20 @@
 
                 opcion.addEventListener('click', function() {
                     document.getElementById('input-origen').value = truncarDireccion(resultado.display_name);
-                    coordenadasOrigenSeleccionado = {
-                        lat: parseFloat(resultado.lat),
-                        lon: parseFloat(resultado.lon)
-                    };
+
+                    // DEBUG: Verificar coordenadas del resultado
+                    console.log('DEBUG Origen seleccionado:', resultado);
+
+                    const lat = parseFloat(resultado.lat);
+                    const lon = parseFloat(resultado.lon);
+
+                    if (isNaN(lat) || isNaN(lon)) {
+                        console.error('ERROR: Coordenadas inválidas en resultado origen:', resultado);
+                        alert('Error: Las coordenadas del lugar seleccionado son inválidas');
+                        return;
+                    }
+
+                    coordenadasOrigenSeleccionado = { lat, lon };
                     coordenadasOrigenActual = coordenadasOrigenSeleccionado;
                     contenedor.classList.add('hidden');
 
@@ -1750,15 +1760,15 @@
         function actualizarTituloOrigen(estado) {
             const titulo = document.getElementById('titulo-seccion-origen');
             if (estado === 'detectado') {
-                titulo.textContent = 'Ubicación detectada';
+                titulo.textContent = 'SU ORIGEN: Ubicación detectada';
             } else if (estado === 'mapa') {
-                titulo.textContent = '¡ORIGEN SELECCIONADO DEL MAPA!';
+                titulo.textContent = 'SU ORIGEN: Seleccionado del mapa';
             } else if (estado === 'direccion') {
-                titulo.textContent = '¡ORIGEN SELECCIONADO POR DIRECCION O NOMBRE!';
+                titulo.textContent = 'SU ORIGEN: Seleccionado por dirección';
             } else if (estado === 'sin-origen') {
-                titulo.textContent = 'Viaje sin origen determinado - Determina tu origen';
+                titulo.textContent = 'SU ORIGEN: Pendiente de determinar';
             } else {
-                titulo.textContent = 'Tu origen está determinado por tu ubicación actual';
+                titulo.textContent = 'SU ORIGEN: Determinado por ubicación actual';
             }
         }
 

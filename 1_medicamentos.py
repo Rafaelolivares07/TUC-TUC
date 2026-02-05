@@ -12551,8 +12551,9 @@ def migrar_conductor():
             conn.execute("""
                 ALTER TABLE conexiones_via ADD COLUMN IF NOT EXISTS fuente VARCHAR(20) DEFAULT 'gps'
             """)
-        except:
-            pass  # Ya existe
+            mensajes.append("✅ conexiones_via.fuente")
+        except Exception as e:
+            mensajes.append(f"⚠️ conexiones_via.fuente: {str(e)}")
 
         # Índices para búsqueda espacial eficiente
         conn.execute("""

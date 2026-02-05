@@ -301,8 +301,8 @@ def guardar_conexiones_osrm(geometria, conn=None):
                 # Insertar nueva
                 conn.execute("""
                     INSERT INTO conexiones_via
-                    (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros, veces_transitado, fecha_creacion)
-                    VALUES (%s, %s, %s, %s, %s, 1, NOW())
+                    (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros, veces_transitado, fecha_creacion, fuente)
+                    VALUES (%s, %s, %s, %s, %s, 1, NOW(), 'osrm')
                 """, (origen_lat, origen_lon, destino_lat, destino_lon, distancia))
                 conexiones_guardadas += 1
 
@@ -414,6 +414,91 @@ def detectar_peajes_en_ruta(geometria, conn=None):
                         peajes_ya_detectados.add(peaje['id'])
 
         return peajes_detectados
+
+    finally:
+        if cerrar_conn:
+            conn.close()
+
+
+def detectar_camaras_en_ruta(geometria, conn=None):
+    """
+    Detecta qué cámaras de fotomulta están en una ruta basándose en la geometría y dirección.
+    Similar a detectar_peajes_en_ruta pero para cámaras.
+    Retorna lista de cámaras detectadas con su información.
+    """
+    if not geometria or len(geometria) < 2:
+        return []
+
+    cerrar_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        cerrar_conn = True
+
+    try:
+        # Obtener cámaras activas
+        camaras = conn.execute("""
+            SELECT id, nombre, lat, lon, velocidad_maxima, direccion, radio_deteccion
+            FROM camaras_fotomulta WHERE activo = TRUE
+        """).fetchall()
+
+        if not camaras:
+            return []
+
+        camaras_detectadas = []
+        camaras_ya_detectadas = set()
+
+        # Recorrer cada segmento de la ruta
+        for i in range(len(geometria) - 1):
+            lat1, lon1 = geometria[i]
+            lat2, lon2 = geometria[i + 1]
+
+            # Calcular bearing del segmento
+            bearing_segmento = calcular_bearing(lat1, lon1, lat2, lon2)
+
+            # Verificar cada cámara
+            for camara in camaras:
+                if camara['id'] in camaras_ya_detectadas:
+                    continue
+
+                camara_lat = float(camara['lat'])
+                camara_lon = float(camara['lon'])
+                radio = camara['radio_deteccion'] or 100  # 100m por defecto para cámaras
+
+                # Verificar si el segmento pasa cerca de la cámara
+                dist = distancia_punto_a_punto(lat1, lon1, camara_lat, camara_lon)
+
+                if dist <= radio:
+                    # Verificar dirección (tolerancia de ±45°)
+                    direccion_camara = camara['direccion'] or 0
+                    diff_direccion = abs(bearing_segmento - direccion_camara)
+                    if diff_direccion > 180:
+                        diff_direccion = 360 - diff_direccion
+
+                    if diff_direccion <= 45:
+                        # Calcular a qué distancia del inicio de la ruta está
+                        distancia_acumulada = 0
+                        for j in range(i):
+                            distancia_acumulada += distancia_punto_a_punto(
+                                geometria[j][0], geometria[j][1],
+                                geometria[j+1][0], geometria[j+1][1]
+                            )
+                        distancia_acumulada += distancia_punto_a_punto(
+                            lat1, lon1, camara_lat, camara_lon
+                        )
+
+                        camaras_detectadas.append({
+                            'id': camara['id'],
+                            'nombre': camara['nombre'],
+                            'lat': camara_lat,
+                            'lon': camara_lon,
+                            'velocidad_maxima': camara['velocidad_maxima'],
+                            'distancia_en_ruta': round(distancia_acumulada)
+                        })
+                        camaras_ya_detectadas.add(camara['id'])
+
+        # Ordenar por distancia en la ruta
+        camaras_detectadas.sort(key=lambda x: x['distancia_en_ruta'])
+        return camaras_detectadas
 
     finally:
         if cerrar_conn:
@@ -12455,10 +12540,19 @@ def migrar_conductor():
                 destino_lon DECIMAL(11, 8) NOT NULL,
                 distancia_metros INTEGER,
                 veces_transitado INTEGER DEFAULT 1,
-                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                fuente VARCHAR(20) DEFAULT 'gps'
             )
         """)
         mensajes.append("✅ Tabla conexiones_via creada")
+
+        # Agregar columna fuente si no existe (para tablas existentes)
+        try:
+            conn.execute("""
+                ALTER TABLE conexiones_via ADD COLUMN IF NOT EXISTS fuente VARCHAR(20) DEFAULT 'gps'
+            """)
+        except:
+            pass  # Ya existe
 
         # Índices para búsqueda espacial eficiente
         conn.execute("""
@@ -19391,6 +19485,37 @@ def api_camaras_cercanas():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/camaras-en-ruta', methods=['POST'])
+def api_camaras_en_ruta():
+    """
+    Detecta cámaras de fotomulta en una ruta específica.
+    Recibe la geometría de la ruta y retorna las cámaras que están en el camino,
+    considerando la dirección del tráfico.
+    """
+    try:
+        data = request.get_json()
+        geometria = data.get('geometria', [])
+
+        if not geometria or len(geometria) < 2:
+            return jsonify({'ok': False, 'error': 'Geometría de ruta inválida'}), 400
+
+        # Convertir a formato [(lat, lon), ...]
+        ruta = [(p[0], p[1]) for p in geometria]
+
+        # Detectar cámaras en la ruta
+        camaras = detectar_camaras_en_ruta(ruta)
+
+        return jsonify({
+            'ok': True,
+            'camaras': camaras,
+            'total': len(camaras)
+        })
+
+    except Exception as e:
+        print(f"Error en camaras en ruta: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/segmentos-cercanos')
 def api_segmentos_cercanos():
     """Retorna segmentos de vía cercanos a una ubicación (rutas conocidas)"""
@@ -19481,8 +19606,8 @@ def api_conductor_segmento():
             result = conn.execute("""
                 INSERT INTO conexiones_via
                 (origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros,
-                 veces_transitado, fecha_creacion)
-                VALUES (%s, %s, %s, %s, %s, 1, NOW())
+                 veces_transitado, fecha_creacion, fuente)
+                VALUES (%s, %s, %s, %s, %s, 1, NOW(), 'gps')
                 RETURNING id
             """, (origen_lat, origen_lon, destino_lat, destino_lon, distancia))
             nuevo_id = result.fetchone()['id']
@@ -20002,16 +20127,29 @@ def api_admin_conexiones_via():
         # Parámetros opcionales de filtro
         min_transitado = request.args.get('min_transitado', 1, type=int)
         limite = request.args.get('limite', 5000, type=int)  # Limitar para no sobrecargar
+        fuente_filtro = request.args.get('fuente', None)  # 'osrm', 'gps', o None para todos
 
         conn = get_db_connection()
-        conexiones = conn.execute("""
-            SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
-                   distancia_metros, veces_transitado
-            FROM conexiones_via
-            WHERE veces_transitado >= %s
-            ORDER BY veces_transitado DESC, id DESC
-            LIMIT %s
-        """, (min_transitado, limite)).fetchall()
+
+        if fuente_filtro:
+            conexiones = conn.execute("""
+                SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
+                       distancia_metros, veces_transitado, fuente, fecha_creacion
+                FROM conexiones_via
+                WHERE veces_transitado >= %s AND (fuente = %s OR fuente IS NULL)
+                ORDER BY veces_transitado DESC, id DESC
+                LIMIT %s
+            """, (min_transitado, fuente_filtro, limite)).fetchall()
+        else:
+            conexiones = conn.execute("""
+                SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
+                       distancia_metros, veces_transitado, fuente, fecha_creacion
+                FROM conexiones_via
+                WHERE veces_transitado >= %s
+                ORDER BY veces_transitado DESC, id DESC
+                LIMIT %s
+            """, (min_transitado, limite)).fetchall()
+
         conn.close()
 
         return jsonify({
@@ -20019,6 +20157,21 @@ def api_admin_conexiones_via():
             'conexiones': [dict(c) for c in conexiones],
             'total': len(conexiones)
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/conexiones-via/<int:id>', methods=['DELETE'])
+@admin_required
+def api_admin_eliminar_conexion(id):
+    """Elimina una conexión de vía específica"""
+    try:
+        conn = get_db_connection()
+        result = conn.execute("DELETE FROM conexiones_via WHERE id = %s", (id,))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'mensaje': 'Conexión eliminada'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

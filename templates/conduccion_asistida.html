@@ -47,10 +47,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.5);
             border-radius: 20px;
             padding: 15px 30px;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(8px);
         }
 
         #velocidad-actual {
@@ -87,10 +87,10 @@
             display: none;
             flex-direction: column;
             align-items: center;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.6);
             border-radius: 16px;
             padding: 15px 25px;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(8px);
             border: 3px solid #f59e0b;
             animation: pulse-alert 1s infinite;
         }
@@ -145,7 +145,7 @@
             top: 20px;
             left: 20px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             border: none;
             color: white;
             width: 50px;
@@ -153,7 +153,7 @@
             border-radius: 50%;
             font-size: 24px;
             cursor: pointer;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(8px);
         }
 
         /* Info de viaje activo */
@@ -162,10 +162,10 @@
             top: 20px;
             right: 20px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.5);
             border-radius: 12px;
             padding: 12px 16px;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(8px);
             display: none;
             border-left: 4px solid #22c55e;
         }
@@ -187,7 +187,7 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 12px;
@@ -250,13 +250,14 @@
             z-index: 1000;
             width: 40px;
             height: 40px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
             transition: transform 0.3s;
+            backdrop-filter: blur(8px);
         }
 
         /* Leyenda de rutas */
@@ -265,10 +266,11 @@
             bottom: 150px;
             right: 15px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             padding: 10px;
             border-radius: 10px;
             font-size: 11px;
+            backdrop-filter: blur(8px);
         }
 
         .leyenda-item {
@@ -303,6 +305,17 @@
             font-weight: 600;
             display: none;
             text-align: center;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+
+        .alerta-advertencia {
+            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+            color: white !important;
         }
     </style>
 </head>
@@ -383,7 +396,9 @@
         let headingActual = 0;
         let camarasCercanas = [];
         let camarasEnMapa = [];
+        let camarasEnRuta = [];  // Cámaras detectadas en la ruta activa
         let viajeActivo = null;
+        let geometriaRutaActiva = null;  // Geometría de la ruta para detección de cámaras
 
         // Capas de rutas
         let capaRutasConocidas = null;
@@ -642,6 +657,10 @@
 
                 if (data.ok && data.ruta) {
                     dibujarRutaViaje(data.ruta);
+                    // Guardar geometría para detección de cámaras en ruta
+                    geometriaRutaActiva = data.ruta.map(p => [p.lat, p.lon]);
+                    // Buscar cámaras en la ruta
+                    await buscarCamarasEnRuta();
                 }
             } catch (e) {
                 console.error('Error cargando ruta de viaje:', e);
@@ -661,6 +680,54 @@
             });
 
             capaViajeActivo.addLayer(polyline);
+        }
+
+        async function buscarCamarasEnRuta() {
+            if (!geometriaRutaActiva || geometriaRutaActiva.length < 2) return;
+
+            try {
+                const res = await fetch('/api/camaras-en-ruta', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ geometria: geometriaRutaActiva })
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    camarasEnRuta = data.camaras || [];
+                    console.log(`📷 ${camarasEnRuta.length} cámaras detectadas en la ruta`);
+                    // Combinar con cámaras cercanas para el mapa
+                    actualizarCamarasEnMapa();
+                    // Mostrar alerta si hay cámaras en la ruta
+                    if (camarasEnRuta.length > 0) {
+                        mostrarAlertaCamarasRuta();
+                    }
+                }
+            } catch (e) {
+                console.error('Error buscando cámaras en ruta:', e);
+            }
+        }
+
+        function mostrarAlertaCamarasRuta() {
+            const proximaCamara = camarasEnRuta[0];
+            if (!proximaCamara) return;
+
+            const alerta = document.getElementById('alerta-camara');
+            alerta.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span style="font-size: 32px;">📷</span>
+                    <div>
+                        <strong>${camarasEnRuta.length} cámara${camarasEnRuta.length > 1 ? 's' : ''} en tu ruta</strong>
+                        <div style="font-size: 14px; opacity: 0.9;">
+                            Próxima: ${proximaCamara.nombre || 'Cámara'}
+                            (${proximaCamara.velocidad_maxima || '?'} km/h)
+                            - ${Math.round(proximaCamara.distancia_en_ruta)}m adelante
+                        </div>
+                    </div>
+                </div>
+            `;
+            alerta.style.display = 'block';
+            alerta.className = 'alerta-camara alerta-advertencia';
         }
 
         function registrarNuevoSegmento() {
@@ -725,12 +792,31 @@
         async function buscarCamarasCercanas() {
             if (!ubicacionActual) return;
 
+            // Si hay ruta activa, las cámaras ya se detectaron en buscarCamarasEnRuta
+            // Aquí solo buscamos cámaras cercanas para conducción libre
+
             try {
                 const res = await fetch(`/api/camaras-cercanas?lat=${ubicacionActual.lat}&lon=${ubicacionActual.lon}&radio=1000`);
                 const data = await res.json();
 
                 if (data.ok) {
-                    camarasCercanas = data.camaras || [];
+                    let todasCamaras = data.camaras || [];
+
+                    // Si NO hay ruta activa, filtrar por bearing (solo mostrar cámaras adelante)
+                    if (!geometriaRutaActiva && headingActual !== null) {
+                        camarasCercanas = todasCamaras.filter(cam => {
+                            const bearingACamara = calcularBearing(
+                                ubicacionActual.lat, ubicacionActual.lon,
+                                cam.lat, cam.lon
+                            );
+                            let diff = Math.abs(bearingACamara - headingActual);
+                            if (diff > 180) diff = 360 - diff;
+                            return diff <= 60;  // ±60° del rumbo actual
+                        });
+                    } else {
+                        camarasCercanas = todasCamaras;
+                    }
+
                     actualizarCamarasEnMapa();
                 }
             } catch (e) {
@@ -738,37 +824,103 @@
             }
         }
 
+        function calcularBearing(lat1, lon1, lat2, lon2) {
+            const toRad = x => x * Math.PI / 180;
+            const toDeg = x => x * 180 / Math.PI;
+
+            const dLon = toRad(lon2 - lon1);
+            const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+            const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+                      Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+            let bearing = toDeg(Math.atan2(y, x));
+            return (bearing + 360) % 360;
+        }
+
         function actualizarCamarasEnMapa() {
             camarasEnMapa.forEach(m => mapa.removeLayer(m));
             camarasEnMapa = [];
 
+            // Combinar cámaras en ruta (prioridad) y cercanas
+            const camarasIds = new Set();
+            const todasCamaras = [];
+
+            // Primero las de la ruta (verde = están en tu camino)
+            camarasEnRuta.forEach(cam => {
+                camarasIds.add(cam.id);
+                todasCamaras.push({ ...cam, enRuta: true });
+            });
+
+            // Luego las cercanas que no estén ya en ruta (rojo = perimetral)
             camarasCercanas.forEach(cam => {
+                if (!camarasIds.has(cam.id)) {
+                    todasCamaras.push({ ...cam, enRuta: false });
+                }
+            });
+
+            todasCamaras.forEach(cam => {
+                const esEnRuta = cam.enRuta;
                 const icono = L.divIcon({
                     className: 'camara-marker',
                     html: `<div style="
-                        background: #ef4444;
+                        background: ${esEnRuta ? '#dc2626' : '#6b7280'};
                         color: white;
-                        width: 35px;
-                        height: 35px;
+                        width: ${esEnRuta ? '40px' : '32px'};
+                        height: ${esEnRuta ? '40px' : '32px'};
                         border-radius: 50%;
                         display: flex;
                         align-items: center;
                         justify-content: center;
-                        font-size: 18px;
-                        border: 2px solid white;
+                        font-size: ${esEnRuta ? '20px' : '16px'};
+                        border: 3px solid ${esEnRuta ? '#fef2f2' : '#d1d5db'};
                         box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                        ${esEnRuta ? 'animation: pulse 1.5s infinite;' : ''}
                     ">📷</div>`,
-                    iconSize: [35, 35],
-                    iconAnchor: [17, 17]
+                    iconSize: [esEnRuta ? 40 : 32, esEnRuta ? 40 : 32],
+                    iconAnchor: [esEnRuta ? 20 : 16, esEnRuta ? 20 : 16]
                 });
 
                 const marker = L.marker([cam.lat, cam.lon], { icon: icono }).addTo(mapa);
+                marker.bindPopup(`
+                    <strong>${cam.nombre || 'Cámara'}</strong><br>
+                    Límite: ${cam.velocidad_maxima || '?'} km/h<br>
+                    ${esEnRuta ? '🚨 <strong>EN TU RUTA</strong>' : 'Cercana (perimetral)'}
+                    ${cam.distancia_en_ruta ? `<br>A ${cam.distancia_en_ruta}m de distancia` : ''}
+                `);
                 camarasEnMapa.push(marker);
             });
         }
 
         function verificarAlertaCamaras() {
-            if (!ubicacionActual || camarasCercanas.length === 0) {
+            if (!ubicacionActual) {
+                ocultarAlertaCamara();
+                return;
+            }
+
+            // Si hay cámaras en la ruta activa, priorizar esas
+            if (camarasEnRuta.length > 0) {
+                // Buscar la cámara más cercana en la ruta (por distancia en línea recta)
+                let camaraProxima = null;
+                let distanciaProxima = Infinity;
+
+                camarasEnRuta.forEach(cam => {
+                    const dist = calcularDistancia(
+                        ubicacionActual.lat, ubicacionActual.lon,
+                        cam.lat, cam.lon
+                    );
+                    if (dist < distanciaProxima) {
+                        distanciaProxima = dist;
+                        camaraProxima = { ...cam, distancia: dist, enRuta: true };
+                    }
+                });
+
+                if (camaraProxima && distanciaProxima < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                    mostrarAlertaCamara(camaraProxima, distanciaProxima);
+                    return;
+                }
+            }
+
+            // Si no hay cámaras en ruta o ninguna cerca, verificar cámaras cercanas (perimetral)
+            if (camarasCercanas.length === 0) {
                 ocultarAlertaCamara();
                 return;
             }
@@ -784,7 +936,7 @@
 
                 if (dist < distanciaMinima) {
                     distanciaMinima = dist;
-                    camaraMasCercana = { ...cam, distancia: dist };
+                    camaraMasCercana = { ...cam, distancia: dist, enRuta: false };
                 }
             });
 
@@ -803,8 +955,13 @@
             alerta.style.display = 'flex';
             barra.style.display = 'block';
 
-            document.getElementById('alerta-distancia').textContent =
-                distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
+            // Mostrar distancia y si es cámara en ruta
+            const textoDistancia = distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
+            const esEnRuta = camara.enRuta === true;
+            document.getElementById('alerta-distancia').innerHTML = esEnRuta
+                ? `<span style="color: #fef08a;">🚨 EN RUTA</span> ${textoDistancia}`
+                : textoDistancia;
+
             document.getElementById('alerta-limite').textContent =
                 `Límite: ${camara.velocidad_maxima || 60} km/h`;
 

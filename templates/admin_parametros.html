@@ -1144,6 +1144,14 @@
                                 </select>
                             </div>
                             <div class="flex items-center gap-2">
+                                <label class="text-sm text-gray-600">Fuente:</label>
+                                <select id="filtro-fuente" class="px-3 py-1 border rounded text-sm" onchange="cargarConexionesEnMapa()">
+                                    <option value="">Todas</option>
+                                    <option value="osrm">🗺️ OSRM (calculadas)</option>
+                                    <option value="gps">📍 GPS (conductor)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <label class="text-sm text-gray-600">Límite:</label>
                                 <select id="filtro-limite-conexiones" class="px-3 py-1 border rounded text-sm" onchange="cargarConexionesEnMapa()">
                                     <option value="1000">1,000</option>
@@ -3389,6 +3397,7 @@
 
             const minTransitado = document.getElementById('filtro-min-transitado')?.value || 2;
             const limite = document.getElementById('filtro-limite-conexiones')?.value || 5000;
+            const fuente = document.getElementById('filtro-fuente')?.value || '';
 
             // Mostrar loading
             const msgDiv = document.getElementById('mensaje-grafo');
@@ -3397,7 +3406,9 @@
             msgDiv.classList.remove('hidden');
 
             try {
-                const res = await fetch(`/api/admin/conexiones-via?min_transitado=${minTransitado}&limite=${limite}`);
+                let url = `/api/admin/conexiones-via?min_transitado=${minTransitado}&limite=${limite}`;
+                if (fuente) url += `&fuente=${fuente}`;
+                const res = await fetch(url);
                 const data = await res.json();
 
                 // Limpiar polylines anteriores
@@ -3421,13 +3432,25 @@
                             opacity: 0.8
                         }).addTo(mapaGrafo);
 
-                        // Agregar popup con info
+                        // Determinar icono y texto de fuente
+                        const fuenteTexto = c.fuente === 'osrm' ? '🗺️ OSRM (calculado)' :
+                                           c.fuente === 'gps' ? '📍 GPS (conductor)' : '❓ Desconocido';
+                        const fuenteColor = c.fuente === 'osrm' ? '#3b82f6' : c.fuente === 'gps' ? '#22c55e' : '#6b7280';
+
+                        // Agregar popup con info y botón eliminar
                         polyline.bindPopup(`
                             <strong>Conexión de vía</strong><br>
                             📍 Origen: ${c.origen_lat}, ${c.origen_lon}<br>
                             🎯 Destino: ${c.destino_lat}, ${c.destino_lon}<br>
                             📏 Distancia: ${c.distancia_metros}m<br>
-                            🔄 Veces transitado: <strong>${c.veces_transitado}</strong>
+                            🔄 Veces transitado: <strong>${c.veces_transitado}</strong><br>
+                            <span style="color: ${fuenteColor}; font-weight: bold;">${fuenteTexto}</span><br>
+                            <hr style="margin: 8px 0;">
+                            <button onclick="eliminarConexion(${c.id})"
+                                    style="background: #ef4444; color: white; border: none; padding: 6px 12px;
+                                           border-radius: 6px; cursor: pointer; width: 100%;">
+                                🗑️ Eliminar conexión
+                            </button>
                         `);
 
                         polylinesGrafo.push(polyline);
@@ -3460,6 +3483,37 @@
                 console.error('Error cargando conexiones:', error);
                 msgDiv.className = 'p-3 rounded-lg text-center bg-red-100 text-red-700';
                 msgDiv.textContent = '❌ Error cargando conexiones: ' + error.message;
+            }
+        }
+
+        // Eliminar una conexión del grafo
+        async function eliminarConexion(id) {
+            if (!confirm('¿Eliminar esta conexión? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/conexiones-via/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    // Cerrar popup y recargar conexiones
+                    mapaGrafo.closePopup();
+                    cargarConexionesEnMapa();
+
+                    const msgDiv = document.getElementById('mensaje-grafo');
+                    msgDiv.classList.remove('hidden');
+                    msgDiv.className = 'p-3 rounded-lg text-center bg-green-100 text-green-700';
+                    msgDiv.textContent = '✅ Conexión eliminada correctamente';
+                    setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error eliminando conexión:', error);
+                alert('Error eliminando conexión');
             }
         }
 

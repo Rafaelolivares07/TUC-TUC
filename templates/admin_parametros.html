@@ -151,6 +151,11 @@
             border-radius: 0 !important;
         }
 
+        /* Cursor pointer para segmentos del grafo */
+        .segmento-grafo {
+            cursor: pointer !important;
+        }
+
         .mapa-grafo-fullscreen #btn-fullscreen-grafo {
             position: fixed !important;
             top: 10px !important;
@@ -3425,17 +3430,52 @@
                         const color = getColorByTransitado(c.veces_transitado);
                         const weight = getWeightByTransitado(c.veces_transitado);
 
-                        // Dibujar línea
+                        // Dibujar círculos en los puntos de inicio y fin
+                        const circuloInicio = L.circleMarker(inicio, {
+                            radius: 5,
+                            fillColor: '#fff',
+                            color: color,
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.9
+                        }).addTo(mapaGrafo);
+                        polylinesGrafo.push(circuloInicio);
+
+                        const circuloFin = L.circleMarker(fin, {
+                            radius: 5,
+                            fillColor: color,
+                            color: '#fff',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.9
+                        }).addTo(mapaGrafo);
+                        polylinesGrafo.push(circuloFin);
+
+                        // Dibujar línea con cursor pointer
                         const polyline = L.polyline([inicio, fin], {
                             color: color,
                             weight: weight,
-                            opacity: 0.8
+                            opacity: 0.8,
+                            className: 'segmento-grafo'
                         }).addTo(mapaGrafo);
+
+                        // Efecto hover para facilitar selección
+                        polyline.on('mouseover', function() {
+                            this.setStyle({ weight: weight + 4, opacity: 1 });
+                        });
+                        polyline.on('mouseout', function() {
+                            this.setStyle({ weight: weight, opacity: 0.8 });
+                        });
 
                         // Determinar icono y texto de fuente
                         const fuenteTexto = c.fuente === 'osrm' ? '🗺️ OSRM (calculado)' :
                                            c.fuente === 'gps' ? '📍 GPS (conductor)' : '❓ Desconocido';
                         const fuenteColor = c.fuente === 'osrm' ? '#3b82f6' : c.fuente === 'gps' ? '#22c55e' : '#6b7280';
+
+                        // Guardar referencia del ID en el polyline para eliminación directa
+                        polyline.conexionId = c.id;
+                        circuloInicio.conexionId = c.id;
+                        circuloFin.conexionId = c.id;
 
                         // Agregar popup con info y botón eliminar
                         polyline.bindPopup(`
@@ -3459,6 +3499,7 @@
                         // Solo para conexiones transitadas 2+ veces y si la distancia es > 20m
                         if (c.veces_transitado >= 2 && c.distancia_metros > 20) {
                             const flecha = crearFlecha(inicio, fin, color);
+                            flecha.conexionId = c.id; // Para eliminarla junto con el segmento
                             flecha.addTo(mapaGrafo);
                             polylinesGrafo.push(flecha);
                         }
@@ -3499,9 +3540,17 @@
                 const data = await res.json();
 
                 if (data.ok) {
-                    // Cerrar popup y recargar conexiones
+                    // Cerrar popup
                     mapaGrafo.closePopup();
-                    cargarConexionesEnMapa();
+
+                    // Eliminar visualmente solo los elementos de esta conexión (sin recargar todo)
+                    polylinesGrafo = polylinesGrafo.filter(item => {
+                        if (item.conexionId === id) {
+                            mapaGrafo.removeLayer(item);
+                            return false; // Remover del array
+                        }
+                        return true; // Mantener en el array
+                    });
 
                     const msgDiv = document.getElementById('mensaje-grafo');
                     msgDiv.classList.remove('hidden');

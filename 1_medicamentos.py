@@ -21,6 +21,7 @@ from data_initializer import initialize_full_db
 from bs4 import BeautifulSoup
 import time
 import math
+import heapq
 import unicodedata
 import re
 from dotenv import load_dotenv
@@ -350,6 +351,146 @@ def distancia_punto_a_punto(lat1, lon1, lat2, lon2):
     a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
+
+def redondear_coordenada(lat, lon, decimales=4):
+    """Normaliza coordenadas para crear claves de nodos (~10m tolerancia)"""
+    return (round(lat, decimales), round(lon, decimales))
+
+
+def cargar_subgrafo(lat1, lon1, lat2, lon2, conn, margen=0.005):
+    """
+    Carga un subgrafo de conexiones_via dentro del bounding box entre dos puntos.
+    Construye dict de adyacencia con pesos basados en distancia y frecuencia de tránsito.
+    """
+    min_lat = min(lat1, lat2) - margen
+    max_lat = max(lat1, lat2) + margen
+    min_lon = min(lon1, lon2) - margen
+    max_lon = max(lon1, lon2) + margen
+
+    conexiones = conn.execute("""
+        SELECT origen_lat, origen_lon, destino_lat, destino_lon, distancia_metros, veces_transitado
+        FROM conexiones_via
+        WHERE origen_lat BETWEEN %s AND %s
+          AND origen_lon BETWEEN %s AND %s
+          AND destino_lat BETWEEN %s AND %s
+          AND destino_lon BETWEEN %s AND %s
+    """, (min_lat, max_lat, min_lon, max_lon, min_lat, max_lat, min_lon, max_lon)).fetchall()
+
+    grafo = {}
+    for c in conexiones:
+        origen = redondear_coordenada(float(c['origen_lat']), float(c['origen_lon']))
+        destino = redondear_coordenada(float(c['destino_lat']), float(c['destino_lon']))
+        dist = float(c['distancia_metros']) if c['distancia_metros'] else distancia_punto_a_punto(origen[0], origen[1], destino[0], destino[1])
+        veces = c['veces_transitado'] or 1
+        peso = dist / max(1, math.log(veces + 1))
+        if origen not in grafo:
+            grafo[origen] = []
+        grafo[origen].append((destino, peso, dist))
+
+    return grafo
+
+
+def encontrar_nodo_cercano(lat, lon, nodos, radio_max=200):
+    """Busca el nodo más cercano dentro de radio_max metros"""
+    mejor = None
+    mejor_dist = radio_max
+    for nodo in nodos:
+        d = distancia_punto_a_punto(lat, lon, nodo[0], nodo[1])
+        if d < mejor_dist:
+            mejor_dist = d
+            mejor = nodo
+    return mejor
+
+
+def buscar_ruta_grafo(lat_inicio, lon_inicio, lat_fin, lon_fin, conn):
+    """
+    Busca ruta usando A* sobre el grafo de conexiones_via.
+    Retorna dict con geometria y distancia, o None si no hay ruta.
+    """
+    grafo = cargar_subgrafo(lat_inicio, lon_inicio, lat_fin, lon_fin, conn)
+
+    if not grafo:
+        return None
+
+    nodos = set(grafo.keys())
+    for vecinos in grafo.values():
+        for (destino, peso, dist) in vecinos:
+            nodos.add(destino)
+
+    inicio = encontrar_nodo_cercano(lat_inicio, lon_inicio, nodos)
+    fin = encontrar_nodo_cercano(lat_fin, lon_fin, nodos)
+
+    if not inicio or not fin or inicio == fin:
+        return None
+
+    # A* con heurística Haversine
+    abiertos = [(0, inicio)]
+    g_score = {inicio: 0}
+    came_from = {}
+    visitados = set()
+
+    while abiertos:
+        _, actual = heapq.heappop(abiertos)
+
+        if actual == fin:
+            # Reconstruir camino
+            camino = [fin]
+            dist_total = 0
+            nodo = fin
+            while nodo in came_from:
+                prev, dist_seg = came_from[nodo]
+                camino.append(prev)
+                dist_total += dist_seg
+                nodo = prev
+            camino.reverse()
+            return {
+                'geometria': [[p[0], p[1]] for p in camino],
+                'distancia_metros': round(dist_total)
+            }
+
+        if actual in visitados:
+            continue
+        visitados.add(actual)
+
+        if actual not in grafo:
+            continue
+
+        for vecino, peso, dist_real in grafo[actual]:
+            if vecino in visitados:
+                continue
+            tentative_g = g_score[actual] + peso
+            if tentative_g < g_score.get(vecino, float('inf')):
+                g_score[vecino] = tentative_g
+                came_from[vecino] = (actual, dist_real)
+                h = distancia_punto_a_punto(vecino[0], vecino[1], fin[0], fin[1])
+                heapq.heappush(abiertos, (tentative_g + h, vecino))
+
+    return None
+
+
+def obtener_ruta_con_fallback(lat1, lon1, lat2, lon2, conn):
+    """
+    Intenta buscar ruta en grafo interno primero, fallback a OSRM.
+    Retorna dict con geometria, distancia_metros y fuente.
+    """
+    resultado = buscar_ruta_grafo(lat1, lon1, lat2, lon2, conn)
+    if resultado:
+        resultado['fuente'] = 'grafo'
+        print(f"  Ruta grafo: {resultado['distancia_metros']}m, {len(resultado['geometria'])} puntos")
+        return resultado
+
+    # Fallback a OSRM
+    osrm = obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=True)
+    if osrm and osrm.get('geometria'):
+        guardar_conexiones_osrm(osrm['geometria'], conn)
+        return {
+            'geometria': osrm['geometria'],
+            'distancia_metros': round(osrm['distancia_metros']),
+            'fuente': 'osrm'
+        }
+
+    return None
 
 
 def detectar_peajes_en_ruta(geometria, conn=None):
@@ -21579,6 +21720,65 @@ def api_conductor_viaje_activo():
             })
         return jsonify({'ok': True, 'viaje': None})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/viaje/<int:viaje_id>/ruta')
+def api_viaje_ruta(viaje_id):
+    """Retorna ruta completa del viaje en dos tramos: conductor→recogida y recogida→destino"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    try:
+        conn = get_db_connection()
+        viaje = conn.execute("""
+            SELECT id, estado, origen_lat, origen_lon, destino_lat, destino_lon,
+                   conductor_lat, conductor_lon
+            FROM solicitudes_transporte
+            WHERE id = %s AND conductor_id = %s
+        """, (viaje_id, session['usuario_id'])).fetchone()
+
+        if not viaje:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Viaje no encontrado'}), 404
+
+        resultado = {'ok': True, 'leg1': None, 'leg2': None, 'camaras': [], 'peajes': []}
+        geometria_completa = []
+
+        # Tramo 1: Conductor → Recogida (solo si aún no recogió al pasajero)
+        if viaje['estado'] in ('aceptada', 'recogiendo') and viaje['conductor_lat'] and viaje['conductor_lon']:
+            cond_lat = float(viaje['conductor_lat'])
+            cond_lon = float(viaje['conductor_lon'])
+            orig_lat = float(viaje['origen_lat'])
+            orig_lon = float(viaje['origen_lon'])
+            print(f"🚗 Tramo 1: conductor ({cond_lat},{cond_lon}) → recogida ({orig_lat},{orig_lon})")
+            leg1 = obtener_ruta_con_fallback(cond_lat, cond_lon, orig_lat, orig_lon, conn)
+            if leg1:
+                resultado['leg1'] = leg1
+                geometria_completa.extend(leg1['geometria'])
+
+        # Tramo 2: Recogida → Destino (siempre)
+        orig_lat = float(viaje['origen_lat'])
+        orig_lon = float(viaje['origen_lon'])
+        dest_lat = float(viaje['destino_lat'])
+        dest_lon = float(viaje['destino_lon'])
+        print(f"🚗 Tramo 2: recogida ({orig_lat},{orig_lon}) → destino ({dest_lat},{dest_lon})")
+        leg2 = obtener_ruta_con_fallback(orig_lat, orig_lon, dest_lat, dest_lon, conn)
+        if leg2:
+            resultado['leg2'] = leg2
+            geometria_completa.extend(leg2['geometria'])
+
+        # Detectar cámaras y peajes en geometría combinada
+        if geometria_completa:
+            resultado['camaras'] = detectar_camaras_en_ruta(geometria_completa, conn)
+            resultado['peajes'] = detectar_peajes_en_ruta(geometria_completa, conn)
+
+        conn.close()
+        return jsonify(resultado)
+    except Exception as e:
+        print(f"Error en /api/viaje/{viaje_id}/ruta: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

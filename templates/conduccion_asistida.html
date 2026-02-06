@@ -37,7 +37,7 @@
             height: 100%;
         }
 
-        /* HUD superior: velocímetro + alerta fusionados */
+        /* HUD unificado: cámara + velocímetro apilados */
         #hud-superior {
             position: absolute;
             top: 20px;
@@ -49,119 +49,131 @@
             padding: 10px 20px;
             backdrop-filter: blur(8px);
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 10px;
-            transition: all 0.3s ease;
+            gap: 4px;
+            transition: all 0.4s ease;
             border: 3px solid transparent;
+            min-width: 90px;
         }
 
-        /* Estado normal: solo velocímetro */
+        /* Velocímetro */
         #hud-velocidad {
             display: flex;
             flex-direction: column;
             align-items: center;
-            transition: all 0.3s ease;
+            transition: all 0.4s ease;
         }
 
         #velocidad-actual {
             font-size: 52px;
             font-weight: 700;
             line-height: 1;
-            transition: all 0.3s;
+            transition: font-size 0.4s ease;
         }
 
         #velocidad-unidad {
             font-size: 14px;
             opacity: 0.7;
             margin-top: 2px;
+            transition: font-size 0.4s ease;
         }
 
-        #limite-zona {
-            display: none;
-        }
-
-        /* Estado alerta: velocidad se achica, alerta toma protagonismo */
-        #hud-alerta {
+        /* Cámara (oculta por defecto, aparece encima del velocímetro) */
+        #hud-camara {
             display: none;
             flex-direction: column;
             align-items: center;
             text-align: center;
+            transition: all 0.4s ease;
+            transform-origin: center bottom;
         }
 
-        #hud-alerta-icono {
-            font-size: 28px;
-            line-height: 1;
-        }
-
-        #hud-alerta-distancia {
-            font-size: 22px;
-            font-weight: 700;
-        }
-
-        #hud-alerta-limite {
-            font-size: 14px;
-            opacity: 0.85;
-        }
-
-        /* Cuando hay alerta activa */
-        #hud-superior.con-alerta {
-            border-color: #f59e0b;
-            animation: pulse-hud 1s infinite;
-        }
-
-        #hud-superior.con-alerta #velocidad-actual {
-            font-size: 30px;
-        }
-
-        #hud-superior.con-alerta #velocidad-unidad {
-            font-size: 11px;
-        }
-
-        #hud-superior.con-alerta #hud-alerta {
+        #hud-camara.visible {
             display: flex;
         }
 
-        /* Separador vertical entre velocidad y alerta */
-        #hud-separador {
-            width: 2px;
-            height: 45px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 1px;
-            display: none;
+        #camara-icono {
+            line-height: 1;
+            transition: font-size 0.4s ease;
         }
 
-        #hud-superior.con-alerta #hud-separador {
+        #camara-distancia {
+            font-weight: 700;
+            transition: font-size 0.4s ease;
+        }
+
+        #camara-limite {
+            opacity: 0.85;
+            transition: font-size 0.4s ease;
+        }
+
+        /* Mensaje de asistencia inteligente */
+        #hud-asistencia {
+            display: none;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+            padding: 4px 12px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            margin: 2px 0;
+        }
+
+        #hud-asistencia.visible {
             display: block;
         }
 
-        /* Peligro: rojo */
-        #hud-superior.peligro {
+        #hud-asistencia.accion-bien {
+            color: #22c55e;
+            font-size: 16px;
+        }
+
+        #hud-asistencia.accion-suelta {
+            color: #facc15;
+            font-size: 20px;
+        }
+
+        #hud-asistencia.accion-reduce {
+            color: #f97316;
+            font-size: 24px;
+        }
+
+        #hud-asistencia.accion-frena {
+            color: #ef4444;
+            font-size: 28px;
+            animation: parpadeo-frena 0.5s infinite;
+        }
+
+        @keyframes parpadeo-frena {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Bordes de alerta según proximidad */
+        #hud-superior.alerta-lejos {
+            border-color: #22c55e;
+        }
+
+        #hud-superior.alerta-medio {
+            border-color: #f59e0b;
+        }
+
+        #hud-superior.alerta-cerca {
             border-color: #ef4444;
-            background: rgba(239, 68, 68, 0.2);
+            animation: pulse-hud 1s infinite;
+        }
+
+        #hud-superior.alerta-exceso {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.25);
+            animation: pulse-hud 0.6s infinite;
         }
 
         @keyframes pulse-hud {
             0%, 100% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.03); }
-        }
-
-        /* Barra de proximidad */
-        #barra-proximidad {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.3);
-            display: none;
-        }
-
-        #barra-proximidad-fill {
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s, background 0.3s;
-            background: #22c55e;
+            50% { transform: translateX(-50%) scale(1.04); }
         }
 
         /* Botón salir */
@@ -284,28 +296,6 @@
         .velocidad-cerca { color: #f59e0b; }
         .velocidad-exceso { color: #ef4444; }
 
-        /* Flash de alerta en bordes */
-        #flash-alerta {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 999;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        #flash-alerta.activo {
-            opacity: 1;
-            animation: flash-border 0.5s ease-out;
-        }
-
-        @keyframes flash-border {
-            0% { box-shadow: inset 0 0 100px rgba(239, 68, 68, 0.8); }
-            100% { box-shadow: inset 0 0 100px rgba(239, 68, 68, 0); }
-        }
 
         /* Indicador de dirección (norte) */
         #brujula {
@@ -381,28 +371,6 @@
             color: white !important;
         }
 
-        /* Alerta de cámara perimetral (secundaria, abajo-derecha) */
-        #alerta-camara-perimetral {
-            position: absolute;
-            bottom: 155px;
-            right: 15px;
-            z-index: 1000;
-            display: none;
-            align-items: center;
-            gap: 8px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 12px;
-            padding: 8px 14px;
-            backdrop-filter: blur(8px);
-            border: 2px solid #6b7280;
-            font-size: 13px;
-            max-width: 180px;
-        }
-
-        #alerta-camara-perimetral.peligro-perimetral {
-            border-color: #f59e0b;
-            background: rgba(245, 158, 11, 0.15);
-        }
     </style>
 </head>
 <body>
@@ -411,41 +379,23 @@
         <div id="mapa"></div>
     </div>
 
-    <!-- Flash de alerta -->
-    <div id="flash-alerta"></div>
-
-    <!-- Barra de proximidad superior -->
-    <div id="barra-proximidad">
-        <div id="barra-proximidad-fill"></div>
-    </div>
-
     <!-- Botón salir -->
     <button id="btn-salir" onclick="salir()">✕</button>
 
     <!-- Brújula -->
     <div id="brujula">🧭</div>
 
-    <!-- HUD superior: velocímetro + alerta fusionados -->
+    <!-- HUD unificado: cámara + asistencia + velocímetro -->
     <div id="hud-superior">
+        <div id="hud-camara">
+            <div id="camara-icono">📷</div>
+            <div id="camara-distancia"></div>
+            <div id="camara-limite"></div>
+        </div>
+        <div id="hud-asistencia"></div>
         <div id="hud-velocidad">
             <div id="velocidad-actual" class="velocidad-ok">0</div>
             <div id="velocidad-unidad">km/h</div>
-            <div id="limite-zona">60</div>
-        </div>
-        <div id="hud-separador"></div>
-        <div id="hud-alerta">
-            <div id="hud-alerta-icono">📷</div>
-            <div id="hud-alerta-distancia">500m</div>
-            <div id="hud-alerta-limite">Límite: 60 km/h</div>
-        </div>
-    </div>
-
-    <!-- Alerta de cámara perimetral (secundaria) -->
-    <div id="alerta-camara-perimetral">
-        <span id="alerta-perimetral-icono">📷</span>
-        <div>
-            <div id="alerta-perimetral-distancia" style="font-weight: 700;"></div>
-            <div id="alerta-perimetral-limite" style="font-size: 11px; opacity: 0.8;"></div>
         </div>
     </div>
 
@@ -535,6 +485,10 @@
 
             // Intentar Wake Lock
             solicitarWakeLock();
+
+            // Inicializar audio al primer toque (requisito móviles)
+            document.addEventListener('touchstart', () => inicializarAudio(), { once: true });
+            document.addEventListener('click', () => inicializarAudio(), { once: true });
         });
 
         async function inicializarMapa() {
@@ -627,8 +581,9 @@
                 cargarSegmentosConocidos();
             }
 
-            // Verificar alertas
+            // Verificar alertas y asistencia inteligente
             verificarAlertaCamaras();
+            analizarCamino();
 
             // Registrar nuevo segmento si se movió suficiente
             registrarNuevoSegmento();
@@ -874,25 +829,18 @@
         }
 
         function mostrarAlertaCamarasRuta() {
+            // Mostrar brevemente que hay cámaras en la ruta cargada
             const proximaCamara = camarasEnRuta[0];
-            if (!proximaCamara) return;
+            if (!proximaCamara || !ubicacionActual) return;
 
-            const hud = document.getElementById('hud-superior');
-            hud.classList.add('con-alerta');
+            const dist = calcularDistancia(
+                ubicacionActual.lat, ubicacionActual.lon,
+                proximaCamara.lat, proximaCamara.lon
+            );
 
-            document.getElementById('hud-alerta-icono').textContent = '📷';
-            document.getElementById('hud-alerta-distancia').innerHTML =
-                `${camarasEnRuta.length} cámara${camarasEnRuta.length > 1 ? 's' : ''}`;
-            document.getElementById('hud-alerta-limite').textContent =
-                `Próxima: ${Math.round(proximaCamara.distancia_en_ruta)}m - ${proximaCamara.velocidad_maxima || '?'} km/h`;
-
-            // Se oculta automáticamente después de 5 segundos (la alerta en tiempo real toma el control)
-            setTimeout(() => {
-                if (!document.getElementById('barra-proximidad').style.display ||
-                    document.getElementById('barra-proximidad').style.display === 'none') {
-                    hud.classList.remove('con-alerta');
-                }
-            }, 5000);
+            if (dist < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                actualizarHudCamara(proximaCamara, dist);
+            }
         }
 
         function registrarNuevoSegmento() {
@@ -1053,132 +1001,108 @@
 
         function verificarAlertaCamaras() {
             if (!ubicacionActual) {
-                ocultarAlertaCamaraRuta();
-                ocultarAlertaCamaraPerimetral();
+                ocultarHudCamara();
                 return;
             }
 
-            // === Alerta principal: cámaras EN RUTA (arriba centrada) ===
-            if (camarasEnRuta.length > 0) {
-                let camaraProxima = null;
-                let distanciaProxima = Infinity;
+            // Buscar la cámara más cercana de TODAS (ruta + cercanas)
+            const todasCamaras = [...camarasEnRuta, ...camarasCercanas];
+            const idsVistos = new Set();
+            let camaraProxima = null;
+            let distanciaProxima = Infinity;
 
-                camarasEnRuta.forEach(cam => {
-                    const dist = calcularDistancia(
-                        ubicacionActual.lat, ubicacionActual.lon,
-                        cam.lat, cam.lon
-                    );
-                    if (dist < distanciaProxima) {
-                        distanciaProxima = dist;
-                        camaraProxima = { ...cam, distancia: dist };
-                    }
-                });
+            todasCamaras.forEach(cam => {
+                if (idsVistos.has(cam.id)) return;
+                idsVistos.add(cam.id);
 
-                if (camaraProxima && distanciaProxima < CONFIG.DISTANCIA_ALERTA_CAMARA) {
-                    mostrarAlertaCamaraRuta(camaraProxima, distanciaProxima);
-                } else {
-                    ocultarAlertaCamaraRuta();
+                const dist = calcularDistancia(
+                    ubicacionActual.lat, ubicacionActual.lon,
+                    cam.lat, cam.lon
+                );
+                if (dist < distanciaProxima) {
+                    distanciaProxima = dist;
+                    camaraProxima = cam;
                 }
+            });
+
+            if (camaraProxima && distanciaProxima < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                actualizarHudCamara(camaraProxima, distanciaProxima);
             } else {
-                ocultarAlertaCamaraRuta();
-            }
-
-            // === Alerta secundaria: cámaras PERIMETRALES (abajo-izquierda) ===
-            if (camarasCercanas.length > 0) {
-                // Excluir cámaras que ya están en ruta
-                const idsEnRuta = new Set(camarasEnRuta.map(c => c.id));
-                let camaraPerimetral = null;
-                let distanciaPerimetral = Infinity;
-
-                camarasCercanas.forEach(cam => {
-                    if (idsEnRuta.has(cam.id)) return; // Ya se muestra en alerta principal
-                    const dist = calcularDistancia(
-                        ubicacionActual.lat, ubicacionActual.lon,
-                        cam.lat, cam.lon
-                    );
-                    if (dist < distanciaPerimetral) {
-                        distanciaPerimetral = dist;
-                        camaraPerimetral = { ...cam, distancia: dist };
-                    }
-                });
-
-                if (camaraPerimetral && distanciaPerimetral < CONFIG.DISTANCIA_ALERTA_CAMARA) {
-                    mostrarAlertaCamaraPerimetral(camaraPerimetral, distanciaPerimetral);
-                } else {
-                    ocultarAlertaCamaraPerimetral();
-                }
-            } else {
-                ocultarAlertaCamaraPerimetral();
+                ocultarHudCamara();
             }
         }
 
-        // Alerta principal (cámara en ruta) - arriba centrada, prominente
-        function mostrarAlertaCamaraRuta(camara, distancia) {
+        // HUD unificado: escala cámara y velocímetro según proximidad
+        function actualizarHudCamara(camara, distancia) {
             const hud = document.getElementById('hud-superior');
-            const barra = document.getElementById('barra-proximidad');
-            const barraFill = document.getElementById('barra-proximidad-fill');
+            const hudCamara = document.getElementById('hud-camara');
+            const iconoEl = document.getElementById('camara-icono');
+            const distanciaEl = document.getElementById('camara-distancia');
+            const limiteEl = document.getElementById('camara-limite');
+            const velocidadEl = document.getElementById('velocidad-actual');
+            const unidadEl = document.getElementById('velocidad-unidad');
 
-            hud.classList.add('con-alerta');
-            barra.style.display = 'block';
+            // Factor: 0 (lejos, 500m) → 1 (encima, 0m)
+            const factor = Math.max(0, Math.min(1, 1 - (distancia / CONFIG.DISTANCIA_ALERTA_CAMARA)));
 
+            // Mostrar cámara
+            hudCamara.classList.add('visible');
+
+            // Texto de distancia
             const textoDistancia = distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
-            document.getElementById('hud-alerta-distancia').innerHTML =
-                `<span style="color: #fef08a;">🚨</span> ${textoDistancia}`;
+            distanciaEl.textContent = textoDistancia;
 
-            document.getElementById('hud-alerta-limite').textContent =
-                `Límite: ${camara.velocidad_maxima || 60} km/h`;
-
-            const porcentaje = Math.max(0, 100 - (distancia / CONFIG.DISTANCIA_ALERTA_CAMARA * 100));
-            barraFill.style.width = `${porcentaje}%`;
-
-            const esPeligro = distancia < CONFIG.DISTANCIA_PELIGRO_CAMARA;
+            // Límite
             const limite = camara.velocidad_maxima || 60;
+            limiteEl.textContent = `Límite: ${limite} km/h`;
+
+            // Escalado progresivo de cámara (pequeña → grande)
+            const iconoSize = 18 + (factor * 22);       // 18px → 40px
+            const distanciaSize = 14 + (factor * 12);    // 14px → 26px
+            const limiteSize = 11 + (factor * 4);        // 11px → 15px
+
+            iconoEl.style.fontSize = `${iconoSize}px`;
+            distanciaEl.style.fontSize = `${distanciaSize}px`;
+            limiteEl.style.fontSize = `${limiteSize}px`;
+
+            // Reducir velocímetro proporcionalmente
+            const velSize = 52 - (factor * 24);          // 52px → 28px
+            const unidadSize = 14 - (factor * 4);        // 14px → 10px
+
+            velocidadEl.style.fontSize = `${velSize}px`;
+            unidadEl.style.fontSize = `${unidadSize}px`;
+
+            // Borde según proximidad y exceso
+            hud.classList.remove('alerta-lejos', 'alerta-medio', 'alerta-cerca', 'alerta-exceso');
+
             const exceso = velocidadActual > limite;
 
-            if (esPeligro || exceso) {
-                hud.classList.add('peligro');
-                barraFill.style.background = '#ef4444';
-                if (exceso && esPeligro) {
-                    flashAlerta();
-                }
+            if (exceso && distancia < CONFIG.DISTANCIA_PELIGRO_CAMARA) {
+                hud.classList.add('alerta-exceso');
+            } else if (distancia < CONFIG.DISTANCIA_PELIGRO_CAMARA) {
+                hud.classList.add('alerta-cerca');
+            } else if (distancia < 300) {
+                hud.classList.add('alerta-medio');
             } else {
-                hud.classList.remove('peligro');
-                barraFill.style.background = distancia < 300 ? '#f59e0b' : '#22c55e';
+                hud.classList.add('alerta-lejos');
             }
         }
 
-        function ocultarAlertaCamaraRuta() {
-            document.getElementById('hud-superior').classList.remove('con-alerta', 'peligro');
-            document.getElementById('barra-proximidad').style.display = 'none';
-        }
+        function ocultarHudCamara() {
+            const hud = document.getElementById('hud-superior');
+            const hudCamara = document.getElementById('hud-camara');
+            const velocidadEl = document.getElementById('velocidad-actual');
+            const unidadEl = document.getElementById('velocidad-unidad');
 
-        // Alerta secundaria (cámara perimetral) - abajo-izquierda, discreta
-        function mostrarAlertaCamaraPerimetral(camara, distancia) {
-            const alerta = document.getElementById('alerta-camara-perimetral');
-            alerta.style.display = 'flex';
+            hudCamara.classList.remove('visible');
+            hud.classList.remove('alerta-lejos', 'alerta-medio', 'alerta-cerca', 'alerta-exceso');
 
-            const textoDistancia = distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
-            document.getElementById('alerta-perimetral-distancia').textContent = textoDistancia;
-            document.getElementById('alerta-perimetral-limite').textContent =
-                `${camara.velocidad_maxima || 60} km/h`;
+            // Restaurar velocímetro a tamaño completo
+            velocidadEl.style.fontSize = '52px';
+            unidadEl.style.fontSize = '14px';
 
-            if (distancia < CONFIG.DISTANCIA_PELIGRO_CAMARA) {
-                alerta.classList.add('peligro-perimetral');
-            } else {
-                alerta.classList.remove('peligro-perimetral');
-            }
-        }
-
-        function ocultarAlertaCamaraPerimetral() {
-            const alerta = document.getElementById('alerta-camara-perimetral');
-            alerta.style.display = 'none';
-            alerta.classList.remove('peligro-perimetral');
-        }
-
-        function flashAlerta() {
-            const flash = document.getElementById('flash-alerta');
-            flash.classList.add('activo');
-            setTimeout(() => flash.classList.remove('activo'), 500);
+            // También ocultar asistencia
+            ocultarAsistencia();
         }
 
         // ==========================================
@@ -1278,6 +1202,182 @@
                 navigator.geolocation.clearWatch(watchId);
             }
             window.location.href = '/conductor';
+        }
+
+        // ==========================================
+        // ASISTENCIA INTELIGENTE DE CONDUCCIÓN
+        // ==========================================
+
+        // Contexto de audio para sonidos
+        let audioCtx = null;
+        let ultimaAccion = null;          // Para no repetir sonido
+        let ultimoSonidoTimestamp = 0;    // Cooldown entre sonidos
+
+        const ASISTENCIA = {
+            DESACELERACION_COSTEO: 1.5,   // km/h por segundo costeando (inercia)
+            DESACELERACION_FRENO: 5,      // km/h por segundo frenando suave
+            COOLDOWN_SONIDO: 3000,        // ms entre sonidos
+        };
+
+        function inicializarAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        // Función principal: analiza qué hay adelante y qué hacer
+        function analizarCamino() {
+            if (!ubicacionActual) return;
+
+            const eventos = obtenerEventosAdelante();
+
+            if (eventos.length === 0) {
+                ocultarAsistencia();
+                return;
+            }
+
+            // Tomar el evento más urgente (el más cercano que requiere acción)
+            const eventoUrgente = eventos[0];
+            const accion = calcularAccion(eventoUrgente.velocidadObjetivo, eventoUrgente.distancia, velocidadActual);
+
+            mostrarAsistencia(accion);
+        }
+
+        // Busca todos los eventos adelante que requieren atención
+        function obtenerEventosAdelante() {
+            const eventos = [];
+
+            // Cámaras (en ruta + cercanas filtradas por bearing)
+            const todasCamaras = [...camarasEnRuta, ...camarasCercanas];
+            const idsVistos = new Set();
+
+            todasCamaras.forEach(cam => {
+                if (idsVistos.has(cam.id)) return;
+                idsVistos.add(cam.id);
+
+                if (!ubicacionActual) return;
+
+                const dist = calcularDistancia(
+                    ubicacionActual.lat, ubicacionActual.lon,
+                    cam.lat, cam.lon
+                );
+
+                if (dist < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                    eventos.push({
+                        tipo: 'camara',
+                        distancia: dist,
+                        velocidadObjetivo: cam.velocidad_maxima || 60,
+                        nombre: cam.nombre || 'Cámara'
+                    });
+                }
+            });
+
+            // Ordenar por distancia (el más cercano primero)
+            eventos.sort((a, b) => a.distancia - b.distancia);
+
+            return eventos;
+        }
+
+        // Calcula qué acción tomar dados: velocidad objetivo, distancia, velocidad actual
+        function calcularAccion(velocidadObjetivo, distancia, velocidadActualKmh) {
+            // Ya voy bien
+            if (velocidadActualKmh <= velocidadObjetivo) {
+                return { nivel: 'bien', texto: 'Vas bien' };
+            }
+
+            const exceso = velocidadActualKmh - velocidadObjetivo;  // km/h que sobran
+
+            // Tiempo disponible en segundos (distancia / velocidad en m/s)
+            const velocidadMs = velocidadActualKmh / 3.6;
+            const tiempoDisponible = velocidadMs > 0 ? distancia / velocidadMs : 999;
+
+            // Tiempo que tarda costeando (soltar acelerador)
+            const tiempoCosteo = exceso / ASISTENCIA.DESACELERACION_COSTEO;
+
+            // Tiempo que tarda frenando suave
+            const tiempoFrenado = exceso / ASISTENCIA.DESACELERACION_FRENO;
+
+            if (tiempoCosteo <= tiempoDisponible * 0.85) {
+                // Alcanza costeando con margen
+                return { nivel: 'suelta', texto: 'Suelta' };
+            } else if (tiempoCosteo <= tiempoDisponible) {
+                // Alcanza costeando pero justo
+                return { nivel: 'reduce', texto: 'Reduce' };
+            } else if (tiempoFrenado <= tiempoDisponible) {
+                // Necesita frenar suave
+                return { nivel: 'reduce', texto: 'Reduce' };
+            } else {
+                // Urgente, frena ya
+                return { nivel: 'frena', texto: 'Frena' };
+            }
+        }
+
+        function mostrarAsistencia(accion) {
+            const el = document.getElementById('hud-asistencia');
+
+            // Reset clases y aplicar nuevas
+            el.className = '';
+            el.id = 'hud-asistencia';
+            el.classList.add('visible', `accion-${accion.nivel}`);
+            el.textContent = accion.texto;
+
+            // Sonido si cambió la acción
+            const ahora = Date.now();
+            if (accion.nivel !== ultimaAccion && accion.nivel !== 'bien' &&
+                ahora - ultimoSonidoTimestamp > ASISTENCIA.COOLDOWN_SONIDO) {
+                reproducirSonido(accion.nivel);
+                ultimoSonidoTimestamp = ahora;
+            }
+            ultimaAccion = accion.nivel;
+        }
+
+        function ocultarAsistencia() {
+            const el = document.getElementById('hud-asistencia');
+            el.classList.remove('visible');
+            ultimaAccion = null;
+        }
+
+        // Sonidos con Web Audio API
+        function reproducirSonido(nivel) {
+            inicializarAudio();
+            if (!audioCtx) return;
+
+            switch (nivel) {
+                case 'suelta':
+                    // Ding suave - tono agradable
+                    tocarTono(880, 0.15, 'sine', 0.3);
+                    break;
+                case 'reduce':
+                    // Dos tonos alertantes
+                    tocarTono(660, 0.15, 'triangle', 0.4);
+                    setTimeout(() => tocarTono(880, 0.15, 'triangle', 0.4), 200);
+                    break;
+                case 'frena':
+                    // Tono urgente repetitivo
+                    tocarTono(1000, 0.12, 'square', 0.3);
+                    setTimeout(() => tocarTono(1200, 0.12, 'square', 0.3), 150);
+                    setTimeout(() => tocarTono(1000, 0.12, 'square', 0.3), 300);
+                    break;
+            }
+        }
+
+        function tocarTono(frecuencia, duracion, tipo, volumen) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = tipo;
+            osc.frequency.value = frecuencia;
+            gain.gain.value = volumen;
+
+            // Fade out para evitar clicks
+            gain.gain.setValueAtTime(volumen, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duracion);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + duracion);
         }
 
         // ==========================================

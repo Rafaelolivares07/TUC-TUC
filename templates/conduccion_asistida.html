@@ -225,21 +225,42 @@
             50% { transform: scale(1.04); }
         }
 
-        /* Botón salir */
+        /* Botón salir - pegado a la esquina */
         #btn-salir {
             position: absolute;
-            top: 20px;
-            left: 20px;
+            top: 8px;
+            left: 8px;
             z-index: 1000;
             background: rgba(0, 0, 0, 0.5);
             border: none;
             color: white;
-            width: 50px;
-            height: 50px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
-            font-size: 24px;
+            font-size: 20px;
             cursor: pointer;
             backdrop-filter: blur(8px);
+        }
+
+        /* Toggle sonido - arriba derecha */
+        #btn-sonido {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            color: white;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+        }
+
+        #btn-sonido.muted {
+            opacity: 0.5;
         }
 
         /* Info de viaje activo - franja horizontal abajo */
@@ -306,25 +327,43 @@
         #info-viaje .btn-iniciar { background: #22c55e; }
         #info-viaje .btn-finalizar { background: #ef4444; color: #fff; }
 
-        /* Estado de conexión (junto a la brújula) */
-        #estado-gps {
+        /* Colores de velocidad */
+        .velocidad-ok { color: #22c55e; }
+        .velocidad-cerca { color: #f59e0b; }
+        .velocidad-exceso { color: #ef4444; }
+
+        /* Franja inferior unificada: brújula + GPS + leyenda */
+        #barra-inferior {
             position: absolute;
-            top: 85px;
-            left: 70px;
+            bottom: 0;
+            left: 0;
+            right: 0;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px;
-            border-radius: 12px;
-            font-size: 11px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 7px 15px;
+            font-size: 10px;
+            backdrop-filter: blur(8px);
             display: flex;
             align-items: center;
-            gap: 6px;
-            backdrop-filter: blur(8px);
+            justify-content: center;
+            gap: 15px;
+        }
+
+        #barra-inferior .brujula-inline {
+            font-size: 16px;
+            transition: transform 0.3s;
+            display: inline-block;
+        }
+
+        #barra-inferior .gps-inline {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
         #gps-indicador {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             background: #22c55e;
             animation: blink 1s infinite;
@@ -340,44 +379,10 @@
             animation: none;
         }
 
-        /* Colores de velocidad */
-        .velocidad-ok { color: #22c55e; }
-        .velocidad-cerca { color: #f59e0b; }
-        .velocidad-exceso { color: #ef4444; }
-
-
-        /* Indicador de dirección (norte) */
-        #brujula {
-            position: absolute;
-            top: 80px;
-            left: 20px;
-            z-index: 1000;
-            width: 40px;
-            height: 40px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            transition: transform 0.3s;
-            backdrop-filter: blur(8px);
-        }
-
-        /* Leyenda de rutas - barra horizontal inferior */
-        #leyenda-rutas {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 15px;
-            font-size: 10px;
-            backdrop-filter: blur(8px);
-            display: flex;
-            justify-content: center;
-            gap: 15px;
+        .separador-barra {
+            width: 1px;
+            height: 14px;
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .leyenda-item {
@@ -428,11 +433,11 @@
         <div id="mapa"></div>
     </div>
 
-    <!-- Botón salir -->
+    <!-- Botón salir (esquina sup izq) -->
     <button id="btn-salir" onclick="salir()">✕</button>
 
-    <!-- Brújula -->
-    <div id="brujula">🧭</div>
+    <!-- Toggle sonido (esquina sup der) -->
+    <button id="btn-sonido" onclick="toggleSonido()">🔊</button>
 
     <!-- HUD unificado: cámara + asistencia + velocímetro + flechas de giro -->
     <div id="hud-wrapper">
@@ -471,25 +476,25 @@
         <div id="viaje-acciones"></div>
     </div>
 
-    <!-- Estado GPS -->
-    <div id="estado-gps">
-        <div id="gps-indicador"></div>
-        <span id="gps-texto">Conectando GPS...</span>
-    </div>
-
-    <!-- Leyenda de rutas -->
-    <div id="leyenda-rutas">
+    <!-- Franja inferior: brújula + GPS + leyenda -->
+    <div id="barra-inferior">
+        <span class="brujula-inline" id="brujula">🧭</span>
+        <div class="gps-inline">
+            <div id="gps-indicador"></div>
+            <span id="gps-texto">GPS...</span>
+        </div>
+        <div class="separador-barra"></div>
         <div class="leyenda-item">
             <div class="leyenda-linea" style="background: rgba(100, 150, 255, 0.6);"></div>
-            <span>Rutas conocidas</span>
+            <span>Conocidas</span>
         </div>
         <div class="leyenda-item">
             <div class="leyenda-linea" style="background: transparent; border-top: 3px dashed #f97316;"></div>
-            <span>Hacia recogida</span>
+            <span>Recogida</span>
         </div>
         <div class="leyenda-item">
             <div class="leyenda-linea" style="background: #22c55e;"></div>
-            <span>Hacia destino</span>
+            <span>Destino</span>
         </div>
     </div>
 
@@ -1272,6 +1277,7 @@
 
         // Contexto de audio para sonidos
         let audioCtx = null;
+        let sonidoActivo = true;          // Toggle de sonido
         let ultimaAccion = null;          // Para no repetir sonido
         let ultimoSonidoTimestamp = 0;    // Cooldown entre sonidos
 
@@ -1422,8 +1428,17 @@
             ultimaAccion = null;
         }
 
+        function toggleSonido() {
+            sonidoActivo = !sonidoActivo;
+            const btn = document.getElementById('btn-sonido');
+            btn.textContent = sonidoActivo ? '🔊' : '🔇';
+            btn.classList.toggle('muted', !sonidoActivo);
+            inicializarAudio();
+        }
+
         // Sonidos con Web Audio API
         function reproducirSonido(nivel) {
+            if (!sonidoActivo) return;
             inicializarAudio();
             if (!audioCtx) return;
 

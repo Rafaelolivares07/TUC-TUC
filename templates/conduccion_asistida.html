@@ -496,6 +496,8 @@
             <div class="leyenda-linea" style="background: #22c55e;"></div>
             <span>Destino</span>
         </div>
+        <div class="separador-barra"></div>
+        <span id="fuente-ruta" style="opacity: 0.5; font-style: italic;"></span>
     </div>
 
     <!-- Toast pantalla -->
@@ -807,7 +809,18 @@
                         actualizarCamarasEnMapa();
                         mostrarAlertaCamarasRuta();
                     }
-                    console.log(`🗺️ Ruta cargada - Tramo1: ${data.leg1 ? data.leg1.fuente : 'N/A'}, Tramo2: ${data.leg2 ? data.leg2.fuente : 'N/A'}`);
+                    // Mostrar fuente de ruta en barra inferior
+                    const f1 = data.leg1 ? data.leg1.fuente : '';
+                    const f2 = data.leg2 ? data.leg2.fuente : '';
+                    const fuenteEl = document.getElementById('fuente-ruta');
+                    if (f1 === 'grafo' && f2 === 'grafo') {
+                        fuenteEl.textContent = '⚡ propio';
+                    } else if (f1 === 'grafo' || f2 === 'grafo') {
+                        fuenteEl.textContent = '⚡/🌐 mixto';
+                    } else {
+                        fuenteEl.textContent = '🌐 osrm';
+                    }
+                    console.log(`🗺️ Ruta cargada - Tramo1: ${f1}, Tramo2: ${f2}`);
                 }
             } catch (e) {
                 console.error('Error cargando ruta de viaje:', e);

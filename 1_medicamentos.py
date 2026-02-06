@@ -23673,7 +23673,7 @@ def api_admin_simular_viaje():
             'segmentos_nuevos': nuevos,
             'segmentos_actualizados': max(0, actualizados),
             'puntos_geometria': total_puntos,
-            'distancia_km': round(osrm['distancia_metros'] / 1000, 1)
+            'distancia_km': round(ruta['distancia_metros'] / 1000, 1)
         })
 
     except Exception as e:

@@ -23472,6 +23472,160 @@ def registrar_cambio_db(tabla, registro_id, accion, campo=None, valor_anterior=N
         print(f"Error registrando cambio: {e}")
 
 
+@app.route('/admin/poblar-segmentos')
+@admin_required
+def admin_poblar_segmentos():
+    """Template para poblar masivamente segmentos de ruta via OSRM"""
+    return render_template('admin_poblar_segmentos.html')
+
+
+@app.route('/api/admin/pois-perimetrales')
+@admin_required
+def api_admin_pois_perimetrales():
+    """Selecciona POIs perimetrales del cuadrante de la ciudad"""
+    nw_lat = request.args.get('nw_lat', 3.52, type=float)
+    nw_lon = request.args.get('nw_lon', -76.58, type=float)
+    se_lat = request.args.get('se_lat', 3.34, type=float)
+    se_lon = request.args.get('se_lon', -76.48, type=float)
+    por_borde = request.args.get('por_borde', 5, type=int)
+
+    margen = 0.015  # ~1.5km de margen para considerar "borde"
+
+    try:
+        conn = get_db_connection()
+        pois = {'norte': [], 'sur': [], 'este': [], 'oeste': []}
+
+        # Norte
+        rows = conn.execute("""
+            SELECT id, nombre, lat, lon, categoria FROM pois_cali
+            WHERE lat > %s AND lat <= %s AND lon BETWEEN %s AND %s
+            ORDER BY RANDOM() LIMIT %s
+        """, (nw_lat - margen, nw_lat, nw_lon, se_lon, por_borde)).fetchall()
+        pois['norte'] = [dict(r) for r in rows]
+
+        # Sur
+        rows = conn.execute("""
+            SELECT id, nombre, lat, lon, categoria FROM pois_cali
+            WHERE lat >= %s AND lat < %s AND lon BETWEEN %s AND %s
+            ORDER BY RANDOM() LIMIT %s
+        """, (se_lat, se_lat + margen, nw_lon, se_lon, por_borde)).fetchall()
+        pois['sur'] = [dict(r) for r in rows]
+
+        # Este
+        rows = conn.execute("""
+            SELECT id, nombre, lat, lon, categoria FROM pois_cali
+            WHERE lon > %s AND lon <= %s AND lat BETWEEN %s AND %s
+            ORDER BY RANDOM() LIMIT %s
+        """, (se_lon - margen, se_lon, se_lat, nw_lat, por_borde)).fetchall()
+        pois['este'] = [dict(r) for r in rows]
+
+        # Oeste
+        rows = conn.execute("""
+            SELECT id, nombre, lat, lon, categoria FROM pois_cali
+            WHERE lon >= %s AND lon < %s AND lat BETWEEN %s AND %s
+            ORDER BY RANDOM() LIMIT %s
+        """, (nw_lon, nw_lon + margen, se_lat, nw_lat, por_borde)).fetchall()
+        pois['oeste'] = [dict(r) for r in rows]
+
+        conn.close()
+
+        total = sum(len(v) for v in pois.values())
+        return jsonify({'ok': True, 'pois': pois, 'total': total})
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/simular-viaje', methods=['POST'])
+@admin_required
+def api_admin_simular_viaje():
+    """Simula un viaje entre dos puntos y guarda los segmentos"""
+    import time
+    data = request.get_json()
+    lat1 = data.get('origen_lat')
+    lon1 = data.get('origen_lon')
+    lat2 = data.get('destino_lat')
+    lon2 = data.get('destino_lon')
+
+    if not all([lat1, lon1, lat2, lon2]):
+        return jsonify({'ok': False, 'error': 'Faltan coordenadas'}), 400
+
+    try:
+        osrm = obtener_distancia_osrm(float(lat1), float(lon1), float(lat2), float(lon2), con_geometria=True)
+
+        if not osrm or not osrm.get('geometria'):
+            return jsonify({'ok': False, 'error': 'OSRM no retornó ruta'})
+
+        conn = get_db_connection()
+        geometria = osrm['geometria']
+        total_puntos = len(geometria)
+
+        # Contar antes
+        antes = conn.execute("SELECT COUNT(*) as c FROM conexiones_via").fetchone()['c']
+
+        guardar_conexiones_osrm(geometria, conn)
+
+        # Contar después
+        despues = conn.execute("SELECT COUNT(*) as c FROM conexiones_via").fetchone()['c']
+
+        conn.close()
+
+        nuevos = despues - antes
+        actualizados = (total_puntos - 1) - nuevos
+
+        return jsonify({
+            'ok': True,
+            'segmentos_nuevos': nuevos,
+            'segmentos_actualizados': max(0, actualizados),
+            'puntos_geometria': total_puntos,
+            'distancia_km': round(osrm['distancia_metros'] / 1000, 1)
+        })
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/estadisticas-grafo')
+@admin_required
+def api_admin_estadisticas_grafo():
+    """Estadísticas del grafo de conexiones_via"""
+    try:
+        conn = get_db_connection()
+
+        stats = {}
+        stats['total'] = conn.execute("SELECT COUNT(*) as c FROM conexiones_via").fetchone()['c']
+
+        # Por fuente
+        rows = conn.execute("""
+            SELECT fuente, COUNT(*) as cantidad FROM conexiones_via GROUP BY fuente ORDER BY cantidad DESC
+        """).fetchall()
+        stats['por_fuente'] = {r['fuente']: r['cantidad'] for r in rows}
+
+        # Promedio transitado
+        row = conn.execute("SELECT AVG(veces_transitado) as prom FROM conexiones_via").fetchone()
+        stats['promedio_transitado'] = round(float(row['prom'] or 0), 1)
+
+        # Bbox cobertura
+        row = conn.execute("""
+            SELECT MIN(origen_lat) as min_lat, MAX(origen_lat) as max_lat,
+                   MIN(origen_lon) as min_lon, MAX(origen_lon) as max_lon
+            FROM conexiones_via
+        """).fetchone()
+        if row and row['min_lat']:
+            stats['cobertura'] = {
+                'min_lat': float(row['min_lat']),
+                'max_lat': float(row['max_lat']),
+                'min_lon': float(row['min_lon']),
+                'max_lon': float(row['max_lon'])
+            }
+
+        conn.close()
+        return jsonify({'ok': True, 'stats': stats})
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/mantenimiento')
 @admin_required
 def admin_mantenimiento():

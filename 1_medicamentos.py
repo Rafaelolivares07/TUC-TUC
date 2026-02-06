@@ -251,6 +251,20 @@ def obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=False):
         return None
 
 
+def obtener_distancia_con_fallback(lat1, lon1, lat2, lon2):
+    """
+    Obtiene solo distancia: Waze → OSRM. Sin geometría, rápido para estimaciones.
+    Retorna dict {'distancia_metros': X} o None.
+    """
+    waze = obtener_ruta_waze(lat1, lon1, lat2, lon2)
+    if waze:
+        return {'distancia_metros': waze['distancia_metros']}
+    osrm = obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=False)
+    if osrm:
+        return {'distancia_metros': osrm['distancia_metros']}
+    return None
+
+
 def obtener_ruta_waze(lat1, lon1, lat2, lon2):
     """
     Obtiene ruta desde Waze como fallback de OSRM.
@@ -21179,17 +21193,17 @@ def api_conductor_cercano():
                 conductor_cercano = c
                 conductor_cercano_dist = dist
 
-        # Obtener distancia real por calles con OSRM
-        osrm_data = obtener_distancia_osrm(
+        # Obtener distancia real por calles: Waze → OSRM
+        dist_data = obtener_distancia_con_fallback(
             float(conductor_cercano['ubicacion_lat']),
             float(conductor_cercano['ubicacion_lon']),
             lat, lon
         )
 
-        if osrm_data:
-            distancia_km = osrm_data['distancia_metros'] / 1000
+        if dist_data:
+            distancia_km = dist_data['distancia_metros'] / 1000
         else:
-            # Fallback a Haversine si OSRM falla
+            # Fallback a Haversine si todo falla
             distancia_km = conductor_cercano_dist / 1000
 
         # Calcular tiempo: (distancia / velocidad) * 60 minutos + minutos extra si está en viaje
@@ -21257,13 +21271,13 @@ def api_conductor_servicios_disponibles():
         candidatos.sort(key=lambda x: x['dist_pre'])
         candidatos = candidatos[:14]
 
-        # Aplicar OSRM a los 14 candidatos
+        # Calcular distancia real a los 14 candidatos: Waze → OSRM
         servicios = []
         for c in candidatos:
             row = c['row']
-            osrm = obtener_distancia_osrm(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
-            if osrm:
-                dist_km = osrm['distancia_metros'] / 1000
+            dist_data = obtener_distancia_con_fallback(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            if dist_data:
+                dist_km = dist_data['distancia_metros'] / 1000
             else:
                 dist_km = c['dist_pre'] / 1000
 
@@ -21312,13 +21326,13 @@ def api_conductor_servicios_disponibles():
         candidatos_prog.sort(key=lambda x: x['dist_pre'])
         candidatos_prog = candidatos_prog[:14]
 
-        # Aplicar OSRM a programados
+        # Calcular distancia real a programados: Waze → OSRM
         programados = []
         for c in candidatos_prog:
             row = c['row']
-            osrm = obtener_distancia_osrm(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
-            if osrm:
-                dist_km = osrm['distancia_metros'] / 1000
+            dist_data = obtener_distancia_con_fallback(lat, lon, float(row['origen_lat']), float(row['origen_lon']))
+            if dist_data:
+                dist_km = dist_data['distancia_metros'] / 1000
             else:
                 dist_km = c['dist_pre'] / 1000
 
@@ -21440,13 +21454,13 @@ def validar_solapamiento_viajes(conn, conductor_id, nuevo_servicio):
             # Viaje programado: hora_fin = fecha_programada + tiempo_estimado
             hora_fin_viaje = viaje['fecha_programada'] + timedelta(minutes=tiempo_estimado)
 
-        # Calcular tiempo de traslado con OSRM (destino viaje A → origen nuevo viaje)
-        osrm_data = obtener_distancia_osrm(destino_lat, destino_lon, nuevo_origen_lat, nuevo_origen_lon)
+        # Calcular tiempo de traslado: Waze → OSRM (destino viaje A → origen nuevo viaje)
+        dist_data = obtener_distancia_con_fallback(destino_lat, destino_lon, nuevo_origen_lat, nuevo_origen_lon)
 
-        if osrm_data:
-            distancia_km = osrm_data['distancia_metros'] / 1000
+        if dist_data:
+            distancia_km = dist_data['distancia_metros'] / 1000
         else:
-            # Fallback a Haversine si OSRM falla
+            # Fallback a Haversine si todo falla
             distancia_metros = calcular_distancia(destino_lat, destino_lon, nuevo_origen_lat, nuevo_origen_lon)
             distancia_km = distancia_metros / 1000
 
@@ -21474,9 +21488,9 @@ def validar_solapamiento_viajes(conn, conductor_id, nuevo_servicio):
                     origen_prog_lat = float(viaje['origen_lat'])
                     origen_prog_lon = float(viaje['origen_lon'])
 
-                    osrm_inv = obtener_distancia_osrm(nuevo_destino_lat, nuevo_destino_lon, origen_prog_lat, origen_prog_lon)
-                    if osrm_inv:
-                        dist_inv_km = osrm_inv['distancia_metros'] / 1000
+                    dist_inv = obtener_distancia_con_fallback(nuevo_destino_lat, nuevo_destino_lon, origen_prog_lat, origen_prog_lon)
+                    if dist_inv:
+                        dist_inv_km = dist_inv['distancia_metros'] / 1000
                     else:
                         dist_inv_km = calcular_distancia(nuevo_destino_lat, nuevo_destino_lon, origen_prog_lat, origen_prog_lon) / 1000
 
@@ -22936,18 +22950,14 @@ def api_calcular_tarifa():
         geometria_ruta = None
 
         if origen_lat and origen_lon and destino_lat and destino_lon:
-            # Obtener ruta con geometría para detectar peajes
-            osrm_data = obtener_distancia_osrm(origen_lat, origen_lon, destino_lat, destino_lon, con_geometria=True)
-            if osrm_data and 'geometria' in osrm_data:
-                geometria_ruta = osrm_data['geometria']
+            # Obtener ruta con geometría: grafo → Waze → OSRM
+            ruta_data = obtener_ruta_con_fallback(origen_lat, origen_lon, destino_lat, destino_lon, conn)
+            if ruta_data and 'geometria' in ruta_data:
+                geometria_ruta = ruta_data['geometria']
                 peajes_detectados = detectar_peajes_en_ruta(geometria_ruta, conn)
                 total_peajes = sum(p['tarifa'] for p in peajes_detectados)
 
-                # Guardar conexiones de la ruta para construir grafo
-                try:
-                    guardar_conexiones_osrm(geometria_ruta, conn)
-                except:
-                    pass  # No bloquear si falla
+                # Segmentos ya guardados dentro de obtener_ruta_con_fallback
 
         if tipo_servicio == 'transporte':
             # Obtener parámetros configurables

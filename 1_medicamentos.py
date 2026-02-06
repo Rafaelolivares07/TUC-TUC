@@ -272,7 +272,7 @@ def obtener_ruta_waze(lat1, lon1, lat2, lon2):
     """
     import requests
     try:
-        url = "https://www.waze.com/row-RoutingManager/routingRequest"
+        url = "https://routing-livemap-row.waze.com/RoutingManager/routingRequest"
         params = {
             "from": f"x:{lon1} y:{lat1}",
             "to": f"x:{lon2} y:{lat2}",

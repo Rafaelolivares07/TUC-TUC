@@ -1337,7 +1337,7 @@
                 }
             });
 
-            // Giros en la ruta
+            // Giros en la ruta (max 160m)
             girosDetectados.forEach(giro => {
                 if (!ubicacionActual) return;
 
@@ -1346,7 +1346,7 @@
                     giro.lat, giro.lon
                 );
 
-                if (dist < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                if (dist < 160) {
                     eventos.push({
                         tipo: 'giro',
                         distancia: dist,
@@ -1541,7 +1541,7 @@
                     ubicacionActual.lat, ubicacionActual.lon,
                     giro.lat, giro.lon
                 );
-                if (dist < distGiro && dist < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                if (dist < distGiro && dist < 160) {
                     distGiro = dist;
                     giroCercano = giro;
                 }
@@ -1560,21 +1560,22 @@
             // Inactiva se oculta
             flechaInactiva.className = 'flecha-giro';
 
-            // Tamaño crece con proximidad
-            const factor = Math.max(0, Math.min(1, 1 - (distGiro / CONFIG.DISTANCIA_ALERTA_CAMARA)));
+            // Tamaño crece con proximidad (max 160m)
+            const DIST_MAX_GIRO = 160;
+            const factor = Math.max(0, Math.min(1, 1 - (distGiro / DIST_MAX_GIRO)));
             const tamano = 36 + (factor * 24);  // 36px → 60px
             flechaActiva.style.fontSize = `${tamano}px`;
 
             // Nivel de parpadeo según distancia
             let claseParpadeo = '';
-            if (distGiro < 80) {
+            if (distGiro < 40) {
                 claseParpadeo = 'parpadeo-rapido';
-            } else if (distGiro < 200) {
+            } else if (distGiro < 80) {
                 claseParpadeo = 'parpadeo-medio';
-            } else if (distGiro < 350) {
+            } else if (distGiro < 120) {
                 claseParpadeo = 'parpadeo-lento';
             }
-            // > 350m: visible fija (sin parpadeo)
+            // 120-160m: visible fija gris (sin parpadeo)
 
             flechaActiva.className = `flecha-giro visible ${claseParpadeo}`;
         }

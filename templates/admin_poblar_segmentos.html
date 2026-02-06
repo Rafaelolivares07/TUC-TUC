@@ -365,14 +365,21 @@
 
                         actualizarContadores();
 
+                        const srcTag = data.fuente === 'waze' ? '🟡waze' : '🌐osrm';
                         if (data.segmentos_nuevos > 0) {
-                            log(`${i+1}/${total} ${viaje.origen_nombre} → ${viaje.destino_nombre} | ${data.distancia_km}km | +${data.segmentos_nuevos} nuevos, ${data.segmentos_actualizados} act.`, 'ok');
+                            log(`${i+1}/${total} [${srcTag}] ${viaje.origen_nombre} → ${viaje.destino_nombre} | ${data.distancia_km}km | +${data.segmentos_nuevos} nuevos, ${data.segmentos_actualizados} act.`, 'ok');
                         }
                     } else {
                         log(`${i+1}/${total} Error: ${data.error}`, 'error');
                     }
                 } catch(e) {
                     log(`${i+1}/${total} Error de red: ${e.message}`, 'error');
+                    // Backoff: si falla, esperar el doble antes del siguiente
+                    if (i < total - 1 && !detenido) {
+                        log(`Backoff: esperando ${c.delay * 3}s por error...`, 'warn');
+                        await new Promise(r => setTimeout(r, c.delay * 3000));
+                    }
+                    continue;
                 }
 
                 // Delay entre requests

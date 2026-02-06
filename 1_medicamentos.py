@@ -251,6 +251,73 @@ def obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=False):
         return None
 
 
+def obtener_ruta_waze(lat1, lon1, lat2, lon2):
+    """
+    Obtiene ruta desde Waze como fallback de OSRM.
+    Retorna dict compatible: {'distancia_metros': X, 'geometria': [[lat,lon], ...]} o None.
+    """
+    import requests
+    try:
+        url = "https://www.waze.com/row-RoutingManager/routingRequest"
+        params = {
+            "from": f"x:{lon1} y:{lat1}",
+            "to": f"x:{lon2} y:{lat2}",
+            "at": 0,
+            "returnJSON": "true",
+            "returnGeometries": "true",
+            "returnInstructions": "false",
+            "timeout": 60000,
+            "nPaths": 1,
+            "options": "AVOID_TRAILS:t"
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "referer": "https://www.waze.com/live-map"
+        }
+        response = requests.get(url, params=params, headers=headers, timeout=8)
+        if response.status_code != 200:
+            print(f"Waze HTTP {response.status_code}")
+            return None
+
+        data = response.json()
+
+        # Extraer respuesta (puede venir en 'alternatives' o 'response')
+        if data.get('alternatives'):
+            route = data['alternatives'][0]['response']
+        elif data.get('response'):
+            route = data['response']
+        else:
+            return None
+
+        results = route.get('results') or route.get('result') or []
+        if not results:
+            return None
+
+        # Reconstruir geometría y sumar distancia
+        geometria = []
+        distancia_total = 0
+        for seg in results:
+            distancia_total += seg.get('length', 0)
+            path = seg.get('path')
+            if path:
+                x = path.get('x')
+                y = path.get('y')
+                if x is not None and y is not None:
+                    geometria.append([float(y), float(x)])  # [lat, lon]
+
+        if len(geometria) < 2:
+            return None
+
+        return {
+            'distancia_metros': distancia_total,
+            'geometria': geometria,
+            'fuente': 'waze'
+        }
+    except Exception as e:
+        print(f"Error Waze: {e}")
+        return None
+
+
 def guardar_conexiones_osrm(geometria, conn=None):
     """
     Guarda las conexiones entre puntos consecutivos de una ruta OSRM.
@@ -23551,13 +23618,20 @@ def api_admin_simular_viaje():
         return jsonify({'ok': False, 'error': 'Faltan coordenadas'}), 400
 
     try:
-        osrm = obtener_distancia_osrm(float(lat1), float(lon1), float(lat2), float(lon2), con_geometria=True)
+        # Intentar OSRM primero
+        ruta = obtener_distancia_osrm(float(lat1), float(lon1), float(lat2), float(lon2), con_geometria=True)
+        fuente_usada = 'osrm'
 
-        if not osrm or not osrm.get('geometria'):
-            return jsonify({'ok': False, 'error': 'OSRM no retornó ruta'})
+        # Fallback a Waze si OSRM falla
+        if not ruta or not ruta.get('geometria'):
+            ruta = obtener_ruta_waze(float(lat1), float(lon1), float(lat2), float(lon2))
+            fuente_usada = 'waze'
+
+        if not ruta or not ruta.get('geometria'):
+            return jsonify({'ok': False, 'error': 'Ni OSRM ni Waze retornaron ruta'})
 
         conn = get_db_connection()
-        geometria = osrm['geometria']
+        geometria = ruta['geometria']
         total_puntos = len(geometria)
 
         # Contar antes
@@ -23575,6 +23649,7 @@ def api_admin_simular_viaje():
 
         return jsonify({
             'ok': True,
+            'fuente': fuente_usada,
             'segmentos_nuevos': nuevos,
             'segmentos_actualizados': max(0, actualizados),
             'puntos_geometria': total_puntos,

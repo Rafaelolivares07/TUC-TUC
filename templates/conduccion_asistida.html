@@ -49,34 +49,46 @@
             gap: 10px;
         }
 
-        /* Flechas de giro */
+        /* Flechas de giro (gris de fondo + amarilla encima) */
         .flecha-giro {
             display: none;
-            font-size: 36px;
-            color: #facc15;
-            text-shadow: 0 0 10px rgba(250, 204, 21, 0.5);
+            position: relative;
             transition: font-size 0.3s ease;
+            font-size: 36px;
         }
 
         .flecha-giro.visible {
             display: block;
         }
 
-        .flecha-giro.parpadeo-lento {
+        .flecha-base {
+            color: #4b5563;
+        }
+
+        .flecha-activa {
+            position: absolute;
+            top: 0;
+            left: 0;
+            color: #facc15;
+            text-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
+            opacity: 0;
+        }
+
+        .flecha-giro.parpadeo-lento .flecha-activa {
             animation: parpadeo-flecha 1s infinite;
         }
 
-        .flecha-giro.parpadeo-medio {
+        .flecha-giro.parpadeo-medio .flecha-activa {
             animation: parpadeo-flecha 0.5s infinite;
         }
 
-        .flecha-giro.parpadeo-rapido {
+        .flecha-giro.parpadeo-rapido .flecha-activa {
             animation: parpadeo-flecha 0.25s infinite;
         }
 
         @keyframes parpadeo-flecha {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.15; }
+            50% { opacity: 0; }
         }
 
         /* HUD unificado: cámara + velocímetro apilados */
@@ -424,7 +436,10 @@
 
     <!-- HUD unificado: cámara + asistencia + velocímetro + flechas de giro -->
     <div id="hud-wrapper">
-        <div id="flecha-izquierda" class="flecha-giro">◀</div>
+        <div id="flecha-izquierda" class="flecha-giro">
+            <span class="flecha-base">◀</span>
+            <span class="flecha-activa">◀</span>
+        </div>
         <div id="hud-superior">
             <div id="hud-camara">
                 <div id="camara-icono">📷</div>
@@ -437,7 +452,10 @@
                 <div id="velocidad-unidad">km/h</div>
             </div>
         </div>
-        <div id="flecha-derecha" class="flecha-giro">▶</div>
+        <div id="flecha-derecha" class="flecha-giro">
+            <span class="flecha-base">▶</span>
+            <span class="flecha-activa">▶</span>
+        </div>
     </div>
 
     <!-- Info viaje activo - franja horizontal -->

@@ -23618,17 +23618,17 @@ def api_admin_simular_viaje():
         return jsonify({'ok': False, 'error': 'Faltan coordenadas'}), 400
 
     try:
-        # Intentar OSRM primero
-        ruta = obtener_distancia_osrm(float(lat1), float(lon1), float(lat2), float(lon2), con_geometria=True)
-        fuente_usada = 'osrm'
+        # Intentar Waze primero (rutas de conductores reales)
+        ruta = obtener_ruta_waze(float(lat1), float(lon1), float(lat2), float(lon2))
+        fuente_usada = 'waze'
 
-        # Fallback a Waze si OSRM falla
+        # Fallback a OSRM si Waze falla
         if not ruta or not ruta.get('geometria'):
-            ruta = obtener_ruta_waze(float(lat1), float(lon1), float(lat2), float(lon2))
-            fuente_usada = 'waze'
+            ruta = obtener_distancia_osrm(float(lat1), float(lon1), float(lat2), float(lon2), con_geometria=True)
+            fuente_usada = 'osrm'
 
         if not ruta or not ruta.get('geometria'):
-            return jsonify({'ok': False, 'error': 'Ni OSRM ni Waze retornaron ruta'})
+            return jsonify({'ok': False, 'error': 'Ni Waze ni OSRM retornaron ruta'})
 
         conn = get_db_connection()
         geometria = ruta['geometria']

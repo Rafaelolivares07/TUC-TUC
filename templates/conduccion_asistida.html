@@ -37,80 +37,112 @@
             height: 100%;
         }
 
-        /* Velocímetro flotante */
-        #velocimetro {
+        /* HUD superior: velocímetro + alerta fusionados */
+        #hud-superior {
             position: absolute;
-            bottom: 50px;
+            top: 20px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 18px;
+            padding: 10px 20px;
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+        }
+
+        /* Estado normal: solo velocímetro */
+        #hud-velocidad {
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 20px;
-            padding: 12px 25px;
-            backdrop-filter: blur(8px);
+            transition: all 0.3s ease;
         }
 
         #velocidad-actual {
-            font-size: 60px;
+            font-size: 52px;
             font-weight: 700;
             line-height: 1;
-            transition: color 0.3s;
+            transition: all 0.3s;
         }
 
         #velocidad-unidad {
-            font-size: 16px;
+            font-size: 14px;
             opacity: 0.7;
-            margin-top: 3px;
+            margin-top: 2px;
         }
 
         #limite-zona {
             display: none;
         }
 
-        /* Alerta de cámara */
-        #alerta-camara {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
+        /* Estado alerta: velocidad se achica, alerta toma protagonismo */
+        #hud-alerta {
             display: none;
             flex-direction: column;
             align-items: center;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 16px;
-            padding: 15px 25px;
-            backdrop-filter: blur(8px);
-            border: 3px solid #f59e0b;
-            animation: pulse-alert 1s infinite;
+            text-align: center;
         }
 
-        @keyframes pulse-alert {
-            0%, 100% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.05); }
+        #hud-alerta-icono {
+            font-size: 28px;
+            line-height: 1;
         }
 
-        #alerta-camara.peligro {
+        #hud-alerta-distancia {
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        #hud-alerta-limite {
+            font-size: 14px;
+            opacity: 0.85;
+        }
+
+        /* Cuando hay alerta activa */
+        #hud-superior.con-alerta {
+            border-color: #f59e0b;
+            animation: pulse-hud 1s infinite;
+        }
+
+        #hud-superior.con-alerta #velocidad-actual {
+            font-size: 30px;
+        }
+
+        #hud-superior.con-alerta #velocidad-unidad {
+            font-size: 11px;
+        }
+
+        #hud-superior.con-alerta #hud-alerta {
+            display: flex;
+        }
+
+        /* Separador vertical entre velocidad y alerta */
+        #hud-separador {
+            width: 2px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 1px;
+            display: none;
+        }
+
+        #hud-superior.con-alerta #hud-separador {
+            display: block;
+        }
+
+        /* Peligro: rojo */
+        #hud-superior.peligro {
             border-color: #ef4444;
             background: rgba(239, 68, 68, 0.2);
         }
 
-        #alerta-icono {
-            font-size: 40px;
-            margin-bottom: 5px;
-        }
-
-        #alerta-distancia {
-            font-size: 28px;
-            font-weight: 700;
-        }
-
-        #alerta-limite {
-            font-size: 20px;
-            opacity: 0.8;
+        @keyframes pulse-hud {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.03); }
         }
 
         /* Barra de proximidad */
@@ -149,47 +181,57 @@
             backdrop-filter: blur(8px);
         }
 
-        /* Info de viaje activo */
+        /* Info de viaje activo - franja horizontal abajo */
         #info-viaje {
             position: absolute;
-            bottom: 155px;
-            left: 15px;
+            bottom: 32px;
+            left: 10px;
+            right: 10px;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.75);
+            border-radius: 14px;
             padding: 10px 14px;
             backdrop-filter: blur(8px);
             display: none;
-            border-left: 4px solid #22c55e;
-            max-width: 200px;
+            border-top: 3px solid #22c55e;
             font-size: 12px;
+        }
+
+        #info-viaje-contenido {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        #info-viaje-datos {
+            flex: 1;
+            min-width: 0;
         }
 
         #info-viaje .viaje-pasajero {
             font-weight: 600;
             font-size: 13px;
-            margin-bottom: 4px;
         }
 
         #info-viaje .viaje-detalle {
             opacity: 0.8;
-            margin-bottom: 2px;
+            font-size: 11px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         #info-viaje .viaje-tarifa {
-            font-weight: 600;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 16px;
             color: #22c55e;
-            margin-top: 4px;
+            white-space: nowrap;
         }
 
         #info-viaje .btn-accion-viaje {
             display: block;
             width: 100%;
-            padding: 8px;
+            padding: 9px;
             border: none;
             border-radius: 8px;
             font-size: 13px;
@@ -383,11 +425,19 @@
     <!-- Brújula -->
     <div id="brujula">🧭</div>
 
-    <!-- Alerta de cámara -->
-    <div id="alerta-camara">
-        <div id="alerta-icono">📷</div>
-        <div id="alerta-distancia">500m</div>
-        <div id="alerta-limite">Límite: 60 km/h</div>
+    <!-- HUD superior: velocímetro + alerta fusionados -->
+    <div id="hud-superior">
+        <div id="hud-velocidad">
+            <div id="velocidad-actual" class="velocidad-ok">0</div>
+            <div id="velocidad-unidad">km/h</div>
+            <div id="limite-zona">60</div>
+        </div>
+        <div id="hud-separador"></div>
+        <div id="hud-alerta">
+            <div id="hud-alerta-icono">📷</div>
+            <div id="hud-alerta-distancia">500m</div>
+            <div id="hud-alerta-limite">Límite: 60 km/h</div>
+        </div>
     </div>
 
     <!-- Alerta de cámara perimetral (secundaria) -->
@@ -399,20 +449,17 @@
         </div>
     </div>
 
-    <!-- Info viaje activo -->
+    <!-- Info viaje activo - franja horizontal -->
     <div id="info-viaje">
-        <div class="viaje-pasajero" id="viaje-pasajero"></div>
-        <div class="viaje-detalle" id="viaje-origen"></div>
-        <div class="viaje-detalle" id="viaje-destino"></div>
-        <div class="viaje-tarifa" id="viaje-tarifa"></div>
+        <div id="info-viaje-contenido">
+            <div id="info-viaje-datos">
+                <div class="viaje-pasajero" id="viaje-pasajero"></div>
+                <div class="viaje-detalle" id="viaje-origen"></div>
+                <div class="viaje-detalle" id="viaje-destino"></div>
+            </div>
+            <div class="viaje-tarifa" id="viaje-tarifa"></div>
+        </div>
         <div id="viaje-acciones"></div>
-    </div>
-
-    <!-- Velocímetro -->
-    <div id="velocimetro">
-        <div id="velocidad-actual" class="velocidad-ok">0</div>
-        <div id="velocidad-unidad">km/h</div>
-        <div id="limite-zona">60</div>
     </div>
 
     <!-- Estado GPS -->
@@ -830,22 +877,22 @@
             const proximaCamara = camarasEnRuta[0];
             if (!proximaCamara) return;
 
-            const alerta = document.getElementById('alerta-camara');
-            alerta.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <span style="font-size: 32px;">📷</span>
-                    <div>
-                        <strong>${camarasEnRuta.length} cámara${camarasEnRuta.length > 1 ? 's' : ''} en tu ruta</strong>
-                        <div style="font-size: 14px; opacity: 0.9;">
-                            Próxima: ${proximaCamara.nombre || 'Cámara'}
-                            (${proximaCamara.velocidad_maxima || '?'} km/h)
-                            - ${Math.round(proximaCamara.distancia_en_ruta)}m adelante
-                        </div>
-                    </div>
-                </div>
-            `;
-            alerta.style.display = 'block';
-            alerta.className = 'alerta-camara alerta-advertencia';
+            const hud = document.getElementById('hud-superior');
+            hud.classList.add('con-alerta');
+
+            document.getElementById('hud-alerta-icono').textContent = '📷';
+            document.getElementById('hud-alerta-distancia').innerHTML =
+                `${camarasEnRuta.length} cámara${camarasEnRuta.length > 1 ? 's' : ''}`;
+            document.getElementById('hud-alerta-limite').textContent =
+                `Próxima: ${Math.round(proximaCamara.distancia_en_ruta)}m - ${proximaCamara.velocidad_maxima || '?'} km/h`;
+
+            // Se oculta automáticamente después de 5 segundos (la alerta en tiempo real toma el control)
+            setTimeout(() => {
+                if (!document.getElementById('barra-proximidad').style.display ||
+                    document.getElementById('barra-proximidad').style.display === 'none') {
+                    hud.classList.remove('con-alerta');
+                }
+            }, 5000);
         }
 
         function registrarNuevoSegmento() {
@@ -1067,18 +1114,18 @@
 
         // Alerta principal (cámara en ruta) - arriba centrada, prominente
         function mostrarAlertaCamaraRuta(camara, distancia) {
-            const alerta = document.getElementById('alerta-camara');
+            const hud = document.getElementById('hud-superior');
             const barra = document.getElementById('barra-proximidad');
             const barraFill = document.getElementById('barra-proximidad-fill');
 
-            alerta.style.display = 'flex';
+            hud.classList.add('con-alerta');
             barra.style.display = 'block';
 
             const textoDistancia = distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
-            document.getElementById('alerta-distancia').innerHTML =
-                `<span style="color: #fef08a;">🚨 EN RUTA</span> ${textoDistancia}`;
+            document.getElementById('hud-alerta-distancia').innerHTML =
+                `<span style="color: #fef08a;">🚨</span> ${textoDistancia}`;
 
-            document.getElementById('alerta-limite').textContent =
+            document.getElementById('hud-alerta-limite').textContent =
                 `Límite: ${camara.velocidad_maxima || 60} km/h`;
 
             const porcentaje = Math.max(0, 100 - (distancia / CONFIG.DISTANCIA_ALERTA_CAMARA * 100));
@@ -1089,19 +1136,19 @@
             const exceso = velocidadActual > limite;
 
             if (esPeligro || exceso) {
-                alerta.classList.add('peligro');
+                hud.classList.add('peligro');
                 barraFill.style.background = '#ef4444';
                 if (exceso && esPeligro) {
                     flashAlerta();
                 }
             } else {
-                alerta.classList.remove('peligro');
+                hud.classList.remove('peligro');
                 barraFill.style.background = distancia < 300 ? '#f59e0b' : '#22c55e';
             }
         }
 
         function ocultarAlertaCamaraRuta() {
-            document.getElementById('alerta-camara').style.display = 'none';
+            document.getElementById('hud-superior').classList.remove('con-alerta', 'peligro');
             document.getElementById('barra-proximidad').style.display = 'none';
         }
 

@@ -37,13 +37,50 @@
             height: 100%;
         }
 
-        /* HUD unificado: cámara + velocímetro apilados */
-        #hud-superior {
+        /* Wrapper del HUD: flechas + bloque central */
+        #hud-wrapper {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Flechas de giro */
+        .flecha-giro {
+            display: none;
+            font-size: 36px;
+            color: #facc15;
+            text-shadow: 0 0 10px rgba(250, 204, 21, 0.5);
+            transition: font-size 0.3s ease;
+        }
+
+        .flecha-giro.visible {
+            display: block;
+        }
+
+        .flecha-giro.parpadeo-lento {
+            animation: parpadeo-flecha 1s infinite;
+        }
+
+        .flecha-giro.parpadeo-medio {
+            animation: parpadeo-flecha 0.5s infinite;
+        }
+
+        .flecha-giro.parpadeo-rapido {
+            animation: parpadeo-flecha 0.25s infinite;
+        }
+
+        @keyframes parpadeo-flecha {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.15; }
+        }
+
+        /* HUD unificado: cámara + velocímetro apilados */
+        #hud-superior {
             background: rgba(0, 0, 0, 0.6);
             border-radius: 18px;
             padding: 10px 20px;
@@ -172,8 +209,8 @@
         }
 
         @keyframes pulse-hud {
-            0%, 100% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.04); }
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
         }
 
         /* Botón salir */
@@ -385,18 +422,22 @@
     <!-- Brújula -->
     <div id="brujula">🧭</div>
 
-    <!-- HUD unificado: cámara + asistencia + velocímetro -->
-    <div id="hud-superior">
-        <div id="hud-camara">
-            <div id="camara-icono">📷</div>
-            <div id="camara-distancia"></div>
-            <div id="camara-limite"></div>
+    <!-- HUD unificado: cámara + asistencia + velocímetro + flechas de giro -->
+    <div id="hud-wrapper">
+        <div id="flecha-izquierda" class="flecha-giro">◀</div>
+        <div id="hud-superior">
+            <div id="hud-camara">
+                <div id="camara-icono">📷</div>
+                <div id="camara-distancia"></div>
+                <div id="camara-limite"></div>
+            </div>
+            <div id="hud-asistencia"></div>
+            <div id="hud-velocidad">
+                <div id="velocidad-actual" class="velocidad-ok">0</div>
+                <div id="velocidad-unidad">km/h</div>
+            </div>
         </div>
-        <div id="hud-asistencia"></div>
-        <div id="hud-velocidad">
-            <div id="velocidad-actual" class="velocidad-ok">0</div>
-            <div id="velocidad-unidad">km/h</div>
-        </div>
+        <div id="flecha-derecha" class="flecha-giro">▶</div>
     </div>
 
     <!-- Info viaje activo - franja horizontal -->
@@ -733,6 +774,9 @@
                     if (data.leg2 && data.leg2.geometria) {
                         geometriaRutaActiva = geometriaRutaActiva.concat(data.leg2.geometria);
                     }
+                    // Detectar giros en la geometría de la ruta
+                    detectarGirosEnRuta();
+
                     // Usar cámaras del response directamente
                     if (data.camaras && data.camaras.length > 0) {
                         camarasEnRuta = data.camaras;
@@ -1229,6 +1273,9 @@
         function analizarCamino() {
             if (!ubicacionActual) return;
 
+            // Actualizar flechas de giro
+            actualizarFlechasGiro();
+
             const eventos = obtenerEventosAdelante();
 
             if (eventos.length === 0) {
@@ -1268,6 +1315,26 @@
                         distancia: dist,
                         velocidadObjetivo: cam.velocidad_maxima || 60,
                         nombre: cam.nombre || 'Cámara'
+                    });
+                }
+            });
+
+            // Giros en la ruta
+            girosDetectados.forEach(giro => {
+                if (!ubicacionActual) return;
+
+                const dist = calcularDistancia(
+                    ubicacionActual.lat, ubicacionActual.lon,
+                    giro.lat, giro.lon
+                );
+
+                if (dist < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                    eventos.push({
+                        tipo: 'giro',
+                        distancia: dist,
+                        velocidadObjetivo: giro.velocidadSugerida,
+                        direccion: giro.direccion,
+                        angulo: giro.anguloAbs
                     });
                 }
             });
@@ -1378,6 +1445,120 @@
 
             osc.start();
             osc.stop(audioCtx.currentTime + duracion);
+        }
+
+        // ==========================================
+        // DETECCIÓN DE CURVAS EN RUTA
+        // ==========================================
+
+        let girosDetectados = [];  // Cache de giros detectados en la ruta
+
+        // Detecta giros en la geometría de la ruta activa
+        function detectarGirosEnRuta() {
+            girosDetectados = [];
+            if (!geometriaRutaActiva || geometriaRutaActiva.length < 3) return;
+
+            for (let i = 1; i < geometriaRutaActiva.length - 1; i++) {
+                const pAnterior = geometriaRutaActiva[i - 1];
+                const pActual = geometriaRutaActiva[i];
+                const pSiguiente = geometriaRutaActiva[i + 1];
+
+                const bearingEntrada = calcularBearing(pAnterior[0], pAnterior[1], pActual[0], pActual[1]);
+                const bearingSalida = calcularBearing(pActual[0], pActual[1], pSiguiente[0], pSiguiente[1]);
+
+                // Diferencia de ángulo (-180 a 180)
+                let angulo = bearingSalida - bearingEntrada;
+                if (angulo > 180) angulo -= 360;
+                if (angulo < -180) angulo += 360;
+
+                const anguloAbs = Math.abs(angulo);
+
+                // Solo giros significativos (> 25°)
+                if (anguloAbs > 25) {
+                    const direccion = angulo > 0 ? 'derecha' : 'izquierda';
+
+                    // Velocidad sugerida según lo cerrado del giro
+                    let velocidadSugerida;
+                    if (anguloAbs > 90) {
+                        velocidadSugerida = 15;  // Giro muy cerrado
+                    } else if (anguloAbs > 60) {
+                        velocidadSugerida = 25;  // Giro fuerte
+                    } else if (anguloAbs > 40) {
+                        velocidadSugerida = 35;  // Giro moderado
+                    } else {
+                        velocidadSugerida = 40;  // Curva suave
+                    }
+
+                    girosDetectados.push({
+                        lat: pActual[0],
+                        lon: pActual[1],
+                        angulo: angulo,
+                        anguloAbs: anguloAbs,
+                        direccion: direccion,
+                        velocidadSugerida: velocidadSugerida
+                    });
+                }
+            }
+
+            console.log(`🔄 ${girosDetectados.length} giros detectados en la ruta`);
+        }
+
+        // Actualiza las flechas de giro según proximidad
+        function actualizarFlechasGiro() {
+            const flechaIzq = document.getElementById('flecha-izquierda');
+            const flechaDer = document.getElementById('flecha-derecha');
+
+            if (!ubicacionActual || girosDetectados.length === 0) {
+                flechaIzq.className = 'flecha-giro';
+                flechaDer.className = 'flecha-giro';
+                return;
+            }
+
+            // Buscar el giro más cercano adelante
+            let giroCercano = null;
+            let distGiro = Infinity;
+
+            girosDetectados.forEach(giro => {
+                const dist = calcularDistancia(
+                    ubicacionActual.lat, ubicacionActual.lon,
+                    giro.lat, giro.lon
+                );
+                if (dist < distGiro && dist < CONFIG.DISTANCIA_ALERTA_CAMARA) {
+                    distGiro = dist;
+                    giroCercano = giro;
+                }
+            });
+
+            if (!giroCercano) {
+                flechaIzq.className = 'flecha-giro';
+                flechaDer.className = 'flecha-giro';
+                return;
+            }
+
+            // Determinar flecha activa y nivel de parpadeo
+            const flechaActiva = giroCercano.direccion === 'izquierda' ? flechaIzq : flechaDer;
+            const flechaInactiva = giroCercano.direccion === 'izquierda' ? flechaDer : flechaIzq;
+
+            // Inactiva se oculta
+            flechaInactiva.className = 'flecha-giro';
+
+            // Tamaño crece con proximidad
+            const factor = Math.max(0, Math.min(1, 1 - (distGiro / CONFIG.DISTANCIA_ALERTA_CAMARA)));
+            const tamano = 36 + (factor * 24);  // 36px → 60px
+            flechaActiva.style.fontSize = `${tamano}px`;
+
+            // Nivel de parpadeo según distancia
+            let claseParpadeo = '';
+            if (distGiro < 80) {
+                claseParpadeo = 'parpadeo-rapido';
+            } else if (distGiro < 200) {
+                claseParpadeo = 'parpadeo-medio';
+            } else if (distGiro < 350) {
+                claseParpadeo = 'parpadeo-lento';
+            }
+            // > 350m: visible fija (sin parpadeo)
+
+            flechaActiva.className = `flecha-giro visible ${claseParpadeo}`;
         }
 
         // ==========================================

@@ -547,7 +547,17 @@ def obtener_ruta_con_fallback(lat1, lon1, lat2, lon2, conn):
         print(f"  Ruta grafo: {resultado['distancia_metros']}m, {len(resultado['geometria'])} puntos")
         return resultado
 
-    # Fallback a OSRM
+    # Fallback 1: Waze (rutas de conductores reales)
+    waze = obtener_ruta_waze(lat1, lon1, lat2, lon2)
+    if waze and waze.get('geometria'):
+        guardar_conexiones_osrm(waze['geometria'], conn)
+        return {
+            'geometria': waze['geometria'],
+            'distancia_metros': round(waze['distancia_metros']),
+            'fuente': 'waze'
+        }
+
+    # Fallback 2: OSRM
     osrm = obtener_distancia_osrm(lat1, lon1, lat2, lon2, con_geometria=True)
     if osrm and osrm.get('geometria'):
         guardar_conexiones_osrm(osrm['geometria'], conn)

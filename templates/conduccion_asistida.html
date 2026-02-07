@@ -1893,12 +1893,17 @@
         }
 
         async function seleccionarDestino(lat, lon, texto) {
-            cerrarPanelBusqueda();
-
+            // Verificar GPS antes de cerrar el panel
             if (!ubicacionActual) {
-                console.error('No hay ubicación GPS');
+                alert('Esperando señal GPS. Intenta de nuevo en unos segundos.');
                 return;
             }
+
+            // Mostrar que está procesando
+            const input = document.getElementById('input-destino-conductor');
+            input.value = 'Calculando ruta...';
+            input.disabled = true;
+            document.getElementById('autocomplete-conductor').style.display = 'none';
 
             try {
                 const res = await fetch('/api/conductor/viaje-personal', {
@@ -1916,7 +1921,10 @@
                 const data = await res.json();
 
                 if (data.ok && data.viaje) {
+                    // Éxito: cerrar panel y mostrar viaje
+                    cerrarPanelBusqueda();
                     viajeActivo = data.viaje;
+                    document.getElementById('barra-vamos-a').style.display = 'none';
                     mostrarInfoViaje();
                     await cargarRutaViajeActivo();
                     if (!intervalRutaActiva) {
@@ -1925,12 +1933,15 @@
                         }, 30000);
                     }
                 } else {
-                    console.error('Error creando viaje personal:', data.error);
-                    document.getElementById('barra-vamos-a').style.display = 'block';
+                    input.value = '';
+                    input.disabled = false;
+                    alert('Error: ' + (data.error || 'No se pudo crear la ruta'));
                 }
             } catch (e) {
+                input.value = '';
+                input.disabled = false;
+                alert('Error de conexión. Intenta de nuevo.');
                 console.error('Error creando viaje personal:', e);
-                document.getElementById('barra-vamos-a').style.display = 'block';
             }
         }
 

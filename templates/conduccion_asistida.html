@@ -648,6 +648,7 @@
                 <div class="viaje-pasajero" id="viaje-pasajero"></div>
                 <div class="viaje-detalle" id="viaje-origen"></div>
                 <div class="viaje-detalle" id="viaje-destino"></div>
+                <div id="viaje-distancia-tiempo" style="font-size:13px;font-weight:600;color:#3b82f6;margin-top:2px;"></div>
             </div>
             <div class="viaje-tarifa" id="viaje-tarifa"></div>
         </div>
@@ -710,6 +711,7 @@
         let camarasEnRuta = [];
         let viajeActivo = null;
         let geometriaRutaActiva = null;
+        let velocidadRutaKmh = 17; // velocidad actual según hora pico/valle
         let marcadoresViaje = [];
         let intervalRutaActiva = null;
         let puntosRutaNueva = [];
@@ -780,7 +782,7 @@
                 style: crearEstilo('light'),
                 center: [-76.5320, 3.4516],
                 zoom: CONFIG.ZOOM_DEFAULT,
-                pitch: 70,
+                pitch: 85,
                 bearing: 0,
                 maxPitch: 85,
                 attributionControl: false
@@ -897,6 +899,9 @@
             // Verificar alertas y asistencia
             verificarAlertaCamaras();
             analizarCamino();
+
+            // Actualizar distancia/tiempo restante
+            if (viajeActivo) actualizarDistanciaTiempo();
 
             // Registrar nuevo segmento
             registrarNuevoSegmento();
@@ -1035,9 +1040,77 @@
                         fuenteEl.textContent = '\uD83C\uDF10 osrm';
                     }
                     console.log('\uD83D\uDDFA\uFE0F Ruta cargada - Tramo1: ' + f1 + ', Tramo2: ' + f2);
+
+                    // Guardar velocidad y actualizar distancia/tiempo
+                    if (data.velocidad_kmh) velocidadRutaKmh = data.velocidad_kmh;
+                    actualizarDistanciaTiempo();
                 }
             } catch (e) {
                 console.error('Error cargando ruta de viaje:', e);
+            }
+        }
+
+        function calcularDistanciaRestante() {
+            // Calcula distancia restante desde posición actual hasta el final de la ruta
+            if (!geometriaRutaActiva || geometriaRutaActiva.length < 2 || !ubicacionActual) return null;
+
+            const lat = ubicacionActual.lat;
+            const lon = ubicacionActual.lon;
+
+            // Encontrar el punto más cercano en la ruta
+            let idxCercano = 0;
+            let distMin = Infinity;
+            for (let i = 0; i < geometriaRutaActiva.length; i++) {
+                const p = geometriaRutaActiva[i];
+                const d = (p[0] - lat) * (p[0] - lat) + (p[1] - lon) * (p[1] - lon);
+                if (d < distMin) {
+                    distMin = d;
+                    idxCercano = i;
+                }
+            }
+
+            // Sumar distancia desde el punto cercano hasta el final
+            let distancia = 0;
+            for (let i = idxCercano; i < geometriaRutaActiva.length - 1; i++) {
+                const a = geometriaRutaActiva[i];
+                const b = geometriaRutaActiva[i + 1];
+                distancia += distanciaEntreCoords(a[0], a[1], b[0], b[1]);
+            }
+            return distancia; // metros
+        }
+
+        function distanciaEntreCoords(lat1, lon1, lat2, lon2) {
+            // Haversine simplificado
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function actualizarDistanciaTiempo() {
+            if (!viajeActivo) return;
+
+            const restante = calcularDistanciaRestante();
+            if (restante === null) return;
+
+            const km = restante / 1000;
+            const minutos = Math.round((km / velocidadRutaKmh) * 60);
+
+            // Formatear
+            let distTexto;
+            if (restante < 1000) {
+                distTexto = Math.round(restante) + ' m';
+            } else {
+                distTexto = km.toFixed(1) + ' km';
+            }
+            const tiempoTexto = minutos < 1 ? '<1 min' : minutos + ' min';
+
+            const el = document.getElementById('viaje-distancia-tiempo');
+            if (el) {
+                el.textContent = distTexto + '  ~' + tiempoTexto;
             }
         }
 
@@ -2074,6 +2147,7 @@
 
             actualizarCamarasEnMapa();
             document.getElementById('fuente-ruta').textContent = '';
+            document.getElementById('viaje-distancia-tiempo').textContent = '';
             document.getElementById('info-viaje').style.display = 'none';
             document.getElementById('barra-vamos-a').style.display = 'block';
         }
@@ -2084,7 +2158,7 @@
 
         function toggleVista() {
             vista3D = !vista3D;
-            mapa.easeTo({ pitch: vista3D ? 70 : 0, duration: 500 });
+            mapa.easeTo({ pitch: vista3D ? 85 : 0, duration: 500 });
             document.getElementById('btn-vista').textContent = vista3D ? '3D' : '2D';
         }
 
@@ -2166,7 +2240,7 @@
                 mapa.easeTo({
                     center: [ubicacionActual.lon, ubicacionActual.lat],
                     zoom: CONFIG.ZOOM_DEFAULT,
-                    pitch: vista3D ? 70 : 0,
+                    pitch: vista3D ? 85 : 0,
                     bearing: headingActual || 0,
                     duration: 800
                 });

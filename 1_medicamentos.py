@@ -21919,6 +21919,19 @@ def api_viaje_ruta(viaje_id):
             resultado['camaras'] = detectar_camaras_en_ruta(geometria_completa, conn)
             resultado['peajes'] = detectar_peajes_en_ruta(geometria_completa, conn)
 
+        # Calcular distancia total y velocidad para estimación de tiempo
+        distancia_total = 0
+        if resultado['leg1'] and resultado['leg1'].get('distancia_metros'):
+            distancia_total += resultado['leg1']['distancia_metros']
+        if resultado['leg2'] and resultado['leg2'].get('distancia_metros'):
+            distancia_total += resultado['leg2']['distancia_metros']
+
+        hora_pico = es_hora_pico(conn)
+        velocidad_kmh = obtener_parametro_transporte(conn, 'transporte_velocidad_pico', 10) if hora_pico else obtener_parametro_transporte(conn, 'transporte_velocidad_valle', 17)
+        resultado['distancia_total_metros'] = round(distancia_total)
+        resultado['velocidad_kmh'] = velocidad_kmh
+        resultado['es_hora_pico'] = hora_pico
+
         conn.close()
         return jsonify(resultado)
     except Exception as e:

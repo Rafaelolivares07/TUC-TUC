@@ -609,7 +609,7 @@
     <!-- Columna derecha: sonido, vista, estilo, explorar -->
     <div id="columna-derecha">
         <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
-        <button id="btn-vista" onclick="toggleVista()">3D</button>
+        <button id="btn-vista" onclick="toggleVista()">3/3</button>
         <button id="btn-estilo" onclick="toggleEstilo()">&#x2600;&#xFE0F;</button>
         <button id="btn-explorar" onclick="toggleModoLibre()">&#x1F5FA;</button>
     </div>
@@ -702,7 +702,8 @@
         let ubicacionActual = null;
         let modoLibre = false;
         let estiloOscuro = false;
-        let vista3D = true;
+        const NIVELES_VISTA = [0, 40, 65, 85]; // 2D, suave, medio, máximo
+        let nivelVista = 3; // inicia en máximo
         let ubicacionAnterior = null;
         let velocidadActual = 0;
         let headingActual = 0;
@@ -743,6 +744,13 @@
         };
 
         function crearEstilo(flavor) {
+            const skyColor = flavor === 'dark' ? '#1a1a2e' : '#b8d4e8';
+            const capas = basemaps.layers("protomaps", basemaps.namedFlavor(flavor), { lang: "es" });
+            capas.push({
+                id: 'sky',
+                type: 'background',
+                paint: { 'background-color': skyColor }
+            });
             return {
                 version: 8,
                 glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
@@ -754,7 +762,7 @@
                         attribution: '&copy; OpenStreetMap'
                     }
                 },
-                layers: basemaps.layers("protomaps", basemaps.namedFlavor(flavor), { lang: "es" })
+                layers: capas
             };
         }
 
@@ -2162,9 +2170,11 @@
         // ==========================================
 
         function toggleVista() {
-            vista3D = !vista3D;
-            mapa.easeTo({ pitch: vista3D ? 85 : 0, duration: 500 });
-            document.getElementById('btn-vista').textContent = vista3D ? '3D' : '2D';
+            nivelVista = (nivelVista + 1) % NIVELES_VISTA.length;
+            const pitch = NIVELES_VISTA[nivelVista];
+            mapa.easeTo({ pitch, duration: 500 });
+            const btn = document.getElementById('btn-vista');
+            btn.textContent = nivelVista === 0 ? '2D' : nivelVista + '/3';
         }
 
         function toggleEstilo() {
@@ -2245,7 +2255,7 @@
                 mapa.easeTo({
                     center: [ubicacionActual.lon, ubicacionActual.lat],
                     zoom: CONFIG.ZOOM_DEFAULT,
-                    pitch: vista3D ? 85 : 0,
+                    pitch: NIVELES_VISTA[nivelVista],
                     bearing: headingActual || 0,
                     duration: 800
                 });

@@ -238,12 +238,18 @@
             backdrop-filter: blur(8px);
         }
 
-        /* Toggle sonido - arriba derecha */
-        #btn-sonido {
+        /* Columna derecha de botones */
+        #columna-derecha {
             position: absolute;
             top: 8px;
             right: 8px;
             z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        #columna-derecha button {
             background: rgba(0, 0, 0, 0.5);
             border: none;
             color: white;
@@ -255,8 +261,32 @@
             backdrop-filter: blur(8px);
         }
 
+        #btn-vista {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
         #btn-sonido.muted {
             opacity: 0.5;
+        }
+
+        /* Botón volver a conducción */
+        #btn-volver-conduccion {
+            display: none;
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.5);
         }
 
         /* Info de viaje activo - franja horizontal abajo */
@@ -436,8 +466,16 @@
     <!-- Botón salir (esquina sup izq) -->
     <button id="btn-salir" onclick="salir()">&#x2715;</button>
 
-    <!-- Toggle sonido (esquina sup der) -->
-    <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
+    <!-- Columna derecha: sonido, vista, estilo, explorar -->
+    <div id="columna-derecha">
+        <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
+        <button id="btn-vista" onclick="toggleVista()">3D</button>
+        <button id="btn-estilo" onclick="toggleEstilo()">&#x1F319;</button>
+        <button id="btn-explorar" onclick="toggleModoLibre()">&#x1F5FA;</button>
+    </div>
+
+    <!-- Botón volver a conducción (solo visible en modo libre) -->
+    <button id="btn-volver-conduccion" onclick="volverAConduccion()">&#x1F3AF; Volver a conducción</button>
 
     <!-- HUD unificado: cámara + asistencia + velocímetro + flechas de giro -->
     <div id="hud-wrapper">
@@ -509,6 +547,9 @@
         let marcadorConductor = null;
         let watchId = null;
         let ubicacionActual = null;
+        let modoLibre = false;
+        let estiloOscuro = true;
+        let vista3D = true;
         let ubicacionAnterior = null;
         let velocidadActual = 0;
         let headingActual = 0;
@@ -735,14 +776,19 @@
         function actualizarMarcador(lat, lon) {
             if (!marcadorConductor) return;
             marcadorConductor.setLngLat([lon, lat]);
-            mapa.easeTo({ center: [lon, lat], duration: 300 });
+            // En modo libre no seguir al conductor
+            if (!modoLibre) {
+                mapa.easeTo({ center: [lon, lat], duration: 300 });
+            }
         }
 
         function rotarMapa(heading) {
             if (heading === null || heading === undefined) return;
-            // MapLibre bearing nativo: heading = dirección que apunta arriba
-            mapa.easeTo({ bearing: heading, duration: 300 });
-            // Brújula
+            // En modo libre no rotar el mapa
+            if (!modoLibre) {
+                mapa.easeTo({ bearing: heading, duration: 300 });
+            }
+            // Brújula siempre se actualiza
             document.getElementById('brujula').style.transform = 'rotate(' + heading + 'deg)';
         }
 
@@ -1640,6 +1686,107 @@
                 });
             } catch (e) {
                 // Silencioso
+            }
+        }
+
+        // ==========================================
+        // CONTROLES DEL CONDUCTOR
+        // ==========================================
+
+        function toggleVista() {
+            vista3D = !vista3D;
+            mapa.easeTo({ pitch: vista3D ? 50 : 0, duration: 500 });
+            document.getElementById('btn-vista').textContent = vista3D ? '3D' : '2D';
+        }
+
+        function toggleEstilo() {
+            estiloOscuro = !estiloOscuro;
+            const flavor = estiloOscuro ? 'dark' : 'light';
+
+            // Guardar estado actual
+            const center = mapa.getCenter();
+            const zoom = mapa.getZoom();
+            const pitch = mapa.getPitch();
+            const bearing = mapa.getBearing();
+
+            mapa.setStyle(crearEstilo(flavor));
+
+            mapa.once('style.load', () => {
+                // Re-agregar fuentes y capas
+                mapa.addSource(FUENTES.SEGMENTOS, { type: 'geojson', data: GEOJSON_VACIO });
+                mapa.addSource(FUENTES.RUTA_RECOGIDA, { type: 'geojson', data: LINEA_VACIA });
+                mapa.addSource(FUENTES.RUTA_DESTINO, { type: 'geojson', data: LINEA_VACIA });
+                mapa.addSource(FUENTES.RUTA_NUEVA, { type: 'geojson', data: LINEA_VACIA });
+
+                mapa.addLayer({
+                    id: 'layer-segmentos', type: 'line', source: FUENTES.SEGMENTOS,
+                    paint: { 'line-color': 'rgba(100, 150, 255, 0.6)', 'line-width': 6, 'line-opacity': 0.7 }
+                });
+                mapa.addLayer({
+                    id: 'layer-ruta-recogida', type: 'line', source: FUENTES.RUTA_RECOGIDA,
+                    paint: { 'line-color': '#f97316', 'line-width': 6, 'line-opacity': 0.85, 'line-dasharray': [2, 1.5] }
+                });
+                mapa.addLayer({
+                    id: 'layer-ruta-destino', type: 'line', source: FUENTES.RUTA_DESTINO,
+                    paint: { 'line-color': '#22c55e', 'line-width': 8, 'line-opacity': 0.9 }
+                });
+                mapa.addLayer({
+                    id: 'layer-ruta-nueva', type: 'line', source: FUENTES.RUTA_NUEVA,
+                    paint: { 'line-color': '#f59e0b', 'line-width': 5, 'line-opacity': 0.8, 'line-dasharray': [2, 2] }
+                });
+
+                mapa.jumpTo({ center, zoom, pitch, bearing });
+
+                // Recargar segmentos y ruta
+                if (ubicacionActual) cargarSegmentosConocidos();
+                if (viajeActivo) cargarRutaViajeActivo();
+            });
+
+            document.getElementById('btn-estilo').textContent = estiloOscuro ? '\uD83C\uDF19' : '\u2600\uFE0F';
+        }
+
+        function toggleModoLibre() {
+            if (modoLibre) {
+                volverAConduccion();
+            } else {
+                entrarModoLibre();
+            }
+        }
+
+        function entrarModoLibre() {
+            modoLibre = true;
+            document.getElementById('btn-volver-conduccion').style.display = 'block';
+            document.getElementById('btn-explorar').style.background = '#3b82f6';
+
+            // Si hay viaje activo, hacer zoom para ver toda la ruta
+            if (viajeActivo && geometriaRutaActiva && geometriaRutaActiva.length >= 2) {
+                const bounds = new maplibregl.LngLatBounds();
+                geometriaRutaActiva.forEach(p => bounds.extend([p[1], p[0]]));
+                // Incluir posición del conductor
+                if (ubicacionActual) {
+                    bounds.extend([ubicacionActual.lon, ubicacionActual.lat]);
+                }
+                mapa.fitBounds(bounds, { padding: 60, pitch: 0, bearing: 0, duration: 800 });
+            } else {
+                // Sin viaje: solo liberar el mapa, quitar pitch y bearing
+                mapa.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+            }
+        }
+
+        function volverAConduccion() {
+            modoLibre = false;
+            document.getElementById('btn-volver-conduccion').style.display = 'none';
+            document.getElementById('btn-explorar').style.background = 'rgba(0, 0, 0, 0.5)';
+
+            // Volver a centrar en conductor con pitch y bearing
+            if (ubicacionActual) {
+                mapa.easeTo({
+                    center: [ubicacionActual.lon, ubicacionActual.lat],
+                    zoom: CONFIG.ZOOM_DEFAULT,
+                    pitch: vista3D ? 50 : 0,
+                    bearing: headingActual || 0,
+                    duration: 800
+                });
             }
         }
 

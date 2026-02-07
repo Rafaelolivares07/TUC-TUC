@@ -22229,6 +22229,16 @@ def api_conductor_viaje_personal():
     try:
         conn = get_db_connection()
 
+        # Asegurar que el constraint permita 'personal'
+        try:
+            conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_tipo_servicio_check")
+            conn.execute("""
+                ALTER TABLE solicitudes_transporte ADD CONSTRAINT solicitudes_transporte_tipo_servicio_check
+                CHECK (tipo_servicio IN ('transporte', 'acompanamiento', 'personal'))
+            """)
+        except Exception:
+            pass
+
         # Verificar que no tenga otro viaje activo
         viaje_existente = conn.execute("""
             SELECT id FROM solicitudes_transporte

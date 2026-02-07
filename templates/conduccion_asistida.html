@@ -744,13 +744,7 @@
         };
 
         function crearEstilo(flavor) {
-            const skyColor = flavor === 'dark' ? '#1a1a2e' : '#b8d4e8';
-            const capas = basemaps.layers("protomaps", basemaps.namedFlavor(flavor), { lang: "es" });
-            capas.push({
-                id: 'sky',
-                type: 'background',
-                paint: { 'background-color': skyColor }
-            });
+            document.getElementById('mapa').style.background = flavor === 'dark' ? '#1a1a2e' : '#b8d4e8';
             return {
                 version: 8,
                 glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
@@ -762,7 +756,7 @@
                         attribution: '&copy; OpenStreetMap'
                     }
                 },
-                layers: capas
+                layers: basemaps.layers("protomaps", basemaps.namedFlavor(flavor), { lang: "es" })
             };
         }
 
@@ -788,6 +782,7 @@
             const protocol = new pmtiles.Protocol();
             maplibregl.addProtocol('pmtiles', protocol.tile);
 
+            document.getElementById('mapa').style.background = '#b8d4e8';
             mapa = new maplibregl.Map({
                 container: 'mapa',
                 style: crearEstilo('light'),

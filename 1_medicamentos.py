@@ -20358,6 +20358,7 @@ def api_admin_conexiones_via():
     """Obtiene conexiones de vía para visualizar el grafo de rutas"""
     try:
         min_transitado = request.args.get('min_transitado', 1, type=int)
+        max_transitado = request.args.get('max_transitado', 0, type=int)  # 0 = sin máximo
         limite = request.args.get('limite', 0, type=int)  # 0 = sin límite
         fuente_filtro = request.args.get('fuente', None)
 
@@ -20370,6 +20371,10 @@ def api_admin_conexiones_via():
             WHERE veces_transitado >= %s
         """
         params = [min_transitado]
+
+        if max_transitado > 0:
+            query += " AND veces_transitado <= %s"
+            params.append(max_transitado)
 
         if fuente_filtro:
             query += " AND (fuente = %s OR fuente IS NULL)"
@@ -20428,6 +20433,41 @@ def api_admin_conexiones_via_stats():
         return jsonify({
             'ok': True,
             'stats': dict(stats) if stats else {}
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/conexiones-via/distribucion')
+@admin_required
+def api_admin_conexiones_via_distribucion():
+    """Distribución de veces_transitado con percentiles para carga progresiva por zoom"""
+    try:
+        conn = get_db_connection()
+        stats = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                MIN(veces_transitado) as min_vt,
+                MAX(veces_transitado) as max_vt,
+                percentile_disc(0.95) WITHIN GROUP (ORDER BY veces_transitado) as p95,
+                percentile_disc(0.80) WITHIN GROUP (ORDER BY veces_transitado) as p80,
+                percentile_disc(0.60) WITHIN GROUP (ORDER BY veces_transitado) as p60,
+                percentile_disc(0.30) WITHIN GROUP (ORDER BY veces_transitado) as p30
+            FROM conexiones_via
+        """).fetchone()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'total': stats['total'],
+            'min': stats['min_vt'],
+            'max': stats['max_vt'],
+            'percentiles': {
+                'p95': stats['p95'],
+                'p80': stats['p80'],
+                'p60': stats['p60'],
+                'p30': stats['p30']
+            }
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

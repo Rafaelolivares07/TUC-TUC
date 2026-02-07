@@ -470,7 +470,7 @@
     <div id="columna-derecha">
         <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
         <button id="btn-vista" onclick="toggleVista()">3D</button>
-        <button id="btn-estilo" onclick="toggleEstilo()">&#x1F319;</button>
+        <button id="btn-estilo" onclick="toggleEstilo()">&#x2600;&#xFE0F;</button>
         <button id="btn-explorar" onclick="toggleModoLibre()">&#x1F5FA;</button>
     </div>
 
@@ -548,7 +548,7 @@
         let watchId = null;
         let ubicacionActual = null;
         let modoLibre = false;
-        let estiloOscuro = true;
+        let estiloOscuro = false;
         let vista3D = true;
         let ubicacionAnterior = null;
         let velocidadActual = 0;
@@ -626,7 +626,7 @@
 
             mapa = new maplibregl.Map({
                 container: 'mapa',
-                style: crearEstilo('dark'),
+                style: crearEstilo('light'),
                 center: [-76.5320, 3.4516],
                 zoom: CONFIG.ZOOM_DEFAULT,
                 pitch: 50,

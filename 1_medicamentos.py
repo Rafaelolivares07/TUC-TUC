@@ -22236,9 +22236,9 @@ def api_conductor_viaje_personal():
                 origen_texto, destino_texto,
                 origen_lat, origen_lon, destino_lat, destino_lon,
                 conductor_lat, conductor_lon,
-                fecha_solicitud, fecha_inicio_viaje
+                fecha_solicitud, fecha_servicio, fecha_inicio_viaje
             )
-            VALUES (%s, %s, 'personal', 'en_curso', %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, 'personal', 'en_curso', %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), NOW())
             RETURNING id
         """, (
             session['usuario_id'], session['usuario_id'],

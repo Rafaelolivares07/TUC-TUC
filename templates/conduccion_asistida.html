@@ -1895,7 +1895,7 @@
         async function seleccionarDestino(lat, lon, texto) {
             // Verificar GPS antes de cerrar el panel
             if (!ubicacionActual) {
-                alert('Esperando señal GPS. Intenta de nuevo en unos segundos.');
+                mostrarErrorVamosA('GPS no listo. Espera unos segundos.');
                 return;
             }
 
@@ -1935,14 +1935,26 @@
                 } else {
                     input.value = '';
                     input.disabled = false;
-                    alert('Error: ' + (data.error || 'No se pudo crear la ruta'));
+                    mostrarErrorVamosA('API: ' + (data.error || 'Sin detalle'));
                 }
             } catch (e) {
                 input.value = '';
                 input.disabled = false;
-                alert('Error de conexión. Intenta de nuevo.');
-                console.error('Error creando viaje personal:', e);
+                mostrarErrorVamosA('Conexión: ' + e.message);
             }
+        }
+
+        function mostrarErrorVamosA(msg) {
+            const toast = document.getElementById('toast-pantalla');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            toast.style.background = 'rgba(239, 68, 68, 0.95)';
+            toast.style.color = '#fff';
+            setTimeout(() => {
+                toast.style.display = 'none';
+                toast.style.background = '';
+                toast.style.color = '';
+            }, 8000);
         }
 
         function activarSeleccionMapa() {

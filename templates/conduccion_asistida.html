@@ -1431,7 +1431,9 @@
             const esPersonal = viajeActivo.tipo_servicio === 'personal';
 
             if (esPersonal) {
-                contenedor.innerHTML = '<button class="btn-accion-viaje btn-finalizar" onclick="cancelarViajePersonal()">Cancelar ruta</button>';
+                contenedor.innerHTML =
+                    '<button class="btn-accion-viaje btn-iniciar" onclick="finalizarViajePersonal()">Llegué al destino</button>' +
+                    '<button class="btn-accion-viaje btn-finalizar" style="margin-top:4px" onclick="cancelarViajePersonal()">Cancelar ruta</button>';
                 return;
             }
 
@@ -2023,6 +2025,23 @@
             await seleccionarDestino(lat, lon, textoDestino);
         }
 
+        async function finalizarViajePersonal() {
+            if (!viajeActivo) return;
+
+            try {
+                await fetch('/api/conductor/finalizar-viaje/' + viajeActivo.id, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ metodo_pago: 'na' })
+                });
+            } catch (e) {
+                // Silencioso
+            }
+
+            // Misma limpieza que cancelar, sin redirigir
+            limpiarViajePersonal();
+        }
+
         async function cancelarViajePersonal() {
             if (!viajeActivo) return;
 
@@ -2032,7 +2051,10 @@
                 // Silencioso
             }
 
-            // Limpiar estado local
+            limpiarViajePersonal();
+        }
+
+        function limpiarViajePersonal() {
             if (intervalRutaActiva) {
                 clearInterval(intervalRutaActiva);
                 intervalRutaActiva = null;
@@ -2044,20 +2066,14 @@
             marcadoresViaje.forEach(m => m.remove());
             marcadoresViaje = [];
 
-            // Limpiar rutas del mapa
             if (mapaListo) {
                 mapa.getSource(FUENTES.RUTA_RECOGIDA).setData(LINEA_VACIA);
                 mapa.getSource(FUENTES.RUTA_DESTINO).setData(LINEA_VACIA);
                 mapa.getSource(FUENTES.RUTA_NUEVA).setData(LINEA_VACIA);
             }
 
-            // Limpiar cámaras de ruta
             actualizarCamarasEnMapa();
-
-            // Limpiar fuente de ruta
             document.getElementById('fuente-ruta').textContent = '';
-
-            // Ocultar info y mostrar barra vamos a
             document.getElementById('info-viaje').style.display = 'none';
             document.getElementById('barra-vamos-a').style.display = 'block';
         }

@@ -20357,32 +20357,31 @@ def api_admin_lugares_sugeridos():
 def api_admin_conexiones_via():
     """Obtiene conexiones de vía para visualizar el grafo de rutas"""
     try:
-        # Parámetros opcionales de filtro
         min_transitado = request.args.get('min_transitado', 1, type=int)
-        limite = request.args.get('limite', 5000, type=int)  # Limitar para no sobrecargar
-        fuente_filtro = request.args.get('fuente', None)  # 'osrm', 'gps', o None para todos
+        limite = request.args.get('limite', 0, type=int)  # 0 = sin límite
+        fuente_filtro = request.args.get('fuente', None)
 
         conn = get_db_connection()
 
-        if fuente_filtro:
-            conexiones = conn.execute("""
-                SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
-                       distancia_metros, veces_transitado, fuente, fecha_creacion
-                FROM conexiones_via
-                WHERE veces_transitado >= %s AND (fuente = %s OR fuente IS NULL)
-                ORDER BY veces_transitado DESC, id DESC
-                LIMIT %s
-            """, (min_transitado, fuente_filtro, limite)).fetchall()
-        else:
-            conexiones = conn.execute("""
-                SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
-                       distancia_metros, veces_transitado, fuente, fecha_creacion
-                FROM conexiones_via
-                WHERE veces_transitado >= %s
-                ORDER BY veces_transitado DESC, id DESC
-                LIMIT %s
-            """, (min_transitado, limite)).fetchall()
+        query = """
+            SELECT id, origen_lat, origen_lon, destino_lat, destino_lon,
+                   distancia_metros, veces_transitado, fuente, fecha_creacion
+            FROM conexiones_via
+            WHERE veces_transitado >= %s
+        """
+        params = [min_transitado]
 
+        if fuente_filtro:
+            query += " AND (fuente = %s OR fuente IS NULL)"
+            params.append(fuente_filtro)
+
+        query += " ORDER BY id ASC"
+
+        if limite > 0:
+            query += " LIMIT %s"
+            params.append(limite)
+
+        conexiones = conn.execute(query, tuple(params)).fetchall()
         conn.close()
 
         return jsonify({

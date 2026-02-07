@@ -1113,7 +1113,7 @@
 
                         <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
                             <p class="text-sm text-blue-700">
-                                <strong>ℹ️ Info:</strong> Este mapa muestra las conexiones de vía capturadas desde OSRM. Las flechas indican la dirección del tránsito. Los colores representan la frecuencia de uso.
+                                <strong>ℹ️ Info:</strong> Este mapa muestra las conexiones de vía capturadas. Las flechas indican la dirección del tránsito (aparecen en curvas y cada ~50m en rectas).
                             </p>
                         </div>
 
@@ -1142,8 +1142,8 @@
                             <div class="flex items-center gap-2">
                                 <label class="text-sm text-gray-600">Mín. veces transitado:</label>
                                 <select id="filtro-min-transitado" class="px-3 py-1 border rounded text-sm" onchange="cargarConexionesEnMapa()">
-                                    <option value="1">1+ (todos)</option>
-                                    <option value="2" selected>2+ (rutas confirmadas)</option>
+                                    <option value="1" selected>1+ (todos)</option>
+                                    <option value="2">2+ (rutas confirmadas)</option>
                                     <option value="5">5+ (rutas frecuentes)</option>
                                     <option value="10">10+ (rutas muy usadas)</option>
                                 </select>
@@ -1159,15 +1159,43 @@
                             <div class="flex items-center gap-2">
                                 <label class="text-sm text-gray-600">Límite:</label>
                                 <select id="filtro-limite-conexiones" class="px-3 py-1 border rounded text-sm" onchange="cargarConexionesEnMapa()">
+                                    <option value="0" selected>Sin límite</option>
                                     <option value="1000">1,000</option>
                                     <option value="2500">2,500</option>
-                                    <option value="5000" selected>5,000</option>
+                                    <option value="5000">5,000</option>
                                     <option value="10000">10,000</option>
+                                    <option value="50000">50,000</option>
                                 </select>
                             </div>
                             <button onclick="cargarConexionesEnMapa()" class="px-4 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
                                 🔄 Recargar
                             </button>
+                            <div class="flex items-center gap-2 ml-auto pl-4 border-l border-gray-300">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="toggle-modo-depuracion" class="sr-only peer" onchange="toggleModoDepuracion()">
+                                    <div class="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-red-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                                </label>
+                                <span id="label-modo-depuracion" class="text-sm text-gray-500">🛠️ Depuración</span>
+                            </div>
+                        </div>
+
+                        <!-- Toggles de visualización -->
+                        <div class="flex flex-wrap items-center gap-6 p-3 bg-gray-50 rounded-lg">
+                            <span class="text-sm font-medium text-gray-700">Visualización:</span>
+                            <div class="flex items-center gap-2">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="toggle-circulos" class="sr-only peer" onchange="cargarConexionesEnMapa()">
+                                    <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                                </label>
+                                <span class="text-sm text-gray-500">⭕ Círculos en extremos</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="toggle-colores-frecuencia" class="sr-only peer" onchange="cargarConexionesEnMapa()">
+                                    <div class="w-9 h-5 bg-gray-300 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                                </label>
+                                <span class="text-sm text-gray-500">🎨 Colores por frecuencia</span>
+                            </div>
                         </div>
 
                         <!-- Capas del mapa -->
@@ -1229,8 +1257,8 @@
                             </div>
                         </div>
 
-                        <!-- Leyenda de colores -->
-                        <div class="flex items-center justify-center gap-6 text-xs">
+                        <!-- Leyenda de colores (visible solo con toggle de colores activado) -->
+                        <div id="leyenda-colores" class="flex items-center justify-center gap-6 text-xs" style="display: none;">
                             <span class="flex items-center gap-1"><span class="w-4 h-1 bg-blue-400"></span> 1x transitado</span>
                             <span class="flex items-center gap-1"><span class="w-4 h-1 bg-green-500"></span> 2-4x</span>
                             <span class="flex items-center gap-1"><span class="w-4 h-1 bg-yellow-500"></span> 5-9x</span>
@@ -2865,6 +2893,7 @@
         let mapaSemaforo = null;
         let mapaLugares = null;
         let mapaGrafo = null;
+        let modoDepuracionGrafo = false;
         let marcadorPeaje = null;
         let marcadorSemaforo = null;
         let marcadoresLugares = [];
@@ -3119,6 +3148,20 @@
         let grafoCapaIntersecciones = [];
         let grafoFullscreen = false;
 
+        // Toggle modo depuración del grafo
+        function toggleModoDepuracion() {
+            modoDepuracionGrafo = document.getElementById('toggle-modo-depuracion').checked;
+            const label = document.getElementById('label-modo-depuracion');
+            if (modoDepuracionGrafo) {
+                label.innerHTML = '🛠️ <span class="text-red-600 font-semibold">Depuración ON</span>';
+            } else {
+                label.innerHTML = '🛠️ Depuración';
+                label.className = 'text-sm text-gray-500';
+            }
+            // Recargar conexiones para aplicar/quitar popups
+            cargarConexionesEnMapa();
+        }
+
         // Toggle fullscreen del mapa del grafo
         function toggleFullscreenGrafo() {
             const wrapper = document.getElementById('mapa-grafo-wrapper');
@@ -3157,7 +3200,7 @@
         function initMapaGrafo() {
             if (mapaGrafo) return; // Ya inicializado
 
-            mapaGrafo = L.map('mapa-grafo').setView(CALI_CENTER, ZOOM_INICIAL);
+            mapaGrafo = L.map('mapa-grafo', { preferCanvas: true }).setView(CALI_CENTER, ZOOM_INICIAL);
             grafoTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(mapaGrafo);
@@ -3378,31 +3421,99 @@
         function crearFlecha(inicio, fin, color) {
             const lat1 = inicio[0], lon1 = inicio[1];
             const lat2 = fin[0], lon2 = fin[1];
-
-            // Calcular punto medio
             const midLat = (lat1 + lat2) / 2;
             const midLon = (lon1 + lon2) / 2;
-
-            // Calcular ángulo de dirección
             const angle = Math.atan2(lat2 - lat1, lon2 - lon1) * (180 / Math.PI);
-
-            // Crear icono de flecha rotado
             const arrowIcon = L.divIcon({
                 className: 'arrow-icon',
                 html: `<div style="transform: rotate(${90 - angle}deg); color: ${color}; font-size: 10px; font-weight: bold;">▲</div>`,
                 iconSize: [10, 10],
                 iconAnchor: [5, 5]
             });
-
             return L.marker([midLat, midLon], { icon: arrowIcon });
+        }
+
+        // Calcular bearing (dirección en grados) entre dos puntos
+        function calcularBearingJS(lat1, lon1, lat2, lon2) {
+            const toRad = Math.PI / 180;
+            const lat1r = lat1 * toRad, lat2r = lat2 * toRad;
+            const dLon = (lon2 - lon1) * toRad;
+            const y = Math.sin(dLon) * Math.cos(lat2r);
+            const x = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+            return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+        }
+
+        // Flechas inteligentes: siempre en cambios de ángulo >30°, cada ~50m en rectas
+        function colocarFlechasInteligentes(conexiones) {
+            const UMBRAL_ANGULO = 30;
+            const DISTANCIA_FLECHA = 50;
+            const DECIMALES = 4;
+            const usarColores = document.getElementById('toggle-colores-frecuencia')?.checked;
+
+            function rnd(v) { return parseFloat(v).toFixed(DECIMALES); }
+            function pk(lat, lon) { return rnd(lat) + ',' + rnd(lon); }
+
+            // Single pass: arrivedAt se construye incrementalmente
+            const arrivedAt = {};  // pointKey → bearing del segmento que llegó ahí
+            const distAccum = {};  // pointKey → distancia acumulada desde última flecha
+
+            conexiones.forEach(c => {
+                const oLat = parseFloat(c.origen_lat), oLon = parseFloat(c.origen_lon);
+                const dLat = parseFloat(c.destino_lat), dLon = parseFloat(c.destino_lon);
+                const bearing = calcularBearingJS(oLat, oLon, dLat, dLon);
+                const dist = parseInt(c.distancia_metros) || 0;
+                const ok = pk(oLat, oLon);
+                const dk = pk(dLat, dLon);
+                const prevBearing = arrivedAt[ok];
+
+                let poner = false;
+
+                if (prevBearing === undefined) {
+                    // Inicio de cadena → flecha
+                    poner = true;
+                } else {
+                    const diff = Math.abs(bearing - prevBearing);
+                    const normalized = diff > 180 ? 360 - diff : diff;
+
+                    if (normalized > UMBRAL_ANGULO) {
+                        // Cambio brusco de dirección → flecha siempre
+                        poner = true;
+                    } else {
+                        const acum = (distAccum[ok] || 0) + dist;
+                        if (acum >= DISTANCIA_FLECHA) {
+                            poner = true;
+                        } else {
+                            distAccum[dk] = acum;
+                        }
+                    }
+                }
+
+                if (poner) {
+                    const color = usarColores ? getColorByTransitado(c.veces_transitado) : '#3b82f6';
+                    const flecha = crearFlecha([oLat, oLon], [dLat, dLon], color);
+                    flecha.addTo(mapaGrafo);
+                    flecha.conexionId = c.id;
+                    polylinesGrafo.push(flecha);
+                    distAccum[dk] = 0;
+                }
+
+                // Actualizar arrivedAt para el destino de este segmento
+                arrivedAt[dk] = bearing;
+            });
         }
 
         async function cargarConexionesEnMapa() {
             if (!mapaGrafo) return;
 
-            const minTransitado = document.getElementById('filtro-min-transitado')?.value || 2;
-            const limite = document.getElementById('filtro-limite-conexiones')?.value || 5000;
+            const minTransitado = document.getElementById('filtro-min-transitado')?.value || 1;
+            const limite = document.getElementById('filtro-limite-conexiones')?.value || 0;
             const fuente = document.getElementById('filtro-fuente')?.value || '';
+            const mostrarCirculos = document.getElementById('toggle-circulos')?.checked;
+            const usarColores = document.getElementById('toggle-colores-frecuencia')?.checked;
+
+            // Mostrar/ocultar leyenda de colores
+            const leyenda = document.getElementById('leyenda-colores');
+            if (leyenda) leyenda.style.display = usarColores ? 'flex' : 'none';
 
             // Mostrar loading
             const msgDiv = document.getElementById('mensaje-grafo');
@@ -3421,45 +3532,39 @@
                 polylinesGrafo = [];
 
                 if (data.ok && data.conexiones && data.conexiones.length > 0) {
-                    // Agrupar por frecuencia para dibujar primero los menos transitados
-                    const conexiones = data.conexiones.sort((a, b) => a.veces_transitado - b.veces_transitado);
+                    const conexiones = data.conexiones;
 
                     conexiones.forEach(c => {
                         const inicio = [parseFloat(c.origen_lat), parseFloat(c.origen_lon)];
                         const fin = [parseFloat(c.destino_lat), parseFloat(c.destino_lon)];
-                        const color = getColorByTransitado(c.veces_transitado);
-                        const weight = getWeightByTransitado(c.veces_transitado);
+                        const color = usarColores ? getColorByTransitado(c.veces_transitado) : '#3b82f6';
+                        const weight = usarColores ? getWeightByTransitado(c.veces_transitado) : 1.5;
 
-                        // Dibujar círculos en los puntos de inicio y fin
-                        const circuloInicio = L.circleMarker(inicio, {
-                            radius: 5,
-                            fillColor: '#fff',
-                            color: color,
-                            weight: 2,
-                            opacity: 1,
-                            fillOpacity: 0.9
-                        }).addTo(mapaGrafo);
-                        polylinesGrafo.push(circuloInicio);
+                        // Círculos en extremos (solo si toggle activado)
+                        if (mostrarCirculos) {
+                            const circuloInicio = L.circleMarker(inicio, {
+                                radius: 4, fillColor: '#fff', color: color,
+                                weight: 2, opacity: 1, fillOpacity: 0.9
+                            }).addTo(mapaGrafo);
+                            circuloInicio.conexionId = c.id;
+                            polylinesGrafo.push(circuloInicio);
 
-                        const circuloFin = L.circleMarker(fin, {
-                            radius: 5,
-                            fillColor: color,
-                            color: '#fff',
-                            weight: 2,
-                            opacity: 1,
-                            fillOpacity: 0.9
-                        }).addTo(mapaGrafo);
-                        polylinesGrafo.push(circuloFin);
+                            const circuloFin = L.circleMarker(fin, {
+                                radius: 4, fillColor: color, color: '#fff',
+                                weight: 2, opacity: 1, fillOpacity: 0.9
+                            }).addTo(mapaGrafo);
+                            circuloFin.conexionId = c.id;
+                            polylinesGrafo.push(circuloFin);
+                        }
 
-                        // Dibujar línea con cursor pointer
+                        // Dibujar línea
                         const polyline = L.polyline([inicio, fin], {
                             color: color,
                             weight: weight,
-                            opacity: 0.8,
-                            className: 'segmento-grafo'
+                            opacity: 0.8
                         }).addTo(mapaGrafo);
 
-                        // Efecto hover para facilitar selección
+                        // Efecto hover
                         polyline.on('mouseover', function() {
                             this.setStyle({ weight: weight + 4, opacity: 1 });
                         });
@@ -3467,47 +3572,39 @@
                             this.setStyle({ weight: weight, opacity: 0.8 });
                         });
 
-                        // Determinar icono y texto de fuente
-                        const fuenteTexto = c.fuente === 'osrm' ? '🗺️ OSRM (calculado)' :
-                                           c.fuente === 'gps' ? '📍 GPS (conductor)' : '❓ Desconocido';
-                        const fuenteColor = c.fuente === 'osrm' ? '#3b82f6' : c.fuente === 'gps' ? '#22c55e' : '#6b7280';
-
-                        // Guardar referencia del ID en el polyline para eliminación directa
                         polyline.conexionId = c.id;
-                        circuloInicio.conexionId = c.id;
-                        circuloFin.conexionId = c.id;
 
-                        // Agregar popup con info y botón eliminar
-                        polyline.bindPopup(`
-                            <strong>Conexión de vía</strong><br>
-                            📍 Origen: ${c.origen_lat}, ${c.origen_lon}<br>
-                            🎯 Destino: ${c.destino_lat}, ${c.destino_lon}<br>
-                            📏 Distancia: ${c.distancia_metros}m<br>
-                            🔄 Veces transitado: <strong>${c.veces_transitado}</strong><br>
-                            <span style="color: ${fuenteColor}; font-weight: bold;">${fuenteTexto}</span><br>
-                            <hr style="margin: 8px 0;">
-                            <button onclick="eliminarConexion(${c.id})"
-                                    style="background: #ef4444; color: white; border: none; padding: 6px 12px;
-                                           border-radius: 6px; cursor: pointer; width: 100%;">
-                                🗑️ Eliminar conexión
-                            </button>
-                        `);
+                        // Popup con info (y botón eliminar solo en modo depuración)
+                        if (modoDepuracionGrafo) {
+                            const fuenteTexto = c.fuente === 'osrm' ? '🗺️ OSRM (calculado)' :
+                                               c.fuente === 'gps' ? '📍 GPS (conductor)' : '❓ Desconocido';
+                            const fuenteColor = c.fuente === 'osrm' ? '#3b82f6' : c.fuente === 'gps' ? '#22c55e' : '#6b7280';
+
+                            polyline.bindPopup(`
+                                <strong>Conexión de vía</strong><br>
+                                📍 Origen: ${c.origen_lat}, ${c.origen_lon}<br>
+                                🎯 Destino: ${c.destino_lat}, ${c.destino_lon}<br>
+                                📏 Distancia: ${c.distancia_metros}m<br>
+                                🔄 Veces transitado: <strong>${c.veces_transitado}</strong><br>
+                                <span style="color: ${fuenteColor}; font-weight: bold;">${fuenteTexto}</span><br>
+                                <hr style="margin: 8px 0;">
+                                <button onclick="eliminarConexion(${c.id})"
+                                        style="background: #ef4444; color: white; border: none; padding: 6px 12px;
+                                               border-radius: 6px; cursor: pointer; width: 100%;">
+                                    🗑️ Eliminar conexión
+                                </button>
+                            `);
+                        }
 
                         polylinesGrafo.push(polyline);
-
-                        // Agregar flecha de dirección cada ciertos segmentos para no sobrecargar
-                        // Solo para conexiones transitadas 2+ veces y si la distancia es > 20m
-                        if (c.veces_transitado >= 2 && c.distancia_metros > 20) {
-                            const flecha = crearFlecha(inicio, fin, color);
-                            flecha.conexionId = c.id; // Para eliminarla junto con el segmento
-                            flecha.addTo(mapaGrafo);
-                            polylinesGrafo.push(flecha);
-                        }
                     });
+
+                    // Flechas inteligentes
+                    colocarFlechasInteligentes(conexiones);
 
                     // Ajustar vista al grafo
                     if (polylinesGrafo.length > 0) {
-                        const bounds = L.latLngBounds(conexiones.map(c => [c.origen_lat, c.origen_lon]));
+                        const bounds = L.latLngBounds(conexiones.map(c => [parseFloat(c.origen_lat), parseFloat(c.origen_lon)]));
                         mapaGrafo.fitBounds(bounds, { padding: [20, 20] });
                     }
 
@@ -3518,7 +3615,7 @@
                     msgDiv.textContent = '⚠️ No hay conexiones con los filtros seleccionados';
                 }
 
-                setTimeout(() => msgDiv.classList.add('hidden'), 3000);
+                setTimeout(() => msgDiv.classList.add('hidden'), 5000);
 
             } catch (error) {
                 console.error('Error cargando conexiones:', error);

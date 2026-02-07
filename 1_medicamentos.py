@@ -834,6 +834,10 @@ def normalizar_texto(texto):
 def test_simple():
     return "Funciona!"
 
+@app.route('/admin/mapa_propio')
+def mapa_propio():
+    return render_template('mapa_propio.html')
+
 
 # Asegurar que la carpeta exista
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)

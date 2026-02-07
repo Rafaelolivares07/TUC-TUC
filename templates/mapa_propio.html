@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa Propio - TUC TUC</title>
+    <script src="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+    <script src="https://unpkg.com/@protomaps/basemaps@5/dist/basemaps.js" crossorigin="anonymous"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 100vh; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        #controles {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+        }
+        #controles button {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        #controles button:hover { background: rgba(0,0,0,0.9); }
+        #controles button.activo { background: #2563eb; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Mapa propio TUC TUC - Cali |
+        Zoom: <span id="zoom-nivel">13</span> |
+        Inclinacion: <span id="pitch-nivel">0</span>°
+    </div>
+    <div id="controles">
+        <button onclick="vista2D()">Vista 2D</button>
+        <button onclick="vista3D()">Vista 3D</button>
+        <button onclick="rotarMapa()">Rotar</button>
+        <button id="btn-estilo" onclick="cambiarEstilo()">Estilo: Claro</button>
+    </div>
+    <div id="map"></div>
+
+    <script>
+        // Registrar protocolo PMTiles
+        const protocol = new pmtiles.Protocol();
+        maplibregl.addProtocol('pmtiles', protocol.tile);
+
+        let estiloActual = 'light';
+        const estilos = ['light', 'dark', 'grayscale', 'white', 'black'];
+        const nombresEstilo = {
+            'light': 'Claro', 'dark': 'Oscuro', 'grayscale': 'Gris',
+            'white': 'Blanco', 'black': 'Negro'
+        };
+        let rotando = false;
+        let animRotacion = null;
+
+        function crearEstilo(flavor) {
+            return {
+                version: 8,
+                glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+                sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/' + flavor,
+                sources: {
+                    protomaps: {
+                        type: 'vector',
+                        url: 'pmtiles:///static/maps/cali.pmtiles',
+                        attribution: '&copy; OpenStreetMap'
+                    }
+                },
+                layers: basemaps.layers("protomaps", basemaps.namedFlavor(flavor), { lang: "es" })
+            };
+        }
+
+        // Crear mapa centrado en Cali
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: crearEstilo('light'),
+            center: [-76.5340, 3.4516],
+            zoom: 13,
+            pitch: 0,
+            bearing: 0,
+            maxPitch: 85
+        });
+
+        map.addControl(new maplibregl.NavigationControl());
+
+        // Actualizar info
+        map.on('move', () => {
+            document.getElementById('zoom-nivel').textContent = map.getZoom().toFixed(1);
+            document.getElementById('pitch-nivel').textContent = Math.round(map.getPitch());
+        });
+
+        function vista2D() {
+            pararRotacion();
+            map.easeTo({ pitch: 0, bearing: 0, duration: 1000 });
+        }
+
+        function vista3D() {
+            pararRotacion();
+            map.easeTo({ pitch: 60, duration: 1000 });
+        }
+
+        function rotarMapa() {
+            if (rotando) {
+                pararRotacion();
+                return;
+            }
+            rotando = true;
+            if (map.getPitch() < 30) {
+                map.easeTo({ pitch: 45, duration: 500 });
+            }
+            function girar() {
+                if (!rotando) return;
+                map.rotateTo(map.getBearing() + 0.3, { duration: 0 });
+                animRotacion = requestAnimationFrame(girar);
+            }
+            girar();
+        }
+
+        function pararRotacion() {
+            rotando = false;
+            if (animRotacion) {
+                cancelAnimationFrame(animRotacion);
+                animRotacion = null;
+            }
+        }
+
+        function cambiarEstilo() {
+            let idx = estilos.indexOf(estiloActual);
+            idx = (idx + 1) % estilos.length;
+            estiloActual = estilos[idx];
+
+            const center = map.getCenter();
+            const zoom = map.getZoom();
+            const pitch = map.getPitch();
+            const bearing = map.getBearing();
+
+            map.setStyle(crearEstilo(estiloActual));
+
+            map.once('styledata', () => {
+                map.jumpTo({ center, zoom, pitch, bearing });
+            });
+
+            document.getElementById('btn-estilo').textContent = 'Estilo: ' + nombresEstilo[estiloActual];
+        }
+
+        // Interaccion: al tocar el mapa se para la rotacion
+        map.on('mousedown', pararRotacion);
+        map.on('touchstart', pararRotacion);
+    </script>
+</body>
+</html>

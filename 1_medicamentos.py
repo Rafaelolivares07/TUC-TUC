@@ -21903,12 +21903,20 @@ def api_viaje_ruta(viaje_id):
                 resultado['leg1'] = leg1
                 geometria_completa.extend(leg1['geometria'])
 
-        # Tramo 2: Recogida → Destino (siempre)
-        orig_lat = float(viaje['origen_lat'])
-        orig_lon = float(viaje['origen_lon'])
+        # Tramo 2: Origen → Destino
+        # Si el conductor se desvió (desde_actual=1) y el viaje está en curso,
+        # usar posición actual del conductor como origen
+        desde_actual = request.args.get('desde_actual') == '1'
+        if desde_actual and viaje['estado'] == 'en_curso' and viaje['conductor_lat'] and viaje['conductor_lon']:
+            orig_lat = float(viaje['conductor_lat'])
+            orig_lon = float(viaje['conductor_lon'])
+            print(f"🔄 Recalculando desde posición actual del conductor ({orig_lat},{orig_lon})")
+        else:
+            orig_lat = float(viaje['origen_lat'])
+            orig_lon = float(viaje['origen_lon'])
         dest_lat = float(viaje['destino_lat'])
         dest_lon = float(viaje['destino_lon'])
-        print(f"🚗 Tramo 2: recogida ({orig_lat},{orig_lon}) → destino ({dest_lat},{dest_lon})")
+        print(f"🚗 Tramo 2: ({orig_lat},{orig_lon}) → destino ({dest_lat},{dest_lon})")
         leg2 = obtener_ruta_con_fallback(orig_lat, orig_lon, dest_lat, dest_lon, conn)
         if leg2:
             resultado['leg2'] = leg2

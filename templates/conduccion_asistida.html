@@ -712,6 +712,9 @@
         let viajeActivo = null;
         let geometriaRutaActiva = null;
         let velocidadRutaKmh = 17; // velocidad actual según hora pico/valle
+        let ultimoRecalculo = 0;
+        const UMBRAL_DESVIO = 50; // metros para detectar desvío
+        const COOLDOWN_RECALCULO = 15000; // mínimo 15s entre recálculos
         let marcadoresViaje = [];
         let intervalRutaActiva = null;
         let puntosRutaNueva = [];
@@ -1001,11 +1004,13 @@
         // SEGMENTOS Y RUTAS
         // ==========================================
 
-        async function cargarRutaViajeActivo() {
+        async function cargarRutaViajeActivo(desdeActual) {
             if (!viajeActivo) return;
 
             try {
-                const res = await fetch('/api/viaje/' + viajeActivo.id + '/ruta');
+                let url = '/api/viaje/' + viajeActivo.id + '/ruta';
+                if (desdeActual) url += '?desde_actual=1';
+                const res = await fetch(url);
                 const data = await res.json();
 
                 if (data.ok) {
@@ -1050,37 +1055,7 @@
             }
         }
 
-        function calcularDistanciaRestante() {
-            // Calcula distancia restante desde posición actual hasta el final de la ruta
-            if (!geometriaRutaActiva || geometriaRutaActiva.length < 2 || !ubicacionActual) return null;
-
-            const lat = ubicacionActual.lat;
-            const lon = ubicacionActual.lon;
-
-            // Encontrar el punto más cercano en la ruta
-            let idxCercano = 0;
-            let distMin = Infinity;
-            for (let i = 0; i < geometriaRutaActiva.length; i++) {
-                const p = geometriaRutaActiva[i];
-                const d = (p[0] - lat) * (p[0] - lat) + (p[1] - lon) * (p[1] - lon);
-                if (d < distMin) {
-                    distMin = d;
-                    idxCercano = i;
-                }
-            }
-
-            // Sumar distancia desde el punto cercano hasta el final
-            let distancia = 0;
-            for (let i = idxCercano; i < geometriaRutaActiva.length - 1; i++) {
-                const a = geometriaRutaActiva[i];
-                const b = geometriaRutaActiva[i + 1];
-                distancia += distanciaEntreCoords(a[0], a[1], b[0], b[1]);
-            }
-            return distancia; // metros
-        }
-
         function distanciaEntreCoords(lat1, lon1, lat2, lon2) {
-            // Haversine simplificado
             const R = 6371000;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -1091,15 +1066,45 @@
         }
 
         function actualizarDistanciaTiempo() {
-            if (!viajeActivo) return;
+            if (!viajeActivo || !geometriaRutaActiva || geometriaRutaActiva.length < 2 || !ubicacionActual) return;
 
-            const restante = calcularDistanciaRestante();
-            if (restante === null) return;
+            const lat = ubicacionActual.lat;
+            const lon = ubicacionActual.lon;
+
+            // Encontrar punto más cercano en la ruta (en metros)
+            let idxCercano = 0;
+            let distAlRuta = Infinity;
+            for (let i = 0; i < geometriaRutaActiva.length; i++) {
+                const p = geometriaRutaActiva[i];
+                const d = distanciaEntreCoords(lat, lon, p[0], p[1]);
+                if (d < distAlRuta) {
+                    distAlRuta = d;
+                    idxCercano = i;
+                }
+            }
+
+            // Detectar desvío: si estamos a más de 50m de la ruta, recalcular
+            if (distAlRuta > UMBRAL_DESVIO) {
+                const ahora = Date.now();
+                if (ahora - ultimoRecalculo > COOLDOWN_RECALCULO) {
+                    ultimoRecalculo = ahora;
+                    console.log('🔄 Desvío detectado (' + Math.round(distAlRuta) + 'm). Recalculando ruta...');
+                    cargarRutaViajeActivo(true);
+                    return;
+                }
+            }
+
+            // Sumar distancia restante desde punto cercano hasta el final
+            let restante = 0;
+            for (let i = idxCercano; i < geometriaRutaActiva.length - 1; i++) {
+                const a = geometriaRutaActiva[i];
+                const b = geometriaRutaActiva[i + 1];
+                restante += distanciaEntreCoords(a[0], a[1], b[0], b[1]);
+            }
 
             const km = restante / 1000;
             const minutos = Math.round((km / velocidadRutaKmh) * 60);
 
-            // Formatear
             let distTexto;
             if (restante < 1000) {
                 distTexto = Math.round(restante) + ' m';

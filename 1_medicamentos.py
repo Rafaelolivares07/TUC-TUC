@@ -12713,6 +12713,17 @@ def migrar_conductor():
         except Exception as e:
             mensajes.append(f"⚠️ Estado constraint: {str(e)}")
 
+        # Actualizar constraint de tipo_servicio para incluir 'personal'
+        try:
+            conn.execute("ALTER TABLE solicitudes_transporte DROP CONSTRAINT IF EXISTS solicitudes_transporte_tipo_servicio_check")
+            conn.execute("""
+                ALTER TABLE solicitudes_transporte ADD CONSTRAINT solicitudes_transporte_tipo_servicio_check
+                CHECK (tipo_servicio IN ('transporte', 'acompanamiento', 'personal'))
+            """)
+            mensajes.append("✅ solicitudes_transporte.tipo_servicio constraint actualizado")
+        except Exception as e:
+            mensajes.append(f"⚠️ tipo_servicio constraint: {str(e)}")
+
         # Parámetros de Pico y Placa
         parametros_pico_placa = [
             ('pico_placa_activo', 'booleano', True),

@@ -834,12 +834,6 @@ def normalizar_texto(texto):
 def test_simple():
     return "Funciona!"
 
-@app.route('/admin/mapa_propio')
-@admin_required
-def mapa_propio():
-    return render_template('mapa_propio.html')
-
-
 # Asegurar que la carpeta exista
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.logger.debug(f"Upload folder: {app.config['UPLOAD_FOLDER']} (exist or created)")
@@ -7004,6 +6998,11 @@ def admin_get_database_mode():
 def admin_menu():
     """Muestra el men principal de administracin."""
     return render_template('admin_menu.html')
+
+@app.route('/admin/mapa_propio')
+@admin_required
+def mapa_propio():
+    return render_template('mapa_propio.html')
 
 @app.route('/admin/categorias')
 @admin_required

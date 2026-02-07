@@ -451,6 +451,146 @@
             color: white !important;
         }
 
+        /* Barra "¿A dónde vamos?" */
+        #barra-vamos-a {
+            display: none;
+            position: absolute;
+            bottom: 32px;
+            left: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.75);
+            border-radius: 14px;
+            padding: 14px;
+            backdrop-filter: blur(8px);
+            cursor: pointer;
+            border-top: 3px solid #3b82f6;
+        }
+
+        #barra-vamos-a .vamos-texto {
+            font-size: 15px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Panel de búsqueda */
+        #panel-busqueda {
+            display: none;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1002;
+            background: rgba(20, 20, 35, 0.97);
+            border-radius: 18px 18px 0 0;
+            padding: 16px;
+            backdrop-filter: blur(12px);
+            max-height: 55vh;
+            overflow: hidden;
+        }
+
+        #panel-busqueda .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        #panel-busqueda .panel-titulo {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        #panel-busqueda .btn-cerrar-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #input-destino-conductor {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 15px;
+            outline: none;
+        }
+
+        #input-destino-conductor::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        #input-destino-conductor:focus {
+            border-color: #60a5fa;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        #autocomplete-conductor {
+            display: none;
+            max-height: 30vh;
+            overflow-y: auto;
+            margin-top: 8px;
+        }
+
+        .sugerencia-item {
+            padding: 11px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 6px;
+        }
+
+        .sugerencia-item:active {
+            background: rgba(59, 130, 246, 0.3);
+        }
+
+        .sugerencia-nombre {
+            flex: 1;
+            font-size: 13px;
+            padding-right: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sugerencia-distancia {
+            font-size: 11px;
+            opacity: 0.5;
+            white-space: nowrap;
+        }
+
+        #btn-seleccionar-mapa {
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        /* Marcador de destino en mapa */
+        .marcador-destino-seleccion {
+            width: 30px;
+            height: 30px;
+            background: #ef4444;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            cursor: pointer;
+        }
+
         /* Ocultar controles de MapLibre que no necesitamos */
         .maplibregl-ctrl-bottom-left,
         .maplibregl-ctrl-bottom-right {
@@ -534,6 +674,22 @@
         <span id="fuente-ruta" style="opacity: 0.5; font-style: italic;"></span>
     </div>
 
+    <!-- Barra "¿A dónde vamos?" (cuando no hay viaje activo) -->
+    <div id="barra-vamos-a" onclick="abrirPanelBusqueda()">
+        <span class="vamos-texto">&#x1F50D; ¿A dónde vamos?</span>
+    </div>
+
+    <!-- Panel de búsqueda de destino -->
+    <div id="panel-busqueda">
+        <div class="panel-header">
+            <span class="panel-titulo">Definir destino</span>
+            <button class="btn-cerrar-panel" onclick="cerrarPanelBusqueda()">&#x2715;</button>
+        </div>
+        <input type="text" id="input-destino-conductor" placeholder="Escribe una dirección o lugar..." autocomplete="off">
+        <div id="autocomplete-conductor"></div>
+        <button id="btn-seleccionar-mapa" onclick="activarSeleccionMapa()">&#x1F5FA; Seleccionar en el mapa</button>
+    </div>
+
     <!-- Toast pantalla -->
     <div id="toast-pantalla">&#x26A0;&#xFE0F; Mantén la pantalla encendida en Ajustes</div>
 
@@ -558,6 +714,9 @@
         let intervalRutaActiva = null;
         let puntosRutaNueva = [];
         let mapaListo = false;
+        let timeoutBusqueda = null;
+        let modoSeleccionMapa = false;
+        let marcadorDestinoTemp = null;
 
         // GeoJSON vacíos para inicializar fuentes
         const LINEA_VACIA = { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} };
@@ -621,7 +780,7 @@
                 style: crearEstilo('light'),
                 center: [-76.5320, 3.4516],
                 zoom: CONFIG.ZOOM_DEFAULT,
-                pitch: 50,
+                pitch: 70,
                 bearing: 0,
                 maxPitch: 85,
                 attributionControl: false
@@ -1222,6 +1381,7 @@
 
                 if (data.ok && data.viaje) {
                     viajeActivo = data.viaje;
+                    document.getElementById('barra-vamos-a').style.display = 'none';
                     mostrarInfoViaje();
                     await cargarRutaViajeActivo();
                     if (!intervalRutaActiva) {
@@ -1229,9 +1389,13 @@
                             if (viajeActivo) cargarRutaViajeActivo();
                         }, 30000);
                     }
+                } else {
+                    // Sin viaje activo: mostrar "¿A dónde vamos?"
+                    document.getElementById('barra-vamos-a').style.display = 'block';
                 }
             } catch (e) {
                 console.log('Sin viaje activo');
+                document.getElementById('barra-vamos-a').style.display = 'block';
             }
         }
 
@@ -1241,12 +1405,22 @@
             const info = document.getElementById('info-viaje');
             info.style.display = 'block';
 
-            document.getElementById('viaje-pasajero').textContent = viajeActivo.usuario_nombre || 'Pasajero';
-            document.getElementById('viaje-origen').textContent = '\uD83D\uDCCD ' + (viajeActivo.origen_texto || 'Origen');
-            document.getElementById('viaje-destino').textContent = '\uD83C\uDFC1 ' + (viajeActivo.destino_texto || 'Destino');
+            const esPersonal = viajeActivo.tipo_servicio === 'personal';
 
-            const tarifa = viajeActivo.tarifa;
-            document.getElementById('viaje-tarifa').textContent = tarifa ? '$' + Number(tarifa).toLocaleString() : '';
+            if (esPersonal) {
+                document.getElementById('viaje-pasajero').textContent = 'Ruta personal';
+                document.getElementById('viaje-origen').textContent = '';
+                document.getElementById('viaje-destino').textContent = '\uD83C\uDFC1 ' + (viajeActivo.destino_texto || 'Destino');
+                document.getElementById('viaje-tarifa').textContent = '';
+                info.style.borderTopColor = '#3b82f6';
+            } else {
+                document.getElementById('viaje-pasajero').textContent = viajeActivo.usuario_nombre || 'Pasajero';
+                document.getElementById('viaje-origen').textContent = '\uD83D\uDCCD ' + (viajeActivo.origen_texto || 'Origen');
+                document.getElementById('viaje-destino').textContent = '\uD83C\uDFC1 ' + (viajeActivo.destino_texto || 'Destino');
+                const tarifa = viajeActivo.tarifa;
+                document.getElementById('viaje-tarifa').textContent = tarifa ? '$' + Number(tarifa).toLocaleString() : '';
+                info.style.borderTopColor = '#22c55e';
+            }
 
             actualizarBotonAccion();
         }
@@ -1254,8 +1428,14 @@
         function actualizarBotonAccion() {
             if (!viajeActivo) return;
             const contenedor = document.getElementById('viaje-acciones');
-            const estado = viajeActivo.estado;
+            const esPersonal = viajeActivo.tipo_servicio === 'personal';
 
+            if (esPersonal) {
+                contenedor.innerHTML = '<button class="btn-accion-viaje btn-finalizar" onclick="cancelarViajePersonal()">Cancelar ruta</button>';
+                return;
+            }
+
+            const estado = viajeActivo.estado;
             if (estado === 'aceptada') {
                 contenedor.innerHTML = '<button class="btn-accion-viaje btn-llegue" onclick="accionLlegue()">Ya llegué</button>';
             } else if (estado === 'recogiendo') {
@@ -1627,12 +1807,245 @@
         }
 
         // ==========================================
+        // "VAMOS A" - BÚSQUEDA Y RUTA PERSONAL
+        // ==========================================
+
+        function abrirPanelBusqueda() {
+            document.getElementById('panel-busqueda').style.display = 'block';
+            document.getElementById('barra-vamos-a').style.display = 'none';
+            document.getElementById('input-destino-conductor').value = '';
+            document.getElementById('autocomplete-conductor').style.display = 'none';
+            setTimeout(() => document.getElementById('input-destino-conductor').focus(), 100);
+        }
+
+        function cerrarPanelBusqueda() {
+            document.getElementById('panel-busqueda').style.display = 'none';
+            if (!viajeActivo) {
+                document.getElementById('barra-vamos-a').style.display = 'block';
+            }
+            desactivarSeleccionMapa();
+        }
+
+        // Event listener para el input de búsqueda
+        document.addEventListener('DOMContentLoaded', function() {
+            const input = document.getElementById('input-destino-conductor');
+            if (input) {
+                input.addEventListener('input', function() {
+                    buscarDestinoAutocomplete(this.value);
+                });
+            }
+        });
+
+        function buscarDestinoAutocomplete(texto) {
+            clearTimeout(timeoutBusqueda);
+
+            if (texto.length < 2) {
+                document.getElementById('autocomplete-conductor').style.display = 'none';
+                return;
+            }
+
+            timeoutBusqueda = setTimeout(async () => {
+                const latParam = ubicacionActual ? ubicacionActual.lat : '';
+                const lonParam = ubicacionActual ? ubicacionActual.lon : '';
+
+                try {
+                    const res = await fetch('/api/buscar_interseccion?q=' + encodeURIComponent(texto) + '&lat=' + latParam + '&lon=' + lonParam);
+                    const data = await res.json();
+
+                    if (data.ok && data.resultados && data.resultados.length > 0) {
+                        mostrarSugerencias(data.resultados);
+                    } else {
+                        document.getElementById('autocomplete-conductor').style.display = 'none';
+                    }
+                } catch (e) {
+                    console.error('Error buscando destino:', e);
+                }
+            }, 500);
+        }
+
+        function mostrarSugerencias(resultados) {
+            const contenedor = document.getElementById('autocomplete-conductor');
+            contenedor.innerHTML = '';
+
+            resultados.forEach(r => {
+                const item = document.createElement('div');
+                item.className = 'sugerencia-item';
+
+                const nombre = document.createElement('span');
+                nombre.className = 'sugerencia-nombre';
+                nombre.textContent = r.display_name || 'Sin nombre';
+
+                const dist = document.createElement('span');
+                dist.className = 'sugerencia-distancia';
+                dist.textContent = r.distancia_texto || '';
+
+                item.appendChild(nombre);
+                item.appendChild(dist);
+
+                item.addEventListener('click', function() {
+                    seleccionarDestino(r.lat, r.lon, r.display_name || 'Destino');
+                });
+
+                contenedor.appendChild(item);
+            });
+
+            contenedor.style.display = 'block';
+        }
+
+        async function seleccionarDestino(lat, lon, texto) {
+            cerrarPanelBusqueda();
+
+            if (!ubicacionActual) {
+                console.error('No hay ubicación GPS');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/conductor/viaje-personal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        destino_lat: lat,
+                        destino_lon: lon,
+                        destino_texto: texto,
+                        origen_lat: ubicacionActual.lat,
+                        origen_lon: ubicacionActual.lon,
+                        origen_texto: 'Mi ubicación'
+                    })
+                });
+                const data = await res.json();
+
+                if (data.ok && data.viaje) {
+                    viajeActivo = data.viaje;
+                    mostrarInfoViaje();
+                    await cargarRutaViajeActivo();
+                    if (!intervalRutaActiva) {
+                        intervalRutaActiva = setInterval(() => {
+                            if (viajeActivo) cargarRutaViajeActivo();
+                        }, 30000);
+                    }
+                } else {
+                    console.error('Error creando viaje personal:', data.error);
+                    document.getElementById('barra-vamos-a').style.display = 'block';
+                }
+            } catch (e) {
+                console.error('Error creando viaje personal:', e);
+                document.getElementById('barra-vamos-a').style.display = 'block';
+            }
+        }
+
+        function activarSeleccionMapa() {
+            modoSeleccionMapa = true;
+            cerrarPanelBusqueda();
+            mapa.getCanvas().style.cursor = 'crosshair';
+
+            // Entrar en modo libre para poder navegar el mapa
+            if (!modoLibre) {
+                entrarModoLibre();
+            }
+        }
+
+        function desactivarSeleccionMapa() {
+            if (!modoSeleccionMapa) return;
+            modoSeleccionMapa = false;
+            mapa.getCanvas().style.cursor = '';
+            if (marcadorDestinoTemp) {
+                marcadorDestinoTemp.remove();
+                marcadorDestinoTemp = null;
+            }
+        }
+
+        // Click en mapa para seleccionar destino
+        document.addEventListener('DOMContentLoaded', function() {
+            // Se ejecuta después de inicializarMapa, así que usamos un interval corto
+            const esperarMapa = setInterval(() => {
+                if (mapa) {
+                    mapa.on('click', handleClickMapa);
+                    clearInterval(esperarMapa);
+                }
+            }, 200);
+        });
+
+        async function handleClickMapa(e) {
+            if (!modoSeleccionMapa) return;
+
+            const lat = e.lngLat.lat;
+            const lon = e.lngLat.lng;
+
+            // Poner marcador temporal
+            if (marcadorDestinoTemp) marcadorDestinoTemp.remove();
+
+            const el = document.createElement('div');
+            el.className = 'marcador-destino-seleccion';
+            marcadorDestinoTemp = new maplibregl.Marker({ element: el })
+                .setLngLat([lon, lat])
+                .addTo(mapa);
+
+            // Obtener dirección reversa
+            let textoDestino = 'Lat: ' + lat.toFixed(4) + ', Lon: ' + lon.toFixed(4);
+            try {
+                const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lon + '&countrycodes=co', {
+                    headers: { 'User-Agent': 'TucTucApp/1.0' }
+                });
+                const data = await res.json();
+                if (data.display_name) {
+                    textoDestino = data.display_name;
+                }
+            } catch (e) {
+                // Usar coordenadas como fallback
+            }
+
+            desactivarSeleccionMapa();
+            volverAConduccion();
+            await seleccionarDestino(lat, lon, textoDestino);
+        }
+
+        async function cancelarViajePersonal() {
+            if (!viajeActivo) return;
+
+            try {
+                await fetch('/api/conductor/cancelar-viaje/' + viajeActivo.id, { method: 'POST' });
+            } catch (e) {
+                // Silencioso
+            }
+
+            // Limpiar estado local
+            if (intervalRutaActiva) {
+                clearInterval(intervalRutaActiva);
+                intervalRutaActiva = null;
+            }
+            viajeActivo = null;
+            geometriaRutaActiva = null;
+            camarasEnRuta = [];
+            girosDetectados = [];
+            marcadoresViaje.forEach(m => m.remove());
+            marcadoresViaje = [];
+
+            // Limpiar rutas del mapa
+            if (mapaListo) {
+                mapa.getSource(FUENTES.RUTA_RECOGIDA).setData(LINEA_VACIA);
+                mapa.getSource(FUENTES.RUTA_DESTINO).setData(LINEA_VACIA);
+                mapa.getSource(FUENTES.RUTA_NUEVA).setData(LINEA_VACIA);
+            }
+
+            // Limpiar cámaras de ruta
+            actualizarCamarasEnMapa();
+
+            // Limpiar fuente de ruta
+            document.getElementById('fuente-ruta').textContent = '';
+
+            // Ocultar info y mostrar barra vamos a
+            document.getElementById('info-viaje').style.display = 'none';
+            document.getElementById('barra-vamos-a').style.display = 'block';
+        }
+
+        // ==========================================
         // CONTROLES DEL CONDUCTOR
         // ==========================================
 
         function toggleVista() {
             vista3D = !vista3D;
-            mapa.easeTo({ pitch: vista3D ? 50 : 0, duration: 500 });
+            mapa.easeTo({ pitch: vista3D ? 70 : 0, duration: 500 });
             document.getElementById('btn-vista').textContent = vista3D ? '3D' : '2D';
         }
 
@@ -1714,7 +2127,7 @@
                 mapa.easeTo({
                     center: [ubicacionActual.lon, ubicacionActual.lat],
                     zoom: CONFIG.ZOOM_DEFAULT,
-                    pitch: vista3D ? 50 : 0,
+                    pitch: vista3D ? 70 : 0,
                     bearing: headingActual || 0,
                     duration: 800
                 });

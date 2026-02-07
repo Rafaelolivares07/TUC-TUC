@@ -21849,7 +21849,8 @@ def api_conductor_viaje_activo():
                     'destino_lat': float(viaje['destino_lat']),
                     'destino_lon': float(viaje['destino_lon']),
                     'tarifa': viaje['precio'],
-                    'usuario_nombre': viaje['usuario_nombre']
+                    'usuario_nombre': viaje['usuario_nombre'],
+                    'tipo_servicio': viaje['tipo_servicio']
                 }
             })
         return jsonify({'ok': True, 'viaje': None})
@@ -22190,6 +22191,79 @@ def api_conductor_cancelar_viaje(servicio_id):
                 )
 
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/viaje-personal', methods=['POST'])
+def api_conductor_viaje_personal():
+    """Crea un viaje personal del conductor (sin pasajero, para navegación propia)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'ok': False, 'error': 'Datos requeridos'}), 400
+
+    destino_lat = data.get('destino_lat')
+    destino_lon = data.get('destino_lon')
+    destino_texto = data.get('destino_texto', 'Destino personal')
+    origen_lat = data.get('origen_lat')
+    origen_lon = data.get('origen_lon')
+    origen_texto = data.get('origen_texto', 'Mi ubicación')
+
+    if not destino_lat or not destino_lon or not origen_lat or not origen_lon:
+        return jsonify({'ok': False, 'error': 'Coordenadas de origen y destino requeridas'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que no tenga otro viaje activo
+        viaje_existente = conn.execute("""
+            SELECT id FROM solicitudes_transporte
+            WHERE conductor_id = %s AND estado IN ('aceptada', 'recogiendo', 'en_curso')
+            LIMIT 1
+        """, (session['usuario_id'],)).fetchone()
+
+        if viaje_existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya tienes un viaje activo'}), 400
+
+        # Crear viaje personal: conductor es también el tercero
+        viaje_id = conn.execute("""
+            INSERT INTO solicitudes_transporte (
+                tercero_id, conductor_id, tipo_servicio, estado,
+                origen_texto, destino_texto,
+                origen_lat, origen_lon, destino_lat, destino_lon,
+                conductor_lat, conductor_lon,
+                fecha_solicitud, fecha_inicio_viaje
+            )
+            VALUES (%s, %s, 'personal', 'en_curso', %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            RETURNING id
+        """, (
+            session['usuario_id'], session['usuario_id'],
+            origen_texto, destino_texto,
+            origen_lat, origen_lon, destino_lat, destino_lon,
+            origen_lat, origen_lon
+        )).fetchone()['id']
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'viaje': {
+                'id': viaje_id,
+                'estado': 'en_curso',
+                'tipo_servicio': 'personal',
+                'origen_texto': origen_texto,
+                'destino_texto': destino_texto,
+                'origen_lat': float(origen_lat),
+                'origen_lon': float(origen_lon),
+                'destino_lat': float(destino_lat),
+                'destino_lon': float(destino_lon)
+            }
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

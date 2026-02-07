@@ -523,10 +523,6 @@
         </div>
         <div class="separador-barra"></div>
         <div class="leyenda-item">
-            <div class="leyenda-linea" style="background: rgba(100, 150, 255, 0.6);"></div>
-            <span>Conocidas</span>
-        </div>
-        <div class="leyenda-item">
             <div class="leyenda-linea" style="background: transparent; border-top: 3px dashed #f97316;"></div>
             <span>Recogida</span>
         </div>
@@ -564,12 +560,10 @@
         let mapaListo = false;
 
         // GeoJSON vacíos para inicializar fuentes
-        const GEOJSON_VACIO = { type: 'FeatureCollection', features: [] };
         const LINEA_VACIA = { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} };
 
         // Nombres de fuentes y capas
         const FUENTES = {
-            SEGMENTOS: 'segmentos-conocidos',
             RUTA_RECOGIDA: 'ruta-recogida',
             RUTA_DESTINO: 'ruta-destino',
             RUTA_NUEVA: 'ruta-nueva'
@@ -580,7 +574,6 @@
             DISTANCIA_ALERTA_CAMARA: 500,
             DISTANCIA_PELIGRO_CAMARA: 200,
             INTERVALO_BUSCAR_CAMARAS: 5000,
-            INTERVALO_CARGAR_SEGMENTOS: 10000,
             ZOOM_DEFAULT: 18,
             DISTANCIA_MIN_NUEVO_PUNTO: 10
         };
@@ -609,7 +602,6 @@
 
             // Intervalos
             setInterval(buscarCamarasCercanas, CONFIG.INTERVALO_BUSCAR_CAMARAS);
-            setInterval(cargarSegmentosConocidos, CONFIG.INTERVALO_CARGAR_SEGMENTOS);
 
             // Wake Lock
             solicitarWakeLock();
@@ -637,22 +629,9 @@
 
             mapa.on('load', () => {
                 // Fuentes GeoJSON para rutas y segmentos
-                mapa.addSource(FUENTES.SEGMENTOS, { type: 'geojson', data: GEOJSON_VACIO });
                 mapa.addSource(FUENTES.RUTA_RECOGIDA, { type: 'geojson', data: LINEA_VACIA });
                 mapa.addSource(FUENTES.RUTA_DESTINO, { type: 'geojson', data: LINEA_VACIA });
                 mapa.addSource(FUENTES.RUTA_NUEVA, { type: 'geojson', data: LINEA_VACIA });
-
-                // Capa: segmentos conocidos (azul)
-                mapa.addLayer({
-                    id: 'layer-segmentos',
-                    type: 'line',
-                    source: FUENTES.SEGMENTOS,
-                    paint: {
-                        'line-color': 'rgba(100, 150, 255, 0.6)',
-                        'line-width': 6,
-                        'line-opacity': 0.7
-                    }
-                });
 
                 // Capa: ruta a recogida (naranja punteado)
                 mapa.addLayer({
@@ -696,11 +675,6 @@
                 crearMarcadorConductor();
 
                 mapaListo = true;
-
-                // Cargar segmentos si ya tenemos ubicación
-                if (ubicacionActual) {
-                    cargarSegmentosConocidos();
-                }
             });
         }
 
@@ -759,7 +733,6 @@
             // Primera ubicación
             if (esPrimeraUbicacion) {
                 buscarCamarasCercanas();
-                cargarSegmentosConocidos();
             }
 
             // Verificar alertas y asistencia
@@ -863,42 +836,6 @@
         // ==========================================
         // SEGMENTOS Y RUTAS
         // ==========================================
-
-        async function cargarSegmentosConocidos() {
-            if (!ubicacionActual || !mapaListo) return;
-
-            try {
-                const res = await fetch('/api/segmentos-cercanos?lat=' + ubicacionActual.lat + '&lon=' + ubicacionActual.lon + '&radio=500');
-                const data = await res.json();
-
-                if (data.ok && data.segmentos) {
-                    dibujarSegmentosConocidos(data.segmentos);
-                }
-            } catch (e) {
-                console.error('Error cargando segmentos:', e);
-            }
-        }
-
-        function dibujarSegmentosConocidos(segmentos) {
-            if (!mapaListo) return;
-
-            const features = segmentos.map(seg => ({
-                type: 'Feature',
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [
-                        [seg.origen_lon, seg.origen_lat],
-                        [seg.destino_lon, seg.destino_lat]
-                    ]
-                },
-                properties: {}
-            }));
-
-            mapa.getSource(FUENTES.SEGMENTOS).setData({
-                type: 'FeatureCollection',
-                features: features
-            });
-        }
 
         async function cargarRutaViajeActivo() {
             if (!viajeActivo) return;
@@ -1712,16 +1649,11 @@
             mapa.setStyle(crearEstilo(flavor));
 
             mapa.once('style.load', () => {
-                // Re-agregar fuentes y capas
-                mapa.addSource(FUENTES.SEGMENTOS, { type: 'geojson', data: GEOJSON_VACIO });
+                // Re-agregar fuentes y capas de rutas
                 mapa.addSource(FUENTES.RUTA_RECOGIDA, { type: 'geojson', data: LINEA_VACIA });
                 mapa.addSource(FUENTES.RUTA_DESTINO, { type: 'geojson', data: LINEA_VACIA });
                 mapa.addSource(FUENTES.RUTA_NUEVA, { type: 'geojson', data: LINEA_VACIA });
 
-                mapa.addLayer({
-                    id: 'layer-segmentos', type: 'line', source: FUENTES.SEGMENTOS,
-                    paint: { 'line-color': 'rgba(100, 150, 255, 0.6)', 'line-width': 6, 'line-opacity': 0.7 }
-                });
                 mapa.addLayer({
                     id: 'layer-ruta-recogida', type: 'line', source: FUENTES.RUTA_RECOGIDA,
                     paint: { 'line-color': '#f97316', 'line-width': 6, 'line-opacity': 0.85, 'line-dasharray': [2, 1.5] }
@@ -1737,8 +1669,7 @@
 
                 mapa.jumpTo({ center, zoom, pitch, bearing });
 
-                // Recargar segmentos y ruta
-                if (ubicacionActual) cargarSegmentosConocidos();
+                // Recargar ruta activa
                 if (viajeActivo) cargarRutaViajeActivo();
             });
 

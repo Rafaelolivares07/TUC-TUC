@@ -835,6 +835,7 @@ def test_simple():
     return "Funciona!"
 
 @app.route('/admin/mapa_propio')
+@admin_required
 def mapa_propio():
     return render_template('mapa_propio.html')
 

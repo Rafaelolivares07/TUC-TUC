@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Conducción Asistida</title>
-    <script src="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.js"></script>
-    <link href="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.css" rel="stylesheet"/>
-    <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
-    <script src="https://unpkg.com/@protomaps/basemaps@5/dist/basemaps.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * {
             margin: 0;
@@ -24,13 +21,20 @@
             width: 100vw;
         }
 
-        #mapa {
+        /* Contenedor del mapa con rotación */
+        #mapa-container {
             position: absolute;
-            top: 0;
-            left: 0;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            z-index: 1;
+            transition: transform 0.3s ease-out;
+        }
+
+        #mapa {
             width: 100%;
             height: 100%;
-            z-index: 1;
         }
 
         /* Wrapper del HUD: flechas + bloque central */
@@ -421,33 +425,29 @@
             color: white !important;
         }
 
-        /* Ocultar controles de MapLibre que no necesitamos */
-        .maplibregl-ctrl-bottom-left,
-        .maplibregl-ctrl-bottom-right {
-            display: none;
-        }
-
     </style>
 </head>
 <body>
-    <!-- Mapa -->
-    <div id="mapa"></div>
+    <!-- Contenedor del mapa con rotación -->
+    <div id="mapa-container">
+        <div id="mapa"></div>
+    </div>
 
     <!-- Botón salir (esquina sup izq) -->
-    <button id="btn-salir" onclick="salir()">&#x2715;</button>
+    <button id="btn-salir" onclick="salir()">✕</button>
 
     <!-- Toggle sonido (esquina sup der) -->
-    <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
+    <button id="btn-sonido" onclick="toggleSonido()">🔊</button>
 
     <!-- HUD unificado: cámara + asistencia + velocímetro + flechas de giro -->
     <div id="hud-wrapper">
         <div id="flecha-izquierda" class="flecha-giro">
-            <span class="flecha-base">&#x25C0;</span>
-            <span class="flecha-activa">&#x25C0;</span>
+            <span class="flecha-base">◀</span>
+            <span class="flecha-activa">◀</span>
         </div>
         <div id="hud-superior">
             <div id="hud-camara">
-                <div id="camara-icono">&#x1F4F7;</div>
+                <div id="camara-icono">📷</div>
                 <div id="camara-distancia"></div>
                 <div id="camara-limite"></div>
             </div>
@@ -458,8 +458,8 @@
             </div>
         </div>
         <div id="flecha-derecha" class="flecha-giro">
-            <span class="flecha-base">&#x25B6;</span>
-            <span class="flecha-activa">&#x25B6;</span>
+            <span class="flecha-base">▶</span>
+            <span class="flecha-activa">▶</span>
         </div>
     </div>
 
@@ -478,7 +478,7 @@
 
     <!-- Franja inferior: brújula + GPS + leyenda -->
     <div id="barra-inferior">
-        <span class="brujula-inline" id="brujula">&#x1F9ED;</span>
+        <span class="brujula-inline" id="brujula">🧭</span>
         <div class="gps-inline">
             <div id="gps-indicador"></div>
             <span id="gps-texto">GPS...</span>
@@ -501,8 +501,9 @@
     </div>
 
     <!-- Toast pantalla -->
-    <div id="toast-pantalla">&#x26A0;&#xFE0F; Mantén la pantalla encendida en Ajustes</div>
+    <div id="toast-pantalla">⚠️ Mantén la pantalla encendida en Ajustes</div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Variables globales
         let mapa = null;
@@ -514,25 +515,18 @@
         let headingActual = 0;
         let camarasCercanas = [];
         let camarasEnMapa = [];
-        let camarasEnRuta = [];
+        let camarasEnRuta = [];  // Cámaras detectadas en la ruta activa
         let viajeActivo = null;
-        let geometriaRutaActiva = null;
+        let geometriaRutaActiva = null;  // Geometría de la ruta para detección de cámaras
+
+        // Capas de rutas
+        let capaRutasConocidas = null;
+        let capaViajeActivo = null;
+        let capaHaciaRecogida = null;
+        let capaRutaNueva = null;
+        let puntosRutaNueva = [];
         let marcadoresViaje = [];
         let intervalRutaActiva = null;
-        let puntosRutaNueva = [];
-        let mapaListo = false;
-
-        // GeoJSON vacíos para inicializar fuentes
-        const GEOJSON_VACIO = { type: 'FeatureCollection', features: [] };
-        const LINEA_VACIA = { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} };
-
-        // Nombres de fuentes y capas
-        const FUENTES = {
-            SEGMENTOS: 'segmentos-conocidos',
-            RUTA_RECOGIDA: 'ruta-recogida',
-            RUTA_DESTINO: 'ruta-destino',
-            RUTA_NUEVA: 'ruta-nueva'
-        };
 
         // Configuración
         const CONFIG = {
@@ -541,145 +535,77 @@
             INTERVALO_BUSCAR_CAMARAS: 5000,
             INTERVALO_CARGAR_SEGMENTOS: 10000,
             ZOOM_DEFAULT: 18,
-            DISTANCIA_MIN_NUEVO_PUNTO: 10
+            DISTANCIA_MIN_NUEVO_PUNTO: 10 // metros mínimos para registrar nuevo punto
         };
-
-        function crearEstilo(flavor) {
-            return {
-                version: 8,
-                glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-                sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/' + flavor,
-                sources: {
-                    protomaps: {
-                        type: 'vector',
-                        url: 'pmtiles:///static/maps/cali.pmtiles',
-                        attribution: '&copy; OpenStreetMap'
-                    }
-                },
-                layers: basemaps.layers("protomaps", basemaps.namedFlavor(flavor), { lang: "es" })
-            };
-        }
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', async function() {
             await inicializarMapa();
             iniciarWatchPosition();
             await verificarViajeActivo();
+            await cargarSegmentosConocidos();
 
             // Intervalos
             setInterval(buscarCamarasCercanas, CONFIG.INTERVALO_BUSCAR_CAMARAS);
             setInterval(cargarSegmentosConocidos, CONFIG.INTERVALO_CARGAR_SEGMENTOS);
 
-            // Wake Lock
+            // Intentar Wake Lock
             solicitarWakeLock();
 
-            // Inicializar audio al primer toque
+            // Inicializar audio al primer toque (requisito móviles)
             document.addEventListener('touchstart', () => inicializarAudio(), { once: true });
             document.addEventListener('click', () => inicializarAudio(), { once: true });
         });
 
         async function inicializarMapa() {
-            // Registrar protocolo PMTiles
-            const protocol = new pmtiles.Protocol();
-            maplibregl.addProtocol('pmtiles', protocol.tile);
+            mapa = L.map('mapa', {
+                zoomControl: false,
+                attributionControl: false,
+                rotate: true,
+                rotateControl: false
+            }).setView([3.4516, -76.5320], CONFIG.ZOOM_DEFAULT);
 
-            mapa = new maplibregl.Map({
-                container: 'mapa',
-                style: crearEstilo('dark'),
-                center: [-76.5320, 3.4516],
-                zoom: CONFIG.ZOOM_DEFAULT,
-                pitch: 50,
-                bearing: 0,
-                maxPitch: 85,
-                attributionControl: false
-            });
+            // Tema más visible (CartoDB Voyager - colores suaves)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19
+            }).addTo(mapa);
 
-            mapa.on('load', () => {
-                // Fuentes GeoJSON para rutas y segmentos
-                mapa.addSource(FUENTES.SEGMENTOS, { type: 'geojson', data: GEOJSON_VACIO });
-                mapa.addSource(FUENTES.RUTA_RECOGIDA, { type: 'geojson', data: LINEA_VACIA });
-                mapa.addSource(FUENTES.RUTA_DESTINO, { type: 'geojson', data: LINEA_VACIA });
-                mapa.addSource(FUENTES.RUTA_NUEVA, { type: 'geojson', data: LINEA_VACIA });
+            // Crear capas para rutas
+            capaRutasConocidas = L.layerGroup().addTo(mapa);
+            capaHaciaRecogida = L.layerGroup().addTo(mapa);
+            capaViajeActivo = L.layerGroup().addTo(mapa);
+            capaRutaNueva = L.layerGroup().addTo(mapa);
 
-                // Capa: segmentos conocidos (azul)
-                mapa.addLayer({
-                    id: 'layer-segmentos',
-                    type: 'line',
-                    source: FUENTES.SEGMENTOS,
-                    paint: {
-                        'line-color': 'rgba(100, 150, 255, 0.6)',
-                        'line-width': 6,
-                        'line-opacity': 0.7
-                    }
-                });
-
-                // Capa: ruta a recogida (naranja punteado)
-                mapa.addLayer({
-                    id: 'layer-ruta-recogida',
-                    type: 'line',
-                    source: FUENTES.RUTA_RECOGIDA,
-                    paint: {
-                        'line-color': '#f97316',
-                        'line-width': 6,
-                        'line-opacity': 0.85,
-                        'line-dasharray': [2, 1.5]
-                    }
-                });
-
-                // Capa: ruta al destino (verde sólido)
-                mapa.addLayer({
-                    id: 'layer-ruta-destino',
-                    type: 'line',
-                    source: FUENTES.RUTA_DESTINO,
-                    paint: {
-                        'line-color': '#22c55e',
-                        'line-width': 8,
-                        'line-opacity': 0.9
-                    }
-                });
-
-                // Capa: ruta nueva (amarillo punteado)
-                mapa.addLayer({
-                    id: 'layer-ruta-nueva',
-                    type: 'line',
-                    source: FUENTES.RUTA_NUEVA,
-                    paint: {
-                        'line-color': '#f59e0b',
-                        'line-width': 5,
-                        'line-opacity': 0.8,
-                        'line-dasharray': [2, 2]
-                    }
-                });
-
-                // Marcador del conductor
-                crearMarcadorConductor();
-
-                mapaListo = true;
-
-                // Cargar segmentos si ya tenemos ubicación
-                if (ubicacionActual) {
-                    cargarSegmentosConocidos();
-                }
-            });
+            // Marcador del conductor (triángulo apuntando arriba)
+            actualizarMarcadorConductor();
         }
 
-        function crearMarcadorConductor() {
-            const el = document.createElement('div');
-            el.innerHTML = '<div style="' +
-                'width: 0; height: 0;' +
-                'border-left: 18px solid transparent;' +
-                'border-right: 18px solid transparent;' +
-                'border-bottom: 28px solid #3b82f6;' +
-                'filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));' +
-                '"></div>';
+        function actualizarMarcadorConductor(contraRotacion = 0) {
+            // Flecha menos puntiaguda (más ancha) que contra-rota para siempre apuntar arriba
+            const iconoConductor = L.divIcon({
+                className: 'conductor-marker',
+                html: `<div id="flecha-conductor" style="
+                    width: 0;
+                    height: 0;
+                    border-left: 18px solid transparent;
+                    border-right: 18px solid transparent;
+                    border-bottom: 28px solid #3b82f6;
+                    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+                    transform: rotate(${contraRotacion}deg);
+                    transition: transform 0.3s ease-out;
+                "></div>`,
+                iconSize: [36, 28],
+                iconAnchor: [18, 28]
+            });
 
-            marcadorConductor = new maplibregl.Marker({
-                element: el,
-                rotationAlignment: 'viewport',
-                pitchAlignment: 'viewport'
-            })
-            .setLngLat([-76.5320, 3.4516])
-            .addTo(mapa);
+            if (marcadorConductor) {
+                mapa.removeLayer(marcadorConductor);
+            }
+
+            marcadorConductor = L.marker([3.4516, -76.5320], {
+                icon: iconoConductor,
+                zIndexOffset: 1000
+            }).addTo(mapa);
         }
 
         function iniciarWatchPosition() {
@@ -715,17 +641,17 @@
             actualizarEstadoGPS(accuracy);
             actualizarBrujula(heading);
 
-            // Primera ubicación
+            // Primera ubicación: buscar cámaras y segmentos inmediatamente
             if (esPrimeraUbicacion) {
                 buscarCamarasCercanas();
                 cargarSegmentosConocidos();
             }
 
-            // Verificar alertas y asistencia
+            // Verificar alertas y asistencia inteligente
             verificarAlertaCamaras();
             analizarCamino();
 
-            // Registrar nuevo segmento
+            // Registrar nuevo segmento si se movió suficiente
             registrarNuevoSegmento();
 
             // Enviar ubicación al servidor
@@ -733,21 +659,26 @@
         }
 
         function actualizarMarcador(lat, lon) {
-            if (!marcadorConductor) return;
-            marcadorConductor.setLngLat([lon, lat]);
-            mapa.easeTo({ center: [lon, lat], duration: 300 });
+            marcadorConductor.setLatLng([lat, lon]);
+            mapa.setView([lat, lon], mapa.getZoom(), { animate: true, duration: 0.3 });
         }
 
         function rotarMapa(heading) {
             if (heading === null || heading === undefined) return;
-            // MapLibre bearing nativo: heading = dirección que apunta arriba
-            mapa.easeTo({ bearing: heading, duration: 300 });
-            // Brújula
-            document.getElementById('brujula').style.transform = 'rotate(' + heading + 'deg)';
+
+            const container = document.getElementById('mapa-container');
+            // Rotar el contenedor del mapa para que el heading apunte arriba
+            container.style.transform = `rotate(${-heading}deg)`;
+
+            // Contra-rotar la flecha del conductor para que siempre apunte arriba
+            actualizarMarcadorConductor(heading);
+
+            // Actualizar brújula para mostrar el norte
+            document.getElementById('brujula').style.transform = `rotate(${heading}deg)`;
         }
 
         function actualizarBrujula(heading) {
-            // Ya se actualiza en rotarMapa
+            // La brújula ya se actualiza en rotarMapa
         }
 
         function actualizarVelocimetro(velocidad) {
@@ -769,6 +700,7 @@
         }
 
         function obtenerLimiteCercano() {
+            // Priorizar cámaras en ruta, luego perimetrales
             const todas = [...camarasEnRuta, ...camarasCercanas];
             if (todas.length === 0) return null;
 
@@ -798,7 +730,7 @@
             } else if (accuracy < 30) {
                 texto.textContent = 'GPS bueno';
             } else {
-                texto.textContent = 'GPS \u00B1' + Math.round(accuracy) + 'm';
+                texto.textContent = `GPS ±${Math.round(accuracy)}m`;
             }
         }
 
@@ -819,10 +751,10 @@
         // ==========================================
 
         async function cargarSegmentosConocidos() {
-            if (!ubicacionActual || !mapaListo) return;
+            if (!ubicacionActual) return;
 
             try {
-                const res = await fetch('/api/segmentos-cercanos?lat=' + ubicacionActual.lat + '&lon=' + ubicacionActual.lon + '&radio=500');
+                const res = await fetch(`/api/segmentos-cercanos?lat=${ubicacionActual.lat}&lon=${ubicacionActual.lon}&radio=500`);
                 const data = await res.json();
 
                 if (data.ok && data.segmentos) {
@@ -834,23 +766,19 @@
         }
 
         function dibujarSegmentosConocidos(segmentos) {
-            if (!mapaListo) return;
+            capaRutasConocidas.clearLayers();
 
-            const features = segmentos.map(seg => ({
-                type: 'Feature',
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [
-                        [seg.origen_lon, seg.origen_lat],
-                        [seg.destino_lon, seg.destino_lat]
-                    ]
-                },
-                properties: {}
-            }));
+            segmentos.forEach(seg => {
+                const polyline = L.polyline([
+                    [seg.origen_lat, seg.origen_lon],
+                    [seg.destino_lat, seg.destino_lon]
+                ], {
+                    color: 'rgba(100, 150, 255, 0.6)',
+                    weight: 6,
+                    opacity: 0.7
+                });
 
-            mapa.getSource(FUENTES.SEGMENTOS).setData({
-                type: 'FeatureCollection',
-                features: features
+                capaRutasConocidas.addLayer(polyline);
             });
         }
 
@@ -858,7 +786,7 @@
             if (!viajeActivo) return;
 
             try {
-                const res = await fetch('/api/viaje/' + viajeActivo.id + '/ruta');
+                const res = await fetch(`/api/viaje/${viajeActivo.id}/ruta`);
                 const data = await res.json();
 
                 if (data.ok) {
@@ -874,25 +802,25 @@
                     // Detectar giros en la geometría de la ruta
                     detectarGirosEnRuta();
 
-                    // Cámaras del response
+                    // Usar cámaras del response directamente
                     if (data.camaras && data.camaras.length > 0) {
                         camarasEnRuta = data.camaras;
-                        console.log('\uD83D\uDCF7 ' + camarasEnRuta.length + ' cámaras en la ruta');
+                        console.log(`📷 ${camarasEnRuta.length} cámaras en la ruta`);
                         actualizarCamarasEnMapa();
                         mostrarAlertaCamarasRuta();
                     }
-                    // Fuente de ruta en barra inferior
+                    // Mostrar fuente de ruta en barra inferior
                     const f1 = data.leg1 ? data.leg1.fuente : '';
                     const f2 = data.leg2 ? data.leg2.fuente : '';
                     const fuenteEl = document.getElementById('fuente-ruta');
                     if (f1 === 'grafo' && f2 === 'grafo') {
-                        fuenteEl.textContent = '\u26A1 propio';
+                        fuenteEl.textContent = '⚡ propio';
                     } else if (f1 === 'grafo' || f2 === 'grafo') {
-                        fuenteEl.textContent = '\u26A1/\uD83C\uDF10 mixto';
+                        fuenteEl.textContent = '⚡/🌐 mixto';
                     } else {
-                        fuenteEl.textContent = '\uD83C\uDF10 osrm';
+                        fuenteEl.textContent = '🌐 osrm';
                     }
-                    console.log('\uD83D\uDDFA\uFE0F Ruta cargada - Tramo1: ' + f1 + ', Tramo2: ' + f2);
+                    console.log(`🗺️ Ruta cargada - Tramo1: ${f1}, Tramo2: ${f2}`);
                 }
             } catch (e) {
                 console.error('Error cargando ruta de viaje:', e);
@@ -900,52 +828,57 @@
         }
 
         function dibujarRutaDosTramos(data) {
-            if (!mapaListo) return;
-
+            capaHaciaRecogida.clearLayers();
+            capaViajeActivo.clearLayers();
             // Limpiar marcadores anteriores
-            marcadoresViaje.forEach(m => m.remove());
+            marcadoresViaje.forEach(m => mapa.removeLayer(m));
             marcadoresViaje = [];
 
-            // Tramo 1: Conductor -> Recogida (naranja punteado)
+            // Tramo 1: Conductor → Recogida (naranja punteado)
             if (data.leg1 && data.leg1.geometria && data.leg1.geometria.length >= 2) {
-                const coords = data.leg1.geometria.map(p => [p[1], p[0]]); // [lon, lat]
-                mapa.getSource(FUENTES.RUTA_RECOGIDA).setData({
-                    type: 'Feature',
-                    geometry: { type: 'LineString', coordinates: coords },
-                    properties: {}
+                const puntos1 = data.leg1.geometria.map(p => [p[0], p[1]]);
+                const polyline1 = L.polyline(puntos1, {
+                    color: '#f97316',
+                    weight: 6,
+                    opacity: 0.85,
+                    dashArray: '10, 8'
                 });
-            } else {
-                mapa.getSource(FUENTES.RUTA_RECOGIDA).setData(LINEA_VACIA);
+                capaHaciaRecogida.addLayer(polyline1);
             }
 
-            // Tramo 2: Recogida -> Destino (verde sólido)
+            // Tramo 2: Recogida → Destino (verde sólido)
             if (data.leg2 && data.leg2.geometria && data.leg2.geometria.length >= 2) {
-                const coords = data.leg2.geometria.map(p => [p[1], p[0]]); // [lon, lat]
-                mapa.getSource(FUENTES.RUTA_DESTINO).setData({
-                    type: 'Feature',
-                    geometry: { type: 'LineString', coordinates: coords },
-                    properties: {}
+                const puntos2 = data.leg2.geometria.map(p => [p[0], p[1]]);
+                const polyline2 = L.polyline(puntos2, {
+                    color: '#22c55e',
+                    weight: 8,
+                    opacity: 0.9
                 });
+                capaViajeActivo.addLayer(polyline2);
 
-                // Marcador "P" en punto de recogida
-                const recogida = coords[0]; // [lon, lat]
-                const elP = document.createElement('div');
-                elP.innerHTML = '<div style="background:#22c55e;color:#000;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;">P</div>';
-                const marcadorP = new maplibregl.Marker({ element: elP })
-                    .setLngLat(recogida)
-                    .addTo(mapa);
+                // Marcador "P" en punto de recogida (inicio del tramo 2)
+                const recogida = puntos2[0];
+                const marcadorP = L.marker(recogida, {
+                    icon: L.divIcon({
+                        className: '',
+                        html: '<div style="background:#22c55e;color:#000;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;">P</div>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(mapa);
                 marcadoresViaje.push(marcadorP);
 
-                // Marcador "D" en destino
-                const destino = coords[coords.length - 1]; // [lon, lat]
-                const elD = document.createElement('div');
-                elD.innerHTML = '<div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;">D</div>';
-                const marcadorD = new maplibregl.Marker({ element: elD })
-                    .setLngLat(destino)
-                    .addTo(mapa);
+                // Marcador "D" en destino (final del tramo 2)
+                const destino = puntos2[puntos2.length - 1];
+                const marcadorD = L.marker(destino, {
+                    icon: L.divIcon({
+                        className: '',
+                        html: '<div style="background:#ef4444;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;">D</div>',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(mapa);
                 marcadoresViaje.push(marcadorD);
-            } else {
-                mapa.getSource(FUENTES.RUTA_DESTINO).setData(LINEA_VACIA);
             }
         }
 
@@ -962,8 +895,10 @@
 
                 if (data.ok) {
                     camarasEnRuta = data.camaras || [];
-                    console.log('\uD83D\uDCF7 ' + camarasEnRuta.length + ' cámaras detectadas en la ruta');
+                    console.log(`📷 ${camarasEnRuta.length} cámaras detectadas en la ruta`);
+                    // Combinar con cámaras cercanas para el mapa
                     actualizarCamarasEnMapa();
+                    // Mostrar alerta si hay cámaras en la ruta
                     if (camarasEnRuta.length > 0) {
                         mostrarAlertaCamarasRuta();
                     }
@@ -974,6 +909,7 @@
         }
 
         function mostrarAlertaCamarasRuta() {
+            // Mostrar brevemente que hay cámaras en la ruta cargada
             const proximaCamara = camarasEnRuta[0];
             if (!proximaCamara || !ubicacionActual) return;
 
@@ -995,22 +931,28 @@
                 ubicacionActual.lat, ubicacionActual.lon
             );
 
+            // Solo registrar si se movió suficiente
             if (distancia < CONFIG.DISTANCIA_MIN_NUEVO_PUNTO) return;
 
             // DESHABILITADO: Dibujo de ruta nueva y guardado de segmentos
-            // puntosRutaNueva.push([ubicacionActual.lon, ubicacionActual.lat]);
+            // puntosRutaNueva.push([ubicacionActual.lat, ubicacionActual.lon]);
             // dibujarRutaNueva();
             // guardarSegmento(ubicacionAnterior, ubicacionActual, distancia);
         }
 
         function dibujarRutaNueva() {
-            if (!mapaListo || puntosRutaNueva.length < 2) return;
+            capaRutaNueva.clearLayers();
 
-            mapa.getSource(FUENTES.RUTA_NUEVA).setData({
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: puntosRutaNueva },
-                properties: {}
+            if (puntosRutaNueva.length < 2) return;
+
+            const polyline = L.polyline(puntosRutaNueva, {
+                color: '#f59e0b',
+                weight: 5,
+                opacity: 0.8,
+                dashArray: '10, 10'
             });
+
+            capaRutaNueva.addLayer(polyline);
         }
 
         async function guardarSegmento(origen, destino, distancia) {
@@ -1024,7 +966,7 @@
                         destino_lat: destino.lat,
                         destino_lon: destino.lon,
                         distancia_metros: distancia,
-                        viaje_id: viajeActivo ? viajeActivo.id : null
+                        viaje_id: viajeActivo?.id
                     })
                 });
             } catch (e) {
@@ -1039,13 +981,17 @@
         async function buscarCamarasCercanas() {
             if (!ubicacionActual) return;
 
+            // Si hay ruta activa, las cámaras ya se detectaron en buscarCamarasEnRuta
+            // Aquí solo buscamos cámaras cercanas para conducción libre
+
             try {
-                const res = await fetch('/api/camaras-cercanas?lat=' + ubicacionActual.lat + '&lon=' + ubicacionActual.lon + '&radio=1000');
+                const res = await fetch(`/api/camaras-cercanas?lat=${ubicacionActual.lat}&lon=${ubicacionActual.lon}&radio=1000`);
                 const data = await res.json();
 
                 if (data.ok) {
                     let todasCamaras = data.camaras || [];
 
+                    // Si NO hay ruta activa, filtrar por bearing (solo mostrar cámaras adelante)
                     if (!geometriaRutaActiva && headingActual !== null) {
                         camarasCercanas = todasCamaras.filter(cam => {
                             const bearingACamara = calcularBearing(
@@ -1054,7 +1000,7 @@
                             );
                             let diff = Math.abs(bearingACamara - headingActual);
                             if (diff > 180) diff = 360 - diff;
-                            return diff <= 60;
+                            return diff <= 60;  // ±60° del rumbo actual
                         });
                     } else {
                         camarasCercanas = todasCamaras;
@@ -1080,55 +1026,55 @@
         }
 
         function actualizarCamarasEnMapa() {
-            // Remover marcadores anteriores
-            camarasEnMapa.forEach(m => m.remove());
+            camarasEnMapa.forEach(m => mapa.removeLayer(m));
             camarasEnMapa = [];
 
+            // Combinar cámaras en ruta (prioridad) y cercanas
             const camarasIds = new Set();
             const todasCamaras = [];
 
-            // Primero las de la ruta
+            // Primero las de la ruta (verde = están en tu camino)
             camarasEnRuta.forEach(cam => {
                 camarasIds.add(cam.id);
-                todasCamaras.push(Object.assign({}, cam, { enRuta: true }));
+                todasCamaras.push({ ...cam, enRuta: true });
             });
 
-            // Luego las cercanas que no estén ya en ruta
+            // Luego las cercanas que no estén ya en ruta (rojo = perimetral)
             camarasCercanas.forEach(cam => {
                 if (!camarasIds.has(cam.id)) {
-                    todasCamaras.push(Object.assign({}, cam, { enRuta: false }));
+                    todasCamaras.push({ ...cam, enRuta: false });
                 }
             });
 
             todasCamaras.forEach(cam => {
                 const esEnRuta = cam.enRuta;
-                const tamano = esEnRuta ? 40 : 32;
+                const icono = L.divIcon({
+                    className: 'camara-marker',
+                    html: `<div style="
+                        background: ${esEnRuta ? '#dc2626' : '#6b7280'};
+                        color: white;
+                        width: ${esEnRuta ? '40px' : '32px'};
+                        height: ${esEnRuta ? '40px' : '32px'};
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: ${esEnRuta ? '20px' : '16px'};
+                        border: 3px solid ${esEnRuta ? '#fef2f2' : '#d1d5db'};
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                        ${esEnRuta ? 'animation: pulse 1.5s infinite;' : ''}
+                    ">📷</div>`,
+                    iconSize: [esEnRuta ? 40 : 32, esEnRuta ? 40 : 32],
+                    iconAnchor: [esEnRuta ? 20 : 16, esEnRuta ? 20 : 16]
+                });
 
-                const el = document.createElement('div');
-                el.innerHTML = '<div style="' +
-                    'background:' + (esEnRuta ? '#dc2626' : '#6b7280') + ';' +
-                    'color:white;' +
-                    'width:' + tamano + 'px;' +
-                    'height:' + tamano + 'px;' +
-                    'border-radius:50%;' +
-                    'display:flex;align-items:center;justify-content:center;' +
-                    'font-size:' + (esEnRuta ? '20' : '16') + 'px;' +
-                    'border:3px solid ' + (esEnRuta ? '#fef2f2' : '#d1d5db') + ';' +
-                    'box-shadow:0 2px 10px rgba(0,0,0,0.3);' +
-                    (esEnRuta ? 'animation:pulse 1.5s infinite;' : '') +
-                    '">\uD83D\uDCF7</div>';
-
-                const popup = new maplibregl.Popup({ offset: 25 }).setHTML(
-                    '<strong>' + (cam.nombre || 'Cámara') + '</strong><br>' +
-                    'Límite: ' + (cam.velocidad_maxima || '?') + ' km/h<br>' +
-                    (esEnRuta ? '\uD83D\uDEA8 <strong>EN TU RUTA</strong>' : 'Cercana (perimetral)') +
-                    (cam.distancia_en_ruta ? '<br>A ' + cam.distancia_en_ruta + 'm de distancia' : '')
-                );
-
-                const marker = new maplibregl.Marker({ element: el })
-                    .setLngLat([cam.lon, cam.lat])
-                    .setPopup(popup)
-                    .addTo(mapa);
+                const marker = L.marker([cam.lat, cam.lon], { icon: icono }).addTo(mapa);
+                marker.bindPopup(`
+                    <strong>${cam.nombre || 'Cámara'}</strong><br>
+                    Límite: ${cam.velocidad_maxima || '?'} km/h<br>
+                    ${esEnRuta ? '🚨 <strong>EN TU RUTA</strong>' : 'Cercana (perimetral)'}
+                    ${cam.distancia_en_ruta ? `<br>A ${cam.distancia_en_ruta}m de distancia` : ''}
+                `);
                 camarasEnMapa.push(marker);
             });
         }
@@ -1139,6 +1085,7 @@
                 return;
             }
 
+            // Buscar la cámara más cercana de TODAS (ruta + cercanas)
             const todasCamaras = [...camarasEnRuta, ...camarasCercanas];
             const idsVistos = new Set();
             let camaraProxima = null;
@@ -1165,6 +1112,7 @@
             }
         }
 
+        // HUD unificado: escala cámara y velocímetro según proximidad
         function actualizarHudCamara(camara, distancia) {
             const hud = document.getElementById('hud-superior');
             const hudCamara = document.getElementById('hud-camara');
@@ -1174,30 +1122,37 @@
             const velocidadEl = document.getElementById('velocidad-actual');
             const unidadEl = document.getElementById('velocidad-unidad');
 
+            // Factor: 0 (lejos, 500m) → 1 (encima, 0m)
             const factor = Math.max(0, Math.min(1, 1 - (distancia / CONFIG.DISTANCIA_ALERTA_CAMARA)));
 
+            // Mostrar cámara
             hudCamara.classList.add('visible');
 
-            const textoDistancia = distancia < 1000 ? Math.round(distancia) + 'm' : (distancia/1000).toFixed(1) + 'km';
+            // Texto de distancia
+            const textoDistancia = distancia < 1000 ? `${Math.round(distancia)}m` : `${(distancia/1000).toFixed(1)}km`;
             distanciaEl.textContent = textoDistancia;
 
+            // Límite
             const limite = camara.velocidad_maxima || 60;
-            limiteEl.textContent = 'Límite: ' + limite + ' km/h';
+            limiteEl.textContent = `Límite: ${limite} km/h`;
 
-            const iconoSize = 18 + (factor * 22);
-            const distanciaSize = 14 + (factor * 12);
-            const limiteSize = 11 + (factor * 4);
+            // Escalado progresivo de cámara (pequeña → grande)
+            const iconoSize = 18 + (factor * 22);       // 18px → 40px
+            const distanciaSize = 14 + (factor * 12);    // 14px → 26px
+            const limiteSize = 11 + (factor * 4);        // 11px → 15px
 
-            iconoEl.style.fontSize = iconoSize + 'px';
-            distanciaEl.style.fontSize = distanciaSize + 'px';
-            limiteEl.style.fontSize = limiteSize + 'px';
+            iconoEl.style.fontSize = `${iconoSize}px`;
+            distanciaEl.style.fontSize = `${distanciaSize}px`;
+            limiteEl.style.fontSize = `${limiteSize}px`;
 
-            const velSize = 52 - (factor * 24);
-            const unidadSize = 14 - (factor * 4);
+            // Reducir velocímetro proporcionalmente
+            const velSize = 52 - (factor * 24);          // 52px → 28px
+            const unidadSize = 14 - (factor * 4);        // 14px → 10px
 
-            velocidadEl.style.fontSize = velSize + 'px';
-            unidadEl.style.fontSize = unidadSize + 'px';
+            velocidadEl.style.fontSize = `${velSize}px`;
+            unidadEl.style.fontSize = `${unidadSize}px`;
 
+            // Borde según proximidad y exceso
             hud.classList.remove('alerta-lejos', 'alerta-medio', 'alerta-cerca', 'alerta-exceso');
 
             const exceso = velocidadActual > limite;
@@ -1222,9 +1177,11 @@
             hudCamara.classList.remove('visible');
             hud.classList.remove('alerta-lejos', 'alerta-medio', 'alerta-cerca', 'alerta-exceso');
 
+            // Restaurar velocímetro a tamaño completo
             velocidadEl.style.fontSize = '52px';
             unidadEl.style.fontSize = '14px';
 
+            // También ocultar asistencia
             ocultarAsistencia();
         }
 
@@ -1241,6 +1198,7 @@
                     viajeActivo = data.viaje;
                     mostrarInfoViaje();
                     await cargarRutaViajeActivo();
+                    // Recalcular ruta cada 30 segundos
                     if (!intervalRutaActiva) {
                         intervalRutaActiva = setInterval(() => {
                             if (viajeActivo) cargarRutaViajeActivo();
@@ -1259,11 +1217,11 @@
             info.style.display = 'block';
 
             document.getElementById('viaje-pasajero').textContent = viajeActivo.usuario_nombre || 'Pasajero';
-            document.getElementById('viaje-origen').textContent = '\uD83D\uDCCD ' + (viajeActivo.origen_texto || 'Origen');
-            document.getElementById('viaje-destino').textContent = '\uD83C\uDFC1 ' + (viajeActivo.destino_texto || 'Destino');
+            document.getElementById('viaje-origen').textContent = '📍 ' + (viajeActivo.origen_texto || 'Origen');
+            document.getElementById('viaje-destino').textContent = '🏁 ' + (viajeActivo.destino_texto || 'Destino');
 
             const tarifa = viajeActivo.tarifa;
-            document.getElementById('viaje-tarifa').textContent = tarifa ? '$' + Number(tarifa).toLocaleString() : '';
+            document.getElementById('viaje-tarifa').textContent = tarifa ? `$${Number(tarifa).toLocaleString()}` : '';
 
             actualizarBotonAccion();
         }
@@ -1286,7 +1244,7 @@
 
         async function accionLlegue() {
             try {
-                const res = await fetch('/api/conductor/llegue/' + viajeActivo.id, { method: 'POST' });
+                const res = await fetch(`/api/conductor/llegue/${viajeActivo.id}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
                     viajeActivo.estado = 'recogiendo';
@@ -1300,15 +1258,13 @@
 
         async function accionIniciar() {
             try {
-                const res = await fetch('/api/conductor/iniciar-viaje/' + viajeActivo.id, { method: 'POST' });
+                const res = await fetch(`/api/conductor/iniciar-viaje/${viajeActivo.id}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
                     viajeActivo.estado = 'en_curso';
                     actualizarBotonAccion();
-                    // Limpiar tramo 1
-                    if (mapaListo) {
-                        mapa.getSource(FUENTES.RUTA_RECOGIDA).setData(LINEA_VACIA);
-                    }
+                    // Ya no mostrar tramo 1
+                    capaHaciaRecogida.clearLayers();
                     await cargarRutaViajeActivo();
                 }
             } catch (e) {
@@ -1317,6 +1273,7 @@
         }
 
         function accionFinalizar() {
+            // Limpiar intervalos y redirigir a conductor donde está el modal de cobro
             if (intervalRutaActiva) {
                 clearInterval(intervalRutaActiva);
                 intervalRutaActiva = null;
@@ -1331,15 +1288,16 @@
         // ASISTENCIA INTELIGENTE DE CONDUCCIÓN
         // ==========================================
 
+        // Contexto de audio para sonidos
         let audioCtx = null;
-        let sonidoActivo = true;
-        let ultimaAccion = null;
-        let ultimoSonidoTimestamp = 0;
+        let sonidoActivo = true;          // Toggle de sonido
+        let ultimaAccion = null;          // Para no repetir sonido
+        let ultimoSonidoTimestamp = 0;    // Cooldown entre sonidos
 
         const ASISTENCIA = {
-            DESACELERACION_COSTEO: 1.5,
-            DESACELERACION_FRENO: 5,
-            COOLDOWN_SONIDO: 3000,
+            DESACELERACION_COSTEO: 1.5,   // km/h por segundo costeando (inercia)
+            DESACELERACION_FRENO: 5,      // km/h por segundo frenando suave
+            COOLDOWN_SONIDO: 3000,        // ms entre sonidos
         };
 
         function inicializarAudio() {
@@ -1348,9 +1306,11 @@
             }
         }
 
+        // Función principal: analiza qué hay adelante y qué hacer
         function analizarCamino() {
             if (!ubicacionActual) return;
 
+            // Actualizar flechas de giro
             actualizarFlechasGiro();
 
             const eventos = obtenerEventosAdelante();
@@ -1360,15 +1320,18 @@
                 return;
             }
 
+            // Tomar el evento más urgente (el más cercano que requiere acción)
             const eventoUrgente = eventos[0];
             const accion = calcularAccion(eventoUrgente.velocidadObjetivo, eventoUrgente.distancia, velocidadActual);
 
             mostrarAsistencia(accion);
         }
 
+        // Busca todos los eventos adelante que requieren atención
         function obtenerEventosAdelante() {
             const eventos = [];
 
+            // Cámaras (en ruta + cercanas filtradas por bearing)
             const todasCamaras = [...camarasEnRuta, ...camarasCercanas];
             const idsVistos = new Set();
 
@@ -1393,6 +1356,7 @@
                 }
             });
 
+            // Giros en la ruta (max 160m)
             girosDetectados.forEach(giro => {
                 if (!ubicacionActual) return;
 
@@ -1412,32 +1376,42 @@
                 }
             });
 
+            // Ordenar por distancia (el más cercano primero)
             eventos.sort((a, b) => a.distancia - b.distancia);
 
             return eventos;
         }
 
+        // Calcula qué acción tomar dados: velocidad objetivo, distancia, velocidad actual
         function calcularAccion(velocidadObjetivo, distancia, velocidadActualKmh) {
+            // Ya voy bien
             if (velocidadActualKmh <= velocidadObjetivo) {
                 return { nivel: 'bien', texto: 'Vas bien' };
             }
 
-            const exceso = velocidadActualKmh - velocidadObjetivo;
+            const exceso = velocidadActualKmh - velocidadObjetivo;  // km/h que sobran
 
+            // Tiempo disponible en segundos (distancia / velocidad en m/s)
             const velocidadMs = velocidadActualKmh / 3.6;
             const tiempoDisponible = velocidadMs > 0 ? distancia / velocidadMs : 999;
 
+            // Tiempo que tarda costeando (soltar acelerador)
             const tiempoCosteo = exceso / ASISTENCIA.DESACELERACION_COSTEO;
 
+            // Tiempo que tarda frenando suave
             const tiempoFrenado = exceso / ASISTENCIA.DESACELERACION_FRENO;
 
             if (tiempoCosteo <= tiempoDisponible * 0.85) {
+                // Alcanza costeando con margen
                 return { nivel: 'suelta', texto: 'Suelta' };
             } else if (tiempoCosteo <= tiempoDisponible) {
+                // Alcanza costeando pero justo
                 return { nivel: 'reduce', texto: 'Reduce' };
             } else if (tiempoFrenado <= tiempoDisponible) {
+                // Necesita frenar suave
                 return { nivel: 'reduce', texto: 'Reduce' };
             } else {
+                // Urgente, frena ya
                 return { nivel: 'frena', texto: 'Frena' };
             }
         }
@@ -1445,11 +1419,13 @@
         function mostrarAsistencia(accion) {
             const el = document.getElementById('hud-asistencia');
 
+            // Reset clases y aplicar nuevas
             el.className = '';
             el.id = 'hud-asistencia';
-            el.classList.add('visible', 'accion-' + accion.nivel);
+            el.classList.add('visible', `accion-${accion.nivel}`);
             el.textContent = accion.texto;
 
+            // Sonido si cambió la acción
             const ahora = Date.now();
             if (accion.nivel !== ultimaAccion && accion.nivel !== 'bien' &&
                 ahora - ultimoSonidoTimestamp > ASISTENCIA.COOLDOWN_SONIDO) {
@@ -1468,11 +1444,12 @@
         function toggleSonido() {
             sonidoActivo = !sonidoActivo;
             const btn = document.getElementById('btn-sonido');
-            btn.textContent = sonidoActivo ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+            btn.textContent = sonidoActivo ? '🔊' : '🔇';
             btn.classList.toggle('muted', !sonidoActivo);
             inicializarAudio();
         }
 
+        // Sonidos con Web Audio API
         function reproducirSonido(nivel) {
             if (!sonidoActivo) return;
             inicializarAudio();
@@ -1480,13 +1457,16 @@
 
             switch (nivel) {
                 case 'suelta':
+                    // Ding suave - tono agradable
                     tocarTono(880, 0.15, 'sine', 0.3);
                     break;
                 case 'reduce':
+                    // Dos tonos alertantes
                     tocarTono(660, 0.15, 'triangle', 0.4);
                     setTimeout(() => tocarTono(880, 0.15, 'triangle', 0.4), 200);
                     break;
                 case 'frena':
+                    // Tono urgente repetitivo
                     tocarTono(1000, 0.12, 'square', 0.3);
                     setTimeout(() => tocarTono(1200, 0.12, 'square', 0.3), 150);
                     setTimeout(() => tocarTono(1000, 0.12, 'square', 0.3), 300);
@@ -1502,6 +1482,7 @@
             osc.frequency.value = frecuencia;
             gain.gain.value = volumen;
 
+            // Fade out para evitar clicks
             gain.gain.setValueAtTime(volumen, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duracion);
 
@@ -1516,8 +1497,9 @@
         // DETECCIÓN DE CURVAS EN RUTA
         // ==========================================
 
-        let girosDetectados = [];
+        let girosDetectados = [];  // Cache de giros detectados en la ruta
 
+        // Detecta giros en la geometría de la ruta activa
         function detectarGirosEnRuta() {
             girosDetectados = [];
             if (!geometriaRutaActiva || geometriaRutaActiva.length < 3) return;
@@ -1530,24 +1512,27 @@
                 const bearingEntrada = calcularBearing(pAnterior[0], pAnterior[1], pActual[0], pActual[1]);
                 const bearingSalida = calcularBearing(pActual[0], pActual[1], pSiguiente[0], pSiguiente[1]);
 
+                // Diferencia de ángulo (-180 a 180)
                 let angulo = bearingSalida - bearingEntrada;
                 if (angulo > 180) angulo -= 360;
                 if (angulo < -180) angulo += 360;
 
                 const anguloAbs = Math.abs(angulo);
 
+                // Solo giros significativos (> 25°)
                 if (anguloAbs > 25) {
                     const direccion = angulo > 0 ? 'derecha' : 'izquierda';
 
+                    // Velocidad sugerida según lo cerrado del giro
                     let velocidadSugerida;
                     if (anguloAbs > 90) {
-                        velocidadSugerida = 15;
+                        velocidadSugerida = 15;  // Giro muy cerrado
                     } else if (anguloAbs > 60) {
-                        velocidadSugerida = 25;
+                        velocidadSugerida = 25;  // Giro fuerte
                     } else if (anguloAbs > 40) {
-                        velocidadSugerida = 35;
+                        velocidadSugerida = 35;  // Giro moderado
                     } else {
-                        velocidadSugerida = 40;
+                        velocidadSugerida = 40;  // Curva suave
                     }
 
                     girosDetectados.push({
@@ -1561,9 +1546,10 @@
                 }
             }
 
-            console.log('\uD83D\uDD04 ' + girosDetectados.length + ' giros detectados en la ruta');
+            console.log(`🔄 ${girosDetectados.length} giros detectados en la ruta`);
         }
 
+        // Actualiza las flechas de giro según proximidad
         function actualizarFlechasGiro() {
             const flechaIzq = document.getElementById('flecha-izquierda');
             const flechaDer = document.getElementById('flecha-derecha');
@@ -1574,6 +1560,7 @@
                 return;
             }
 
+            // Buscar el giro más cercano adelante
             let giroCercano = null;
             let distGiro = Infinity;
 
@@ -1594,16 +1581,20 @@
                 return;
             }
 
+            // Determinar flecha activa y nivel de parpadeo
             const flechaActiva = giroCercano.direccion === 'izquierda' ? flechaIzq : flechaDer;
             const flechaInactiva = giroCercano.direccion === 'izquierda' ? flechaDer : flechaIzq;
 
+            // Inactiva se oculta
             flechaInactiva.className = 'flecha-giro';
 
+            // Tamaño crece con proximidad (max 160m)
             const DIST_MAX_GIRO = 160;
             const factor = Math.max(0, Math.min(1, 1 - (distGiro / DIST_MAX_GIRO)));
-            const tamano = 36 + (factor * 24);
-            flechaActiva.style.fontSize = tamano + 'px';
+            const tamano = 36 + (factor * 24);  // 36px → 60px
+            flechaActiva.style.fontSize = `${tamano}px`;
 
+            // Nivel de parpadeo según distancia
             let claseParpadeo = '';
             if (distGiro < 40) {
                 claseParpadeo = 'parpadeo-rapido';
@@ -1612,8 +1603,9 @@
             } else if (distGiro < 120) {
                 claseParpadeo = 'parpadeo-lento';
             }
+            // 120-160m: visible fija gris (sin parpadeo)
 
-            flechaActiva.className = 'flecha-giro visible ' + claseParpadeo;
+            flechaActiva.className = `flecha-giro visible ${claseParpadeo}`;
         }
 
         // ==========================================

@@ -702,7 +702,7 @@
         let ubicacionActual = null;
         let modoLibre = false;
         let estiloOscuro = false;
-        const NIVELES_VISTA = [0, 40, 65, 85]; // 2D, suave, medio, máximo
+        const NIVELES_VISTA = [0, 65, 75, 85]; // 2D, suave, medio, máximo
         let nivelVista = 3; // inicia en máximo
         let ubicacionAnterior = null;
         let velocidadActual = 0;
@@ -921,7 +921,7 @@
             marcadorConductor.setLngLat([lon, lat]);
             // En modo libre no seguir al conductor
             if (!modoLibre) {
-                mapa.easeTo({ center: [lon, lat], duration: 300 });
+                mapa.easeTo({ center: [lon, lat], offset: [0, 120], duration: 300 });
             }
         }
 
@@ -2252,6 +2252,7 @@
                     zoom: CONFIG.ZOOM_DEFAULT,
                     pitch: NIVELES_VISTA[nivelVista],
                     bearing: headingActual || 0,
+                    offset: [0, 120],
                     duration: 800
                 });
             }

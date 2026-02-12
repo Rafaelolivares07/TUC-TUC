@@ -29,6 +29,14 @@
         <p class="text-gray-400 text-sm">Mesero</p>
     </div>
 
+    <!-- ====== LISTOS PARA LLEVAR ====== -->
+    <div id="seccion-listos" class="hidden mb-6">
+        <div class="bg-green-900 border-2 border-green-400 rounded-xl p-4 animate-pulse">
+            <h2 class="text-green-300 font-extrabold text-lg mb-3">LISTOS PARA LLEVAR</h2>
+            <div id="lista-listos-mesero" class="space-y-2"></div>
+        </div>
+    </div>
+
     <!-- ====== PASO 1: SELECCIONAR MESA ====== -->
     <div id="paso-mesa">
         <h2 class="text-lg font-bold mb-4 text-gray-300">Selecciona la mesa</h2>
@@ -329,31 +337,56 @@ async function cargarPedidos() {
         const data = await r.json();
         if (!data.ok) return;
 
-        const cont = document.getElementById('lista-pedidos');
-        if (data.pedidos.length === 0) {
-            cont.innerHTML = '<p class="text-gray-500 text-center py-4">Sin pedidos activos</p>';
-            return;
+        const listos = data.pedidos.filter(p => p.estado === 'listo');
+        const pendientes = data.pedidos.filter(p => p.estado === 'pendiente');
+
+        // ===== SECCIÓN LISTOS PARA LLEVAR (arriba, bien visible) =====
+        const secListos = document.getElementById('seccion-listos');
+        const contListos = document.getElementById('lista-listos-mesero');
+        if (listos.length > 0) {
+            secListos.classList.remove('hidden');
+            contListos.innerHTML = listos.map(p => {
+                const items = [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
+                return `
+                    <div class="flex items-center justify-between bg-green-800 rounded-lg p-3">
+                        <div>
+                            <span class="font-extrabold text-xl text-white">Mesa ${p.mesa_num}</span>
+                            <span class="text-green-200 text-sm ml-2">${items}</span>
+                        </div>
+                        <button onclick="marcarEntregado(${p.id})"
+                            class="bg-white text-green-800 px-4 py-2 rounded-lg font-bold text-sm flex-shrink-0">
+                            Entregado
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            secListos.classList.add('hidden');
         }
 
-        cont.innerHTML = data.pedidos.map(p => {
-            const esListo = p.estado === 'listo';
-            const items = [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
-            return `
-                <div class="bg-gray-800 rounded-xl p-4 border-2 ${esListo ? 'border-green-500' : 'border-gray-700'}">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <span class="font-bold text-lg">Mesa ${p.mesa_num}</span>
-                            <span class="ml-2 text-xs px-2 py-1 rounded-full ${esListo ? 'bg-green-600' : 'bg-yellow-600'}">${esListo ? 'LISTO' : 'En cocina'}</span>
-                            <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
+        // ===== PEDIDOS EN COCINA (abajo) =====
+        const cont = document.getElementById('lista-pedidos');
+        if (pendientes.length === 0) {
+            cont.innerHTML = '<p class="text-gray-500 text-center py-4">Sin pedidos en cocina</p>';
+        } else {
+            cont.innerHTML = pendientes.map(p => {
+                const items = [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
+                return `
+                    <div class="bg-gray-800 rounded-xl p-4 border-2 border-gray-700">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="font-bold text-lg">Mesa ${p.mesa_num}</span>
+                                <span class="ml-2 text-xs px-2 py-1 rounded-full bg-yellow-600">En cocina</span>
+                                <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
+                            </div>
+                            <span class="font-bold text-amber-400">$${Number(p.precio).toLocaleString()}</span>
                         </div>
-                        <span class="font-bold text-amber-400">$${Number(p.precio).toLocaleString()}</span>
+                        <p class="text-gray-400 text-sm mt-1">${p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1)}: ${items}</p>
+                        ${p.notas ? `<p class="text-gray-500 text-xs mt-1">${p.notas}</p>` : ''}
                     </div>
-                    <p class="text-gray-400 text-sm mt-1">${p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1)}: ${items}</p>
-                    ${p.notas ? `<p class="text-gray-500 text-xs mt-1">${p.notas}</p>` : ''}
-                    ${esListo ? `<button onclick="marcarEntregado(${p.id})" class="mt-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold w-full">Entregado</button>` : ''}
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
+        }
     } catch(e) { console.error(e); }
 }
 

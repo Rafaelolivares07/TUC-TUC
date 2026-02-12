@@ -23786,6 +23786,45 @@ def invitacion_pasajero(token):
         return redirect('/servicios')
 
 
+@app.route('/api/usuario/actualizar-telefono', methods=['POST'])
+def api_usuario_actualizar_telefono():
+    """Actualiza el teléfono de un usuario logueado (para usuarios pre-creados sin teléfono)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip()
+    telefono = ''.join(c for c in telefono if c.isdigit())
+
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Teléfono debe tener al menos 10 dígitos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verificar que no exista otro usuario con ese teléfono
+        existente = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s AND id != %s",
+            (telefono, session['usuario_id'])
+        ).fetchone()
+
+        if existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Este teléfono ya está registrado'}), 400
+
+        conn.execute(
+            "UPDATE terceros SET telefono = %s WHERE id = %s",
+            (telefono, session['usuario_id'])
+        )
+        conn.commit()
+        conn.close()
+
+        session['telefono'] = telefono
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/usuario-actual')
 def api_usuario_actual():
     """
@@ -23796,8 +23835,15 @@ def api_usuario_actual():
 
     try:
         conn = get_db_connection()
+        # Self-healing: credito_bienvenida
+        try:
+            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS credito_bienvenida INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         usuario = conn.execute("""
-            SELECT id, nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo
+            SELECT id, nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo,
+                   COALESCE(credito_bienvenida, 0) as credito_bienvenida
             FROM terceros
             WHERE id = %s
         """, (session['usuario_id'],)).fetchone()
@@ -23816,7 +23862,8 @@ def api_usuario_actual():
                     'placa': usuario['placa'],
                     'color_vehiculo': usuario['color_vehiculo'],
                     'marca_vehiculo': usuario['marca_vehiculo'],
-                    'modelo_vehiculo': usuario['modelo_vehiculo']
+                    'modelo_vehiculo': usuario['modelo_vehiculo'],
+                    'credito_bienvenida': usuario['credito_bienvenida']
                 }
             })
         else:

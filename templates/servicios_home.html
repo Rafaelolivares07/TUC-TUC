@@ -50,9 +50,17 @@
     <div class="max-w-4xl mx-auto p-4">
 
         <!-- Comunidad TUC TUC -->
-        <div class="mb-4 cursor-pointer" onclick="goToComunidad()">
+        <div id="banner-comunidad" class="mb-4 cursor-pointer" onclick="goToComunidad()">
             <img src="/static/comunidad_tuctuc.png" alt="Comunidad TUC TUC"
                 class="rounded-xl w-full shadow-md">
+        </div>
+
+        <!-- Banner crédito bienvenida (oculto por defecto, reemplaza comunidad) -->
+        <div id="banner-credito" class="hidden mb-4">
+            <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-md p-4 text-white">
+                <p class="text-2xl font-bold">$<span id="credito-monto">5,000</span> de descuento</p>
+                <p class="text-sm mt-1 opacity-90">Programa tu primer viaje y ahorra con TUC TUC</p>
+            </div>
         </div>
 
         <!-- Header -->
@@ -2032,15 +2040,24 @@
 
                 if (data.ok && data.usuario) {
                     // Usuario logueado
-                    const { nombre, telefono, primer_nombre } = data.usuario;
+                    const { nombre, telefono, primer_nombre, credito_bienvenida } = data.usuario;
 
                     // Pre-llenar campos de transporte
                     document.getElementById('input-nombre').value = nombre;
                     document.getElementById('input-nombre').disabled = true;
-                    document.getElementById('input-telefono').value = telefono;
-                    document.getElementById('input-telefono').disabled = true;
+                    if (telefono) {
+                        document.getElementById('input-telefono').value = telefono;
+                        document.getElementById('input-telefono').disabled = true;
+                    }
 
-                    // Mostrar botón de chat con nombre
+                    // Banner de crédito de bienvenida
+                    if (credito_bienvenida && credito_bienvenida > 0) {
+                        document.getElementById('banner-comunidad').classList.add('hidden');
+                        document.getElementById('banner-credito').classList.remove('hidden');
+                        document.getElementById('credito-monto').textContent =
+                            credito_bienvenida.toLocaleString('es-CO');
+                    }
+
                     console.log('Usuario logueado:', nombre);
                 } else {
                     // Usuario no logueado - campos habilitados
@@ -2526,6 +2543,83 @@
         }
 
         // =====================================================
+        // PEDIR TELÉFONO (usuario capturado sin teléfono)
+        // =====================================================
+        function mostrarPedirTelefono() {
+            const creditoEl = document.getElementById('credito-monto');
+            const monto = creditoEl ? creditoEl.textContent : '5,000';
+
+            const modal = document.createElement('div');
+            modal.id = 'modal-pedir-telefono';
+            modal.className = 'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gray-900 bg-opacity-95 p-6';
+            modal.innerHTML = `
+                <p class="text-green-400 text-xl font-bold mb-2 text-center">Tienes $${monto} de descuento</p>
+                <p class="text-gray-400 text-base mb-8 text-center">Ingresa tu celular para programar tu viaje</p>
+                <input type="tel" id="input-tel-captura" inputmode="tel"
+                    class="w-full max-w-sm bg-gray-800 text-white text-3xl font-bold text-center py-6 rounded-2xl border-2 border-gray-600 focus:border-green-500 focus:outline-none"
+                    placeholder="3XX XXX XXXX" autofocus>
+                <button onclick="guardarTelefonoCaptura()" id="btn-guardar-tel"
+                    class="w-full max-w-sm mt-6 py-5 bg-green-600 text-white rounded-2xl font-bold text-xl">
+                    Continuar
+                </button>
+                <button onclick="cerrarPedirTelefono()"
+                    class="w-full max-w-sm mt-3 py-4 bg-gray-800 text-gray-400 rounded-2xl font-bold text-lg border border-gray-700">
+                    Cancelar
+                </button>
+            `;
+            document.body.appendChild(modal);
+            setTimeout(() => document.getElementById('input-tel-captura').focus(), 300);
+
+            // Enter para continuar
+            document.getElementById('input-tel-captura').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') guardarTelefonoCaptura();
+            });
+        }
+
+        function guardarTelefonoCaptura() {
+            const tel = document.getElementById('input-tel-captura').value.trim().replace(/\D/g, '');
+            if (tel.length < 10) {
+                alert('Ingresa un número de celular válido (mínimo 10 dígitos)');
+                return;
+            }
+
+            const btn = document.getElementById('btn-guardar-tel');
+            btn.disabled = true;
+            btn.textContent = 'Guardando...';
+
+            fetch('/api/usuario/actualizar-telefono', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ telefono: tel })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    // Actualizar input de teléfono en el formulario
+                    document.getElementById('input-telefono').value = tel;
+                    document.getElementById('input-telefono').disabled = true;
+                    cerrarPedirTelefono();
+                    // Ahora sí abrir programación
+                    abrirModalProgramacion();
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Continuar';
+                    alert(data.error || 'Error al guardar');
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Continuar';
+                alert('Error de conexión');
+            });
+        }
+
+        function cerrarPedirTelefono() {
+            const modal = document.getElementById('modal-pedir-telefono');
+            if (modal) modal.remove();
+        }
+
+        // =====================================================
         // VIAJES PROGRAMADOS
         // =====================================================
         let fechaProgramadaSeleccionada = null;
@@ -2533,6 +2627,13 @@
         function abrirModalProgramacion() {
             // Si ya tiene fecha programada, no abrir modal (usar el ✕ para cancelar)
             if (fechaProgramadaSeleccionada) return;
+
+            // Si tiene crédito pero no teléfono, pedir teléfono primero
+            const telInput = document.getElementById('input-telefono');
+            if (usuarioLogueado && (!telInput.value || telInput.value.trim().length < 7)) {
+                mostrarPedirTelefono();
+                return;
+            }
 
             // Verificar si el usuario tiene datos ingresados
             if (!verificarUsuarioRegistrado()) {

@@ -107,11 +107,14 @@
 <script>
 const SLUG = '{{ restaurante.slug }}';
 const MESA = {{ mesa_num }};
+const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const BASE = `/api/restaurante/${SLUG}`;
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
 
 let menuHoy = null;
 let opcionesHoy = [];
+let cartaCatalogo = [];
+let carrito = {};
 let tipoSeleccionado = null;
 let sopaSeleccionada = null;
 let proteinaSeleccionada = null;
@@ -138,7 +141,11 @@ function mostrarMenu() {
     document.getElementById('paso-nombre').classList.add('hidden');
     document.getElementById('seccion-menu').classList.remove('hidden');
     document.getElementById('nombre-display').textContent = nombreCliente;
-    cargarMenuHoy();
+    if (TIPO_REST === 'carta') {
+        cargarCartaCliente();
+    } else {
+        cargarMenuHoy();
+    }
 }
 
 // ===== MENÚ =====
@@ -341,25 +348,138 @@ async function cargarMisPedidos() {
         }
 
         cont.innerHTML = mios.map(p => {
-            const items = [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
+            const items = p.tipo === 'carta'
+                ? (p.plato ? `${p.cantidad > 1 ? p.cantidad + 'x ' : ''}${p.plato}` : '')
+                : [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
             const esListo = p.estado === 'listo';
+            const tipoLabel = p.tipo === 'carta' ? '' : p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
             return `
                 <div class="bg-white rounded-xl p-3 shadow border-l-4 ${esListo ? 'border-green-500' : 'border-amber-400'}">
                     <div class="flex justify-between items-center">
                         <div>
-                            <span class="font-semibold text-gray-800">${p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1)}</span>
+                            ${tipoLabel ? `<span class="font-semibold text-gray-800">${tipoLabel}</span>` : ''}
+                            <span class="font-medium text-gray-800">${items}</span>
                             <span class="text-gray-400 text-xs ml-2">${p.created_at}</span>
                         </div>
                         <span class="text-xs px-2 py-1 rounded-full font-bold ${esListo ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
                             ${esListo ? 'LISTO' : 'Preparando...'}
                         </span>
                     </div>
-                    <p class="text-gray-500 text-sm mt-1">${items}</p>
                 </div>
             `;
         }).join('');
     } catch(e) { console.error(e); }
 }
+
+// ===== CARTA CLIENTE =====
+async function cargarCartaCliente() {
+    try {
+        const r = await fetch(`${BASE}/opciones`);
+        const data = await r.json();
+        if (!data.ok) return;
+        cartaCatalogo = data.opciones.filter(o => o.activo);
+        carrito = {};
+
+        if (cartaCatalogo.length === 0) {
+            document.getElementById('sin-menu').classList.remove('hidden');
+            document.getElementById('sec-tipos').classList.add('hidden');
+            return;
+        }
+
+        // Agrupar por categoría
+        const grupos = {};
+        cartaCatalogo.forEach(o => {
+            if (!grupos[o.tipo]) grupos[o.tipo] = [];
+            grupos[o.tipo].push(o);
+        });
+
+        document.getElementById('sec-tipos').innerHTML = Object.keys(grupos).map(cat => `
+            <div class="mb-4">
+                <h3 class="font-bold text-gray-700 text-sm uppercase tracking-wide mb-2">${cat}</h3>
+                <div class="space-y-2">
+                    ${grupos[cat].map(p => `
+                        <div class="bg-white rounded-xl shadow p-3 flex items-center gap-3">
+                            ${p.imagen
+                                ? `<img src="${p.imagen}" class="w-16 h-16 rounded-lg object-cover flex-shrink-0">`
+                                : `<div class="w-16 h-16 rounded-lg bg-gray-100 flex-shrink-0 flex items-center justify-center">
+                                    <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                  </div>`}
+                            <div class="flex-1 min-w-0">
+                                <span class="font-semibold text-gray-800 block">${p.nombre}</span>
+                                <span class="text-amber-600 font-bold">$${Number(p.precio).toLocaleString()}</span>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <button onclick="cartaClienteCant(${p.id}, -1)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 w-8 h-8 rounded-lg font-bold">-</button>
+                                <span id="cli-cant-${p.id}" class="font-bold text-gray-800 w-6 text-center">0</span>
+                                <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-8 h-8 rounded-lg font-bold">+</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+
+        // Mostrar notas y botón pedir
+        document.getElementById('sec-notas').classList.remove('hidden');
+        document.getElementById('sec-pedir').classList.remove('hidden');
+        cartaClienteTotal();
+    } catch(e) { console.error(e); }
+}
+
+function cartaClienteCant(id, delta) {
+    carrito[id] = (carrito[id] || 0) + delta;
+    if (carrito[id] <= 0) delete carrito[id];
+    const span = document.getElementById(`cli-cant-${id}`);
+    if (span) span.textContent = carrito[id] || 0;
+    cartaClienteTotal();
+}
+
+function cartaClienteTotal() {
+    let total = 0;
+    Object.keys(carrito).forEach(id => {
+        const plato = cartaCatalogo.find(p => p.id === parseInt(id));
+        if (plato) total += plato.precio * carrito[id];
+    });
+    document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString()}`;
+}
+
+// Override enviarPedido for carta
+const _enviarPedidoOriginal = enviarPedido;
+enviarPedido = async function() {
+    if (TIPO_REST === 'carta') {
+        const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
+        if (platos.length === 0) return toast('Agrega al menos un plato', false);
+        try {
+            const r = await fetch(`${BASE}/pedido`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    mesa_num: MESA,
+                    platos,
+                    notas: document.getElementById('cli-notas').value.trim(),
+                    nombre_cliente: nombreCliente
+                })
+            });
+            const data = await r.json();
+            if (data.ok) {
+                toast('Pedido enviado');
+                carrito = {};
+                document.getElementById('cli-notas').value = '';
+                // Reset cantidades visibles
+                cartaCatalogo.forEach(p => {
+                    const s = document.getElementById(`cli-cant-${p.id}`);
+                    if (s) s.textContent = '0';
+                });
+                cartaClienteTotal();
+                cargarMisPedidos();
+            } else {
+                toast(data.error, false);
+            }
+        } catch(e) { toast('Error de conexión', false); }
+    } else {
+        return _enviarPedidoOriginal();
+    }
+};
 
 // ===== INIT =====
 const nombreGuardado = localStorage.getItem(STORAGE_KEY);

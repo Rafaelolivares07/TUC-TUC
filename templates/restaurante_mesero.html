@@ -99,6 +99,27 @@
         </div>
     </div>
 
+    <!-- ====== PASO CARTA (solo para tipo carta) ====== -->
+    <div id="paso-carta" class="hidden">
+        <div class="flex items-center justify-between mb-4">
+            <button onclick="volverAPaso('mesa')" class="text-gray-400 hover:text-white text-sm">&larr; Cambiar mesa</button>
+            <span id="label-mesa-carta" class="text-amber-400 font-bold text-lg">Mesa X</span>
+        </div>
+        <div id="carta-categorias" class="space-y-4 mb-4"></div>
+        <div class="mb-4">
+            <input id="carta-notas" type="text" placeholder="Notas (opcional)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm">
+        </div>
+        <div class="bg-gray-800 rounded-xl p-4 flex items-center justify-between">
+            <div>
+                <span class="text-gray-400 text-sm">Total:</span>
+                <span id="carta-total" class="text-2xl font-extrabold text-amber-400 ml-2">$0</span>
+            </div>
+            <button onclick="enviarPedidoCarta()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold text-lg">
+                Enviar
+            </button>
+        </div>
+    </div>
+
     <!-- ====== CUENTAS POR MESA ====== -->
     <div class="mt-8 border-t border-gray-700 pt-6">
         <h2 class="text-lg font-bold text-amber-400 mb-4">Cuentas</h2>
@@ -118,6 +139,7 @@
 
 <script>
 const SLUG = '{{ restaurante.slug }}';
+const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const BASE = `/api/restaurante/${SLUG}`;
 
 let mesaSeleccionada = null;
@@ -166,11 +188,19 @@ async function cargarMenuHoy() {
 }
 
 function seleccionarMesa(num) {
+    mesaSeleccionada = num;
+
+    if (TIPO_REST === 'carta') {
+        document.getElementById('label-mesa-carta').textContent = `Mesa ${num}`;
+        cargarCarta();
+        mostrarPaso('carta');
+        return;
+    }
+
     if (!menuHoy) {
         toast('No hay menú configurado para hoy', false);
         return;
     }
-    mesaSeleccionada = num;
     document.getElementById('label-mesa').textContent = `Mesa ${num}`;
     mostrarPaso('tipo');
 
@@ -321,8 +351,9 @@ async function enviarPedido() {
 
 // ===== NAVEGACIÓN =====
 function mostrarPaso(paso) {
-    ['mesa', 'tipo', 'opciones'].forEach(p => {
-        document.getElementById(`paso-${p}`).classList.toggle('hidden', p !== paso);
+    ['mesa', 'tipo', 'opciones', 'carta'].forEach(p => {
+        const el = document.getElementById(`paso-${p}`);
+        if (el) el.classList.toggle('hidden', p !== paso);
     });
 }
 
@@ -346,7 +377,9 @@ async function cargarPedidos() {
         if (listos.length > 0) {
             secListos.classList.remove('hidden');
             contListos.innerHTML = listos.map(p => {
-                const items = [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
+                const items = p.tipo === 'carta'
+                    ? (p.plato ? `${p.cantidad > 1 ? p.cantidad + 'x ' : ''}${p.plato}` : '')
+                    : [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
                 return `
                     <div class="flex items-center justify-between bg-green-800 rounded-lg p-3">
                         <div>
@@ -371,7 +404,9 @@ async function cargarPedidos() {
             cont.innerHTML = '<p class="text-gray-500 text-center py-4">Sin pedidos en cocina</p>';
         } else {
             cont.innerHTML = pendientes.map(p => {
-                const items = [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
+                const items = p.tipo === 'carta'
+                    ? (p.plato ? `${p.cantidad > 1 ? p.cantidad + 'x ' : ''}${p.plato}` : '')
+                    : [p.sopa, p.proteina, p.principio].filter(Boolean).join(' + ');
                 return `
                     <div class="bg-gray-800 rounded-xl p-4 border-2 border-gray-700">
                         <div class="flex justify-between items-start">
@@ -401,6 +436,96 @@ async function marcarEntregado(id) {
             cargarPedidos();
         }
     } catch(e) { toast('Error', false); }
+}
+
+// ===== CARTA =====
+let cartaCatalogo = [];
+let carrito = {}; // {plato_id: cantidad}
+
+async function cargarCarta() {
+    try {
+        const r = await fetch(`${BASE}/opciones`);
+        const data = await r.json();
+        if (!data.ok) return;
+        cartaCatalogo = data.opciones.filter(o => o.activo);
+        carrito = {};
+        renderCarta();
+    } catch(e) { console.error(e); }
+}
+
+function renderCarta() {
+    const cont = document.getElementById('carta-categorias');
+    const grupos = {};
+    cartaCatalogo.forEach(o => {
+        if (!grupos[o.tipo]) grupos[o.tipo] = [];
+        grupos[o.tipo].push(o);
+    });
+
+    cont.innerHTML = Object.keys(grupos).map(cat => `
+        <div>
+            <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wide mb-2">${cat}</h3>
+            <div class="space-y-2">
+                ${grupos[cat].map(p => `
+                    <div class="bg-gray-800 border border-gray-700 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                            <span class="font-semibold text-white">${p.nombre}</span>
+                            <span class="text-amber-400 text-sm ml-2">$${Number(p.precio).toLocaleString()}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="cambiarCantidad(${p.id}, -1)" class="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg font-bold">-</button>
+                            <span id="cant-${p.id}" class="text-white font-bold w-6 text-center">${carrito[p.id] || 0}</span>
+                            <button onclick="cambiarCantidad(${p.id}, 1)" class="bg-amber-600 hover:bg-amber-500 text-white w-8 h-8 rounded-lg font-bold">+</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+    calcularTotalCarta();
+}
+
+function cambiarCantidad(id, delta) {
+    carrito[id] = (carrito[id] || 0) + delta;
+    if (carrito[id] <= 0) delete carrito[id];
+    const span = document.getElementById(`cant-${id}`);
+    if (span) span.textContent = carrito[id] || 0;
+    calcularTotalCarta();
+}
+
+function calcularTotalCarta() {
+    let total = 0;
+    Object.keys(carrito).forEach(id => {
+        const plato = cartaCatalogo.find(p => p.id === parseInt(id));
+        if (plato) total += plato.precio * carrito[id];
+    });
+    document.getElementById('carta-total').textContent = `$${Number(total).toLocaleString()}`;
+}
+
+async function enviarPedidoCarta() {
+    const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
+    if (platos.length === 0) return toast('Agrega al menos un plato', false);
+
+    try {
+        const r = await fetch(`${BASE}/pedido`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                mesa_num: mesaSeleccionada,
+                platos,
+                notas: document.getElementById('carta-notas').value.trim()
+            })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast('Pedido enviado a cocina');
+            carrito = {};
+            mostrarPaso('mesa');
+            cargarPedidos();
+            cargarCuentas();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
 }
 
 // ===== CUENTAS =====
@@ -447,7 +572,7 @@ async function cobrarMesa(num, total) {
 
 // ===== INIT =====
 cargarMesas();
-cargarMenuHoy();
+if (TIPO_REST !== 'carta') cargarMenuHoy();
 cargarPedidos();
 cargarCuentas();
 // Polling cada 10s

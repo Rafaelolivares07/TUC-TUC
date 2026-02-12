@@ -43,9 +43,11 @@
             <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="flex-1 py-4 text-center text-sm tab-active transition-all">
                 Opciones del menú
             </button>
+            {% if restaurante.tipo_restaurante != 'carta' %}
             <button onclick="cambiarTab('menudia')" id="tab-menudia" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
                 Menú del día
             </button>
+            {% endif %}
             <button onclick="cambiarTab('mesas')" id="tab-mesas" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
                 Mesas
             </button>
@@ -58,15 +60,24 @@
         <div id="panel-catalogo" class="p-6">
             <!-- Formulario agregar -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                <h3 class="font-bold text-gray-700 mb-3">Agregar opción</h3>
+                <h3 class="font-bold text-gray-700 mb-3">Agregar {% if restaurante.tipo_restaurante == 'carta' %}plato{% else %}opción{% endif %}</h3>
                 <div class="flex flex-col sm:flex-row gap-3">
+                    {% if restaurante.tipo_restaurante == 'carta' %}
+                    <input id="cat-tipo" type="text" placeholder="Categoría (ej: Entradas)" class="border rounded-lg px-3 py-2 text-sm flex-shrink-0 w-40" list="categorias-list">
+                    <datalist id="categorias-list"></datalist>
+                    {% else %}
                     <select id="cat-tipo" class="border rounded-lg px-3 py-2 text-sm flex-shrink-0">
                         <option value="sopa">Sopa / Caldo</option>
                         <option value="proteina">Proteína</option>
                         <option value="principio">Principio</option>
                     </select>
-                    <input id="cat-nombre" type="text" placeholder="Nombre (ej: Sancocho)" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    {% endif %}
+                    <input id="cat-nombre" type="text" placeholder="Nombre (ej: {% if restaurante.tipo_restaurante == 'carta' %}Lomo en salsa{% else %}Sancocho{% endif %})" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    {% if restaurante.tipo_restaurante == 'carta' %}
+                    <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    {% else %}
                     <input id="cat-recargo" type="number" placeholder="Recargo $" value="0" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    {% endif %}
                     <button onclick="guardarOpcion()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
                         Agregar
                     </button>
@@ -196,11 +207,17 @@
 
         <div class="border-t pt-6">
             <h3 class="font-bold text-gray-700 mb-3">Crear nuevo restaurante</h3>
-            <div class="flex gap-3">
-                <input id="nuevo-nombre" type="text" placeholder="Nombre del restaurante" class="border rounded-lg px-3 py-2 text-sm flex-1">
-                <button onclick="crearRestaurante()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
-                    Crear
-                </button>
+            <div class="flex flex-col gap-3">
+                <input id="nuevo-nombre" type="text" placeholder="Nombre del restaurante" class="border rounded-lg px-3 py-2 text-sm">
+                <div class="flex gap-3">
+                    <select id="nuevo-tipo" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                        <option value="menu_dia">Menú del día</option>
+                        <option value="carta">Carta (platos individuales)</option>
+                    </select>
+                    <button onclick="crearRestaurante()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
+                        Crear
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -209,6 +226,7 @@
 
 <script>
 const SLUG = '{{ restaurante.slug if restaurante else "" }}';
+const TIPO_REST = '{{ restaurante.tipo_restaurante if restaurante else "menu_dia" }}';
 const BASE = SLUG ? `/api/restaurante/${SLUG}` : '';
 
 // ===== TOAST =====
@@ -233,12 +251,13 @@ function cambiarTab(tab) {
 // ===== CREAR RESTAURANTE =====
 async function crearRestaurante() {
     const nombre = document.getElementById('nuevo-nombre').value.trim();
+    const tipo_restaurante = document.getElementById('nuevo-tipo').value;
     if (!nombre) return toast('Escribe el nombre del restaurante', false);
     try {
         const r = await fetch('/api/restaurante/crear', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nombre})
+            body: JSON.stringify({nombre, tipo_restaurante})
         });
         const data = await r.json();
         if (data.ok) {
@@ -266,29 +285,56 @@ async function cargarCatalogo() {
 
 function renderCatalogo() {
     const cont = document.getElementById('catalogo-lista');
-    const tipos = [
-        {key: 'sopa', label: 'Sopas y Caldos', color: 'yellow'},
-        {key: 'proteina', label: 'Proteínas', color: 'red'},
-        {key: 'principio', label: 'Principios', color: 'green'}
-    ];
 
     if (catalogoData.length === 0) {
         cont.innerHTML = '<p class="text-gray-400 text-center py-8">No hay opciones en el catálogo. Agrega la primera arriba.</p>';
         return;
     }
 
-    cont.innerHTML = tipos.map(t => {
-        const items = catalogoData.filter(o => o.tipo === t.key);
-        if (items.length === 0) return '';
+    // Agrupar por tipo/categoría
+    const grupos = {};
+    catalogoData.forEach(o => {
+        if (!grupos[o.tipo]) grupos[o.tipo] = [];
+        grupos[o.tipo].push(o);
+    });
+
+    // Para carta: actualizar datalist de categorías
+    if (TIPO_REST === 'carta') {
+        const dl = document.getElementById('categorias-list');
+        if (dl) dl.innerHTML = Object.keys(grupos).map(k => `<option value="${k}">`).join('');
+    }
+
+    const colores = ['amber', 'red', 'green', 'blue', 'purple', 'teal', 'orange', 'cyan'];
+    let ci = 0;
+
+    cont.innerHTML = Object.keys(grupos).map(tipo => {
+        const items = grupos[tipo];
+        const color = TIPO_REST === 'carta' ? colores[ci++ % colores.length] :
+            (tipo === 'sopa' ? 'yellow' : tipo === 'proteina' ? 'red' : 'green');
+        const label = TIPO_REST === 'carta' ? tipo :
+            (tipo === 'sopa' ? 'Sopas y Caldos' : tipo === 'proteina' ? 'Proteínas' : 'Principios');
         return `
             <div>
-                <h4 class="font-bold text-${t.color}-700 mb-2 text-sm uppercase tracking-wide">${t.label}</h4>
+                <h4 class="font-bold text-${color}-700 mb-2 text-sm uppercase tracking-wide">${label}</h4>
                 <div class="space-y-2">
                     ${items.map(i => `
                         <div class="flex items-center justify-between bg-white border rounded-lg px-4 py-3">
-                            <span class="font-medium text-gray-800">${i.nombre}</span>
                             <div class="flex items-center gap-3">
-                                ${i.recargo > 0 ? `<span class="text-sm text-amber-600 font-semibold">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
+                                ${TIPO_REST === 'carta' ? `
+                                    <div class="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer border-2 ${i.imagen ? 'border-green-300' : 'border-dashed border-gray-300'}"
+                                         onclick="document.getElementById('img-input-${i.id}').click()" title="${i.imagen ? 'Cambiar imagen' : 'Agregar imagen'}">
+                                        ${i.imagen
+                                            ? `<img src="${i.imagen}" class="w-full h-full object-cover">`
+                                            : `<svg class="w-6 h-6 text-gray-400 m-auto mt-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`}
+                                        <input type="file" id="img-input-${i.id}" accept="image/*" class="hidden" onchange="subirImagen(${i.id}, this)">
+                                    </div>
+                                ` : ''}
+                                <span class="font-medium text-gray-800">${i.nombre}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                ${TIPO_REST === 'carta'
+                                    ? `<span class="text-sm text-amber-600 font-semibold">$${Number(i.precio).toLocaleString()}</span>`
+                                    : (i.recargo > 0 ? `<span class="text-sm text-amber-600 font-semibold">+$${Number(i.recargo).toLocaleString()}</span>` : '')}
                                 <button onclick="eliminarOpcion(${i.id})" class="text-red-400 hover:text-red-600 text-sm" title="Eliminar">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                 </button>
@@ -302,27 +348,81 @@ function renderCatalogo() {
 }
 
 async function guardarOpcion() {
-    const tipo = document.getElementById('cat-tipo').value;
+    const tipo = document.getElementById('cat-tipo').value.trim();
     const nombre = document.getElementById('cat-nombre').value.trim();
-    const recargo = parseFloat(document.getElementById('cat-recargo').value) || 0;
-    if (!nombre) return toast('Escribe el nombre de la opción', false);
+    if (!tipo) return toast('Selecciona una categoría', false);
+    if (!nombre) return toast('Escribe el nombre', false);
+
+    const body = {tipo, nombre};
+    if (TIPO_REST === 'carta') {
+        body.precio = parseFloat(document.getElementById('cat-precio').value) || 0;
+        if (!body.precio) return toast('El precio es obligatorio', false);
+    } else {
+        body.recargo = parseFloat(document.getElementById('cat-recargo').value) || 0;
+    }
 
     try {
         const r = await fetch(`${BASE}/opcion`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({tipo, nombre, recargo})
+            body: JSON.stringify(body)
         });
         const data = await r.json();
         if (data.ok) {
             document.getElementById('cat-nombre').value = '';
-            document.getElementById('cat-recargo').value = '0';
-            toast('Opción agregada');
+            if (TIPO_REST === 'carta') {
+                document.getElementById('cat-precio').value = '';
+            } else {
+                document.getElementById('cat-recargo').value = '0';
+            }
+            toast('Agregado');
             cargarCatalogo();
         } else {
             toast(data.error, false);
         }
     } catch(e) { toast('Error de conexión', false); }
+}
+
+async function subirImagen(opcionId, input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) return toast('Imagen muy grande (máx 2MB)', false);
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        // Redimensionar a 400px máx para no saturar la BD
+        const img = new Image();
+        img.onload = async function() {
+            const canvas = document.createElement('canvas');
+            const MAX = 400;
+            let w = img.width, h = img.height;
+            if (w > MAX || h > MAX) {
+                if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                else { w = Math.round(w * MAX / h); h = MAX; }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const base64 = canvas.toDataURL('image/jpeg', 0.7);
+
+            try {
+                const r = await fetch(`${BASE}/opcion/${opcionId}/imagen`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({imagen: base64})
+                });
+                const data = await r.json();
+                if (data.ok) {
+                    toast('Imagen guardada');
+                    cargarCatalogo();
+                } else {
+                    toast(data.error || 'Error', false);
+                }
+            } catch(e) { toast('Error subiendo imagen', false); }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
 async function eliminarOpcion(id) {

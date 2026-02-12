@@ -162,8 +162,10 @@ async function cargarPedidos() {
 }
 
 function renderPedido(p, esListo) {
-    const items = [p.sopa, p.proteina, p.principio].filter(Boolean);
-    const tipoLabel = p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
+    const items = p.tipo === 'carta'
+        ? [p.plato ? `${p.cantidad > 1 ? p.cantidad + 'x ' : ''}${p.plato}` : '']
+        : [p.sopa, p.proteina, p.principio].filter(Boolean);
+    const tipoLabel = p.tipo === 'carta' ? '' : p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
     const colorBorde = esListo ? 'border-green-500' : 'border-yellow-500';
     const colorFondo = esListo ? 'bg-green-900/30' : 'bg-gray-800';
 

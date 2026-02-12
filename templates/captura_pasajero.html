@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Capturar Pasajero - TucTuc</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { overscroll-behavior: none; }
+        .paso { display: none; }
+        .paso.activo { display: flex; }
+        .chip-lugar {
+            transition: transform 0.1s, background-color 0.15s;
+        }
+        .chip-lugar:active {
+            transform: scale(0.95);
+        }
+        .chip-usado {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+        .fade-in {
+            animation: fadeIn 0.25s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .toast {
+            animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 2.7s forwards;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 min-h-screen flex flex-col">
+
+    <!-- Header fijo -->
+    <div class="bg-yellow-500 p-3 flex items-center justify-between">
+        <a href="/conductor" class="text-gray-800 font-bold text-lg">&larr;</a>
+        <h1 class="text-lg font-bold text-gray-800">Capturar Pasajero</h1>
+        <span id="indicador-paso" class="text-sm text-gray-700 font-medium">1/6</span>
+    </div>
+
+    <!-- Contenedor de pasos -->
+    <div class="flex-1 flex flex-col justify-center p-6" id="contenedor-pasos">
+
+        <!-- PASO 1: Tarifa -->
+        <div id="paso-1" class="paso activo flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-4 text-center">Tarifa que muestra DiDi</label>
+            <div class="relative w-full max-w-sm mx-auto">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-3xl font-bold">$</span>
+                <input type="number" id="input-tarifa" inputmode="numeric"
+                    class="w-full bg-gray-800 text-white text-4xl font-bold text-center py-6 rounded-2xl border-2 border-gray-600 focus:border-yellow-500 focus:outline-none pl-12"
+                    placeholder="0" autofocus>
+            </div>
+            <button onclick="siguiente()" class="w-full max-w-sm mx-auto mt-8 py-5 bg-yellow-500 text-gray-900 rounded-2xl font-bold text-xl">
+                Siguiente
+            </button>
+        </div>
+
+        <!-- PASO 2: Nombre -->
+        <div id="paso-2" class="paso flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-4 text-center">Nombre del pasajero</label>
+            <input type="text" id="input-nombre" autocapitalize="words"
+                class="w-full max-w-sm mx-auto bg-gray-800 text-white text-3xl font-bold text-center py-6 rounded-2xl border-2 border-gray-600 focus:border-yellow-500 focus:outline-none"
+                placeholder="Nombre">
+            <button onclick="siguiente()" class="w-full max-w-sm mx-auto mt-8 py-5 bg-yellow-500 text-gray-900 rounded-2xl font-bold text-xl">
+                Siguiente
+            </button>
+        </div>
+
+        <!-- PASO 3: Punto A (Recogida) -->
+        <div id="paso-3" class="paso flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-2 text-center">Punto de recogida</label>
+            <p class="text-gray-500 text-sm mb-6 text-center">Toca para capturar tu ubicación GPS actual</p>
+            <div class="grid grid-cols-2 gap-4 w-full max-w-sm mx-auto">
+                <button onclick="capturarPunto('A', 'Casa')" data-etiqueta="Casa"
+                    class="chip-lugar chip-a bg-blue-600 hover:bg-blue-700 text-white py-8 rounded-2xl font-bold text-xl flex flex-col items-center gap-2">
+                    <span class="text-3xl">🏠</span>
+                    Casa
+                </button>
+                <button onclick="capturarPunto('A', 'Trabajo')" data-etiqueta="Trabajo"
+                    class="chip-lugar chip-a bg-green-600 hover:bg-green-700 text-white py-8 rounded-2xl font-bold text-xl flex flex-col items-center gap-2">
+                    <span class="text-3xl">💼</span>
+                    Trabajo
+                </button>
+                <button onclick="capturarPunto('A', 'C.Comercial')" data-etiqueta="C.Comercial"
+                    class="chip-lugar chip-a bg-purple-600 hover:bg-purple-700 text-white py-8 rounded-2xl font-bold text-xl flex flex-col items-center gap-2">
+                    <span class="text-3xl">🏬</span>
+                    C.Comercial
+                </button>
+                <button onclick="capturarPunto('A', 'EPS Salud')" data-etiqueta="EPS Salud"
+                    class="chip-lugar chip-a bg-red-600 hover:bg-red-700 text-white py-8 rounded-2xl font-bold text-xl flex flex-col items-center gap-2">
+                    <span class="text-3xl">🏥</span>
+                    EPS Salud
+                </button>
+            </div>
+            <div id="confirmacion-a" class="hidden mt-4 text-green-400 text-center text-lg font-medium"></div>
+        </div>
+
+        <!-- PASO 4: Teléfono -->
+        <div id="paso-4" class="paso flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-4 text-center">Teléfono del pasajero</label>
+            <input type="tel" id="input-telefono" inputmode="tel"
+                class="w-full max-w-sm mx-auto bg-gray-800 text-white text-3xl font-bold text-center py-6 rounded-2xl border-2 border-gray-600 focus:border-yellow-500 focus:outline-none"
+                placeholder="3XX XXX XXXX">
+            <button onclick="siguiente()" class="w-full max-w-sm mx-auto mt-6 py-5 bg-yellow-500 text-gray-900 rounded-2xl font-bold text-xl">
+                Siguiente
+            </button>
+            <button onclick="saltarTelefono()" class="w-full max-w-sm mx-auto mt-3 py-4 bg-gray-700 text-gray-300 rounded-2xl font-bold text-lg">
+                Saltar
+            </button>
+        </div>
+
+        <!-- PASO 5: Punto B (Destino) -->
+        <div id="paso-5" class="paso flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-2 text-center">Punto de destino</label>
+            <p class="text-gray-500 text-sm mb-6 text-center">Toca para capturar tu ubicación GPS actual</p>
+            <div class="grid grid-cols-2 gap-4 w-full max-w-sm mx-auto" id="chips-punto-b">
+                <!-- Se generan dinámicamente (sin el chip ya usado en punto A) -->
+            </div>
+            <div id="confirmacion-b" class="hidden mt-4 text-green-400 text-center text-lg font-medium"></div>
+        </div>
+
+        <!-- PASO 6: Resumen -->
+        <div id="paso-6" class="paso flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-4 text-center">Confirmar captura</label>
+            <div class="w-full max-w-sm mx-auto bg-gray-800 rounded-2xl p-5 space-y-4">
+                <div>
+                    <span class="text-gray-500 text-sm">Nombre</span>
+                    <p id="resumen-nombre" class="text-white text-xl font-bold"></p>
+                </div>
+                <div>
+                    <span class="text-gray-500 text-sm">Tarifa (editable)</span>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xl font-bold">$</span>
+                        <input type="number" id="resumen-tarifa" inputmode="numeric"
+                            class="w-full bg-gray-700 text-yellow-400 text-2xl font-bold py-3 rounded-xl border border-gray-600 focus:border-yellow-500 focus:outline-none pl-10 text-center">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <span class="text-gray-500 text-sm">Recogida</span>
+                        <p id="resumen-punto-a" class="text-white font-medium"></p>
+                    </div>
+                    <div>
+                        <span class="text-gray-500 text-sm">Destino</span>
+                        <p id="resumen-punto-b" class="text-white font-medium"></p>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-gray-500 text-sm">Teléfono</span>
+                    <p id="resumen-telefono" class="text-white font-medium"></p>
+                </div>
+            </div>
+            <button onclick="guardarCaptura()" id="btn-guardar" class="w-full max-w-sm mx-auto mt-6 py-5 bg-green-600 text-white rounded-2xl font-bold text-xl">
+                Guardar
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-container" class="fixed bottom-6 left-0 right-0 flex justify-center pointer-events-none z-50"></div>
+
+    <script>
+        // Estado de la captura
+        const captura = {
+            tarifa: null,
+            nombre: '',
+            puntoA: { lat: null, lon: null, etiqueta: '' },
+            telefono: '',
+            puntoB: { lat: null, lon: null, etiqueta: '' }
+        };
+
+        let pasoActual = 1;
+        const totalPasos = 6;
+
+        // Chips disponibles para punto B
+        const todosLosChips = [
+            { etiqueta: 'Casa', icono: '🏠', color: 'bg-blue-600 hover:bg-blue-700' },
+            { etiqueta: 'Trabajo', icono: '💼', color: 'bg-green-600 hover:bg-green-700' },
+            { etiqueta: 'C.Comercial', icono: '🏬', color: 'bg-purple-600 hover:bg-purple-700' },
+            { etiqueta: 'EPS Salud', icono: '🏥', color: 'bg-red-600 hover:bg-red-700' }
+        ];
+
+        function mostrarPaso(n) {
+            document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
+            const paso = document.getElementById('paso-' + n);
+            if (paso) {
+                paso.classList.add('activo');
+                paso.classList.remove('fade-in');
+                void paso.offsetWidth;
+                paso.classList.add('fade-in');
+            }
+            document.getElementById('indicador-paso').textContent = n + '/' + totalPasos;
+            pasoActual = n;
+
+            // Auto-focus en inputs
+            const input = paso.querySelector('input');
+            if (input) setTimeout(() => input.focus(), 300);
+        }
+
+        function siguiente() {
+            if (pasoActual === 1) {
+                const tarifa = document.getElementById('input-tarifa').value;
+                if (!tarifa || parseFloat(tarifa) <= 0) {
+                    mostrarToast('Ingresa la tarifa', 'error');
+                    return;
+                }
+                captura.tarifa = parseFloat(tarifa);
+                mostrarPaso(2);
+            } else if (pasoActual === 2) {
+                const nombre = document.getElementById('input-nombre').value.trim();
+                if (!nombre) {
+                    mostrarToast('Ingresa el nombre', 'error');
+                    return;
+                }
+                captura.nombre = nombre;
+                mostrarPaso(3);
+            } else if (pasoActual === 4) {
+                const tel = document.getElementById('input-telefono').value.trim();
+                if (tel && tel.replace(/\D/g, '').length < 10) {
+                    mostrarToast('Teléfono debe tener al menos 10 dígitos', 'error');
+                    return;
+                }
+                captura.telefono = tel.replace(/\D/g, '');
+                mostrarPaso(5);
+                generarChipsPuntoB();
+            }
+        }
+
+        function saltarTelefono() {
+            captura.telefono = '';
+            mostrarPaso(5);
+            generarChipsPuntoB();
+        }
+
+        function capturarPunto(punto, etiqueta) {
+            if (!navigator.geolocation) {
+                mostrarToast('GPS no disponible', 'error');
+                return;
+            }
+
+            // Feedback inmediato - deshabilitar chips
+            const chips = document.querySelectorAll('.chip-' + punto.toLowerCase());
+            chips.forEach(c => { c.disabled = true; c.style.opacity = '0.5'; });
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+
+                    if (punto === 'A') {
+                        captura.puntoA = { lat, lon, etiqueta };
+                        document.getElementById('confirmacion-a').classList.remove('hidden');
+                        document.getElementById('confirmacion-a').textContent =
+                            '✓ ' + etiqueta + ' capturado';
+                        setTimeout(() => mostrarPaso(4), 800);
+                    } else {
+                        captura.puntoB = { lat, lon, etiqueta };
+                        document.getElementById('confirmacion-b').classList.remove('hidden');
+                        document.getElementById('confirmacion-b').textContent =
+                            '✓ ' + etiqueta + ' capturado';
+                        setTimeout(() => {
+                            llenarResumen();
+                            mostrarPaso(6);
+                        }, 800);
+                    }
+                },
+                (err) => {
+                    chips.forEach(c => { c.disabled = false; c.style.opacity = '1'; });
+                    mostrarToast('Error GPS: ' + err.message, 'error');
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+
+        function generarChipsPuntoB() {
+            const container = document.getElementById('chips-punto-b');
+            container.innerHTML = '';
+            const etiquetaUsada = captura.puntoA.etiqueta;
+
+            todosLosChips.forEach(chip => {
+                if (chip.etiqueta === etiquetaUsada) return;
+                const btn = document.createElement('button');
+                btn.className = 'chip-lugar chip-b ' + chip.color + ' text-white py-8 rounded-2xl font-bold text-xl flex flex-col items-center gap-2';
+                btn.onclick = () => capturarPunto('B', chip.etiqueta);
+                btn.innerHTML = '<span class="text-3xl">' + chip.icono + '</span>' + chip.etiqueta;
+                container.appendChild(btn);
+            });
+        }
+
+        function llenarResumen() {
+            document.getElementById('resumen-nombre').textContent = captura.nombre;
+            document.getElementById('resumen-tarifa').value = captura.tarifa;
+            document.getElementById('resumen-punto-a').textContent =
+                captura.puntoA.etiqueta + ' 📍';
+            document.getElementById('resumen-punto-b').textContent =
+                captura.puntoB.etiqueta + ' 📍';
+            document.getElementById('resumen-telefono').textContent =
+                captura.telefono || 'No proporcionado';
+        }
+
+        function guardarCaptura() {
+            const btn = document.getElementById('btn-guardar');
+            btn.disabled = true;
+            btn.textContent = 'Guardando...';
+
+            // Tomar tarifa final del resumen (puede haber sido editada)
+            const tarifaFinal = parseFloat(document.getElementById('resumen-tarifa').value) || captura.tarifa;
+
+            const datos = {
+                nombre: captura.nombre,
+                tarifa_referencia: captura.tarifa,
+                tarifa_final: tarifaFinal,
+                telefono: captura.telefono || null,
+                punto_a_lat: captura.puntoA.lat,
+                punto_a_lon: captura.puntoA.lon,
+                punto_a_etiqueta: captura.puntoA.etiqueta,
+                punto_b_lat: captura.puntoB.lat,
+                punto_b_lon: captura.puntoB.lon,
+                punto_b_etiqueta: captura.puntoB.etiqueta
+            };
+
+            fetch('/api/conductor/captura', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datos)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    mostrarToast('Pasajero capturado', 'ok');
+                    setTimeout(() => window.location.href = '/conductor', 1500);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = 'Guardar';
+                    mostrarToast(data.error || 'Error al guardar', 'error');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.textContent = 'Guardar';
+                mostrarToast('Error de conexión', 'error');
+            });
+        }
+
+        function mostrarToast(msg, tipo) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bg = tipo === 'ok' ? 'bg-green-600' : 'bg-red-600';
+            toast.className = 'toast ' + bg + ' text-white px-6 py-3 rounded-xl font-bold text-lg shadow-lg';
+            toast.textContent = msg;
+            container.innerHTML = '';
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Enter key avanza al siguiente paso
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && [1, 2, 4].includes(pasoActual)) {
+                siguiente();
+            }
+        });
+
+        // Iniciar en paso 1
+        mostrarPaso(1);
+    </script>
+
+</body>
+</html>

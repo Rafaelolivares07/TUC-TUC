@@ -23621,6 +23621,79 @@ def api_conductor_calificar_viaje(servicio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/conductor/captura')
+def conductor_captura():
+    """Página de captura de pasajero"""
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    return render_template('captura_pasajero.html')
+
+
+@app.route('/api/conductor/captura', methods=['POST'])
+def api_conductor_captura():
+    """Guarda una captura de pasajero prospecto"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    tarifa_referencia = data.get('tarifa_referencia')
+    tarifa_final = data.get('tarifa_final')
+    telefono = data.get('telefono') or None
+    punto_a_lat = data.get('punto_a_lat')
+    punto_a_lon = data.get('punto_a_lon')
+    punto_a_etiqueta = data.get('punto_a_etiqueta', '')
+    punto_b_lat = data.get('punto_b_lat')
+    punto_b_lon = data.get('punto_b_lon')
+    punto_b_etiqueta = data.get('punto_b_etiqueta', '')
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if not tarifa_referencia:
+        return jsonify({'ok': False, 'error': 'Tarifa requerida'}), 400
+    if not punto_a_lat or not punto_b_lat:
+        return jsonify({'ok': False, 'error': 'Ambos puntos GPS son requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Self-healing: crear tabla si no existe
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS capturas_pasajero (
+                id SERIAL PRIMARY KEY,
+                conductor_id INTEGER NOT NULL,
+                nombre VARCHAR(255) NOT NULL,
+                tarifa_referencia DECIMAL(10,2),
+                tarifa_final DECIMAL(10,2),
+                telefono VARCHAR(20),
+                punto_a_lat DECIMAL(10,8),
+                punto_a_lon DECIMAL(11,8),
+                punto_a_etiqueta VARCHAR(50),
+                punto_b_lat DECIMAL(10,8),
+                punto_b_lon DECIMAL(11,8),
+                punto_b_etiqueta VARCHAR(50),
+                estado VARCHAR(20) DEFAULT 'completada',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
+        conn.execute("""
+            INSERT INTO capturas_pasajero
+            (conductor_id, nombre, tarifa_referencia, tarifa_final, telefono,
+             punto_a_lat, punto_a_lon, punto_a_etiqueta,
+             punto_b_lat, punto_b_lon, punto_b_etiqueta)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (session['usuario_id'], nombre, tarifa_referencia, tarifa_final, telefono,
+              punto_a_lat, punto_a_lon, punto_a_etiqueta,
+              punto_b_lat, punto_b_lon, punto_b_etiqueta))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/usuario-actual')
 def api_usuario_actual():
     """

@@ -24602,8 +24602,6 @@ def admin_restaurante_lista():
             "SELECT id, nombre, slug FROM restaurantes WHERE activo = TRUE ORDER BY nombre"
         ).fetchall()
         conn.close()
-        if len(restaurantes) == 1:
-            return redirect(f'/admin/restaurante/{restaurantes[0]["slug"]}')
         return render_template('restaurante_admin.html', restaurantes=restaurantes, restaurante=None)
     except Exception as e:
         return f"Error: {e}", 500

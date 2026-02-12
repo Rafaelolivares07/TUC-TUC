@@ -351,6 +351,7 @@ async function cargarPedidos() {
                     <div class="flex items-center justify-between bg-green-800 rounded-lg p-3">
                         <div>
                             <span class="font-extrabold text-xl text-white">Mesa ${p.mesa_num}</span>
+                            ${p.nombre_cliente ? `<span class="text-green-200 text-sm ml-1">- ${p.nombre_cliente}</span>` : ''}
                             <span class="text-green-200 text-sm ml-2">${items}</span>
                         </div>
                         <button onclick="marcarEntregado(${p.id})"
@@ -376,6 +377,7 @@ async function cargarPedidos() {
                         <div class="flex justify-between items-start">
                             <div>
                                 <span class="font-bold text-lg">Mesa ${p.mesa_num}</span>
+                                ${p.nombre_cliente ? `<span class="text-amber-300 text-xs ml-1">${p.nombre_cliente}</span>` : ''}
                                 <span class="ml-2 text-xs px-2 py-1 rounded-full bg-yellow-600">En cocina</span>
                                 <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
                             </div>

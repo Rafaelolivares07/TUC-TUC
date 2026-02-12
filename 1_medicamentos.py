@@ -24564,9 +24564,15 @@ def crear_tablas_restaurante(conn):
             precio DECIMAL(10,2) NOT NULL,
             estado VARCHAR(20) DEFAULT 'pendiente',
             notas TEXT,
+            nombre_cliente VARCHAR(100),
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    # Self-healing: agregar nombre_cliente si no existe
+    try:
+        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)")
+    except:
+        pass
 
 
 def generar_slug(nombre):
@@ -24982,6 +24988,31 @@ def restaurante_cocina(slug):
         return f"Error: {e}", 500
 
 
+@app.route('/r/<slug>/mesa/<int:mesa_num>')
+def restaurante_cliente(slug, mesa_num):
+    """Vista del cliente (QR por mesa)"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return "Restaurante no encontrado", 404
+        # Verificar que la mesa existe
+        mesa = conn.execute(
+            "SELECT id FROM mesas_restaurante WHERE restaurante_id = %s AND numero = %s AND activo = TRUE",
+            (rest['id'], mesa_num)
+        ).fetchone()
+        conn.close()
+        if not mesa:
+            return "Mesa no encontrada", 404
+        return render_template('restaurante_cliente.html', restaurante=rest, mesa_num=mesa_num)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
 @app.route('/api/restaurante/<slug>/pedido', methods=['POST'])
 def api_restaurante_pedido_crear(slug):
     """Crear un pedido (mesero)"""
@@ -24992,6 +25023,7 @@ def api_restaurante_pedido_crear(slug):
     proteina_id = data.get('proteina_id')
     principio_id = data.get('principio_id')
     notas = data.get('notas', '').strip()
+    nombre_cliente = data.get('nombre_cliente', '').strip() or None
 
     if not mesa_num or tipo not in ('completo', 'bandeja', 'sopa'):
         return jsonify({'ok': False, 'error': 'Mesa y tipo requeridos'}), 400
@@ -25032,9 +25064,9 @@ def api_restaurante_pedido_crear(slug):
                 precio += float(recargo['recargo'])
 
         conn.execute("""
-            INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (rest['id'], mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas or None))
+            INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (rest['id'], mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas or None, nombre_cliente))
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'precio': precio})
@@ -25058,7 +25090,7 @@ def api_restaurante_pedidos(slug):
 
         placeholders = ','.join(['%s'] * len(estados))
         pedidos = conn.execute(f"""
-            SELECT p.id, p.mesa_num, p.tipo, p.precio, p.estado, p.notas, p.created_at,
+            SELECT p.id, p.mesa_num, p.tipo, p.precio, p.estado, p.notas, p.nombre_cliente, p.created_at,
                    s.nombre as sopa_nombre,
                    pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
                    pi.nombre as principio_nombre
@@ -25085,6 +25117,7 @@ def api_restaurante_pedidos(slug):
                 'proteina': p['proteina_nombre'],
                 'proteina_recargo': float(p['proteina_recargo']) if p['proteina_recargo'] else 0,
                 'principio': p['principio_nombre'],
+                'nombre_cliente': p['nombre_cliente'],
                 'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
             })
         return jsonify({'ok': True, 'pedidos': resultado})

@@ -23839,15 +23839,11 @@ def api_usuario_actual():
 
     try:
         conn = get_db_connection()
-        # Self-healing: descuento_bienvenida (renombrar si existía como credito_bienvenida)
-        try:
-            conn.execute("ALTER TABLE terceros RENAME COLUMN credito_bienvenida TO descuento_bienvenida")
-        except Exception:
-            pass
+        # Self-healing: descuento_bienvenida
         try:
             conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS descuento_bienvenida INTEGER DEFAULT 0")
         except Exception:
-            pass
+            conn.rollback()
 
         usuario = conn.execute("""
             SELECT id, nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo,

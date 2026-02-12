@@ -24552,6 +24552,21 @@ def crear_tablas_restaurante(conn):
             agotado BOOLEAN DEFAULT FALSE
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pedidos_restaurante (
+            id SERIAL PRIMARY KEY,
+            restaurante_id INTEGER NOT NULL,
+            mesa_num INTEGER NOT NULL,
+            tipo VARCHAR(20) NOT NULL,
+            sopa_id INTEGER,
+            proteina_id INTEGER,
+            principio_id INTEGER,
+            precio DECIMAL(10,2) NOT NULL,
+            estado VARCHAR(20) DEFAULT 'pendiente',
+            notas TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
 
 
 def generar_slug(nombre):
@@ -24927,6 +24942,231 @@ def api_restaurante_mesa_eliminar(slug, mesa_id):
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== RESTAURANTE: MESERO Y COCINA =====
+
+@app.route('/r/<slug>/mesero')
+def restaurante_mesero(slug):
+    """Vista del mesero"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not rest:
+            return "Restaurante no encontrado", 404
+        return render_template('restaurante_mesero.html', restaurante=rest)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/r/<slug>/cocina')
+def restaurante_cocina(slug):
+    """Vista de cocina"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not rest:
+            return "Restaurante no encontrado", 404
+        return render_template('restaurante_cocina.html', restaurante=rest)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/restaurante/<slug>/pedido', methods=['POST'])
+def api_restaurante_pedido_crear(slug):
+    """Crear un pedido (mesero)"""
+    data = request.get_json()
+    mesa_num = data.get('mesa_num')
+    tipo = data.get('tipo')
+    sopa_id = data.get('sopa_id')
+    proteina_id = data.get('proteina_id')
+    principio_id = data.get('principio_id')
+    notas = data.get('notas', '').strip()
+
+    if not mesa_num or tipo not in ('completo', 'bandeja', 'sopa'):
+        return jsonify({'ok': False, 'error': 'Mesa y tipo requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        # Obtener menú del día para calcular precio
+        from datetime import date
+        menu = conn.execute("""
+            SELECT id, precio_completo, precio_bandeja, precio_sopa
+            FROM menu_dia WHERE restaurante_id = %s AND fecha = %s AND activo = TRUE
+        """, (rest['id'], date.today().isoformat())).fetchone()
+
+        if not menu:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay menú configurado para hoy'}), 400
+
+        # Precio base según tipo
+        if tipo == 'completo':
+            precio = float(menu['precio_completo'])
+        elif tipo == 'bandeja':
+            precio = float(menu['precio_bandeja'])
+        else:
+            precio = float(menu['precio_sopa'])
+
+        # Sumar recargo de proteína si aplica
+        if proteina_id and tipo in ('completo', 'bandeja'):
+            recargo = conn.execute(
+                "SELECT recargo FROM opciones_menu WHERE id = %s", (proteina_id,)
+            ).fetchone()
+            if recargo and recargo['recargo']:
+                precio += float(recargo['recargo'])
+
+        conn.execute("""
+            INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (rest['id'], mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas or None))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'precio': precio})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/pedidos')
+def api_restaurante_pedidos(slug):
+    """Listar pedidos (filtrable por estado)"""
+    estado = request.args.get('estado', 'pendiente,listo')
+    estados = [e.strip() for e in estado.split(',')]
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        placeholders = ','.join(['%s'] * len(estados))
+        pedidos = conn.execute(f"""
+            SELECT p.id, p.mesa_num, p.tipo, p.precio, p.estado, p.notas, p.created_at,
+                   s.nombre as sopa_nombre,
+                   pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
+                   pi.nombre as principio_nombre
+            FROM pedidos_restaurante p
+            LEFT JOIN opciones_menu s ON s.id = p.sopa_id
+            LEFT JOIN opciones_menu pr ON pr.id = p.proteina_id
+            LEFT JOIN opciones_menu pi ON pi.id = p.principio_id
+            WHERE p.restaurante_id = %s AND p.estado IN ({placeholders})
+            AND p.created_at::date = CURRENT_DATE
+            ORDER BY p.created_at DESC
+        """, (rest['id'], *estados)).fetchall()
+
+        conn.close()
+        resultado = []
+        for p in pedidos:
+            resultado.append({
+                'id': p['id'],
+                'mesa_num': p['mesa_num'],
+                'tipo': p['tipo'],
+                'precio': float(p['precio']),
+                'estado': p['estado'],
+                'notas': p['notas'],
+                'sopa': p['sopa_nombre'],
+                'proteina': p['proteina_nombre'],
+                'proteina_recargo': float(p['proteina_recargo']) if p['proteina_recargo'] else 0,
+                'principio': p['principio_nombre'],
+                'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
+            })
+        return jsonify({'ok': True, 'pedidos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/pedido/<int:pedido_id>/listo', methods=['POST'])
+def api_restaurante_pedido_listo(slug, pedido_id):
+    """Marcar pedido como listo (cocina)"""
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        conn.execute(
+            "UPDATE pedidos_restaurante SET estado = 'listo' WHERE id = %s AND restaurante_id = %s AND estado = 'pendiente'",
+            (pedido_id, rest['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/pedido/<int:pedido_id>/entregado', methods=['POST'])
+def api_restaurante_pedido_entregado(slug, pedido_id):
+    """Marcar pedido como entregado (mesero)"""
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        conn.execute(
+            "UPDATE pedidos_restaurante SET estado = 'entregado' WHERE id = %s AND restaurante_id = %s AND estado = 'listo'",
+            (pedido_id, rest['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/agotar/<int:opcion_id>', methods=['POST'])
+def api_restaurante_agotar(slug, opcion_id):
+    """Marcar opción como agotada en el menú de hoy (cocina)"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        from datetime import date
+        menu = conn.execute(
+            "SELECT id FROM menu_dia WHERE restaurante_id = %s AND fecha = %s AND activo = TRUE",
+            (rest['id'], date.today().isoformat())
+        ).fetchone()
+        if not menu:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay menú hoy'}), 400
+
+        # Toggle agotado
+        mdo = conn.execute(
+            "SELECT id, agotado FROM menu_dia_opciones WHERE menu_dia_id = %s AND opcion_id = %s",
+            (menu['id'], opcion_id)
+        ).fetchone()
+        if mdo:
+            conn.execute(
+                "UPDATE menu_dia_opciones SET agotado = NOT agotado WHERE id = %s", (mdo['id'],)
+            )
+        conn.commit()
+        nuevo_estado = not mdo['agotado'] if mdo else False
+        conn.close()
+        return jsonify({'ok': True, 'agotado': nuevo_estado})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ restaurante.nombre }} - Cocina</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #111827; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+        @keyframes pulsar {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .nuevo { animation: pulsar 1s ease-in-out 3; }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+
+<div id="toast" class="toast"></div>
+<div class="max-w-2xl mx-auto p-4">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl font-extrabold">{{ restaurante.nombre }}</h1>
+            <p class="text-gray-400 text-sm">Cocina</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="contador" class="bg-amber-600 text-white px-3 py-1 rounded-full font-bold text-lg">0</span>
+            <span class="text-gray-400 text-sm">pendientes</span>
+        </div>
+    </div>
+
+    <!-- Agotados -->
+    <div class="mb-6">
+        <button onclick="toggleAgotados()" class="text-sm text-gray-400 hover:text-white flex items-center gap-2">
+            <span id="agotados-arrow">&#9654;</span> Marcar agotados
+        </button>
+        <div id="panel-agotados" class="hidden mt-3 bg-gray-800 rounded-xl p-4">
+            <div id="lista-agotados" class="flex flex-wrap gap-2">
+                <p class="text-gray-500 text-sm">Cargando...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pedidos pendientes -->
+    <h2 class="text-lg font-bold text-yellow-400 mb-3">Pedidos pendientes</h2>
+    <div id="lista-pendientes" class="space-y-3 mb-8">
+        <p class="text-gray-500 text-center py-8">Cargando...</p>
+    </div>
+
+    <!-- Pedidos listos -->
+    <h2 class="text-lg font-bold text-green-400 mb-3">Listos para entregar</h2>
+    <div id="lista-listos" class="space-y-3">
+        <p class="text-gray-500 text-center py-4">-</p>
+    </div>
+</div>
+
+<script>
+const SLUG = '{{ restaurante.slug }}';
+const BASE = `/api/restaurante/${SLUG}`;
+let pedidosAnteriores = 0;
+
+function toast(msg, ok = true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function toggleAgotados() {
+    const panel = document.getElementById('panel-agotados');
+    const arrow = document.getElementById('agotados-arrow');
+    panel.classList.toggle('hidden');
+    arrow.textContent = panel.classList.contains('hidden') ? '\u25B6' : '\u25BC';
+}
+
+// ===== AGOTADOS =====
+async function cargarAgotados() {
+    try {
+        const r = await fetch(`${BASE}/menu-dia`);
+        const data = await r.json();
+        if (!data.ok || !data.menu) {
+            document.getElementById('lista-agotados').innerHTML = '<p class="text-gray-500 text-sm">No hay menú hoy</p>';
+            return;
+        }
+
+        const opciones = data.opciones_activas || [];
+        if (opciones.length === 0) {
+            document.getElementById('lista-agotados').innerHTML = '<p class="text-gray-500 text-sm">Sin opciones</p>';
+            return;
+        }
+
+        document.getElementById('lista-agotados').innerHTML = opciones.map(o => `
+            <button onclick="toggleAgotar(${o.opcion_id}, this)"
+                class="px-3 py-2 rounded-lg text-sm font-semibold border-2 transition
+                ${o.agotado
+                    ? 'bg-red-900 border-red-500 text-red-300 line-through'
+                    : 'bg-gray-700 border-gray-600 text-white hover:border-amber-500'}">
+                ${o.nombre}
+                ${o.recargo > 0 ? ` (+$${Number(o.recargo).toLocaleString()})` : ''}
+            </button>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function toggleAgotar(opcionId, btn) {
+    try {
+        const r = await fetch(`${BASE}/agotar/${opcionId}`, {method: 'POST'});
+        const data = await r.json();
+        if (data.ok) {
+            toast(data.agotado ? 'Marcado como agotado' : 'Disponible de nuevo');
+            cargarAgotados();
+        }
+    } catch(e) { toast('Error', false); }
+}
+
+// ===== PEDIDOS =====
+async function cargarPedidos() {
+    try {
+        const r = await fetch(`${BASE}/pedidos?estado=pendiente,listo`);
+        const data = await r.json();
+        if (!data.ok) return;
+
+        const pendientes = data.pedidos.filter(p => p.estado === 'pendiente');
+        const listos = data.pedidos.filter(p => p.estado === 'listo');
+
+        // Contador
+        document.getElementById('contador').textContent = pendientes.length;
+
+        // Sonido si hay nuevos
+        if (pendientes.length > pedidosAnteriores && pedidosAnteriores > 0) {
+            try { new Audio('data:audio/wav;base64,UklGRlQFAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YTAFAACAgICAgICAgICBgYKDhIWHiYuNj5GUl5qdn6KlqKuusbS3ury+wMPFx8nLzc/R0tTW2Nna3N3e3+Dh4uPk5eXm5+jo6enq6uvr7O3t7u7v8PDx8fLy8/P09PX19vb39/j4+fn6+vv7/Pz9/f7+//8AAQECAgMDBAQFBQYGBwcICAkJCgoLCwwMDQ0ODg8PEBARERISExMUFBUVFhYXFxcYGBkZGhobGxwcHR0eHh8fICAhISIiIyMkJCUlJiYnJygoKSkqKisrLCwtLS4uLy8wMDExMjIzMzQ0NTU2Njc3ODg5OTo6Ozs8PD09').play(); } catch(e) {}
+        }
+        pedidosAnteriores = pendientes.length;
+
+        // Renderizar pendientes
+        const contP = document.getElementById('lista-pendientes');
+        if (pendientes.length === 0) {
+            contP.innerHTML = '<p class="text-gray-500 text-center py-8">Sin pedidos pendientes</p>';
+        } else {
+            contP.innerHTML = pendientes.map(p => renderPedido(p, false)).join('');
+        }
+
+        // Renderizar listos
+        const contL = document.getElementById('lista-listos');
+        if (listos.length === 0) {
+            contL.innerHTML = '<p class="text-gray-500 text-center py-4">-</p>';
+        } else {
+            contL.innerHTML = listos.map(p => renderPedido(p, true)).join('');
+        }
+    } catch(e) { console.error(e); }
+}
+
+function renderPedido(p, esListo) {
+    const items = [p.sopa, p.proteina, p.principio].filter(Boolean);
+    const tipoLabel = p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
+    const colorBorde = esListo ? 'border-green-500' : 'border-yellow-500';
+    const colorFondo = esListo ? 'bg-green-900/30' : 'bg-gray-800';
+
+    return `
+        <div class="${colorFondo} rounded-xl p-4 border-2 ${colorBorde} ${!esListo ? 'nuevo' : ''}">
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-3">
+                    <span class="bg-amber-600 text-white px-3 py-1 rounded-lg font-extrabold text-xl">${p.mesa_num}</span>
+                    <div>
+                        <span class="font-bold text-lg">${tipoLabel}</span>
+                        <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ml-14 space-y-1">
+                ${items.map(i => `<p class="text-gray-300">${i}${p.proteina === i && p.proteina_recargo > 0 ? ` <span class="text-amber-400 text-xs">(+$${Number(p.proteina_recargo).toLocaleString()})</span>` : ''}</p>`).join('')}
+                ${p.notas ? `<p class="text-yellow-400 text-sm font-semibold mt-1">${p.notas}</p>` : ''}
+            </div>
+            ${!esListo ? `
+                <button onclick="marcarListo(${p.id})"
+                    class="mt-3 w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold text-lg transition">
+                    LISTO
+                </button>
+            ` : ''}
+        </div>
+    `;
+}
+
+async function marcarListo(id) {
+    try {
+        const r = await fetch(`${BASE}/pedido/${id}/listo`, {method: 'POST'});
+        const data = await r.json();
+        if (data.ok) {
+            toast('Pedido listo');
+            cargarPedidos();
+        }
+    } catch(e) { toast('Error', false); }
+}
+
+// ===== INIT =====
+cargarAgotados();
+cargarPedidos();
+// Polling cada 5 segundos
+setInterval(cargarPedidos, 5000);
+</script>
+</body>
+</html>

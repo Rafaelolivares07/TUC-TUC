@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if restaurante %}{{ restaurante.nombre }}{% else %}Restaurantes{% endif %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .tab-active { border-bottom: 3px solid #4f46e5; color: #4f46e5; font-weight: 700; }
+        .tab-inactive { border-bottom: 3px solid transparent; color: #6b7280; }
+        .tab-inactive:hover { color: #374151; border-color: #d1d5db; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+
+<div id="toast" class="toast"></div>
+
+{% if restaurante %}
+<!-- ============================================ -->
+<!-- PANEL ADMIN DE UN RESTAURANTE                -->
+<!-- ============================================ -->
+<div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-t-4 border-amber-500">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-gray-800">{{ restaurante.nombre }}</h1>
+                <p class="text-sm text-gray-400 mt-1">{{ request.host_url }}r/{{ restaurante.slug }}</p>
+            </div>
+            <a href="/admin/restaurante" class="text-sm text-gray-500 hover:text-gray-700 bg-gray-100 px-4 py-2 rounded-lg">
+                Mis restaurantes
+            </a>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
+        <div class="flex border-b">
+            <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="flex-1 py-4 text-center text-sm tab-active transition-all">
+                Opciones del menú
+            </button>
+            <button onclick="cambiarTab('menudia')" id="tab-menudia" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
+                Menú del día
+            </button>
+            <button onclick="cambiarTab('mesas')" id="tab-mesas" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
+                Mesas
+            </button>
+        </div>
+
+        <!-- ====== TAB: CATÁLOGO DE OPCIONES ====== -->
+        <div id="panel-catalogo" class="p-6">
+            <!-- Formulario agregar -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-3">Agregar opción</h3>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <select id="cat-tipo" class="border rounded-lg px-3 py-2 text-sm flex-shrink-0">
+                        <option value="sopa">Sopa / Caldo</option>
+                        <option value="proteina">Proteína</option>
+                        <option value="principio">Principio</option>
+                    </select>
+                    <input id="cat-nombre" type="text" placeholder="Nombre (ej: Sancocho)" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    <input id="cat-recargo" type="number" placeholder="Recargo $" value="0" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    <button onclick="guardarOpcion()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                        Agregar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista por tipo -->
+            <div id="catalogo-lista" class="space-y-6">
+                <p class="text-gray-400 text-center py-8">Cargando...</p>
+            </div>
+        </div>
+
+        <!-- ====== TAB: MENÚ DEL DÍA ====== -->
+        <div id="panel-menudia" class="p-6 hidden">
+            <!-- Fecha -->
+            <div class="flex items-center gap-4 mb-6">
+                <label class="font-bold text-gray-700">Fecha:</label>
+                <input id="menu-fecha" type="date" class="border rounded-lg px-3 py-2 text-sm" onchange="cargarMenuDia()">
+                <span id="menu-estado" class="text-sm text-gray-400"></span>
+            </div>
+
+            <!-- Precios -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-green-50 rounded-xl p-4 text-center">
+                    <label class="text-xs text-gray-500 block mb-1">Completo (sopa + bandeja)</label>
+                    <div class="flex items-center justify-center">
+                        <span class="text-gray-400 mr-1">$</span>
+                        <input id="menu-precio-completo" type="number" step="500" min="0" placeholder="12000" class="border rounded-lg px-2 py-2 text-lg font-bold text-center w-28">
+                    </div>
+                </div>
+                <div class="bg-blue-50 rounded-xl p-4 text-center">
+                    <label class="text-xs text-gray-500 block mb-1">Solo bandeja</label>
+                    <div class="flex items-center justify-center">
+                        <span class="text-gray-400 mr-1">$</span>
+                        <input id="menu-precio-bandeja" type="number" step="500" min="0" placeholder="10000" class="border rounded-lg px-2 py-2 text-lg font-bold text-center w-28">
+                    </div>
+                </div>
+                <div class="bg-yellow-50 rounded-xl p-4 text-center">
+                    <label class="text-xs text-gray-500 block mb-1">Solo sopa</label>
+                    <div class="flex items-center justify-center">
+                        <span class="text-gray-400 mr-1">$</span>
+                        <input id="menu-precio-sopa" type="number" step="500" min="0" placeholder="3000" class="border rounded-lg px-2 py-2 text-lg font-bold text-center w-28">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Opciones del día -->
+            <h3 class="font-bold text-gray-700 mb-3">Opciones disponibles hoy</h3>
+            <p class="text-xs text-gray-400 mb-4">Activa las opciones que estarán disponibles. Solo aparecen las del catálogo.</p>
+            <div id="menudia-opciones" class="space-y-4 mb-6">
+                <p class="text-gray-400 text-center py-4">Selecciona una fecha</p>
+            </div>
+
+            <button onclick="guardarMenuDia()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-lg">
+                Guardar menú del día
+            </button>
+        </div>
+
+        <!-- ====== TAB: MESAS ====== -->
+        <div id="panel-mesas" class="p-6 hidden">
+            <!-- Agregar mesa -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-3">Agregar mesa</h3>
+                <div class="flex gap-3">
+                    <input id="mesa-numero" type="number" min="1" placeholder="Número de mesa" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    <button onclick="agregarMesa()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
+                        Agregar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Lista de mesas -->
+            <div id="mesas-grid" class="grid grid-cols-5 sm:grid-cols-8 gap-3">
+                <p class="text-gray-400 col-span-full text-center py-8">Cargando...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- ============================================ -->
+<!-- LISTA DE RESTAURANTES / CREAR NUEVO          -->
+<!-- ============================================ -->
+<div class="max-w-lg mx-auto">
+    <div class="bg-white rounded-2xl shadow-lg p-8 border-t-4 border-amber-500">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-6">Mis Restaurantes</h1>
+
+        {% if restaurantes %}
+        <div class="space-y-3 mb-8">
+            {% for r in restaurantes %}
+            <a href="/admin/restaurante/{{ r.slug }}" class="block p-4 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 transition">
+                <span class="font-bold text-gray-800">{{ r.nombre }}</span>
+                <span class="text-xs text-gray-400 ml-2">/r/{{ r.slug }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="border-t pt-6">
+            <h3 class="font-bold text-gray-700 mb-3">Crear nuevo restaurante</h3>
+            <div class="flex gap-3">
+                <input id="nuevo-nombre" type="text" placeholder="Nombre del restaurante" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                <button onclick="crearRestaurante()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
+                    Crear
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+const SLUG = '{{ restaurante.slug if restaurante else "" }}';
+const BASE = SLUG ? `/api/restaurante/${SLUG}` : '';
+
+// ===== TOAST =====
+function toast(msg, ok = true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ===== TABS =====
+function cambiarTab(tab) {
+    ['catalogo', 'menudia', 'mesas'].forEach(t => {
+        document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+        document.getElementById(`tab-${t}`).className = `flex-1 py-4 text-center text-sm transition-all ${t === tab ? 'tab-active' : 'tab-inactive'}`;
+    });
+    if (tab === 'menudia') cargarMenuDia();
+    if (tab === 'mesas') cargarMesas();
+}
+
+// ===== CREAR RESTAURANTE =====
+async function crearRestaurante() {
+    const nombre = document.getElementById('nuevo-nombre').value.trim();
+    if (!nombre) return toast('Escribe el nombre del restaurante', false);
+    try {
+        const r = await fetch('/api/restaurante/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            window.location.href = `/admin/restaurante/${data.slug}`;
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+// ===== CATÁLOGO =====
+let catalogoData = [];
+
+async function cargarCatalogo() {
+    if (!SLUG) return;
+    try {
+        const r = await fetch(`${BASE}/opciones`);
+        const data = await r.json();
+        if (data.ok) {
+            catalogoData = data.opciones.filter(o => o.activo);
+            renderCatalogo();
+        }
+    } catch(e) { console.error(e); }
+}
+
+function renderCatalogo() {
+    const cont = document.getElementById('catalogo-lista');
+    const tipos = [
+        {key: 'sopa', label: 'Sopas y Caldos', color: 'yellow'},
+        {key: 'proteina', label: 'Proteínas', color: 'red'},
+        {key: 'principio', label: 'Principios', color: 'green'}
+    ];
+
+    if (catalogoData.length === 0) {
+        cont.innerHTML = '<p class="text-gray-400 text-center py-8">No hay opciones en el catálogo. Agrega la primera arriba.</p>';
+        return;
+    }
+
+    cont.innerHTML = tipos.map(t => {
+        const items = catalogoData.filter(o => o.tipo === t.key);
+        if (items.length === 0) return '';
+        return `
+            <div>
+                <h4 class="font-bold text-${t.color}-700 mb-2 text-sm uppercase tracking-wide">${t.label}</h4>
+                <div class="space-y-2">
+                    ${items.map(i => `
+                        <div class="flex items-center justify-between bg-white border rounded-lg px-4 py-3">
+                            <span class="font-medium text-gray-800">${i.nombre}</span>
+                            <div class="flex items-center gap-3">
+                                ${i.recargo > 0 ? `<span class="text-sm text-amber-600 font-semibold">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
+                                <button onclick="eliminarOpcion(${i.id})" class="text-red-400 hover:text-red-600 text-sm" title="Eliminar">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function guardarOpcion() {
+    const tipo = document.getElementById('cat-tipo').value;
+    const nombre = document.getElementById('cat-nombre').value.trim();
+    const recargo = parseFloat(document.getElementById('cat-recargo').value) || 0;
+    if (!nombre) return toast('Escribe el nombre de la opción', false);
+
+    try {
+        const r = await fetch(`${BASE}/opcion`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tipo, nombre, recargo})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('cat-nombre').value = '';
+            document.getElementById('cat-recargo').value = '0';
+            toast('Opción agregada');
+            cargarCatalogo();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function eliminarOpcion(id) {
+    if (!confirm('¿Eliminar esta opción del catálogo?')) return;
+    try {
+        const r = await fetch(`${BASE}/opcion/${id}`, {method: 'DELETE'});
+        const data = await r.json();
+        if (data.ok) {
+            toast('Opción eliminada');
+            cargarCatalogo();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+// ===== MENÚ DEL DÍA =====
+let menuActual = null;
+let opcionesActivas = [];
+
+function initFechaHoy() {
+    const hoy = new Date();
+    const yyyy = hoy.getFullYear();
+    const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dd = String(hoy.getDate()).padStart(2, '0');
+    document.getElementById('menu-fecha').value = `${yyyy}-${mm}-${dd}`;
+}
+
+async function cargarMenuDia() {
+    const fecha = document.getElementById('menu-fecha').value;
+    if (!fecha) return;
+
+    try {
+        const r = await fetch(`${BASE}/menu-dia?fecha=${fecha}`);
+        const data = await r.json();
+        if (!data.ok) return toast(data.error, false);
+
+        menuActual = data.menu;
+        opcionesActivas = data.opciones_activas || [];
+
+        if (menuActual) {
+            document.getElementById('menu-precio-completo').value = menuActual.precio_completo;
+            document.getElementById('menu-precio-bandeja').value = menuActual.precio_bandeja;
+            document.getElementById('menu-precio-sopa').value = menuActual.precio_sopa;
+            document.getElementById('menu-estado').textContent = 'Menú guardado';
+            document.getElementById('menu-estado').className = 'text-sm text-green-600 font-semibold';
+        } else {
+            document.getElementById('menu-precio-completo').value = '';
+            document.getElementById('menu-precio-bandeja').value = '';
+            document.getElementById('menu-precio-sopa').value = '';
+            document.getElementById('menu-estado').textContent = 'Sin menú para esta fecha';
+            document.getElementById('menu-estado').className = 'text-sm text-gray-400';
+        }
+
+        renderOpcionesMenuDia();
+    } catch(e) { console.error(e); }
+}
+
+function renderOpcionesMenuDia() {
+    const cont = document.getElementById('menudia-opciones');
+    const activasIds = opcionesActivas.map(o => o.opcion_id);
+    const tipos = [
+        {key: 'sopa', label: 'Sopas y Caldos', color: 'yellow'},
+        {key: 'proteina', label: 'Proteínas', color: 'red'},
+        {key: 'principio', label: 'Principios', color: 'green'}
+    ];
+
+    if (catalogoData.length === 0) {
+        cont.innerHTML = '<p class="text-gray-400 text-center py-4">Primero agrega opciones al catálogo</p>';
+        return;
+    }
+
+    cont.innerHTML = tipos.map(t => {
+        const items = catalogoData.filter(o => o.tipo === t.key);
+        if (items.length === 0) return '';
+        return `
+            <div>
+                <h4 class="font-bold text-${t.color}-700 mb-2 text-sm uppercase tracking-wide">${t.label}</h4>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    ${items.map(i => {
+                        const activa = activasIds.includes(i.id);
+                        return `
+                            <label class="flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition
+                                ${activa ? `bg-${t.color}-50 border-${t.color}-300` : 'bg-white border-gray-200 hover:bg-gray-50'}">
+                                <input type="checkbox" value="${i.id}" class="menudia-check" ${activa ? 'checked' : ''}>
+                                <span class="text-sm font-medium">${i.nombre}</span>
+                                ${i.recargo > 0 ? `<span class="text-xs text-amber-500">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
+                            </label>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function guardarMenuDia() {
+    const fecha = document.getElementById('menu-fecha').value;
+    const precio_completo = parseFloat(document.getElementById('menu-precio-completo').value);
+    const precio_bandeja = parseFloat(document.getElementById('menu-precio-bandeja').value) || 0;
+    const precio_sopa = parseFloat(document.getElementById('menu-precio-sopa').value) || 0;
+
+    if (!fecha) return toast('Selecciona una fecha', false);
+    if (!precio_completo) return toast('El precio completo es obligatorio', false);
+
+    const checks = document.querySelectorAll('.menudia-check:checked');
+    const opciones_ids = Array.from(checks).map(c => parseInt(c.value));
+
+    if (opciones_ids.length === 0) return toast('Activa al menos una opción', false);
+
+    try {
+        const r = await fetch(`${BASE}/menu-dia`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha, precio_completo, precio_bandeja, precio_sopa, opciones_ids})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast('Menú del día guardado');
+            cargarMenuDia();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+// ===== MESAS =====
+async function cargarMesas() {
+    if (!SLUG) return;
+    try {
+        const r = await fetch(`${BASE}/mesas`);
+        const data = await r.json();
+        if (!data.ok) return;
+
+        const cont = document.getElementById('mesas-grid');
+        if (data.mesas.length === 0) {
+            cont.innerHTML = '<p class="text-gray-400 col-span-full text-center py-8">No hay mesas. Agrega la primera arriba.</p>';
+            return;
+        }
+
+        cont.innerHTML = data.mesas.map(m => `
+            <div class="relative bg-amber-50 border-2 border-amber-200 rounded-xl p-4 text-center group">
+                <span class="text-2xl font-bold text-amber-700">${m.numero}</span>
+                <button onclick="eliminarMesa(${m.id}, ${m.numero})"
+                    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs font-bold opacity-0 group-hover:opacity-100 transition">
+                    X
+                </button>
+            </div>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function agregarMesa() {
+    const num = parseInt(document.getElementById('mesa-numero').value);
+    if (!num || num < 1) return toast('Escribe un número de mesa válido', false);
+
+    try {
+        const r = await fetch(`${BASE}/mesa`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({numero: num})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('mesa-numero').value = '';
+            toast(`Mesa ${num} agregada`);
+            cargarMesas();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function eliminarMesa(id, num) {
+    if (!confirm(`¿Eliminar mesa ${num}?`)) return;
+    try {
+        const r = await fetch(`${BASE}/mesa/${id}`, {method: 'DELETE'});
+        const data = await r.json();
+        if (data.ok) {
+            toast(`Mesa ${num} eliminada`);
+            cargarMesas();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+// ===== INIT =====
+if (SLUG) {
+    initFechaHoy();
+    cargarCatalogo();
+    cargarMesas();
+}
+</script>
+</body>
+</html>

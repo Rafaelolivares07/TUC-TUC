@@ -25171,6 +25171,81 @@ def api_restaurante_agotar(slug, opcion_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/restaurante/<slug>/cuentas')
+def api_restaurante_cuentas(slug):
+    """Totales por mesa activa (pedidos no cobrados de hoy)"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        cuentas = conn.execute("""
+            SELECT mesa_num, COUNT(*) as cantidad, SUM(precio) as total
+            FROM pedidos_restaurante
+            WHERE restaurante_id = %s AND estado != 'cobrado'
+            AND created_at::date = CURRENT_DATE
+            GROUP BY mesa_num ORDER BY mesa_num
+        """, (rest['id'],)).fetchall()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'cuentas': [{'mesa_num': c['mesa_num'], 'cantidad': c['cantidad'], 'total': float(c['total'])} for c in cuentas]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/cobrar/<int:mesa_num>', methods=['POST'])
+def api_restaurante_cobrar(slug, mesa_num):
+    """Cobrar mesa: marca todos sus pedidos del día como cobrado"""
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        result = conn.execute("""
+            UPDATE pedidos_restaurante SET estado = 'cobrado'
+            WHERE restaurante_id = %s AND mesa_num = %s AND estado != 'cobrado'
+            AND created_at::date = CURRENT_DATE
+        """, (rest['id'], mesa_num))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/venta-dia')
+def api_restaurante_venta_dia(slug):
+    """Total vendido hoy (pedidos cobrados)"""
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        venta = conn.execute("""
+            SELECT COUNT(*) as cantidad, COALESCE(SUM(precio), 0) as total
+            FROM pedidos_restaurante
+            WHERE restaurante_id = %s AND estado = 'cobrado'
+            AND created_at::date = CURRENT_DATE
+        """, (rest['id'],)).fetchone()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'cantidad': venta['cantidad'],
+            'total': float(venta['total'])
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

@@ -91,6 +91,14 @@
         </div>
     </div>
 
+    <!-- ====== CUENTAS POR MESA ====== -->
+    <div class="mt-8 border-t border-gray-700 pt-6">
+        <h2 class="text-lg font-bold text-amber-400 mb-4">Cuentas</h2>
+        <div id="lista-cuentas" class="grid grid-cols-2 gap-3">
+            <p class="text-gray-500 col-span-2 text-center py-4">Cargando...</p>
+        </div>
+    </div>
+
     <!-- ====== PEDIDOS ACTIVOS ====== -->
     <div class="mt-8 border-t border-gray-700 pt-6">
         <h2 class="text-lg font-bold text-gray-300 mb-4">Pedidos de hoy</h2>
@@ -360,12 +368,55 @@ async function marcarEntregado(id) {
     } catch(e) { toast('Error', false); }
 }
 
+// ===== CUENTAS =====
+async function cargarCuentas() {
+    try {
+        const r = await fetch(`${BASE}/cuentas`);
+        const data = await r.json();
+        if (!data.ok) return;
+
+        const cont = document.getElementById('lista-cuentas');
+        if (data.cuentas.length === 0) {
+            cont.innerHTML = '<p class="text-gray-500 col-span-2 text-center py-4">No hay cuentas abiertas</p>';
+            return;
+        }
+
+        cont.innerHTML = data.cuentas.map(c => `
+            <div class="bg-gray-800 rounded-xl p-4 border-2 border-amber-500">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold text-xl">Mesa ${c.mesa_num}</span>
+                    <span class="text-xs text-gray-400">${c.cantidad} pedido${c.cantidad > 1 ? 's' : ''}</span>
+                </div>
+                <div class="text-2xl font-extrabold text-amber-400 mb-3">$${Number(c.total).toLocaleString()}</div>
+                <button onclick="cobrarMesa(${c.mesa_num}, ${c.total})"
+                    class="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold transition">
+                    Cobrar
+                </button>
+            </div>
+        `).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function cobrarMesa(num, total) {
+    if (!confirm(`¿Cobrar Mesa ${num}?\nTotal: $${Number(total).toLocaleString()}`)) return;
+    try {
+        const r = await fetch(`${BASE}/cobrar/${num}`, {method: 'POST'});
+        const data = await r.json();
+        if (data.ok) {
+            toast(`Mesa ${num} cobrada - $${Number(total).toLocaleString()}`);
+            cargarCuentas();
+            cargarPedidos();
+        }
+    } catch(e) { toast('Error', false); }
+}
+
 // ===== INIT =====
 cargarMesas();
 cargarMenuHoy();
 cargarPedidos();
-// Polling pedidos cada 10s
-setInterval(cargarPedidos, 10000);
+cargarCuentas();
+// Polling cada 10s
+setInterval(() => { cargarPedidos(); cargarCuentas(); }, 10000);
 </script>
 </body>
 </html>

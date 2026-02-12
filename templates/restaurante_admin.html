@@ -344,11 +344,13 @@ async function cargarMenuDia() {
             document.getElementById('menu-estado').textContent = 'Menú guardado';
             document.getElementById('menu-estado').className = 'text-sm text-green-600 font-semibold';
         } else {
-            document.getElementById('menu-precio-completo').value = '';
-            document.getElementById('menu-precio-bandeja').value = '';
-            document.getElementById('menu-precio-sopa').value = '';
-            document.getElementById('menu-estado').textContent = 'Sin menú para esta fecha';
-            document.getElementById('menu-estado').className = 'text-sm text-gray-400';
+            // Pre-llenar con precios del último menú
+            const sug = data.precios_sugeridos;
+            document.getElementById('menu-precio-completo').value = sug ? sug.precio_completo : '';
+            document.getElementById('menu-precio-bandeja').value = sug ? sug.precio_bandeja : '';
+            document.getElementById('menu-precio-sopa').value = sug ? sug.precio_sopa : '';
+            document.getElementById('menu-estado').textContent = sug ? 'Nuevo día (precios del último menú)' : 'Sin menú para esta fecha';
+            document.getElementById('menu-estado').className = `text-sm ${sug ? 'text-amber-500' : 'text-gray-400'}`;
         }
 
         renderOpcionesMenuDia();

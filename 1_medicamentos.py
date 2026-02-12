@@ -24749,8 +24749,21 @@ def api_restaurante_menu_dia(slug):
         """, (rest['id'], fecha)).fetchone()
 
         if not menu:
+            # Buscar precios del último menú como sugerencia
+            ultimo = conn.execute("""
+                SELECT precio_completo, precio_bandeja, precio_sopa
+                FROM menu_dia WHERE restaurante_id = %s AND activo = TRUE
+                ORDER BY fecha DESC LIMIT 1
+            """, (rest['id'],)).fetchone()
             conn.close()
-            return jsonify({'ok': True, 'menu': None, 'opciones_activas': []})
+            return jsonify({
+                'ok': True, 'menu': None, 'opciones_activas': [],
+                'precios_sugeridos': {
+                    'precio_completo': float(ultimo['precio_completo']),
+                    'precio_bandeja': float(ultimo['precio_bandeja']),
+                    'precio_sopa': float(ultimo['precio_sopa'])
+                } if ultimo else None
+            })
 
         opciones_activas = conn.execute("""
             SELECT mdo.id as mdo_id, mdo.opcion_id, mdo.agotado,

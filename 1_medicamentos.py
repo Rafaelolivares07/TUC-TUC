@@ -23694,9 +23694,13 @@ def api_conductor_captura():
         except Exception:
             pass
 
-        # Self-healing: credito_bienvenida en terceros
+        # Self-healing: descuento_bienvenida en terceros (renombrar si existía como credito_bienvenida)
         try:
-            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS credito_bienvenida INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE terceros RENAME COLUMN credito_bienvenida TO descuento_bienvenida")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS descuento_bienvenida INTEGER DEFAULT 0")
         except Exception:
             pass
 
@@ -23710,19 +23714,19 @@ def api_conductor_captura():
             if existente:
                 tercero_id = existente[0]
                 conn.execute("""
-                    UPDATE terceros SET credito_bienvenida = GREATEST(credito_bienvenida, %s)
+                    UPDATE terceros SET descuento_bienvenida = GREATEST(descuento_bienvenida, %s)
                     WHERE id = %s
                 """, (int(precio_oferta), tercero_id))
             else:
                 cur = conn.execute("""
-                    INSERT INTO terceros (nombre, telefono, referido_por, credito_bienvenida, fecha_creacion)
+                    INSERT INTO terceros (nombre, telefono, referido_por, descuento_bienvenida, fecha_creacion)
                     VALUES (%s, %s, %s, %s, NOW())
                 """, (nombre, telefono, session['usuario_id'], int(precio_oferta)))
                 tercero_id = cur.fetchone()[0] if cur else None
         else:
             # Sin teléfono: crear usuario solo con nombre + crédito
             cur = conn.execute("""
-                INSERT INTO terceros (nombre, referido_por, credito_bienvenida, fecha_creacion)
+                INSERT INTO terceros (nombre, referido_por, descuento_bienvenida, fecha_creacion)
                 VALUES (%s, %s, %s, NOW())
             """, (nombre, session['usuario_id'], int(precio_oferta)))
             tercero_id = cur.fetchone()[0] if cur else None
@@ -23835,15 +23839,19 @@ def api_usuario_actual():
 
     try:
         conn = get_db_connection()
-        # Self-healing: credito_bienvenida
+        # Self-healing: descuento_bienvenida (renombrar si existía como credito_bienvenida)
         try:
-            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS credito_bienvenida INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE terceros RENAME COLUMN credito_bienvenida TO descuento_bienvenida")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS descuento_bienvenida INTEGER DEFAULT 0")
         except Exception:
             pass
 
         usuario = conn.execute("""
             SELECT id, nombre, telefono, placa, color_vehiculo, marca_vehiculo, modelo_vehiculo,
-                   COALESCE(credito_bienvenida, 0) as credito_bienvenida
+                   COALESCE(descuento_bienvenida, 0) as descuento_bienvenida
             FROM terceros
             WHERE id = %s
         """, (session['usuario_id'],)).fetchone()
@@ -23863,7 +23871,7 @@ def api_usuario_actual():
                     'color_vehiculo': usuario['color_vehiculo'],
                     'marca_vehiculo': usuario['marca_vehiculo'],
                     'modelo_vehiculo': usuario['modelo_vehiculo'],
-                    'credito_bienvenida': usuario['credito_bienvenida']
+                    'descuento_bienvenida': usuario['descuento_bienvenida']
                 }
             })
         else:

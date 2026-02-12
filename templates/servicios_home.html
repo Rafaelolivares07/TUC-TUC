@@ -56,9 +56,9 @@
         </div>
 
         <!-- Banner crédito bienvenida (oculto por defecto, reemplaza comunidad) -->
-        <div id="banner-credito" class="hidden mb-4">
+        <div id="banner-descuento" class="hidden mb-4">
             <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-md p-4 text-white">
-                <p class="text-2xl font-bold">$<span id="credito-monto">5,000</span> de descuento</p>
+                <p class="text-2xl font-bold">$<span id="descuento-monto">5,000</span> de descuento</p>
                 <p class="text-sm mt-1 opacity-90">Programa tu primer viaje y ahorra con TUC TUC</p>
             </div>
         </div>
@@ -2040,7 +2040,7 @@
 
                 if (data.ok && data.usuario) {
                     // Usuario logueado
-                    const { nombre, telefono, primer_nombre, credito_bienvenida } = data.usuario;
+                    const { nombre, telefono, primer_nombre, descuento_bienvenida } = data.usuario;
 
                     // Pre-llenar campos de transporte
                     document.getElementById('input-nombre').value = nombre;
@@ -2051,11 +2051,11 @@
                     }
 
                     // Banner de crédito de bienvenida
-                    if (credito_bienvenida && credito_bienvenida > 0) {
+                    if (descuento_bienvenida && descuento_bienvenida > 0) {
                         document.getElementById('banner-comunidad').classList.add('hidden');
-                        document.getElementById('banner-credito').classList.remove('hidden');
-                        document.getElementById('credito-monto').textContent =
-                            credito_bienvenida.toLocaleString('es-CO');
+                        document.getElementById('banner-descuento').classList.remove('hidden');
+                        document.getElementById('descuento-monto').textContent =
+                            descuento_bienvenida.toLocaleString('es-CO');
                     }
 
                     console.log('Usuario logueado:', nombre);
@@ -2546,7 +2546,7 @@
         // PEDIR TELÉFONO (usuario capturado sin teléfono)
         // =====================================================
         function mostrarPedirTelefono() {
-            const creditoEl = document.getElementById('credito-monto');
+            const creditoEl = document.getElementById('descuento-monto');
             const monto = creditoEl ? creditoEl.textContent : '5,000';
 
             const modal = document.createElement('div');

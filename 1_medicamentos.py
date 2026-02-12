@@ -23631,10 +23631,11 @@ def conductor_captura():
 
 @app.route('/api/conductor/captura', methods=['POST'])
 def api_conductor_captura():
-    """Guarda una captura de pasajero prospecto"""
+    """Guarda una captura de pasajero prospecto y genera token de invitación"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
+    import uuid
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
     tarifa_referencia = data.get('tarifa_referencia')
@@ -23654,6 +23655,11 @@ def api_conductor_captura():
     if not punto_a_lat or not punto_b_lat:
         return jsonify({'ok': False, 'error': 'Ambos puntos GPS son requeridos'}), 400
 
+    token = uuid.uuid4().hex[:12]
+    precio_oferta = float(tarifa_final or tarifa_referencia) - 5000
+    if precio_oferta < 0:
+        precio_oferta = 0
+
     try:
         conn = get_db_connection()
 
@@ -23662,6 +23668,7 @@ def api_conductor_captura():
             CREATE TABLE IF NOT EXISTS capturas_pasajero (
                 id SERIAL PRIMARY KEY,
                 conductor_id INTEGER NOT NULL,
+                tercero_id INTEGER,
                 nombre VARCHAR(255) NOT NULL,
                 tarifa_referencia DECIMAL(10,2),
                 tarifa_final DECIMAL(10,2),
@@ -23672,26 +23679,111 @@ def api_conductor_captura():
                 punto_b_lat DECIMAL(10,8),
                 punto_b_lon DECIMAL(11,8),
                 punto_b_etiqueta VARCHAR(50),
+                token VARCHAR(20),
+                precio_oferta DECIMAL(10,2),
                 estado VARCHAR(20) DEFAULT 'completada',
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
 
+        # Self-healing: agregar columnas si no existen (para tablas ya creadas)
+        try:
+            conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS token VARCHAR(20)")
+            conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS precio_oferta DECIMAL(10,2)")
+            conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS tercero_id INTEGER")
+        except Exception:
+            pass
+
+        # Self-healing: credito_bienvenida en terceros
+        try:
+            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS credito_bienvenida INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # Pre-crear usuario en terceros con bono de $5,000
+        tercero_id = None
+        if telefono:
+            # Si ya existe un usuario con ese teléfono, vincularlo y darle crédito
+            existente = conn.execute(
+                "SELECT id FROM terceros WHERE telefono = %s", (telefono,)
+            ).fetchone()
+            if existente:
+                tercero_id = existente[0]
+                conn.execute("""
+                    UPDATE terceros SET credito_bienvenida = GREATEST(credito_bienvenida, %s)
+                    WHERE id = %s
+                """, (int(precio_oferta), tercero_id))
+            else:
+                cur = conn.execute("""
+                    INSERT INTO terceros (nombre, telefono, referido_por, credito_bienvenida, fecha_creacion)
+                    VALUES (%s, %s, %s, %s, NOW())
+                """, (nombre, telefono, session['usuario_id'], int(precio_oferta)))
+                tercero_id = cur.fetchone()[0] if cur else None
+        else:
+            # Sin teléfono: crear usuario solo con nombre + crédito
+            cur = conn.execute("""
+                INSERT INTO terceros (nombre, referido_por, credito_bienvenida, fecha_creacion)
+                VALUES (%s, %s, %s, NOW())
+            """, (nombre, session['usuario_id'], int(precio_oferta)))
+            tercero_id = cur.fetchone()[0] if cur else None
+
         conn.execute("""
             INSERT INTO capturas_pasajero
-            (conductor_id, nombre, tarifa_referencia, tarifa_final, telefono,
+            (conductor_id, tercero_id, nombre, tarifa_referencia, tarifa_final, telefono,
              punto_a_lat, punto_a_lon, punto_a_etiqueta,
-             punto_b_lat, punto_b_lon, punto_b_etiqueta)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (session['usuario_id'], nombre, tarifa_referencia, tarifa_final, telefono,
+             punto_b_lat, punto_b_lon, punto_b_etiqueta,
+             token, precio_oferta)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (session['usuario_id'], tercero_id, nombre, tarifa_referencia, tarifa_final, telefono,
               punto_a_lat, punto_a_lon, punto_a_etiqueta,
-              punto_b_lat, punto_b_lon, punto_b_etiqueta))
+              punto_b_lat, punto_b_lon, punto_b_etiqueta,
+              token, precio_oferta))
 
         conn.commit()
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({
+            'ok': True,
+            'token': token,
+            'precio_oferta': precio_oferta,
+            'nombre': nombre,
+            'telefono': telefono
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/i/<token>')
+def invitacion_pasajero(token):
+    """Auto-login del pasajero pre-creado via token de captura"""
+    try:
+        conn = get_db_connection()
+        captura = conn.execute("""
+            SELECT tercero_id, nombre, telefono, precio_oferta,
+                   punto_a_etiqueta, punto_b_etiqueta
+            FROM capturas_pasajero WHERE token = %s
+        """, (token,)).fetchone()
+
+        if not captura:
+            conn.close()
+            return redirect('/servicios')
+
+        tercero_id = captura[0]
+        nombre = captura[1]
+        telefono = captura[2]
+
+        if tercero_id:
+            # Auto-login
+            session['usuario_id'] = tercero_id
+            session['nombre'] = nombre
+            if telefono:
+                session['telefono'] = telefono
+            session['rol'] = 'Cliente'
+            session.permanent = True
+
+        conn.close()
+        return redirect('/servicios')
+    except Exception:
+        return redirect('/servicios')
 
 
 @app.route('/api/usuario-actual')

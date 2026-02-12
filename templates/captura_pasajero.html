@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Capturar Pasajero - TucTuc</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         body { overscroll-behavior: none; }
         .paso { display: none; }
@@ -43,7 +44,7 @@
 
     <!-- Header fijo -->
     <div class="bg-yellow-500 p-3 flex items-center justify-between">
-        <a href="/conductor" class="text-gray-800 font-bold text-lg">&larr;</a>
+        <a href="/conductor" class="bg-red-600 text-white px-3 py-1 rounded-lg font-bold text-base">Cancelar</a>
         <h1 class="text-lg font-bold text-gray-800">Capturar Pasajero</h1>
         <span id="indicador-paso" class="text-sm text-gray-700 font-medium">1/6</span>
     </div>
@@ -165,6 +166,30 @@
             </button>
         </div>
 
+        <!-- PASO 7: QR + WhatsApp -->
+        <div id="paso-7" class="paso flex-col items-center fade-in">
+            <label class="text-green-400 text-xl mb-2 text-center font-bold">Captura guardada</label>
+            <p class="text-gray-400 text-sm mb-4 text-center">Muestra el QR al pasajero o envía por WhatsApp</p>
+
+            <div class="w-full max-w-sm mx-auto bg-white rounded-2xl p-6 flex flex-col items-center">
+                <div id="qr-code" class="mb-3"></div>
+                <p id="qr-precio" class="text-gray-800 text-lg font-bold text-center"></p>
+                <p id="qr-nombre" class="text-gray-500 text-sm text-center"></p>
+            </div>
+
+            <button id="btn-whatsapp" onclick="enviarWhatsApp()" class="hidden w-full max-w-sm mx-auto mt-4 py-4 bg-green-500 text-white rounded-2xl font-bold text-xl flex items-center justify-center gap-2">
+                WhatsApp
+            </button>
+
+            <button id="btn-copiar-link" onclick="copiarEnlace()" class="w-full max-w-sm mx-auto mt-3 py-4 bg-gray-700 text-gray-300 rounded-2xl font-bold text-lg text-center">
+                Copiar enlace
+            </button>
+
+            <a href="/conductor" class="w-full max-w-sm mx-auto mt-3 py-4 bg-gray-800 text-gray-400 rounded-2xl font-bold text-lg text-center block border border-gray-700">
+                Volver al panel
+            </a>
+        </div>
+
     </div>
 
     <!-- Toast container -->
@@ -181,7 +206,8 @@
         };
 
         let pasoActual = 1;
-        const totalPasos = 6;
+        const totalPasos = 7;
+        let inviteUrl = '';
 
         // Chips disponibles para punto B
         const todosLosChips = [
@@ -339,7 +365,7 @@
             .then(data => {
                 if (data.ok) {
                     mostrarToast('Pasajero capturado', 'ok');
-                    setTimeout(() => window.location.href = '/conductor', 1500);
+                    mostrarInvitacion(data);
                 } else {
                     btn.disabled = false;
                     btn.textContent = 'Guardar';
@@ -350,6 +376,62 @@
                 btn.disabled = false;
                 btn.textContent = 'Guardar';
                 mostrarToast('Error de conexión', 'error');
+            });
+        }
+
+        function mostrarInvitacion(data) {
+            inviteUrl = window.location.origin + '/i/' + data.token;
+
+            // Generar QR
+            document.getElementById('qr-code').innerHTML = '';
+            new QRCode(document.getElementById('qr-code'), {
+                text: inviteUrl,
+                width: 220,
+                height: 220,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            // Info de precio
+            const tarifaFinal = parseFloat(document.getElementById('resumen-tarifa').value) || captura.tarifa;
+            document.getElementById('qr-precio').textContent =
+                'Tu viaje por $' + Math.round(data.precio_oferta).toLocaleString('es-CO');
+            document.getElementById('qr-nombre').textContent =
+                data.nombre + ' - Ahorra $5,000 con TUC TUC';
+
+            // WhatsApp solo si hay teléfono
+            if (data.telefono) {
+                document.getElementById('btn-whatsapp').classList.remove('hidden');
+                document.getElementById('btn-whatsapp').classList.add('flex');
+            }
+
+            // Ocultar header cancelar, mostrar paso 7
+            mostrarPaso(7);
+        }
+
+        function enviarWhatsApp() {
+            const tarifaFinal = parseFloat(document.getElementById('resumen-tarifa').value) || captura.tarifa;
+            const precioOferta = Math.round(tarifaFinal - 5000);
+            const msg = 'Hola ' + captura.nombre + '! Tu viaje te sale $' +
+                precioOferta.toLocaleString('es-CO') +
+                ' con TUC TUC (te ahorras $5,000). Registrate aqui: ' + inviteUrl;
+            const tel = captura.telefono.startsWith('57') ? captura.telefono : '57' + captura.telefono;
+            window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+        }
+
+        function copiarEnlace() {
+            navigator.clipboard.writeText(inviteUrl).then(() => {
+                mostrarToast('Enlace copiado', 'ok');
+            }).catch(() => {
+                // Fallback para navegadores sin clipboard API
+                const input = document.createElement('input');
+                input.value = inviteUrl;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                mostrarToast('Enlace copiado', 'ok');
             });
         }
 

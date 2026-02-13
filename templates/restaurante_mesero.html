@@ -470,9 +470,11 @@ async function cargarPedidos() {
                 return `
                     <div class="flex items-center justify-between bg-green-800 rounded-lg p-3">
                         <div>
-                            <span class="font-extrabold text-xl text-white">Mesa ${p.mesa_num}</span>
+                            <span class="font-extrabold text-xl text-white">${p.mesa_num > 0 ? 'Mesa ' + p.mesa_num : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
                             ${p.nombre_cliente ? `<span class="text-green-200 text-sm ml-1">- ${p.nombre_cliente}</span>` : ''}
+                            ${p.mesa_num === 0 && p.telefono_cliente ? `<span class="text-green-200 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                             <span class="text-green-200 text-sm ml-2">${items}</span>
+                            ${p.mesa_num === 0 && p.direccion_cliente ? `<div class="text-green-300 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
                         </div>
                         <button onclick="marcarEntregado(${p.id})"
                             class="bg-white text-green-800 px-4 py-2 rounded-lg font-bold text-sm flex-shrink-0">
@@ -498,10 +500,12 @@ async function cargarPedidos() {
                     <div class="bg-gray-800 rounded-xl p-4 border-2 border-gray-700">
                         <div class="flex justify-between items-start">
                             <div>
-                                <span class="font-bold text-lg">Mesa ${p.mesa_num}</span>
+                                <span class="font-bold text-lg">${p.mesa_num > 0 ? 'Mesa ' + p.mesa_num : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
                                 ${p.nombre_cliente ? `<span class="text-amber-300 text-xs ml-1">${p.nombre_cliente}</span>` : ''}
+                                ${p.mesa_num === 0 && p.telefono_cliente ? `<span class="text-gray-400 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                                 <span class="ml-2 text-xs px-2 py-1 rounded-full bg-yellow-600">En cocina</span>
                                 <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
+                                ${p.mesa_num === 0 && p.direccion_cliente ? `<div class="text-gray-400 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
                             </div>
                             <span class="font-bold text-amber-400">$${Number(p.precio).toLocaleString()}</span>
                         </div>

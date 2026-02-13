@@ -24588,6 +24588,11 @@ def crear_tablas_restaurante(conn):
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_mesero VARCHAR(10)")
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_cocina VARCHAR(10)")
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0")
+        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(20) DEFAULT 'mesa'")
+        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS telefono_cliente VARCHAR(20)")
+        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS direccion_cliente TEXT")
+        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_id INTEGER")
+        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT")
     except:
         pass
 
@@ -25506,6 +25511,35 @@ def restaurante_cocina(slug):
         return f"Error: {e}", 500
 
 
+@app.route('/r/<slug>')
+def restaurante_publico(slug):
+    """Página pública del restaurante - pedido remoto (domicilio/recoger)"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not rest:
+            return "Restaurante no encontrado", 404
+
+        # Si el cliente ya está logueado, pasar sus datos
+        cliente_data = None
+        if session.get('usuario_id'):
+            conn2 = get_db_connection()
+            tercero = conn2.execute(
+                "SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (session['usuario_id'],)
+            ).fetchone()
+            conn2.close()
+            if tercero:
+                cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '', 'direccion': tercero['direccion'] or '', 'cliente_id': session['usuario_id']}
+
+        return render_template('restaurante_cliente.html', restaurante=rest, mesa_num=0, cliente_data=cliente_data)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
 @app.route('/r/<slug>/mesa/<int:mesa_num>')
 def restaurante_cliente(slug, mesa_num):
     """Vista del cliente (QR por mesa)"""
@@ -25526,21 +25560,68 @@ def restaurante_cliente(slug, mesa_num):
         conn.close()
         if not mesa:
             return "Mesa no encontrada", 404
-        return render_template('restaurante_cliente.html', restaurante=rest, mesa_num=mesa_num)
+        return render_template('restaurante_cliente.html', restaurante=rest, mesa_num=mesa_num, cliente_data=None)
     except Exception as e:
         return f"Error: {e}", 500
+
+
+@app.route('/api/restaurante/<slug>/registrar-cliente', methods=['POST'])
+def api_restaurante_registrar_cliente(slug):
+    """Registra/identifica cliente para pedido remoto, lo loguea"""
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    direccion = data.get('direccion', '').strip()
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+
+    try:
+        conn = get_db_connection()
+        # Buscar o crear tercero
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if tercero:
+            cliente_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s, direccion = %s WHERE id = %s",
+                         (nombre, direccion or None, cliente_id))
+        else:
+            conn.execute(
+                "INSERT INTO terceros (nombre, telefono, direccion) VALUES (%s, %s, %s)",
+                (nombre, telefono, direccion or None)
+            )
+            cliente_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (telefono,)).fetchone()['id']
+
+        conn.commit()
+        conn.close()
+
+        # Loguear
+        session['usuario_id'] = cliente_id
+        session['nombre'] = nombre
+        session['telefono'] = telefono
+        session['rol'] = 'Cliente'
+        session.permanent = True
+        session.modified = True
+
+        return jsonify({'ok': True, 'cliente_id': cliente_id})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/restaurante/<slug>/pedido', methods=['POST'])
 def api_restaurante_pedido_crear(slug):
     """Crear pedido(s) — soporta menu_dia y carta"""
     data = request.get_json()
-    mesa_num = data.get('mesa_num')
+    mesa_num = int(data.get('mesa_num', 0))
     nombre_cliente = data.get('nombre_cliente', '').strip() or None
     notas = data.get('notas', '').strip()
-
-    if not mesa_num:
-        return jsonify({'ok': False, 'error': 'Mesa requerida'}), 400
+    tipo_entrega = data.get('tipo_entrega', 'mesa')
+    telefono_cliente = data.get('telefono_cliente', '').strip() or None if data.get('telefono_cliente') else None
+    direccion_cliente = data.get('direccion_cliente', '').strip() or None if data.get('direccion_cliente') else None
+    cliente_id = data.get('cliente_id')
 
     try:
         conn = get_db_connection()
@@ -25589,9 +25670,9 @@ def api_restaurante_pedido_crear(slug):
                 precio_item = float(opcion['precio']) * cant
                 precio_total += precio_item
                 conn.execute("""
-                    INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, plato_id, cantidad, precio, notas, nombre_cliente)
-                    VALUES (%s, %s, 'carta', %s, %s, %s, %s, %s)
-                """, (rest['id'], mesa_num, opcion['id'], cant, precio_item, notas or None, nombre_cliente))
+                    INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id)
+                    VALUES (%s, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (rest['id'], mesa_num, opcion['id'], cant, precio_item, notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
 
         else:
             # MENU_DIA: flujo original
@@ -25629,9 +25710,9 @@ def api_restaurante_pedido_crear(slug):
                     precio_total += float(recargo['recargo'])
 
             conn.execute("""
-                INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (rest['id'], mesa_num, tipo, sopa_id, proteina_id, principio_id, precio_total, notas or None, nombre_cliente))
+                INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (rest['id'], mesa_num, tipo, sopa_id, proteina_id, principio_id, precio_total, notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
 
         conn.commit()
         conn.close()
@@ -25657,7 +25738,7 @@ def api_restaurante_pedidos(slug):
         placeholders = ','.join(['%s'] * len(estados))
         pedidos = conn.execute(f"""
             SELECT p.id, p.mesa_num, p.tipo, p.precio, p.estado, p.notas, p.nombre_cliente, p.created_at,
-                   p.cantidad,
+                   p.cantidad, p.tipo_entrega, p.telefono_cliente, p.direccion_cliente, p.cliente_id,
                    s.nombre as sopa_nombre,
                    pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
                    pi.nombre as principio_nombre,
@@ -25689,6 +25770,10 @@ def api_restaurante_pedidos(slug):
                 'plato': p['plato_nombre'],
                 'cantidad': p['cantidad'] or 1,
                 'nombre_cliente': p['nombre_cliente'],
+                'tipo_entrega': p['tipo_entrega'] or 'mesa',
+                'telefono_cliente': p['telefono_cliente'],
+                'direccion_cliente': p['direccion_cliente'],
+                'cliente_id': p['cliente_id'],
                 'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
             })
         return jsonify({'ok': True, 'pedidos': resultado})

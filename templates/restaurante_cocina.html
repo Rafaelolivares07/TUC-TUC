@@ -254,11 +254,13 @@ function renderPedido(p, esListo) {
         <div class="${colorFondo} rounded-xl p-4 border-2 ${colorBorde} ${!esListo ? 'nuevo' : ''}">
             <div class="flex justify-between items-start mb-2">
                 <div class="flex items-center gap-3">
-                    <span class="bg-amber-600 text-white px-3 py-1 rounded-lg font-extrabold text-xl">${p.mesa_num}</span>
+                    <span class="bg-amber-600 text-white px-3 py-1 rounded-lg font-extrabold text-xl">${p.mesa_num > 0 ? p.mesa_num : (p.tipo_entrega === 'domicilio' ? 'DOM' : 'REC')}</span>
                     <div>
-                        <span class="font-bold text-lg">${tipoLabel}</span>
+                        <span class="font-bold text-lg">${p.mesa_num > 0 ? tipoLabel : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
                         ${p.nombre_cliente ? `<span class="text-amber-300 text-sm ml-2">${p.nombre_cliente}</span>` : ''}
+                        ${p.mesa_num === 0 && p.telefono_cliente ? `<span class="text-gray-400 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                         <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
+                        ${p.mesa_num === 0 && p.direccion_cliente ? `<div class="text-amber-200 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
                     </div>
                 </div>
             </div>

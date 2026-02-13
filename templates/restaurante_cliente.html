@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ restaurante.nombre }} - Mesa {{ mesa_num }}</title>
+    <title>{{ restaurante.nombre }}{% if mesa_num > 0 %} - Mesa {{ mesa_num }}{% endif %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -28,7 +28,21 @@
     <!-- Header -->
     <div class="text-center mb-4">
         <h1 class="text-2xl font-extrabold text-gray-800">{{ restaurante.nombre }}</h1>
+        {% if mesa_num > 0 %}
         <span class="inline-block bg-amber-100 text-amber-700 px-4 py-1 rounded-full font-bold text-sm mt-1">Mesa {{ mesa_num }}</span>
+        {% else %}
+        <span class="inline-block bg-green-100 text-green-700 px-4 py-1 rounded-full font-bold text-sm mt-1">Pedido Online</span>
+        {% endif %}
+        <!-- Info entrega (solo remoto, visible tras registro) -->
+        <div id="info-entrega" class="hidden mt-3 w-full">
+            <div class="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center justify-between">
+                <div class="text-sm">
+                    <span id="info-entrega-tipo" class="font-bold text-green-700"></span>
+                    <span id="info-entrega-detalle" class="text-green-600 ml-1"></span>
+                </div>
+                <button onclick="abrirModalRegistro()" class="text-green-600 text-xs font-bold underline">Cambiar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Nombre del cliente -->
@@ -48,7 +62,7 @@
 
         <!-- Saludo -->
         <div class="mb-4">
-            <p class="text-gray-600">Hola <span id="nombre-display" class="font-bold text-amber-700"></span>, ¿qué vas a pedir?</p>
+            <p class="text-gray-600" id="saludo-menu">Hola <span id="nombre-display" class="font-bold text-amber-700"></span>, ¿qué vas a pedir?</p>
         </div>
 
         <!-- Sin menú -->
@@ -110,6 +124,11 @@ const MESA = {{ mesa_num }};
 const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const BASE = `/api/restaurante/${SLUG}`;
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
+const CLIENTE_DATA = {{ cliente_data | tojson | safe if cliente_data else 'null' }};
+let clienteId = CLIENTE_DATA ? CLIENTE_DATA.cliente_id : null;
+let tipoEntrega = '';
+let telefonoCliente = CLIENTE_DATA ? CLIENTE_DATA.telefono : '';
+let direccionCliente = CLIENTE_DATA ? CLIENTE_DATA.direccion : '';
 
 let menuHoy = null;
 let opcionesHoy = [];
@@ -305,7 +324,11 @@ async function enviarPedido() {
                 proteina_id: proteinaSeleccionada,
                 principio_id: principioSeleccionado,
                 notas: document.getElementById('cli-notas').value.trim(),
-                nombre_cliente: nombreCliente
+                nombre_cliente: nombreCliente,
+                tipo_entrega: MESA === 0 ? tipoEntrega : 'mesa',
+                telefono_cliente: telefonoCliente || null,
+                direccion_cliente: direccionCliente || null,
+                cliente_id: clienteId || null
             })
         });
         const data = await r.json();
@@ -342,8 +365,10 @@ async function cargarMisPedidos() {
         const data = await r.json();
         if (!data.ok) return;
 
-        // Filtrar por mi mesa y mi nombre
-        const mios = data.pedidos.filter(p => p.mesa_num === MESA && p.nombre_cliente === nombreCliente);
+        // Filtrar: mesa+nombre para mesas, cliente_id para remoto
+        const mios = MESA > 0
+            ? data.pedidos.filter(p => p.mesa_num === MESA && p.nombre_cliente === nombreCliente)
+            : data.pedidos.filter(p => p.cliente_id === clienteId && p.mesa_num === 0);
         const cont = document.getElementById('mis-pedidos');
 
         if (mios.length === 0) {
@@ -447,9 +472,14 @@ function cartaClienteTotal() {
     document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString()}`;
 }
 
-// Override enviarPedido for carta
+// Override enviarPedido for carta + remote check
 const _enviarPedidoOriginal = enviarPedido;
 enviarPedido = async function() {
+    // Remoto: verificar registro y tipo de entrega antes de pedir
+    if (MESA === 0 && (!clienteId || !tipoEntrega)) {
+        abrirModalRegistro();
+        return;
+    }
     if (TIPO_REST === 'carta') {
         const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
         if (platos.length === 0) return toast('Agrega al menos un plato', false);
@@ -461,7 +491,11 @@ enviarPedido = async function() {
                     mesa_num: MESA,
                     platos,
                     notas: document.getElementById('cli-notas').value.trim(),
-                    nombre_cliente: nombreCliente
+                    nombre_cliente: nombreCliente,
+                    tipo_entrega: MESA === 0 ? tipoEntrega : 'mesa',
+                    telefono_cliente: telefonoCliente || null,
+                    direccion_cliente: direccionCliente || null,
+                    cliente_id: clienteId || null
                 })
             });
             const data = await r.json();
@@ -469,7 +503,6 @@ enviarPedido = async function() {
                 toast('Pedido enviado');
                 carrito = {};
                 document.getElementById('cli-notas').value = '';
-                // Reset cantidades visibles
                 cartaCatalogo.forEach(p => {
                     const s = document.getElementById(`cli-cant-${p.id}`);
                     if (s) s.textContent = '0';
@@ -489,20 +522,161 @@ enviarPedido = async function() {
     }
 };
 
+// Callback del modal de registro: enviar pedido tras registrarse
+function enviarPedidoReal() { enviarPedido(); }
+
+// ===== MODAL REGISTRO (remoto) =====
+function abrirModalRegistro() {
+    const modal = document.getElementById('modal-registro');
+    if (!modal) return;
+    if (nombreCliente) document.getElementById('reg-nombre').value = nombreCliente;
+    if (telefonoCliente) document.getElementById('reg-telefono').value = telefonoCliente;
+    if (direccionCliente) document.getElementById('reg-direccion').value = direccionCliente;
+    if (tipoEntrega) selTipoEntrega(tipoEntrega);
+    modal.classList.remove('hidden');
+}
+
+function cerrarModal() {
+    document.getElementById('modal-registro').classList.add('hidden');
+}
+
+function selTipoEntrega(tipo) {
+    tipoEntrega = tipo;
+    const clsOn = 'border-amber-500 bg-amber-50 text-amber-700';
+    const clsOff = 'border-gray-200 text-gray-600 hover:border-amber-400';
+    document.getElementById('btn-recoger').className = `flex-1 border-2 rounded-xl py-3 font-bold text-center transition ${tipo === 'recoger' ? clsOn : clsOff}`;
+    document.getElementById('btn-domicilio').className = `flex-1 border-2 rounded-xl py-3 font-bold text-center transition ${tipo === 'domicilio' ? clsOn : clsOff}`;
+    document.getElementById('reg-direccion').classList.toggle('hidden', tipo !== 'domicilio');
+}
+
+async function confirmarRegistro() {
+    const nombre = document.getElementById('reg-nombre').value.trim();
+    const telefono = document.getElementById('reg-telefono').value.trim();
+    const direccion = document.getElementById('reg-direccion').value.trim();
+
+    if (!nombre) return toast('Escribe tu nombre', false);
+    if (telefono.replace(/\D/g,'').length < 10) return toast('Celular debe tener al menos 10 digitos', false);
+    if (!tipoEntrega) return toast('Elige recoger o domicilio', false);
+    if (tipoEntrega === 'domicilio' && !direccion) return toast('Escribe tu direccion', false);
+
+    try {
+        const r = await fetch(`${BASE}/registrar-cliente`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre, telefono, direccion })
+        });
+        const data = await r.json();
+        if (!data.ok) return toast(data.error, false);
+
+        clienteId = data.cliente_id;
+        nombreCliente = nombre;
+        telefonoCliente = telefono;
+        direccionCliente = direccion;
+        localStorage.setItem(`remoto_${SLUG}`, JSON.stringify({nombre, telefono, direccion, tipoEntrega, clienteId}));
+
+        cerrarModal();
+        actualizarInfoEntrega();
+        enviarPedidoReal();
+    } catch(e) { toast('Error de conexion', false); }
+}
+
+function actualizarInfoEntrega() {
+    const info = document.getElementById('info-entrega');
+    if (!info || MESA > 0) return;
+    if (!clienteId) { info.classList.add('hidden'); return; }
+    info.classList.remove('hidden');
+    document.getElementById('info-entrega-tipo').textContent = tipoEntrega === 'domicilio' ? 'Domicilio:' : 'Recoger:';
+    const detalle = tipoEntrega === 'domicilio' ? `${direccionCliente} - ${nombreCliente}` : nombreCliente;
+    document.getElementById('info-entrega-detalle').textContent = detalle;
+    const saludo = document.getElementById('saludo-menu');
+    if (saludo) saludo.innerHTML = `Hola <span class="font-bold text-amber-700">${nombreCliente}</span>, ¿qué vas a pedir?`;
+}
+
 // ===== INIT =====
-const nombreGuardado = localStorage.getItem(STORAGE_KEY);
-if (nombreGuardado) {
-    nombreCliente = nombreGuardado;
-    document.getElementById('input-nombre').value = nombreGuardado;
-    document.getElementById('saludo-texto').innerHTML = `¡Hola de nuevo, <strong>${nombreGuardado}</strong>!`;
-    // Auto-continuar o dejar que confirme
-    mostrarMenu();
+if (MESA === 0) {
+    // Modo remoto: ir directo al menú
+    // Recuperar datos guardados
+    const saved = localStorage.getItem(`remoto_${SLUG}`);
+    if (saved) {
+        try {
+            const d = JSON.parse(saved);
+            if (!nombreCliente && d.nombre) nombreCliente = d.nombre;
+            if (!telefonoCliente && d.telefono) telefonoCliente = d.telefono;
+            if (!direccionCliente && d.direccion) direccionCliente = d.direccion;
+            if (!tipoEntrega && d.tipoEntrega) tipoEntrega = d.tipoEntrega;
+            if (!clienteId && d.clienteId) clienteId = d.clienteId;
+        } catch(e) {}
+    }
+    // Datos del servidor tienen prioridad (sesión activa)
+    if (CLIENTE_DATA) {
+        nombreCliente = CLIENTE_DATA.nombre;
+        telefonoCliente = CLIENTE_DATA.telefono;
+        direccionCliente = CLIENTE_DATA.direccion;
+        clienteId = CLIENTE_DATA.cliente_id;
+    }
+
+    document.getElementById('paso-nombre').classList.add('hidden');
+    document.getElementById('seccion-menu').classList.remove('hidden');
+    const saludo = document.getElementById('saludo-menu');
+    if (nombreCliente && saludo) {
+        saludo.innerHTML = `Hola <span class="font-bold text-amber-700">${nombreCliente}</span>, ¿qué vas a pedir?`;
+    } else if (saludo) {
+        saludo.textContent = '¿Qué te gustaría pedir?';
+    }
+    actualizarInfoEntrega();
+    if (TIPO_REST === 'carta') {
+        cargarCartaCliente();
+    } else {
+        cargarMenuHoy();
+    }
 } else {
-    document.getElementById('input-nombre').focus();
+    // Modo mesa: flujo original con nombre
+    const nombreGuardado = localStorage.getItem(STORAGE_KEY);
+    if (nombreGuardado) {
+        nombreCliente = nombreGuardado;
+        document.getElementById('input-nombre').value = nombreGuardado;
+        document.getElementById('saludo-texto').innerHTML = `¡Hola de nuevo, <strong>${nombreGuardado}</strong>!`;
+        mostrarMenu();
+    } else {
+        document.getElementById('input-nombre').focus();
+    }
 }
 
 // Polling mis pedidos cada 10s
 setInterval(cargarMisPedidos, 10000);
 </script>
+
+{% if mesa_num == 0 %}
+<!-- Modal registro para pedido remoto -->
+<div id="modal-registro" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden" onclick="if(event.target===this)cerrarModal()">
+    <div class="bg-white rounded-t-3xl w-full max-w-lg p-6 pb-8">
+        <h2 class="font-extrabold text-xl text-gray-800 mb-4">Datos para tu pedido</h2>
+        <div class="space-y-3">
+            <input id="reg-nombre" type="text" placeholder="Tu nombre"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none font-semibold">
+            <input id="reg-telefono" type="tel" placeholder="Tu celular (10 digitos)"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none">
+            <div class="flex gap-3">
+                <button onclick="selTipoEntrega('recoger')" id="btn-recoger"
+                    class="flex-1 border-2 border-gray-200 rounded-xl py-3 font-bold text-center transition hover:border-amber-400 text-gray-600">
+                    Recoger en local
+                </button>
+                <button onclick="selTipoEntrega('domicilio')" id="btn-domicilio"
+                    class="flex-1 border-2 border-gray-200 rounded-xl py-3 font-bold text-center transition hover:border-amber-400 text-gray-600">
+                    Domicilio
+                </button>
+            </div>
+            <input id="reg-direccion" type="text" placeholder="Tu direccion de entrega"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none hidden">
+        </div>
+        <button onclick="confirmarRegistro()"
+            class="mt-4 bg-green-600 hover:bg-green-700 text-white w-full py-3 rounded-xl font-bold text-lg">
+            Confirmar y Pedir
+        </button>
+        <button onclick="cerrarModal()" class="mt-2 text-gray-400 text-sm w-full text-center py-2">Cancelar</button>
+    </div>
+</div>
+{% endif %}
+
 </body>
 </html>

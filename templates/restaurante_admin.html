@@ -85,6 +85,14 @@
                 </div>
             </div>
 
+            <!-- Buscar productos existentes -->
+            <div class="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-200">
+                <h3 class="font-bold text-gray-700 mb-2 text-sm">Buscar productos de otros restaurantes</h3>
+                <input id="buscar-producto" type="text" placeholder="Escribí al menos 2 letras... ej: arroz, sopa, lomo"
+                       class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off">
+                <div id="resultados-busqueda" class="mt-2 hidden"></div>
+            </div>
+
             <!-- Lista por tipo -->
             <div id="catalogo-lista" class="space-y-6">
                 <p class="text-gray-400 text-center py-8">Cargando...</p>
@@ -722,6 +730,72 @@ async function cobrarMesaAdmin(num, total) {
             cargarCuentasAdmin();
         }
     } catch(e) { toast('Error', false); }
+}
+
+// ===== BUSCAR PRODUCTOS EXISTENTES =====
+let buscarTimer = null;
+
+document.getElementById('buscar-producto')?.addEventListener('input', function() {
+    clearTimeout(buscarTimer);
+    const q = this.value.trim();
+    const cont = document.getElementById('resultados-busqueda');
+    if (q.length < 2) {
+        cont.classList.add('hidden');
+        cont.innerHTML = '';
+        return;
+    }
+    buscarTimer = setTimeout(() => buscarProductos(q), 300);
+});
+
+async function buscarProductos(q) {
+    const cont = document.getElementById('resultados-busqueda');
+    try {
+        const r = await fetch(`${BASE}/buscar-productos?q=${encodeURIComponent(q)}`);
+        const data = await r.json();
+        if (!data.ok || data.productos.length === 0) {
+            cont.innerHTML = '<p class="text-xs text-gray-400 py-2">No se encontraron productos</p>';
+            cont.classList.remove('hidden');
+            return;
+        }
+        cont.innerHTML = data.productos.map(p =>
+            `<div class="flex items-center justify-between bg-white rounded-lg p-2 border mb-1 hover:bg-blue-50">
+                <div class="flex-1 min-w-0">
+                    <span class="font-semibold text-sm text-gray-800">${p.nombre}</span>
+                    <span class="text-xs text-gray-400 ml-1">${p.tipo}</span>
+                    ${p.precio ? `<span class="text-xs text-green-600 ml-1">$${Number(p.precio).toLocaleString()}</span>` : ''}
+                    ${p.tiene_imagen ? '<span class="text-xs ml-1">📷</span>' : ''}
+                    <span class="text-xs text-gray-300 ml-1">de ${p.restaurante}</span>
+                </div>
+                <button onclick="adoptarProducto('${p.nombre.replace(/'/g, "\\'")}', '${p.tipo.replace(/'/g, "\\'")}')"
+                        class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-1 rounded-lg font-semibold ml-2 flex-shrink-0">
+                    Agregar
+                </button>
+            </div>`
+        ).join('');
+        cont.classList.remove('hidden');
+    } catch(e) {
+        cont.innerHTML = '<p class="text-xs text-red-400 py-2">Error de conexión</p>';
+        cont.classList.remove('hidden');
+    }
+}
+
+async function adoptarProducto(nombre, tipo) {
+    try {
+        const r = await fetch(`${BASE}/adoptar-producto`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre, tipo})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast(`${nombre} agregado a tu catálogo`);
+            cargarCatalogo();
+            document.getElementById('buscar-producto').value = '';
+            document.getElementById('resultados-busqueda').classList.add('hidden');
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
 }
 
 // ===== PINs DE ACCESO =====

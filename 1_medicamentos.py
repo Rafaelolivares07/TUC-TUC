@@ -24879,6 +24879,96 @@ def api_restaurante_opciones(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/restaurante/<slug>/buscar-productos')
+def api_restaurante_buscar_productos(slug):
+    """Busca productos existentes en otros restaurantes para reutilizar"""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'ok': True, 'productos': []})
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        productos = conn.execute("""
+            SELECT DISTINCT ON (LOWER(om.nombre), LOWER(om.tipo))
+                om.nombre, om.tipo, om.precio, om.recargo, om.imagen,
+                r.nombre as restaurante_nombre
+            FROM opciones_menu om
+            JOIN restaurantes r ON r.id = om.restaurante_id
+            WHERE om.restaurante_id != %s
+              AND om.activo = TRUE
+              AND LOWER(om.nombre) LIKE %s
+            ORDER BY LOWER(om.nombre), LOWER(om.tipo), om.id DESC
+            LIMIT 15
+        """, (rest['id'], f'%{q.lower()}%')).fetchall()
+        conn.close()
+
+        return jsonify({'ok': True, 'productos': [
+            {
+                'nombre': p['nombre'],
+                'tipo': p['tipo'],
+                'precio': float(p['precio']) if p['precio'] else 0,
+                'recargo': float(p['recargo']) if p['recargo'] else 0,
+                'tiene_imagen': bool(p['imagen']),
+                'restaurante': p['restaurante_nombre']
+            } for p in productos
+        ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/adoptar-producto', methods=['POST'])
+def api_restaurante_adoptar_producto(slug):
+    """Copia un producto de otro restaurante al catálogo propio"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    tipo = data.get('tipo', '').strip()
+    if not nombre or not tipo:
+        return jsonify({'ok': False, 'error': 'Nombre y tipo requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id, tipo_restaurante FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        # Verificar que no exista ya en este restaurante
+        existente = conn.execute(
+            "SELECT id FROM opciones_menu WHERE restaurante_id = %s AND LOWER(nombre) = %s AND LOWER(tipo) = %s AND activo = TRUE",
+            (rest['id'], nombre.lower(), tipo.lower())
+        ).fetchone()
+        if existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'{nombre} ya existe en tu catálogo'}), 400
+
+        # Buscar el producto original para copiar datos
+        original = conn.execute("""
+            SELECT nombre, tipo, precio, recargo, imagen
+            FROM opciones_menu
+            WHERE LOWER(nombre) = %s AND LOWER(tipo) = %s AND activo = TRUE
+            ORDER BY id DESC LIMIT 1
+        """, (nombre.lower(), tipo.lower())).fetchone()
+
+        if not original:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        conn.execute(
+            "INSERT INTO opciones_menu (restaurante_id, tipo, nombre, precio, recargo, imagen) VALUES (%s, %s, %s, %s, %s, %s)",
+            (rest['id'], original['tipo'], original['nombre'], original['precio'], original['recargo'], original['imagen'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/restaurante/<slug>/opcion', methods=['POST'])
 def api_restaurante_opcion_crear(slug):
     """Crear o editar una opción del catálogo"""

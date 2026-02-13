@@ -326,7 +326,11 @@ async function enviarPedido() {
             });
             cargarMisPedidos();
         } else {
-            toast(data.error, false);
+            if (data.error === 'suscripcion_agotada') {
+                toast('El restaurante no está disponible en este momento', false);
+            } else {
+                toast(data.error, false);
+            }
         }
     } catch(e) { toast('Error de conexión', false); }
 }
@@ -473,7 +477,11 @@ enviarPedido = async function() {
                 cartaClienteTotal();
                 cargarMisPedidos();
             } else {
-                toast(data.error, false);
+                if (data.error === 'suscripcion_agotada') {
+                    toast('El restaurante no está disponible en este momento', false);
+                } else {
+                    toast(data.error, false);
+                }
             }
         } catch(e) { toast('Error de conexión', false); }
     } else {

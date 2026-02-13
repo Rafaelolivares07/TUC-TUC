@@ -243,8 +243,26 @@
                     <span class="font-bold text-gray-800">{{ r.nombre }}</span>
                     <span class="text-xs text-gray-400 ml-2">/r/{{ r.slug }}</span>
                 </a>
+                <!-- Suscripción -->
+                <div class="mt-2 pt-2 border-t border-amber-200">
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="text-xs font-semibold text-gray-500">Días:</span>
+                        <span class="text-xs {% if r.dias_restantes > 5 %}text-green-600{% elif r.dias_restantes > 0 %}text-amber-600{% else %}text-red-600{% endif %} font-bold">
+                            {{ r.dias_usados }} usados / {{ r.dias_pagados or 0 }} pagados
+                            ({{ r.dias_restantes }} restantes)
+                        </span>
+                        <div class="flex items-center gap-1 ml-auto">
+                            <input type="number" id="dias-{{ r.slug }}" value="{{ r.dias_pagados or 0 }}" min="0"
+                                   class="border rounded px-2 py-1 text-xs w-16 text-center">
+                            <button onclick="actualizarDias('{{ r.slug }}')"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-2 py-1 rounded font-semibold">
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
                 {% if r.admin_nombre %}
-                <div class="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between">
+                <div class="pt-2 border-t border-amber-200 flex items-center justify-between">
                     <div class="text-xs text-gray-500">
                         <span class="font-semibold">Admin:</span> {{ r.admin_nombre }}
                         <span class="text-gray-400 ml-1">{{ r.admin_telefono }}</span>
@@ -296,6 +314,26 @@ function toast(msg, ok = true) {
     t.textContent = msg;
     t.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
     setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ===== DÍAS PAGADOS (lista admin) =====
+async function actualizarDias(slug) {
+    const input = document.getElementById(`dias-${slug}`);
+    const dias = parseInt(input.value);
+    if (isNaN(dias) || dias < 0) return toast('Número inválido', false);
+    try {
+        const r = await fetch(`/api/restaurante/${slug}/dias-pagados`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({dias_pagados: dias})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast('Días actualizados');
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
 }
 
 // ===== TABS =====

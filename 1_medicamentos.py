@@ -24578,6 +24578,7 @@ def crear_tablas_restaurante(conn):
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS token_acceso VARCHAR(100) UNIQUE")
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_mesero VARCHAR(10)")
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_cocina VARCHAR(10)")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0")
     except:
         pass
 
@@ -24600,9 +24601,20 @@ def admin_restaurante_lista():
     try:
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
-        restaurantes = conn.execute(
-            "SELECT id, nombre, slug, admin_nombre, admin_telefono, token_acceso FROM restaurantes WHERE activo = TRUE ORDER BY nombre"
+        restaurantes_raw = conn.execute(
+            "SELECT id, nombre, slug, admin_nombre, admin_telefono, token_acceso, dias_pagados FROM restaurantes WHERE activo = TRUE ORDER BY nombre"
         ).fetchall()
+        # Calcular días usados por restaurante
+        restaurantes = []
+        for r in restaurantes_raw:
+            dias_usados = conn.execute("""
+                SELECT COUNT(DISTINCT DATE(created_at)) as dias
+                FROM pedidos_restaurante WHERE restaurante_id = %s
+            """, (r['id'],)).fetchone()['dias']
+            rest_dict = dict(r)
+            rest_dict['dias_usados'] = dias_usados
+            rest_dict['dias_restantes'] = max(0, (r['dias_pagados'] or 0) - dias_usados)
+            restaurantes.append(rest_dict)
         conn.close()
         return render_template('restaurante_admin.html', restaurantes=restaurantes, restaurante=None)
     except Exception as e:
@@ -25355,6 +25367,63 @@ def api_restaurante_verificar_pin(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ===== RESTAURANTE: SUSCRIPCIÓN / DÍAS =====
+
+@app.route('/api/restaurante/<slug>/suscripcion')
+def api_restaurante_suscripcion(slug):
+    """Consultar estado de suscripción"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, dias_pagados FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        dias_pagados = rest['dias_pagados'] or 0
+        dias_usados = conn.execute("""
+            SELECT COUNT(DISTINCT DATE(created_at)) as dias
+            FROM pedidos_restaurante WHERE restaurante_id = %s
+        """, (rest['id'],)).fetchone()['dias']
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'dias_pagados': dias_pagados,
+            'dias_usados': dias_usados,
+            'dias_restantes': max(0, dias_pagados - dias_usados)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/dias-pagados', methods=['POST'])
+def api_restaurante_dias_pagados(slug):
+    """Actualizar días pagados (solo admin del sistema)"""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo administradores'}), 403
+
+    data = request.get_json()
+    dias = data.get('dias_pagados')
+    if dias is None or not isinstance(dias, int) or dias < 0:
+        return jsonify({'ok': False, 'error': 'Días inválidos'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        conn.execute(
+            "UPDATE restaurantes SET dias_pagados = %s WHERE slug = %s AND activo = TRUE",
+            (dias, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ===== RESTAURANTE: MESERO Y COCINA =====
 
 @app.route('/r/<slug>/mesero')
@@ -25430,10 +25499,29 @@ def api_restaurante_pedido_crear(slug):
     try:
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
-        rest = conn.execute("SELECT id, tipo_restaurante FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tipo_restaurante, dias_pagados FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        # Verificar suscripción: ¿tiene días disponibles?
+        dias_pagados = rest['dias_pagados'] or 0
+        if dias_pagados > 0:
+            dias_usados = conn.execute("""
+                SELECT COUNT(DISTINCT DATE(created_at)) as dias
+                FROM pedidos_restaurante WHERE restaurante_id = %s
+            """, (rest['id'],)).fetchone()['dias']
+
+            # Si hoy ya tiene pedidos, no consume un día nuevo
+            tiene_pedidos_hoy = conn.execute("""
+                SELECT 1 FROM pedidos_restaurante
+                WHERE restaurante_id = %s AND DATE(created_at) = CURRENT_DATE
+                LIMIT 1
+            """, (rest['id'],)).fetchone()
+
+            if not tiene_pedidos_hoy and dias_usados >= dias_pagados:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'suscripcion_agotada', 'dias_pagados': dias_pagados, 'dias_usados': dias_usados}), 402
 
         precio_total = 0
 

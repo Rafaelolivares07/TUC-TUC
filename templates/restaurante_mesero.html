@@ -427,7 +427,11 @@ async function enviarPedido() {
             mostrarPaso('mesa');
             cargarPedidos();
         } else {
-            toast(data.error, false);
+            if (data.error === 'suscripcion_agotada') {
+                toast('Suscripción agotada. Contacta al administrador.', false);
+            } else {
+                toast(data.error, false);
+            }
         }
     } catch(e) { toast('Error de conexión', false); }
 }
@@ -606,7 +610,11 @@ async function enviarPedidoCarta() {
             cargarPedidos();
             cargarCuentas();
         } else {
-            toast(data.error, false);
+            if (data.error === 'suscripcion_agotada') {
+                toast('Suscripción agotada. Contacta al administrador.', false);
+            } else {
+                toast(data.error, false);
+            }
         }
     } catch(e) { toast('Error de conexión', false); }
 }

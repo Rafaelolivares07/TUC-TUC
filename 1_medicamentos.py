@@ -1440,7 +1440,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -25931,6 +25931,62 @@ def api_restaurante_venta_dia(slug):
             'cantidad': venta['cantidad'],
             'total': float(venta['total'])
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== LANDING PAGE - PROSPECTOS =====
+
+@app.route('/empieza')
+def landing_empieza():
+    """Landing page para captar prospectos"""
+    return render_template('empieza.html')
+
+
+@app.route('/api/prospecto', methods=['POST'])
+def api_crear_prospecto():
+    """Guardar prospecto desde landing page"""
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    tipologia = data.get('tipologia', '').strip()
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 digitos'}), 400
+    if not tipologia:
+        return jsonify({'ok': False, 'error': 'Selecciona un tipo de negocio'}), 400
+
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS prospectos (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(255) NOT NULL,
+                telefono VARCHAR(20) NOT NULL,
+                tipologia VARCHAR(50) NOT NULL,
+                estado VARCHAR(20) DEFAULT 'nuevo',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Verificar si ya existe por teléfono
+        existente = conn.execute(
+            "SELECT id FROM prospectos WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if existente:
+            conn.execute(
+                "UPDATE prospectos SET nombre = %s, tipologia = %s, estado = 'nuevo' WHERE id = %s",
+                (nombre, tipologia, existente['id'])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO prospectos (nombre, telefono, tipologia) VALUES (%s, %s, %s)",
+                (nombre, telefono, tipologia)
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

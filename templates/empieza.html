@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TUC TUC - Lleva tu negocio al siguiente nivel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+        .tipo-card.selected { border-color: #f59e0b; background: #fffbeb; transform: scale(1.02); }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-amber-50 to-white">
+
+<div id="toast" class="toast"></div>
+
+<!-- Hero -->
+<div class="max-w-lg mx-auto px-4 pt-12 pb-8 text-center">
+    <h1 class="text-4xl font-black text-gray-900 leading-tight mb-3">
+        Tu negocio,<br><span class="text-amber-500">en el bolsillo de tus clientes</span>
+    </h1>
+    <p class="text-gray-500 text-lg mb-8">
+        Pedidos online, control de mesas, cocina en tiempo real y mucho mas. Sin contratos, pagas solo los dias que uses.
+    </p>
+</div>
+
+<!-- Formulario -->
+<div id="form-section" class="max-w-lg mx-auto px-4 pb-12">
+
+    <!-- Paso 1: Tipología -->
+    <div class="mb-6">
+        <p class="text-gray-700 font-bold mb-3">¿Que tipo de negocio tienes?</p>
+        <div class="grid grid-cols-2 gap-3" id="grid-tipos">
+            <button onclick="selTipo('restaurante_carta')"
+                class="tipo-card border-2 border-gray-200 rounded-xl p-4 text-left transition hover:border-amber-300">
+                <span class="text-2xl block mb-1">&#127869;</span>
+                <span class="font-bold text-gray-800 block">Restaurante Carta</span>
+                <span class="text-gray-400 text-xs">Platos individuales, categorias</span>
+            </button>
+            <button onclick="selTipo('restaurante_almuerzos')"
+                class="tipo-card border-2 border-gray-200 rounded-xl p-4 text-left transition hover:border-amber-300">
+                <span class="text-2xl block mb-1">&#127858;</span>
+                <span class="font-bold text-gray-800 block">Restaurante Almuerzos</span>
+                <span class="text-gray-400 text-xs">Menu del dia, sopa + bandeja</span>
+            </button>
+            <button onclick="selTipo('ecommerce')"
+                class="tipo-card border-2 border-gray-200 rounded-xl p-4 text-left transition hover:border-amber-300">
+                <span class="text-2xl block mb-1">&#128722;</span>
+                <span class="font-bold text-gray-800 block">E-Commerce</span>
+                <span class="text-gray-400 text-xs">Tienda online, catalogo, envios</span>
+            </button>
+            <button onclick="selTipo('transporte')"
+                class="tipo-card border-2 border-gray-200 rounded-xl p-4 text-left transition hover:border-amber-300">
+                <span class="text-2xl block mb-1">&#128663;</span>
+                <span class="font-bold text-gray-800 block">Transporte</span>
+                <span class="text-gray-400 text-xs">Rutas, pasajeros, conductores</span>
+            </button>
+            <button onclick="selTipo('otro')"
+                class="tipo-card border-2 border-gray-200 rounded-xl p-4 text-left transition hover:border-amber-300 col-span-2">
+                <span class="text-2xl inline mb-1">&#128161;</span>
+                <span class="font-bold text-gray-800">Otro</span>
+                <span class="text-gray-400 text-xs ml-1">Cuentanos que necesitas</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Paso 2: Datos -->
+    <div class="space-y-3 mb-6">
+        <input id="inp-nombre" type="text" placeholder="Tu nombre"
+            class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-amber-500 focus:outline-none font-semibold">
+        <input id="inp-telefono" type="tel" placeholder="Tu celular (10 digitos)"
+            class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-amber-500 focus:outline-none">
+    </div>
+
+    <!-- Botón enviar -->
+    <button onclick="enviarProspecto()" id="btn-enviar"
+        class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-xl font-bold text-lg transition shadow-lg shadow-amber-200">
+        Quiero empezar
+    </button>
+
+    <p class="text-center text-gray-400 text-xs mt-4">Te contactaremos por WhatsApp para activar tu cuenta</p>
+</div>
+
+<!-- Confirmación (oculta) -->
+<div id="confirmacion" class="hidden max-w-lg mx-auto px-4 py-20 text-center">
+    <div class="text-6xl mb-4">&#9989;</div>
+    <h2 class="text-2xl font-extrabold text-gray-800 mb-3">Recibimos tus datos</h2>
+    <p class="text-gray-500 text-lg">Te contactaremos pronto por WhatsApp para activar tu cuenta y empezar.</p>
+    <p class="text-amber-500 font-bold mt-6">Equipo TUC TUC</p>
+</div>
+
+<script>
+let tipologia = '';
+
+function toast(msg, ok = true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function selTipo(tipo) {
+    tipologia = tipo;
+    document.querySelectorAll('.tipo-card').forEach(b => {
+        b.classList.remove('selected', 'border-amber-500');
+        b.classList.add('border-gray-200');
+    });
+    event.currentTarget.classList.add('selected', 'border-amber-500');
+    event.currentTarget.classList.remove('border-gray-200');
+}
+
+async function enviarProspecto() {
+    const nombre = document.getElementById('inp-nombre').value.trim();
+    const telefono = document.getElementById('inp-telefono').value.trim();
+
+    if (!tipologia) return toast('Selecciona un tipo de negocio', false);
+    if (!nombre) return toast('Escribe tu nombre', false);
+    if (telefono.replace(/\D/g,'').length < 10) return toast('Celular debe tener al menos 10 digitos', false);
+
+    const btn = document.getElementById('btn-enviar');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+        const r = await fetch('/api/prospecto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre, telefono, tipologia })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('form-section').classList.add('hidden');
+            document.getElementById('confirmacion').classList.remove('hidden');
+        } else {
+            toast(data.error, false);
+            btn.disabled = false;
+            btn.textContent = 'Quiero empezar';
+        }
+    } catch(e) {
+        toast('Error de conexion', false);
+        btn.disabled = false;
+        btn.textContent = 'Quiero empezar';
+    }
+}
+</script>
+
+</body>
+</html>

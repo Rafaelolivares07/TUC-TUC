@@ -44,6 +44,7 @@
     <div class="text-center mb-6">
         <h1 class="text-2xl font-extrabold">{{ restaurante.nombre }}</h1>
         <p class="text-gray-400 text-sm">Mesero</p>
+        <button onclick="compartirEnlace()" class="mt-2 text-xs text-amber-400 hover:text-amber-300 underline">Compartir menu online</button>
     </div>
 
     <!-- ====== LISTOS PARA LLEVAR ====== -->
@@ -673,6 +674,24 @@ function iniciarApp() {
     cargarCuentas();
     setInterval(() => { cargarPedidos(); cargarCuentas(); }, 10000);
 }
+
+function compartirEnlace() {
+    const url = `${location.origin}/r/${SLUG}`;
+    const texto = `Pide desde tu celular en {{ restaurante.nombre }}: ${url}`;
+    if (navigator.share) {
+        navigator.share({title: '{{ restaurante.nombre }}', text: texto, url: url});
+    } else {
+        navigator.clipboard.writeText(url).then(() => toast('Enlace copiado'));
+    }
+}
 </script>
+
+<!-- Powered by -->
+<div class="text-center py-4">
+    <a href="/empieza" class="text-gray-600 text-xs hover:text-amber-400 transition">
+        Tecnologia por <strong>TUC TUC</strong> &mdash; ¿Quieres esto para tu negocio?
+    </a>
+</div>
+
 </body>
 </html>

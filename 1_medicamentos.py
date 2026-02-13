@@ -25935,6 +25935,71 @@ def api_restaurante_venta_dia(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/restaurante/<slug>/ventas')
+def api_restaurante_ventas(slug):
+    """Reporte de ventas por rango de fechas"""
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Fechas requeridas'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+
+        pedidos = conn.execute("""
+            SELECT p.id, p.mesa_num, p.tipo, p.precio, p.estado, p.notas, p.nombre_cliente,
+                   p.cantidad, p.tipo_entrega, p.telefono_cliente, p.direccion_cliente,
+                   p.created_at,
+                   s.nombre as sopa_nombre,
+                   pr.nombre as proteina_nombre,
+                   pi.nombre as principio_nombre,
+                   pl.nombre as plato_nombre
+            FROM pedidos_restaurante p
+            LEFT JOIN opciones_menu s ON s.id = p.sopa_id
+            LEFT JOIN opciones_menu pr ON pr.id = p.proteina_id
+            LEFT JOIN opciones_menu pi ON pi.id = p.principio_id
+            LEFT JOIN opciones_menu pl ON pl.id = p.plato_id
+            WHERE p.restaurante_id = %s AND p.created_at::date >= %s AND p.created_at::date <= %s
+            ORDER BY p.created_at DESC
+        """, (rest['id'], desde, hasta)).fetchall()
+        conn.close()
+
+        resultado = []
+        for p in pedidos:
+            items = []
+            if p['plato_nombre']:
+                items.append(p['plato_nombre'])
+            else:
+                for campo in ['sopa_nombre', 'proteina_nombre', 'principio_nombre']:
+                    if p[campo]:
+                        items.append(p[campo])
+
+            resultado.append({
+                'id': p['id'],
+                'mesa_num': p['mesa_num'],
+                'tipo': p['tipo'],
+                'precio': float(p['precio']),
+                'estado': p['estado'],
+                'nombre_cliente': p['nombre_cliente'],
+                'cantidad': p['cantidad'] or 1,
+                'tipo_entrega': p['tipo_entrega'] or 'mesa',
+                'items': items,
+                'plato': p['plato_nombre'],
+                'notas': p['notas'],
+                'fecha': p['created_at'].strftime('%Y-%m-%d') if p['created_at'] else '',
+                'hora': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
+            })
+
+        return jsonify({'ok': True, 'pedidos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ===== LANDING PAGE - PROSPECTOS =====
 
 @app.route('/empieza')

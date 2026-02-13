@@ -233,6 +233,79 @@
             <div id="admin-cuentas-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
                 <p class="text-gray-400 col-span-full text-center py-4">Cargando...</p>
             </div>
+
+            <!-- Reporte de ventas -->
+            <div class="border-t pt-6 mt-6">
+                <h3 class="font-bold text-gray-700 mb-3">Reporte de ventas</h3>
+                <div class="flex flex-wrap items-end gap-3 mb-4">
+                    <div>
+                        <label class="text-xs text-gray-500 block mb-1">Desde</label>
+                        <input id="rpt-desde" type="date" class="border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 block mb-1">Hasta</label>
+                        <input id="rpt-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <button onclick="cargarReporte()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Consultar</button>
+                </div>
+
+                <!-- Resumen -->
+                <div id="rpt-resumen" class="hidden bg-indigo-50 rounded-xl p-4 mb-4 flex justify-between items-center">
+                    <div>
+                        <span id="rpt-total-label" class="font-bold text-indigo-800"></span>
+                        <p id="rpt-total-pedidos" class="text-sm text-gray-500"></p>
+                    </div>
+                    <span id="rpt-total-monto" class="text-3xl font-extrabold text-indigo-700"></span>
+                </div>
+
+                <!-- Tabs del reporte -->
+                <div id="rpt-tabs" class="hidden flex gap-2 mb-4">
+                    <button onclick="mostrarReporte('productos')" id="rpt-tab-productos"
+                        class="px-4 py-2 rounded-lg text-sm font-bold bg-indigo-600 text-white">Por productos</button>
+                    <button onclick="mostrarReporte('detalle')" id="rpt-tab-detalle"
+                        class="px-4 py-2 rounded-lg text-sm font-bold bg-gray-200 text-gray-600">Por orden</button>
+                </div>
+
+                <!-- Reporte por productos -->
+                <div id="rpt-productos" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="text-left px-3 py-2 rounded-tl-lg">Producto</th>
+                                    <th class="text-left px-3 py-2">Tipo</th>
+                                    <th class="text-right px-3 py-2">Cantidad</th>
+                                    <th class="text-right px-3 py-2 rounded-tr-lg">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rpt-productos-body"></tbody>
+                            <tfoot id="rpt-productos-foot" class="border-t-2 border-gray-300 font-bold"></tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Reporte por orden -->
+                <div id="rpt-detalle" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="text-left px-3 py-2 rounded-tl-lg">Fecha</th>
+                                    <th class="text-left px-3 py-2">Hora</th>
+                                    <th class="text-left px-3 py-2">Producto</th>
+                                    <th class="text-left px-3 py-2">Cliente</th>
+                                    <th class="text-left px-3 py-2">Mesa/Entrega</th>
+                                    <th class="text-left px-3 py-2">Estado</th>
+                                    <th class="text-right px-3 py-2 rounded-tr-lg">Precio</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rpt-detalle-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <p id="rpt-vacio" class="hidden text-gray-400 text-center py-8">No hay ventas en este periodo</p>
+            </div>
         </div>
     </div>
 </div>
@@ -1139,6 +1212,120 @@ async function cargarSuscripcion() {
     } catch(e) {}
 }
 
+// ===== REPORTE DE VENTAS =====
+let datosReporte = [];
+
+async function cargarReporte() {
+    const desde = document.getElementById('rpt-desde').value;
+    const hasta = document.getElementById('rpt-hasta').value;
+    if (!desde || !hasta) return toast('Selecciona ambas fechas', false);
+    if (desde > hasta) return toast('La fecha "desde" debe ser menor o igual a "hasta"', false);
+
+    try {
+        const r = await fetch(`${BASE}/ventas?desde=${desde}&hasta=${hasta}`);
+        const data = await r.json();
+        if (!data.ok) return toast(data.error, false);
+        datosReporte = data.pedidos;
+
+        if (datosReporte.length === 0) {
+            document.getElementById('rpt-resumen').classList.add('hidden');
+            document.getElementById('rpt-tabs').classList.add('hidden');
+            document.getElementById('rpt-productos').classList.add('hidden');
+            document.getElementById('rpt-detalle').classList.add('hidden');
+            document.getElementById('rpt-vacio').classList.remove('hidden');
+            return;
+        }
+
+        document.getElementById('rpt-vacio').classList.add('hidden');
+
+        // Resumen
+        const total = datosReporte.reduce((s, p) => s + p.precio, 0);
+        document.getElementById('rpt-total-label').textContent = desde === hasta ? `Ventas del ${desde}` : `Ventas del ${desde} al ${hasta}`;
+        document.getElementById('rpt-total-pedidos').textContent = `${datosReporte.length} pedido${datosReporte.length !== 1 ? 's' : ''}`;
+        document.getElementById('rpt-total-monto').textContent = `$${Number(total).toLocaleString()}`;
+        document.getElementById('rpt-resumen').classList.remove('hidden');
+        document.getElementById('rpt-tabs').classList.remove('hidden');
+
+        renderReporteProductos();
+        renderReporteDetalle();
+        mostrarReporte('productos');
+    } catch(e) { toast('Error cargando reporte', false); }
+}
+
+function mostrarReporte(tipo) {
+    document.getElementById('rpt-productos').classList.toggle('hidden', tipo !== 'productos');
+    document.getElementById('rpt-detalle').classList.toggle('hidden', tipo !== 'detalle');
+    document.getElementById('rpt-tab-productos').className = `px-4 py-2 rounded-lg text-sm font-bold ${tipo === 'productos' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`;
+    document.getElementById('rpt-tab-detalle').className = `px-4 py-2 rounded-lg text-sm font-bold ${tipo === 'detalle' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`;
+}
+
+function renderReporteProductos() {
+    // Agrupar por producto
+    const grupos = {};
+    datosReporte.forEach(p => {
+        if (p.tipo === 'carta' && p.plato) {
+            const key = p.plato;
+            if (!grupos[key]) grupos[key] = {nombre: p.plato, tipo: 'carta', cantidad: 0, total: 0};
+            grupos[key].cantidad += p.cantidad;
+            grupos[key].total += p.precio;
+        } else {
+            // Menu día: cada item como fila
+            p.items.forEach(item => {
+                const key = item;
+                if (!grupos[key]) grupos[key] = {nombre: item, tipo: p.tipo, cantidad: 0, total: 0};
+                grupos[key].cantidad += 1;
+            });
+            // El total va al tipo del pedido
+            const tipoKey = `__tipo_${p.tipo}`;
+            if (!grupos[tipoKey]) grupos[tipoKey] = {nombre: p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1), tipo: 'menu', cantidad: 0, total: 0};
+            grupos[tipoKey].cantidad += 1;
+            grupos[tipoKey].total += p.precio;
+        }
+    });
+
+    // Ordenar por total descendente
+    const filas = Object.values(grupos).sort((a, b) => b.total - a.total || b.cantidad - a.cantidad);
+    const totalGeneral = datosReporte.reduce((s, p) => s + p.precio, 0);
+    const cantGeneral = datosReporte.length;
+
+    document.getElementById('rpt-productos-body').innerHTML = filas.map(f => `
+        <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <td class="px-3 py-2 font-medium">${f.nombre}</td>
+            <td class="px-3 py-2 text-gray-500">${f.tipo}</td>
+            <td class="px-3 py-2 text-right">${f.cantidad}</td>
+            <td class="px-3 py-2 text-right font-semibold">${f.total > 0 ? '$' + Number(f.total).toLocaleString() : '-'}</td>
+        </tr>
+    `).join('');
+
+    document.getElementById('rpt-productos-foot').innerHTML = `
+        <tr>
+            <td class="px-3 py-2" colspan="2">Total</td>
+            <td class="px-3 py-2 text-right">${cantGeneral}</td>
+            <td class="px-3 py-2 text-right">$${Number(totalGeneral).toLocaleString()}</td>
+        </tr>
+    `;
+}
+
+function renderReporteDetalle() {
+    const body = document.getElementById('rpt-detalle-body');
+    body.innerHTML = datosReporte.map(p => {
+        const items = p.tipo === 'carta' ? `${p.cantidad > 1 ? p.cantidad + 'x ' : ''}${p.plato || ''}` : p.items.join(' + ');
+        const ubicacion = p.mesa_num > 0 ? `Mesa ${p.mesa_num}` : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger');
+        const estadoColor = p.estado === 'cobrado' ? 'text-green-600' : p.estado === 'listo' ? 'text-blue-600' : p.estado === 'pendiente' ? 'text-yellow-600' : 'text-gray-400';
+        return `
+            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="px-3 py-2 text-gray-500">${p.fecha}</td>
+                <td class="px-3 py-2 text-gray-500">${p.hora}</td>
+                <td class="px-3 py-2 font-medium">${items}</td>
+                <td class="px-3 py-2">${p.nombre_cliente || '-'}</td>
+                <td class="px-3 py-2">${ubicacion}</td>
+                <td class="px-3 py-2 ${estadoColor} font-semibold text-xs">${p.estado}</td>
+                <td class="px-3 py-2 text-right font-semibold">$${Number(p.precio).toLocaleString()}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
 if (SLUG) {
     initFechaHoy();
     cargarCatalogo();
@@ -1149,6 +1336,11 @@ if (SLUG) {
     // Mostrar URL pública
     const urlPub = document.getElementById('url-publica');
     if (urlPub) urlPub.textContent = `${location.origin}/r/${SLUG}`;
+
+    // Fechas del reporte: default hoy
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('rpt-desde').value = hoy;
+    document.getElementById('rpt-hasta').value = hoy;
 }
 
 function copiarEnlace() {

@@ -396,8 +396,10 @@ async function verHistorial(slug) {
 // ===== TABS =====
 function cambiarTab(tab) {
     ['catalogo', 'menudia', 'mesas', 'cuentas'].forEach(t => {
-        document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
-        document.getElementById(`tab-${t}`).className = `flex-1 py-4 text-center text-sm transition-all ${t === tab ? 'tab-active' : 'tab-inactive'}`;
+        const panel = document.getElementById(`panel-${t}`);
+        const tabEl = document.getElementById(`tab-${t}`);
+        if (panel) panel.classList.toggle('hidden', t !== tab);
+        if (tabEl) tabEl.className = `flex-1 py-4 text-center text-sm transition-all ${t === tab ? 'tab-active' : 'tab-inactive'}`;
     });
     if (tab === 'menudia') cargarMenuDia();
     if (tab === 'mesas') cargarMesas();

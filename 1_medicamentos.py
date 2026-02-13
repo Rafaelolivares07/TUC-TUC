@@ -24645,7 +24645,7 @@ def mi_restaurante(slug):
         es_admin_sistema = session.get('rol') == 'Administrador'
 
         # Verificar permisos: admin del sistema o dueño del restaurante
-        if usuario_id and (es_admin_sistema or usuario_id == restaurante.get('admin_id')):
+        if usuario_id and (es_admin_sistema or usuario_id == restaurante['admin_id']):
             conn.close()
             return render_template('restaurante_admin.html', restaurante=restaurante, restaurantes=None, es_dueno=True)
 
@@ -24679,7 +24679,7 @@ def restaurante_acceso_token(token):
 
         session['usuario_id'] = tercero['id']
         session['nombre'] = tercero['nombre']
-        session['telefono'] = tercero.get('telefono', '')
+        session['telefono'] = tercero['telefono'] if tercero['telefono'] else ''
         session['rol'] = 'Restaurante'
         session.permanent = True
         session.modified = True
@@ -24717,7 +24717,7 @@ def api_restaurante_recuperar():
         ).fetchone()
         conn.close()
 
-        if not tercero or not tercero.get('telegram_chat_id'):
+        if not tercero or not tercero['telegram_chat_id']:
             return jsonify({
                 'ok': False,
                 'necesita_telegram': True,
@@ -24779,7 +24779,7 @@ def api_restaurante_verificar_codigo():
         # Loguear
         session['usuario_id'] = tercero['id']
         session['nombre'] = tercero['nombre']
-        session['telefono'] = tercero.get('telefono', '')
+        session['telefono'] = tercero['telefono'] if tercero['telefono'] else ''
         session['rol'] = 'Restaurante'
         session.permanent = True
         session.modified = True
@@ -25197,9 +25197,9 @@ def api_restaurante_pines(slug):
         if not rest:
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         es_admin = session.get('rol') == 'Administrador'
-        if not es_admin and usuario_id != rest.get('admin_id'):
+        if not es_admin and usuario_id != rest['admin_id']:
             return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
-        return jsonify({'ok': True, 'pin_mesero': rest.get('pin_mesero') or '', 'pin_cocina': rest.get('pin_cocina') or ''})
+        return jsonify({'ok': True, 'pin_mesero': rest['pin_mesero'] or '', 'pin_cocina': rest['pin_cocina'] or ''})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -25220,7 +25220,7 @@ def api_restaurante_guardar_pines(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         es_admin = session.get('rol') == 'Administrador'
-        if not es_admin and usuario_id != rest.get('admin_id'):
+        if not es_admin and usuario_id != rest['admin_id']:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
 
@@ -25259,7 +25259,7 @@ def api_restaurante_verificar_pin(slug):
         if not rest:
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
 
-        pin_correcto = rest.get(f'pin_{rol}')
+        pin_correcto = rest[f'pin_{rol}']
         if not pin_correcto:
             return jsonify({'ok': False, 'error': 'El administrador aún no ha configurado el PIN de acceso'}), 400
         if pin == pin_correcto:

@@ -174,12 +174,12 @@
                     <div class="bg-gray-50 rounded-lg p-3 border">
                         <p class="text-xs font-semibold text-gray-500 mb-2">PIN Mesero</p>
                         <div class="flex gap-2">
-                            <input id="inp-pin-mesero" type="text" inputmode="numeric" maxlength="10" placeholder="Sin PIN"
+                            <input id="inp-pin-mesero" type="text" inputmode="numeric" maxlength="10" placeholder="Definir PIN"
                                    class="border rounded-lg px-3 py-2 text-sm flex-1 text-center font-mono tracking-widest">
                             <button onclick="guardarPines()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700">Guardar</button>
                         </div>
                         <a id="link-wa-mesero" href="#" target="_blank"
-                           class="mt-2 block text-center bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-2 rounded-lg font-semibold">
+                           class="mt-2 block text-center text-white text-xs px-3 py-2 rounded-lg font-semibold bg-gray-300 pointer-events-none">
                             Compartir enlace mesero por WhatsApp
                         </a>
                     </div>
@@ -187,12 +187,12 @@
                     <div class="bg-gray-50 rounded-lg p-3 border">
                         <p class="text-xs font-semibold text-gray-500 mb-2">PIN Cocina</p>
                         <div class="flex gap-2">
-                            <input id="inp-pin-cocina" type="text" inputmode="numeric" maxlength="10" placeholder="Sin PIN"
+                            <input id="inp-pin-cocina" type="text" inputmode="numeric" maxlength="10" placeholder="Definir PIN"
                                    class="border rounded-lg px-3 py-2 text-sm flex-1 text-center font-mono tracking-widest">
                             <button onclick="guardarPines()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-700">Guardar</button>
                         </div>
                         <a id="link-wa-cocina" href="#" target="_blank"
-                           class="mt-2 block text-center bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-2 rounded-lg font-semibold">
+                           class="mt-2 block text-center text-white text-xs px-3 py-2 rounded-lg font-semibold bg-gray-300 pointer-events-none">
                             Compartir enlace cocina por WhatsApp
                         </a>
                     </div>
@@ -243,7 +243,7 @@
                 {% if r.admin_nombre %}
                 <div class="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between">
                     <div class="text-xs text-gray-500">
-                        <span class="font-semibold">Dueño:</span> {{ r.admin_nombre }}
+                        <span class="font-semibold">Admin:</span> {{ r.admin_nombre }}
                         <span class="text-gray-400 ml-1">{{ r.admin_telefono }}</span>
                     </div>
                     {% if r.token_acceso %}
@@ -269,9 +269,9 @@
                     <option value="carta">Carta (platos individuales)</option>
                 </select>
                 <div class="bg-gray-50 rounded-lg p-3 border">
-                    <p class="text-xs font-semibold text-gray-500 mb-2">Dueño del restaurante</p>
-                    <input id="nuevo-admin-nombre" type="text" placeholder="Nombre del dueño" class="border rounded-lg px-3 py-2 text-sm w-full mb-2">
-                    <input id="nuevo-admin-tel" type="tel" placeholder="Celular del dueño" class="border rounded-lg px-3 py-2 text-sm w-full">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Administrador del restaurante</p>
+                    <input id="nuevo-admin-nombre" type="text" placeholder="Nombre del administrador" class="border rounded-lg px-3 py-2 text-sm w-full mb-2">
+                    <input id="nuevo-admin-tel" type="tel" placeholder="Celular del administrador" class="border rounded-lg px-3 py-2 text-sm w-full">
                 </div>
                 <button onclick="crearRestaurante()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
                     Crear restaurante
@@ -313,7 +313,7 @@ async function crearRestaurante() {
     const admin_nombre = document.getElementById('nuevo-admin-nombre').value.trim();
     const admin_telefono = document.getElementById('nuevo-admin-tel').value.trim();
     if (!nombre) return toast('Escribe el nombre del restaurante', false);
-    if (!admin_nombre || !admin_telefono) return toast('Nombre y celular del dueño son requeridos', false);
+    if (!admin_nombre || !admin_telefono) return toast('Nombre y celular del administrador son requeridos', false);
     try {
         const r = await fetch('/api/restaurante/crear', {
             method: 'POST',
@@ -765,11 +765,26 @@ function actualizarEnlacesWA() {
     const urlMesero = `${base}/r/${SLUG}/mesero`;
     const urlCocina = `${base}/r/${SLUG}/cocina`;
 
-    const msgMesero = `Hola! Acá está tu enlace de mesero:\n${urlMesero}` + (pinMesero ? `\n\nPIN de acceso: ${pinMesero}` : '');
-    const msgCocina = `Hola! Acá está tu enlace de cocina:\n${urlCocina}` + (pinCocina ? `\n\nPIN de acceso: ${pinCocina}` : '');
+    const btnMesero = document.getElementById('link-wa-mesero');
+    const btnCocina = document.getElementById('link-wa-cocina');
 
-    document.getElementById('link-wa-mesero').href = `https://wa.me/?text=${encodeURIComponent(msgMesero)}`;
-    document.getElementById('link-wa-cocina').href = `https://wa.me/?text=${encodeURIComponent(msgCocina)}`;
+    if (pinMesero) {
+        const msg = `Hola! Acá está tu enlace de mesero:\n${urlMesero}\n\nPIN de acceso: ${pinMesero}`;
+        btnMesero.href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+        btnMesero.className = 'mt-2 block text-center bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-2 rounded-lg font-semibold';
+    } else {
+        btnMesero.href = '#';
+        btnMesero.className = 'mt-2 block text-center bg-gray-300 text-white text-xs px-3 py-2 rounded-lg font-semibold pointer-events-none';
+    }
+
+    if (pinCocina) {
+        const msg = `Hola! Acá está tu enlace de cocina:\n${urlCocina}\n\nPIN de acceso: ${pinCocina}`;
+        btnCocina.href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+        btnCocina.className = 'mt-2 block text-center bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-2 rounded-lg font-semibold';
+    } else {
+        btnCocina.href = '#';
+        btnCocina.className = 'mt-2 block text-center bg-gray-300 text-white text-xs px-3 py-2 rounded-lg font-semibold pointer-events-none';
+    }
 }
 
 // ===== QR MESAS =====

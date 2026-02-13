@@ -32,7 +32,7 @@
         <button onclick="verificarPin()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg font-semibold">
             Entrar
         </button>
-        <p id="pin-error" class="text-red-400 text-sm mt-3 hidden">PIN incorrecto</p>
+        <p id="pin-error" class="text-red-400 text-sm mt-3 hidden"></p>
     </div>
 </div>
 {% endif %}
@@ -178,13 +178,16 @@ async function verificarPin() {
             document.getElementById('app-content').classList.remove('hidden');
             iniciarApp();
         } else {
-            document.getElementById('pin-error').classList.remove('hidden');
+            const errEl = document.getElementById('pin-error');
+            errEl.textContent = data.error || 'PIN incorrecto';
+            errEl.classList.remove('hidden');
             document.getElementById('inp-pin').value = '';
             document.getElementById('inp-pin').focus();
         }
     } catch(e) {
-        document.getElementById('pin-error').textContent = 'Error de conexión';
-        document.getElementById('pin-error').classList.remove('hidden');
+        const errEl = document.getElementById('pin-error');
+        errEl.textContent = 'Error de conexión';
+        errEl.classList.remove('hidden');
     }
 }
 

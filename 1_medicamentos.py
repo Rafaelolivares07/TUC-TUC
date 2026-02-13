@@ -24709,7 +24709,7 @@ def api_restaurante_recuperar():
         ).fetchone()
         if not rest or rest['admin_telefono'] != telefono:
             conn.close()
-            return jsonify({'ok': False, 'error': 'Este celular no corresponde al dueño de este restaurante'}), 400
+            return jsonify({'ok': False, 'error': 'Este celular no corresponde al administrador de este restaurante'}), 400
 
         # Buscar telegram_chat_id del tercero
         tercero = conn.execute(
@@ -24804,7 +24804,7 @@ def api_restaurante_crear():
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre del restaurante requerido'}), 400
     if not admin_nombre or not admin_telefono:
-        return jsonify({'ok': False, 'error': 'Nombre y celular del dueño son requeridos'}), 400
+        return jsonify({'ok': False, 'error': 'Nombre y celular del administrador son requeridos'}), 400
     if tipo_restaurante not in ('menu_dia', 'carta'):
         tipo_restaurante = 'menu_dia'
 
@@ -25261,7 +25261,7 @@ def api_restaurante_verificar_pin(slug):
 
         pin_correcto = rest.get(f'pin_{rol}')
         if not pin_correcto:
-            return jsonify({'ok': True})  # Sin PIN = acceso libre
+            return jsonify({'ok': False, 'error': 'El administrador aún no ha configurado el PIN de acceso'}), 400
         if pin == pin_correcto:
             return jsonify({'ok': True})
         return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 400
@@ -25283,8 +25283,7 @@ def restaurante_mesero(slug):
         conn.close()
         if not rest:
             return "Restaurante no encontrado", 404
-        tiene_pin = bool(rest.get('pin_mesero'))
-        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=tiene_pin)
+        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=True)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -25301,8 +25300,7 @@ def restaurante_cocina(slug):
         conn.close()
         if not rest:
             return "Restaurante no encontrado", 404
-        tiene_pin = bool(rest.get('pin_cocina'))
-        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=tiene_pin)
+        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=True)
     except Exception as e:
         return f"Error: {e}", 500
 

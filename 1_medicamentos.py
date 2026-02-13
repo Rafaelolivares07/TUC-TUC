@@ -24894,10 +24894,8 @@ def api_restaurante_buscar_productos(slug):
 
         productos = conn.execute("""
             SELECT DISTINCT ON (LOWER(om.nombre), LOWER(om.tipo))
-                om.nombre, om.tipo, om.precio, om.recargo, om.imagen,
-                r.nombre as restaurante_nombre
+                om.nombre, om.tipo, om.precio, om.recargo
             FROM opciones_menu om
-            JOIN restaurantes r ON r.id = om.restaurante_id
             WHERE om.restaurante_id != %s
               AND om.activo = TRUE
               AND LOWER(om.nombre) LIKE %s
@@ -24911,9 +24909,7 @@ def api_restaurante_buscar_productos(slug):
                 'nombre': p['nombre'],
                 'tipo': p['tipo'],
                 'precio': float(p['precio']) if p['precio'] else 0,
-                'recargo': float(p['recargo']) if p['recargo'] else 0,
-                'tiene_imagen': bool(p['imagen']),
-                'restaurante': p['restaurante_nombre']
+                'recargo': float(p['recargo']) if p['recargo'] else 0
             } for p in productos
         ]})
     except Exception as e:

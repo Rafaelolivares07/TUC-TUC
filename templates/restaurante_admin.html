@@ -73,7 +73,10 @@
                         <option value="principio">Principio</option>
                     </select>
                     {% endif %}
-                    <input id="cat-nombre" type="text" placeholder="Nombre (ej: {% if restaurante.tipo_restaurante == 'carta' %}Lomo en salsa{% else %}Sancocho{% endif %})" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    <div class="relative flex-1">
+                        <input id="cat-nombre" type="text" placeholder="Nombre (ej: {% if restaurante.tipo_restaurante == 'carta' %}Lomo en salsa{% else %}Sancocho{% endif %})" class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off">
+                        <div id="autocomplete-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto"></div>
+                    </div>
                     {% if restaurante.tipo_restaurante == 'carta' %}
                     <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
                     {% else %}
@@ -83,14 +86,6 @@
                         Agregar
                     </button>
                 </div>
-            </div>
-
-            <!-- Buscar productos existentes -->
-            <div class="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-200">
-                <h3 class="font-bold text-gray-700 mb-2 text-sm">Buscar productos de otros restaurantes</h3>
-                <input id="buscar-producto" type="text" placeholder="Escribí al menos 2 letras... ej: arroz, sopa, lomo"
-                       class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off">
-                <div id="resultados-busqueda" class="mt-2 hidden"></div>
             </div>
 
             <!-- Lista por tipo -->
@@ -422,6 +417,29 @@ async function guardarOpcion() {
     if (!tipo) return toast('Selecciona una categoría', false);
     if (!nombre) return toast('Escribe el nombre', false);
 
+    document.getElementById('autocomplete-dropdown').classList.add('hidden');
+
+    // Si seleccionó del dropdown y no cambió el nombre → adoptar (copia con imagen)
+    if (productoSeleccionado && productoSeleccionado.nombre === nombre) {
+        try {
+            const r = await fetch(`${BASE}/adoptar-producto`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({nombre: productoSeleccionado.nombre, tipo: productoSeleccionado.tipo})
+            });
+            const data = await r.json();
+            if (data.ok) {
+                limpiarFormCatalogo();
+                toast('Agregado');
+                cargarCatalogo();
+            } else {
+                toast(data.error, false);
+            }
+        } catch(e) { toast('Error de conexión', false); }
+        return;
+    }
+
+    // Crear nuevo producto
     const body = {tipo, nombre};
     if (TIPO_REST === 'carta') {
         body.precio = parseFloat(document.getElementById('cat-precio').value) || 0;
@@ -438,18 +456,23 @@ async function guardarOpcion() {
         });
         const data = await r.json();
         if (data.ok) {
-            document.getElementById('cat-nombre').value = '';
-            if (TIPO_REST === 'carta') {
-                document.getElementById('cat-precio').value = '';
-            } else {
-                document.getElementById('cat-recargo').value = '0';
-            }
+            limpiarFormCatalogo();
             toast('Agregado');
             cargarCatalogo();
         } else {
             toast(data.error, false);
         }
     } catch(e) { toast('Error de conexión', false); }
+}
+
+function limpiarFormCatalogo() {
+    document.getElementById('cat-nombre').value = '';
+    productoSeleccionado = null;
+    if (TIPO_REST === 'carta') {
+        document.getElementById('cat-precio').value = '';
+    } else {
+        document.getElementById('cat-recargo').value = '0';
+    }
 }
 
 async function subirImagen(opcionId, input) {
@@ -732,70 +755,71 @@ async function cobrarMesaAdmin(num, total) {
     } catch(e) { toast('Error', false); }
 }
 
-// ===== BUSCAR PRODUCTOS EXISTENTES =====
-let buscarTimer = null;
+// ===== AUTOCOMPLETE PRODUCTOS EXISTENTES =====
+let acTimer = null;
+let productoSeleccionado = null;
 
-document.getElementById('buscar-producto')?.addEventListener('input', function() {
-    clearTimeout(buscarTimer);
+document.getElementById('cat-nombre')?.addEventListener('input', function() {
+    productoSeleccionado = null;
+    clearTimeout(acTimer);
     const q = this.value.trim();
-    const cont = document.getElementById('resultados-busqueda');
+    const dd = document.getElementById('autocomplete-dropdown');
     if (q.length < 2) {
-        cont.classList.add('hidden');
-        cont.innerHTML = '';
+        dd.classList.add('hidden');
         return;
     }
-    buscarTimer = setTimeout(() => buscarProductos(q), 300);
+    acTimer = setTimeout(() => cargarSugerencias(q), 300);
 });
 
-async function buscarProductos(q) {
-    const cont = document.getElementById('resultados-busqueda');
+document.getElementById('cat-nombre')?.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.getElementById('autocomplete-dropdown').classList.add('hidden');
+    }
+});
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#cat-nombre') && !e.target.closest('#autocomplete-dropdown')) {
+        document.getElementById('autocomplete-dropdown')?.classList.add('hidden');
+    }
+});
+
+async function cargarSugerencias(q) {
+    const dd = document.getElementById('autocomplete-dropdown');
     try {
         const r = await fetch(`${BASE}/buscar-productos?q=${encodeURIComponent(q)}`);
         const data = await r.json();
         if (!data.ok || data.productos.length === 0) {
-            cont.innerHTML = '<p class="text-xs text-gray-400 py-2">No se encontraron productos</p>';
-            cont.classList.remove('hidden');
+            dd.classList.add('hidden');
             return;
         }
-        cont.innerHTML = data.productos.map(p =>
-            `<div class="flex items-center justify-between bg-white rounded-lg p-2 border mb-1 hover:bg-blue-50">
-                <div class="flex-1 min-w-0">
-                    <span class="font-semibold text-sm text-gray-800">${p.nombre}</span>
-                    <span class="text-xs text-gray-400 ml-1">${p.tipo}</span>
-                    ${p.precio ? `<span class="text-xs text-green-600 ml-1">$${Number(p.precio).toLocaleString()}</span>` : ''}
-                    ${p.tiene_imagen ? '<span class="text-xs ml-1">📷</span>' : ''}
-                    <span class="text-xs text-gray-300 ml-1">de ${p.restaurante}</span>
-                </div>
-                <button onclick="adoptarProducto('${p.nombre.replace(/'/g, "\\'")}', '${p.tipo.replace(/'/g, "\\'")}')"
-                        class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-1 rounded-lg font-semibold ml-2 flex-shrink-0">
-                    Agregar
-                </button>
+        dd.innerHTML = data.productos.map(p =>
+            `<div class="px-3 py-2 hover:bg-amber-50 cursor-pointer border-b last:border-0 text-sm"
+                  onclick="seleccionarProducto('${p.nombre.replace(/'/g, "\\'")}', '${p.tipo.replace(/'/g, "\\'")}', ${p.precio}, ${p.recargo})">
+                <span class="font-semibold text-gray-800">${p.nombre}</span>
+                <span class="text-xs text-gray-400 ml-1">${p.tipo}</span>
+                ${p.precio ? `<span class="text-xs text-green-600 ml-2">$${Number(p.precio).toLocaleString()}</span>` : ''}
             </div>`
         ).join('');
-        cont.classList.remove('hidden');
+        dd.classList.remove('hidden');
     } catch(e) {
-        cont.innerHTML = '<p class="text-xs text-red-400 py-2">Error de conexión</p>';
-        cont.classList.remove('hidden');
+        dd.classList.add('hidden');
     }
 }
 
-async function adoptarProducto(nombre, tipo) {
-    try {
-        const r = await fetch(`${BASE}/adoptar-producto`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nombre, tipo})
-        });
-        const data = await r.json();
-        if (data.ok) {
-            toast(`${nombre} agregado a tu catálogo`);
-            cargarCatalogo();
-            document.getElementById('buscar-producto').value = '';
-            document.getElementById('resultados-busqueda').classList.add('hidden');
-        } else {
-            toast(data.error, false);
-        }
-    } catch(e) { toast('Error de conexión', false); }
+function seleccionarProducto(nombre, tipo, precio, recargo) {
+    document.getElementById('cat-nombre').value = nombre;
+    document.getElementById('autocomplete-dropdown').classList.add('hidden');
+    productoSeleccionado = {nombre, tipo, precio, recargo};
+
+    // Auto-llenar campos
+    const tipoInput = document.getElementById('cat-tipo');
+    if (TIPO_REST === 'carta') {
+        tipoInput.value = tipo;
+        document.getElementById('cat-precio').value = precio || '';
+    } else {
+        if (['sopa', 'proteina', 'principio'].includes(tipo)) tipoInput.value = tipo;
+        document.getElementById('cat-recargo').value = recargo || 0;
+    }
 }
 
 // ===== PINs DE ACCESO =====

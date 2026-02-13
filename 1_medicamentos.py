@@ -24564,6 +24564,15 @@ def crear_tablas_restaurante(conn):
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pagos_restaurante (
+            id SERIAL PRIMARY KEY,
+            restaurante_id INTEGER NOT NULL,
+            dias INTEGER NOT NULL,
+            nota VARCHAR(255),
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
     # Self-healing: columnas nuevas
     try:
         conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)")
@@ -25401,25 +25410,62 @@ def api_restaurante_suscripcion(slug):
 
 @app.route('/api/restaurante/<slug>/dias-pagados', methods=['POST'])
 def api_restaurante_dias_pagados(slug):
-    """Actualizar días pagados (solo admin del sistema)"""
+    """Agregar días pagados y registrar en historial (solo admin del sistema)"""
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo administradores'}), 403
 
     data = request.get_json()
-    dias = data.get('dias_pagados')
-    if dias is None or not isinstance(dias, int) or dias < 0:
-        return jsonify({'ok': False, 'error': 'Días inválidos'}), 400
+    dias = data.get('dias')
+    nota = data.get('nota', '').strip()
+    if not dias or not isinstance(dias, int) or dias <= 0:
+        return jsonify({'ok': False, 'error': 'Número de días inválido'}), 400
 
     try:
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id, dias_pagados FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        nuevo_total = (rest['dias_pagados'] or 0) + dias
+
         conn.execute(
-            "UPDATE restaurantes SET dias_pagados = %s WHERE slug = %s AND activo = TRUE",
-            (dias, slug)
+            "UPDATE restaurantes SET dias_pagados = %s WHERE id = %s",
+            (nuevo_total, rest['id'])
+        )
+        conn.execute(
+            "INSERT INTO pagos_restaurante (restaurante_id, dias, nota) VALUES (%s, %s, %s)",
+            (rest['id'], dias, nota or None)
         )
         conn.commit()
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'nuevo_total': nuevo_total})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/pagos')
+def api_restaurante_pagos(slug):
+    """Historial de pagos/recargas de días"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        pagos = conn.execute("""
+            SELECT dias, nota, created_at FROM pagos_restaurante
+            WHERE restaurante_id = %s ORDER BY created_at DESC
+        """, (rest['id'],)).fetchall()
+        conn.close()
+
+        return jsonify({'ok': True, 'pagos': [
+            {'dias': p['dias'], 'nota': p['nota'] or '', 'fecha': p['created_at'].strftime('%Y-%m-%d %H:%M')}
+            for p in pagos
+        ]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

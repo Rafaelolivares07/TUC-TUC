@@ -252,17 +252,24 @@
                         <span class="text-xs font-semibold text-gray-500">Días:</span>
                         <span class="text-xs {% if r.dias_restantes > 5 %}text-green-600{% elif r.dias_restantes > 0 %}text-amber-600{% else %}text-red-600{% endif %} font-bold">
                             {{ r.dias_usados }} usados / {{ r.dias_pagados or 0 }} pagados
-                            ({{ r.dias_restantes }} restantes)
+                            (<span id="saldo-{{ r.slug }}">{{ r.dias_restantes }}</span> restantes)
                         </span>
-                        <div class="flex items-center gap-1 ml-auto">
-                            <input type="number" id="dias-{{ r.slug }}" value="{{ r.dias_pagados or 0 }}" min="0"
-                                   class="border rounded px-2 py-1 text-xs w-16 text-center">
-                            <button onclick="actualizarDias('{{ r.slug }}')"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-2 py-1 rounded font-semibold">
-                                Guardar
-                            </button>
-                        </div>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="dias-{{ r.slug }}" placeholder="Días" min="1"
+                               class="border rounded px-2 py-1 text-xs w-16 text-center">
+                        <input type="text" id="nota-{{ r.slug }}" placeholder="Nota (opcional)"
+                               class="border rounded px-2 py-1 text-xs flex-1">
+                        <button onclick="agregarDias('{{ r.slug }}')"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1 rounded font-semibold">
+                            + Agregar
+                        </button>
+                        <button onclick="verHistorial('{{ r.slug }}')"
+                                class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-3 py-1 rounded font-semibold">
+                            Historial
+                        </button>
+                    </div>
+                    <div id="historial-{{ r.slug }}" class="hidden mt-2"></div>
                 </div>
                 {% if r.admin_nombre %}
                 <div class="pt-2 border-t border-amber-200 flex items-center justify-between">
@@ -320,23 +327,63 @@ function toast(msg, ok = true) {
 }
 
 // ===== DÍAS PAGADOS (lista admin) =====
-async function actualizarDias(slug) {
+async function agregarDias(slug) {
     const input = document.getElementById(`dias-${slug}`);
+    const notaInput = document.getElementById(`nota-${slug}`);
     const dias = parseInt(input.value);
-    if (isNaN(dias) || dias < 0) return toast('Número inválido', false);
+    if (!dias || dias <= 0) return toast('Ingresa número de días', false);
     try {
         const r = await fetch(`/api/restaurante/${slug}/dias-pagados`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({dias_pagados: dias})
+            body: JSON.stringify({dias, nota: notaInput.value.trim()})
         });
         const data = await r.json();
         if (data.ok) {
-            toast('Días actualizados');
+            toast(`+${dias} días agregados (total: ${data.nuevo_total})`);
+            input.value = '';
+            notaInput.value = '';
+            // Actualizar saldo visible
+            const saldo = document.getElementById(`saldo-${slug}`);
+            if (saldo) saldo.textContent = parseInt(saldo.textContent) + dias;
         } else {
             toast(data.error, false);
         }
     } catch(e) { toast('Error de conexión', false); }
+}
+
+async function verHistorial(slug) {
+    const cont = document.getElementById(`historial-${slug}`);
+    if (!cont.classList.contains('hidden')) {
+        cont.classList.add('hidden');
+        return;
+    }
+    cont.innerHTML = '<p class="text-xs text-gray-400 py-2">Cargando...</p>';
+    cont.classList.remove('hidden');
+    try {
+        const r = await fetch(`/api/restaurante/${slug}/pagos`);
+        const data = await r.json();
+        if (!data.ok || data.pagos.length === 0) {
+            cont.innerHTML = '<p class="text-xs text-gray-400 py-2">Sin registros</p>';
+            return;
+        }
+        cont.innerHTML = `<table class="w-full text-xs">
+            <thead><tr class="text-gray-400 border-b">
+                <th class="text-left py-1">Fecha</th>
+                <th class="text-center py-1">Días</th>
+                <th class="text-left py-1">Nota</th>
+            </tr></thead>
+            <tbody>${data.pagos.map(p =>
+                `<tr class="border-b border-gray-100">
+                    <td class="py-1 text-gray-500">${p.fecha}</td>
+                    <td class="py-1 text-center font-bold text-green-600">+${p.dias}</td>
+                    <td class="py-1 text-gray-400">${p.nota || '-'}</td>
+                </tr>`
+            ).join('')}</tbody>
+        </table>`;
+    } catch(e) {
+        cont.innerHTML = '<p class="text-xs text-red-400 py-2">Error</p>';
+    }
 }
 
 // ===== TABS =====

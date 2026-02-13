@@ -24576,6 +24576,8 @@ def crear_tablas_restaurante(conn):
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)")
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(255)")
         conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS token_acceso VARCHAR(100) UNIQUE")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_mesero VARCHAR(10)")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_cocina VARCHAR(10)")
     except:
         pass
 
@@ -25177,6 +25179,96 @@ def api_restaurante_mesa_eliminar(slug, mesa_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ===== RESTAURANTE: PINs DE ACCESO =====
+
+@app.route('/api/restaurante/<slug>/pines', methods=['GET'])
+def api_restaurante_pines(slug):
+    """Obtener PINs actuales (solo admin o dueño)"""
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, admin_id, pin_mesero, pin_cocina FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not rest:
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        es_admin = session.get('rol') == 'Administrador'
+        if not es_admin and usuario_id != rest.get('admin_id'):
+            return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
+        return jsonify({'ok': True, 'pin_mesero': rest.get('pin_mesero') or '', 'pin_cocina': rest.get('pin_cocina') or ''})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/pines', methods=['POST'])
+def api_restaurante_guardar_pines(slug):
+    """Guardar PINs (solo admin o dueño)"""
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        es_admin = session.get('rol') == 'Administrador'
+        if not es_admin and usuario_id != rest.get('admin_id'):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
+
+        data = request.get_json()
+        pin_mesero = data.get('pin_mesero', '').strip()
+        pin_cocina = data.get('pin_cocina', '').strip()
+
+        conn.execute(
+            "UPDATE restaurantes SET pin_mesero = %s, pin_cocina = %s WHERE id = %s",
+            (pin_mesero or None, pin_cocina or None, rest['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/verificar-pin', methods=['POST'])
+def api_restaurante_verificar_pin(slug):
+    """Verifica PIN de mesero o cocina"""
+    data = request.get_json()
+    pin = data.get('pin', '').strip()
+    rol = data.get('rol', '')  # 'mesero' o 'cocina'
+
+    if rol not in ('mesero', 'cocina'):
+        return jsonify({'ok': False, 'error': 'Rol inválido'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, pin_mesero, pin_cocina FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not rest:
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        pin_correcto = rest.get(f'pin_{rol}')
+        if not pin_correcto:
+            return jsonify({'ok': True})  # Sin PIN = acceso libre
+        if pin == pin_correcto:
+            return jsonify({'ok': True})
+        return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ===== RESTAURANTE: MESERO Y COCINA =====
 
 @app.route('/r/<slug>/mesero')
@@ -25191,7 +25283,8 @@ def restaurante_mesero(slug):
         conn.close()
         if not rest:
             return "Restaurante no encontrado", 404
-        return render_template('restaurante_mesero.html', restaurante=rest)
+        tiene_pin = bool(rest.get('pin_mesero'))
+        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=tiene_pin)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -25208,7 +25301,8 @@ def restaurante_cocina(slug):
         conn.close()
         if not rest:
             return "Restaurante no encontrado", 404
-        return render_template('restaurante_cocina.html', restaurante=rest)
+        tiene_pin = bool(rest.get('pin_cocina'))
+        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=tiene_pin)
     except Exception as e:
         return f"Error: {e}", 500
 

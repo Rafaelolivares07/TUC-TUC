@@ -21,6 +21,23 @@
 <body class="min-h-screen text-white">
 
 <div id="toast" class="toast"></div>
+
+{% if tiene_pin %}
+<div id="overlay-pin" class="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-2xl p-8 max-w-xs w-full text-center border border-gray-700">
+        <h2 class="text-xl font-bold text-white mb-2">{{ restaurante.nombre }}</h2>
+        <p class="text-sm text-gray-400 mb-6">Ingresa el PIN de mesero</p>
+        <input id="inp-pin" type="password" inputmode="numeric" maxlength="10" placeholder="PIN"
+               class="w-full text-center text-2xl tracking-widest font-bold bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 mb-4">
+        <button onclick="verificarPin()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-lg font-semibold">
+            Entrar
+        </button>
+        <p id="pin-error" class="text-red-400 text-sm mt-3 hidden">PIN incorrecto</p>
+    </div>
+</div>
+{% endif %}
+
+<div id="app-content" {% if tiene_pin %}class="hidden"{% endif %}>
 <div class="max-w-lg mx-auto p-4">
 
     <!-- Header -->
@@ -136,11 +153,74 @@
         </div>
     </div>
 </div>
+</div><!-- /app-content -->
 
 <script>
 const SLUG = '{{ restaurante.slug }}';
 const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const BASE = `/api/restaurante/${SLUG}`;
+const TIENE_PIN = {{ 'true' if tiene_pin else 'false' }};
+
+// ===== VERIFICACIÓN PIN =====
+async function verificarPin() {
+    const pin = document.getElementById('inp-pin').value.trim();
+    if (!pin) return;
+    try {
+        const r = await fetch(`${BASE}/verificar-pin`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin, rol: 'mesero'})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            localStorage.setItem(`pin_mesero_${SLUG}`, pin);
+            document.getElementById('overlay-pin').remove();
+            document.getElementById('app-content').classList.remove('hidden');
+            iniciarApp();
+        } else {
+            document.getElementById('pin-error').classList.remove('hidden');
+            document.getElementById('inp-pin').value = '';
+            document.getElementById('inp-pin').focus();
+        }
+    } catch(e) {
+        document.getElementById('pin-error').textContent = 'Error de conexión';
+        document.getElementById('pin-error').classList.remove('hidden');
+    }
+}
+
+// Enter en el campo PIN
+document.getElementById('inp-pin')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') verificarPin();
+});
+
+// Auto-verificar PIN guardado
+async function autoVerificarPin() {
+    const pinGuardado = localStorage.getItem(`pin_mesero_${SLUG}`);
+    if (pinGuardado) {
+        try {
+            const r = await fetch(`${BASE}/verificar-pin`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({pin: pinGuardado, rol: 'mesero'})
+            });
+            const data = await r.json();
+            if (data.ok) {
+                document.getElementById('overlay-pin')?.remove();
+                document.getElementById('app-content').classList.remove('hidden');
+                return true;
+            } else {
+                localStorage.removeItem(`pin_mesero_${SLUG}`);
+            }
+        } catch(e) {}
+    }
+    return false;
+}
+
+if (TIENE_PIN) {
+    autoVerificarPin().then(ok => { if (ok) iniciarApp(); });
+} else {
+    iniciarApp();
+}
 
 let mesaSeleccionada = null;
 let tipoSeleccionado = null;
@@ -571,12 +651,13 @@ async function cobrarMesa(num, total) {
 }
 
 // ===== INIT =====
-cargarMesas();
-if (TIPO_REST !== 'carta') cargarMenuHoy();
-cargarPedidos();
-cargarCuentas();
-// Polling cada 10s
-setInterval(() => { cargarPedidos(); cargarCuentas(); }, 10000);
+function iniciarApp() {
+    cargarMesas();
+    if (TIPO_REST !== 'carta') cargarMenuHoy();
+    cargarPedidos();
+    cargarCuentas();
+    setInterval(() => { cargarPedidos(); cargarCuentas(); }, 10000);
+}
 </script>
 </body>
 </html>

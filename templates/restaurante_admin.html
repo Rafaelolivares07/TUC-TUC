@@ -6,6 +6,7 @@
     <title>{% if restaurante %}{{ restaurante.nombre }}{% else %}Restaurantes{% endif %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
@@ -156,7 +157,10 @@
 
             <!-- QR de mesas -->
             <div class="mt-6 border-t pt-4">
-                <button onclick="toggleQRs()" class="text-sm text-gray-500 hover:text-gray-700 font-semibold">Ver QR de mesas (para imprimir)</button>
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleQRs()" class="text-sm text-gray-500 hover:text-gray-700 font-semibold">Ver QR de mesas (para imprimir)</button>
+                    <button onclick="generarPDFQRs()" class="text-sm bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 font-semibold">Descargar PDF</button>
+                </div>
                 <div id="panel-qrs" class="hidden mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
                     <p class="text-gray-400 col-span-full text-center py-4">Cargando...</p>
                 </div>
@@ -197,10 +201,27 @@
         {% if restaurantes %}
         <div class="space-y-3 mb-8">
             {% for r in restaurantes %}
-            <a href="/admin/restaurante/{{ r.slug }}" class="block p-4 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 transition">
-                <span class="font-bold text-gray-800">{{ r.nombre }}</span>
-                <span class="text-xs text-gray-400 ml-2">/r/{{ r.slug }}</span>
-            </a>
+            <div class="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                <a href="/admin/restaurante/{{ r.slug }}" class="block hover:bg-amber-100 rounded-lg transition -m-2 p-2">
+                    <span class="font-bold text-gray-800">{{ r.nombre }}</span>
+                    <span class="text-xs text-gray-400 ml-2">/r/{{ r.slug }}</span>
+                </a>
+                {% if r.admin_nombre %}
+                <div class="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between">
+                    <div class="text-xs text-gray-500">
+                        <span class="font-semibold">Dueño:</span> {{ r.admin_nombre }}
+                        <span class="text-gray-400 ml-1">{{ r.admin_telefono }}</span>
+                    </div>
+                    {% if r.token_acceso %}
+                    <a href="https://wa.me/57{{ r.admin_telefono }}?text={{ ('Hola ' + r.admin_nombre + '! Acá está tu enlace para administrar ' + r.nombre + ': ' + request.host_url + 'r/acceso/' + r.token_acceso) | urlencode }}"
+                       target="_blank"
+                       class="bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-1 rounded-lg font-semibold">
+                        Enviar enlace por WhatsApp
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
             {% endfor %}
         </div>
         {% endif %}
@@ -209,15 +230,18 @@
             <h3 class="font-bold text-gray-700 mb-3">Crear nuevo restaurante</h3>
             <div class="flex flex-col gap-3">
                 <input id="nuevo-nombre" type="text" placeholder="Nombre del restaurante" class="border rounded-lg px-3 py-2 text-sm">
-                <div class="flex gap-3">
-                    <select id="nuevo-tipo" class="border rounded-lg px-3 py-2 text-sm flex-1">
-                        <option value="menu_dia">Menú del día</option>
-                        <option value="carta">Carta (platos individuales)</option>
-                    </select>
-                    <button onclick="crearRestaurante()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
-                        Crear
-                    </button>
+                <select id="nuevo-tipo" class="border rounded-lg px-3 py-2 text-sm">
+                    <option value="menu_dia">Menú del día</option>
+                    <option value="carta">Carta (platos individuales)</option>
+                </select>
+                <div class="bg-gray-50 rounded-lg p-3 border">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Dueño del restaurante</p>
+                    <input id="nuevo-admin-nombre" type="text" placeholder="Nombre del dueño" class="border rounded-lg px-3 py-2 text-sm w-full mb-2">
+                    <input id="nuevo-admin-tel" type="tel" placeholder="Celular del dueño" class="border rounded-lg px-3 py-2 text-sm w-full">
                 </div>
+                <button onclick="crearRestaurante()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
+                    Crear restaurante
+                </button>
             </div>
         </div>
     </div>
@@ -252,12 +276,15 @@ function cambiarTab(tab) {
 async function crearRestaurante() {
     const nombre = document.getElementById('nuevo-nombre').value.trim();
     const tipo_restaurante = document.getElementById('nuevo-tipo').value;
+    const admin_nombre = document.getElementById('nuevo-admin-nombre').value.trim();
+    const admin_telefono = document.getElementById('nuevo-admin-tel').value.trim();
     if (!nombre) return toast('Escribe el nombre del restaurante', false);
+    if (!admin_nombre || !admin_telefono) return toast('Nombre y celular del dueño son requeridos', false);
     try {
         const r = await fetch('/api/restaurante/crear', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nombre, tipo_restaurante})
+            body: JSON.stringify({nombre, tipo_restaurante, admin_nombre, admin_telefono})
         });
         const data = await r.json();
         if (data.ok) {
@@ -703,6 +730,106 @@ async function generarQRs() {
         });
     });
     qrsGenerados = true;
+}
+
+async function generarPDFQRs() {
+    toast('Generando PDF...');
+    const r = await fetch(`${BASE}/mesas`);
+    const data = await r.json();
+    if (!data.ok || data.mesas.length === 0) {
+        toast('No hay mesas para generar PDF', false);
+        return;
+    }
+
+    const baseUrl = window.location.origin;
+    const nombre = document.querySelector('h1')?.textContent || 'Restaurante';
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'letter');
+
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const cols = 2;
+    const rows = 3;
+    const cardW = 85;
+    const cardH = 75;
+    const qrSize = 45;
+    const marginX = (pageW - cols * cardW) / 2;
+    const marginTop = 30;
+    const gapY = 8;
+
+    let idx = 0;
+    const mesas = data.mesas;
+
+    while (idx < mesas.length) {
+        if (idx > 0) doc.addPage();
+
+        // Encabezado
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(nombre, pageW / 2, 15, { align: 'center' });
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(120);
+        doc.text('Escanea el QR para ver el menú', pageW / 2, 22, { align: 'center' });
+        doc.setTextColor(0);
+
+        for (let row = 0; row < rows && idx < mesas.length; row++) {
+            for (let col = 0; col < cols && idx < mesas.length; col++) {
+                const m = mesas[idx];
+                const x = marginX + col * cardW;
+                const y = marginTop + row * (cardH + gapY);
+
+                // Borde recortable (línea punteada)
+                doc.setDrawColor(180);
+                doc.setLineDashPattern([2, 2], 0);
+                doc.roundedRect(x, y, cardW, cardH, 3, 3, 'S');
+                doc.setLineDashPattern([], 0);
+
+                // Generar QR en un canvas temporal
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'absolute';
+                tempDiv.style.left = '-9999px';
+                document.body.appendChild(tempDiv);
+
+                await new Promise(resolve => {
+                    new QRCode(tempDiv, {
+                        text: `${baseUrl}/r/${SLUG}/mesa/${m.numero}`,
+                        width: 300,
+                        height: 300,
+                        colorDark: '#1f2937',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    setTimeout(resolve, 100);
+                });
+
+                const canvas = tempDiv.querySelector('canvas');
+                if (canvas) {
+                    const imgData = canvas.toDataURL('image/png');
+                    const qrX = x + (cardW - qrSize) / 2;
+                    doc.addImage(imgData, 'PNG', qrX, y + 5, qrSize, qrSize);
+                }
+                document.body.removeChild(tempDiv);
+
+                // Texto "Mesa X"
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Mesa ${m.numero}`, x + cardW / 2, y + qrSize + 12, { align: 'center' });
+
+                // URL chica
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(130);
+                doc.text(`/r/${SLUG}/mesa/${m.numero}`, x + cardW / 2, y + qrSize + 18, { align: 'center' });
+                doc.setTextColor(0);
+
+                idx++;
+            }
+        }
+    }
+
+    doc.save(`QR_Mesas_${SLUG}.pdf`);
+    toast('PDF descargado');
 }
 
 // ===== INIT =====

@@ -1440,7 +1440,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -24572,6 +24572,10 @@ def crear_tablas_restaurante(conn):
         conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS plato_id INTEGER")
         conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1")
         conn.execute("ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS imagen TEXT")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_id INTEGER")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(255)")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS token_acceso VARCHAR(100) UNIQUE")
     except:
         pass
 
@@ -24595,7 +24599,7 @@ def admin_restaurante_lista():
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
         restaurantes = conn.execute(
-            "SELECT id, nombre, slug FROM restaurantes WHERE activo = TRUE ORDER BY nombre"
+            "SELECT id, nombre, slug, admin_nombre, admin_telefono, token_acceso FROM restaurantes WHERE activo = TRUE ORDER BY nombre"
         ).fetchall()
         conn.close()
         return render_template('restaurante_admin.html', restaurantes=restaurantes, restaurante=None)
@@ -24622,21 +24626,194 @@ def admin_restaurante_detalle(slug):
         return f"Error: {e}", 500
 
 
+@app.route('/mi-restaurante/<slug>')
+def mi_restaurante(slug):
+    """Panel del dueño del restaurante (fuera de /admin)"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        restaurante = conn.execute(
+            "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not restaurante:
+            conn.close()
+            return "Restaurante no encontrado", 404
+
+        usuario_id = session.get('usuario_id')
+        es_admin_sistema = session.get('rol') == 'Administrador'
+
+        # Verificar permisos: admin del sistema o dueño del restaurante
+        if usuario_id and (es_admin_sistema or usuario_id == restaurante.get('admin_id')):
+            conn.close()
+            return render_template('restaurante_admin.html', restaurante=restaurante, restaurantes=None, es_dueno=True)
+
+        conn.close()
+        # No autenticado o sin permisos: mostrar pantalla de recuperación
+        return render_template('restaurante_recuperar.html', restaurante=restaurante)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/r/acceso/<token>')
+def restaurante_acceso_token(token):
+    """Link mágico: loguea al dueño del restaurante"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        restaurante = conn.execute(
+            "SELECT * FROM restaurantes WHERE token_acceso = %s AND activo = TRUE", (token,)
+        ).fetchone()
+        if not restaurante:
+            conn.close()
+            return "Enlace inválido o expirado", 404
+
+        # Loguear al dueño
+        admin_id = restaurante['admin_id']
+        tercero = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (admin_id,)).fetchone()
+        conn.close()
+
+        if not tercero:
+            return "Usuario no encontrado", 404
+
+        session['usuario_id'] = tercero['id']
+        session['nombre'] = tercero['nombre']
+        session['telefono'] = tercero.get('telefono', '')
+        session['rol'] = 'Restaurante'
+        session.permanent = True
+        session.modified = True
+
+        return redirect(f"/mi-restaurante/{restaurante['slug']}")
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/restaurante/recuperar', methods=['POST'])
+def api_restaurante_recuperar():
+    """Envía código de verificación por Telegram para recuperar acceso"""
+    data = request.get_json()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    slug = data.get('slug', '')
+
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular inválido'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+
+        # Verificar que el teléfono corresponde al admin de este restaurante
+        rest = conn.execute(
+            "SELECT id, admin_id, admin_telefono FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest or rest['admin_telefono'] != telefono:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Este celular no corresponde al dueño de este restaurante'}), 400
+
+        # Buscar telegram_chat_id del tercero
+        tercero = conn.execute(
+            "SELECT id, telegram_chat_id FROM terceros WHERE id = %s", (rest['admin_id'],)
+        ).fetchone()
+        conn.close()
+
+        if not tercero or not tercero.get('telegram_chat_id'):
+            return jsonify({
+                'ok': False,
+                'necesita_telegram': True,
+                'error': 'No tenés Telegram vinculado. Para recuperar tu cuenta necesitás vincular Telegram.'
+            }), 400
+
+        # Generar código de 6 dígitos
+        import random
+        codigo = str(random.randint(100000, 999999))
+
+        # Guardar código en sesión temporalmente
+        session['codigo_recuperacion'] = codigo
+        session['recuperar_admin_id'] = tercero['id']
+        session['recuperar_slug'] = slug
+        session.modified = True
+
+        # Enviar por Telegram
+        enviar_mensaje_telegram(
+            tercero['telegram_chat_id'],
+            f"🔐 Tu código de acceso al restaurante es:\n\n"
+            f"<b>{codigo}</b>\n\n"
+            f"Ingresalo en la pantalla de recuperación."
+        )
+
+        return jsonify({'ok': True, 'mensaje': 'Código enviado a tu Telegram'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/verificar-codigo', methods=['POST'])
+def api_restaurante_verificar_codigo():
+    """Verifica el código de Telegram y loguea al dueño"""
+    data = request.get_json()
+    codigo = data.get('codigo', '').strip()
+
+    codigo_guardado = session.get('codigo_recuperacion')
+    admin_id = session.get('recuperar_admin_id')
+    slug = session.get('recuperar_slug')
+
+    if not codigo_guardado or not admin_id:
+        return jsonify({'ok': False, 'error': 'No hay código pendiente. Solicitá uno nuevo.'}), 400
+
+    if codigo != codigo_guardado:
+        return jsonify({'ok': False, 'error': 'Código incorrecto'}), 400
+
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (admin_id,)).fetchone()
+        conn.close()
+
+        if not tercero:
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 400
+
+        # Limpiar códigos temporales
+        session.pop('codigo_recuperacion', None)
+        session.pop('recuperar_admin_id', None)
+        session.pop('recuperar_slug', None)
+
+        # Loguear
+        session['usuario_id'] = tercero['id']
+        session['nombre'] = tercero['nombre']
+        session['telefono'] = tercero.get('telefono', '')
+        session['rol'] = 'Restaurante'
+        session.permanent = True
+        session.modified = True
+
+        return jsonify({'ok': True, 'slug': slug})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/restaurante/crear', methods=['POST'])
 def api_restaurante_crear():
-    """Crea un nuevo restaurante"""
+    """Crea un nuevo restaurante con dueño"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
     data = request.get_json()
     nombre = data.get('nombre', '').strip()
     tipo_restaurante = data.get('tipo_restaurante', 'menu_dia')
+    admin_nombre = data.get('admin_nombre', '').strip()
+    admin_telefono = data.get('admin_telefono', '').strip()
+
     if not nombre:
-        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+        return jsonify({'ok': False, 'error': 'Nombre del restaurante requerido'}), 400
+    if not admin_nombre or not admin_telefono:
+        return jsonify({'ok': False, 'error': 'Nombre y celular del dueño son requeridos'}), 400
     if tipo_restaurante not in ('menu_dia', 'carta'):
         tipo_restaurante = 'menu_dia'
 
+    # Limpiar teléfono
+    admin_telefono = ''.join(filter(str.isdigit, admin_telefono))
+    if len(admin_telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+
     slug = generar_slug(nombre)
+    token_acceso = str(uuid.uuid4())
+
     try:
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
@@ -24646,13 +24823,29 @@ def api_restaurante_crear():
             conn.close()
             return jsonify({'ok': False, 'error': 'Ya existe un restaurante con ese nombre'}), 400
 
-        result = conn.execute(
-            "INSERT INTO restaurantes (nombre, slug, tipo_restaurante) VALUES (%s, %s, %s)",
-            (nombre, slug, tipo_restaurante)
+        # Buscar o crear tercero para el dueño
+        tercero = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (admin_telefono,)
+        ).fetchone()
+        if tercero:
+            admin_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (admin_nombre, admin_id))
+        else:
+            conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)",
+                (admin_nombre, admin_telefono)
+            )
+            admin_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (admin_telefono,)).fetchone()['id']
+
+        conn.execute(
+            "INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso)
         )
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'slug': slug, 'nombre': nombre})
+
+        link_acceso = f"{request.host_url}r/acceso/{token_acceso}"
+        return jsonify({'ok': True, 'slug': slug, 'nombre': nombre, 'token_acceso': token_acceso, 'link_acceso': link_acceso})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

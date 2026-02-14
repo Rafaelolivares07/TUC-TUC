@@ -32,6 +32,15 @@
         .tema-oscuro .bg-section { background: #1f2937; }
         .tema-oscuro .opcion-btn { background: #1f2937; border-color: #374151; }
         .tema-oscuro .opcion-btn:hover { border-color: #d97706; }
+        .tema-oscuro .tipo-btn { background: #1f2937; }
+        .tema-oscuro .tipo-btn.selected { background: #78350f; }
+        .tema-oscuro .opcion-btn.selected { background: #78350f; }
+        .tema-oscuro .btn-menos { background: #374151; color: #f3f4f6; }
+        .tema-oscuro .btn-menos:hover { background: #4b5563; }
+        .tema-oscuro .modal-card { background: #1f2937; }
+        .tema-oscuro .modal-card input { background: #111827; border-color: #4b5563; color: #f3f4f6; }
+        .tema-oscuro .modal-card .btn-entrega { border-color: #374151; color: #9ca3af; }
+        .tema-oscuro .placeholder-sin-img { background: #374151; }
 
         /* Zoom modal */
         .zoom-overlay {
@@ -86,7 +95,7 @@
 
     <!-- Nombre del cliente -->
     <div id="paso-nombre" class="mb-6">
-        <div class="card bg-white rounded-2xl shadow p-6 text-center">
+        <div class="card rounded-2xl shadow p-6 text-center">
             <p class="txt-muted mb-3" id="saludo-texto">¿Cómo te llamas?</p>
             <input id="input-nombre" type="text" placeholder="Tu nombre"
                 class="card-input w-full border-2 border-amber-300 rounded-xl px-4 py-3 text-xl text-center font-bold focus:outline-none focus:border-amber-500">
@@ -136,7 +145,7 @@
 
         <!-- Botón pedir -->
         <div id="sec-pedir" class="hidden">
-            <div class="card bg-white rounded-2xl shadow p-4 flex items-center justify-between">
+            <div class="card rounded-2xl shadow p-4 flex items-center justify-between">
                 <div>
                     <span class="txt-muted text-sm">Tu pedido:</span>
                     <span id="cli-precio" class="text-2xl font-extrabold text-amber-600 ml-2">$0</span>
@@ -243,31 +252,31 @@ function renderTipos() {
     const cont = document.getElementById('sec-tipos');
     cont.innerHTML = `
         <button onclick="seleccionarTipo('completo')" id="tipo-completo"
-            class="tipo-btn w-full bg-white rounded-2xl shadow p-5 text-left border-2 border-transparent hover:border-amber-400 transition">
+            class="tipo-btn card w-full rounded-2xl shadow p-5 text-left border-2 border-transparent hover:border-amber-400 transition">
             <div class="flex justify-between items-center">
                 <div>
-                    <span class="text-xl font-bold text-gray-800">Completo</span>
-                    <p class="text-gray-400 text-sm">Sopa + Bandeja</p>
+                    <span class="text-xl font-bold txt-primary">Completo</span>
+                    <p class="txt-muted text-sm">Sopa + Bandeja</p>
                 </div>
                 <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_completo).toLocaleString()}</span>
             </div>
         </button>
         <button onclick="seleccionarTipo('bandeja')" id="tipo-bandeja"
-            class="tipo-btn w-full bg-white rounded-2xl shadow p-5 text-left border-2 border-transparent hover:border-amber-400 transition">
+            class="tipo-btn card w-full rounded-2xl shadow p-5 text-left border-2 border-transparent hover:border-amber-400 transition">
             <div class="flex justify-between items-center">
                 <div>
-                    <span class="text-xl font-bold text-gray-800">Bandeja</span>
-                    <p class="text-gray-400 text-sm">Proteína + Principio</p>
+                    <span class="text-xl font-bold txt-primary">Bandeja</span>
+                    <p class="txt-muted text-sm">Proteína + Principio</p>
                 </div>
                 <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_bandeja).toLocaleString()}</span>
             </div>
         </button>
         <button onclick="seleccionarTipo('sopa')" id="tipo-sopa"
-            class="tipo-btn w-full bg-white rounded-2xl shadow p-5 text-left border-2 border-transparent hover:border-amber-400 transition">
+            class="tipo-btn card w-full rounded-2xl shadow p-5 text-left border-2 border-transparent hover:border-amber-400 transition">
             <div class="flex justify-between items-center">
                 <div>
-                    <span class="text-xl font-bold text-gray-800">Sopa</span>
-                    <p class="text-gray-400 text-sm">Solo sopa o caldo</p>
+                    <span class="text-xl font-bold txt-primary">Sopa</span>
+                    <p class="txt-muted text-sm">Solo sopa o caldo</p>
                 </div>
                 <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_sopa).toLocaleString()}</span>
             </div>
@@ -321,8 +330,8 @@ function renderOpcionesCliente(containerId, items, categoria) {
     }
     cont.innerHTML = items.map(i => `
         <button onclick="seleccionarOpcion('${categoria}', ${i.opcion_id}, this)"
-            class="opcion-btn opcion-${categoria} bg-white border-2 border-gray-200 rounded-xl p-3 text-left transition hover:border-amber-300">
-            <span class="font-semibold text-gray-800">${i.nombre}</span>
+            class="opcion-btn opcion-${categoria} border-2 border-gray-200 rounded-xl p-3 text-left transition hover:border-amber-300">
+            <span class="font-semibold txt-primary">${i.nombre}</span>
             ${i.recargo > 0 ? `<span class="text-amber-500 text-xs block">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
         </button>
     `).join('');
@@ -439,7 +448,7 @@ async function cargarMisPedidos() {
             const esListo = p.estado === 'listo';
             const tipoLabel = p.tipo === 'carta' ? '' : p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1);
             return `
-                <div class="card bg-white rounded-xl p-3 shadow border-l-4 ${esListo ? 'border-green-500' : 'border-amber-400'}">
+                <div class="card rounded-xl p-3 shadow border-l-4 ${esListo ? 'border-green-500' : 'border-amber-400'}">
                     <div class="flex justify-between items-center">
                         <div>
                             ${tipoLabel ? `<span class="font-semibold txt-primary">${tipoLabel}</span>` : ''}
@@ -483,17 +492,17 @@ async function cargarCartaCliente() {
                 <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-3">${cat}</h3>
                 <div class="grid grid-cols-2 gap-3">
                     ${grupos[cat].map(p => `
-                        <div class="card bg-white rounded-2xl shadow overflow-hidden">
+                        <div class="card rounded-2xl shadow overflow-hidden">
                             ${p.imagen
                                 ? `<img src="${p.imagen}" onclick="abrirZoom('${p.imagen}')" class="w-full h-36 object-cover cursor-pointer">`
-                                : `<div class="w-full h-24 bg-gray-100 flex items-center justify-center">
+                                : `<div class="w-full h-24 placeholder-sin-img bg-gray-100 flex items-center justify-center">
                                     <svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                   </div>`}
                             <div class="p-3">
                                 <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
                                 <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
                                 <div class="flex items-center justify-center gap-3 mt-2">
-                                    <button onclick="cartaClienteCant(${p.id}, -1)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
+                                    <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
                                     <span id="cli-cant-${p.id}" class="font-bold txt-primary w-6 text-center text-lg">0</span>
                                     <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-9 h-9 rounded-full font-bold text-lg">+</button>
                                 </div>
@@ -599,7 +608,7 @@ function cerrarModal() {
 function selTipoEntrega(tipo) {
     tipoEntrega = tipo;
     const clsOn = 'border-amber-500 bg-amber-50 text-amber-700';
-    const clsOff = 'border-gray-200 text-gray-600 hover:border-amber-400';
+    const clsOff = 'btn-entrega border-gray-200 text-gray-600 hover:border-amber-400';
     document.getElementById('btn-recoger').className = `flex-1 border-2 rounded-xl py-3 font-bold text-center transition ${tipo === 'recoger' ? clsOn : clsOff}`;
     document.getElementById('btn-domicilio').className = `flex-1 border-2 rounded-xl py-3 font-bold text-center transition ${tipo === 'domicilio' ? clsOn : clsOff}`;
     document.getElementById('reg-direccion').classList.toggle('hidden', tipo !== 'domicilio');
@@ -705,8 +714,8 @@ setInterval(cargarMisPedidos, 10000);
 {% if mesa_num == 0 %}
 <!-- Modal registro para pedido remoto -->
 <div id="modal-registro" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden" onclick="if(event.target===this)cerrarModal()">
-    <div class="bg-white rounded-t-3xl w-full max-w-lg p-6 pb-8">
-        <h2 class="font-extrabold text-xl text-gray-800 mb-4">Datos para tu pedido</h2>
+    <div class="modal-card bg-white rounded-t-3xl w-full max-w-lg p-6 pb-8">
+        <h2 class="font-extrabold text-xl txt-primary mb-4">Datos para tu pedido</h2>
         <div class="space-y-3">
             <input id="reg-nombre" type="text" placeholder="Tu nombre"
                 class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none font-semibold">
@@ -714,11 +723,11 @@ setInterval(cargarMisPedidos, 10000);
                 class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none">
             <div class="flex gap-3">
                 <button onclick="selTipoEntrega('recoger')" id="btn-recoger"
-                    class="flex-1 border-2 border-gray-200 rounded-xl py-3 font-bold text-center transition hover:border-amber-400 text-gray-600">
+                    class="btn-entrega flex-1 border-2 border-gray-200 rounded-xl py-3 font-bold text-center transition hover:border-amber-400 text-gray-600">
                     Recoger en local
                 </button>
                 <button onclick="selTipoEntrega('domicilio')" id="btn-domicilio"
-                    class="flex-1 border-2 border-gray-200 rounded-xl py-3 font-bold text-center transition hover:border-amber-400 text-gray-600">
+                    class="btn-entrega flex-1 border-2 border-gray-200 rounded-xl py-3 font-bold text-center transition hover:border-amber-400 text-gray-600">
                     Domicilio
                 </button>
             </div>

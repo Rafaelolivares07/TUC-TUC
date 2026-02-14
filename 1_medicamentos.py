@@ -24573,30 +24573,38 @@ def crear_tablas_restaurante(conn):
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
-    # Self-healing: columnas nuevas
-    try:
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tipo_restaurante VARCHAR(20) DEFAULT 'menu_dia'")
-        conn.execute("ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS precio DECIMAL(10,2) DEFAULT 0")
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS plato_id INTEGER")
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1")
-        conn.execute("ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS imagen TEXT")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_id INTEGER")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(255)")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS token_acceso VARCHAR(100) UNIQUE")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_mesero VARCHAR(10)")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_cocina VARCHAR(10)")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0")
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(20) DEFAULT 'mesa'")
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS telefono_cliente VARCHAR(20)")
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS direccion_cliente TEXT")
-        conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_id INTEGER")
-        conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT")
-        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'")
-    except:
-        pass
+    # Self-healing: columnas nuevas (cada ALTER aislado para que uno no tumbe los demás)
+    alters = [
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tipo_restaurante VARCHAR(20) DEFAULT 'menu_dia'",
+        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS precio DECIMAL(10,2) DEFAULT 0",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS plato_id INTEGER",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1",
+        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS imagen TEXT",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_id INTEGER",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(255)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS token_acceso VARCHAR(100) UNIQUE",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_mesero VARCHAR(10)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_cocina VARCHAR(10)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(20) DEFAULT 'mesa'",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS telefono_cliente VARCHAR(20)",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS direccion_cliente TEXT",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_id INTEGER",
+        "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except:
+            try:
+                conn.rollback()
+            except:
+                pass
 
 
 def generar_slug(nombre):

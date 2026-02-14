@@ -24595,6 +24595,7 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
     ]
     for sql in alters:
         try:
@@ -25138,6 +25139,30 @@ def api_restaurante_tema(slug):
         conn.execute(
             "UPDATE restaurantes SET tema = %s WHERE id = %s",
             (tema, rest['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/mostrar-nombre', methods=['POST'])
+def api_restaurante_mostrar_nombre(slug):
+    """Toggle mostrar/ocultar nombre del restaurante en página pública"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    mostrar = data.get('mostrar', True)
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute(
+            "UPDATE restaurantes SET mostrar_nombre = %s WHERE id = %s",
+            (mostrar, rest['id'])
         )
         conn.commit()
         conn.close()

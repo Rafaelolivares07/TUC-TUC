@@ -314,6 +314,8 @@
         <!-- ====== TAB: PERSONALIZAR ====== -->
         <div id="panel-personalizar" class="p-6 hidden">
 
+            <p class="text-xs text-gray-400 mb-4 text-center">Estos cambios aplican a tu <b>página pública</b> y a las <b>mesas QR</b></p>
+
             <!-- Imagen header -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
                 <h3 class="font-bold text-gray-700 mb-2">Imagen de portada</h3>
@@ -337,6 +339,22 @@
                     <p class="text-sm text-gray-400">Toca para subir tu imagen de portada</p>
                 </div>
                 <input type="file" id="header-file-input" accept="image/*" class="hidden" onchange="subirImagenHeader(this)">
+            </div>
+
+            <!-- Mostrar/ocultar nombre -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-bold text-gray-700">Mostrar nombre del restaurante</h3>
+                        <p class="text-xs text-gray-400">Desactiva si tu imagen de portada ya incluye el nombre</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-nombre" class="sr-only peer"
+                            {{ 'checked' if (restaurante.mostrar_nombre | default(true)) }}
+                            onchange="toggleNombre(this.checked)">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
             </div>
 
             <!-- Tema claro/oscuro -->
@@ -1430,6 +1448,27 @@ async function quitarImagenHeader() {
         document.getElementById('header-preview').classList.add('hidden');
         document.getElementById('header-upload').classList.remove('hidden');
         toast('Imagen quitada');
+    }
+}
+
+// ===== MOSTRAR NOMBRE =====
+async function toggleNombre(mostrar) {
+    try {
+        const r = await fetch(`${BASE}/mostrar-nombre`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mostrar})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast(mostrar ? 'Nombre visible' : 'Nombre oculto');
+        } else {
+            toast(data.error || 'Error', true);
+            document.getElementById('toggle-nombre').checked = !mostrar;
+        }
+    } catch(e) {
+        toast('Error de conexión', true);
+        document.getElementById('toggle-nombre').checked = !mostrar;
     }
 }
 

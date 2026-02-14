@@ -65,6 +65,9 @@
             <button onclick="cambiarTab('cuentas')" id="tab-cuentas" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
                 Cuentas
             </button>
+            <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
+                Personalizar
+            </button>
         </div>
 
         <!-- ====== TAB: CATÁLOGO DE OPCIONES ====== -->
@@ -307,6 +310,56 @@
                 <p id="rpt-vacio" class="hidden text-gray-400 text-center py-8">No hay ventas en este periodo</p>
             </div>
         </div>
+
+        <!-- ====== TAB: PERSONALIZAR ====== -->
+        <div id="panel-personalizar" class="p-6 hidden">
+
+            <!-- Imagen header -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-2">Imagen de portada</h3>
+                <p class="text-xs text-gray-400 mb-3">Se muestra arriba en tu página pública y en las mesas QR. Tamaño ideal: 1200x400px</p>
+
+                <!-- Preview -->
+                <div id="header-preview" class="{% if not restaurante.imagen_header %}hidden{% endif %} mb-3">
+                    <img id="header-img-preview"
+                         src="{{ restaurante.imagen_header or '' }}"
+                         class="w-full h-32 object-cover rounded-xl border">
+                    <button onclick="quitarImagenHeader()" class="mt-2 text-xs text-red-500 hover:text-red-700 font-semibold">Quitar imagen</button>
+                </div>
+
+                <!-- Subir -->
+                <div id="header-upload" class="{% if restaurante.imagen_header %}hidden{% endif %}
+                    border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-amber-400 transition"
+                    onclick="document.getElementById('header-file-input').click()">
+                    <svg class="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <p class="text-sm text-gray-400">Toca para subir tu imagen de portada</p>
+                </div>
+                <input type="file" id="header-file-input" accept="image/*" class="hidden" onchange="subirImagenHeader(this)">
+            </div>
+
+            <!-- Tema claro/oscuro -->
+            <div class="bg-gray-50 rounded-xl p-4">
+                <h3 class="font-bold text-gray-700 mb-2">Tema de la página</h3>
+                <p class="text-xs text-gray-400 mb-3">Elige cómo se ve tu página para los clientes</p>
+                <div class="flex gap-3">
+                    <button onclick="cambiarTema('claro')" id="btn-tema-claro"
+                        class="flex-1 border-2 rounded-xl py-4 text-center font-bold transition
+                        {{ 'border-amber-500 bg-amber-50 text-amber-700' if (restaurante.tema or 'claro') == 'claro' else 'border-gray-200 text-gray-500 hover:border-gray-300' }}">
+                        <span class="text-2xl block mb-1">&#9728;</span>
+                        Claro
+                    </button>
+                    <button onclick="cambiarTema('oscuro')" id="btn-tema-oscuro"
+                        class="flex-1 border-2 rounded-xl py-4 text-center font-bold transition
+                        {{ 'border-amber-500 bg-gray-800 text-amber-400' if restaurante.tema == 'oscuro' else 'border-gray-200 text-gray-500 hover:border-gray-300' }}">
+                        <span class="text-2xl block mb-1">&#9790;</span>
+                        Oscuro
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -468,7 +521,7 @@ async function verHistorial(slug) {
 
 // ===== TABS =====
 function cambiarTab(tab) {
-    ['catalogo', 'menudia', 'mesas', 'cuentas'].forEach(t => {
+    ['catalogo', 'menudia', 'mesas', 'cuentas', 'personalizar'].forEach(t => {
         const panel = document.getElementById(`panel-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
@@ -1324,6 +1377,82 @@ function renderReporteDetalle() {
             </tr>
         `;
     }).join('');
+}
+
+// ===== IMAGEN HEADER =====
+async function subirImagenHeader(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return toast('Imagen muy pesada (máx 5MB)', false);
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const MAX_W = 800;
+            let w = img.width, h = img.height;
+            if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const base64 = canvas.toDataURL('image/jpeg', 0.75);
+
+            fetch(`${BASE}/imagen-header`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({imagen: base64})
+            }).then(r => r.json()).then(data => {
+                if (data.ok) {
+                    document.getElementById('header-img-preview').src = base64;
+                    document.getElementById('header-preview').classList.remove('hidden');
+                    document.getElementById('header-upload').classList.add('hidden');
+                    toast('Imagen de portada guardada');
+                } else {
+                    toast(data.error || 'Error', false);
+                }
+            });
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+async function quitarImagenHeader() {
+    const r = await fetch(`${BASE}/imagen-header`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({imagen: ''})
+    });
+    const data = await r.json();
+    if (data.ok) {
+        document.getElementById('header-preview').classList.add('hidden');
+        document.getElementById('header-upload').classList.remove('hidden');
+        toast('Imagen quitada');
+    }
+}
+
+// ===== TEMA =====
+async function cambiarTema(tema) {
+    const r = await fetch(`${BASE}/tema`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tema})
+    });
+    const data = await r.json();
+    if (data.ok) {
+        const btnClaro = document.getElementById('btn-tema-claro');
+        const btnOscuro = document.getElementById('btn-tema-oscuro');
+        if (tema === 'claro') {
+            btnClaro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-amber-500 bg-amber-50 text-amber-700';
+            btnOscuro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-gray-200 text-gray-500 hover:border-gray-300';
+        } else {
+            btnOscuro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-amber-500 bg-gray-800 text-amber-400';
+            btnClaro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-gray-200 text-gray-500 hover:border-gray-300';
+        }
+        toast(`Tema cambiado a ${tema}`);
+    }
 }
 
 if (SLUG) {

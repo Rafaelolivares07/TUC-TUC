@@ -24593,6 +24593,8 @@ def crear_tablas_restaurante(conn):
         conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS direccion_cliente TEXT")
         conn.execute("ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_id INTEGER")
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT")
+        conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'")
     except:
         pass
 
@@ -25078,6 +25080,56 @@ def api_restaurante_opcion_imagen(slug, opcion_id):
         conn.execute(
             "UPDATE opciones_menu SET imagen = %s WHERE id = %s AND restaurante_id = %s",
             (imagen if imagen else None, opcion_id, rest['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/imagen-header', methods=['POST'])
+def api_restaurante_imagen_header(slug):
+    """Subir o quitar imagen header del restaurante"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id, admin_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute(
+            "UPDATE restaurantes SET imagen_header = %s WHERE id = %s",
+            (imagen if imagen else None, rest['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/tema', methods=['POST'])
+def api_restaurante_tema(slug):
+    """Cambiar tema claro/oscuro del restaurante"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    tema = data.get('tema', 'claro')
+    if tema not in ('claro', 'oscuro'):
+        return jsonify({'ok': False, 'error': 'Tema inválido'}), 400
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute(
+            "UPDATE restaurantes SET tema = %s WHERE id = %s",
+            (tema, rest['id'])
         )
         conn.commit()
         conn.close()

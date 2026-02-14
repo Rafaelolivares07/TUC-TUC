@@ -1435,23 +1435,29 @@ async function quitarImagenHeader() {
 
 // ===== TEMA =====
 async function cambiarTema(tema) {
-    const r = await fetch(`${BASE}/tema`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({tema})
-    });
-    const data = await r.json();
-    if (data.ok) {
-        const btnClaro = document.getElementById('btn-tema-claro');
-        const btnOscuro = document.getElementById('btn-tema-oscuro');
-        if (tema === 'claro') {
-            btnClaro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-amber-500 bg-amber-50 text-amber-700';
-            btnOscuro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-gray-200 text-gray-500 hover:border-gray-300';
+    try {
+        const r = await fetch(`${BASE}/tema`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tema})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            const btnClaro = document.getElementById('btn-tema-claro');
+            const btnOscuro = document.getElementById('btn-tema-oscuro');
+            if (tema === 'claro') {
+                btnClaro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-amber-500 bg-amber-50 text-amber-700';
+                btnOscuro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-gray-200 text-gray-500 hover:border-gray-300';
+            } else {
+                btnOscuro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-amber-500 bg-gray-800 text-amber-400';
+                btnClaro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-gray-200 text-gray-500 hover:border-gray-300';
+            }
+            toast(`Tema cambiado a ${tema}`);
         } else {
-            btnOscuro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-amber-500 bg-gray-800 text-amber-400';
-            btnClaro.className = 'flex-1 border-2 rounded-xl py-4 text-center font-bold transition border-gray-200 text-gray-500 hover:border-gray-300';
+            toast(data.error || 'Error al cambiar tema', true);
         }
-        toast(`Tema cambiado a ${tema}`);
+    } catch(e) {
+        toast('Error de conexión al cambiar tema', true);
     }
 }
 

@@ -25574,7 +25574,10 @@ def restaurante_mesero(slug):
         conn.close()
         if not rest:
             return "Restaurante no encontrado", 404
-        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=True)
+        # Admin del sistema o dueño del restaurante: entrar sin PIN
+        uid = session.get('usuario_id')
+        skip_pin = uid and (session.get('rol') == 'Administrador' or uid == rest['admin_id'])
+        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=not skip_pin)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -25591,7 +25594,10 @@ def restaurante_cocina(slug):
         conn.close()
         if not rest:
             return "Restaurante no encontrado", 404
-        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=True)
+        # Admin del sistema o dueño del restaurante: entrar sin PIN
+        uid = session.get('usuario_id')
+        skip_pin = uid and (session.get('rol') == 'Administrador' or uid == rest['admin_id'])
+        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=not skip_pin)
     except Exception as e:
         return f"Error: {e}", 500
 

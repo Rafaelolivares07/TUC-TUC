@@ -178,6 +178,16 @@
             </div>
             {% endif %}
 
+            <!-- Info suscripción (solo lectura para dueño) -->
+            {% if es_dueno | default(false) %}
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-3">Tu suscripcion</h3>
+                <div id="info-suscripcion" class="bg-gray-50 rounded-xl p-4 text-sm text-gray-600">
+                    Cargando...
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Telegram (visible para todos) -->
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-3">Notificaciones Telegram</h3>
@@ -663,6 +673,20 @@ async function cargarSuscripcion() {
             const rest = data.dias_restantes;
             badge.textContent = `${data.dias_usados}/${data.dias_pagados} dias`;
             badge.className = `text-sm font-bold px-3 py-1 rounded-full ${rest <= 0 ? 'bg-red-100 text-red-600' : rest <= 3 ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}`;
+        }
+        // Info para dueño (solo lectura)
+        const info = document.getElementById('info-suscripcion');
+        if (info) {
+            if (data.dias_pagados > 0) {
+                const rest = data.dias_restantes;
+                const color = rest <= 0 ? 'text-red-600' : rest <= 3 ? 'text-yellow-600' : 'text-green-600';
+                info.innerHTML = `<div class="flex items-center justify-between">
+                    <span>Dias usados: <b>${data.dias_usados}</b> de <b>${data.dias_pagados}</b></span>
+                    <span class="font-bold ${color}">${rest} dias restantes</span>
+                </div>`;
+            } else {
+                info.textContent = 'Sin suscripcion activa. Contacta al administrador.';
+            }
         }
     } catch(e) {}
 }

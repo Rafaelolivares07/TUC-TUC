@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if tienda %}{{ tienda.nombre }}{% else %}Tiendas{% endif %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .tab-active { border-bottom: 3px solid #e11d48; color: #e11d48; font-weight: 700; }
+        .tab-inactive { border-bottom: 3px solid transparent; color: #6b7280; }
+        .tab-inactive:hover { color: #374151; border-color: #d1d5db; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+
+<div id="toast" class="toast"></div>
+
+{% if tienda %}
+<!-- ============================================ -->
+<!-- PANEL ADMIN DE UNA TIENDA                    -->
+<!-- ============================================ -->
+<div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-t-4 border-rose-500">
+        <div class="flex items-center justify-between">
+            <h1 class="text-3xl font-extrabold text-gray-800">{{ tienda.nombre }}</h1>
+            <div id="badge-dias" class="hidden text-sm font-bold px-3 py-1 rounded-full"></div>
+        </div>
+        <div class="mt-3 flex items-center gap-2 flex-wrap">
+            <span class="text-gray-400 text-sm">Pagina publica:</span>
+            <code id="url-publica" class="text-sm bg-gray-100 px-2 py-1 rounded text-rose-700 font-mono"></code>
+            <button onclick="copiarEnlace()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">Copiar</button>
+            <button onclick="compartirWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">WhatsApp</button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
+        <div class="flex border-b overflow-x-auto">
+            <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="flex-1 py-4 text-center text-sm tab-active transition-all whitespace-nowrap px-2">
+                Catalogo
+            </button>
+            <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
+                Pedidos
+            </button>
+            <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
+                Personalizar
+            </button>
+            <button onclick="cambiarTab('acceso')" id="tab-acceso" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
+                Acceso
+            </button>
+        </div>
+
+        <!-- ====== TAB: CATÁLOGO DE PRODUCTOS ====== -->
+        <div id="panel-catalogo" class="p-6">
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-3">Agregar producto</h3>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input id="cat-categoria" type="text" placeholder="Categoria" class="border rounded-lg px-3 py-2 text-sm w-40" list="categorias-list">
+                    <datalist id="categorias-list"></datalist>
+                    <input id="cat-nombre" type="text" placeholder="Nombre del producto" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
+                    <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    <button onclick="guardarProducto()" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                        Agregar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Buscador adopción -->
+            <div class="bg-blue-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-2">Buscar en otras tiendas</h3>
+                <input id="buscar-adopcion" type="text" placeholder="Buscar producto..." class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off">
+                <div id="resultados-adopcion" class="mt-2 space-y-1"></div>
+            </div>
+
+            <!-- Lista de productos por categoría -->
+            <div id="lista-productos"></div>
+        </div>
+
+        <!-- ====== TAB: PEDIDOS ====== -->
+        <div id="panel-pedidos" class="p-6 hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-gray-700">Pedidos de hoy</h3>
+                <span id="pedidos-count" class="text-sm text-gray-400"></span>
+            </div>
+            <div id="lista-pedidos" class="space-y-4"></div>
+            <div id="sin-pedidos" class="hidden text-center py-12 text-gray-400">
+                <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                <p class="font-semibold">No hay pedidos hoy</p>
+                <p class="text-sm mt-1">Los pedidos apareceran aqui automaticamente</p>
+            </div>
+        </div>
+
+        <!-- ====== TAB: PERSONALIZAR ====== -->
+        <div id="panel-personalizar" class="p-6 hidden">
+            <p class="text-sm text-gray-400 mb-6">Estos cambios aplican a tu pagina publica /t/{{ tienda.slug }}</p>
+
+            <!-- Imagen de portada -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-3">Imagen de portada</h3>
+                <div id="preview-header" class="w-full h-40 bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden" onclick="document.getElementById('inp-header').click()">
+                    {% if tienda.imagen_header %}
+                    <img src="{{ tienda.imagen_header }}" class="w-full h-full object-cover">
+                    {% else %}
+                    <span class="text-gray-400 text-sm">Toca para subir imagen</span>
+                    {% endif %}
+                </div>
+                <input id="inp-header" type="file" accept="image/*" class="hidden" onchange="subirHeader(this)">
+            </div>
+
+            <!-- Tema -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-3">Tema</h3>
+                <div class="flex gap-4">
+                    <button onclick="cambiarTema('claro')" id="btn-tema-claro" class="flex-1 py-3 rounded-xl border-2 font-semibold transition {{ 'border-rose-500 bg-rose-50' if (tienda.tema or 'claro') == 'claro' else 'border-gray-200' }}">
+                        Claro
+                    </button>
+                    <button onclick="cambiarTema('oscuro')" id="btn-tema-oscuro" class="flex-1 py-3 rounded-xl border-2 font-semibold transition {{ 'border-rose-500 bg-rose-50' if tienda.tema == 'oscuro' else 'border-gray-200' }}">
+                        Oscuro
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mostrar nombre -->
+            <div class="mb-4">
+                <h3 class="font-bold text-gray-700 mb-3">Mostrar nombre sobre la imagen</h3>
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="chk-mostrar-nombre" {{ 'checked' if tienda.mostrar_nombre | default(true) else '' }} onchange="toggleMostrarNombre()" class="w-5 h-5 accent-rose-500">
+                    <span class="text-sm text-gray-600">Si tu imagen ya tiene el nombre, desactiva esto</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- ====== TAB: ACCESO ====== -->
+        <div id="panel-acceso" class="p-6 hidden">
+            <!-- Link mágico -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-3">Enlace de acceso del dueno</h3>
+                <p class="text-sm text-gray-500 mb-3">Comparte este enlace con el dueno de la tienda para que pueda acceder a su panel.</p>
+                <div class="bg-gray-50 rounded-xl p-4 flex items-center gap-2 flex-wrap">
+                    <code id="link-magico" class="text-sm text-rose-700 font-mono break-all flex-1"></code>
+                    <button onclick="copiarLinkMagico()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600">Copiar</button>
+                    <button onclick="enviarLinkWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white">WhatsApp</button>
+                </div>
+            </div>
+
+            <!-- Telegram -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-3">Notificaciones Telegram</h3>
+                <p class="text-sm text-gray-500 mb-3">Ingresa tu Chat ID de Telegram para recibir notificaciones de pedidos nuevos. Puedes obtenerlo enviando /start a @userinfobot en Telegram.</p>
+                <div class="flex gap-2">
+                    <input id="inp-telegram" type="text" placeholder="Chat ID (ej: 123456789)" value="{{ tienda.telegram_chat_id or '' }}" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    <button onclick="guardarTelegram()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Guardar</button>
+                </div>
+            </div>
+
+            <!-- Días pagados (solo admin sistema) -->
+            {% if not es_dueno | default(false) %}
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-3">Suscripcion (dias pagados)</h3>
+                <div class="flex gap-2">
+                    <input id="inp-dias" type="number" min="0" value="{{ tienda.dias_pagados or 0 }}" class="border rounded-lg px-3 py-2 text-sm w-32">
+                    <button onclick="guardarDias()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Guardar</button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center py-4">
+        <p class="text-xs text-gray-400">Powered by <span class="font-bold">TUC TUC</span></p>
+    </div>
+</div>
+
+<script>
+const SLUG = '{{ tienda.slug }}';
+const BASE = '/api/tienda/' + SLUG;
+const TOKEN = '{{ tienda.token_acceso }}';
+const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
+let productos = [];
+let pollingInterval = null;
+
+// === Toast ===
+function toast(msg, error) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (error ? 'toast-err' : 'toast-ok');
+    setTimeout(() => t.className = 'toast', 2500);
+}
+
+// === Tabs ===
+function cambiarTab(tab) {
+    ['catalogo','pedidos','personalizar','acceso'].forEach(t => {
+        document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+        document.getElementById('tab-' + t).className = (t === tab) ?
+            'flex-1 py-4 text-center text-sm tab-active transition-all whitespace-nowrap px-2' :
+            'flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2';
+    });
+    if (tab === 'pedidos') cargarPedidos();
+}
+
+// === URL pública y enlaces ===
+document.getElementById('url-publica').textContent = location.origin + '/t/' + SLUG;
+
+function copiarEnlace() {
+    navigator.clipboard.writeText(location.origin + '/t/' + SLUG);
+    toast('Enlace copiado');
+}
+function compartirWhatsApp() {
+    window.open('https://wa.me/?text=' + encodeURIComponent('Mira nuestra tienda online: ' + location.origin + '/t/' + SLUG));
+}
+
+// Link mágico
+document.getElementById('link-magico').textContent = location.origin + '/t/acceso/' + TOKEN;
+function copiarLinkMagico() {
+    navigator.clipboard.writeText(location.origin + '/t/acceso/' + TOKEN);
+    toast('Enlace copiado');
+}
+function enviarLinkWhatsApp() {
+    const msg = `Hola! Accede a tu panel de tienda desde este enlace:\n${location.origin}/t/acceso/${TOKEN}`;
+    window.open('https://wa.me/' + (ADMIN_TEL.startsWith('57') ? ADMIN_TEL : '57' + ADMIN_TEL) + '?text=' + encodeURIComponent(msg));
+}
+
+// === Productos ===
+async function cargarProductos() {
+    try {
+        const r = await fetch(BASE + '/productos');
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        productos = data.productos;
+        renderProductos();
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function renderProductos() {
+    const cont = document.getElementById('lista-productos');
+    if (!productos.length) {
+        cont.innerHTML = '<p class="text-center text-gray-400 py-8">No hay productos. Agrega el primero arriba.</p>';
+        return;
+    }
+    // Agrupar por categoría
+    const cats = {};
+    productos.forEach(p => {
+        const c = p.categoria || 'Sin categoria';
+        if (!cats[c]) cats[c] = [];
+        cats[c].push(p);
+    });
+    // Actualizar datalist
+    const dl = document.getElementById('categorias-list');
+    dl.innerHTML = Object.keys(cats).map(c => `<option value="${c}">`).join('');
+
+    let html = '';
+    for (const [cat, prods] of Object.entries(cats)) {
+        html += `<div class="mb-6">
+            <h4 class="text-sm font-bold text-gray-500 uppercase mb-3">${cat}</h4>
+            <div class="space-y-2">`;
+        for (const p of prods) {
+            const agotado = !p.disponible;
+            html += `<div class="flex items-center gap-3 bg-white border rounded-xl p-3 ${agotado ? 'opacity-50' : ''}">
+                <div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 cursor-pointer" onclick="clickImagen(${p.id})">
+                    ${p.imagen ? `<img src="${p.imagen}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-300 text-xs">Foto</div>`}
+                </div>
+                <input type="file" id="inp-img-${p.id}" accept="image/*" class="hidden" onchange="subirImagen(${p.id}, this)">
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-800 truncate">${p.nombre}</p>
+                    <p class="text-sm text-rose-600 font-bold">$${p.precio.toLocaleString()}</p>
+                </div>
+                <button onclick="toggleDisponible(${p.id}, ${agotado})" class="text-xs px-3 py-1 rounded-full font-bold ${agotado ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
+                    ${agotado ? 'Agotado' : 'Disponible'}
+                </button>
+                <button onclick="eliminarProducto(${p.id})" class="text-gray-300 hover:text-red-500 transition">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+            </div>`;
+        }
+        html += '</div></div>';
+    }
+    cont.innerHTML = html;
+}
+
+async function guardarProducto() {
+    const nombre = document.getElementById('cat-nombre').value.trim();
+    const categoria = document.getElementById('cat-categoria').value.trim();
+    const precio = document.getElementById('cat-precio').value;
+    if (!nombre) return toast('Escribe el nombre del producto', true);
+    if (!precio || parseFloat(precio) <= 0) return toast('Ingresa un precio valido', true);
+
+    try {
+        const r = await fetch(BASE + '/producto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre, categoria, precio: parseFloat(precio)})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('cat-nombre').value = '';
+            document.getElementById('cat-precio').value = '';
+            toast('Producto agregado');
+            cargarProductos();
+        } else {
+            toast(data.error || 'Error', true);
+        }
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function eliminarProducto(id) {
+    if (!confirm('Eliminar este producto?')) return;
+    try {
+        const r = await fetch(BASE + '/producto/' + id, {method: 'DELETE'});
+        const data = await r.json();
+        if (data.ok) { toast('Eliminado'); cargarProductos(); }
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function toggleDisponible(id, estaAgotado) {
+    try {
+        const r = await fetch(BASE + '/producto/' + id + '/disponible', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({disponible: estaAgotado})
+        });
+        const data = await r.json();
+        if (data.ok) { toast(estaAgotado ? 'Disponible' : 'Agotado'); cargarProductos(); }
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function clickImagen(id) {
+    document.getElementById('inp-img-' + id).click();
+}
+
+async function subirImagen(id, input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const img = new Image();
+        img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const max = 400;
+            let w = img.width, h = img.height;
+            if (w > max || h > max) {
+                if (w > h) { h = h * max / w; w = max; }
+                else { w = w * max / h; h = max; }
+            }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const base64 = canvas.toDataURL('image/jpeg', 0.7);
+            try {
+                const r = await fetch(BASE + '/producto/' + id + '/imagen', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({imagen: base64})
+                });
+                const data = await r.json();
+                if (data.ok) { toast('Imagen actualizada'); cargarProductos(); }
+                else toast(data.error || 'Error', true);
+            } catch(e) { toast('Error de conexion', true); }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+// === Adopción ===
+let debounceTimer;
+document.getElementById('buscar-adopcion').addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    const q = this.value.trim();
+    if (q.length < 2) { document.getElementById('resultados-adopcion').innerHTML = ''; return; }
+    debounceTimer = setTimeout(async () => {
+        try {
+            const r = await fetch(BASE + '/buscar-productos?q=' + encodeURIComponent(q));
+            const data = await r.json();
+            if (!data.ok) return;
+            const cont = document.getElementById('resultados-adopcion');
+            if (!data.productos.length) { cont.innerHTML = '<p class="text-sm text-gray-400">No se encontraron productos</p>'; return; }
+            cont.innerHTML = data.productos.map(p =>
+                `<div class="flex items-center justify-between bg-white rounded-lg p-2 border">
+                    <div><span class="font-semibold text-sm">${p.nombre}</span> <span class="text-xs text-gray-400">${p.categoria}</span></div>
+                    <button onclick="adoptarProducto('${p.nombre.replace(/'/g,"\\'")}','${p.categoria.replace(/'/g,"\\'")}')" class="text-xs bg-blue-500 text-white px-3 py-1 rounded-lg font-bold">Agregar</button>
+                </div>`
+            ).join('');
+        } catch(e) {}
+    }, 300);
+});
+
+async function adoptarProducto(nombre, categoria) {
+    try {
+        const r = await fetch(BASE + '/adoptar-producto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre, categoria})
+        });
+        const data = await r.json();
+        if (data.ok) { toast('Producto adoptado'); cargarProductos(); document.getElementById('buscar-adopcion').value = ''; document.getElementById('resultados-adopcion').innerHTML = ''; }
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+// === Pedidos ===
+let pedidosAnteriores = 0;
+async function cargarPedidos() {
+    try {
+        const r = await fetch(BASE + '/pedidos');
+        const data = await r.json();
+        if (!data.ok) return;
+        const pedidos = data.pedidos;
+        document.getElementById('pedidos-count').textContent = pedidos.length + ' pedido(s)';
+        document.getElementById('sin-pedidos').classList.toggle('hidden', pedidos.length > 0);
+
+        // Sonido si hay nuevos
+        if (pedidos.length > pedidosAnteriores && pedidosAnteriores > 0) {
+            try { new Audio('data:audio/wav;base64,UklGRl9vT19teleXRlZm10IBAAAAABAAIAQB8AAEAfAAAABAAgAAAAAQBkYXRhQW9P/wD/AP8A/wD/AP8A').play(); } catch(e){}
+        }
+        pedidosAnteriores = pedidos.length;
+
+        const cont = document.getElementById('lista-pedidos');
+        if (!pedidos.length) { cont.innerHTML = ''; return; }
+
+        cont.innerHTML = pedidos.map(p => {
+            const estados = {nuevo: 'bg-blue-100 text-blue-700', preparando: 'bg-yellow-100 text-yellow-700', listo: 'bg-green-100 text-green-700', entregado: 'bg-gray-100 text-gray-500'};
+            const nextEstado = {nuevo: 'preparando', preparando: 'listo', listo: 'entregado'};
+            const entrega = p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger';
+            const itemsHtml = p.items.map(i => `<li class="text-sm text-gray-600">${i.cantidad}x ${i.nombre} <span class="text-gray-400">$${(i.precio * i.cantidad).toLocaleString()}</span></li>`).join('');
+            return `<div class="bg-white border rounded-xl p-4">
+                <div class="flex items-start justify-between mb-2">
+                    <div>
+                        <span class="font-bold text-gray-800">${p.nombre_cliente || 'Sin nombre'}</span>
+                        <span class="text-xs text-gray-400 ml-2">${p.created_at}</span>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 rounded-full ${estados[p.estado] || ''}">${p.estado.toUpperCase()}</span>
+                </div>
+                <div class="text-sm text-gray-500 mb-2">
+                    <span class="font-semibold">${entrega}</span>
+                    ${p.telefono_cliente ? ' | ' + p.telefono_cliente : ''}
+                    ${p.direccion_cliente ? ' | ' + p.direccion_cliente : ''}
+                </div>
+                <ul class="mb-3 space-y-1">${itemsHtml}</ul>
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-rose-600">Total: $${p.total.toLocaleString()}</span>
+                    ${nextEstado[p.estado] ? `<button onclick="cambiarEstado(${p.id}, '${nextEstado[p.estado]}')" class="text-sm bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-semibold">${nextEstado[p.estado] === 'preparando' ? 'Preparar' : nextEstado[p.estado] === 'listo' ? 'Marcar listo' : 'Entregar'}</button>` : '<span class="text-xs text-gray-400">Entregado</span>'}
+                </div>
+                ${p.notas ? `<p class="text-xs text-gray-400 mt-2 italic">${p.notas}</p>` : ''}
+            </div>`;
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function cambiarEstado(pedidoId, estado) {
+    try {
+        const r = await fetch(BASE + '/pedido/' + pedidoId + '/estado', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({estado})
+        });
+        const data = await r.json();
+        if (data.ok) { toast('Estado actualizado'); cargarPedidos(); }
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+// === Personalización ===
+async function subirHeader(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const img = new Image();
+        img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const max = 800;
+            let w = img.width, h = img.height;
+            if (w > max) { h = h * max / w; w = max; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const base64 = canvas.toDataURL('image/jpeg', 0.75);
+            try {
+                const r = await fetch(BASE + '/imagen-header', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({imagen: base64})
+                });
+                const data = await r.json();
+                if (data.ok) {
+                    document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
+                    toast('Imagen actualizada');
+                } else toast(data.error || 'Error', true);
+            } catch(e) { toast('Error de conexion', true); }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function cambiarTema(tema) {
+    try {
+        const r = await fetch(BASE + '/tema', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tema})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('btn-tema-claro').className = `flex-1 py-3 rounded-xl border-2 font-semibold transition ${tema === 'claro' ? 'border-rose-500 bg-rose-50' : 'border-gray-200'}`;
+            document.getElementById('btn-tema-oscuro').className = `flex-1 py-3 rounded-xl border-2 font-semibold transition ${tema === 'oscuro' ? 'border-rose-500 bg-rose-50' : 'border-gray-200'}`;
+            toast('Tema actualizado');
+        } else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function toggleMostrarNombre() {
+    const mostrar = document.getElementById('chk-mostrar-nombre').checked;
+    try {
+        const r = await fetch(BASE + '/mostrar-nombre', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mostrar})
+        });
+        const data = await r.json();
+        if (data.ok) toast(mostrar ? 'Nombre visible' : 'Nombre oculto');
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+// === Acceso: Telegram ===
+async function guardarTelegram() {
+    const chat_id = document.getElementById('inp-telegram').value.trim();
+    try {
+        const r = await fetch(BASE + '/telegram', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_chat_id: chat_id})
+        });
+        const data = await r.json();
+        if (data.ok) toast('Telegram configurado');
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+// === Acceso: Días pagados ===
+async function guardarDias() {
+    const dias = parseInt(document.getElementById('inp-dias').value) || 0;
+    try {
+        const r = await fetch(BASE + '/dias-pagados', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({dias})
+        });
+        const data = await r.json();
+        if (data.ok) { toast('Dias actualizados'); cargarSuscripcion(); }
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+// === Suscripción badge ===
+async function cargarSuscripcion() {
+    try {
+        const r = await fetch(BASE + '/suscripcion');
+        const data = await r.json();
+        if (!data.ok) return;
+        const badge = document.getElementById('badge-dias');
+        if (data.dias_pagados > 0) {
+            badge.classList.remove('hidden');
+            const rest = data.dias_restantes;
+            badge.textContent = `${data.dias_usados}/${data.dias_pagados} dias`;
+            badge.className = `text-sm font-bold px-3 py-1 rounded-full ${rest <= 0 ? 'bg-red-100 text-red-600' : rest <= 3 ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}`;
+        }
+    } catch(e) {}
+}
+
+// === Init ===
+cargarProductos();
+cargarSuscripcion();
+// Polling pedidos cada 5 segundos
+pollingInterval = setInterval(() => {
+    if (!document.getElementById('panel-pedidos').classList.contains('hidden')) {
+        cargarPedidos();
+    }
+}, 5000);
+</script>
+
+{% else %}
+<!-- ============================================ -->
+<!-- LISTA DE TIENDAS + CREAR NUEVA               -->
+<!-- ============================================ -->
+<div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-extrabold text-gray-800">Tiendas</h1>
+        <a href="/admin" class="text-sm text-gray-400 hover:text-gray-600">Volver al menu</a>
+    </div>
+
+    <!-- Lista -->
+    {% if tiendas %}
+    <div class="space-y-3 mb-8">
+        {% for t in tiendas %}
+        <a href="/admin/tienda/{{ t.slug }}" class="block bg-white rounded-xl shadow p-4 hover:shadow-lg transition border-l-4 border-rose-400">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-gray-800">{{ t.nombre }}</h3>
+                    <p class="text-sm text-gray-500">{{ t.admin_nombre }} - {{ t.admin_telefono }}</p>
+                </div>
+                <div class="text-right">
+                    {% if t.dias_pagados and t.dias_pagados > 0 %}
+                    <span class="text-xs font-bold px-2 py-1 rounded-full {{ 'bg-red-100 text-red-600' if t.dias_restantes <= 0 else 'bg-yellow-100 text-yellow-600' if t.dias_restantes <= 3 else 'bg-green-100 text-green-600' }}">
+                        {{ t.dias_usados }}/{{ t.dias_pagados }} dias
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-12 text-gray-400 mb-8">
+        <p class="font-semibold text-lg">No hay tiendas todavia</p>
+        <p class="text-sm">Crea la primera abajo</p>
+    </div>
+    {% endif %}
+
+    <!-- Formulario crear -->
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Crear nueva tienda</h2>
+        <div class="space-y-4">
+            <div>
+                <label class="text-sm font-semibold text-gray-600">Nombre de la tienda</label>
+                <input id="nuevo-nombre" type="text" placeholder="Ej: Mi Tienda Online" class="w-full border rounded-lg px-3 py-2 mt-1">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm font-semibold text-gray-600">Nombre del dueno</label>
+                    <input id="nuevo-admin-nombre" type="text" placeholder="Nombre completo" class="w-full border rounded-lg px-3 py-2 mt-1">
+                </div>
+                <div>
+                    <label class="text-sm font-semibold text-gray-600">Celular del dueno</label>
+                    <input id="nuevo-admin-tel" type="tel" placeholder="3001234567" class="w-full border rounded-lg px-3 py-2 mt-1">
+                </div>
+            </div>
+            <button onclick="crearTienda()" class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-lg font-bold text-lg transition">
+                Crear tienda
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function toast(msg, error) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (error ? 'toast-err' : 'toast-ok');
+    setTimeout(() => t.className = 'toast', 2500);
+}
+
+async function crearTienda() {
+    const nombre = document.getElementById('nuevo-nombre').value.trim();
+    const admin_nombre = document.getElementById('nuevo-admin-nombre').value.trim();
+    const admin_telefono = document.getElementById('nuevo-admin-tel').value.trim();
+
+    if (!nombre) return toast('Escribe el nombre de la tienda', true);
+    if (!admin_nombre || !admin_telefono) return toast('Nombre y celular del dueno son requeridos', true);
+
+    try {
+        const r = await fetch('/api/tienda/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre, admin_nombre, admin_telefono})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            window.location.href = '/admin/tienda/' + data.slug;
+        } else {
+            toast(data.error || 'Error', true);
+        }
+    } catch(e) { toast('Error de conexion', true); }
+}
+</script>
+{% endif %}
+
+</body>
+</html>

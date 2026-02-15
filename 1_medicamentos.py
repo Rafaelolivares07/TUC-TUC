@@ -1440,7 +1440,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -24608,6 +24608,80 @@ def crear_tablas_restaurante(conn):
                 pass
 
 
+def crear_tablas_tienda(conn):
+    """Self-healing: crear todas las tablas del módulo tienda ecommerce"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tiendas (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(255) NOT NULL,
+            slug VARCHAR(100) UNIQUE NOT NULL,
+            admin_id INTEGER,
+            admin_nombre VARCHAR(255),
+            admin_telefono VARCHAR(20),
+            token_acceso VARCHAR(100) UNIQUE,
+            dias_pagados INTEGER DEFAULT 0,
+            imagen_header TEXT,
+            tema VARCHAR(10) DEFAULT 'claro',
+            mostrar_nombre BOOLEAN DEFAULT TRUE,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS productos_tienda (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL,
+            nombre VARCHAR(255) NOT NULL,
+            categoria VARCHAR(100),
+            precio DECIMAL(10,2) NOT NULL,
+            imagen TEXT,
+            disponible BOOLEAN DEFAULT TRUE,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pedidos_tienda (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL,
+            cliente_id INTEGER,
+            nombre_cliente VARCHAR(100),
+            telefono_cliente VARCHAR(20),
+            direccion_cliente TEXT,
+            tipo_entrega VARCHAR(20) DEFAULT 'domicilio',
+            estado VARCHAR(20) DEFAULT 'nuevo',
+            total DECIMAL(10,2) DEFAULT 0,
+            notas TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS items_pedido_tienda (
+            id SERIAL PRIMARY KEY,
+            pedido_id INTEGER NOT NULL,
+            producto_id INTEGER NOT NULL,
+            nombre_producto VARCHAR(255),
+            cantidad INTEGER DEFAULT 1,
+            precio_unitario DECIMAL(10,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
+    alters = [
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except:
+            try:
+                conn.rollback()
+            except:
+                pass
+
+
 def generar_slug(nombre):
     """Genera slug URL-friendly desde un nombre"""
     import re, unicodedata
@@ -26087,6 +26161,699 @@ def api_restaurante_ventas(slug):
             })
 
         return jsonify({'ok': True, 'pedidos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== MÓDULO TIENDAS E-COMMERCE =====
+
+@app.route('/admin/tienda')
+def admin_tienda_lista():
+    """Lista tiendas"""
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tiendas_raw = conn.execute(
+            "SELECT id, nombre, slug, admin_nombre, admin_telefono, token_acceso, dias_pagados FROM tiendas WHERE activo = TRUE ORDER BY nombre"
+        ).fetchall()
+        tiendas = []
+        for t in tiendas_raw:
+            dias_usados = conn.execute("""
+                SELECT COUNT(DISTINCT DATE(created_at)) as dias
+                FROM pedidos_tienda WHERE tienda_id = %s
+            """, (t['id'],)).fetchone()['dias']
+            t_dict = dict(t)
+            t_dict['dias_usados'] = dias_usados
+            t_dict['dias_restantes'] = max(0, (t['dias_pagados'] or 0) - dias_usados)
+            tiendas.append(t_dict)
+        conn.close()
+        return render_template('tienda_admin.html', tiendas=tiendas, tienda=None)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/admin/tienda/<slug>')
+def admin_tienda_detalle(slug):
+    """Panel admin de una tienda"""
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT * FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not tienda:
+            return redirect('/admin/tienda')
+        return render_template('tienda_admin.html', tienda=tienda, tiendas=None)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/mi-tienda/<slug>')
+def mi_tienda(slug):
+    """Panel del dueño de la tienda (fuera de /admin)"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT * FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return "Tienda no encontrada", 404
+
+        usuario_id = session.get('usuario_id')
+        es_admin_sistema = session.get('rol') == 'Administrador'
+
+        if usuario_id and (es_admin_sistema or usuario_id == tienda['admin_id']):
+            conn.close()
+            return render_template('tienda_admin.html', tienda=tienda, tiendas=None, es_dueno=True)
+
+        conn.close()
+        return redirect(f"/t/{slug}")
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/t/acceso/<token>')
+def tienda_acceso_token(token):
+    """Link mágico: loguea al dueño de la tienda"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT * FROM tiendas WHERE token_acceso = %s AND activo = TRUE", (token,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return "Enlace invalido o expirado", 404
+
+        admin_id = tienda['admin_id']
+        tercero = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (admin_id,)).fetchone()
+        conn.close()
+
+        if not tercero:
+            return "Usuario no encontrado", 404
+
+        session['usuario_id'] = tercero['id']
+        session['nombre'] = tercero['nombre']
+        session['telefono'] = tercero['telefono'] if tercero['telefono'] else ''
+        session['rol'] = 'Tienda'
+        session.permanent = True
+        session.modified = True
+
+        return redirect(f"/mi-tienda/{tienda['slug']}")
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/t/<slug>')
+def tienda_publica(slug):
+    """Página pública de la tienda - vitrina y pedidos"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT * FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not tienda:
+            return "Tienda no encontrada", 404
+
+        cliente_data = None
+        if session.get('usuario_id'):
+            conn2 = get_db_connection()
+            tercero = conn2.execute(
+                "SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (session['usuario_id'],)
+            ).fetchone()
+            conn2.close()
+            if tercero:
+                cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '', 'direccion': tercero['direccion'] or '', 'cliente_id': session['usuario_id']}
+
+        return render_template('tienda_cliente.html', tienda=tienda, cliente_data=cliente_data)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/tienda/crear', methods=['POST'])
+def api_tienda_crear():
+    """Crea una nueva tienda con dueño"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    admin_nombre = data.get('admin_nombre', '').strip()
+    admin_telefono = data.get('admin_telefono', '').strip()
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre de la tienda requerido'}), 400
+    if not admin_nombre or not admin_telefono:
+        return jsonify({'ok': False, 'error': 'Nombre y celular del administrador son requeridos'}), 400
+
+    admin_telefono = ''.join(filter(str.isdigit, admin_telefono))
+    if len(admin_telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 digitos'}), 400
+
+    slug = generar_slug(nombre)
+    token_acceso = str(uuid.uuid4())
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+
+        existente = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya existe una tienda con ese nombre'}), 400
+
+        tercero = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (admin_telefono,)
+        ).fetchone()
+        if tercero:
+            admin_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (admin_nombre, admin_id))
+        else:
+            conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)",
+                (admin_nombre, admin_telefono)
+            )
+            admin_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (admin_telefono,)).fetchone()['id']
+
+        conn.execute(
+            "INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso) VALUES (%s, %s, %s, %s, %s, %s)",
+            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso)
+        )
+        conn.commit()
+        conn.close()
+
+        link_acceso = f"{request.host_url}t/acceso/{token_acceso}"
+        return jsonify({'ok': True, 'slug': slug, 'nombre': nombre, 'token_acceso': token_acceso, 'link_acceso': link_acceso})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/dias-pagados', methods=['POST'])
+def api_tienda_dias_pagados(slug):
+    """Configurar días pagados (solo admin del sistema)"""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
+    data = request.get_json()
+    dias = int(data.get('dias', 0))
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET dias_pagados = %s WHERE slug = %s", (dias, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# --- APIs Productos Tienda ---
+
+@app.route('/api/tienda/<slug>/productos')
+def api_tienda_productos(slug):
+    """Lista productos de la tienda"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        productos = conn.execute(
+            "SELECT id, nombre, categoria, precio, imagen, disponible, orden FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
+            (tienda['id'],)
+        ).fetchall()
+        conn.close()
+        resultado = []
+        for p in productos:
+            resultado.append({
+                'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
+                'precio': float(p['precio']), 'imagen': p['imagen'] or '',
+                'disponible': p['disponible'], 'orden': p['orden']
+            })
+        return jsonify({'ok': True, 'productos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto', methods=['POST'])
+def api_tienda_producto_crear(slug):
+    """Crear o editar producto"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    categoria = data.get('categoria', '').strip()
+    precio = data.get('precio', 0)
+    producto_id = data.get('id')
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    try:
+        precio = float(precio)
+    except:
+        return jsonify({'ok': False, 'error': 'Precio invalido'}), 400
+
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        if producto_id:
+            conn.execute(
+                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s WHERE id = %s AND tienda_id = %s",
+                (nombre, categoria, precio, producto_id, tienda['id'])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio) VALUES (%s, %s, %s, %s)",
+                (tienda['id'], nombre, categoria, precio)
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>', methods=['DELETE'])
+def api_tienda_producto_eliminar(slug, producto_id):
+    """Eliminar producto"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("DELETE FROM productos_tienda WHERE id = %s AND tienda_id = %s", (producto_id, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/imagen', methods=['POST'])
+def api_tienda_producto_imagen(slug, producto_id):
+    """Subir imagen de producto (base64)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("UPDATE productos_tienda SET imagen = %s WHERE id = %s AND tienda_id = %s", (imagen, producto_id, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/disponible', methods=['POST'])
+def api_tienda_producto_disponible(slug, producto_id):
+    """Toggle disponible/agotado"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    disponible = data.get('disponible', True)
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("UPDATE productos_tienda SET disponible = %s WHERE id = %s AND tienda_id = %s", (disponible, producto_id, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/buscar-productos')
+def api_tienda_buscar_productos(slug):
+    """Buscar productos de otras tiendas para adopción"""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'ok': True, 'productos': []})
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        productos = conn.execute("""
+            SELECT DISTINCT nombre, categoria FROM productos_tienda
+            WHERE tienda_id != %s AND LOWER(nombre) LIKE %s
+            LIMIT 20
+        """, (tienda['id'], f'%{q.lower()}%')).fetchall()
+        conn.close()
+        resultado = [{'nombre': p['nombre'], 'categoria': p['categoria'] or ''} for p in productos]
+        return jsonify({'ok': True, 'productos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/adoptar-producto', methods=['POST'])
+def api_tienda_adoptar_producto(slug):
+    """Copiar nombre+categoría de otra tienda"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    categoria = data.get('categoria', '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        existente = conn.execute(
+            "SELECT id FROM productos_tienda WHERE tienda_id = %s AND LOWER(nombre) = %s",
+            (tienda['id'], nombre.lower())
+        ).fetchone()
+        if existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya tienes este producto'}), 400
+        conn.execute(
+            "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio) VALUES (%s, %s, %s, 0)",
+            (tienda['id'], nombre, categoria)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# --- APIs Personalización Tienda ---
+
+@app.route('/api/tienda/<slug>/imagen-header', methods=['POST'])
+def api_tienda_imagen_header(slug):
+    """Subir imagen de portada"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET imagen_header = %s WHERE slug = %s", (imagen, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/tema', methods=['POST'])
+def api_tienda_tema(slug):
+    """Cambiar tema claro/oscuro"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    tema = data.get('tema', 'claro')
+    if tema not in ('claro', 'oscuro'):
+        tema = 'claro'
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET tema = %s WHERE slug = %s", (tema, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/mostrar-nombre', methods=['POST'])
+def api_tienda_mostrar_nombre(slug):
+    """Toggle mostrar nombre sobre imagen"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    mostrar = data.get('mostrar', True)
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET mostrar_nombre = %s WHERE slug = %s", (mostrar, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/telegram', methods=['POST'])
+def api_tienda_telegram(slug):
+    """Guardar chat_id de Telegram del dueño"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    chat_id = data.get('telegram_chat_id', '').strip()
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET telegram_chat_id = %s WHERE slug = %s", (chat_id if chat_id else None, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# --- APIs Pedidos Tienda ---
+
+@app.route('/api/tienda/<slug>/registrar-cliente', methods=['POST'])
+def api_tienda_registrar_cliente(slug):
+    """Registrar cliente desde la tienda pública"""
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    direccion = data.get('direccion', '').strip()
+
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 digitos'}), 400
+
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
+        if tercero:
+            cliente_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s, direccion = %s WHERE id = %s", (nombre, direccion, cliente_id))
+        else:
+            conn.execute("INSERT INTO terceros (nombre, telefono, direccion) VALUES (%s, %s, %s)", (nombre, telefono, direccion))
+            cliente_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (telefono,)).fetchone()['id']
+        conn.commit()
+        conn.close()
+
+        session['usuario_id'] = cliente_id
+        session['nombre'] = nombre
+        session['telefono'] = telefono
+        session['rol'] = 'Cliente'
+        session.permanent = True
+        session.modified = True
+
+        return jsonify({'ok': True, 'cliente_id': cliente_id})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/pedido', methods=['POST'])
+def api_tienda_pedido_crear(slug):
+    """Crear pedido desde la tienda pública"""
+    data = request.get_json()
+    nombre_cliente = data.get('nombre_cliente', '').strip()
+    telefono_cliente = data.get('telefono_cliente', '').strip()
+    direccion_cliente = data.get('direccion_cliente', '').strip()
+    tipo_entrega = data.get('tipo_entrega', 'domicilio')
+    notas = data.get('notas', '').strip()
+    cliente_id = data.get('cliente_id')
+    items = data.get('items', [])
+
+    if not items:
+        return jsonify({'ok': False, 'error': 'El carrito esta vacio'}), 400
+    if not nombre_cliente:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT id, nombre, dias_pagados, telegram_chat_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        # Verificar suscripción
+        dias_pagados = tienda['dias_pagados'] or 0
+        if dias_pagados > 0:
+            dias_usados = conn.execute("""
+                SELECT COUNT(DISTINCT DATE(created_at)) as dias
+                FROM pedidos_tienda WHERE tienda_id = %s
+            """, (tienda['id'],)).fetchone()['dias']
+            tiene_pedidos_hoy = conn.execute("""
+                SELECT 1 FROM pedidos_tienda
+                WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE LIMIT 1
+            """, (tienda['id'],)).fetchone()
+            if not tiene_pedidos_hoy and dias_usados >= dias_pagados:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'suscripcion_agotada', 'dias_pagados': dias_pagados, 'dias_usados': dias_usados}), 402
+
+        # Calcular total y validar items
+        total = 0
+        items_validos = []
+        for item in items:
+            producto = conn.execute(
+                "SELECT id, nombre, precio, disponible FROM productos_tienda WHERE id = %s AND tienda_id = %s",
+                (item.get('producto_id'), tienda['id'])
+            ).fetchone()
+            if not producto or not producto['disponible']:
+                continue
+            cantidad = max(1, int(item.get('cantidad', 1)))
+            precio_u = float(producto['precio'])
+            total += precio_u * cantidad
+            items_validos.append({'producto_id': producto['id'], 'nombre_producto': producto['nombre'], 'cantidad': cantidad, 'precio_unitario': precio_u})
+
+        if not items_validos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
+
+        # Crear pedido
+        conn.execute("""
+            INSERT INTO pedidos_tienda (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (tienda['id'], cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas or None))
+        pedido_id = conn.execute("SELECT currval(pg_get_serial_sequence('pedidos_tienda', 'id'))").fetchone()[0]
+
+        # Insertar items
+        for it in items_validos:
+            conn.execute("""
+                INSERT INTO items_pedido_tienda (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
+
+        conn.commit()
+        conn.close()
+
+        # Notificación Telegram al dueño
+        telegram_chat_id = tienda['telegram_chat_id']
+        if telegram_chat_id:
+            items_txt = '\n'.join([f"  {it['cantidad']}x {it['nombre_producto']} - ${it['precio_unitario'] * it['cantidad']:,.0f}" for it in items_validos])
+            entrega = 'Domicilio' if tipo_entrega == 'domicilio' else 'Recoger'
+            mensaje = f"🛒 <b>Nuevo pedido en {tienda['nombre']}</b>\n👤 {nombre_cliente} - {telefono_cliente}\n📦 {entrega}: {direccion_cliente or 'N/A'}\n\n{items_txt}\n\n💰 Total: ${total:,.0f}"
+            try:
+                import requests as req
+                url = f"https://api.telegram.org/bot{{}}/sendMessage"
+                conn2 = get_db_connection()
+                config = conn2.execute("SELECT telegram_token FROM CONFIGURACION_SISTEMA WHERE id = 1").fetchone()
+                conn2.close()
+                if config and config[0]:
+                    req.post(f"https://api.telegram.org/bot{config[0]}/sendMessage", json={'chat_id': telegram_chat_id, 'text': mensaje, 'parse_mode': 'HTML'}, timeout=10)
+            except:
+                pass
+
+        return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/pedidos')
+def api_tienda_pedidos(slug):
+    """Lista pedidos de la tienda (para polling del dueño)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        pedidos = conn.execute("""
+            SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, estado, total, notas, created_at
+            FROM pedidos_tienda WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
+            ORDER BY created_at DESC
+        """, (tienda['id'],)).fetchall()
+
+        resultado = []
+        for p in pedidos:
+            items = conn.execute("""
+                SELECT nombre_producto, cantidad, precio_unitario FROM items_pedido_tienda WHERE pedido_id = %s
+            """, (p['id'],)).fetchall()
+            resultado.append({
+                'id': p['id'],
+                'nombre_cliente': p['nombre_cliente'] or '',
+                'telefono_cliente': p['telefono_cliente'] or '',
+                'direccion_cliente': p['direccion_cliente'] or '',
+                'tipo_entrega': p['tipo_entrega'],
+                'estado': p['estado'],
+                'total': float(p['total']),
+                'notas': p['notas'] or '',
+                'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else '',
+                'items': [{'nombre': i['nombre_producto'], 'cantidad': i['cantidad'], 'precio': float(i['precio_unitario'])} for i in items]
+            })
+        conn.close()
+        return jsonify({'ok': True, 'pedidos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/pedido/<int:pedido_id>/estado', methods=['POST'])
+def api_tienda_pedido_estado(slug, pedido_id):
+    """Cambiar estado del pedido"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    estado = data.get('estado', '')
+    if estado not in ('nuevo', 'preparando', 'listo', 'entregado'):
+        return jsonify({'ok': False, 'error': 'Estado invalido'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("UPDATE pedidos_tienda SET estado = %s WHERE id = %s AND tienda_id = %s", (estado, pedido_id, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/suscripcion')
+def api_tienda_suscripcion(slug):
+    """Consultar días usados/pagados"""
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id, dias_pagados FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        dias_usados = conn.execute("""
+            SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos_tienda WHERE tienda_id = %s
+        """, (tienda['id'],)).fetchone()['dias']
+        conn.close()
+        dias_pagados = tienda['dias_pagados'] or 0
+        return jsonify({'ok': True, 'dias_pagados': dias_pagados, 'dias_usados': dias_usados, 'dias_restantes': max(0, dias_pagados - dias_usados)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

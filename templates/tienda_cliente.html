@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ tienda.nombre }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        body.tema-claro { background: #faf7f2; color: #1f2937; }
+        body.tema-oscuro { background: #111827; color: #f3f4f6; }
+        .toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+
+        /* Tema oscuro */
+        .tema-oscuro .card { background: #1f2937; border-color: #374151; }
+        .tema-oscuro .txt-primary { color: #f3f4f6; }
+        .tema-oscuro .txt-secondary { color: #d1d5db; }
+        .tema-oscuro .txt-muted { color: #9ca3af; }
+        .tema-oscuro .modal-card { background: #1f2937; }
+        .tema-oscuro .modal-card input, .tema-oscuro .modal-card textarea { background: #111827; border-color: #4b5563; color: #f3f4f6; }
+        .tema-oscuro .btn-entrega { border-color: #374151; color: #9ca3af; }
+        .tema-oscuro .cat-btn { background: #1f2937; border-color: #374151; color: #d1d5db; }
+        .tema-oscuro .cat-btn.selected { background: #881337; border-color: #e11d48; color: #fff; }
+        .tema-oscuro .placeholder-sin-img { background: #374151; }
+        .tema-oscuro .carrito-bar { background: #1f2937; border-color: #374151; }
+        .tema-oscuro .carrito-panel { background: #111827; }
+
+        .tema-claro .cat-btn { background: #fff; border-color: #e5e7eb; color: #374151; }
+        .tema-claro .cat-btn.selected { background: #fff1f2; border-color: #e11d48; color: #e11d48; }
+        .tema-claro .carrito-bar { background: #fff; border-color: #e5e7eb; }
+        .tema-claro .carrito-panel { background: #fff; }
+
+        /* Zoom */
+        .zoom-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9998;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .zoom-overlay.active { opacity: 1; pointer-events: auto; }
+    </style>
+</head>
+<body class="tema-{{ tienda.tema or 'claro' }} pb-20">
+
+<div id="toast" class="toast"></div>
+<div id="zoom-overlay" class="zoom-overlay" onclick="cerrarZoom()">
+    <img id="zoom-img" src="" class="max-w-[90vw] max-h-[85vh] rounded-xl shadow-2xl">
+</div>
+
+<div class="max-w-lg mx-auto">
+
+    <!-- Header / Portada -->
+    {% if tienda.imagen_header %}
+    <div class="relative">
+        <img src="{{ tienda.imagen_header }}" class="w-full h-40 object-cover">
+        {% if tienda.mostrar_nombre | default(true) %}
+        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+            <h1 class="text-2xl font-extrabold text-white">{{ tienda.nombre }}</h1>
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="p-6 pb-2">
+        <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
+    </div>
+    {% endif %}
+
+    <!-- Info entrega (después de registro) -->
+    <div id="info-entrega" class="hidden px-4 py-2">
+        <div class="bg-rose-50 rounded-xl p-3 flex items-center justify-between card">
+            <div>
+                <span id="info-nombre" class="font-bold text-sm txt-primary"></span>
+                <span id="info-tipo-entrega" class="text-xs txt-secondary ml-2"></span>
+            </div>
+            <button onclick="mostrarModalRegistro()" class="text-xs text-rose-500 font-bold">Cambiar</button>
+        </div>
+    </div>
+
+    <!-- Filtro categorías -->
+    <div class="px-4 py-3 overflow-x-auto flex gap-2" id="filtro-categorias">
+        <button onclick="filtrarCategoria('')" class="cat-btn selected text-sm font-semibold px-4 py-2 rounded-full border whitespace-nowrap transition" data-cat="">
+            Todos
+        </button>
+    </div>
+
+    <!-- Grid productos -->
+    <div id="grid-productos" class="px-4 grid grid-cols-2 gap-3"></div>
+
+    <!-- Sin productos -->
+    <div id="sin-productos" class="hidden text-center py-16 px-4">
+        <p class="font-semibold txt-muted text-lg">Esta tienda aun no tiene productos</p>
+    </div>
+
+</div>
+
+<!-- Barra carrito fija abajo -->
+<div id="carrito-bar" class="fixed bottom-0 left-0 right-0 carrito-bar border-t shadow-lg z-40 hidden">
+    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3 cursor-pointer" onclick="toggleCarrito()">
+            <div class="relative">
+                <svg class="w-7 h-7 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+                <span id="carrito-badge" class="absolute -top-2 -right-2 bg-rose-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">0</span>
+            </div>
+            <span class="font-bold txt-primary" id="carrito-total-bar">$0</span>
+        </div>
+        <button onclick="abrirPedido()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-2 rounded-xl font-bold transition">
+            Hacer pedido
+        </button>
+    </div>
+
+    <!-- Panel carrito expandible -->
+    <div id="carrito-panel" class="carrito-panel border-t hidden max-h-[50vh] overflow-y-auto">
+        <div class="max-w-lg mx-auto px-4 py-4">
+            <div id="carrito-items" class="space-y-3"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pedido -->
+<div id="modal-pedido" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden" onclick="if(event.target===this)cerrarModalPedido()">
+    <div class="modal-card w-full max-w-lg rounded-t-2xl p-6 pb-8 shadow-2xl bg-white">
+        <h2 class="text-xl font-extrabold txt-primary mb-4">Confirmar pedido</h2>
+
+        <div id="resumen-pedido" class="mb-4 max-h-40 overflow-y-auto space-y-1"></div>
+
+        <div class="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-xl card">
+            <span class="font-bold txt-primary">Total</span>
+            <span class="text-xl font-extrabold text-rose-600" id="modal-total">$0</span>
+        </div>
+
+        <!-- Datos del cliente -->
+        <div id="campos-cliente">
+            <input id="inp-nombre" type="text" placeholder="Tu nombre" class="w-full border rounded-lg px-3 py-2 text-sm mb-3">
+            <input id="inp-telefono" type="tel" placeholder="Celular (10 digitos)" class="w-full border rounded-lg px-3 py-2 text-sm mb-3">
+
+            <!-- Tipo entrega -->
+            <div class="flex gap-3 mb-3">
+                <button onclick="selEntrega('domicilio')" id="btn-domicilio" class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega border-rose-500 bg-rose-50 text-rose-600 transition">
+                    Domicilio
+                </button>
+                <button onclick="selEntrega('recoger')" id="btn-recoger" class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega border-gray-200 text-gray-500 transition">
+                    Recoger
+                </button>
+            </div>
+
+            <div id="campo-direccion">
+                <input id="inp-direccion" type="text" placeholder="Direccion de entrega" class="w-full border rounded-lg px-3 py-2 text-sm mb-3">
+            </div>
+
+            <textarea id="inp-notas" placeholder="Notas (opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-4" rows="2"></textarea>
+        </div>
+
+        <button onclick="enviarPedido()" id="btn-enviar" class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold text-lg transition">
+            Enviar pedido
+        </button>
+    </div>
+</div>
+
+<!-- Modal confirmación -->
+<div id="modal-ok" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden">
+    <div class="modal-card bg-white rounded-2xl p-8 max-w-sm text-center shadow-2xl">
+        <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <h2 class="text-xl font-extrabold txt-primary mb-2">Pedido enviado</h2>
+        <p class="txt-secondary text-sm mb-6">Tu pedido fue recibido. Te avisaremos cuando este listo.</p>
+        <button onclick="document.getElementById('modal-ok').classList.add('hidden')" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-bold transition">Aceptar</button>
+    </div>
+</div>
+
+<script>
+const SLUG = '{{ tienda.slug }}';
+const BASE = '/api/tienda/' + SLUG;
+let productos = [];
+let carrito = JSON.parse(localStorage.getItem('carrito_' + SLUG) || '{}');
+let tipoEntrega = 'domicilio';
+let clienteData = {{ cliente_data | tojson if cliente_data else 'null' }};
+
+function toast(msg, error) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (error ? 'toast-err' : 'toast-ok');
+    setTimeout(() => t.className = 'toast', 2500);
+}
+
+// === Productos ===
+async function cargarProductos() {
+    try {
+        const r = await fetch(BASE + '/productos');
+        const data = await r.json();
+        if (!data.ok) return;
+        productos = data.productos;
+        renderCategorias();
+        renderProductos();
+    } catch(e) { toast('Error cargando productos', true); }
+}
+
+function renderCategorias() {
+    const cats = [...new Set(productos.map(p => p.categoria || 'Sin categoria'))];
+    const cont = document.getElementById('filtro-categorias');
+    cont.innerHTML = `<button onclick="filtrarCategoria('')" class="cat-btn selected text-sm font-semibold px-4 py-2 rounded-full border whitespace-nowrap transition" data-cat="">Todos</button>`;
+    cats.forEach(c => {
+        cont.innerHTML += `<button onclick="filtrarCategoria('${c.replace(/'/g,"\\'")}')" class="cat-btn text-sm font-semibold px-4 py-2 rounded-full border whitespace-nowrap transition" data-cat="${c}">${c}</button>`;
+    });
+}
+
+let filtroActual = '';
+function filtrarCategoria(cat) {
+    filtroActual = cat;
+    document.querySelectorAll('.cat-btn').forEach(b => {
+        b.classList.toggle('selected', b.dataset.cat === cat);
+    });
+    renderProductos();
+}
+
+function renderProductos() {
+    const filtrados = filtroActual ? productos.filter(p => (p.categoria || 'Sin categoria') === filtroActual) : productos;
+    const grid = document.getElementById('grid-productos');
+    document.getElementById('sin-productos').classList.toggle('hidden', productos.length > 0);
+
+    if (!filtrados.length && productos.length) {
+        grid.innerHTML = '<p class="col-span-2 text-center txt-muted py-8">No hay productos en esta categoria</p>';
+        return;
+    }
+
+    grid.innerHTML = filtrados.map(p => {
+        const enCarrito = carrito[p.id] || 0;
+        const agotado = !p.disponible;
+        return `<div class="card bg-white border rounded-xl overflow-hidden ${agotado ? 'opacity-50' : ''}" id="prod-${p.id}">
+            ${p.imagen ?
+                `<div class="h-36 overflow-hidden cursor-pointer" onclick="${agotado ? '' : `zoomImagen('${p.imagen}')`}">
+                    <img src="${p.imagen}" class="w-full h-full object-cover">
+                </div>` :
+                `<div class="h-24 placeholder-sin-img bg-gray-100 flex items-center justify-center">
+                    <svg class="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>`
+            }
+            <div class="p-3">
+                <p class="font-semibold text-sm txt-primary truncate">${p.nombre}</p>
+                <p class="text-rose-600 font-bold text-sm mt-1">$${p.precio.toLocaleString()}</p>
+                ${agotado ?
+                    `<p class="text-xs text-red-500 font-bold mt-2">Agotado</p>` :
+                    (enCarrito > 0 ?
+                        `<div class="flex items-center justify-between mt-2">
+                            <button onclick="cambiarCantidad(${p.id}, -1)" class="w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-lg flex items-center justify-center">-</button>
+                            <span class="font-bold txt-primary">${enCarrito}</span>
+                            <button onclick="cambiarCantidad(${p.id}, 1)" class="w-8 h-8 rounded-full bg-rose-500 text-white font-bold text-lg flex items-center justify-center">+</button>
+                        </div>` :
+                        `<button onclick="cambiarCantidad(${p.id}, 1)" class="w-full mt-2 bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-sm font-semibold transition">Agregar</button>`
+                    )
+                }
+            </div>
+        </div>`;
+    }).join('');
+    actualizarCarritoUI();
+}
+
+// === Carrito ===
+function cambiarCantidad(productoId, delta) {
+    const actual = carrito[productoId] || 0;
+    const nueva = actual + delta;
+    if (nueva <= 0) delete carrito[productoId];
+    else carrito[productoId] = nueva;
+    localStorage.setItem('carrito_' + SLUG, JSON.stringify(carrito));
+    renderProductos();
+}
+
+function actualizarCarritoUI() {
+    const ids = Object.keys(carrito);
+    const totalItems = Object.values(carrito).reduce((a, b) => a + b, 0);
+    let totalPrecio = 0;
+    ids.forEach(id => {
+        const p = productos.find(x => x.id == id);
+        if (p) totalPrecio += p.precio * carrito[id];
+    });
+
+    document.getElementById('carrito-bar').classList.toggle('hidden', totalItems === 0);
+    document.getElementById('carrito-badge').textContent = totalItems;
+    document.getElementById('carrito-total-bar').textContent = '$' + totalPrecio.toLocaleString();
+
+    // Items del panel
+    const cont = document.getElementById('carrito-items');
+    cont.innerHTML = ids.map(id => {
+        const p = productos.find(x => x.id == id);
+        if (!p) return '';
+        return `<div class="flex items-center gap-3">
+            ${p.imagen ? `<img src="${p.imagen}" class="w-10 h-10 rounded-lg object-cover">` : ''}
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold text-sm txt-primary truncate">${p.nombre}</p>
+                <p class="text-xs txt-secondary">$${p.precio.toLocaleString()} x ${carrito[id]}</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="cambiarCantidad(${id}, -1)" class="w-7 h-7 rounded-full bg-gray-200 text-gray-700 font-bold flex items-center justify-center">-</button>
+                <span class="font-bold text-sm w-4 text-center">${carrito[id]}</span>
+                <button onclick="cambiarCantidad(${id}, 1)" class="w-7 h-7 rounded-full bg-rose-500 text-white font-bold flex items-center justify-center">+</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function toggleCarrito() {
+    document.getElementById('carrito-panel').classList.toggle('hidden');
+}
+
+// === Zoom ===
+function zoomImagen(src) {
+    document.getElementById('zoom-img').src = src;
+    document.getElementById('zoom-overlay').classList.add('active');
+}
+function cerrarZoom() {
+    document.getElementById('zoom-overlay').classList.remove('active');
+}
+
+// === Pedido ===
+function selEntrega(tipo) {
+    tipoEntrega = tipo;
+    document.getElementById('btn-domicilio').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'domicilio' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('btn-recoger').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'recoger' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('campo-direccion').classList.toggle('hidden', tipo === 'recoger');
+}
+
+function abrirPedido() {
+    // Cerrar panel carrito
+    document.getElementById('carrito-panel').classList.add('hidden');
+
+    // Llenar resumen
+    const ids = Object.keys(carrito);
+    let total = 0;
+    const resumen = document.getElementById('resumen-pedido');
+    resumen.innerHTML = ids.map(id => {
+        const p = productos.find(x => x.id == id);
+        if (!p) return '';
+        const sub = p.precio * carrito[id];
+        total += sub;
+        return `<div class="flex justify-between text-sm"><span class="txt-secondary">${carrito[id]}x ${p.nombre}</span><span class="font-semibold txt-primary">$${sub.toLocaleString()}</span></div>`;
+    }).join('');
+    document.getElementById('modal-total').textContent = '$' + total.toLocaleString();
+
+    // Pre-llenar datos del cliente
+    const saved = JSON.parse(localStorage.getItem('cliente_' + SLUG) || '{}');
+    if (clienteData) {
+        document.getElementById('inp-nombre').value = clienteData.nombre || '';
+        document.getElementById('inp-telefono').value = clienteData.telefono || '';
+        document.getElementById('inp-direccion').value = clienteData.direccion || '';
+    } else if (saved.nombre) {
+        document.getElementById('inp-nombre').value = saved.nombre || '';
+        document.getElementById('inp-telefono').value = saved.telefono || '';
+        document.getElementById('inp-direccion').value = saved.direccion || '';
+    }
+
+    document.getElementById('modal-pedido').classList.remove('hidden');
+}
+
+function cerrarModalPedido() {
+    document.getElementById('modal-pedido').classList.add('hidden');
+}
+
+async function enviarPedido() {
+    const nombre = document.getElementById('inp-nombre').value.trim();
+    const telefono = document.getElementById('inp-telefono').value.trim();
+    const direccion = document.getElementById('inp-direccion').value.trim();
+    const notas = document.getElementById('inp-notas').value.trim();
+
+    if (!nombre) return toast('Ingresa tu nombre', true);
+    const telLimpio = telefono.replace(/\D/g, '');
+    if (telLimpio.length < 10) return toast('Celular debe tener al menos 10 digitos', true);
+    if (tipoEntrega === 'domicilio' && !direccion) return toast('Ingresa la direccion de entrega', true);
+
+    const btn = document.getElementById('btn-enviar');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+        // Registrar cliente primero
+        const rCliente = await fetch(BASE + '/registrar-cliente', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre, telefono: telLimpio, direccion})
+        });
+        const dataCliente = await rCliente.json();
+        if (!dataCliente.ok) {
+            btn.disabled = false; btn.textContent = 'Enviar pedido';
+            return toast(dataCliente.error || 'Error registrando', true);
+        }
+
+        const clienteId = dataCliente.cliente_id;
+        clienteData = {nombre, telefono: telLimpio, direccion, cliente_id: clienteId};
+        localStorage.setItem('cliente_' + SLUG, JSON.stringify({nombre, telefono: telLimpio, direccion}));
+
+        // Crear pedido
+        const items = Object.keys(carrito).map(id => ({producto_id: parseInt(id), cantidad: carrito[id]}));
+        const rPedido = await fetch(BASE + '/pedido', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nombre_cliente: nombre,
+                telefono_cliente: telLimpio,
+                direccion_cliente: direccion,
+                tipo_entrega: tipoEntrega,
+                notas,
+                cliente_id: clienteId,
+                items
+            })
+        });
+        const dataPedido = await rPedido.json();
+        if (dataPedido.ok) {
+            // Limpiar carrito
+            carrito = {};
+            localStorage.removeItem('carrito_' + SLUG);
+            cerrarModalPedido();
+            renderProductos();
+            document.getElementById('modal-ok').classList.remove('hidden');
+
+            // Mostrar info entrega
+            document.getElementById('info-nombre').textContent = nombre;
+            document.getElementById('info-tipo-entrega').textContent = tipoEntrega === 'domicilio' ? 'Domicilio' : 'Recoger';
+            document.getElementById('info-entrega').classList.remove('hidden');
+        } else {
+            if (dataPedido.error === 'suscripcion_agotada') {
+                toast('La tienda no esta disponible en este momento', true);
+            } else {
+                toast(dataPedido.error || 'Error al enviar pedido', true);
+            }
+        }
+    } catch(e) {
+        toast('Error de conexion', true);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Enviar pedido';
+}
+
+function mostrarModalRegistro() {
+    abrirPedido();
+}
+
+// === Init ===
+cargarProductos();
+
+// Pre-llenar info entrega si ya hay datos
+if (clienteData && clienteData.nombre) {
+    document.getElementById('info-nombre').textContent = clienteData.nombre;
+    document.getElementById('info-tipo-entrega').textContent = '';
+    document.getElementById('info-entrega').classList.remove('hidden');
+}
+</script>
+
+<!-- Footer -->
+<div class="text-center py-4 pb-24">
+    <p class="text-xs txt-muted">Powered by <span class="font-bold">TUC TUC</span></p>
+</div>
+
+</body>
+</html>

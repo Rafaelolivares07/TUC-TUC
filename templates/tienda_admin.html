@@ -269,21 +269,26 @@ function renderProductos() {
             <div class="space-y-2">`;
         for (const p of prods) {
             const agotado = !p.disponible;
-            html += `<div class="flex items-center gap-3 bg-white border rounded-xl p-3 ${agotado ? 'opacity-50' : ''}">
-                <div class="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 cursor-pointer" onclick="clickImagen(${p.id})">
-                    ${p.imagen ? `<img src="${p.imagen}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-gray-300 text-xs">Foto</div>`}
+            html += `<div class="bg-white border rounded-xl p-3 ${agotado ? 'opacity-50' : ''}">
+                <div class="flex items-center gap-3">
+                    <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition" onclick="clickImagen(${p.id})">
+                        ${p.imagen ? `<img src="${p.imagen}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        </div>`}
+                    </div>
+                    <input type="file" id="inp-img-${p.id}" accept="image/*" class="hidden" onchange="subirImagen(${p.id}, this)">
+                    <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-gray-800 truncate">${p.nombre}</p>
+                        <p class="text-sm text-rose-600 font-bold">$${p.precio.toLocaleString()}</p>
+                    </div>
+                    <button onclick="toggleDisponible(${p.id}, ${agotado})" class="text-xs px-3 py-1 rounded-full font-bold ${agotado ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
+                        ${agotado ? 'Agotado' : 'Disponible'}
+                    </button>
+                    <button onclick="eliminarProducto(${p.id})" class="text-gray-300 hover:text-red-500 transition">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
                 </div>
-                <input type="file" id="inp-img-${p.id}" accept="image/*" class="hidden" onchange="subirImagen(${p.id}, this)">
-                <div class="flex-1 min-w-0">
-                    <p class="font-semibold text-gray-800 truncate">${p.nombre}</p>
-                    <p class="text-sm text-rose-600 font-bold">$${p.precio.toLocaleString()}</p>
-                </div>
-                <button onclick="toggleDisponible(${p.id}, ${agotado})" class="text-xs px-3 py-1 rounded-full font-bold ${agotado ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
-                    ${agotado ? 'Agotado' : 'Disponible'}
-                </button>
-                <button onclick="eliminarProducto(${p.id})" class="text-gray-300 hover:text-red-500 transition">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                </button>
+                ${!p.imagen ? `<button onclick="clickImagen(${p.id})" class="mt-2 w-full text-xs text-rose-500 font-semibold py-1 border border-rose-200 rounded-lg hover:bg-rose-50 transition">Subir foto</button>` : ''}
             </div>`;
         }
         html += '</div></div>';

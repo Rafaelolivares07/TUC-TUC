@@ -66,14 +66,23 @@
         <div id="panel-catalogo" class="p-6">
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
                 <h3 class="font-bold text-gray-700 mb-3">Agregar producto</h3>
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <input id="cat-categoria" type="text" placeholder="Categoria" class="border rounded-lg px-3 py-2 text-sm w-40" list="categorias-list">
-                    <datalist id="categorias-list"></datalist>
-                    <input id="cat-nombre" type="text" placeholder="Nombre del producto" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
-                    <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
-                    <button onclick="guardarProducto()" class="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
-                        Agregar
-                    </button>
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <input id="cat-categoria" type="text" placeholder="Categoria" class="border rounded-lg px-3 py-2 text-sm w-40" list="categorias-list">
+                        <datalist id="categorias-list"></datalist>
+                        <input id="cat-nombre" type="text" placeholder="Nombre del producto" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
+                        <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div id="preview-nuevo" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition flex items-center justify-center" onclick="document.getElementById('inp-foto-nuevo').click()">
+                            <svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        </div>
+                        <input type="file" id="inp-foto-nuevo" accept="image/*" class="hidden" onchange="previsualizarNuevo(this)">
+                        <span id="nombre-foto-nuevo" class="text-xs text-gray-400 flex-1">Sin foto (opcional)</span>
+                        <button onclick="guardarProducto()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                            Agregar
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -296,6 +305,33 @@ function renderProductos() {
     cont.innerHTML = html;
 }
 
+let fotoNuevaBase64 = null;
+
+function previsualizarNuevo(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const max = 400;
+            let w = img.width, h = img.height;
+            if (w > max || h > max) {
+                if (w > h) { h = h * max / w; w = max; }
+                else { w = w * max / h; h = max; }
+            }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            fotoNuevaBase64 = canvas.toDataURL('image/jpeg', 0.7);
+            document.getElementById('preview-nuevo').innerHTML = `<img src="${fotoNuevaBase64}" class="w-full h-full object-cover">`;
+            document.getElementById('nombre-foto-nuevo').textContent = file.name;
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
 async function guardarProducto() {
     const nombre = document.getElementById('cat-nombre').value.trim();
     const categoria = document.getElementById('cat-categoria').value.trim();
@@ -311,8 +347,20 @@ async function guardarProducto() {
         });
         const data = await r.json();
         if (data.ok) {
+            // Si hay foto, subirla inmediatamente
+            if (fotoNuevaBase64 && data.id) {
+                await fetch(BASE + '/producto/' + data.id + '/imagen', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({imagen: fotoNuevaBase64})
+                });
+            }
             document.getElementById('cat-nombre').value = '';
             document.getElementById('cat-precio').value = '';
+            fotoNuevaBase64 = null;
+            document.getElementById('preview-nuevo').innerHTML = `<svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`;
+            document.getElementById('nombre-foto-nuevo').textContent = 'Sin foto (opcional)';
+            document.getElementById('inp-foto-nuevo').value = '';
             toast('Producto agregado');
             cargarProductos();
         } else {

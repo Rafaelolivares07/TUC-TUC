@@ -26433,14 +26433,16 @@ def api_tienda_producto_crear(slug):
                 "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s WHERE id = %s AND tienda_id = %s",
                 (nombre, categoria, precio, producto_id, tienda['id'])
             )
+            nuevo_id = producto_id
         else:
             conn.execute(
                 "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio) VALUES (%s, %s, %s, %s)",
                 (tienda['id'], nombre, categoria, precio)
             )
+            nuevo_id = conn.execute("SELECT currval(pg_get_serial_sequence('productos_tienda', 'id'))").fetchone()[0]
         conn.commit()
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'id': nuevo_id})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

@@ -68,8 +68,11 @@
                 <h3 class="font-bold text-gray-700 mb-3">Agregar producto</h3>
                 <div class="flex flex-col gap-3">
                     <div class="flex flex-col sm:flex-row gap-3">
-                        <input id="cat-categoria" type="text" placeholder="Categoria" class="border rounded-lg px-3 py-2 text-sm w-40" list="categorias-list">
-                        <datalist id="categorias-list"></datalist>
+                        <select id="cat-categoria-sel" onchange="onCategoriaSelect()" class="border rounded-lg px-3 py-2 text-sm w-48 bg-white">
+                            <option value="">Categoria...</option>
+                            <option value="__nueva__">+ Nueva categoria</option>
+                        </select>
+                        <input id="cat-categoria-nueva" type="text" placeholder="Nombre de la nueva categoria" class="border rounded-lg px-3 py-2 text-sm w-48 hidden">
                         <input id="cat-nombre" type="text" placeholder="Nombre del producto" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
                         <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
                     </div>
@@ -267,9 +270,15 @@ function renderProductos() {
         if (!cats[c]) cats[c] = [];
         cats[c].push(p);
     });
-    // Actualizar datalist
-    const dl = document.getElementById('categorias-list');
-    dl.innerHTML = Object.keys(cats).map(c => `<option value="${c}">`).join('');
+    // Actualizar select de categorías
+    const sel = document.getElementById('cat-categoria-sel');
+    const valorActual = sel.value;
+    sel.innerHTML = '<option value="">Categoria...</option>';
+    Object.keys(cats).forEach(c => {
+        sel.innerHTML += `<option value="${c}">${c}</option>`;
+    });
+    sel.innerHTML += '<option value="__nueva__">+ Nueva categoria</option>';
+    if (valorActual && valorActual !== '__nueva__') sel.value = valorActual;
 
     let html = '';
     for (const [cat, prods] of Object.entries(cats)) {
@@ -305,6 +314,26 @@ function renderProductos() {
     cont.innerHTML = html;
 }
 
+function onCategoriaSelect() {
+    const sel = document.getElementById('cat-categoria-sel');
+    const inp = document.getElementById('cat-categoria-nueva');
+    if (sel.value === '__nueva__') {
+        inp.classList.remove('hidden');
+        inp.focus();
+    } else {
+        inp.classList.add('hidden');
+        inp.value = '';
+    }
+}
+
+function getCategoriaSeleccionada() {
+    const sel = document.getElementById('cat-categoria-sel');
+    if (sel.value === '__nueva__') {
+        return document.getElementById('cat-categoria-nueva').value.trim();
+    }
+    return sel.value;
+}
+
 let fotoNuevaBase64 = null;
 
 function previsualizarNuevo(input) {
@@ -334,7 +363,7 @@ function previsualizarNuevo(input) {
 
 async function guardarProducto() {
     const nombre = document.getElementById('cat-nombre').value.trim();
-    const categoria = document.getElementById('cat-categoria').value.trim();
+    const categoria = getCategoriaSeleccionada();
     const precio = document.getElementById('cat-precio').value;
     if (!nombre) return toast('Escribe el nombre del producto', true);
     if (!precio || parseFloat(precio) <= 0) return toast('Ingresa un precio valido', true);
@@ -357,6 +386,8 @@ async function guardarProducto() {
             }
             document.getElementById('cat-nombre').value = '';
             document.getElementById('cat-precio').value = '';
+            document.getElementById('cat-categoria-nueva').value = '';
+            document.getElementById('cat-categoria-nueva').classList.add('hidden');
             fotoNuevaBase64 = null;
             document.getElementById('preview-nuevo').innerHTML = `<svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`;
             document.getElementById('nombre-foto-nuevo').textContent = 'Sin foto (opcional)';

@@ -3104,10 +3104,16 @@
             // Mostrar campana solo si el navegador soporta notificaciones
             if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
             if (Notification.permission === 'granted') {
-                // Ya tiene permiso, mostrar campana llena y registrar token silenciosamente
-                document.getElementById('btn-notificaciones').classList.add('hidden');
-                document.getElementById('notif-activa').classList.remove('hidden');
-                registrarTokenPush();
+                // Ya tiene permiso, intentar registrar token y mostrar estado real
+                registrarTokenPush().then(guardado => {
+                    if (guardado) {
+                        document.getElementById('btn-notificaciones').classList.add('hidden');
+                        document.getElementById('notif-activa').classList.remove('hidden');
+                    } else {
+                        // Permiso concedido pero token no guardado, mostrar campana para reintentar
+                        document.getElementById('btn-notificaciones').classList.remove('hidden');
+                    }
+                });
             } else if (Notification.permission !== 'denied') {
                 // Puede pedir permiso, mostrar campana vacía
                 document.getElementById('btn-notificaciones').classList.remove('hidden');
@@ -3118,10 +3124,14 @@
             try {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
-                    await registrarTokenPush();
-                    document.getElementById('btn-notificaciones').classList.add('hidden');
-                    document.getElementById('notif-activa').classList.remove('hidden');
-                    toast('Notificaciones activadas');
+                    const guardado = await registrarTokenPush();
+                    if (guardado) {
+                        document.getElementById('btn-notificaciones').classList.add('hidden');
+                        document.getElementById('notif-activa').classList.remove('hidden');
+                        toast('Notificaciones activadas');
+                    } else {
+                        toast('Permiso concedido pero no se pudo registrar. Intenta de nuevo.', true);
+                    }
                 } else {
                     toast('Permiso de notificaciones denegado', true);
                 }
@@ -3144,11 +3154,17 @@
                 });
                 if (token) {
                     console.log('Push token obtenido:', token.substring(0, 20) + '...');
-                    await fetch('/api/guardar-push-token', {
+                    const r = await fetch('/api/guardar-push-token', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ token })
                     });
+                    const data = await r.json();
+                    if (!data.ok) {
+                        console.error('Error guardando token:', data.error);
+                        return false;
+                    }
+                    console.log('Token push guardado en BD');
                 }
                 // Manejar mensajes en primer plano
                 messaging.onMessage((payload) => {
@@ -3160,8 +3176,10 @@
                         });
                     }
                 });
+                return true;
             } catch (error) {
                 console.error('Error registrando token push:', error);
+                return false;
             }
         }
 

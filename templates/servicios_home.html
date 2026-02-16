@@ -3142,13 +3142,14 @@
                     firebase.initializeApp(firebaseConfig);
                 }
                 const messaging = firebase.messaging();
+                toast('Conectando con Firebase...');
                 const registration = await navigator.serviceWorker.ready;
                 const token = await messaging.getToken({
                     vapidKey: 'BKc82ZvVuWGI2esN-Qr64xQsxlY2PM5MaVXZgF4Ke55uzwTKH93e3fiKABlLHeqhkcAFDEkkZUde-lqbGCWnIH0',
                     serviceWorkerRegistration: registration
                 });
                 if (token) {
-                    console.log('Push token obtenido:', token.substring(0, 20) + '...');
+                    toast('Token obtenido: ' + token.substring(0, 20) + '...');
                     const tel = document.getElementById('input-telefono')?.value?.trim() || '';
                     const r = await fetch('/api/guardar-push-token', {
                         method: 'POST',
@@ -3157,14 +3158,15 @@
                     });
                     const data = await r.json();
                     if (!data.ok) {
-                        console.error('Error guardando token:', data.error);
+                        toast('Error guardando: ' + (data.error || 'desconocido'), true);
                         return false;
                     }
-                    console.log('Token push guardado en BD');
+                    toast('Token guardado en BD (tercero: ' + (data.tercero ? 'si' : 'no') + ')');
+                } else {
+                    toast('Firebase no generó token', true);
                 }
                 // Manejar mensajes en primer plano
                 messaging.onMessage((payload) => {
-                    console.log('Mensaje recibido en primer plano:', payload);
                     if (Notification.permission === 'granted') {
                         new Notification(payload.notification?.title || 'TUC TUC', {
                             body: payload.notification?.body || payload.data?.mensaje,
@@ -3174,7 +3176,7 @@
                 });
                 return true;
             } catch (error) {
-                console.error('Error registrando token push:', error);
+                toast('Error Firebase: ' + error.message, true);
                 return false;
             }
         }

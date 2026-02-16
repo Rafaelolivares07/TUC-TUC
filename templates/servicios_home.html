@@ -67,7 +67,19 @@
         <div class="bg-white rounded-lg shadow-lg p-3 mb-4">
             <h1 class="text-xl font-bold text-gray-800">TUC TUC TE LLEVA!</h1>
             <p id="conteo-destinos" class="text-xs text-gray-500">a más de <span id="num-destinos">...</span> destinos conocidos en tu ciudad</p>
-            <p id="saludo-usuario" class="text-sm text-gray-600 mt-1">Solicita tu servicio de forma rápida y segura</p>
+            <div class="flex items-center justify-between mt-1">
+                <p id="saludo-usuario" class="text-sm text-gray-600">Solicita tu servicio de forma rápida y segura</p>
+                <button id="btn-notificaciones" onclick="activarNotificaciones()" class="hidden text-gray-400 hover:text-yellow-500 transition p-1" title="Activar notificaciones">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                </button>
+                <span id="notif-activa" class="hidden text-yellow-500 p-1" title="Notificaciones activas">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2a2 2 0 00-2 2v.341C7.67 5.165 6 7.388 6 10v4.159c0 .538-.214 1.055-.595 1.436L4 17h16l-1.405-1.405A2.032 2.032 0 0118 14.158V10a6.002 6.002 0 00-4-5.659V4a2 2 0 00-2-2zm-2 19a2 2 0 004 0h-4z"/>
+                    </svg>
+                </span>
+            </div>
         </div>
 
         <!-- Formulario de Transporte -->
@@ -3079,59 +3091,68 @@
         // =====================================================
         // PUSH NOTIFICATIONS - FIREBASE
         // =====================================================
-        async function inicializarPushNotifications() {
-            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                console.log('Push notifications no soportadas');
-                return;
-            }
+        const firebaseConfig = {
+            apiKey: "AIzaSyAWkFO0cnmsbM4-faqoVS-G7ecXjvOJN3A",
+            authDomain: "tuc-tuc-4f1e5.firebaseapp.com",
+            projectId: "tuc-tuc-4f1e5",
+            storageBucket: "tuc-tuc-4f1e5.firebasestorage.app",
+            messagingSenderId: "448460808766",
+            appId: "1:448460808766:web:831e7c76a99ed304e1a76f"
+        };
 
+        function mostrarBotonNotificaciones() {
+            // Mostrar campana solo si el navegador soporta notificaciones
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+            if (Notification.permission === 'granted') {
+                // Ya tiene permiso, mostrar campana llena y registrar token silenciosamente
+                document.getElementById('btn-notificaciones').classList.add('hidden');
+                document.getElementById('notif-activa').classList.remove('hidden');
+                registrarTokenPush();
+            } else if (Notification.permission !== 'denied') {
+                // Puede pedir permiso, mostrar campana vacía
+                document.getElementById('btn-notificaciones').classList.remove('hidden');
+            }
+        }
+
+        async function activarNotificaciones() {
             try {
                 const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    console.log('Permiso de notificaciones denegado');
-                    return;
+                if (permission === 'granted') {
+                    await registrarTokenPush();
+                    document.getElementById('btn-notificaciones').classList.add('hidden');
+                    document.getElementById('notif-activa').classList.remove('hidden');
+                    toast('Notificaciones activadas');
+                } else {
+                    toast('Permiso de notificaciones denegado', true);
                 }
+            } catch (error) {
+                console.error('Error pidiendo permiso:', error);
+                toast('Error activando notificaciones', true);
+            }
+        }
 
-                // Firebase config
-                const firebaseConfig = {
-                    apiKey: "AIzaSyAWkFO0cnmsbM4-faqoVS-G7ecXjvOJN3A",
-                    authDomain: "tuc-tuc-4f1e5.firebaseapp.com",
-                    projectId: "tuc-tuc-4f1e5",
-                    storageBucket: "tuc-tuc-4f1e5.firebasestorage.app",
-                    messagingSenderId: "448460808766",
-                    appId: "1:448460808766:web:831e7c76a99ed304e1a76f"
-                };
-
-                // Inicializar Firebase
+        async function registrarTokenPush() {
+            try {
                 if (!firebase.apps.length) {
                     firebase.initializeApp(firebaseConfig);
                 }
-
                 const messaging = firebase.messaging();
-
-                // Registrar service worker para FCM
                 const registration = await navigator.serviceWorker.ready;
-
-                // Obtener token
                 const token = await messaging.getToken({
                     vapidKey: 'BKc82ZvVuWGI2esN-Qr64xQsxlY2PM5MaVXZgF4Ke55uzwTKH93e3fiKABlLHeqhkcAFDEkkZUde-lqbGCWnIH0',
                     serviceWorkerRegistration: registration
                 });
-
                 if (token) {
                     console.log('Push token obtenido:', token.substring(0, 20) + '...');
-                    // Guardar token en backend
                     await fetch('/api/guardar-push-token', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ token })
                     });
                 }
-
                 // Manejar mensajes en primer plano
                 messaging.onMessage((payload) => {
                     console.log('Mensaje recibido en primer plano:', payload);
-                    // Mostrar notificación manualmente si estamos en primer plano
                     if (Notification.permission === 'granted') {
                         new Notification(payload.notification?.title || 'TUC TUC', {
                             body: payload.notification?.body || payload.data?.mensaje,
@@ -3139,14 +3160,13 @@
                         });
                     }
                 });
-
             } catch (error) {
-                console.error('Error inicializando push notifications:', error);
+                console.error('Error registrando token push:', error);
             }
         }
 
-        // Inicializar push después de un pequeño delay para no bloquear la carga
-        setTimeout(inicializarPushNotifications, 3000);
+        // Mostrar botón de notificaciones al cargar
+        setTimeout(mostrarBotonNotificaciones, 2000);
 
         // =====================================================
         // FUNCIONES DE LUGARES FRECUENTES

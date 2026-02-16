@@ -3149,10 +3149,11 @@
                 });
                 if (token) {
                     console.log('Push token obtenido:', token.substring(0, 20) + '...');
+                    const tel = document.getElementById('input-telefono')?.value?.trim() || '';
                     const r = await fetch('/api/guardar-push-token', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token })
+                        body: JSON.stringify({ token, telefono: tel })
                     });
                     const data = await r.json();
                     if (!data.ok) {

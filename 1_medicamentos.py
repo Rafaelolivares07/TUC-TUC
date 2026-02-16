@@ -21995,6 +21995,7 @@ def api_guardar_push_token():
     try:
         data = request.get_json() or {}
         token = data.get('token')
+        telefono = data.get('telefono', '').strip()
 
         if not token:
             return jsonify({'ok': False, 'error': 'Token requerido'}), 400
@@ -22006,15 +22007,69 @@ def api_guardar_push_token():
             conn.execute('UPDATE "USUARIOS" SET push_token = %s WHERE dispositivo_id = %s',
                          (token, session['dispositivo_id']))
 
-        # Guardar en terceros si hay usuario_id en sesión
-        if 'usuario_id' in session:
+        # Guardar en terceros - buscar por teléfono (más confiable que usuario_id)
+        tercero_ok = False
+        # 1) Teléfono enviado desde el frontend
+        if telefono:
+            cur = conn.execute("UPDATE terceros SET push_token = %s WHERE telefono = %s RETURNING id",
+                         (token, telefono))
+            if cur.fetchone():
+                tercero_ok = True
+        # 2) Teléfono en sesión (de interacción previa)
+        if not tercero_ok and session.get('telefono'):
+            cur = conn.execute("UPDATE terceros SET push_token = %s WHERE telefono = %s RETURNING id",
+                         (token, session['telefono']))
+            if cur.fetchone():
+                tercero_ok = True
+        # 3) Fallback: usuario_id en sesión (funciona si coincide con terceros.id)
+        if not tercero_ok and 'usuario_id' in session:
             conn.execute("UPDATE terceros SET push_token = %s WHERE id = %s",
                          (token, session['usuario_id']))
 
         conn.commit()
         conn.close()
 
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'tercero': tercero_ok})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/test-push', methods=['POST'])
+def api_admin_test_push():
+    """Envía una notificación push de prueba"""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo admin'}), 403
+    try:
+        data = request.get_json() or {}
+        tercero_id = data.get('tercero_id')
+        titulo = data.get('titulo', 'Prueba TUC TUC')
+        mensaje = data.get('mensaje', 'Esta es una notificación de prueba')
+        url = data.get('url', '/servicios')
+
+        conn = get_db_connection()
+
+        # Buscar push_token en terceros
+        tercero = conn.execute("SELECT nombre, push_token, telefono FROM terceros WHERE id = %s",
+                               (tercero_id,)).fetchone()
+        if not tercero:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'Tercero {tercero_id} no encontrado'}), 404
+
+        push_token = tercero['push_token']
+
+        # Si terceros no tiene token, buscar en USUARIOS por teléfono
+        if not push_token and tercero['telefono']:
+            usuario = conn.execute(
+                'SELECT push_token FROM "USUARIOS" WHERE push_token IS NOT NULL ORDER BY id DESC LIMIT 1'
+            ).fetchone()
+
+        conn.close()
+
+        if not push_token:
+            return jsonify({'ok': False, 'error': f'{tercero["nombre"]} no tiene push_token'}), 400
+
+        resultado = enviar_push_notification(push_token, titulo, mensaje, url)
+        return jsonify({'ok': resultado, 'nombre': tercero['nombre']})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

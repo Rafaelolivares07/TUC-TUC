@@ -12655,8 +12655,8 @@ def migrar_conductor():
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS push_token TEXT")
         mensajes.append("✅ terceros.push_token")
 
-        conn.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS push_token TEXT")
-        mensajes.append("✅ usuarios.push_token")
+        conn.execute('ALTER TABLE "USUARIOS" ADD COLUMN IF NOT EXISTS push_token TEXT')
+        mensajes.append("✅ USUARIOS.push_token")
 
         # Columnas para estado de conexión del conductor
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS estado_conexion VARCHAR(20) DEFAULT 'desconectado'")
@@ -22001,9 +22001,9 @@ def api_guardar_push_token():
 
         conn = get_db_connection()
 
-        # Guardar en usuarios por dispositivo_id (siempre existe)
+        # Guardar en USUARIOS por dispositivo_id (siempre existe)
         if 'dispositivo_id' in session:
-            conn.execute("UPDATE usuarios SET push_token = %s WHERE dispositivo_id = %s",
+            conn.execute('UPDATE "USUARIOS" SET push_token = %s WHERE dispositivo_id = %s',
                          (token, session['dispositivo_id']))
 
         # Guardar en terceros si hay usuario_id en sesión
@@ -23286,9 +23286,9 @@ def api_solicitar_servicio():
             session['rol'] = 'Cliente'
             session.permanent = True
 
-            # Copiar push_token de usuarios a terceros si existe
+            # Copiar push_token de USUARIOS a terceros si existe
             if 'dispositivo_id' in session:
-                usuario_rec = conn.execute("SELECT push_token FROM usuarios WHERE dispositivo_id = %s",
+                usuario_rec = conn.execute('SELECT push_token FROM "USUARIOS" WHERE dispositivo_id = %s',
                                            (session['dispositivo_id'],)).fetchone()
                 if usuario_rec and usuario_rec['push_token']:
                     conn.execute("UPDATE terceros SET push_token = %s WHERE id = %s",

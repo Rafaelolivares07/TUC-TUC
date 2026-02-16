@@ -74,7 +74,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                     </svg>
                 </button>
-                <span id="notif-activa" class="hidden text-yellow-500 p-1" title="Notificaciones activas">
+                <span id="notif-activa" class="hidden text-yellow-500 p-1 cursor-pointer" title="Notificaciones activas" onclick="registrarTokenPush()">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 2a2 2 0 00-2 2v.341C7.67 5.165 6 7.388 6 10v4.159c0 .538-.214 1.055-.595 1.436L4 17h16l-1.405-1.405A2.032 2.032 0 0118 14.158V10a6.002 6.002 0 00-4-5.659V4a2 2 0 00-2-2zm-2 19a2 2 0 004 0h-4z"/>
                     </svg>
@@ -3108,7 +3108,7 @@
                 document.getElementById('btn-notificaciones').classList.add('hidden');
                 document.getElementById('notif-activa').classList.remove('hidden');
                 // Intentar registrar token en background
-                registrarTokenPush().catch(e => console.error('Error registrando token:', e));
+                registrarTokenPush();
             } else if (Notification.permission !== 'denied') {
                 // Puede pedir permiso, mostrar campana vacía
                 document.getElementById('btn-notificaciones').classList.remove('hidden');

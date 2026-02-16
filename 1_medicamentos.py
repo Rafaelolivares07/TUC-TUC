@@ -12651,9 +12651,12 @@ def migrar_conductor():
         conn.execute("ALTER TABLE solicitudes_transporte ADD COLUMN IF NOT EXISTS fecha_inicio_viaje TIMESTAMP")
         mensajes.append("✅ solicitudes_transporte.fecha_inicio_viaje")
 
-        # Columna para push token en terceros
+        # Columna para push token en terceros y usuarios
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS push_token TEXT")
         mensajes.append("✅ terceros.push_token")
+
+        conn.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS push_token TEXT")
+        mensajes.append("✅ usuarios.push_token")
 
         # Columnas para estado de conexión del conductor
         conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS estado_conexion VARCHAR(20) DEFAULT 'desconectado'")
@@ -21989,9 +21992,6 @@ def api_conductor_mis_programados():
 @app.route('/api/guardar-push-token', methods=['POST'])
 def api_guardar_push_token():
     """Guarda el token de push notifications del usuario"""
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
     try:
         data = request.get_json() or {}
         token = data.get('token')
@@ -22000,9 +22000,17 @@ def api_guardar_push_token():
             return jsonify({'ok': False, 'error': 'Token requerido'}), 400
 
         conn = get_db_connection()
-        conn.execute("""
-            UPDATE terceros SET push_token = %s WHERE id = %s
-        """, (token, session['usuario_id']))
+
+        # Guardar en usuarios por dispositivo_id (siempre existe)
+        if 'dispositivo_id' in session:
+            conn.execute("UPDATE usuarios SET push_token = %s WHERE dispositivo_id = %s",
+                         (token, session['dispositivo_id']))
+
+        # Guardar en terceros si hay usuario_id en sesión
+        if 'usuario_id' in session:
+            conn.execute("UPDATE terceros SET push_token = %s WHERE id = %s",
+                         (token, session['usuario_id']))
+
         conn.commit()
         conn.close()
 
@@ -23277,6 +23285,15 @@ def api_solicitar_servicio():
             session['telefono'] = telefono
             session['rol'] = 'Cliente'
             session.permanent = True
+
+            # Copiar push_token de usuarios a terceros si existe
+            if 'dispositivo_id' in session:
+                usuario_rec = conn.execute("SELECT push_token FROM usuarios WHERE dispositivo_id = %s",
+                                           (session['dispositivo_id'],)).fetchone()
+                if usuario_rec and usuario_rec['push_token']:
+                    conn.execute("UPDATE terceros SET push_token = %s WHERE id = %s",
+                                 (usuario_rec['push_token'], tercero_id))
+                    conn.commit()
 
         # Crear solicitud
         tipo_servicio = data.get('tipo_servicio')

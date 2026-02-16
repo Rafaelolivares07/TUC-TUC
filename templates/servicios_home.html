@@ -3123,16 +3123,16 @@
                     if (guardado) {
                         document.getElementById('btn-notificaciones').classList.add('hidden');
                         document.getElementById('notif-activa').classList.remove('hidden');
-                        toast('Notificaciones activadas');
+                        mostrarToast('Notificaciones activadas', 'success');
                     } else {
-                        toast('Permiso concedido pero no se pudo registrar. Intenta de nuevo.', true);
+                        mostrarToast('Permiso concedido pero no se pudo registrar', 'error');
                     }
                 } else {
-                    toast('Permiso de notificaciones denegado', true);
+                    mostrarToast('Permiso de notificaciones denegado', 'error');
                 }
             } catch (error) {
                 console.error('Error pidiendo permiso:', error);
-                toast('Error activando notificaciones', true);
+                mostrarToast('Error activando notificaciones', 'error');
             }
         }
 
@@ -3142,14 +3142,14 @@
                     firebase.initializeApp(firebaseConfig);
                 }
                 const messaging = firebase.messaging();
-                toast('Conectando con Firebase...');
+                mostrarToast('Conectando con Firebase...', 'info');
                 const registration = await navigator.serviceWorker.ready;
                 const token = await messaging.getToken({
                     vapidKey: 'BKc82ZvVuWGI2esN-Qr64xQsxlY2PM5MaVXZgF4Ke55uzwTKH93e3fiKABlLHeqhkcAFDEkkZUde-lqbGCWnIH0',
                     serviceWorkerRegistration: registration
                 });
                 if (token) {
-                    toast('Token obtenido: ' + token.substring(0, 20) + '...');
+                    mostrarToast('Token obtenido: ' + token.substring(0, 20) + '...', 'success');
                     const tel = document.getElementById('input-telefono')?.value?.trim() || '';
                     const r = await fetch('/api/guardar-push-token', {
                         method: 'POST',
@@ -3158,12 +3158,12 @@
                     });
                     const data = await r.json();
                     if (!data.ok) {
-                        toast('Error guardando: ' + (data.error || 'desconocido'), true);
+                        mostrarToast('Error guardando: ' + (data.error || 'desconocido'), 'error');
                         return false;
                     }
-                    toast('Token guardado en BD (tercero: ' + (data.tercero ? 'si' : 'no') + ')');
+                    mostrarToast('Token guardado en BD (tercero: ' + (data.tercero ? 'si' : 'no') + ')', 'success');
                 } else {
-                    toast('Firebase no generó token', true);
+                    mostrarToast('Firebase no generó token', 'error');
                 }
                 // Manejar mensajes en primer plano
                 messaging.onMessage((payload) => {
@@ -3176,7 +3176,7 @@
                 });
                 return true;
             } catch (error) {
-                toast('Error Firebase: ' + error.message, true);
+                mostrarToast('Error Firebase: ' + error.message, 'error');
                 return false;
             }
         }

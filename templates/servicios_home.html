@@ -3104,16 +3104,11 @@
             // Mostrar campana solo si el navegador soporta notificaciones
             if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
             if (Notification.permission === 'granted') {
-                // Ya tiene permiso, intentar registrar token y mostrar estado real
-                registrarTokenPush().then(guardado => {
-                    if (guardado) {
-                        document.getElementById('btn-notificaciones').classList.add('hidden');
-                        document.getElementById('notif-activa').classList.remove('hidden');
-                    } else {
-                        // Permiso concedido pero token no guardado, mostrar campana para reintentar
-                        document.getElementById('btn-notificaciones').classList.remove('hidden');
-                    }
-                });
+                // Ya tiene permiso - mostrar campana amarilla inmediatamente
+                document.getElementById('btn-notificaciones').classList.add('hidden');
+                document.getElementById('notif-activa').classList.remove('hidden');
+                // Intentar registrar token en background
+                registrarTokenPush().catch(e => console.error('Error registrando token:', e));
             } else if (Notification.permission !== 'denied') {
                 // Puede pedir permiso, mostrar campana vacía
                 document.getElementById('btn-notificaciones').classList.remove('hidden');

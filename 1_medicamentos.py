@@ -34,6 +34,48 @@ import atexit
 # Cargar variables de entorno
 load_dotenv()
 
+# Configurar Anthropic (Claude API)
+import anthropic as anthropic_sdk
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+anthropic_client = anthropic_sdk.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+
+CHAT_SYSTEM_PROMPT = """Eres el asistente personal de Rafael, fundador y desarrollador de TUC TUC, una plataforma de negocios digitales para Colombia (Cali).
+
+PROYECTO TUC TUC:
+- Stack: Flask + PostgreSQL (psycopg2) + Tailwind CSS + MapLibre GL + PMTiles
+- Backend monolítico: 1_medicamentos.py (~27K líneas)
+- Repo: Rafaelolivares07/TUC-TUC (branch main, deploy en Render.com)
+
+MÓDULOS FUNCIONALES:
+1. Restaurante (menú del día / carta) — pedidos en mesa, para llevar y online. Templates: restaurante_admin, mesero, cocina, cliente. URLs: /mi-restaurante/<slug>, /r/<slug>
+2. Tienda Online — catálogo, carrito localStorage, pedidos a domicilio. Templates: tienda_admin, tienda_cliente. URLs: /mi-tienda/<slug>, /t/<slug>
+3. Transporte — conducción asistida con MapLibre GL + PMTiles (mapa Cali 4.3MB), grafo ~49K segmentos, ruteo A*→Waze→OSRM
+4. Captura de Pasajeros — wizard 7 pasos + QR + WhatsApp + descuento bienvenida
+5. Landing /empieza — onboarding conversacional por modales (restaurante/tienda/otro)
+
+REGLAS DE CÓDIGO CRÍTICAS:
+- Solo PostgreSQL con psycopg2. NUNCA SQLite.
+- row['campo'] NUNCA row.get('campo') — DictRow no tiene .get()
+- En except SQL: SIEMPRE conn.rollback() — sin rollback la conexión queda "aborted"
+- INSERT SIEMPRE con RETURNING id para obtener el nuevo ID
+- ALTERs: cada uno en su propio try/except con commit()/rollback() — NUNCA agrupar
+- APIs nuevas DEBEN estar en rutas_publicas del before_request
+- Rutas de dueños/clientes (terceros) DEBEN ser públicas — before_request solo busca en usuarios
+- Dos tablas: usuarios (admins) vs terceros (dueños, clientes, conductores)
+
+PENDIENTES CONOCIDOS:
+- APK interceptor DiDi: probar chooser en Xiaomi
+- FCM nativo en APK (no web Firebase que se colgaba)
+- Chat persistente (este mismo) escalarlo a Telegram después
+- Captura pasajeros fases 4-6
+
+ESTILO DE RESPUESTA:
+- Español, directo, técnico
+- Rafael trabaja desde terminal (no VS Code)
+- Prefiere discutir enfoque antes de codear
+- Respuestas concisas salvo que pida detalle
+"""
+
 # Configurar Cloudinary
 cloudinary.config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
@@ -27085,6 +27127,128 @@ def api_registro_rapido():
             return jsonify({'ok': True, 'redirect': f'/mi-tienda/{slug}'})
 
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# CHAT PERSONAL — Claude API + PostgreSQL
+# ============================================================================
+
+def crear_tabla_chat(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_mensajes (
+            id         SERIAL PRIMARY KEY,
+            rol        VARCHAR(20)  NOT NULL,
+            contenido  TEXT         NOT NULL,
+            created_at TIMESTAMP    DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
+
+@app.route('/admin/chat')
+def admin_chat():
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tabla_chat(conn)
+        mensajes = conn.execute(
+            "SELECT rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
+        ).fetchall()
+        conn.close()
+        return render_template('chat_admin.html', mensajes=mensajes)
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return f"Error: {e}", 500
+
+
+@app.route('/api/admin/chat', methods=['POST'])
+def api_admin_chat():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if not anthropic_client:
+        return jsonify({'ok': False, 'error': 'Claude API no configurada'}), 500
+
+    data      = request.get_json()
+    contenido = (data.get('mensaje') or '').strip()
+    if not contenido:
+        return jsonify({'ok': False, 'error': 'Mensaje vacío'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tabla_chat(conn)
+
+        # Guardar mensaje del usuario
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido) VALUES (%s, %s)",
+            ('user', contenido)
+        )
+        conn.commit()
+
+        # Recuperar historial completo para contexto
+        historial = conn.execute(
+            "SELECT rol, contenido FROM chat_mensajes ORDER BY id ASC"
+        ).fetchall()
+
+        mensajes_api = [{'role': row['rol'], 'content': row['contenido']} for row in historial]
+
+        # Llamar a Claude API
+        respuesta = anthropic_client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=4096,
+            system=CHAT_SYSTEM_PROMPT,
+            messages=mensajes_api
+        )
+        texto_respuesta = respuesta.content[0].text
+
+        # Guardar respuesta del asistente
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido) VALUES (%s, %s)",
+            ('assistant', texto_respuesta)
+        )
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'respuesta': texto_respuesta})
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/chat/limpiar', methods=['POST'])
+def api_admin_chat_limpiar():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        conn.execute("TRUNCATE TABLE chat_mensajes RESTART IDENTITY")
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/chat/historial')
+def api_admin_chat_historial():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        mensajes = conn.execute(
+            "SELECT rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'mensajes': [dict(m) for m in mensajes]})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

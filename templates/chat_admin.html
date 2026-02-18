@@ -133,8 +133,9 @@ async function enviar() {
     if (!msg || esperandoRespuesta) return;
 
     const btn = document.getElementById('btn-enviar');
-    btn.disabled = true;
-    input.value  = '';
+    btn.disabled   = true;
+    input.disabled = true;
+    input.value    = '';
     input.style.height = 'auto';
 
     // Ocultar empty state
@@ -182,9 +183,11 @@ function iniciarPolling() {
                 clearInterval(pollingInterval);
                 pollingInterval = null;
                 esperandoRespuesta = false;
+                ultimoId = data.id;
                 document.getElementById('typing').classList.add('hidden');
                 document.getElementById('btn-enviar').disabled = false;
-                ultimoId = data.id;
+                document.getElementById('input-msg').disabled = false;
+                document.getElementById('input-msg').focus();
                 agregarBurbuja('assistant', data.contenido);
             }
         } catch(e) {}

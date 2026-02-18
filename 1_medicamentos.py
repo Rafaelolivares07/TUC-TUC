@@ -27166,10 +27166,9 @@ def admin_chat():
 
 @app.route('/api/admin/chat', methods=['POST'])
 def api_admin_chat():
+    """Guarda mensaje del usuario — respuesta llega vía chat_bridge.py (Claude Code local)"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    if not anthropic_client:
-        return jsonify({'ok': False, 'error': 'Claude API no configurada'}), 500
 
     data      = request.get_json()
     contenido = (data.get('mensaje') or '').strip()
@@ -27179,40 +27178,58 @@ def api_admin_chat():
     try:
         conn = get_db_connection()
         crear_tabla_chat(conn)
-
-        # Guardar mensaje del usuario
-        conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido) VALUES (%s, %s)",
+        row = conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido) VALUES (%s, %s) RETURNING id",
             ('user', contenido)
-        )
+        ).fetchone()
         conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row[0]})
 
-        # Recuperar historial completo para contexto
-        historial = conn.execute(
-            "SELECT rol, contenido FROM chat_mensajes ORDER BY id ASC"
-        ).fetchall()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
-        mensajes_api = [{'role': row['rol'], 'content': row['contenido']} for row in historial]
 
-        # Llamar a Claude API
-        respuesta = anthropic_client.messages.create(
-            model='claude-sonnet-4-6',
-            max_tokens=4096,
-            system=CHAT_SYSTEM_PROMPT,
-            messages=mensajes_api
-        )
-        texto_respuesta = respuesta.content[0].text
+@app.route('/api/admin/chat/ultimo')
+def api_admin_chat_ultimo():
+    """Retorna el último mensaje — el frontend hace polling aquí para detectar respuesta"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT id, rol, contenido FROM chat_mensajes ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+        if row:
+            return jsonify({'ok': True, 'id': row['id'], 'rol': row['rol'], 'contenido': row['contenido']})
+        return jsonify({'ok': True, 'id': 0})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
-        # Guardar respuesta del asistente
+
+@app.route('/api/admin/chat/responder', methods=['POST'])
+def api_admin_chat_responder():
+    """Recibe la respuesta de Claude Code (via chat_bridge.py) y la guarda en BD"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data      = request.get_json()
+    contenido = (data.get('contenido') or '').strip()
+    if not contenido:
+        return jsonify({'ok': False, 'error': 'Contenido vacío'}), 400
+    try:
+        conn = get_db_connection()
         conn.execute(
             "INSERT INTO chat_mensajes (rol, contenido) VALUES (%s, %s)",
-            ('assistant', texto_respuesta)
+            ('assistant', contenido)
         )
         conn.commit()
         conn.close()
-
-        return jsonify({'ok': True, 'respuesta': texto_respuesta})
-
+        return jsonify({'ok': True})
     except Exception as e:
         conn.rollback()
         conn.close()

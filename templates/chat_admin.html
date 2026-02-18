@@ -38,8 +38,9 @@
         <p class="font-semibold text-gray-800 text-sm leading-none">Claude</p>
         <p class="text-xs text-gray-400">Asistente TUC TUC</p>
     </div>
-    <div class="ml-auto">
-        <button onclick="limpiarChat()" class="text-xs text-gray-400 hover:text-red-500 transition">Limpiar historial</button>
+    <div class="ml-auto flex items-center gap-3">
+        <span id="estado-bridge" class="text-xs text-gray-400">⏳ Esperando bridge...</span>
+        <button onclick="limpiarChat()" class="text-xs text-gray-400 hover:text-red-500 transition">Limpiar</button>
     </div>
 </div>
 
@@ -47,7 +48,7 @@
 <div id="mensajes" class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
 
     {% if not mensajes %}
-    <div class="flex-1 flex flex-col items-center justify-center text-center py-16">
+    <div id="empty-state" class="flex-1 flex flex-col items-center justify-center text-center py-16">
         <div class="text-5xl mb-4">👋</div>
         <p class="font-semibold text-gray-700 text-lg">Hola Rafael</p>
         <p class="text-gray-400 text-sm mt-1">Soy tu asistente personal para TUC TUC.<br>Pregúntame lo que necesites sobre el proyecto.</p>
@@ -86,20 +87,28 @@
             class="flex-1 border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition"
             onkeydown="tecla(event)" oninput="autoResize(this)"></textarea>
         <button onclick="enviar()" id="btn-enviar"
-            class="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-4 py-3 font-semibold text-sm transition shrink-0">
+            class="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white rounded-2xl px-4 py-3 font-semibold text-sm transition shrink-0">
             Enviar
         </button>
     </div>
 </div>
 
 <script>
+// ID del último mensaje conocido — para detectar respuestas nuevas
+let ultimoId = {{ mensajes[-1].id if mensajes else 0 }};
+let esperandoRespuesta = false;
+let pollingInterval = null;
+
 // Renderizar markdown en mensajes existentes
 document.querySelectorAll('[data-markdown]').forEach(el => {
     el.innerHTML = marked.parse(el.dataset.markdown);
 });
 
-// Scroll al fondo al cargar
 scrollFondo();
+
+// Iniciar polling de estado del bridge
+checkBridge();
+setInterval(checkBridge, 5000);
 
 function scrollFondo() {
     const c = document.getElementById('mensajes');
@@ -121,19 +130,22 @@ function autoResize(el) {
 async function enviar() {
     const input = document.getElementById('input-msg');
     const msg   = input.value.trim();
-    if (!msg) return;
+    if (!msg || esperandoRespuesta) return;
 
     const btn = document.getElementById('btn-enviar');
     btn.disabled = true;
     input.value  = '';
     input.style.height = 'auto';
 
-    // Agregar burbuja usuario
+    // Ocultar empty state
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+
+    // Mostrar burbuja usuario
     agregarBurbuja('user', msg);
 
     // Mostrar typing
-    const typing = document.getElementById('typing');
-    typing.classList.remove('hidden');
+    document.getElementById('typing').classList.remove('hidden');
     scrollFondo();
 
     try {
@@ -143,21 +155,54 @@ async function enviar() {
             body: JSON.stringify({ mensaje: msg })
         });
         const data = await r.json();
-        typing.classList.add('hidden');
 
         if (data.ok) {
-            agregarBurbuja('assistant', data.respuesta);
+            esperandoRespuesta = true;
+            ultimoId = data.id;
+            iniciarPolling();
         } else {
+            document.getElementById('typing').classList.add('hidden');
             agregarBurbuja('assistant', '⚠️ Error: ' + (data.error || 'Inténtalo de nuevo'));
+            btn.disabled = false;
         }
     } catch(e) {
-        typing.classList.add('hidden');
+        document.getElementById('typing').classList.add('hidden');
         agregarBurbuja('assistant', '⚠️ Error de conexión');
+        btn.disabled = false;
     }
+}
 
-    btn.disabled = false;
-    input.focus();
-    scrollFondo();
+function iniciarPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(async () => {
+        try {
+            const r    = await fetch('/api/admin/chat/ultimo');
+            const data = await r.json();
+            if (data.ok && data.id > ultimoId && data.rol === 'assistant') {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                esperandoRespuesta = false;
+                document.getElementById('typing').classList.add('hidden');
+                document.getElementById('btn-enviar').disabled = false;
+                ultimoId = data.id;
+                agregarBurbuja('assistant', data.contenido);
+            }
+        } catch(e) {}
+    }, 2000);
+}
+
+async function checkBridge() {
+    // Verifica si hay un mensaje pendiente sin respuesta (bridge activo)
+    try {
+        const r    = await fetch('/api/admin/chat/ultimo');
+        const data = await r.json();
+        const el   = document.getElementById('estado-bridge');
+        if (data.ok && data.rol === 'user' && esperandoRespuesta) {
+            el.textContent = '🟡 Esperando a Claude Code...';
+        } else {
+            el.textContent = '🟢 Bridge listo';
+        }
+    } catch(e) {}
 }
 
 function agregarBurbuja(rol, contenido) {
@@ -175,9 +220,7 @@ function agregarBurbuja(rol, contenido) {
     }
 
     wrap.appendChild(burbuja);
-
-    const typing = document.getElementById('typing');
-    document.getElementById('mensajes').insertBefore(wrap, typing);
+    document.getElementById('mensajes').insertBefore(wrap, document.getElementById('typing'));
     scrollFondo();
 }
 

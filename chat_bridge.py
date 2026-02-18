@@ -37,16 +37,15 @@ POLL_INTERVAL  = 2   # segundos entre checks de la BD
 
 
 def get_conn():
-    conn = psycopg2.connect(DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    conn.autocommit = False
-    return conn
+    return psycopg2.connect(DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 def get_mensaje_pendiente(ultimo_id_procesado):
     """Retorna el mensaje más reciente de 'user' que no tiene respuesta posterior."""
     conn = get_conn()
     try:
-        row = conn.execute("""
+        cur = conn.cursor()
+        cur.execute("""
             SELECT id, contenido, created_at::text as ts
             FROM chat_mensajes
             WHERE rol = 'user'
@@ -57,7 +56,8 @@ def get_mensaje_pendiente(ultimo_id_procesado):
               )
             ORDER BY id DESC
             LIMIT 1
-        """, (ultimo_id_procesado,)).fetchone()
+        """, (ultimo_id_procesado,))
+        row = cur.fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
@@ -67,7 +67,8 @@ def guardar_respuesta_en_bd(contenido):
     """Inserta la respuesta del asistente directamente en la BD."""
     conn = get_conn()
     try:
-        conn.execute(
+        cur = conn.cursor()
+        cur.execute(
             "INSERT INTO chat_mensajes (rol, contenido) VALUES ('assistant', %s)",
             (contenido,)
         )
@@ -100,9 +101,9 @@ def main():
     # No reprocesar mensajes anteriores al arranque
     conn = get_conn()
     try:
-        row = conn.execute(
-            "SELECT COALESCE(MAX(id), 0) as max_id FROM chat_mensajes"
-        ).fetchone()
+        cur = conn.cursor()
+        cur.execute("SELECT COALESCE(MAX(id), 0) as max_id FROM chat_mensajes")
+        row = cur.fetchone()
         ultimo_id = row['max_id'] if row else 0
     finally:
         conn.close()

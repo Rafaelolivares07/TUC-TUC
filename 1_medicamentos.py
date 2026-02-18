@@ -27154,7 +27154,7 @@ def admin_chat():
         conn = get_db_connection()
         crear_tabla_chat(conn)
         mensajes = conn.execute(
-            "SELECT rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
+            "SELECT id, rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
         ).fetchall()
         conn.close()
         return render_template('chat_admin.html', mensajes=mensajes)
@@ -27259,7 +27259,7 @@ def api_admin_chat_historial():
     try:
         conn = get_db_connection()
         mensajes = conn.execute(
-            "SELECT rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
+            "SELECT id, rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'mensajes': [dict(m) for m in mensajes]})

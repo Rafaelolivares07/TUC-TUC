@@ -1440,7 +1440,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -24750,6 +24750,7 @@ def crear_tablas_tienda(conn):
 
     alters = [
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
     ]
     for sql in alters:
         try:
@@ -26445,11 +26446,23 @@ def api_tienda_dias_pagados(slug):
     data = request.get_json()
     dias = int(data.get('dias', 0))
     try:
+        from datetime import date, timedelta
         conn = get_db_connection()
-        conn.execute("UPDATE tiendas SET dias_pagados = %s WHERE slug = %s", (dias, slug))
+        tienda = conn.execute("SELECT dias_pagados, fecha_vence FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        nuevo_total = (tienda['dias_pagados'] or 0) + dias
+        # fecha_vence: desde hoy o extender si aún no ha vencido
+        base = tienda['fecha_vence'] if tienda['fecha_vence'] and tienda['fecha_vence'] > date.today() else date.today()
+        nueva_fecha = base + timedelta(days=dias)
+        conn.execute(
+            "UPDATE tiendas SET dias_pagados = %s, fecha_vence = %s WHERE slug = %s",
+            (nuevo_total, nueva_fecha, slug)
+        )
         conn.commit()
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'dias_pagados': nuevo_total, 'fecha_vence': str(nueva_fecha)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -26778,26 +26791,18 @@ def api_tienda_pedido_crear(slug):
         conn = get_db_connection()
         crear_tablas_tienda(conn)
         tienda = conn.execute(
-            "SELECT id, nombre, dias_pagados, telegram_chat_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+            "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
         ).fetchone()
         if not tienda:
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
 
-        # Verificar suscripción
-        dias_pagados = tienda['dias_pagados'] or 0
-        if dias_pagados > 0:
-            dias_usados = conn.execute("""
-                SELECT COUNT(DISTINCT DATE(created_at)) as dias
-                FROM pedidos_tienda WHERE tienda_id = %s
-            """, (tienda['id'],)).fetchone()['dias']
-            tiene_pedidos_hoy = conn.execute("""
-                SELECT 1 FROM pedidos_tienda
-                WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE LIMIT 1
-            """, (tienda['id'],)).fetchone()
-            if not tiene_pedidos_hoy and dias_usados >= dias_pagados:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'suscripcion_agotada', 'dias_pagados': dias_pagados, 'dias_usados': dias_usados}), 402
+        # Verificar suscripción por días calendario
+        from datetime import date
+        fecha_vence = tienda['fecha_vence']
+        if fecha_vence and date.today() > fecha_vence:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'suscripcion_agotada', 'fecha_vence': str(fecha_vence)}), 402
 
         # Calcular total y validar items
         total = 0
@@ -26992,6 +26997,93 @@ def api_crear_prospecto():
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/registro-rapido', methods=['POST'])
+def api_registro_rapido():
+    """Registro automático de restaurante o tienda desde /empieza — crea tercero + negocio + sesión"""
+    import uuid
+    from datetime import date, timedelta
+    data = request.get_json()
+    tipo        = data.get('tipo', '').strip()            # 'restaurante' o 'tienda'
+    nombre_neg  = data.get('nombre_negocio', '').strip()
+    subtipo     = data.get('subtipo', 'menu_dia').strip() # solo restaurante: 'carta' o 'menu_dia'
+    nombre_due  = data.get('nombre_dueno', '').strip()
+    telefono    = ''.join(filter(str.isdigit, data.get('telefono', '')))
+
+    if tipo not in ('restaurante', 'tienda'):
+        return jsonify({'ok': False, 'error': 'Tipo de negocio inválido'}), 400
+    if not nombre_neg:
+        return jsonify({'ok': False, 'error': 'Nombre del negocio requerido'}), 400
+    if not nombre_due:
+        return jsonify({'ok': False, 'error': 'Tu nombre es requerido'}), 400
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+
+    slug = generar_slug(nombre_neg)
+
+    try:
+        conn = get_db_connection()
+
+        # Buscar o crear tercero (dueño del negocio)
+        tercero = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if tercero:
+            tercero_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre_due, tercero_id))
+            conn.commit()
+        else:
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                (nombre_due, telefono)
+            )
+            tercero_id = cur.fetchone()[0]
+            conn.commit()
+
+        if tipo == 'restaurante':
+            crear_tablas_restaurante(conn)
+            existente = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+            if existente:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Ya existe un restaurante con ese nombre. Prueba con otro nombre.'}), 400
+            token_acceso = uuid.uuid4().hex
+            conn.execute("""
+                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 2, TRUE)
+            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso))
+            conn.commit()
+            conn.close()
+            session['usuario_id'] = tercero_id
+            session['nombre']     = nombre_due
+            session['telefono']   = telefono
+            session['rol']        = 'Restaurante'
+            session.permanent     = True
+            return jsonify({'ok': True, 'redirect': f'/mi-restaurante/{slug}'})
+
+        else:  # tienda
+            crear_tablas_tienda(conn)
+            existente = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+            if existente:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Ya existe una tienda con ese nombre. Prueba con otro nombre.'}), 400
+            token_acceso = uuid.uuid4().hex
+            fecha_vence  = date.today() + timedelta(days=4)
+            conn.execute("""
+                INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, fecha_vence, activo)
+                VALUES (%s, %s, %s, %s, %s, %s, 4, %s, TRUE)
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, fecha_vence))
+            conn.commit()
+            conn.close()
+            session['usuario_id'] = tercero_id
+            session['nombre']     = nombre_due
+            session['telefono']   = telefono
+            session['rol']        = 'Tienda'
+            session.permanent     = True
+            return jsonify({'ok': True, 'redirect': f'/mi-tienda/{slug}'})
+
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

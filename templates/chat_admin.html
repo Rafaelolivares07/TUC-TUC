@@ -98,6 +98,7 @@
 let ultimoId = {{ mensajes[-1].id if mensajes else 0 }};
 let esperandoRespuesta = false;
 let pollingInterval = null;
+let timeoutSeguridad = null;
 
 // Renderizar markdown en mensajes existentes
 document.querySelectorAll('[data-markdown]').forEach(el => {
@@ -127,14 +128,31 @@ function autoResize(el) {
     el.style.height = Math.min(el.scrollHeight, 140) + 'px';
 }
 
+function desbloquearInput() {
+    esperandoRespuesta = false;
+    if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+    if (timeoutSeguridad) { clearTimeout(timeoutSeguridad); timeoutSeguridad = null; }
+    const btn = document.getElementById('btn-enviar');
+    btn.disabled = false;
+    btn.textContent = 'Enviar';
+    document.getElementById('typing').classList.add('hidden');
+    document.getElementById('input-msg').focus();
+}
+
 async function enviar() {
     const input = document.getElementById('input-msg');
     const msg   = input.value.trim();
-    if (!msg || esperandoRespuesta) return;
+    if (!msg) return;
+
+    // Si ya hay una respuesta en curso, advertir pero no bloquear
+    if (esperandoRespuesta) {
+        agregarBurbuja('assistant', '_Aguarda un momento, procesando el mensaje anterior..._');
+        return;
+    }
 
     const btn = document.getElementById('btn-enviar');
     btn.disabled   = true;
-    input.disabled = true;
+    btn.textContent = '...';
     input.value    = '';
     input.style.height = 'auto';
 
@@ -160,47 +178,45 @@ async function enviar() {
         if (data.ok) {
             esperandoRespuesta = true;
             ultimoId = data.id;
-            iniciarPolling();
+            iniciarPolling(data.id);
+            // Timeout de seguridad: desbloquear a los 90s si el bridge no responde
+            timeoutSeguridad = setTimeout(() => {
+                desbloquearInput();
+                agregarBurbuja('assistant', '⚠️ El bridge tardó demasiado. Puedes enviar otro mensaje.');
+            }, 90000);
         } else {
             document.getElementById('typing').classList.add('hidden');
             agregarBurbuja('assistant', '⚠️ Error: ' + (data.error || 'Inténtalo de nuevo'));
             btn.disabled = false;
+            btn.textContent = 'Enviar';
         }
     } catch(e) {
         document.getElementById('typing').classList.add('hidden');
         agregarBurbuja('assistant', '⚠️ Error de conexión');
         btn.disabled = false;
+        btn.textContent = 'Enviar';
     }
 }
 
-function iniciarPolling() {
+function iniciarPolling(desdeId) {
     if (pollingInterval) clearInterval(pollingInterval);
     pollingInterval = setInterval(async () => {
         try {
-            const r    = await fetch('/api/admin/chat/ultimo');
+            const r    = await fetch('/api/admin/chat/desde/' + desdeId);
             const data = await r.json();
-            if (data.ok && data.id > ultimoId && data.rol === 'assistant') {
-                clearInterval(pollingInterval);
-                pollingInterval = null;
-                esperandoRespuesta = false;
+            if (data.ok && data.encontrado) {
                 ultimoId = data.id;
-                document.getElementById('typing').classList.add('hidden');
-                document.getElementById('btn-enviar').disabled = false;
-                document.getElementById('input-msg').disabled = false;
-                document.getElementById('input-msg').focus();
                 agregarBurbuja('assistant', data.contenido);
+                desbloquearInput();
             }
         } catch(e) {}
     }, 2000);
 }
 
 async function checkBridge() {
-    // Verifica si hay un mensaje pendiente sin respuesta (bridge activo)
     try {
-        const r    = await fetch('/api/admin/chat/ultimo');
-        const data = await r.json();
-        const el   = document.getElementById('estado-bridge');
-        if (data.ok && data.rol === 'user' && esperandoRespuesta) {
+        const el = document.getElementById('estado-bridge');
+        if (esperandoRespuesta) {
             el.textContent = '🟡 Esperando a Claude Code...';
         } else {
             el.textContent = '🟢 Bridge listo';

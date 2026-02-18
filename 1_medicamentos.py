@@ -27212,6 +27212,27 @@ def api_admin_chat_ultimo():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/chat/desde/<int:desde_id>')
+def api_admin_chat_desde(desde_id):
+    """Retorna la primera respuesta del asistente con ID mayor a desde_id — polling exacto"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT id, rol, contenido FROM chat_mensajes WHERE id > %s AND rol = 'assistant' ORDER BY id ASC LIMIT 1",
+            (desde_id,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return jsonify({'ok': True, 'encontrado': True, 'id': row['id'], 'contenido': row['contenido']})
+        return jsonify({'ok': True, 'encontrado': False})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/chat/responder', methods=['POST'])
 def api_admin_chat_responder():
     """Recibe la respuesta de Claude Code (via chat_bridge.py) y la guarda en BD"""

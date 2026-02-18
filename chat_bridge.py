@@ -13,8 +13,10 @@ Uso:
 """
 
 import os
+import sys
 import json
 import time
+import socket
 import subprocess
 import psycopg2
 import psycopg2.extras
@@ -31,7 +33,23 @@ APP_DIR     = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 
 POLL_INTERVAL = 3   # segundos entre checks
 MAX_HISTORIAL = 20  # mensajes de contexto a incluir
+LOCK_PORT     = 47832  # puerto local para mutex de instancia única
 # ────────────────────────────────────────────────────────────────────────────
+
+_lock_socket = None
+
+def adquirir_lock():
+    """Garantiza una sola instancia del bridge usando un socket local."""
+    global _lock_socket
+    try:
+        _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.bind(('127.0.0.1', LOCK_PORT))
+        _lock_socket.listen(1)
+        return True
+    except OSError:
+        if _lock_socket:
+            _lock_socket.close()
+        return False
 
 
 def get_conn():
@@ -95,58 +113,84 @@ def guardar_respuesta(contenido):
 
 
 def leer_memoria():
-    """Lee los archivos de memoria relevantes para dar contexto a Claude."""
-    archivos = ['SESION_ACTIVA.md', 'PLAN.md']
+    """Lee TODOS los archivos de memoria para dar contexto completo."""
+    archivos = [
+        ('MEMORY.md',    6000),
+        ('patterns.md',  5000),
+        ('modulos.md',   4000),
+        ('LOG.md',       3000),
+        ('PLAN.md',      4000),
+        ('SESION_ACTIVA.md', 5000),
+    ]
     contenido = ""
-    for nombre in archivos:
+    for nombre, limite in archivos:
         ruta = MEMORIA_DIR / nombre
         if ruta.exists():
             try:
                 texto = ruta.read_text(encoding='utf-8')
-                contenido += f"\n\n--- {nombre} ---\n{texto[:3000]}"
+                contenido += f"\n\n=== {nombre} ===\n{texto[:limite]}"
             except Exception:
                 pass
     return contenido
 
 
 def llamar_claude(mensaje, historial):
-    """Llama a claude --print con contexto completo y retorna la respuesta."""
+    """Llama a claude -p con contexto completo del proyecto TUC TUC."""
 
-    # Formatear historial
+    # Formatear historial (excluir el último = mensaje actual)
     hist_texto = ""
-    for m in historial[:-1]:  # excluir el último (es el mensaje actual)
+    for m in historial[:-1]:
         nombre = "Rafael" if m['rol'] == 'user' else "Claude"
         hist_texto += f"\n{nombre}: {m['contenido']}"
 
-    # Leer contexto de memoria
     memoria = leer_memoria()
 
-    prompt = f"""Eres el asistente personal de Rafael en el chat de TUC TUC.
-Rafael te escribe desde la web app /admin/chat y tú respondes aquí de forma autónoma.
-Responde en español, de forma directa y útil.
+    prompt = f"""Eres Claude Code — el mismo asistente que Rafael usa en su terminal para desarrollar TUC TUC.
+Rafael te escribe desde /admin/chat (puede estar en su celular o en otro dispositivo).
+Tienes acceso completo a las herramientas: puedes leer archivos, editar código, ejecutar bash, etc.
+Actúa exactamente como lo harías en una sesión interactiva de Claude Code.
+Responde en español. Sé directo y concreto.
+
+El proyecto está en: C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos
+El backend principal es: 1_medicamentos.py
+
+━━━ CONTEXTO DEL PROYECTO ━━━
 {memoria}
 
---- HISTORIAL DEL CHAT ---
-{hist_texto if hist_texto else "(sin historial previo)"}
+━━━ HISTORIAL DEL CHAT ━━━
+{hist_texto if hist_texto else "(inicio de conversación)"}
 
---- NUEVO MENSAJE DE RAFAEL ---
-{mensaje}
-
-Responde directamente al mensaje anterior. Solo el contenido de tu respuesta, sin preámbulos."""
+━━━ MENSAJE DE RAFAEL ━━━
+{mensaje}"""
 
     try:
+        claude_cmd = r"C:\Users\RAFAEL OLIVARES\AppData\Roaming\npm\claude.cmd"
+        env = os.environ.copy()
+        # Remover vars que indican sesión anidada de Claude Code
+        for var in ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID',
+                    'CLAUDE_CODE_API_KEY_HELPER', 'ANTHROPIC_API_KEY']:
+            env.pop(var, None)
+
+        # Pasar prompt por stdin (evita límites y caracteres especiales en args)
         result = subprocess.run(
-            ['claude', '--print', prompt],
+            ['cmd', '/c', claude_cmd, '-p', '--dangerously-skip-permissions'],
+            input=prompt,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             cwd=str(APP_DIR),
-            timeout=120
+            timeout=300,
+            env=env
         )
+        print(f"  returncode: {result.returncode}")
+        print(f"  stdout: {repr(result.stdout[:200])}")
+        print(f"  stderr: {repr(result.stderr[:200])}")
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
         else:
-            err = result.stderr.strip() or "Sin respuesta"
-            print(f"  ✗ claude --print error: {err[:200]}")
+            err = result.stderr.strip() or result.stdout.strip() or "Sin respuesta"
+            print(f"  ✗ error: {err[:200]}")
             return f"_(Error al generar respuesta: {err[:100]})_"
     except subprocess.TimeoutExpired:
         return "_(Timeout al generar respuesta)_"
@@ -161,6 +205,10 @@ def ts():
 
 
 def main():
+    if not adquirir_lock():
+        print("⚠️  Bridge ya está corriendo. Saliendo.")
+        sys.exit(0)
+
     print("=" * 55)
     print("  chat_bridge.py — TUC TUC (modo autónomo)")
     print("  Claude Code responde automáticamente")

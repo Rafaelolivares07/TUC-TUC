@@ -8,242 +8,436 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .paso { display: none; }
-        .paso.activo {
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            backdrop-filter: blur(2px);
+        }
+        .modal-overlay.activo {
             display: flex;
-            animation: entrar 0.35s ease;
+            animation: fadein 0.2s ease;
         }
-        @keyframes entrar {
-            from { opacity: 0; transform: translateY(24px); }
-            to   { opacity: 1; transform: translateY(0); }
+        .modal-card {
+            animation: slideup 0.3s cubic-bezier(.22,.68,0,1.2);
         }
-        .tipo-card.sel { border-color: #f59e0b; background: #fffbeb; }
-        .sub-card.sel  { border-color: #f59e0b; background: #fffbeb; }
+        @keyframes fadein {
+            from { opacity: 0; } to { opacity: 1; }
+        }
+        @keyframes slideup {
+            from { opacity: 0; transform: translateY(32px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0)    scale(1);    }
+        }
+
+        .neg-card { cursor: pointer; transition: all 0.2s; }
+        .neg-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(245,158,11,0.13); }
+        .neg-card:active { transform: translateY(0); }
+
+        .opt-card { transition: all 0.15s; }
+        .opt-card.sel { border-color: #f59e0b !important; background: #fffbeb; }
+        .opt-card:hover { border-color: #fcd34d; }
     </style>
 </head>
-<body class="min-h-screen bg-gradient-to-b from-amber-50 to-white flex flex-col items-center justify-center px-4 py-10">
+<body class="min-h-screen bg-gradient-to-b from-amber-50 via-white to-white">
 
-<!-- Logo / header -->
-<div class="mb-8 text-center">
-    <span class="text-3xl font-black text-amber-500">TUC TUC</span>
-    <p class="text-gray-400 text-sm mt-1">Tu negocio digital en minutos</p>
+<!-- ======== LANDING ======== -->
+<div class="max-w-lg mx-auto px-4 py-10">
+
+    <!-- Logo -->
+    <div class="text-center mb-10">
+        <span class="text-4xl font-black text-amber-500 tracking-tight">TUC TUC</span>
+        <p class="text-gray-400 text-sm mt-1 font-medium">Tu negocio digital en minutos</p>
+    </div>
+
+    <!-- Hero -->
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-extrabold text-gray-800 leading-tight mb-3">
+            Digitaliza tu negocio<br>
+            <span class="text-amber-500">hoy mismo</span>
+        </h1>
+        <p class="text-gray-500">Elige tu tipo de negocio y en menos de 2 minutos tienes tu panel listo.</p>
+    </div>
+
+    <!-- Beneficios -->
+    <div class="flex flex-wrap justify-center gap-2 mb-10">
+        <span class="bg-green-50 text-green-700 text-xs font-bold px-3 py-1.5 rounded-full border border-green-100">✓ Sin contratos</span>
+        <span class="bg-green-50 text-green-700 text-xs font-bold px-3 py-1.5 rounded-full border border-green-100">✓ Sin tarjeta de crédito</span>
+        <span class="bg-green-50 text-green-700 text-xs font-bold px-3 py-1.5 rounded-full border border-green-100">✓ Solo pagas por uso</span>
+        <span class="bg-amber-50 text-amber-600 text-xs font-bold px-3 py-1.5 rounded-full border border-amber-100">🎁 Prueba gratis incluida</span>
+    </div>
+
+    <!-- Cards de negocio -->
+    <div class="flex flex-col gap-4">
+
+        <!-- Restaurante -->
+        <div onclick="iniciarFlujo('restaurante')"
+            class="neg-card bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-amber-200">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">🍽️</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-extrabold text-gray-800 text-lg">Restaurante</span>
+                        <span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">2 días gratis</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Menú del día o carta — pedidos en mesa, para llevar y online</p>
+                </div>
+                <span class="text-amber-300 text-xl font-bold shrink-0">›</span>
+            </div>
+        </div>
+
+        <!-- Tienda Online -->
+        <div onclick="iniciarFlujo('tienda')"
+            class="neg-card bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-amber-200">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">🛍️</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-extrabold text-gray-800 text-lg">Tienda Online</span>
+                        <span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">4 días gratis</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Catálogo, carrito y pedidos a domicilio</p>
+                </div>
+                <span class="text-amber-300 text-xl font-bold shrink-0">›</span>
+            </div>
+        </div>
+
+        <!-- Otro tipo -->
+        <div onclick="iniciarFlujo('otro')"
+            class="neg-card bg-white border-2 border-dashed border-gray-200 rounded-2xl p-5 hover:border-gray-300">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">💼</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-extrabold text-gray-600 text-lg">Otro tipo de negocio</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Transporte, salud, servicios u otro — cuéntanos y te contactamos</p>
+                </div>
+                <span class="text-gray-300 text-xl font-bold shrink-0">›</span>
+            </div>
+        </div>
+
+    </div>
+
+    <p class="text-center text-gray-300 text-xs mt-8">Al registrarte aceptas los términos de uso de TUC TUC</p>
 </div>
 
-<!-- Contenedor de pasos -->
-<div class="w-full max-w-md">
 
-    <!-- PASO 1: ¿Qué tipo de negocio? -->
-    <div id="paso1" class="paso activo flex-col gap-4">
-        <h2 class="text-2xl font-extrabold text-gray-800 text-center">¿Qué tienes?</h2>
-        <p class="text-gray-400 text-center text-sm mb-2">Elige tu tipo de negocio para empezar</p>
-
-        <button onclick="selTipo('restaurante')"
-            class="tipo-card border-2 border-gray-200 rounded-2xl p-5 text-left transition hover:border-amber-300 bg-white shadow-sm">
-            <span class="text-3xl block mb-2">🍽️</span>
-            <span class="font-bold text-gray-800 block text-lg">Restaurante</span>
-            <span class="text-gray-400 text-sm">Menú del día o carta — pedidos en mesa y online</span>
-        </button>
-
-        <button onclick="selTipo('tienda')"
-            class="tipo-card border-2 border-gray-200 rounded-2xl p-5 text-left transition hover:border-amber-300 bg-white shadow-sm">
-            <span class="text-3xl block mb-2">🛍️</span>
-            <span class="font-bold text-gray-800 block text-lg">Tienda Online</span>
-            <span class="text-gray-400 text-sm">Catálogo, carrito y pedidos a domicilio</span>
-        </button>
-
-        <button onclick="irContacto()"
-            class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-left transition hover:border-gray-300 bg-white text-gray-400 text-sm">
-            <span class="font-semibold text-gray-500">Otro tipo de negocio →</span>
-            <span class="block text-xs mt-1">Transporte, servicios u otro — te contactamos</span>
-        </button>
+<!-- ======== MODAL OVERLAY ======== -->
+<div id="modal-overlay" class="modal-overlay" onclick="clickOverlay(event)">
+    <div class="modal-card bg-white rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden"
+         onclick="event.stopPropagation()">
+        <div id="modal-body" class="p-8"></div>
     </div>
-
-    <!-- PASO 2A: Subtipo restaurante -->
-    <div id="paso2r" class="paso flex-col gap-4">
-        <button onclick="irPaso('paso1')" class="text-amber-500 text-sm font-semibold text-left">← Volver</button>
-        <h2 class="text-2xl font-extrabold text-gray-800 text-center">¿Cómo funciona tu restaurante?</h2>
-
-        <button onclick="selSubtipo('menu_dia')"
-            class="sub-card border-2 border-gray-200 rounded-2xl p-5 text-left transition hover:border-amber-300 bg-white shadow-sm">
-            <span class="text-3xl block mb-2">🥘</span>
-            <span class="font-bold text-gray-800 block text-lg">Menú del Día</span>
-            <span class="text-gray-400 text-sm">Sopa, bandeja, jugo — precio fijo cada día</span>
-        </button>
-
-        <button onclick="selSubtipo('carta')"
-            class="sub-card border-2 border-gray-200 rounded-2xl p-5 text-left transition hover:border-amber-300 bg-white shadow-sm">
-            <span class="text-3xl block mb-2">📋</span>
-            <span class="font-bold text-gray-800 block text-lg">Carta</span>
-            <span class="text-gray-400 text-sm">Platos individuales por categoría con precios propios</span>
-        </button>
-    </div>
-
-    <!-- PASO 3: Nombre del negocio -->
-    <div id="paso3" class="paso flex-col gap-4">
-        <button onclick="volverNombre()" class="text-amber-500 text-sm font-semibold text-left">← Volver</button>
-        <h2 class="text-2xl font-extrabold text-gray-800 text-center" id="titulo-negocio">¿Cómo se llama tu restaurante?</h2>
-        <p class="text-gray-400 text-center text-sm">Este será el nombre que verán tus clientes</p>
-        <input id="inp-nombre-neg" type="text"
-            placeholder="Ej: El Buen Sabor"
-            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold"
-            onkeydown="if(event.key==='Enter') irPaso('paso4')">
-        <button onclick="irPaso('paso4')"
-            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition shadow-lg shadow-amber-100">
-            Siguiente →
-        </button>
-    </div>
-
-    <!-- PASO 4: Nombre del dueño -->
-    <div id="paso4" class="paso flex-col gap-4">
-        <button onclick="irPaso('paso3')" class="text-amber-500 text-sm font-semibold text-left">← Volver</button>
-        <h2 class="text-2xl font-extrabold text-gray-800 text-center">¿Cuál es tu nombre?</h2>
-        <p class="text-gray-400 text-center text-sm">El nombre del dueño o responsable del negocio</p>
-        <input id="inp-nombre-due" type="text"
-            placeholder="Tu nombre completo"
-            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold"
-            onkeydown="if(event.key==='Enter') irPaso('paso5')">
-        <button onclick="irPaso('paso5')"
-            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition shadow-lg shadow-amber-100">
-            Siguiente →
-        </button>
-    </div>
-
-    <!-- PASO 5: Celular -->
-    <div id="paso5" class="paso flex-col gap-4">
-        <button onclick="irPaso('paso4')" class="text-amber-500 text-sm font-semibold text-left">← Volver</button>
-        <h2 class="text-2xl font-extrabold text-gray-800 text-center">¿Tu número de celular?</h2>
-        <p class="text-gray-400 text-center text-sm">Para acceder a tu panel desde cualquier dispositivo</p>
-        <input id="inp-telefono" type="tel"
-            placeholder="Ej: 3001234567"
-            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold"
-            onkeydown="if(event.key==='Enter') crear()">
-        <button onclick="crear()" id="btn-crear"
-            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition shadow-lg shadow-amber-100">
-            ¡Crear mi negocio!
-        </button>
-        <p id="msg-error" class="text-red-500 text-sm text-center hidden"></p>
-    </div>
-
-    <!-- PASO 6: Éxito -->
-    <div id="paso6" class="paso flex-col items-center gap-4 text-center">
-        <div class="text-6xl">🎉</div>
-        <h2 class="text-2xl font-extrabold text-gray-800">¡Listo! Tu negocio está creado</h2>
-        <p class="text-gray-500" id="msg-dias"></p>
-        <p class="text-gray-400 text-sm">Entrando a tu panel...</p>
-        <div class="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mt-2"></div>
-    </div>
-
-    <!-- PASO contacto (otros tipos) -->
-    <div id="paso-contacto" class="paso flex-col gap-4 text-center">
-        <div class="text-5xl">💬</div>
-        <h2 class="text-2xl font-extrabold text-gray-800">¡Cuéntanos más!</h2>
-        <p class="text-gray-500">Tu tipo de negocio está en camino. Escríbenos y lo armamos juntos.</p>
-        <a href="https://wa.me/573XXXXXXXXX?text=Hola%2C%20quiero%20información%20sobre%20TUC%20TUC"
-            class="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-bold text-lg transition">
-            Escribir por WhatsApp
-        </a>
-        <button onclick="irPaso('paso1')" class="text-amber-500 text-sm font-semibold">← Volver</button>
-    </div>
-
 </div>
+
 
 <script>
-let tipo = '';
+let tipo    = '';
 let subtipo = 'menu_dia';
+let datos   = {};
 
-function irPaso(id) {
-    // Validaciones antes de avanzar
-    if (id === 'paso4') {
-        const v = document.getElementById('inp-nombre-neg').value.trim();
-        if (!v) { document.getElementById('inp-nombre-neg').focus(); return; }
-    }
-    if (id === 'paso5') {
-        const v = document.getElementById('inp-nombre-due').value.trim();
-        if (!v) { document.getElementById('inp-nombre-due').focus(); return; }
-    }
-    document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
-    document.getElementById(id).classList.add('activo');
+// ─── Entrada ───────────────────────────────────────────
+
+function iniciarFlujo(t) {
+    tipo    = t;
+    subtipo = 'menu_dia';
+    datos   = {};
+    if (t === 'restaurante') mSubtipo();
+    else if (t === 'tienda') mNombreNeg();
+    else                     mOtro();
 }
 
-function selTipo(t) {
-    tipo = t;
-    document.querySelectorAll('.tipo-card').forEach(b => b.classList.remove('sel'));
-    event.currentTarget.classList.add('sel');
-    document.getElementById('titulo-negocio').textContent =
-        tipo === 'restaurante' ? '¿Cómo se llama tu restaurante?' : '¿Cómo se llama tu tienda?';
-    if (tipo === 'restaurante') {
-        setTimeout(() => irPaso('paso2r'), 180);
-    } else {
-        setTimeout(() => irPaso('paso3'), 180);
-    }
+// ─── Restaurante: subtipo ───────────────────────────────
+
+function mSubtipo() {
+    render(`
+        <button onclick="cerrar()" class="absolute top-4 right-5 text-gray-300 hover:text-gray-500 text-3xl leading-none font-light">×</button>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Restaurante</p>
+        <h3 class="text-2xl font-extrabold text-gray-800 mb-5">¿Cómo funciona tu restaurante?</h3>
+        <div class="flex flex-col gap-3">
+            <button onclick="selSubtipo('menu_dia')"
+                class="opt-card border-2 border-gray-200 rounded-2xl p-4 text-left">
+                <span class="text-2xl block mb-1">🥘</span>
+                <span class="font-bold text-gray-800 block">Menú del Día</span>
+                <span class="text-gray-400 text-sm">Sopa, bandeja, jugo — precio fijo cada día</span>
+            </button>
+            <button onclick="selSubtipo('carta')"
+                class="opt-card border-2 border-gray-200 rounded-2xl p-4 text-left">
+                <span class="text-2xl block mb-1">📋</span>
+                <span class="font-bold text-gray-800 block">Carta</span>
+                <span class="text-gray-400 text-sm">Platos individuales por categoría con precios propios</span>
+            </button>
+        </div>
+    `);
 }
 
 function selSubtipo(s) {
     subtipo = s;
-    document.querySelectorAll('.sub-card').forEach(b => b.classList.remove('sel'));
+    document.querySelectorAll('.opt-card').forEach(b => b.classList.remove('sel'));
     event.currentTarget.classList.add('sel');
-    setTimeout(() => irPaso('paso3'), 180);
+    setTimeout(mNombreNeg, 180);
 }
 
-function volverNombre() {
-    irPaso(tipo === 'restaurante' ? 'paso2r' : 'paso1');
+// ─── Modal: nombre del negocio ──────────────────────────
+
+function mNombreNeg() {
+    const esRest = tipo === 'restaurante';
+    const label  = esRest ? 'restaurante' : 'tienda';
+    const ph     = esRest ? 'Ej: El Buen Sabor' : 'Ej: Moda Express';
+    const volver = esRest ? 'mSubtipo()' : 'cerrar()';
+    render(`
+        <button onclick="${volver}" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : 'Tienda'}</p>
+        <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Cómo se llama tu ${label}?</h3>
+        <p class="text-gray-400 text-sm mb-5">Este será el nombre que verán tus clientes</p>
+        <input id="iNomNeg" type="text" placeholder="${ph}"
+            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold mb-4"
+            onkeydown="if(event.key==='Enter') avNomNeg()">
+        <button onclick="avNomNeg()"
+            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition">
+            Siguiente →
+        </button>
+        <p id="eNomNeg" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+    `);
+    focus('iNomNeg');
 }
 
-function irContacto() {
-    irPaso('paso-contacto');
+function avNomNeg() {
+    const v = val('iNomNeg');
+    if (!v) { err('eNomNeg', 'Escribe el nombre de tu negocio'); return; }
+    datos.nombre_negocio = v;
+    mNombreDueno(mNombreNeg);
+}
+
+// ─── Modal: nombre del dueño ────────────────────────────
+
+function mNombreDueno(fnVolver) {
+    render(`
+        <button onclick="(${fnVolver.toString()})()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Casi listo</p>
+        <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Cuál es tu nombre?</h3>
+        <p class="text-gray-400 text-sm mb-5">El nombre del dueño o responsable del negocio</p>
+        <input id="iNomDue" type="text" placeholder="Tu nombre completo"
+            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold mb-4"
+            onkeydown="if(event.key==='Enter') avNomDueno()">
+        <button onclick="avNomDueno()"
+            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition">
+            Siguiente →
+        </button>
+        <p id="eNomDue" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+    `);
+    focus('iNomDue');
+}
+
+function avNomDueno() {
+    const v = val('iNomDue');
+    if (!v) { err('eNomDue', 'Escribe tu nombre'); return; }
+    datos.nombre_dueno = v;
+    mTelefono();
+}
+
+// ─── Modal: teléfono + crear ────────────────────────────
+
+function mTelefono() {
+    const dias = tipo === 'restaurante' ? '2' : '4';
+    render(`
+        <button onclick="mNombreDueno(mNombreNeg)" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Último paso</p>
+        <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Tu número de celular?</h3>
+        <p class="text-gray-400 text-sm mb-5">Para acceder a tu panel desde cualquier dispositivo</p>
+        <input id="iTel" type="tel" placeholder="Ej: 3001234567"
+            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold mb-4"
+            onkeydown="if(event.key==='Enter') crear()">
+        <button onclick="crear()" id="btnCrear"
+            class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition shadow-lg shadow-amber-100">
+            ¡Crear mi negocio! 🚀
+        </button>
+        <p class="text-center text-xs text-gray-400 mt-3">🎁 Tienes <strong>${dias} días gratis</strong> para explorar todo — sin tarjeta</p>
+        <p id="eTel" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+    `);
+    focus('iTel');
 }
 
 async function crear() {
-    const nombreNeg = document.getElementById('inp-nombre-neg').value.trim();
-    const nombreDue = document.getElementById('inp-nombre-due').value.trim();
-    const telefono  = document.getElementById('inp-telefono').value.trim();
-    const err       = document.getElementById('msg-error');
+    const telefono = val('iTel');
+    if (telefono.replace(/\D/g,'').length < 10) { err('eTel', 'El celular debe tener 10 dígitos'); return; }
+    datos.telefono = telefono;
 
-    if (!nombreNeg) { mostrarError('Falta el nombre del negocio'); return; }
-    if (!nombreDue) { mostrarError('Falta tu nombre'); return; }
-    if (telefono.replace(/\D/g,'').length < 10) { mostrarError('Celular debe tener 10 dígitos'); return; }
-
-    const btn = document.getElementById('btn-crear');
+    const btn = document.getElementById('btnCrear');
     btn.disabled = true;
     btn.textContent = 'Creando...';
-    err.classList.add('hidden');
 
     try {
-        const r = await fetch('/api/registro-rapido', {
+        const r    = await fetch('/api/registro-rapido', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                tipo,
-                subtipo,
-                nombre_negocio: nombreNeg,
-                nombre_dueno:   nombreDue,
-                telefono
-            })
+            body: JSON.stringify({ tipo, subtipo, ...datos })
         });
         const data = await r.json();
         if (data.ok) {
-            document.getElementById('msg-dias').textContent =
-                tipo === 'restaurante'
-                    ? 'Tienes 2 días de prueba gratis para explorar todo.'
-                    : 'Tienes 4 días de prueba gratis para explorar todo.';
-            irPaso('paso6');
-            setTimeout(() => { window.location.href = data.redirect; }, 2200);
+            mExito(data.redirect);
         } else {
-            mostrarError(data.error || 'Ocurrió un error, intenta de nuevo');
+            err('eTel', data.error || 'Ocurrió un error, intenta de nuevo');
             btn.disabled = false;
-            btn.textContent = '¡Crear mi negocio!';
+            btn.textContent = '¡Crear mi negocio! 🚀';
         }
     } catch(e) {
-        mostrarError('Error de conexión, intenta de nuevo');
+        err('eTel', 'Error de conexión, intenta de nuevo');
         btn.disabled = false;
-        btn.textContent = '¡Crear mi negocio!';
+        btn.textContent = '¡Crear mi negocio! 🚀';
     }
 }
 
-function mostrarError(msg) {
-    const el = document.getElementById('msg-error');
+// ─── Flujo "Otro tipo de negocio" ──────────────────────
+
+function mOtro() {
+    render(`
+        <button onclick="cerrar()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Otro negocio</p>
+        <h3 class="text-2xl font-extrabold text-gray-800 mb-1">Cuéntanos sobre tu negocio</h3>
+        <p class="text-gray-400 text-sm mb-5">Lo estamos armando — deja tus datos y te contactamos en breve</p>
+        <input id="iOtroTipo" type="text" placeholder="¿Qué tipo de negocio? Ej: Peluquería"
+            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-base focus:border-amber-500 focus:outline-none font-semibold mb-3"
+            onkeydown="if(event.key==='Enter') document.getElementById('iOtroNom').focus()">
+        <input id="iOtroNom" type="text" placeholder="Nombre del negocio"
+            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-base focus:border-amber-500 focus:outline-none font-semibold mb-4"
+            onkeydown="if(event.key==='Enter') avOtro()">
+        <button onclick="avOtro()"
+            class="w-full bg-gray-800 hover:bg-gray-900 text-white py-4 rounded-2xl font-bold text-lg transition">
+            Siguiente →
+        </button>
+        <p id="eOtro" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+    `);
+    focus('iOtroTipo');
+}
+
+function avOtro() {
+    const t = val('iOtroTipo');
+    const n = val('iOtroNom');
+    if (!t) { err('eOtro', 'Escribe el tipo de negocio'); return; }
+    if (!n) { err('eOtro', 'Escribe el nombre del negocio'); return; }
+    datos.subtipo_otro   = t;
+    datos.nombre_negocio = n;
+    mNombreDueno(mOtro);
+    // sobrescribir avNomDueno para que vaya al tel de otro
+    window._flujoOtro = true;
+}
+
+// Override: después del nombre del dueño en flujo "otro"
+const _avNomDuenoOrig = avNomDueno;
+function avNomDueno() {
+    const v = val('iNomDue');
+    if (!v) { err('eNomDue', 'Escribe tu nombre'); return; }
+    datos.nombre_dueno = v;
+    if (tipo === 'otro') mTelefonoOtro();
+    else                 mTelefono();
+}
+
+function mTelefonoOtro() {
+    render(`
+        <button onclick="mNombreDueno(mOtro)" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Último paso</p>
+        <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Tu número de celular?</h3>
+        <p class="text-gray-400 text-sm mb-5">Te contactamos por este número en cuanto estemos listos</p>
+        <input id="iTelOtro" type="tel" placeholder="Ej: 3001234567"
+            class="w-full border-2 border-gray-200 rounded-2xl px-5 py-4 text-lg focus:border-amber-500 focus:outline-none font-semibold mb-4"
+            onkeydown="if(event.key==='Enter') enviarOtro()">
+        <button onclick="enviarOtro()" id="btnOtro"
+            class="w-full bg-gray-800 hover:bg-gray-900 text-white py-4 rounded-2xl font-bold text-lg transition">
+            ¡Enviar mis datos!
+        </button>
+        <p id="eTelOtro" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+    `);
+    focus('iTelOtro');
+}
+
+async function enviarOtro() {
+    const telefono = val('iTelOtro');
+    if (telefono.replace(/\D/g,'').length < 10) { err('eTelOtro', 'El celular debe tener 10 dígitos'); return; }
+    datos.telefono = telefono;
+
+    const btn = document.getElementById('btnOtro');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+        await fetch('/api/prospecto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nombre:    datos.nombre_dueno,
+                telefono:  datos.telefono,
+                tipologia: datos.subtipo_otro + ' — ' + datos.nombre_negocio
+            })
+        });
+    } catch(e) {}
+    mExitoOtro();
+}
+
+// ─── Modales de éxito ───────────────────────────────────
+
+function mExito(redirect) {
+    const dias = tipo === 'restaurante' ? '2' : '4';
+    render(`
+        <div class="text-center py-4">
+            <div class="text-6xl mb-4">🎉</div>
+            <h3 class="text-2xl font-extrabold text-gray-800 mb-2">¡Listo! Tu negocio está creado</h3>
+            <p class="text-gray-500 mb-1">Tienes <strong>${dias} días de prueba gratis</strong> para explorar todo.</p>
+            <p class="text-gray-400 text-sm mb-6">Entrando a tu panel...</p>
+            <div class="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+    `);
+    setTimeout(() => { window.location.href = redirect; }, 2200);
+}
+
+function mExitoOtro() {
+    render(`
+        <div class="text-center py-4">
+            <div class="text-6xl mb-4">💬</div>
+            <h3 class="text-2xl font-extrabold text-gray-800 mb-2">¡Recibido!</h3>
+            <p class="text-gray-500 mb-6">Registramos tu información. Te contactaremos en breve para armar tu negocio en TUC TUC.</p>
+            <button onclick="cerrar()"
+                class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-semibold transition">
+                Volver al inicio
+            </button>
+        </div>
+    `);
+}
+
+// ─── Utilidades ─────────────────────────────────────────
+
+function render(html) {
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-overlay').classList.add('activo');
+}
+
+function cerrar() {
+    document.getElementById('modal-overlay').classList.remove('activo');
+}
+
+function clickOverlay(e) {
+    if (e.target === document.getElementById('modal-overlay')) cerrar();
+}
+
+function val(id) {
+    return (document.getElementById(id)?.value || '').trim();
+}
+
+function err(id, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
+}
+
+function focus(id) {
+    setTimeout(() => document.getElementById(id)?.focus(), 120);
 }
 </script>
 

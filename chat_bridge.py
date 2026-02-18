@@ -1,12 +1,12 @@
 """
-chat_bridge.py — Puente entre /admin/chat (PostgreSQL) y Claude Code (archivos JSON)
+chat_bridge.py — Puente autónomo entre /admin/chat (PostgreSQL) y Claude Code
 
-Flujo:
+Flujo completamente autónomo:
   1. Detecta nuevo mensaje 'user' sin respuesta en chat_mensajes
-  2. Escribe chat_pendiente.json en la carpeta de memoria de Claude
-  3. Espera que Claude Code escriba chat_respuesta.json
-  4. Guarda la respuesta en la BD via /api/admin/chat/responder
-  5. Borra chat_respuesta.json y vuelve a esperar
+  2. Lee historial reciente + archivos de memoria
+  3. Llama a `claude --print` con contexto completo
+  4. Guarda la respuesta en la BD directamente
+  5. El frontend polling detecta la respuesta y la muestra
 
 Uso:
   py chat_bridge.py
@@ -15,7 +15,7 @@ Uso:
 import os
 import json
 import time
-import requests
+import subprocess
 import psycopg2
 import psycopg2.extras
 from pathlib import Path
@@ -26,13 +26,11 @@ load_dotenv()
 
 # ── Config ──────────────────────────────────────────────────────────────────
 DB_URL      = os.getenv('DATABASE_URL')
-APP_URL     = os.getenv('APP_URL', 'https://tuc-tuc.onrender.com')
 MEMORIA_DIR = Path(r"C:\Users\RAFAEL OLIVARES\.claude\projects\C--Users-RAFAEL-OLIVARES\memory")
+APP_DIR     = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 
-PENDIENTE_FILE = MEMORIA_DIR / "chat_pendiente.json"
-RESPUESTA_FILE = MEMORIA_DIR / "chat_respuesta.json"
-
-POLL_INTERVAL  = 2   # segundos entre checks de la BD
+POLL_INTERVAL = 3   # segundos entre checks
+MAX_HISTORIAL = 20  # mensajes de contexto a incluir
 # ────────────────────────────────────────────────────────────────────────────
 
 
@@ -41,7 +39,7 @@ def get_conn():
 
 
 def get_mensaje_pendiente(ultimo_id_procesado):
-    """Retorna el mensaje más reciente de 'user' que no tiene respuesta posterior."""
+    """Retorna el mensaje más reciente de 'user' sin respuesta posterior."""
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -63,8 +61,23 @@ def get_mensaje_pendiente(ultimo_id_procesado):
         conn.close()
 
 
-def guardar_respuesta_en_bd(contenido):
-    """Inserta la respuesta del asistente directamente en la BD."""
+def get_historial(limite=MAX_HISTORIAL):
+    """Retorna los últimos N mensajes del chat para dar contexto."""
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT rol, contenido FROM (
+                SELECT id, rol, contenido FROM chat_mensajes ORDER BY id DESC LIMIT %s
+            ) sub ORDER BY id ASC
+        """, (limite,))
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def guardar_respuesta(contenido):
+    """Inserta la respuesta del asistente en la BD."""
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -73,12 +86,74 @@ def guardar_respuesta_en_bd(contenido):
             (contenido,)
         )
         conn.commit()
-        print(f"  ✓ Respuesta guardada en BD ({len(contenido)} chars)")
+        print(f"  ✓ Respuesta guardada ({len(contenido)} chars)")
     except Exception as e:
         conn.rollback()
-        print(f"  ✗ Error guardando respuesta: {e}")
+        print(f"  ✗ Error guardando: {e}")
     finally:
         conn.close()
+
+
+def leer_memoria():
+    """Lee los archivos de memoria relevantes para dar contexto a Claude."""
+    archivos = ['SESION_ACTIVA.md', 'PLAN.md']
+    contenido = ""
+    for nombre in archivos:
+        ruta = MEMORIA_DIR / nombre
+        if ruta.exists():
+            try:
+                texto = ruta.read_text(encoding='utf-8')
+                contenido += f"\n\n--- {nombre} ---\n{texto[:3000]}"
+            except Exception:
+                pass
+    return contenido
+
+
+def llamar_claude(mensaje, historial):
+    """Llama a claude --print con contexto completo y retorna la respuesta."""
+
+    # Formatear historial
+    hist_texto = ""
+    for m in historial[:-1]:  # excluir el último (es el mensaje actual)
+        nombre = "Rafael" if m['rol'] == 'user' else "Claude"
+        hist_texto += f"\n{nombre}: {m['contenido']}"
+
+    # Leer contexto de memoria
+    memoria = leer_memoria()
+
+    prompt = f"""Eres el asistente personal de Rafael en el chat de TUC TUC.
+Rafael te escribe desde la web app /admin/chat y tú respondes aquí de forma autónoma.
+Responde en español, de forma directa y útil.
+{memoria}
+
+--- HISTORIAL DEL CHAT ---
+{hist_texto if hist_texto else "(sin historial previo)"}
+
+--- NUEVO MENSAJE DE RAFAEL ---
+{mensaje}
+
+Responde directamente al mensaje anterior. Solo el contenido de tu respuesta, sin preámbulos."""
+
+    try:
+        result = subprocess.run(
+            ['claude', '--print', prompt],
+            capture_output=True,
+            text=True,
+            cwd=str(APP_DIR),
+            timeout=120
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        else:
+            err = result.stderr.strip() or "Sin respuesta"
+            print(f"  ✗ claude --print error: {err[:200]}")
+            return f"_(Error al generar respuesta: {err[:100]})_"
+    except subprocess.TimeoutExpired:
+        return "_(Timeout al generar respuesta)_"
+    except FileNotFoundError:
+        return "_(claude no encontrado en PATH — verifica instalación de Claude Code)_"
+    except Exception as e:
+        return f"_(Error: {e})_"
 
 
 def ts():
@@ -87,16 +162,12 @@ def ts():
 
 def main():
     print("=" * 55)
-    print("  chat_bridge.py — TUC TUC")
-    print("  Conectando Claude Code ↔ /admin/chat")
+    print("  chat_bridge.py — TUC TUC (modo autónomo)")
+    print("  Claude Code responde automáticamente")
     print("=" * 55)
-    print(f"  BD:       {DB_URL[:40]}...")
-    print(f"  Memoria:  {MEMORIA_DIR}")
+    print(f"  BD:      {DB_URL[:40]}...")
+    print(f"  Memoria: {MEMORIA_DIR}")
     print()
-
-    # Limpiar archivos residuales
-    if PENDIENTE_FILE.exists(): PENDIENTE_FILE.unlink()
-    if RESPUESTA_FILE.exists(): RESPUESTA_FILE.unlink()
 
     # No reprocesar mensajes anteriores al arranque
     conn = get_conn()
@@ -108,42 +179,24 @@ def main():
     finally:
         conn.close()
 
-    print(f"[{ts()}] Listo. Último ID en BD: {ultimo_id}. Esperando mensajes...\n")
+    print(f"[{ts()}] Listo. Último ID: {ultimo_id}. Esperando mensajes...\n")
 
     while True:
         try:
             mensaje = get_mensaje_pendiente(ultimo_id)
 
             if mensaje:
-                print(f"[{ts()}] 📨 Nuevo mensaje (ID={mensaje['id']})")
-                print(f"         → {mensaje['contenido'][:120]}")
-
-                # Escribir archivo para Claude Code
-                with open(PENDIENTE_FILE, 'w', encoding='utf-8') as f:
-                    json.dump({
-                        'id':        mensaje['id'],
-                        'contenido': mensaje['contenido'],
-                        'ts':        mensaje['ts']
-                    }, f, ensure_ascii=False, indent=2)
-
-                print(f"[{ts()}] 📝 Escrito en chat_pendiente.json")
-                print(f"[{ts()}] ⏳ Esperando respuesta en chat_respuesta.json...")
-
+                print(f"[{ts()}] 📨 Mensaje (ID={mensaje['id']}): {mensaje['contenido'][:80]}")
                 ultimo_id = mensaje['id']
 
-                # Esperar respuesta de Claude Code
-                while not RESPUESTA_FILE.exists():
-                    time.sleep(1)
+                historial = get_historial()
+                print(f"[{ts()}] 🧠 Llamando a Claude Code ({len(historial)} msgs contexto)...")
 
-                # Leer respuesta
-                with open(RESPUESTA_FILE, 'r', encoding='utf-8') as f:
-                    respuesta = json.load(f)
+                respuesta = llamar_claude(mensaje['contenido'], historial)
+                print(f"[{ts()}] 💬 Respuesta: {respuesta[:80]}...")
 
-                RESPUESTA_FILE.unlink()
-                print(f"[{ts()}] 💬 Respuesta recibida ({len(respuesta['contenido'])} chars)")
-
-                guardar_respuesta_en_bd(respuesta['contenido'])
-                print(f"[{ts()}] ✅ Listo. Esperando siguiente mensaje...\n")
+                guardar_respuesta(respuesta)
+                print(f"[{ts()}] ✅ Listo.\n")
 
             time.sleep(POLL_INTERVAL)
 

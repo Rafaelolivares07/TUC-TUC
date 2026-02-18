@@ -23793,15 +23793,19 @@ def api_conductor_captura():
                 cur = conn.execute("""
                     INSERT INTO terceros (nombre, telefono, referido_por, descuento_bienvenida, fecha_creacion)
                     VALUES (%s, %s, %s, %s, NOW())
+                    RETURNING id
                 """, (nombre, telefono, session['usuario_id'], int(precio_oferta)))
-                tercero_id = cur.fetchone()[0] if cur else None
+                row = cur.fetchone()
+                tercero_id = row[0] if row else None
         else:
             # Sin teléfono: crear usuario solo con nombre + crédito
             cur = conn.execute("""
                 INSERT INTO terceros (nombre, referido_por, descuento_bienvenida, fecha_creacion)
                 VALUES (%s, %s, %s, NOW())
+                RETURNING id
             """, (nombre, session['usuario_id'], int(precio_oferta)))
-            tercero_id = cur.fetchone()[0] if cur else None
+            row = cur.fetchone()
+            tercero_id = row[0] if row else None
 
         conn.execute("""
             INSERT INTO capturas_pasajero

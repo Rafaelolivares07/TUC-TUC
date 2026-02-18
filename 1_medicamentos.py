@@ -23758,13 +23758,17 @@ def api_conductor_captura():
             )
         """)
 
-        # Self-healing: agregar columnas si no existen (para tablas ya creadas)
-        try:
-            conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS token VARCHAR(20)")
-            conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS precio_oferta DECIMAL(10,2)")
-            conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS tercero_id INTEGER")
-        except Exception:
-            conn.rollback()
+        # Self-healing: agregar columnas si no existen (cada uno aislado)
+        for alter in [
+            "ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS token VARCHAR(20)",
+            "ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS precio_oferta DECIMAL(10,2)",
+            "ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS tercero_id INTEGER",
+        ]:
+            try:
+                conn.execute(alter)
+                conn.commit()
+            except Exception:
+                conn.rollback()
 
         # Self-healing: descuento_bienvenida en terceros (renombrar si existía como credito_bienvenida)
         try:

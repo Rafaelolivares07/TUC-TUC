@@ -23764,17 +23764,17 @@ def api_conductor_captura():
             conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS precio_oferta DECIMAL(10,2)")
             conn.execute("ALTER TABLE capturas_pasajero ADD COLUMN IF NOT EXISTS tercero_id INTEGER")
         except Exception:
-            pass
+            conn.rollback()
 
         # Self-healing: descuento_bienvenida en terceros (renombrar si existía como credito_bienvenida)
         try:
             conn.execute("ALTER TABLE terceros RENAME COLUMN credito_bienvenida TO descuento_bienvenida")
         except Exception:
-            pass
+            conn.rollback()
         try:
             conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS descuento_bienvenida INTEGER DEFAULT 0")
         except Exception:
-            pass
+            conn.rollback()
 
         # Pre-crear usuario en terceros con bono de $5,000
         tercero_id = None

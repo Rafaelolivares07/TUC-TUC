@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backups BD — TUC TUC Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background: #f3f4f6; }</style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+<div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <a href="/admin" class="text-sm text-gray-400 hover:text-gray-600 mb-1 inline-block">&larr; Volver al admin</a>
+            <h1 class="text-3xl font-extrabold text-gray-800">Backups de Base de Datos</h1>
+            <p class="text-gray-500 mt-1">Exporta, descarga y restaura snapshots de PostgreSQL.</p>
+        </div>
+
+        <!-- Botón crear backup -->
+        <button onclick="crearBackup()"
+            id="btn-crear"
+            class="inline-flex items-center px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Hacer Backup Ahora
+        </button>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-xl font-semibold text-sm max-w-sm"></div>
+
+    <!-- Alerta si no hay backups -->
+    {% if not backups %}
+    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center text-yellow-700">
+        <p class="text-lg font-semibold">No hay backups todavía</p>
+        <p class="text-sm mt-1">Presiona "Hacer Backup Ahora" para crear el primero.</p>
+    </div>
+    {% endif %}
+
+    <!-- Lista de backups -->
+    <div id="lista-backups" class="space-y-3">
+        {% for b in backups %}
+        <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between gap-4" id="row-{{ b.nombre }}">
+            <div class="flex-1 min-w-0">
+                <p class="font-mono text-sm font-semibold text-gray-800 truncate">{{ b.nombre }}</p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ b.fecha }} &mdash; {{ b.tamano_mb }} MB</p>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <!-- Descargar -->
+                <a href="/api/admin/backup/descargar/{{ b.nombre }}"
+                   class="inline-flex items-center px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200 transition">
+                    Descargar
+                </a>
+
+                <!-- Restaurar (solo en local) -->
+                {% if '_local' in b.nombre %}
+                <button onclick="restaurar('{{ b.nombre }}')"
+                    class="inline-flex items-center px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg border border-amber-200 transition">
+                    Restaurar
+                </button>
+                {% else %}
+                <button onclick="restaurarProd('{{ b.nombre }}')"
+                    class="inline-flex items-center px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-semibold text-xs rounded-lg border border-orange-200 transition"
+                    title="Restaura en BD local aunque el backup sea de producción">
+                    Restaurar (en local)
+                </button>
+                {% endif %}
+
+                <!-- Eliminar -->
+                <button onclick="eliminar('{{ b.nombre }}')"
+                    class="inline-flex items-center px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs rounded-lg border border-red-200 transition">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Fila que se inserta cuando se crea un backup nuevo (JS) -->
+    <div id="nuevos-backups" class="space-y-3 mt-3"></div>
+
+</div>
+
+<script>
+function toast(msg, error=false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-xl font-semibold text-sm max-w-sm ${error ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+    setTimeout(() => t.classList.add('hidden'), 5000);
+}
+
+async function crearBackup() {
+    const btn = document.getElementById('btn-crear');
+    btn.disabled = true;
+    btn.textContent = 'Creando backup...';
+    try {
+        const r = await fetch('/api/admin/backup/crear', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            toast(`Backup creado: ${d.nombre} (${d.tamano_mb} MB)`);
+            // Insertar nueva fila al inicio
+            const row = document.createElement('div');
+            row.className = 'bg-white rounded-xl shadow p-4 flex items-center justify-between gap-4 border-2 border-indigo-200';
+            row.id = `row-${d.nombre}`;
+            const tag = d.nombre.includes('_local') ? '_local' : '_prod';
+            row.innerHTML = `
+                <div class="flex-1 min-w-0">
+                    <p class="font-mono text-sm font-semibold text-gray-800 truncate">${d.nombre}</p>
+                    <p class="text-xs text-gray-400 mt-0.5">Ahora mismo &mdash; ${d.tamano_mb} MB</p>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <a href="/api/admin/backup/descargar/${d.nombre}"
+                       class="inline-flex items-center px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200 transition">
+                        Descargar
+                    </a>
+                    <button onclick="restaurar('${d.nombre}')"
+                        class="inline-flex items-center px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg border border-amber-200 transition">
+                        Restaurar
+                    </button>
+                    <button onclick="eliminar('${d.nombre}')"
+                        class="inline-flex items-center px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs rounded-lg border border-red-200 transition">
+                        Eliminar
+                    </button>
+                </div>`;
+            document.getElementById('nuevos-backups').prepend(row);
+        } else {
+            toast(d.error || 'Error al crear backup', true);
+        }
+    } catch(e) {
+        toast('Error de conexión', true);
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+    </svg>Hacer Backup Ahora`;
+}
+
+async function restaurar(filename) {
+    if (!confirm(`¿Restaurar "${filename}" en la BD LOCAL?\n\nEsto sobreescribirá los datos locales actuales.`)) return;
+    try {
+        const r = await fetch(`/api/admin/backup/restaurar/${encodeURIComponent(filename)}`, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) toast(d.mensaje);
+        else toast(d.error || 'Error al restaurar', true);
+    } catch(e) {
+        toast('Error de conexión', true);
+    }
+}
+
+function restaurarProd(filename) {
+    restaurar(filename);
+}
+
+async function eliminar(filename) {
+    if (!confirm(`¿Eliminar "${filename}"? Esta acción no se puede deshacer.`)) return;
+    try {
+        const r = await fetch(`/api/admin/backup/eliminar/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) {
+            const row = document.getElementById(`row-${filename}`);
+            if (row) row.remove();
+            toast('Backup eliminado');
+        } else {
+            toast(d.error || 'Error al eliminar', true);
+        }
+    } catch(e) {
+        toast('Error de conexión', true);
+    }
+}
+</script>
+</body>
+</html>

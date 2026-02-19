@@ -27290,6 +27290,122 @@ def api_admin_chat_historial():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ============================================================
+# --- MÓDULO DE BACKUPS DE BASE DE DATOS ---
+# ============================================================
+
+BACKUPS_DIR = os.path.join(os.path.dirname(__file__), 'backups')
+PG_DUMP_BIN = r'C:\Program Files\PostgreSQL\18\bin\pg_dump.exe'
+PSQL_BIN    = r'C:\Program Files\PostgreSQL\18\bin\psql.exe'
+
+
+@app.route('/admin/backups')
+@admin_required
+def admin_backups():
+    """Lista los backups .sql disponibles en la carpeta backups/"""
+    archivos = []
+    if os.path.exists(BACKUPS_DIR):
+        for f in sorted(os.listdir(BACKUPS_DIR), reverse=True):
+            if f.endswith('.sql'):
+                ruta = os.path.join(BACKUPS_DIR, f)
+                stat = os.stat(ruta)
+                archivos.append({
+                    'nombre': f,
+                    'fecha': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+                    'tamano_mb': round(stat.st_size / 1024 / 1024, 2)
+                })
+    return render_template('admin_backups.html', backups=archivos)
+
+
+@app.route('/api/admin/backup/crear', methods=['POST'])
+@admin_required
+def api_admin_backup_crear():
+    """Crea un backup completo de la BD activa (pg_dump → backups/backup_FECHA_TAG.sql)"""
+    import subprocess
+    try:
+        os.makedirs(BACKUPS_DIR, exist_ok=True)
+
+        use_local = session.get('use_local_db', False)
+        if use_local:
+            db_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
+            tag = 'local'
+        else:
+            db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
+            tag = 'prod'
+
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'backup_{ts}_{tag}.sql'
+        filepath = os.path.join(BACKUPS_DIR, filename)
+
+        result = subprocess.run(
+            [PG_DUMP_BIN, db_url, '-f', filepath, '--no-password'],
+            capture_output=True, text=True, timeout=120
+        )
+
+        if result.returncode != 0:
+            return jsonify({'ok': False, 'error': result.stderr[:500]}), 500
+
+        stat = os.stat(filepath)
+        return jsonify({
+            'ok': True,
+            'nombre': filename,
+            'tamano_mb': round(stat.st_size / 1024 / 1024, 2)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/backup/descargar/<filename>')
+@admin_required
+def api_admin_backup_descargar(filename):
+    """Descarga un backup .sql como attachment"""
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'ok': False, 'error': 'Nombre inválido'}), 400
+    filepath = os.path.join(BACKUPS_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({'ok': False, 'error': 'Archivo no encontrado'}), 404
+    return send_file(filepath, as_attachment=True, download_name=filename)
+
+
+@app.route('/api/admin/backup/restaurar/<filename>', methods=['POST'])
+@admin_required
+def api_admin_backup_restaurar(filename):
+    """Restaura un backup en la BD LOCAL (nunca en prod)"""
+    import subprocess
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'ok': False, 'error': 'Nombre inválido'}), 400
+    filepath = os.path.join(BACKUPS_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({'ok': False, 'error': 'Archivo no encontrado'}), 404
+    try:
+        db_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
+        result = subprocess.run(
+            [PSQL_BIN, db_url, '-f', filepath, '--no-password'],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode != 0:
+            return jsonify({'ok': False, 'error': result.stderr[:500]}), 500
+        return jsonify({'ok': True, 'mensaje': 'Restaurado exitosamente en BD local'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/backup/eliminar/<filename>', methods=['DELETE'])
+@admin_required
+def api_admin_backup_eliminar(filename):
+    """Elimina un archivo de backup"""
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'ok': False, 'error': 'Nombre inválido'}), 400
+    filepath = os.path.join(BACKUPS_DIR, filename)
+    if not os.path.exists(filepath):
+        return jsonify({'ok': False, 'error': 'Archivo no encontrado'}), 404
+    try:
+        os.remove(filepath)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

@@ -27295,8 +27295,22 @@ def api_admin_chat_historial():
 # ============================================================
 
 BACKUPS_DIR = os.path.join(os.path.dirname(__file__), 'backups')
-PG_DUMP_BIN = r'C:\Program Files\PostgreSQL\18\bin\pg_dump.exe'
-PSQL_BIN    = r'C:\Program Files\PostgreSQL\18\bin\psql.exe'
+
+def _find_pg_bin(name):
+    """Encuentra pg_dump o psql: PATH primero, luego rutas conocidas de Windows."""
+    import shutil
+    found = shutil.which(name)
+    if found:
+        return found
+    # Fallback rutas Windows locales
+    for ver in ['18', '17', '16', '15']:
+        candidate = rf'C:\Program Files\PostgreSQL\{ver}\bin\{name}.exe'
+        if os.path.exists(candidate):
+            return candidate
+    return name  # último recurso: deja que el OS lo resuelva (fallará con error claro)
+
+PG_DUMP_BIN = _find_pg_bin('pg_dump')
+PSQL_BIN    = _find_pg_bin('psql')
 
 
 @app.route('/admin/backups')

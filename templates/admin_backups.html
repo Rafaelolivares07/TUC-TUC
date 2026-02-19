@@ -6,42 +6,119 @@
     <title>Backups BD — TUC TUC Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>body { font-family: 'Inter', sans-serif; background: #f3f4f6; }</style>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+        .toggle-checkbox:checked { transform: translateX(2rem) !important; border-color: #10b981 !important; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #10b981 !important; }
+        .toggle-label { transition: background-color 0.3s ease; }
+    </style>
 </head>
 <body class="p-4 sm:p-8 min-h-screen">
 <div class="max-w-4xl mx-auto">
 
     <!-- Header -->
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex items-start justify-between mb-6 flex-col sm:flex-row gap-4">
         <div>
             <a href="/admin" class="text-sm text-gray-400 hover:text-gray-600 mb-1 inline-block">&larr; Volver al admin</a>
             <h1 class="text-3xl font-extrabold text-gray-800">Backups de Base de Datos</h1>
-            <p class="text-gray-500 mt-1">Exporta, descarga y restaura snapshots de PostgreSQL.</p>
+            <p class="text-gray-500 mt-1">Copia de seguridad, descarga y restauración de PostgreSQL.</p>
         </div>
 
         <!-- Botón crear backup -->
-        <button onclick="crearBackup()"
-            id="btn-crear"
-            class="inline-flex items-center px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Hacer Backup Ahora
-        </button>
+        <div class="text-right flex-shrink-0">
+            <button onclick="crearBackup()" id="btn-crear"
+                class="inline-flex items-center px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Hacer Backup Ahora
+            </button>
+            <p class="text-xs text-gray-400 mt-1">Siempre respalda Producción (Render).<br>El archivo se guarda en el servidor.</p>
+        </div>
     </div>
 
     <!-- Toast -->
     <div id="toast" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-xl font-semibold text-sm max-w-sm"></div>
 
+    <!-- Panel: Switch Base de Datos -->
+    <div id="panel-bd" class="mb-6 p-6 rounded-xl border-2 shadow-lg transition-all
+        {% if db_mode == 'local' %}bg-gradient-to-r from-green-50 to-emerald-50 border-green-300{% else %}bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200{% endif %}">
+        <div class="flex items-start justify-between flex-col sm:flex-row gap-4">
+            <div class="flex-1">
+                <h3 class="text-lg font-bold {% if db_mode == 'local' %}text-green-800{% else %}text-purple-800{% endif %} mb-2">
+                    🗄️ Base de Datos Activa
+                </h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Este toggle controla en qué base de datos opera <strong>toda la aplicación</strong> — no solo los backups.
+                    Úsalo con cuidado.
+                </p>
+                <div class="space-y-1 text-sm">
+                    <p class="text-gray-700">
+                        🔴 <strong>Producción (Render)</strong> — datos reales. Usuarios, pedidos, restaurantes y tiendas en vivo.
+                    </p>
+                    <p class="text-gray-700">
+                        🟢 <strong>Local (Backup)</strong> — copia de respaldo en tu PC. Solo para consultar o restaurar. No uses la app en modo local durante operación normal.
+                    </p>
+                </div>
+                {% if db_mode == 'local' %}
+                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 font-semibold">
+                    ⚠️ Estás en modo Local. Toda la app consulta tu BD local. Vuelve a Producción cuando termines.
+                </p>
+                {% endif %}
+            </div>
+
+            <div class="flex items-center space-x-4 flex-shrink-0">
+                <div class="text-right">
+                    <span id="db-mode-label" class="text-sm font-bold">
+                        {% if db_mode == 'local' %}
+                        <span class="text-green-600">🟢 Local (Backup)</span>
+                        {% else %}
+                        <span class="text-red-600">🔴 Producción (Render)</span>
+                        {% endif %}
+                    </span>
+                    <p class="text-xs text-gray-500">Modo actual</p>
+                </div>
+                <div class="relative inline-block w-16 h-8 align-middle select-none">
+                    <input type="checkbox" id="db-toggle"
+                        class="toggle-checkbox absolute block w-8 h-8 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-300"
+                        {% if db_mode == 'local' %}checked style="transform: translateX(2rem); border-color: #10b981;"{% else %}style="transform: translateX(0); border-color: #dc2626;"{% endif %} />
+                    <label for="db-toggle"
+                        class="toggle-label block overflow-hidden h-8 rounded-full cursor-pointer transition-colors duration-300
+                        {% if db_mode == 'local' %}bg-emerald-400{% else %}bg-gray-300{% endif %}"></label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel: Info restaurar -->
+    <div id="panel-restaurar-info" class="mb-6 p-4 rounded-xl border text-sm
+        {% if db_mode == 'local' %}bg-amber-50 border-amber-200 text-amber-800{% else %}bg-gray-50 border-gray-200 text-gray-500{% endif %}">
+        {% if db_mode == 'local' %}
+        <p><strong>Restaurar activado.</strong> Puedes cargar cualquier backup en tu PostgreSQL local (<code>tuctuc_local</code>). Esto sobreescribe los datos locales.</p>
+        {% else %}
+        <p><strong>Restaurar desactivado.</strong> Para restaurar un backup en tu base de datos local, primero activa el modo <strong>Local (Backup)</strong> con el toggle de arriba. No es posible restaurar directamente en Producción desde aquí.</p>
+        {% endif %}
+    </div>
+
     <!-- Alerta si no hay backups -->
     {% if not backups %}
-    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center text-yellow-700">
+    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center text-yellow-700 mb-4">
         <p class="text-lg font-semibold">No hay backups todavía</p>
         <p class="text-sm mt-1">Presiona "Hacer Backup Ahora" para crear el primero.</p>
     </div>
     {% endif %}
 
-    <!-- Lista de backups -->
+    <!-- Encabezado lista -->
+    {% if backups %}
+    <div class="mb-3">
+        <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wide">Backups disponibles</h2>
+        <p class="text-xs text-gray-400 mt-0.5">
+            Los archivos están almacenados en el servidor. Descárgalos a tu PC para conservarlos.
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Lista de backups (Jinja) -->
     <div id="lista-backups" class="space-y-3">
         {% for b in backups %}
         <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between gap-4" id="row-{{ b.nombre }}">
@@ -49,30 +126,27 @@
                 <p class="font-mono text-sm font-semibold text-gray-800 truncate">{{ b.nombre }}</p>
                 <p class="text-xs text-gray-400 mt-0.5">{{ b.fecha }} &mdash; {{ b.tamano_mb }} MB</p>
             </div>
-
             <div class="flex items-center gap-2 flex-shrink-0">
-                <!-- Descargar -->
+                <!-- Descargar: siempre activo -->
                 <a href="/api/admin/backup/descargar/{{ b.nombre }}"
+                   title="Descarga el archivo .sql a tu PC"
                    class="inline-flex items-center px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200 transition">
                     Descargar
                 </a>
 
-                <!-- Restaurar (solo en local) -->
-                {% if '_local' in b.nombre %}
+                <!-- Restaurar: activo solo en modo local -->
                 <button onclick="restaurar('{{ b.nombre }}')"
-                    class="inline-flex items-center px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg border border-amber-200 transition">
-                    Restaurar
+                    data-restaurar="true"
+                    title="{% if db_mode == 'local' %}Carga este backup en tu PostgreSQL local (tuctuc_local){% else %}Activa el modo Local para poder restaurar{% endif %}"
+                    class="btn-restaurar inline-flex items-center px-3 py-1.5 font-semibold text-xs rounded-lg border transition
+                        {% if db_mode == 'local' %}bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 cursor-pointer{% else %}bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed{% endif %}"
+                    {% if db_mode != 'local' %}disabled{% endif %}>
+                    Restaurar en local
                 </button>
-                {% else %}
-                <button onclick="restaurarProd('{{ b.nombre }}')"
-                    class="inline-flex items-center px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-semibold text-xs rounded-lg border border-orange-200 transition"
-                    title="Restaura en BD local aunque el backup sea de producción">
-                    Restaurar (en local)
-                </button>
-                {% endif %}
 
-                <!-- Eliminar -->
+                <!-- Eliminar: siempre activo -->
                 <button onclick="eliminar('{{ b.nombre }}')"
+                    title="Elimina este archivo del servidor permanentemente"
                     class="inline-flex items-center px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs rounded-lg border border-red-200 transition">
                     Eliminar
                 </button>
@@ -81,18 +155,81 @@
         {% endfor %}
     </div>
 
-    <!-- Fila que se inserta cuando se crea un backup nuevo (JS) -->
+    <!-- Nuevos backups creados en esta sesión (JS) -->
     <div id="nuevos-backups" class="space-y-3 mt-3"></div>
 
 </div>
 
 <script>
+const modoInicial = '{{ db_mode }}';
+let modoActual = modoInicial;
+
 function toast(msg, error=false) {
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = `fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-xl font-semibold text-sm max-w-sm ${error ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`;
+    t.classList.remove('hidden');
     setTimeout(() => t.classList.add('hidden'), 5000);
 }
+
+// Actualiza estado visual del toggle y botones de restaurar
+function aplicarModo(mode) {
+    modoActual = mode;
+    const toggle = document.getElementById('db-toggle');
+    const label = document.getElementById('db-mode-label');
+    const infoPanel = document.getElementById('panel-restaurar-info');
+    const panel = document.getElementById('panel-bd');
+
+    if (mode === 'local') {
+        toggle.checked = true;
+        label.innerHTML = '<span class="text-green-600">🟢 Local (Backup)</span>';
+        infoPanel.className = 'mb-6 p-4 rounded-xl border text-sm bg-amber-50 border-amber-200 text-amber-800';
+        infoPanel.innerHTML = '<p><strong>Restaurar activado.</strong> Puedes cargar cualquier backup en tu PostgreSQL local (<code>tuctuc_local</code>). Esto sobreescribe los datos locales.</p>';
+        panel.className = panel.className.replace('from-purple-50 to-indigo-50 border-purple-200', 'from-green-50 to-emerald-50 border-green-300');
+    } else {
+        toggle.checked = false;
+        label.innerHTML = '<span class="text-red-600">🔴 Producción (Render)</span>';
+        infoPanel.className = 'mb-6 p-4 rounded-xl border text-sm bg-gray-50 border-gray-200 text-gray-500';
+        infoPanel.innerHTML = '<p><strong>Restaurar desactivado.</strong> Para restaurar un backup en tu base de datos local, primero activa el modo <strong>Local (Backup)</strong> con el toggle de arriba. No es posible restaurar directamente en Producción desde aquí.</p>';
+        panel.className = panel.className.replace('from-green-50 to-emerald-50 border-green-300', 'from-purple-50 to-indigo-50 border-purple-200');
+    }
+
+    // Habilitar/deshabilitar todos los botones Restaurar
+    document.querySelectorAll('[data-restaurar="true"]').forEach(btn => {
+        if (mode === 'local') {
+            btn.disabled = false;
+            btn.className = btn.className.replace('bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed', 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 cursor-pointer');
+            btn.title = 'Carga este backup en tu PostgreSQL local (tuctuc_local)';
+        } else {
+            btn.disabled = true;
+            btn.className = btn.className.replace('bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 cursor-pointer', 'bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed');
+            btn.title = 'Activa el modo Local para poder restaurar';
+        }
+    });
+}
+
+// Manejar cambio de toggle
+document.getElementById('db-toggle').addEventListener('change', async function(e) {
+    const newMode = e.target.checked ? 'local' : 'production';
+    try {
+        const r = await fetch('/admin/switch-database', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: newMode })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            aplicarModo(newMode);
+            toast(newMode === 'local' ? '🟢 Modo Local activado — app usando BD local' : '🔴 Modo Producción activado — app usando Render');
+        } else {
+            toast('Error: ' + d.error, true);
+            e.target.checked = !e.target.checked;
+        }
+    } catch(err) {
+        toast('Error de conexión', true);
+        e.target.checked = !e.target.checked;
+    }
+});
 
 async function crearBackup() {
     const btn = document.getElementById('btn-crear');
@@ -103,11 +240,13 @@ async function crearBackup() {
         const d = await r.json();
         if (d.ok) {
             toast(`Backup creado: ${d.nombre} (${d.tamano_mb} MB)`);
-            // Insertar nueva fila al inicio
             const row = document.createElement('div');
             row.className = 'bg-white rounded-xl shadow p-4 flex items-center justify-between gap-4 border-2 border-indigo-200';
             row.id = `row-${d.nombre}`;
-            const tag = d.nombre.includes('_local') ? '_local' : '_prod';
+            const restaurarClass = modoActual === 'local'
+                ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 cursor-pointer'
+                : 'bg-gray-100 text-gray-400 border-gray-200 opacity-50 cursor-not-allowed';
+            const restaurarDisabled = modoActual !== 'local' ? 'disabled' : '';
             row.innerHTML = `
                 <div class="flex-1 min-w-0">
                     <p class="font-mono text-sm font-semibold text-gray-800 truncate">${d.nombre}</p>
@@ -115,14 +254,17 @@ async function crearBackup() {
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <a href="/api/admin/backup/descargar/${d.nombre}"
+                       title="Descarga el archivo .sql a tu PC"
                        class="inline-flex items-center px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200 transition">
                         Descargar
                     </a>
                     <button onclick="restaurar('${d.nombre}')"
-                        class="inline-flex items-center px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg border border-amber-200 transition">
-                        Restaurar
+                        data-restaurar="true" ${restaurarDisabled}
+                        class="btn-restaurar inline-flex items-center px-3 py-1.5 font-semibold text-xs rounded-lg border transition ${restaurarClass}">
+                        Restaurar en local
                     </button>
                     <button onclick="eliminar('${d.nombre}')"
+                        title="Elimina este archivo del servidor permanentemente"
                         class="inline-flex items-center px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs rounded-lg border border-red-200 transition">
                         Eliminar
                     </button>
@@ -141,23 +283,23 @@ async function crearBackup() {
 }
 
 async function restaurar(filename) {
-    if (!confirm(`¿Restaurar "${filename}" en la BD LOCAL?\n\nEsto sobreescribirá los datos locales actuales.`)) return;
+    if (modoActual !== 'local') {
+        toast('Activa el modo Local para poder restaurar', true);
+        return;
+    }
+    if (!confirm(`¿Restaurar "${filename}" en tu BD local (tuctuc_local)?\n\nEsto sobreescribirá los datos locales actuales.`)) return;
     try {
         const r = await fetch(`/api/admin/backup/restaurar/${encodeURIComponent(filename)}`, { method: 'POST' });
         const d = await r.json();
-        if (d.ok) toast(d.mensaje);
+        if (d.ok) toast(d.mensaje || 'Restaurado exitosamente');
         else toast(d.error || 'Error al restaurar', true);
     } catch(e) {
         toast('Error de conexión', true);
     }
 }
 
-function restaurarProd(filename) {
-    restaurar(filename);
-}
-
 async function eliminar(filename) {
-    if (!confirm(`¿Eliminar "${filename}"? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Eliminar "${filename}"?\n\nEsta acción no se puede deshacer.`)) return;
     try {
         const r = await fetch(`/api/admin/backup/eliminar/${encodeURIComponent(filename)}`, { method: 'DELETE' });
         const d = await r.json();

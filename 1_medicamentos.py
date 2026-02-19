@@ -27359,7 +27359,8 @@ def admin_backups():
                     'fecha': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
                     'tamano_mb': round(stat.st_size / 1024 / 1024, 2)
                 })
-    return render_template('admin_backups.html', backups=archivos)
+    db_mode = session.get('db_mode', 'production')
+    return render_template('admin_backups.html', backups=archivos, db_mode=db_mode)
 
 
 @app.route('/api/admin/backup/crear', methods=['POST'])

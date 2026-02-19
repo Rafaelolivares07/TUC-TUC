@@ -60,38 +60,10 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Switch Base de Datos: Producción / Local -->
-        <div class="mb-8 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-200 shadow-lg">
-            <div class="flex items-center justify-between flex-col sm:flex-row">
-                <div class="mb-4 sm:mb-0">
-                    <h3 class="text-lg font-bold text-purple-800 mb-1">🗄️ Base de Datos Activa</h3>
-                    <p class="text-sm text-gray-600">
-                        Cambia entre <strong>Producción</strong> (Render - datos reales) y <strong>Local</strong> (Backup - para testing)
-                    </p>
-                </div>
-
-                <div class="flex items-center space-x-4">
-                    <!-- Indicador de estado -->
-                    <div id="db-status-text" class="text-right">
-                        <span id="db-mode-label" class="text-sm font-semibold">Cargando...</span>
-                        <p class="text-xs text-gray-500">Modo actual</p>
-                    </div>
-
-                    <!-- Toggle Switch -->
-                    <div class="relative inline-block w-16 h-8 align-middle select-none transition duration-200 ease-in">
-                        <input
-                            type="checkbox"
-                            id="db-toggle"
-                            class="toggle-checkbox absolute block w-8 h-8 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-300"
-                            style="transform: translateX(0); border-color: #dc2626;"
-                        />
-                        <label
-                            for="db-toggle"
-                            class="toggle-label block overflow-hidden h-8 rounded-full bg-gray-300 cursor-pointer transition-colors duration-300"
-                        ></label>
-                    </div>
-                </div>
-            </div>
+        <!-- Banner: Base de Datos Activa -->
+        <div id="banner-bd" class="mb-8 px-5 py-3 rounded-xl border flex items-center justify-between gap-4 text-sm font-semibold">
+            <span id="banner-bd-texto">Cargando modo de BD...</span>
+            <a href="/admin/backups" class="text-xs font-normal underline opacity-70 hover:opacity-100 whitespace-nowrap">Cambiar en Backups BD &rarr;</a>
         </div>
 
         <!-- Menú Principal de Opciones -->
@@ -263,92 +235,26 @@
         </div>
     </div>
 
-    <!-- Script para el Switch de Base de Datos -->
-    <style>
-        /* Estilos para el toggle switch */
-        .toggle-checkbox:checked {
-            transform: translateX(2rem) !important;
-            border-color: #10b981 !important;
-        }
-
-        .toggle-checkbox:checked + .toggle-label {
-            background-color: #10b981 !important;
-        }
-
-        .toggle-label {
-            transition: background-color 0.3s ease;
-        }
-    </style>
-
     <script>
-        let currentMode = 'production'; // Estado inicial
-
-        // Cargar estado actual al cargar la página
-        async function loadDatabaseMode() {
+        // Banner de modo BD — carga al abrir el admin
+        async function cargarBannerBD() {
             try {
-                const response = await fetch('/admin/get-database-mode');
-                const data = await response.json();
-
-                if (data.ok) {
-                    currentMode = data.mode;
-                    updateUI(currentMode);
-                }
-            } catch (error) {
-                console.error('Error cargando modo BD:', error);
-            }
-        }
-
-        // Actualizar UI según el modo
-        function updateUI(mode) {
-            const toggle = document.getElementById('db-toggle');
-            const label = document.getElementById('db-mode-label');
-
-            if (mode === 'local') {
-                toggle.checked = true;
-                label.innerHTML = '<span class="text-green-600">🟢 Local (Backup)</span>';
-            } else {
-                toggle.checked = false;
-                label.innerHTML = '<span class="text-red-600">🔴 Producción (Render)</span>';
-            }
-        }
-
-        // Manejar cambio de toggle
-        document.getElementById('db-toggle').addEventListener('change', async function(e) {
-            const newMode = e.target.checked ? 'local' : 'production';
-
-            try {
-                const response = await fetch('/admin/switch-database', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: newMode })
-                });
-
-                const data = await response.json();
-
-                if (data.ok) {
-                    currentMode = newMode;
-                    updateUI(newMode);
-
-                    // Mostrar notificación
-                    alert(`✅ ${data.mensaje}\n\nLa siguiente consulta usará esta base de datos.`);
-
-                    // Opcional: recargar página para aplicar cambios
-                    // location.reload();
+                const r = await fetch('/admin/get-database-mode');
+                const d = await r.json();
+                const banner = document.getElementById('banner-bd');
+                const texto = document.getElementById('banner-bd-texto');
+                if (d.ok && d.mode === 'local') {
+                    banner.className = 'mb-8 px-5 py-3 rounded-xl border flex items-center justify-between gap-4 text-sm font-semibold bg-amber-50 border-amber-300 text-amber-800';
+                    texto.textContent = '⚠️ Base de datos: Local (Backup) — estás viendo datos del respaldo local, no de producción.';
                 } else {
-                    alert('❌ Error: ' + data.error);
-                    // Revertir toggle
-                    e.target.checked = !e.target.checked;
+                    banner.className = 'mb-8 px-5 py-3 rounded-xl border flex items-center justify-between gap-4 text-sm font-semibold bg-green-50 border-green-200 text-green-800';
+                    texto.textContent = '🟢 Base de datos: Producción (Render) — operando con datos reales.';
                 }
-            } catch (error) {
-                console.error('Error cambiando modo:', error);
-                alert('❌ Error al cambiar de base de datos');
-                // Revertir toggle
-                e.target.checked = !e.target.checked;
+            } catch(e) {
+                console.error('Error cargando modo BD:', e);
             }
-        });
-
-        // Cargar modo al iniciar
-        loadDatabaseMode();
+        }
+        cargarBannerBD();
     </script>
 </body>
 </html>

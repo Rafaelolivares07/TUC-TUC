@@ -27358,8 +27358,6 @@ def api_admin_backup_crear():
             for table in tables:
                 cur.execute(f'SELECT COUNT(*) FROM "{table}"')
                 count = cur.fetchone()[0]
-                if count == 0:
-                    continue
 
                 cur.execute(f'SELECT * FROM "{table}"')
                 cols = [d[0] for d in cur.description]
@@ -27367,13 +27365,14 @@ def api_admin_backup_crear():
                 placeholders = ', '.join(['%s'] * len(cols))
 
                 f.write(f'-- {table} ({count} filas)\n')
-                rows = cur.fetchall()
-                for row in rows:
-                    stmt = cur.mogrify(
-                        f'INSERT INTO "{table}" ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING',
-                        row
-                    ).decode('utf-8')
-                    f.write(stmt + ';\n')
+                if count > 0:
+                    rows = cur.fetchall()
+                    for row in rows:
+                        stmt = cur.mogrify(
+                            f'INSERT INTO "{table}" ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING',
+                            row
+                        ).decode('utf-8')
+                        f.write(stmt + ';\n')
                 f.write('\n')
 
         cur.close()

@@ -27140,10 +27140,21 @@ def crear_tabla_chat(conn):
             id         SERIAL PRIMARY KEY,
             rol        VARCHAR(20)  NOT NULL,
             contenido  TEXT         NOT NULL,
-            created_at TIMESTAMP    DEFAULT NOW()
+            created_at TIMESTAMP    DEFAULT NOW(),
+            estado     VARCHAR(20)  DEFAULT 'pendiente'
         )
     """)
     conn.commit()
+    # ALTER para BDs existentes
+    alters = [
+        "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente'"
+    ]
+    for alter in alters:
+        try:
+            conn.execute(alter)
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
 
 @app.route('/admin/chat')
@@ -27179,7 +27190,7 @@ def api_admin_chat():
         conn = get_db_connection()
         crear_tabla_chat(conn)
         row = conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido) VALUES (%s, %s) RETURNING id",
+            "INSERT INTO chat_mensajes (rol, contenido, estado) VALUES (%s, %s, 'pendiente') RETURNING id",
             ('user', contenido)
         ).fetchone()
         conn.commit()

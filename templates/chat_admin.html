@@ -39,7 +39,7 @@
         <p class="text-xs text-gray-400">Asistente TUC TUC</p>
     </div>
     <div class="ml-auto flex items-center gap-3">
-        <span id="estado-bridge" class="text-xs text-gray-400">⏳ Esperando bridge...</span>
+        <span id="estado-bridge" class="text-xs text-gray-400">🟢 Listo</span>
         <button onclick="limpiarChat()" class="text-xs text-gray-400 hover:text-red-500 transition">Limpiar</button>
     </div>
 </div>
@@ -68,7 +68,7 @@
     </div>
     {% endfor %}
 
-    <!-- Indicador typing -->
+    <!-- Indicador typing (visible mientras Claude procesa) -->
     <div id="typing" class="hidden flex justify-start">
         <div class="msg-assistant rounded-2xl rounded-bl-sm px-4 py-3">
             <div class="typing flex gap-1 items-center h-4">
@@ -79,37 +79,41 @@
 
 </div>
 
-<!-- Input -->
+<!-- Input — NUNCA se bloquea -->
 <div class="bg-white border-t border-gray-200 px-4 py-3 shrink-0">
     <div class="flex gap-2 items-end max-w-3xl mx-auto">
         <textarea id="input-msg" rows="1"
-            placeholder="Escribe tu mensaje..."
+            placeholder="Escribe tu mensaje... (puedes enviar varios mientras Claude procesa)"
             class="flex-1 border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition"
             onkeydown="tecla(event)" oninput="autoResize(this)"></textarea>
         <button onclick="enviar()" id="btn-enviar"
-            class="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white rounded-2xl px-4 py-3 font-semibold text-sm transition shrink-0">
+            class="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-4 py-3 font-semibold text-sm transition shrink-0">
             Enviar
         </button>
     </div>
 </div>
 
 <script>
-// ID del último mensaje conocido — para detectar respuestas nuevas
 let ultimoId = {{ mensajes[-1].id if mensajes else 0 }};
-let esperandoRespuesta = false;
-let pollingInterval = null;
-let timeoutSeguridad = null;
+let hayPendientes = false;  // hay mensajes user sin respuesta aún
 
 // Renderizar markdown en mensajes existentes
 document.querySelectorAll('[data-markdown]').forEach(el => {
     el.innerHTML = marked.parse(el.dataset.markdown);
 });
 
+// Detectar si el último mensaje visible es del user (Claude aún no respondió)
+{% if mensajes %}
+{% if mensajes[-1].rol == 'user' %}
+hayPendientes = true;
+mostrarTyping(true);
+{% endif %}
+{% endif %}
+
 scrollFondo();
 
-// Iniciar polling de estado del bridge
-checkBridge();
-setInterval(checkBridge, 5000);
+// Polling persistente — siempre activo, detecta respuestas de Claude
+setInterval(pollRespuesta, 2500);
 
 function scrollFondo() {
     const c = document.getElementById('mensajes');
@@ -128,15 +132,17 @@ function autoResize(el) {
     el.style.height = Math.min(el.scrollHeight, 140) + 'px';
 }
 
-function desbloquearInput() {
-    esperandoRespuesta = false;
-    if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
-    if (timeoutSeguridad) { clearTimeout(timeoutSeguridad); timeoutSeguridad = null; }
-    const btn = document.getElementById('btn-enviar');
-    btn.disabled = false;
-    btn.textContent = 'Enviar';
-    document.getElementById('typing').classList.add('hidden');
-    document.getElementById('input-msg').focus();
+function mostrarTyping(visible) {
+    const t = document.getElementById('typing');
+    const estado = document.getElementById('estado-bridge');
+    if (visible) {
+        t.classList.remove('hidden');
+        estado.textContent = '🟡 Claude está pensando...';
+    } else {
+        t.classList.add('hidden');
+        estado.textContent = '🟢 Listo';
+    }
+    scrollFondo();
 }
 
 async function enviar() {
@@ -144,29 +150,22 @@ async function enviar() {
     const msg   = input.value.trim();
     if (!msg) return;
 
-    // Si ya hay una respuesta en curso, advertir pero no bloquear
-    if (esperandoRespuesta) {
-        agregarBurbuja('assistant', '_Aguarda un momento, procesando el mensaje anterior..._');
-        return;
-    }
-
-    const btn = document.getElementById('btn-enviar');
-    btn.disabled   = true;
-    btn.textContent = '...';
-    input.value    = '';
+    input.value = '';
     input.style.height = 'auto';
+    input.focus();
 
     // Ocultar empty state
     const empty = document.getElementById('empty-state');
     if (empty) empty.remove();
 
-    // Mostrar burbuja usuario
+    // Mostrar burbuja usuario inmediatamente
     agregarBurbuja('user', msg);
 
-    // Mostrar typing
-    document.getElementById('typing').classList.remove('hidden');
-    scrollFondo();
+    // Activar typing si no estaba ya
+    hayPendientes = true;
+    mostrarTyping(true);
 
+    // Guardar en BD
     try {
         const r    = await fetch('/api/admin/chat', {
             method: 'POST',
@@ -174,52 +173,28 @@ async function enviar() {
             body: JSON.stringify({ mensaje: msg })
         });
         const data = await r.json();
-
         if (data.ok) {
-            esperandoRespuesta = true;
             ultimoId = data.id;
-            iniciarPolling(data.id);
-            // Timeout de seguridad: desbloquear a los 90s si el bridge no responde
-            timeoutSeguridad = setTimeout(() => {
-                desbloquearInput();
-                agregarBurbuja('assistant', '⚠️ El bridge tardó demasiado. Puedes enviar otro mensaje.');
-            }, 90000);
-        } else {
-            document.getElementById('typing').classList.add('hidden');
-            agregarBurbuja('assistant', '⚠️ Error: ' + (data.error || 'Inténtalo de nuevo'));
-            btn.disabled = false;
-            btn.textContent = 'Enviar';
+        }
+        // Si falla el guardado, mostrar aviso pero no bloquear
+        if (!data.ok) {
+            agregarBurbuja('assistant', '⚠️ No se pudo guardar el mensaje: ' + (data.error || 'error desconocido'));
         }
     } catch(e) {
-        document.getElementById('typing').classList.add('hidden');
-        agregarBurbuja('assistant', '⚠️ Error de conexión');
-        btn.disabled = false;
-        btn.textContent = 'Enviar';
+        agregarBurbuja('assistant', '⚠️ Error de conexión al enviar');
     }
 }
 
-function iniciarPolling(desdeId) {
-    if (pollingInterval) clearInterval(pollingInterval);
-    pollingInterval = setInterval(async () => {
-        try {
-            const r    = await fetch('/api/admin/chat/desde/' + desdeId);
-            const data = await r.json();
-            if (data.ok && data.encontrado) {
-                ultimoId = data.id;
-                agregarBurbuja('assistant', data.contenido);
-                desbloquearInput();
-            }
-        } catch(e) {}
-    }, 2000);
-}
-
-async function checkBridge() {
+async function pollRespuesta() {
+    if (!hayPendientes) return;
     try {
-        const el = document.getElementById('estado-bridge');
-        if (esperandoRespuesta) {
-            el.textContent = '🟡 Esperando a Claude Code...';
-        } else {
-            el.textContent = '🟢 Bridge listo';
+        const r    = await fetch('/api/admin/chat/desde/' + ultimoId);
+        const data = await r.json();
+        if (data.ok && data.encontrado) {
+            ultimoId = data.id;
+            agregarBurbuja('assistant', data.contenido);
+            hayPendientes = false;
+            mostrarTyping(false);
         }
     } catch(e) {}
 }

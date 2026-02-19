@@ -10,6 +10,8 @@
         body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
         .toggle-checkbox:checked { transform: translateX(2rem) !important; border-color: #10b981 !important; }
         .toggle-checkbox:checked + .toggle-label { background-color: #10b981 !important; }
+        .toggle-checkbox:not(:checked) { transform: translateX(0) !important; border-color: #f59e0b !important; }
+        .toggle-checkbox:not(:checked) + .toggle-label { background-color: #fcd34d !important; }
         .toggle-label { transition: background-color 0.3s ease; }
     </style>
 </head>
@@ -42,10 +44,10 @@
 
     <!-- Panel: Switch Base de Datos -->
     <div id="panel-bd" class="mb-6 p-6 rounded-xl border-2 shadow-lg transition-all
-        {% if db_mode == 'local' %}bg-gradient-to-r from-green-50 to-emerald-50 border-green-300{% else %}bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200{% endif %}">
+        {% if db_mode == 'production' %}bg-gradient-to-r from-green-50 to-emerald-50 border-green-300{% else %}bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-300{% endif %}">
         <div class="flex items-start justify-between flex-col sm:flex-row gap-4">
             <div class="flex-1">
-                <h3 class="text-lg font-bold {% if db_mode == 'local' %}text-green-800{% else %}text-purple-800{% endif %} mb-2">
+                <h3 class="text-lg font-bold {% if db_mode == 'production' %}text-green-800{% else %}text-amber-800{% endif %} mb-2">
                     🗄️ Base de Datos Activa
                 </h3>
                 <p class="text-sm text-gray-600 mb-3">
@@ -70,10 +72,10 @@
             <div class="flex items-center space-x-4 flex-shrink-0">
                 <div class="text-right">
                     <span id="db-mode-label" class="text-sm font-bold">
-                        {% if db_mode == 'local' %}
-                        <span class="text-green-600">🟢 Local (Backup)</span>
+                        {% if db_mode == 'production' %}
+                        <span class="text-green-600">🟢 Producción (Render)</span>
                         {% else %}
-                        <span class="text-red-600">🔴 Producción (Render)</span>
+                        <span class="text-amber-600">🟡 Local (Backup)</span>
                         {% endif %}
                     </span>
                     <p class="text-xs text-gray-500">Modo actual</p>
@@ -81,10 +83,10 @@
                 <div class="relative inline-block w-16 h-8 align-middle select-none">
                     <input type="checkbox" id="db-toggle"
                         class="toggle-checkbox absolute block w-8 h-8 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-300"
-                        {% if db_mode == 'local' %}checked style="transform: translateX(2rem); border-color: #10b981;"{% else %}style="transform: translateX(0); border-color: #dc2626;"{% endif %} />
+                        {% if db_mode == 'production' %}checked style="transform: translateX(2rem); border-color: #10b981;"{% else %}style="transform: translateX(0); border-color: #f59e0b;"{% endif %} />
                     <label for="db-toggle"
                         class="toggle-label block overflow-hidden h-8 rounded-full cursor-pointer transition-colors duration-300
-                        {% if db_mode == 'local' %}bg-emerald-400{% else %}bg-gray-300{% endif %}"></label>
+                        {% if db_mode == 'production' %}bg-emerald-400{% else %}bg-amber-300{% endif %}"></label>
                 </div>
             </div>
         </div>
@@ -180,18 +182,18 @@ function aplicarModo(mode) {
     const infoPanel = document.getElementById('panel-restaurar-info');
     const panel = document.getElementById('panel-bd');
 
-    if (mode === 'local') {
+    if (mode === 'production') {
         toggle.checked = true;
-        label.innerHTML = '<span class="text-green-600">🟢 Local (Backup)</span>';
-        infoPanel.className = 'mb-6 p-4 rounded-xl border text-sm bg-amber-50 border-amber-200 text-amber-800';
-        infoPanel.innerHTML = '<p><strong>Restaurar activado.</strong> Puedes cargar cualquier backup en tu PostgreSQL local (<code>tuctuc_local</code>). Esto sobreescribe los datos locales.</p>';
-        panel.className = panel.className.replace('from-purple-50 to-indigo-50 border-purple-200', 'from-green-50 to-emerald-50 border-green-300');
-    } else {
-        toggle.checked = false;
-        label.innerHTML = '<span class="text-red-600">🔴 Producción (Render)</span>';
+        label.innerHTML = '<span class="text-green-600">🟢 Producción (Render)</span>';
         infoPanel.className = 'mb-6 p-4 rounded-xl border text-sm bg-gray-50 border-gray-200 text-gray-500';
         infoPanel.innerHTML = '<p><strong>Restaurar desactivado.</strong> Para restaurar un backup en tu base de datos local, primero activa el modo <strong>Local (Backup)</strong> con el toggle de arriba. No es posible restaurar directamente en Producción desde aquí.</p>';
-        panel.className = panel.className.replace('from-green-50 to-emerald-50 border-green-300', 'from-purple-50 to-indigo-50 border-purple-200');
+        panel.className = panel.className.replace('from-amber-50 to-yellow-50 border-amber-300', 'from-green-50 to-emerald-50 border-green-300');
+    } else {
+        toggle.checked = false;
+        label.innerHTML = '<span class="text-amber-600">🟡 Local (Backup)</span>';
+        infoPanel.className = 'mb-6 p-4 rounded-xl border text-sm bg-amber-50 border-amber-200 text-amber-800';
+        infoPanel.innerHTML = '<p><strong>Restaurar activado.</strong> Puedes cargar cualquier backup en tu PostgreSQL local (<code>tuctuc_local</code>). Esto sobreescribe los datos locales.</p>';
+        panel.className = panel.className.replace('from-green-50 to-emerald-50 border-green-300', 'from-amber-50 to-yellow-50 border-amber-300');
     }
 
     // Habilitar/deshabilitar todos los botones Restaurar
@@ -209,8 +211,9 @@ function aplicarModo(mode) {
 }
 
 // Manejar cambio de toggle
+// checked = Producción (verde, derecha), unchecked = Local (ámbar, izquierda)
 document.getElementById('db-toggle').addEventListener('change', async function(e) {
-    const newMode = e.target.checked ? 'local' : 'production';
+    const newMode = e.target.checked ? 'production' : 'local';
     try {
         const r = await fetch('/admin/switch-database', {
             method: 'POST',
@@ -220,7 +223,7 @@ document.getElementById('db-toggle').addEventListener('change', async function(e
         const d = await r.json();
         if (d.ok) {
             aplicarModo(newMode);
-            toast(newMode === 'local' ? '🟢 Modo Local activado — app usando BD local' : '🔴 Modo Producción activado — app usando Render');
+            toast(newMode === 'production' ? '🟢 Producción activada — app usando Render' : '🟡 Modo Local activado — app usando BD local');
         } else {
             toast('Error: ' + d.error, true);
             e.target.checked = !e.target.checked;

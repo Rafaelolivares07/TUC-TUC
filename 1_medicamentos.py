@@ -27297,6 +27297,53 @@ def api_admin_chat_historial():
 BACKUPS_DIR = os.path.join(os.path.dirname(__file__), 'backups')
 
 
+@app.route('/api/admin/schema')
+@admin_required
+def api_admin_schema():
+    """Devuelve el schema completo de la BD de producción."""
+    import psycopg2
+    try:
+        db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT t.table_name,
+                   c.column_name,
+                   c.data_type,
+                   c.character_maximum_length,
+                   c.is_nullable,
+                   c.column_default
+            FROM information_schema.tables t
+            JOIN information_schema.columns c
+              ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+            WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+            ORDER BY t.table_name, c.ordinal_position
+        """)
+        rows = cur.fetchall()
+
+        schema = {}
+        for table, col, dtype, max_len, nullable, default in rows:
+            if table not in schema:
+                schema[table] = []
+            schema[table].append({
+                'col': col,
+                'type': dtype + (f'({max_len})' if max_len else ''),
+                'nullable': nullable == 'YES',
+                'default': default
+            })
+
+        cur.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
+        total = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return jsonify({'ok': True, 'total_tablas': total, 'schema': schema})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/admin/backups')
 @admin_required
 def admin_backups():

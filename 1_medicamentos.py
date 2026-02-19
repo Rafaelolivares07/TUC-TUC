@@ -27324,19 +27324,12 @@ def api_admin_backup_crear():
     try:
         os.makedirs(BACKUPS_DIR, exist_ok=True)
 
-        db_mode = session.get('db_mode', 'production')
-        if db_mode == 'local':
-            db_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
-            tag = 'local'
-        else:
-            db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
-            tag = 'prod'
-
+        db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
         if db_url.startswith('postgres://'):
             db_url = db_url.replace('postgres://', 'postgresql://', 1)
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'backup_{ts}_{tag}.sql'
+        filename = f'backup_{ts}_prod.sql'
         filepath = os.path.join(BACKUPS_DIR, filename)
 
         conn = psycopg2.connect(db_url)
@@ -27350,22 +27343,47 @@ def api_admin_backup_crear():
         tables = [r[0] for r in cur.fetchall()]
 
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write('-- TUC TUC Backup\n')
-            f.write(f'-- Generado: {datetime.now().isoformat()}\n')
-            f.write(f'-- BD: {tag}\n\n')
+            f.write('-- TUC TUC Backup — Producción\n')
+            f.write(f'-- Generado: {datetime.now().isoformat()}\n\n')
             f.write("SET client_encoding = 'UTF8';\n\n")
 
             for table in tables:
+                # Schema: columnas de la tabla
+                cur.execute("""
+                    SELECT column_name, data_type, character_maximum_length,
+                           is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = %s
+                    ORDER BY ordinal_position
+                """, (table,))
+                col_defs = cur.fetchall()
+
+                col_lines = []
+                for col_name, dtype, max_len, nullable, default in col_defs:
+                    line = f'  "{col_name}" {dtype}'
+                    if max_len:
+                        line += f'({max_len})'
+                    if default:
+                        line += f' DEFAULT {default}'
+                    if nullable == 'NO':
+                        line += ' NOT NULL'
+                    col_lines.append(line)
+
+                f.write(f'CREATE TABLE IF NOT EXISTS "{table}" (\n')
+                f.write(',\n'.join(col_lines))
+                f.write('\n);\n\n')
+
+                # Datos
                 cur.execute(f'SELECT COUNT(*) FROM "{table}"')
                 count = cur.fetchone()[0]
 
-                cur.execute(f'SELECT * FROM "{table}"')
-                cols = [d[0] for d in cur.description]
-                cols_str = ', '.join(f'"{c}"' for c in cols)
-                placeholders = ', '.join(['%s'] * len(cols))
-
-                f.write(f'-- {table} ({count} filas)\n')
                 if count > 0:
+                    cur.execute(f'SELECT * FROM "{table}"')
+                    cols = [d[0] for d in cur.description]
+                    cols_str = ', '.join(f'"{c}"' for c in cols)
+                    placeholders = ', '.join(['%s'] * len(cols))
+
+                    f.write(f'-- {table}: {count} filas\n')
                     rows = cur.fetchall()
                     for row in rows:
                         stmt = cur.mogrify(
@@ -27373,7 +27391,7 @@ def api_admin_backup_crear():
                             row
                         ).decode('utf-8')
                         f.write(stmt + ';\n')
-                f.write('\n')
+                    f.write('\n')
 
         cur.close()
         conn.close()

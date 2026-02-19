@@ -27296,22 +27296,6 @@ def api_admin_chat_historial():
 
 BACKUPS_DIR = os.path.join(os.path.dirname(__file__), 'backups')
 
-def _find_pg_bin(name):
-    """Encuentra pg_dump o psql: PATH primero, luego rutas conocidas de Windows."""
-    import shutil
-    found = shutil.which(name)
-    if found:
-        return found
-    # Fallback rutas Windows locales
-    for ver in ['18', '17', '16', '15']:
-        candidate = rf'C:\Program Files\PostgreSQL\{ver}\bin\{name}.exe'
-        if os.path.exists(candidate):
-            return candidate
-    return name  # último recurso: deja que el OS lo resuelva (fallará con error claro)
-
-PG_DUMP_BIN = _find_pg_bin('pg_dump')
-PSQL_BIN    = _find_pg_bin('psql')
-
 
 @app.route('/admin/backups')
 @admin_required
@@ -27334,30 +27318,66 @@ def admin_backups():
 @app.route('/api/admin/backup/crear', methods=['POST'])
 @admin_required
 def api_admin_backup_crear():
-    """Crea un backup completo de la BD activa (pg_dump → backups/backup_FECHA_TAG.sql)"""
-    import subprocess
+    """Crea un backup completo de la BD activa usando psycopg2 (sin pg_dump)."""
+    import psycopg2
+    from psycopg2.extensions import adapt
     try:
         os.makedirs(BACKUPS_DIR, exist_ok=True)
 
-        use_local = session.get('use_local_db', False)
-        if use_local:
+        db_mode = session.get('db_mode', 'production')
+        if db_mode == 'local':
             db_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
             tag = 'local'
         else:
             db_url = os.getenv('DATABASE_URL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
             tag = 'prod'
 
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'backup_{ts}_{tag}.sql'
         filepath = os.path.join(BACKUPS_DIR, filename)
 
-        result = subprocess.run(
-            [PG_DUMP_BIN, db_url, '-f', filepath, '--no-password'],
-            capture_output=True, text=True, timeout=120
-        )
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
 
-        if result.returncode != 0:
-            return jsonify({'ok': False, 'error': result.stderr[:500]}), 500
+        cur.execute("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """)
+        tables = [r[0] for r in cur.fetchall()]
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write('-- TUC TUC Backup\n')
+            f.write(f'-- Generado: {datetime.now().isoformat()}\n')
+            f.write(f'-- BD: {tag}\n\n')
+            f.write("SET client_encoding = 'UTF8';\n\n")
+
+            for table in tables:
+                cur.execute(f'SELECT COUNT(*) FROM "{table}"')
+                count = cur.fetchone()[0]
+                if count == 0:
+                    continue
+
+                cur.execute(f'SELECT * FROM "{table}"')
+                cols = [d[0] for d in cur.description]
+                cols_str = ', '.join(f'"{c}"' for c in cols)
+                placeholders = ', '.join(['%s'] * len(cols))
+
+                f.write(f'-- {table} ({count} filas)\n')
+                rows = cur.fetchall()
+                for row in rows:
+                    stmt = cur.mogrify(
+                        f'INSERT INTO "{table}" ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING',
+                        row
+                    ).decode('utf-8')
+                    f.write(stmt + ';\n')
+                f.write('\n')
+
+        cur.close()
+        conn.close()
 
         stat = os.stat(filepath)
         return jsonify({
@@ -27366,6 +27386,7 @@ def api_admin_backup_crear():
             'tamano_mb': round(stat.st_size / 1024 / 1024, 2)
         })
     except Exception as e:
+        conn.rollback() if 'conn' in dir() else None
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -27384,8 +27405,8 @@ def api_admin_backup_descargar(filename):
 @app.route('/api/admin/backup/restaurar/<filename>', methods=['POST'])
 @admin_required
 def api_admin_backup_restaurar(filename):
-    """Restaura un backup en la BD LOCAL (nunca en prod)"""
-    import subprocess
+    """Restaura un backup en la BD LOCAL usando psycopg2 (sin psql)."""
+    import psycopg2
     if '..' in filename or '/' in filename or '\\' in filename:
         return jsonify({'ok': False, 'error': 'Nombre inválido'}), 400
     filepath = os.path.join(BACKUPS_DIR, filename)
@@ -27393,12 +27414,29 @@ def api_admin_backup_restaurar(filename):
         return jsonify({'ok': False, 'error': 'Archivo no encontrado'}), 404
     try:
         db_url = os.getenv('DATABASE_URL_LOCAL', 'postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local')
-        result = subprocess.run(
-            [PSQL_BIN, db_url, '-f', filepath, '--no-password'],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode != 0:
-            return jsonify({'ok': False, 'error': result.stderr[:500]}), 500
+        if db_url.startswith('postgres://'):
+            db_url = db_url.replace('postgres://', 'postgresql://', 1)
+
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        with open(filepath, 'r', encoding='utf-8') as f:
+            sql = f.read()
+
+        # Ejecutar sentencia por sentencia (ignorar comentarios y líneas vacías)
+        for stmt in sql.split(';\n'):
+            stmt = stmt.strip()
+            if stmt and not stmt.startswith('--') and not stmt.upper().startswith('SET'):
+                try:
+                    cur.execute(stmt)
+                except Exception:
+                    conn.rollback()
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+
+        conn.commit()
+        cur.close()
+        conn.close()
         return jsonify({'ok': True, 'mensaje': 'Restaurado exitosamente en BD local'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

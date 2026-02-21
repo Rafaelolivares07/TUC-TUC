@@ -505,6 +505,17 @@ if (clienteData && clienteData.nombre) {
 <!-- Modal selección de variante -->
 <div id="modal-variante-cli" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/50">
     <div class="bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
+
+        <!-- Galería de fotos -->
+        <div id="var-cli-galeria" class="hidden mb-4">
+            <div class="relative">
+                <img id="var-cli-foto-grande" src="" alt=""
+                    class="w-full h-52 object-cover rounded-xl cursor-pointer"
+                    onclick="zoomImagen(this.src)">
+            </div>
+            <div id="var-cli-miniaturas" class="flex gap-2 mt-2 overflow-x-auto pb-1"></div>
+        </div>
+
         <div class="flex items-center justify-between mb-4">
             <h3 id="var-cli-nombre" class="font-bold txt-primary text-lg"></h3>
             <button onclick="cerrarModalVariante()" class="text-gray-400 text-2xl leading-none">&times;</button>
@@ -537,6 +548,30 @@ async function abrirModalVariante(productoId) {
     document.getElementById('var-cli-estado').classList.add('hidden');
     document.getElementById('modal-variante-cli').classList.remove('hidden');
 
+    // Galería: mostrar foto principal si existe
+    const galeriaEl = document.getElementById('var-cli-galeria');
+    const fotoGrande = document.getElementById('var-cli-foto-grande');
+    const miniaturas = document.getElementById('var-cli-miniaturas');
+    if (varCliProducto.imagen) {
+        fotoGrande.src = varCliProducto.imagen;
+        miniaturas.innerHTML = '';
+        galeriaEl.classList.remove('hidden');
+        // Cargar fotos adicionales
+        try {
+            const ri = await fetch(`${BASE}/producto/${productoId}/imagenes`);
+            const di = await ri.json();
+            if (di.ok && di.imagenes && di.imagenes.length > 0) {
+                const todasFotos = [varCliProducto.imagen, ...di.imagenes.map(x => x.imagen)];
+                miniaturas.innerHTML = todasFotos.map((src, i) => `
+                    <img src="${src}" onclick="cambiarFotoModal('${src}')"
+                        class="w-16 h-16 object-cover rounded-lg cursor-pointer flex-shrink-0 border-2 ${i === 0 ? 'border-rose-500' : 'border-transparent'} transition">
+                `).join('');
+            }
+        } catch(e) { /* sin extras, ok */ }
+    } else {
+        galeriaEl.classList.add('hidden');
+    }
+
     try {
         const r = await fetch(`${BASE}/producto/${productoId}/atributos`);
         const data = await r.json();
@@ -558,6 +593,14 @@ async function abrirModalVariante(productoId) {
             </div>
         `).join('');
     } catch(e) { cerrarModalVariante(); }
+}
+
+function cambiarFotoModal(src) {
+    document.getElementById('var-cli-foto-grande').src = src;
+    document.querySelectorAll('#var-cli-miniaturas img').forEach(img => {
+        img.classList.toggle('border-rose-500', img.src === src || img.getAttribute('src') === src);
+        img.classList.toggle('border-transparent', img.src !== src && img.getAttribute('src') !== src);
+    });
 }
 
 function cerrarModalVariante() {

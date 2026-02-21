@@ -580,6 +580,40 @@
             cursor: pointer;
         }
 
+        /* Chips de lugares frecuentes en panel búsqueda */
+        .chip-lugar {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            cursor: pointer;
+            min-width: 60px;
+            transition: background 0.15s;
+        }
+        .chip-lugar:active {
+            background: rgba(59, 130, 246, 0.3);
+            border-color: #3b82f6;
+        }
+        .chip-lugar .chip-icono {
+            width: 22px;
+            height: 22px;
+            color: #93c5fd;
+        }
+        .chip-lugar .chip-nombre {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.75);
+            white-space: nowrap;
+            max-width: 58px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #chips-lugares::-webkit-scrollbar { display: none; }
+
         /* Marcador de destino en mapa */
         .marcador-destino-seleccion {
             width: 30px;
@@ -689,6 +723,11 @@
         <input type="text" id="input-destino-conductor" placeholder="Escribe una dirección o lugar..." autocomplete="off">
         <div id="autocomplete-conductor"></div>
         <button id="btn-seleccionar-mapa" onclick="activarSeleccionMapa()">&#x1F5FA; Seleccionar en el mapa</button>
+        <!-- Carrusel de lugares frecuentes -->
+        <div id="panel-lugares-frecuentes" style="display:none; margin-top:12px;">
+            <p style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:8px;">Mis lugares</p>
+            <div id="chips-lugares" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;"></div>
+        </div>
     </div>
 
     <!-- Toast pantalla -->
@@ -1898,7 +1937,46 @@
             document.getElementById('barra-vamos-a').style.display = 'none';
             document.getElementById('input-destino-conductor').value = '';
             document.getElementById('autocomplete-conductor').style.display = 'none';
+            cargarLugaresFrecuentes();
             setTimeout(() => document.getElementById('input-destino-conductor').focus(), 100);
+        }
+
+        const ICONOS_SVG = {
+            'casa': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955a1.126 1.126 0 0 1 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>',
+            'trabajo': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75a23.978 23.978 0 0 1-7.577-1.22 2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0" /></svg>',
+            'gym': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5h2.25M3 12h2.25m-2.25 4.5h2.25M21 7.5h-2.25M21 12h-2.25m2.25 4.5h-2.25M6.75 6v12h1.5V6h-1.5zm9 0v12h1.5V6h-1.5zM9.75 9v6h4.5V9h-4.5z" /></svg>',
+            'universidad': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" /></svg>',
+            'banco': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0 0 12 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75Z" /></svg>',
+            'parque': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" /></svg>',
+            'cine': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>',
+            'super': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg>',
+            'default': '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>'
+        };
+
+        async function cargarLugaresFrecuentes() {
+            const panel = document.getElementById('panel-lugares-frecuentes');
+            const chips = document.getElementById('chips-lugares');
+            try {
+                const r = await fetch('/api/mis-lugares');
+                if (!r.ok) { panel.style.display = 'none'; return; }
+                const data = await r.json();
+                if (!data.ok || !data.lugares || data.lugares.length === 0) {
+                    panel.style.display = 'none';
+                    return;
+                }
+                chips.innerHTML = '';
+                data.lugares.forEach(lugar => {
+                    const btn = document.createElement('button');
+                    btn.className = 'chip-lugar';
+                    const icono = ICONOS_SVG[lugar.icono] || ICONOS_SVG['default'];
+                    btn.innerHTML = `<span class="chip-icono">${icono}</span><span class="chip-nombre">${lugar.nombre}</span>`;
+                    btn.onclick = () => seleccionarDestino(parseFloat(lugar.lat), parseFloat(lugar.lon), lugar.nombre);
+                    chips.appendChild(btn);
+                });
+                panel.style.display = 'block';
+            } catch(e) {
+                panel.style.display = 'none';
+            }
         }
 
         function cerrarPanelBusqueda() {

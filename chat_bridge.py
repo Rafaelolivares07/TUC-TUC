@@ -52,7 +52,28 @@ def adquirir_lock():
 
 
 def get_conn():
-    return psycopg2.connect(DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    return psycopg2.connect(
+        DB_URL,
+        cursor_factory=psycopg2.extras.RealDictCursor,
+        connect_timeout=10,
+    )
+
+
+def recuperar_procesando():
+    """Al arrancar, cualquier mensaje 'procesando' quedó atascado por crash previo → resetear."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE chat_mensajes SET estado = 'pendiente' WHERE rol = 'user' AND estado = 'procesando'"
+        )
+        n = cur.rowcount
+        conn.commit()
+        conn.close()
+        if n:
+            print(f"  ↩  {n} mensaje(s) atascado(s) en 'procesando' → reseteado(s) a 'pendiente'")
+    except Exception as e:
+        print(f"  ✗ No se pudo recuperar mensajes atascados: {e}")
 
 
 def get_mensajes_pendientes():
@@ -238,7 +259,10 @@ def main():
     print(f"  BD:      {DB_URL[:40]}...")
     print(f"  Memoria: {MEMORIA_DIR}")
     print()
+    recuperar_procesando()
     print(f"[{ts()}] Listo. Esperando mensajes...\n")
+
+    error_wait = 5  # backoff: empieza en 5s, sube hasta 60s
 
     while True:
         try:
@@ -265,14 +289,21 @@ def main():
                 marcar_estado(ids, 'respondido')
                 print(f"[{ts()}] ✅ Listo.\n")
 
+            error_wait = 5  # reset backoff en ciclo exitoso
             time.sleep(POLL_INTERVAL)
 
         except KeyboardInterrupt:
             print(f"\n[{ts()}] Bridge detenido.")
             break
+        except psycopg2.OperationalError as e:
+            print(f"[{ts()}] ✗ Conexión BD perdida: {e}")
+            print(f"[{ts()}] ⏳ Reintentando en {error_wait}s...")
+            time.sleep(error_wait)
+            error_wait = min(error_wait * 2, 60)  # backoff exponencial, máx 60s
         except Exception as e:
             print(f"[{ts()}] ✗ Error: {e}")
-            time.sleep(5)
+            time.sleep(error_wait)
+            error_wait = min(error_wait * 2, 60)
 
 
 if __name__ == '__main__':

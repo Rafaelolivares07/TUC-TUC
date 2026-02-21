@@ -720,14 +720,13 @@
             <span class="panel-titulo">Definir destino</span>
             <button class="btn-cerrar-panel" onclick="cerrarPanelBusqueda()">&#x2715;</button>
         </div>
+        <!-- Carrusel de lugares frecuentes -->
+        <div id="panel-lugares-frecuentes" style="display:none; margin-bottom:10px;">
+            <div id="chips-lugares" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;"></div>
+        </div>
         <input type="text" id="input-destino-conductor" placeholder="Escribe una dirección o lugar..." autocomplete="off">
         <div id="autocomplete-conductor"></div>
         <button id="btn-seleccionar-mapa" onclick="activarSeleccionMapa()">&#x1F5FA; Seleccionar en el mapa</button>
-        <!-- Carrusel de lugares frecuentes -->
-        <div id="panel-lugares-frecuentes" style="display:none; margin-top:12px;">
-            <p style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:8px;">Mis lugares</p>
-            <div id="chips-lugares" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;"></div>
-        </div>
     </div>
 
     <!-- Toast pantalla -->

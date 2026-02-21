@@ -332,6 +332,7 @@ function renderOpcionesCliente(containerId, items, categoria) {
         <button onclick="seleccionarOpcion('${categoria}', ${i.opcion_id}, this)"
             class="opcion-btn opcion-${categoria} border-2 border-gray-200 rounded-xl p-3 text-left transition hover:border-amber-300">
             <span class="font-semibold txt-primary">${i.nombre}</span>
+            ${i.descripcion ? `<span class="text-gray-400 text-xs block leading-tight mt-0.5">${i.descripcion}</span>` : ''}
             ${i.recargo > 0 ? `<span class="text-amber-500 text-xs block">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
         </button>
     `).join('');
@@ -500,6 +501,7 @@ async function cargarCartaCliente() {
                                   </div>`}
                             <div class="p-3">
                                 <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
+                                ${p.descripcion ? `<span class="text-gray-400 text-xs block leading-tight mt-0.5 mb-1">${p.descripcion}</span>` : ''}
                                 <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
                                 <div class="flex items-center justify-center gap-3 mt-2">
                                     <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>

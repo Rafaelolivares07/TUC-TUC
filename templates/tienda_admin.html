@@ -76,6 +76,8 @@
                         <input id="cat-nombre" type="text" placeholder="Nombre del producto" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
                         <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
                     </div>
+                    <textarea id="cat-descripcion" placeholder="Descripción opcional (materiales, tallas disponibles, colores...)" rows="2"
+                        class="border rounded-lg px-3 py-2 text-sm w-full resize-none text-gray-600" maxlength="300"></textarea>
                     <div class="flex items-center gap-3">
                         <div id="preview-nuevo" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition flex items-center justify-center" onclick="document.getElementById('inp-foto-nuevo').click()">
                             <svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -307,6 +309,7 @@ function renderProductos() {
                     <input type="file" id="inp-img-${p.id}" accept="image/*" class="hidden" onchange="subirImagen(${p.id}, this)">
                     <div class="flex-1 min-w-0">
                         <p class="font-semibold text-gray-800 truncate">${p.nombre}</p>
+                        ${p.descripcion ? `<p class="text-xs text-gray-400 truncate">${p.descripcion}</p>` : ''}
                         <p class="text-sm text-rose-600 font-bold">$${p.precio.toLocaleString()}</p>
                     </div>
                     <button onclick="toggleDisponible(${p.id}, ${agotado})" class="text-xs px-3 py-1 rounded-full font-bold ${agotado ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
@@ -382,7 +385,7 @@ async function guardarProducto() {
         const r = await fetch(BASE + '/producto', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nombre, categoria, precio: parseFloat(precio)})
+            body: JSON.stringify({nombre, categoria, precio: parseFloat(precio), descripcion: document.getElementById('cat-descripcion').value.trim()})
         });
         const data = await r.json();
         if (data.ok) {
@@ -396,6 +399,7 @@ async function guardarProducto() {
             }
             document.getElementById('cat-nombre').value = '';
             document.getElementById('cat-precio').value = '';
+            document.getElementById('cat-descripcion').value = '';
             document.getElementById('cat-categoria-nueva').value = '';
             document.getElementById('cat-categoria-nueva').classList.add('hidden');
             fotoNuevaBase64 = null;

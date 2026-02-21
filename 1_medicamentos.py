@@ -24718,6 +24718,7 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS descripcion TEXT",
     ]
     for sql in alters:
         try:
@@ -24793,6 +24794,7 @@ def crear_tablas_tienda(conn):
     alters = [
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
+        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS descripcion TEXT",
     ]
     for sql in alters:
         try:
@@ -25098,7 +25100,7 @@ def api_restaurante_opciones(slug):
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
 
         opciones = conn.execute("""
-            SELECT id, tipo, nombre, recargo, precio, imagen, activo
+            SELECT id, tipo, nombre, recargo, precio, imagen, activo, descripcion
             FROM opciones_menu
             WHERE restaurante_id = %s
             ORDER BY tipo, nombre
@@ -25211,6 +25213,7 @@ def api_restaurante_opcion_crear(slug):
     nombre = data.get('nombre', '').strip()
     recargo = data.get('recargo', 0)
     precio = data.get('precio', 0)
+    descripcion = data.get('descripcion', '').strip()
 
     if not tipo:
         return jsonify({'ok': False, 'error': 'Categoría requerida'}), 400
@@ -25231,14 +25234,14 @@ def api_restaurante_opcion_crear(slug):
 
         if opcion_id:
             conn.execute("""
-                UPDATE opciones_menu SET tipo = %s, nombre = %s, recargo = %s, precio = %s
+                UPDATE opciones_menu SET tipo = %s, nombre = %s, recargo = %s, precio = %s, descripcion = %s
                 WHERE id = %s AND restaurante_id = %s
-            """, (tipo, nombre, recargo, precio, opcion_id, rest['id']))
+            """, (tipo, nombre, recargo, precio, descripcion or None, opcion_id, rest['id']))
         else:
             conn.execute("""
-                INSERT INTO opciones_menu (restaurante_id, tipo, nombre, recargo, precio)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (rest['id'], tipo, nombre, recargo, precio))
+                INSERT INTO opciones_menu (restaurante_id, tipo, nombre, recargo, precio, descripcion)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (rest['id'], tipo, nombre, recargo, precio, descripcion or None))
 
         conn.commit()
         conn.close()
@@ -26522,7 +26525,7 @@ def api_tienda_productos(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, imagen, disponible, orden FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
+            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
             (tienda['id'],)
         ).fetchall()
         conn.close()
@@ -26531,7 +26534,8 @@ def api_tienda_productos(slug):
             resultado.append({
                 'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
                 'precio': float(p['precio']), 'imagen': p['imagen'] or '',
-                'disponible': p['disponible'], 'orden': p['orden']
+                'disponible': p['disponible'], 'orden': p['orden'],
+                'descripcion': p['descripcion'] or ''
             })
         return jsonify({'ok': True, 'productos': resultado})
     except Exception as e:
@@ -26548,6 +26552,7 @@ def api_tienda_producto_crear(slug):
     categoria = data.get('categoria', '').strip()
     precio = data.get('precio', 0)
     producto_id = data.get('id')
+    descripcion = data.get('descripcion', '').strip()
 
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
@@ -26565,16 +26570,16 @@ def api_tienda_producto_crear(slug):
 
         if producto_id:
             conn.execute(
-                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s WHERE id = %s AND tienda_id = %s",
-                (nombre, categoria, precio, producto_id, tienda['id'])
+                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s, descripcion = %s WHERE id = %s AND tienda_id = %s",
+                (nombre, categoria, precio, descripcion or None, producto_id, tienda['id'])
             )
             nuevo_id = producto_id
         else:
-            conn.execute(
-                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio) VALUES (%s, %s, %s, %s)",
-                (tienda['id'], nombre, categoria, precio)
-            )
-            nuevo_id = conn.execute("SELECT currval(pg_get_serial_sequence('productos_tienda', 'id'))").fetchone()[0]
+            row = conn.execute(
+                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio, descripcion) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                (tienda['id'], nombre, categoria, precio, descripcion or None)
+            ).fetchone()
+            nuevo_id = row['id']
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'id': nuevo_id})

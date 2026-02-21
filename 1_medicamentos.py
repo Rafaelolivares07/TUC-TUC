@@ -28091,7 +28091,6 @@ def api_garaje_vehiculo_foto(vid):
     if 'foto' not in request.files:
         return jsonify({'ok': False, 'error': 'Sin archivo'})
     try:
-        import cloudinary.uploader
         file = request.files['foto']
         result = cloudinary.uploader.upload(file, folder='garaje')
         url = result.get('secure_url')

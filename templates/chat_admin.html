@@ -25,6 +25,9 @@
         .typing span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
         #input-msg { resize: none; max-height: 140px; }
+        #btn-mic { transition: all 0.2s; }
+        #btn-mic.grabando { background: #ef4444; animation: pulso 1s infinite; }
+        @keyframes pulso { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
     </style>
 </head>
 <body class="bg-gray-50 h-screen flex flex-col">
@@ -86,6 +89,9 @@
             placeholder="Escribe tu mensaje... (puedes enviar varios mientras Claude procesa)"
             class="flex-1 border border-gray-200 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition"
             onkeydown="tecla(event)" oninput="autoResize(this)"></textarea>
+        <button id="btn-mic" onclick="toggleMic()"
+            class="hidden bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl px-3 py-3 text-lg transition shrink-0"
+            title="Dictar mensaje">🎤</button>
         <button onclick="enviar()" id="btn-enviar"
             class="bg-amber-500 hover:bg-amber-600 text-white rounded-2xl px-4 py-3 font-semibold text-sm transition shrink-0">
             Enviar
@@ -217,6 +223,63 @@ function agregarBurbuja(rol, contenido) {
     document.getElementById('mensajes').insertBefore(wrap, document.getElementById('typing'));
     scrollFondo();
 }
+
+// ── Dictado por voz (Web Speech API) ──────────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconocedor = null;
+let grabando = false;
+
+(function iniciarMic() {
+    if (!SpeechRecognition) return; // navegador no soporta → botón queda oculto
+    document.getElementById('btn-mic').classList.remove('hidden');
+
+    reconocedor = new SpeechRecognition();
+    reconocedor.lang = 'es';
+    reconocedor.continuous = false;
+    reconocedor.interimResults = false;
+
+    reconocedor.onresult = function(e) {
+        const transcripcion = e.results[0][0].transcript;
+        const input = document.getElementById('input-msg');
+        // Añadir al final del texto existente (con espacio si ya hay algo)
+        const separador = input.value.trim() ? ' ' : '';
+        input.value = input.value.trim() + separador + transcripcion;
+        autoResize(input);
+        input.focus();
+    };
+
+    reconocedor.onend = function() {
+        grabando = false;
+        const btn = document.getElementById('btn-mic');
+        btn.classList.remove('grabando');
+        btn.title = 'Dictar mensaje';
+    };
+
+    reconocedor.onerror = function(e) {
+        grabando = false;
+        const btn = document.getElementById('btn-mic');
+        btn.classList.remove('grabando');
+        btn.title = 'Dictar mensaje';
+        if (e.error !== 'no-speech') {
+            console.warn('Speech error:', e.error);
+        }
+    };
+})();
+
+function toggleMic() {
+    if (!reconocedor) return;
+    if (grabando) {
+        reconocedor.stop();
+        grabando = false;
+    } else {
+        reconocedor.start();
+        grabando = true;
+        const btn = document.getElementById('btn-mic');
+        btn.classList.add('grabando');
+        btn.title = 'Tocá de nuevo para detener';
+    }
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 async function limpiarChat() {
     if (!confirm('¿Borrar todo el historial del chat?')) return;

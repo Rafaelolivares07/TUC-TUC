@@ -248,13 +248,15 @@ function renderProductos() {
                 <p class="text-rose-600 font-bold text-sm mt-1">$${p.precio.toLocaleString()}</p>
                 ${agotado ?
                     `<p class="text-xs text-red-500 font-bold mt-2">Agotado</p>` :
+                    p.tiene_variantes ?
+                        `<button onclick="abrirModalVariante(${p.id})" class="w-full mt-2 bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-sm font-semibold transition">Elegir opción</button>` :
                     (enCarrito > 0 ?
                         `<div class="flex items-center justify-between mt-2">
-                            <button onclick="cambiarCantidad(${p.id}, -1)" class="w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-lg flex items-center justify-center">-</button>
+                            <button onclick="cambiarCantidad('${p.id}', -1)" class="w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-lg flex items-center justify-center">-</button>
                             <span class="font-bold txt-primary">${enCarrito}</span>
-                            <button onclick="cambiarCantidad(${p.id}, 1)" class="w-8 h-8 rounded-full bg-rose-500 text-white font-bold text-lg flex items-center justify-center">+</button>
+                            <button onclick="cambiarCantidad('${p.id}', 1)" class="w-8 h-8 rounded-full bg-rose-500 text-white font-bold text-lg flex items-center justify-center">+</button>
                         </div>` :
-                        `<button onclick="cambiarCantidad(${p.id}, 1)" class="w-full mt-2 bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-sm font-semibold transition">Agregar</button>`
+                        `<button onclick="cambiarCantidad('${p.id}', 1)" class="w-full mt-2 bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-sm font-semibold transition">Agregar</button>`
                     )
                 }
             </div>
@@ -264,43 +266,74 @@ function renderProductos() {
 }
 
 // === Carrito ===
-function cambiarCantidad(productoId, delta) {
-    const actual = carrito[productoId] || 0;
+// carritoMeta: {key: {productoId, varianteId, precio, label}} — solo para variantes
+let carritoMeta = JSON.parse(localStorage.getItem('carrito_meta_' + SLUG) || '{}');
+
+function cambiarCantidad(key, delta) {
+    const actual = carrito[key] || 0;
     const nueva = actual + delta;
-    if (nueva <= 0) delete carrito[productoId];
-    else carrito[productoId] = nueva;
+    if (nueva <= 0) { delete carrito[key]; delete carritoMeta[key]; }
+    else carrito[key] = nueva;
     localStorage.setItem('carrito_' + SLUG, JSON.stringify(carrito));
+    localStorage.setItem('carrito_meta_' + SLUG, JSON.stringify(carritoMeta));
     renderProductos();
 }
 
+function agregarVarianteAlCarrito(productoId, varianteId, precio, label) {
+    const key = `${productoId}-v${varianteId}`;
+    carrito[key] = (carrito[key] || 0) + 1;
+    carritoMeta[key] = {productoId, varianteId, precio, label};
+    localStorage.setItem('carrito_' + SLUG, JSON.stringify(carrito));
+    localStorage.setItem('carrito_meta_' + SLUG, JSON.stringify(carritoMeta));
+    cerrarModalVariante();
+    renderProductos();
+    toast('Agregado al carrito');
+}
+
+function getPrecioItem(key) {
+    if (carritoMeta[key]) return carritoMeta[key].precio;
+    const p = productos.find(x => x.id == key);
+    return p ? p.precio : 0;
+}
+
+function getNombreItem(key) {
+    const p = productos.find(x => x.id == key);
+    if (carritoMeta[key]) return p ? `${p.nombre} — ${carritoMeta[key].label}` : carritoMeta[key].label;
+    return p ? p.nombre : '';
+}
+
+function getImagenItem(key) {
+    const productoId = carritoMeta[key] ? carritoMeta[key].productoId : key;
+    const p = productos.find(x => x.id == productoId);
+    return p ? p.imagen : '';
+}
+
 function actualizarCarritoUI() {
-    const ids = Object.keys(carrito);
+    const keys = Object.keys(carrito);
     const totalItems = Object.values(carrito).reduce((a, b) => a + b, 0);
     let totalPrecio = 0;
-    ids.forEach(id => {
-        const p = productos.find(x => x.id == id);
-        if (p) totalPrecio += p.precio * carrito[id];
-    });
+    keys.forEach(k => { totalPrecio += getPrecioItem(k) * carrito[k]; });
 
     document.getElementById('carrito-bar').classList.toggle('hidden', totalItems === 0);
     document.getElementById('carrito-badge').textContent = totalItems;
     document.getElementById('carrito-total-bar').textContent = '$' + totalPrecio.toLocaleString();
 
-    // Items del panel
     const cont = document.getElementById('carrito-items');
-    cont.innerHTML = ids.map(id => {
-        const p = productos.find(x => x.id == id);
-        if (!p) return '';
+    cont.innerHTML = keys.map(k => {
+        const nombre = getNombreItem(k);
+        const precio = getPrecioItem(k);
+        const imagen = getImagenItem(k);
+        if (!nombre) return '';
         return `<div class="flex items-center gap-3">
-            ${p.imagen ? `<img src="${p.imagen}" class="w-10 h-10 rounded-lg object-cover">` : ''}
+            ${imagen ? `<img src="${imagen}" class="w-10 h-10 rounded-lg object-cover flex-shrink-0">` : ''}
             <div class="flex-1 min-w-0">
-                <p class="font-semibold text-sm txt-primary truncate">${p.nombre}</p>
-                <p class="text-xs txt-secondary">$${p.precio.toLocaleString()} x ${carrito[id]}</p>
+                <p class="font-semibold text-sm txt-primary leading-tight">${nombre}</p>
+                <p class="text-xs txt-secondary">$${precio.toLocaleString()} x ${carrito[k]}</p>
             </div>
             <div class="flex items-center gap-2">
-                <button onclick="cambiarCantidad(${id}, -1)" class="w-7 h-7 rounded-full bg-gray-200 text-gray-700 font-bold flex items-center justify-center">-</button>
-                <span class="font-bold text-sm w-4 text-center">${carrito[id]}</span>
-                <button onclick="cambiarCantidad(${id}, 1)" class="w-7 h-7 rounded-full bg-rose-500 text-white font-bold flex items-center justify-center">+</button>
+                <button onclick="cambiarCantidad('${k}', -1)" class="w-7 h-7 rounded-full bg-gray-200 text-gray-700 font-bold flex items-center justify-center">-</button>
+                <span class="font-bold text-sm w-4 text-center">${carrito[k]}</span>
+                <button onclick="cambiarCantidad('${k}', 1)" class="w-7 h-7 rounded-full bg-rose-500 text-white font-bold flex items-center justify-center">+</button>
             </div>
         </div>`;
     }).join('');
@@ -335,12 +368,13 @@ function abrirPedido() {
     const ids = Object.keys(carrito);
     let total = 0;
     const resumen = document.getElementById('resumen-pedido');
-    resumen.innerHTML = ids.map(id => {
-        const p = productos.find(x => x.id == id);
-        if (!p) return '';
-        const sub = p.precio * carrito[id];
+    resumen.innerHTML = ids.map(k => {
+        const nombre = getNombreItem(k);
+        const precio = getPrecioItem(k);
+        if (!nombre) return '';
+        const sub = precio * carrito[k];
         total += sub;
-        return `<div class="flex justify-between text-sm"><span class="txt-secondary">${carrito[id]}x ${p.nombre}</span><span class="font-semibold txt-primary">$${sub.toLocaleString()}</span></div>`;
+        return `<div class="flex justify-between text-sm"><span class="txt-secondary">${carrito[k]}x ${nombre}</span><span class="font-semibold txt-primary">$${sub.toLocaleString()}</span></div>`;
     }).join('');
     document.getElementById('modal-total').textContent = '$' + total.toLocaleString();
 
@@ -396,7 +430,16 @@ async function enviarPedido() {
         localStorage.setItem('cliente_' + SLUG, JSON.stringify({nombre, telefono: telLimpio, direccion}));
 
         // Crear pedido
-        const items = Object.keys(carrito).map(id => ({producto_id: parseInt(id), cantidad: carrito[id]}));
+        const items = Object.keys(carrito).map(k => {
+            const meta = carritoMeta[k];
+            return {
+                producto_id: meta ? meta.productoId : parseInt(k),
+                variante_id: meta ? meta.varianteId : null,
+                cantidad: carrito[k],
+                precio_unitario: getPrecioItem(k),
+                label_variante: meta ? meta.label : null
+            };
+        });
         const rPedido = await fetch(BASE + '/pedido', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -414,7 +457,9 @@ async function enviarPedido() {
         if (dataPedido.ok) {
             // Limpiar carrito
             carrito = {};
+            carritoMeta = {};
             localStorage.removeItem('carrito_' + SLUG);
+            localStorage.removeItem('carrito_meta_' + SLUG);
             cerrarModalPedido();
             renderProductos();
             document.getElementById('modal-ok').classList.remove('hidden');
@@ -456,6 +501,122 @@ if (clienteData && clienteData.nombre) {
 <div class="text-center py-4 pb-24">
     <a href="/empieza" class="txt-muted text-xs hover:text-rose-500 transition">Powered by <span class="font-bold">TUC TUC</span></a>
 </div>
+
+<!-- Modal selección de variante -->
+<div id="modal-variante-cli" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/50">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="var-cli-nombre" class="font-bold txt-primary text-lg"></h3>
+            <button onclick="cerrarModalVariante()" class="text-gray-400 text-2xl leading-none">&times;</button>
+        </div>
+        <p id="var-cli-desc" class="text-sm txt-secondary mb-3 hidden"></p>
+        <p id="var-cli-precio-base" class="text-rose-600 font-bold mb-4"></p>
+        <div id="var-cli-selectores" class="space-y-4 mb-5"></div>
+        <div id="var-cli-estado" class="text-sm text-center mb-3 hidden"></div>
+        <button id="btn-cli-agregar" onclick="confirmarVariante()" class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-semibold transition">
+            Agregar al carrito
+        </button>
+    </div>
+</div>
+
+<script>
+let varCliProducto = null;
+let varCliVariantes = [];
+let varCliSeleccion = {};
+
+async function abrirModalVariante(productoId) {
+    varCliProducto = productos.find(p => p.id == productoId);
+    if (!varCliProducto) return;
+    varCliSeleccion = {};
+
+    document.getElementById('var-cli-nombre').textContent = varCliProducto.nombre;
+    const descEl = document.getElementById('var-cli-desc');
+    if (varCliProducto.descripcion) { descEl.textContent = varCliProducto.descripcion; descEl.classList.remove('hidden'); }
+    else descEl.classList.add('hidden');
+    document.getElementById('var-cli-precio-base').textContent = '$' + varCliProducto.precio.toLocaleString();
+    document.getElementById('var-cli-estado').classList.add('hidden');
+    document.getElementById('modal-variante-cli').classList.remove('hidden');
+
+    try {
+        const r = await fetch(`${BASE}/producto/${productoId}/atributos`);
+        const data = await r.json();
+        if (!data.ok) return;
+        varCliVariantes = data.variantes;
+
+        const cont = document.getElementById('var-cli-selectores');
+        cont.innerHTML = data.atributos.map(a => `
+            <div>
+                <p class="text-sm font-semibold txt-primary mb-2">${a.nombre}</p>
+                <div class="flex flex-wrap gap-2">
+                    ${a.valores.map(v => `
+                        <button onclick="seleccionarVar('${a.nombre}', '${v.valor}', this)"
+                            class="var-btn-${a.id} px-3 py-1.5 rounded-full border-2 border-gray-200 text-sm font-medium text-gray-700 hover:border-rose-400 transition">
+                            ${v.valor}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+    } catch(e) { cerrarModalVariante(); }
+}
+
+function cerrarModalVariante() {
+    document.getElementById('modal-variante-cli').classList.add('hidden');
+    varCliProducto = null;
+    varCliVariantes = [];
+    varCliSeleccion = {};
+}
+
+function seleccionarVar(atributo, valor, btn) {
+    // Highlight el botón seleccionado dentro del grupo
+    const clase = btn.className.match(/var-btn-\d+/)?.[0];
+    if (clase) document.querySelectorAll('.' + clase).forEach(b => {
+        b.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-600');
+        b.classList.add('border-gray-200', 'text-gray-700');
+    });
+    btn.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-600');
+    btn.classList.remove('border-gray-200', 'text-gray-700');
+
+    varCliSeleccion[atributo] = valor;
+
+    // Buscar variante coincidente
+    const variante = varCliVariantes.find(v => {
+        return Object.entries(varCliSeleccion).every(([k, val]) => v.atributos[k] === val);
+    });
+    const estadoEl = document.getElementById('var-cli-estado');
+    const btnAgregar = document.getElementById('btn-cli-agregar');
+    if (variante) {
+        document.getElementById('var-cli-precio-base').textContent = '$' + variante.precio.toLocaleString();
+        if (!variante.disponible) {
+            estadoEl.textContent = 'Esta combinación está agotada';
+            estadoEl.className = 'text-sm text-red-500 text-center mb-3';
+            estadoEl.classList.remove('hidden');
+            btnAgregar.disabled = true;
+            btnAgregar.className = 'w-full bg-gray-300 text-gray-500 py-3 rounded-xl font-semibold cursor-not-allowed';
+        } else {
+            estadoEl.classList.add('hidden');
+            btnAgregar.disabled = false;
+            btnAgregar.className = 'w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-semibold transition';
+        }
+    }
+}
+
+function confirmarVariante() {
+    if (!varCliProducto) return;
+    const atributosTotales = document.querySelectorAll('[class*="var-btn-"]');
+    const grupos = new Set([...atributosTotales].map(b => b.className.match(/var-btn-\d+/)?.[0]).filter(Boolean));
+    if (Object.keys(varCliSeleccion).length < grupos.size) return toast('Elige todas las opciones', true);
+
+    const variante = varCliVariantes.find(v =>
+        Object.entries(varCliSeleccion).every(([k, val]) => v.atributos[k] === val)
+    );
+    if (!variante) return toast('Combinación no disponible', true);
+    if (!variante.disponible) return toast('Esta combinación está agotada', true);
+
+    const label = Object.entries(varCliSeleccion).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    agregarVarianteAlCarrito(varCliProducto.id, variante.id, variante.precio, label);
+}
+</script>
 
 </body>
 </html>

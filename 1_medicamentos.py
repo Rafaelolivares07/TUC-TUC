@@ -24791,6 +24791,43 @@ def crear_tablas_tienda(conn):
     """)
     conn.commit()
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS producto_atributos (
+            id SERIAL PRIMARY KEY,
+            producto_id INTEGER NOT NULL,
+            nombre VARCHAR(50) NOT NULL,
+            orden INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS atributo_valores (
+            id SERIAL PRIMARY KEY,
+            atributo_id INTEGER NOT NULL,
+            valor VARCHAR(100) NOT NULL,
+            orden INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS producto_variantes (
+            id SERIAL PRIMARY KEY,
+            producto_id INTEGER NOT NULL,
+            atributos JSONB NOT NULL,
+            precio DECIMAL(10,2) NOT NULL,
+            disponible BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS producto_imagenes (
+            id SERIAL PRIMARY KEY,
+            producto_id INTEGER NOT NULL,
+            imagen TEXT NOT NULL,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
     alters = [
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
@@ -26528,15 +26565,19 @@ def api_tienda_productos(slug):
             "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
             (tienda['id'],)
         ).fetchall()
-        conn.close()
         resultado = []
         for p in productos:
+            nv = conn.execute(
+                "SELECT COUNT(*) FROM producto_variantes WHERE producto_id = %s", (p['id'],)
+            ).fetchone()[0]
             resultado.append({
                 'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
                 'precio': float(p['precio']), 'imagen': p['imagen'] or '',
                 'disponible': p['disponible'], 'orden': p['orden'],
-                'descripcion': p['descripcion'] or ''
+                'descripcion': p['descripcion'] or '',
+                'tiene_variantes': nv > 0
             })
+        conn.close()
         return jsonify({'ok': True, 'productos': resultado})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -26989,6 +27030,286 @@ def api_tienda_suscripcion(slug):
         dias_pagados = tienda['dias_pagados'] or 0
         return jsonify({'ok': True, 'dias_pagados': dias_pagados, 'dias_usados': dias_usados, 'dias_restantes': max(0, dias_pagados - dias_usados)})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== VARIANTES DE PRODUCTOS =====
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/atributos')
+def api_tienda_atributos(slug, producto_id):
+    """Retorna atributos + valores + variantes de un producto"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        producto = conn.execute(
+            "SELECT id, precio FROM productos_tienda WHERE id = %s AND tienda_id = %s",
+            (producto_id, tienda['id'])
+        ).fetchone()
+        if not producto:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        atributos = conn.execute(
+            "SELECT id, nombre, orden FROM producto_atributos WHERE producto_id = %s ORDER BY orden, id",
+            (producto_id,)
+        ).fetchall()
+        resultado = []
+        for a in atributos:
+            valores = conn.execute(
+                "SELECT id, valor, orden FROM atributo_valores WHERE atributo_id = %s ORDER BY orden, id",
+                (a['id'],)
+            ).fetchall()
+            resultado.append({'id': a['id'], 'nombre': a['nombre'], 'valores': [dict(v) for v in valores]})
+
+        variantes = conn.execute(
+            "SELECT id, atributos, precio, disponible FROM producto_variantes WHERE producto_id = %s ORDER BY id",
+            (producto_id,)
+        ).fetchall()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'atributos': resultado,
+            'variantes': [{'id': v['id'], 'atributos': v['atributos'], 'precio': float(v['precio']), 'disponible': v['disponible']} for v in variantes]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/atributo', methods=['POST'])
+def api_tienda_atributo_crear(slug, producto_id):
+    """Crea un atributo (ej: Talla) con sus valores (ej: S,M,L)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    valores = [v.strip() for v in data.get('valores', []) if str(v).strip()]
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if not valores:
+        return jsonify({'ok': False, 'error': 'Al menos un valor requerido'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("SELECT id FROM productos_tienda WHERE id = %s AND tienda_id = %s", (producto_id, tienda['id'])).fetchone()
+        row = conn.execute(
+            "INSERT INTO producto_atributos (producto_id, nombre) VALUES (%s, %s) RETURNING id",
+            (producto_id, nombre)
+        ).fetchone()
+        atributo_id = row['id']
+        for i, v in enumerate(valores):
+            conn.execute(
+                "INSERT INTO atributo_valores (atributo_id, valor, orden) VALUES (%s, %s, %s)",
+                (atributo_id, v, i)
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': atributo_id})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/atributo/<int:atributo_id>', methods=['DELETE'])
+def api_tienda_atributo_eliminar(slug, producto_id, atributo_id):
+    """Elimina un atributo, sus valores y regenera variantes"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("DELETE FROM atributo_valores WHERE atributo_id = %s", (atributo_id,))
+        conn.execute("DELETE FROM producto_atributos WHERE id = %s AND producto_id = %s", (atributo_id, producto_id))
+        conn.execute("DELETE FROM producto_variantes WHERE producto_id = %s", (producto_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/generar-variantes', methods=['POST'])
+def api_tienda_generar_variantes(slug, producto_id):
+    """Genera todas las combinaciones posibles de atributos como variantes"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    import itertools, json
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        producto = conn.execute(
+            "SELECT id, precio FROM productos_tienda WHERE id = %s AND tienda_id = %s",
+            (producto_id, tienda['id'])
+        ).fetchone()
+        if not producto:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        atributos = conn.execute(
+            "SELECT id, nombre FROM producto_atributos WHERE producto_id = %s ORDER BY orden, id",
+            (producto_id,)
+        ).fetchall()
+        if not atributos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Define al menos un atributo primero'}), 400
+
+        listas = []
+        for a in atributos:
+            valores = conn.execute(
+                "SELECT valor FROM atributo_valores WHERE atributo_id = %s ORDER BY orden, id",
+                (a['id'],)
+            ).fetchall()
+            listas.append((a['nombre'], [v['valor'] for v in valores]))
+
+        # Obtener variantes existentes para preservar precio/disponible
+        existentes = conn.execute(
+            "SELECT atributos, precio, disponible FROM producto_variantes WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchall()
+        existentes_map = {json.dumps(dict(e['atributos']), sort_keys=True): {'precio': float(e['precio']), 'disponible': e['disponible']} for e in existentes}
+
+        # Eliminar variantes viejas y regenerar
+        conn.execute("DELETE FROM producto_variantes WHERE producto_id = %s", (producto_id,))
+
+        nombres = [l[0] for l in listas]
+        valores_listas = [l[1] for l in listas]
+        precio_base = float(producto['precio'])
+
+        for combo in itertools.product(*valores_listas):
+            atrs = dict(zip(nombres, combo))
+            key = json.dumps(atrs, sort_keys=True)
+            prev = existentes_map.get(key, {})
+            conn.execute(
+                "INSERT INTO producto_variantes (producto_id, atributos, precio, disponible) VALUES (%s, %s, %s, %s)",
+                (producto_id, json.dumps(atrs), prev.get('precio', precio_base), prev.get('disponible', True))
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/variante/<int:variante_id>', methods=['POST'])
+def api_tienda_variante_editar(slug, producto_id, variante_id):
+    """Edita precio o disponible de una variante"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        campos = []
+        vals = []
+        if 'precio' in data:
+            campos.append('precio = %s')
+            vals.append(float(data['precio']))
+        if 'disponible' in data:
+            campos.append('disponible = %s')
+            vals.append(bool(data['disponible']))
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Nada que actualizar'}), 400
+        vals += [variante_id, producto_id]
+        conn.execute(f"UPDATE producto_variantes SET {', '.join(campos)} WHERE id = %s AND producto_id = %s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/imagenes')
+def api_tienda_producto_imagenes(slug, producto_id):
+    """Lista las imágenes extra de un producto"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        imgs = conn.execute(
+            "SELECT id, imagen, orden FROM producto_imagenes WHERE producto_id = %s ORDER BY orden, id",
+            (producto_id,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'imagenes': [dict(i) for i in imgs]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/imagen-extra', methods=['POST'])
+def api_tienda_producto_imagen_extra(slug, producto_id):
+    """Agrega una imagen extra al producto"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'Imagen requerida'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        max_orden = conn.execute(
+            "SELECT COALESCE(MAX(orden), -1) FROM producto_imagenes WHERE producto_id = %s", (producto_id,)
+        ).fetchone()[0]
+        row = conn.execute(
+            "INSERT INTO producto_imagenes (producto_id, imagen, orden) VALUES (%s, %s, %s) RETURNING id",
+            (producto_id, imagen, max_orden + 1)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/producto/<int:producto_id>/imagen-extra/<int:imagen_id>', methods=['DELETE'])
+def api_tienda_producto_imagen_extra_eliminar(slug, producto_id, imagen_id):
+    """Elimina una imagen extra"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("DELETE FROM producto_imagenes WHERE id = %s AND producto_id = %s", (imagen_id, producto_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

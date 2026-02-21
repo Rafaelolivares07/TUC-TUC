@@ -260,7 +260,9 @@ let grabando = false;
         const btn = document.getElementById('btn-mic');
         btn.classList.remove('grabando');
         btn.title = 'Dictar mensaje';
-        if (e.error !== 'no-speech') {
+        if (e.error === 'network') {
+            toast('Este navegador bloqueó el micrófono. Prueba en Chrome.', true);
+        } else if (e.error !== 'no-speech') {
             console.warn('Speech error:', e.error);
         }
     };

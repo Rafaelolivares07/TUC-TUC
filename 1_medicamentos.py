@@ -1482,7 +1482,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -24844,6 +24844,97 @@ def crear_tablas_tienda(conn):
                 pass
 
 
+def crear_tablas_garaje(conn):
+    """Self-healing: crear todas las tablas del módulo Garaje TUC TUC"""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vehiculos (
+            id SERIAL PRIMARY KEY,
+            propietario_id INTEGER NOT NULL,
+            placa VARCHAR(20),
+            marca VARCHAR(50),
+            linea VARCHAR(100),
+            anio INTEGER,
+            color VARCHAR(50),
+            apodo VARCHAR(50),
+            km_actual INTEGER DEFAULT 0,
+            fechahora TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vehiculo_fotos (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            imagen TEXT NOT NULL,
+            orden INTEGER DEFAULT 0,
+            fechahora TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS repostes (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            fechahora TIMESTAMP DEFAULT NOW(),
+            km INTEGER NOT NULL,
+            valor_pagado DECIMAL(12,2) NOT NULL,
+            precio_galon DECIMAL(8,2) NOT NULL,
+            gasolinera_id INTEGER
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS intervenciones (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            fechahora TIMESTAMP DEFAULT NOW(),
+            km INTEGER,
+            tipo VARCHAR(20) NOT NULL DEFAULT 'correctivo',
+            descripcion TEXT,
+            intervalo_km INTEGER,
+            intervalo_dias INTEGER
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS items_intervencion (
+            id SERIAL PRIMARY KEY,
+            intervencion_id INTEGER NOT NULL,
+            fechahora TIMESTAMP DEFAULT NOW(),
+            tipo VARCHAR(20) NOT NULL,
+            descripcion TEXT,
+            proveedor_id INTEGER,
+            costo DECIMAL(12,2) DEFAULT 0
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS llantas (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            posicion VARCHAR(20) NOT NULL,
+            marca VARCHAR(50),
+            referencia VARCHAR(50),
+            km_instalacion INTEGER DEFAULT 0,
+            fechahora TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS documentos_vehiculo (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            tipo VARCHAR(20) NOT NULL,
+            vencimiento TIMESTAMP,
+            valor_pagado DECIMAL(12,2),
+            fecha_pago TIMESTAMP,
+            fechahora TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    alters = []
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+
 def generar_slug(nombre):
     """Genera slug URL-friendly desde un nombre"""
     import re, unicodedata
@@ -27858,6 +27949,564 @@ def api_admin_backup_eliminar(filename):
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# GARAJE TUC TUC — Portal de tenencia y mantenimiento vehicular
+# ============================================================================
+
+@app.route('/garaje')
+def garaje_home():
+    conn = get_db_connection()
+    crear_tablas_garaje(conn)
+    conn.close()
+    return render_template('garaje.html')
+
+
+@app.route('/api/garaje/login', methods=['POST'])
+def api_garaje_login():
+    """Login o registro en Garaje TUC TUC. Detecta si el tercero ya existe."""
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'})
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono = %s", (telefono,)
+        ).fetchone()
+        if tercero:
+            session['usuario_id'] = tercero['id']
+            conn.close()
+            return jsonify({'ok': True, 'nombre': tercero['nombre'], 'nuevo': False})
+        # Tercero nuevo
+        if not nombre:
+            conn.close()
+            return jsonify({'ok': False, 'nuevo': True, 'error': 'nombre_requerido'})
+        row = conn.execute(
+            "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+            (nombre, telefono)
+        ).fetchone()
+        conn.commit()
+        session['usuario_id'] = row['id']
+        conn.close()
+        return jsonify({'ok': True, 'nombre': nombre, 'nuevo': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculos')
+def api_garaje_vehiculos():
+    """Lista vehículos del usuario en sesión."""
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        vehiculos = conn.execute(
+            "SELECT * FROM vehiculos WHERE propietario_id = %s ORDER BY fechahora DESC",
+            (usuario_id,)
+        ).fetchall()
+        resultado = []
+        for v in vehiculos:
+            fotos = conn.execute(
+                "SELECT imagen FROM vehiculo_fotos WHERE vehiculo_id = %s ORDER BY orden LIMIT 1",
+                (v['id'],)
+            ).fetchone()
+            resultado.append({
+                'id': v['id'], 'placa': v['placa'], 'marca': v['marca'],
+                'linea': v['linea'], 'anio': v['anio'], 'color': v['color'],
+                'apodo': v['apodo'], 'km_actual': v['km_actual'],
+                'foto': fotos['imagen'] if fotos else None
+            })
+        conn.close()
+        return jsonify({'ok': True, 'vehiculos': resultado})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo', methods=['POST'])
+def api_garaje_vehiculo_crear():
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        row = conn.execute("""
+            INSERT INTO vehiculos (propietario_id, placa, marca, linea, anio, color, apodo, km_actual)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """, (
+            usuario_id,
+            (data.get('placa') or '').strip().upper() or None,
+            data.get('marca'), data.get('linea'), data.get('anio'),
+            data.get('color'), data.get('apodo'), data.get('km_actual') or 0
+        )).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>', methods=['POST'])
+def api_garaje_vehiculo_actualizar(vid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        conn.execute("""
+            UPDATE vehiculos SET placa=%s, marca=%s, linea=%s, anio=%s,
+            color=%s, apodo=%s, km_actual=%s
+            WHERE id=%s AND propietario_id=%s
+        """, (
+            (data.get('placa') or '').strip().upper() or None,
+            data.get('marca'), data.get('linea'), data.get('anio'),
+            data.get('color'), data.get('apodo'), data.get('km_actual') or 0,
+            vid, usuario_id
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/foto', methods=['POST'])
+def api_garaje_vehiculo_foto(vid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    if 'foto' not in request.files:
+        return jsonify({'ok': False, 'error': 'Sin archivo'})
+    try:
+        import cloudinary.uploader
+        file = request.files['foto']
+        result = cloudinary.uploader.upload(file, folder='garaje')
+        url = result.get('secure_url')
+        conn = get_db_connection()
+        orden = conn.execute(
+            "SELECT COUNT(*) as c FROM vehiculo_fotos WHERE vehiculo_id=%s", (vid,)
+        ).fetchone()['c']
+        conn.execute(
+            "INSERT INTO vehiculo_fotos (vehiculo_id, imagen, orden) VALUES (%s, %s, %s)",
+            (vid, url, orden)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'url': url})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/foto/<int:fid>', methods=['DELETE'])
+def api_garaje_vehiculo_foto_eliminar(vid, fid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "DELETE FROM vehiculo_fotos WHERE id=%s AND vehiculo_id=%s", (fid, vid)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/fotos')
+def api_garaje_vehiculo_fotos(vid):
+    try:
+        conn = get_db_connection()
+        fotos = conn.execute(
+            "SELECT id, imagen, orden FROM vehiculo_fotos WHERE vehiculo_id=%s ORDER BY orden",
+            (vid,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'fotos': [dict(f) for f in fotos]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/repostes')
+def api_garaje_repostes(vid):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT r.*, t.nombre as gasolinera_nombre
+            FROM repostes r
+            LEFT JOIN terceros t ON t.id = r.gasolinera_id
+            WHERE r.vehiculo_id = %s ORDER BY r.fechahora DESC
+        """, (vid,)).fetchall()
+        resultado = []
+        rows_list = list(rows)
+        for i, r in enumerate(rows_list):
+            km_anterior = rows_list[i+1]['km'] if i+1 < len(rows_list) else None
+            km_recorridos = r['km'] - km_anterior if km_anterior else None
+            galones = float(r['valor_pagado']) / float(r['precio_galon']) if r['precio_galon'] else None
+            km_galon = round(km_recorridos / galones, 1) if (km_recorridos and galones) else None
+            costo_km = round(float(r['valor_pagado']) / km_recorridos) if km_recorridos else None
+            resultado.append({
+                'id': r['id'], 'fechahora': r['fechahora'].isoformat() if r['fechahora'] else None,
+                'km': r['km'], 'valor_pagado': float(r['valor_pagado']),
+                'precio_galon': float(r['precio_galon']),
+                'gasolinera_id': r['gasolinera_id'],
+                'gasolinera_nombre': r['gasolinera_nombre'],
+                'km_recorridos': km_recorridos, 'galones': round(galones, 2) if galones else None,
+                'km_galon': km_galon, 'costo_km': costo_km
+            })
+        conn.close()
+        return jsonify({'ok': True, 'repostes': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/reposte', methods=['POST'])
+def api_garaje_reposte_crear(vid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    km = data.get('km')
+    valor = data.get('valor_pagado')
+    precio_galon = data.get('precio_galon')
+    if not all([km, valor, precio_galon]):
+        return jsonify({'ok': False, 'error': 'Faltan datos'})
+    try:
+        conn = get_db_connection()
+        # Actualizar km_actual del vehículo
+        conn.execute(
+            "UPDATE vehiculos SET km_actual=%s WHERE id=%s AND propietario_id=%s",
+            (km, vid, usuario_id)
+        )
+        # Registrar gasolinera si viene nombre nuevo
+        gasolinera_id = data.get('gasolinera_id')
+        gasolinera_nombre = (data.get('gasolinera_nombre') or '').strip()
+        if gasolinera_nombre and not gasolinera_id:
+            g = conn.execute(
+                "SELECT id FROM terceros WHERE nombre ILIKE %s", (gasolinera_nombre,)
+            ).fetchone()
+            if g:
+                gasolinera_id = g['id']
+            else:
+                g = conn.execute(
+                    "INSERT INTO terceros (nombre) VALUES (%s) RETURNING id",
+                    (gasolinera_nombre,)
+                ).fetchone()
+                gasolinera_id = g['id']
+        row = conn.execute("""
+            INSERT INTO repostes (vehiculo_id, km, valor_pagado, precio_galon, gasolinera_id)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (vid, km, valor, precio_galon, gasolinera_id)).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/ultimo-reposte')
+def api_garaje_ultimo_reposte(vid):
+    """Devuelve datos del último reposte para precargar el formulario."""
+    try:
+        conn = get_db_connection()
+        r = conn.execute("""
+            SELECT r.precio_galon, r.gasolinera_id, t.nombre as gasolinera_nombre
+            FROM repostes r
+            LEFT JOIN terceros t ON t.id = r.gasolinera_id
+            WHERE r.vehiculo_id = %s ORDER BY r.fechahora DESC LIMIT 1
+        """, (vid,)).fetchone()
+        conn.close()
+        if r:
+            return jsonify({'ok': True, 'precio_galon': float(r['precio_galon']),
+                            'gasolinera_id': r['gasolinera_id'],
+                            'gasolinera_nombre': r['gasolinera_nombre']})
+        return jsonify({'ok': True, 'precio_galon': None, 'gasolinera_id': None, 'gasolinera_nombre': None})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/intervenciones')
+def api_garaje_intervenciones(vid):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT i.*, t.nombre as mecanico_nombre
+            FROM intervenciones i
+            LEFT JOIN items_intervencion it ON it.intervencion_id = i.id AND it.tipo = 'mano_obra'
+            LEFT JOIN terceros t ON t.id = it.proveedor_id
+            WHERE i.vehiculo_id = %s ORDER BY i.fechahora DESC
+        """, (vid,)).fetchall()
+        resultado = []
+        for r in rows:
+            items = conn.execute("""
+                SELECT ii.*, t.nombre as proveedor_nombre
+                FROM items_intervencion ii
+                LEFT JOIN terceros t ON t.id = ii.proveedor_id
+                WHERE ii.intervencion_id = %s
+            """, (r['id'],)).fetchall()
+            total = sum(float(it['costo'] or 0) for it in items)
+            resultado.append({
+                'id': r['id'],
+                'fechahora': r['fechahora'].isoformat() if r['fechahora'] else None,
+                'km': r['km'], 'tipo': r['tipo'], 'descripcion': r['descripcion'],
+                'intervalo_km': r['intervalo_km'], 'intervalo_dias': r['intervalo_dias'],
+                'total': total,
+                'items': [{'id': it['id'], 'tipo': it['tipo'], 'descripcion': it['descripcion'],
+                           'costo': float(it['costo'] or 0), 'proveedor_nombre': it['proveedor_nombre']}
+                          for it in items]
+            })
+        conn.close()
+        return jsonify({'ok': True, 'intervenciones': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/intervencion', methods=['POST'])
+def api_garaje_intervencion_crear(vid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        row = conn.execute("""
+            INSERT INTO intervenciones (vehiculo_id, km, tipo, descripcion, intervalo_km, intervalo_dias)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+        """, (vid, data.get('km'), data.get('tipo', 'correctivo'),
+              data.get('descripcion'), data.get('intervalo_km'), data.get('intervalo_dias')
+        )).fetchone()
+        intervencion_id = row['id']
+        # Agregar items si vienen
+        for item in (data.get('items') or []):
+            proveedor_id = item.get('proveedor_id')
+            proveedor_nombre = (item.get('proveedor_nombre') or '').strip()
+            if proveedor_nombre and not proveedor_id:
+                p = conn.execute(
+                    "SELECT id FROM terceros WHERE nombre ILIKE %s", (proveedor_nombre,)
+                ).fetchone()
+                if p:
+                    proveedor_id = p['id']
+                else:
+                    p = conn.execute(
+                        "INSERT INTO terceros (nombre) VALUES (%s) RETURNING id",
+                        (proveedor_nombre,)
+                    ).fetchone()
+                    proveedor_id = p['id']
+            conn.execute("""
+                INSERT INTO items_intervencion (intervencion_id, tipo, descripcion, proveedor_id, costo)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (intervencion_id, item.get('tipo'), item.get('descripcion'),
+                  proveedor_id, item.get('costo') or 0))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': intervencion_id})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/llantas')
+def api_garaje_llantas(vid):
+    try:
+        conn = get_db_connection()
+        v = conn.execute("SELECT km_actual FROM vehiculos WHERE id=%s", (vid,)).fetchone()
+        km_actual = v['km_actual'] if v else 0
+        rows = conn.execute(
+            "SELECT * FROM llantas WHERE vehiculo_id=%s ORDER BY posicion", (vid,)
+        ).fetchall()
+        resultado = []
+        for r in rows:
+            km_acumulado = km_actual - (r['km_instalacion'] or 0)
+            resultado.append({
+                'id': r['id'], 'posicion': r['posicion'], 'marca': r['marca'],
+                'referencia': r['referencia'], 'km_instalacion': r['km_instalacion'],
+                'fechahora': r['fechahora'].isoformat() if r['fechahora'] else None,
+                'km_acumulado': max(km_acumulado, 0)
+            })
+        conn.close()
+        return jsonify({'ok': True, 'llantas': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/llanta', methods=['POST'])
+def api_garaje_llanta_crear(vid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    posicion = data.get('posicion')
+    if not posicion:
+        return jsonify({'ok': False, 'error': 'Posición requerida'})
+    try:
+        conn = get_db_connection()
+        # Reemplazar llanta existente en esa posición
+        conn.execute(
+            "DELETE FROM llantas WHERE vehiculo_id=%s AND posicion=%s", (vid, posicion)
+        )
+        v = conn.execute("SELECT km_actual FROM vehiculos WHERE id=%s", (vid,)).fetchone()
+        km_inst = data.get('km_instalacion') or (v['km_actual'] if v else 0)
+        row = conn.execute("""
+            INSERT INTO llantas (vehiculo_id, posicion, marca, referencia, km_instalacion)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (vid, posicion, data.get('marca'), data.get('referencia'), km_inst)).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/documentos')
+def api_garaje_documentos(vid):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT * FROM documentos_vehiculo WHERE vehiculo_id=%s ORDER BY tipo", (vid,)
+        ).fetchall()
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc)
+        resultado = []
+        for r in rows:
+            venc = r['vencimiento']
+            dias = None
+            semaforo = 'verde'
+            if venc:
+                if venc.tzinfo is None:
+                    from datetime import timezone
+                    venc_tz = venc.replace(tzinfo=timezone.utc)
+                else:
+                    venc_tz = venc
+                dias = (venc_tz - ahora).days
+                if dias < 0:
+                    semaforo = 'vencido'
+                elif dias <= 30:
+                    semaforo = 'rojo'
+                elif dias <= 60:
+                    semaforo = 'amarillo'
+            resultado.append({
+                'id': r['id'], 'tipo': r['tipo'],
+                'vencimiento': venc.strftime('%Y-%m-%d') if venc else None,
+                'valor_pagado': float(r['valor_pagado']) if r['valor_pagado'] else None,
+                'fecha_pago': r['fecha_pago'].strftime('%Y-%m-%d') if r['fecha_pago'] else None,
+                'dias_restantes': dias, 'semaforo': semaforo
+            })
+        conn.close()
+        return jsonify({'ok': True, 'documentos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/documento', methods=['POST'])
+def api_garaje_documento_crear(vid):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    tipo = data.get('tipo')
+    if not tipo:
+        return jsonify({'ok': False, 'error': 'Tipo requerido'})
+    try:
+        conn = get_db_connection()
+        existe = conn.execute(
+            "SELECT id FROM documentos_vehiculo WHERE vehiculo_id=%s AND tipo=%s", (vid, tipo)
+        ).fetchone()
+        if existe:
+            conn.execute("""
+                UPDATE documentos_vehiculo SET vencimiento=%s, valor_pagado=%s, fecha_pago=%s, fechahora=NOW()
+                WHERE id=%s
+            """, (data.get('vencimiento'), data.get('valor_pagado'), data.get('fecha_pago'), existe['id']))
+        else:
+            conn.execute("""
+                INSERT INTO documentos_vehiculo (vehiculo_id, tipo, vencimiento, valor_pagado, fecha_pago)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (vid, tipo, data.get('vencimiento'), data.get('valor_pagado'), data.get('fecha_pago')))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/alertas')
+def api_garaje_alertas(vid):
+    """Calcula alertas del vehículo: documentos próximos a vencer + preventivos próximos."""
+    try:
+        conn = get_db_connection()
+        v = conn.execute("SELECT km_actual FROM vehiculos WHERE id=%s", (vid,)).fetchone()
+        km_actual = v['km_actual'] if v else 0
+        alertas = []
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc)
+        # Alertas de documentos
+        docs = conn.execute(
+            "SELECT tipo, vencimiento FROM documentos_vehiculo WHERE vehiculo_id=%s", (vid,)
+        ).fetchall()
+        for d in docs:
+            if d['vencimiento']:
+                venc = d['vencimiento']
+                if venc.tzinfo is None:
+                    venc = venc.replace(tzinfo=timezone.utc)
+                dias = (venc - ahora).days
+                if dias < 0:
+                    alertas.append({'tipo': 'documento', 'nivel': 'rojo',
+                                    'mensaje': f"{d['tipo'].upper()} vencido hace {abs(dias)} días"})
+                elif dias <= 30:
+                    alertas.append({'tipo': 'documento', 'nivel': 'rojo',
+                                    'mensaje': f"{d['tipo'].upper()} vence en {dias} días"})
+                elif dias <= 60:
+                    alertas.append({'tipo': 'documento', 'nivel': 'amarillo',
+                                    'mensaje': f"{d['tipo'].upper()} vence en {dias} días"})
+        # Alertas de preventivos (intervenciones con intervalo_km)
+        preventivos = conn.execute("""
+            SELECT descripcion, km, intervalo_km, intervalo_dias, fechahora
+            FROM intervenciones
+            WHERE vehiculo_id=%s AND tipo='preventivo' AND intervalo_km IS NOT NULL
+            ORDER BY fechahora DESC
+        """, (vid,)).fetchall()
+        vistos = set()
+        for p in preventivos:
+            key = p['descripcion']
+            if key in vistos:
+                continue
+            vistos.add(key)
+            proximo_km = (p['km'] or 0) + p['intervalo_km']
+            faltan = proximo_km - km_actual
+            if faltan <= 0:
+                alertas.append({'tipo': 'preventivo', 'nivel': 'rojo',
+                                'mensaje': f"{p['descripcion']} — vencido hace {abs(faltan)} km"})
+            elif faltan <= 500:
+                alertas.append({'tipo': 'preventivo', 'nivel': 'amarillo',
+                                'mensaje': f"{p['descripcion']} — faltan {faltan} km"})
+        conn.close()
+        return jsonify({'ok': True, 'alertas': alertas})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
 
 
 if __name__ == '__main__':

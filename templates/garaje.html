@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garaje TUC TUC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+        .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 10px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+        .semaforo-verde { color: #059669; }
+        .semaforo-amarillo { color: #d97706; }
+        .semaforo-rojo { color: #dc2626; }
+        .semaforo-vencido { color: #7c3aed; }
+        .posicion-btn { transition: all 0.15s; }
+        .posicion-btn.activa { ring: 2px; }
+    </style>
+</head>
+<body class="pb-10">
+
+<div id="toast" class="toast"></div>
+
+<!-- ===== PANTALLA LOGIN ===== -->
+<div id="pantalla-login" class="hidden min-h-screen flex items-center justify-center px-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
+        <div class="text-center mb-6">
+            <div class="text-5xl mb-3">🚗</div>
+            <h1 class="text-2xl font-extrabold text-gray-800">Garaje TUC TUC</h1>
+            <p class="text-sm text-gray-500 mt-1">El historial de tu vehículo, siempre contigo</p>
+        </div>
+        <div id="login-paso1">
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Tu número de celular</label>
+            <input id="inp-tel" type="tel" placeholder="3001234567"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-yellow-400 focus:outline-none mb-4">
+            <button onclick="loginPaso1()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl text-lg transition">
+                Continuar
+            </button>
+        </div>
+        <div id="login-paso2" class="hidden">
+            <p class="text-sm text-gray-500 mb-3">Parece que eres nuevo. ¿Cómo te llamas?</p>
+            <input id="inp-nombre" type="text" placeholder="Tu nombre"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg focus:border-yellow-400 focus:outline-none mb-4">
+            <button onclick="loginPaso2()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl text-lg transition">
+                Entrar al Garaje
+            </button>
+            <button onclick="volverPaso1()" class="w-full mt-2 text-sm text-gray-400 hover:text-gray-600">← Cambiar número</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== PANTALLA PRINCIPAL ===== -->
+<div id="pantalla-main" class="hidden max-w-lg mx-auto">
+
+    <!-- Header -->
+    <div class="bg-yellow-400 px-4 py-4 flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-extrabold text-gray-900">🚗 Garaje TUC TUC</h1>
+            <p id="hdr-nombre" class="text-sm text-gray-700"></p>
+        </div>
+        <button onclick="abrirAgregarVehiculo()" class="bg-gray-900 text-yellow-400 px-3 py-2 rounded-xl text-sm font-bold">
+            + Vehículo
+        </button>
+    </div>
+
+    <!-- Lista de vehículos -->
+    <div id="lista-vehiculos" class="p-4 space-y-3"></div>
+
+    <!-- Sin vehículos -->
+    <div id="sin-vehiculos" class="hidden text-center py-16 px-6">
+        <div class="text-6xl mb-4">🔧</div>
+        <p class="font-bold text-gray-700 text-lg">Aún no tienes vehículos</p>
+        <p class="text-sm text-gray-500 mt-1 mb-6">Agrega tu primer vehículo para empezar</p>
+        <button onclick="abrirAgregarVehiculo()" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold px-8 py-3 rounded-xl transition">
+            Agregar vehículo
+        </button>
+    </div>
+</div>
+
+<!-- ===== PANTALLA VEHÍCULO (dashboard) ===== -->
+<div id="pantalla-vehiculo" class="hidden max-w-lg mx-auto">
+
+    <!-- Header vehículo -->
+    <div class="bg-gray-900 text-white px-4 py-4">
+        <button onclick="volverALista()" class="text-yellow-400 text-sm font-semibold mb-2">← Mis vehículos</button>
+        <div class="flex items-center gap-3">
+            <div id="veh-foto-header" class="w-16 h-16 rounded-xl bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center cursor-pointer" onclick="abrirFotosVehiculo()">
+                <span class="text-3xl" id="veh-icono-header">🚗</span>
+            </div>
+            <div class="flex-1">
+                <h2 id="veh-apodo" class="text-xl font-extrabold"></h2>
+                <p id="veh-subtitulo" class="text-gray-400 text-sm"></p>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-yellow-400 font-bold text-sm" id="veh-km"></span>
+                    <button onclick="abrirActualizarKm()" class="text-xs text-gray-400 underline">actualizar</button>
+                </div>
+            </div>
+            <button onclick="abrirEditarVehiculo()" class="text-gray-400 text-xs underline">Editar</button>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div id="panel-alertas" class="hidden px-4 pt-3">
+        <div id="lista-alertas" class="space-y-2"></div>
+    </div>
+
+    <!-- 4 accesos principales -->
+    <div class="grid grid-cols-2 gap-3 p-4">
+        <button onclick="abrirSeccion('repostes')" class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left hover:border-yellow-400 transition">
+            <div class="text-3xl mb-2">⛽</div>
+            <p class="font-bold text-gray-800">Repostes</p>
+            <p class="text-xs text-gray-500">Combustible y rendimiento</p>
+        </button>
+        <button onclick="abrirSeccion('intervenciones')" class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left hover:border-yellow-400 transition">
+            <div class="text-3xl mb-2">🔧</div>
+            <p class="font-bold text-gray-800">Intervenciones</p>
+            <p class="text-xs text-gray-500">Mantenimiento y reparaciones</p>
+        </button>
+        <button onclick="abrirSeccion('llantas')" class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left hover:border-yellow-400 transition">
+            <div class="text-3xl mb-2">🛞</div>
+            <p class="font-bold text-gray-800">Llantas</p>
+            <p class="text-xs text-gray-500">Desgaste por posición</p>
+        </button>
+        <button onclick="abrirSeccion('documentos')" class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left hover:border-yellow-400 transition">
+            <div class="text-3xl mb-2">📄</div>
+            <p class="font-bold text-gray-800">Documentos</p>
+            <p class="text-xs text-gray-500">SOAT, RTM, Impuesto</p>
+        </button>
+    </div>
+</div>
+
+<!-- ===== SECCIÓN REPOSTES ===== -->
+<div id="seccion-repostes" class="hidden max-w-lg mx-auto">
+    <div class="bg-white border-b px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <button onclick="cerrarSeccion()" class="text-gray-500 font-semibold">←</button>
+            <h2 class="font-bold text-gray-800">⛽ Repostes</h2>
+        </div>
+        <button onclick="abrirModalReposte()" class="bg-yellow-400 text-gray-900 px-3 py-1.5 rounded-lg text-sm font-bold">+ Nuevo</button>
+    </div>
+    <div id="lista-repostes" class="p-4 space-y-3"></div>
+</div>
+
+<!-- ===== SECCIÓN INTERVENCIONES ===== -->
+<div id="seccion-intervenciones" class="hidden max-w-lg mx-auto">
+    <div class="bg-white border-b px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <button onclick="cerrarSeccion()" class="text-gray-500 font-semibold">←</button>
+            <h2 class="font-bold text-gray-800">🔧 Intervenciones</h2>
+        </div>
+        <button onclick="abrirModalIntervencion()" class="bg-yellow-400 text-gray-900 px-3 py-1.5 rounded-lg text-sm font-bold">+ Nueva</button>
+    </div>
+    <div id="lista-intervenciones" class="p-4 space-y-3"></div>
+</div>
+
+<!-- ===== SECCIÓN LLANTAS ===== -->
+<div id="seccion-llantas" class="hidden max-w-lg mx-auto">
+    <div class="bg-white border-b px-4 py-3 flex items-center gap-3">
+        <button onclick="cerrarSeccion()" class="text-gray-500 font-semibold">←</button>
+        <h2 class="font-bold text-gray-800">🛞 Llantas</h2>
+    </div>
+    <div class="p-4">
+        <!-- Diagrama posiciones -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm mb-4">
+            <p class="text-xs text-gray-500 text-center mb-3">Toca una posición para actualizar</p>
+            <!-- Frontal -->
+            <div class="flex justify-between mb-6">
+                <button onclick="abrirModalLlanta('del_izq')" id="btn-del_izq" class="posicion-btn w-20 h-14 bg-gray-100 rounded-xl border-2 border-gray-200 flex flex-col items-center justify-center hover:border-yellow-400 transition">
+                    <span class="text-xs font-bold text-gray-600">Del. Izq</span>
+                </button>
+                <div class="flex-1 flex items-center justify-center">
+                    <div class="w-12 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
+                        <span class="text-xs text-gray-400 rotate-90" style="writing-mode:vertical-rl">FRENTE</span>
+                    </div>
+                </div>
+                <button onclick="abrirModalLlanta('del_der')" id="btn-del_der" class="posicion-btn w-20 h-14 bg-gray-100 rounded-xl border-2 border-gray-200 flex flex-col items-center justify-center hover:border-yellow-400 transition">
+                    <span class="text-xs font-bold text-gray-600">Del. Der</span>
+                </button>
+            </div>
+            <!-- Trasera -->
+            <div class="flex justify-between mb-4">
+                <button onclick="abrirModalLlanta('tra_izq')" id="btn-tra_izq" class="posicion-btn w-20 h-14 bg-gray-100 rounded-xl border-2 border-gray-200 flex flex-col items-center justify-center hover:border-yellow-400 transition">
+                    <span class="text-xs font-bold text-gray-600">Tra. Izq</span>
+                </button>
+                <div class="flex-1 flex items-center justify-center">
+                    <div class="w-12 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
+                        <span class="text-xs text-gray-400 rotate-90" style="writing-mode:vertical-rl">ATRÁS</span>
+                    </div>
+                </div>
+                <button onclick="abrirModalLlanta('tra_der')" id="btn-tra_der" class="posicion-btn w-20 h-14 bg-gray-100 rounded-xl border-2 border-gray-200 flex flex-col items-center justify-center hover:border-yellow-400 transition">
+                    <span class="text-xs font-bold text-gray-600">Tra. Der</span>
+                </button>
+            </div>
+            <!-- Repuesto -->
+            <div class="flex justify-center">
+                <button onclick="abrirModalLlanta('repuesto')" id="btn-repuesto" class="posicion-btn w-24 h-14 bg-gray-100 rounded-xl border-2 border-gray-200 flex flex-col items-center justify-center hover:border-yellow-400 transition">
+                    <span class="text-xs font-bold text-gray-600">Repuesto</span>
+                </button>
+            </div>
+        </div>
+        <div id="detalle-llantas" class="space-y-2"></div>
+    </div>
+</div>
+
+<!-- ===== SECCIÓN DOCUMENTOS ===== -->
+<div id="seccion-documentos" class="hidden max-w-lg mx-auto">
+    <div class="bg-white border-b px-4 py-3 flex items-center gap-3">
+        <button onclick="cerrarSeccion()" class="text-gray-500 font-semibold">←</button>
+        <h2 class="font-bold text-gray-800">📄 Documentos</h2>
+    </div>
+    <div class="p-4 space-y-3">
+        <div onclick="abrirModalDocumento('soat')" class="bg-white rounded-2xl p-4 shadow-sm border-2 cursor-pointer hover:border-yellow-400 transition" id="card-soat">
+            <div class="flex items-center justify-between">
+                <div><p class="font-bold text-gray-800">SOAT</p><p id="soat-info" class="text-sm text-gray-500">Sin registro</p></div>
+                <span id="soat-semaforo" class="text-2xl">⚪</span>
+            </div>
+        </div>
+        <div onclick="abrirModalDocumento('rtm')" class="bg-white rounded-2xl p-4 shadow-sm border-2 cursor-pointer hover:border-yellow-400 transition" id="card-rtm">
+            <div class="flex items-center justify-between">
+                <div><p class="font-bold text-gray-800">Revisión Técnico-Mecánica</p><p id="rtm-info" class="text-sm text-gray-500">Sin registro</p></div>
+                <span id="rtm-semaforo" class="text-2xl">⚪</span>
+            </div>
+        </div>
+        <div onclick="abrirModalDocumento('impuesto')" class="bg-white rounded-2xl p-4 shadow-sm border-2 cursor-pointer hover:border-yellow-400 transition" id="card-impuesto">
+            <div class="flex items-center justify-between">
+                <div><p class="font-bold text-gray-800">Impuesto Vehicular</p><p id="impuesto-info" class="text-sm text-gray-500">Sin registro</p></div>
+                <span id="impuesto-semaforo" class="text-2xl">⚪</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODALES ========== -->
+
+<!-- Modal agregar/editar vehículo -->
+<div id="modal-vehiculo" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h3 id="modal-vehiculo-titulo" class="font-bold text-lg text-gray-800">Agregar vehículo</h3>
+            <button onclick="cerrarModalVehiculo()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <div class="space-y-3">
+            <input id="vf-apodo" type="text" placeholder="Apodo (ej: Silver)" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            <div class="grid grid-cols-2 gap-3">
+                <input id="vf-marca" type="text" placeholder="Marca (KIA)" class="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+                <input id="vf-linea" type="text" placeholder="Línea (Picanto Ion)" class="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <input id="vf-anio" type="number" placeholder="Año (2017)" class="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+                <input id="vf-color" type="text" placeholder="Color" class="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <input id="vf-placa" type="text" placeholder="Placa (opcional)" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none uppercase">
+            <input id="vf-km" type="number" placeholder="Kilometraje actual" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+        </div>
+        <button onclick="guardarVehiculo()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl mt-4 transition">
+            Guardar
+        </button>
+    </div>
+</div>
+
+<!-- Modal actualizar km -->
+<div id="modal-km" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 mx-4 w-full max-w-sm">
+        <h3 class="font-bold text-lg text-gray-800 mb-3">Actualizar kilometraje</h3>
+        <input id="inp-km-nuevo" type="number" placeholder="Kilometraje actual"
+            class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-xl focus:border-yellow-400 focus:outline-none mb-4">
+        <div class="flex gap-3">
+            <button onclick="cerrarModalKm()" class="flex-1 border-2 border-gray-200 text-gray-600 py-2.5 rounded-xl font-semibold">Cancelar</button>
+            <button onclick="guardarKm()" class="flex-1 bg-yellow-400 hover:bg-yellow-500 text-gray-900 py-2.5 rounded-xl font-bold">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal reposte -->
+<div id="modal-reposte" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-8">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg text-gray-800">⛽ Registrar reposte</h3>
+            <button onclick="cerrarModalReposte()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <div class="space-y-3">
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Kilometraje al cargar</label>
+                <input id="rep-km" type="number" placeholder="110223" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Valor pagado ($)</label>
+                <input id="rep-valor" type="number" placeholder="100000" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Precio del galón ($)</label>
+                <input id="rep-precio-galon" type="number" placeholder="16800" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Gasolinera (opcional)</label>
+                <input id="rep-gasolinera" type="text" placeholder="Terpel Av. 30" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+                <input id="rep-gasolinera-id" type="hidden">
+            </div>
+        </div>
+        <button onclick="guardarReposte()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl mt-4 transition">
+            Registrar
+        </button>
+    </div>
+</div>
+
+<!-- Modal intervención -->
+<div id="modal-intervencion" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl p-6 pb-8 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg text-gray-800">🔧 Nueva intervención</h3>
+            <button onclick="cerrarModalIntervencion()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <!-- Tipo -->
+        <div class="flex gap-3 mb-4">
+            <button id="btn-tipo-correctivo" onclick="selTipo('correctivo')"
+                class="flex-1 py-2 rounded-xl border-2 font-semibold text-sm transition border-rose-500 bg-rose-50 text-rose-600">
+                Correctivo
+            </button>
+            <button id="btn-tipo-preventivo" onclick="selTipo('preventivo')"
+                class="flex-1 py-2 rounded-xl border-2 font-semibold text-sm transition border-gray-200 text-gray-500">
+                Preventivo
+            </button>
+        </div>
+        <div class="space-y-3 mb-3">
+            <input id="int-desc" type="text" placeholder="Descripción (ej: Cambio aceite y filtro)"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            <input id="int-km" type="number" placeholder="Kilometraje"
+                class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            <div id="panel-intervalo" class="hidden grid grid-cols-2 gap-3">
+                <input id="int-intervalo-km" type="number" placeholder="Cada X km"
+                    class="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+                <input id="int-intervalo-dias" type="number" placeholder="Cada X días"
+                    class="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+        </div>
+        <!-- Items -->
+        <p class="text-sm font-bold text-gray-700 mb-2">Detalle de costos</p>
+        <div id="items-intervencion" class="space-y-2 mb-3"></div>
+        <button onclick="agregarItemIntervencion()" class="text-sm text-yellow-600 font-semibold">+ Agregar repuesto o mano de obra</button>
+        <button onclick="guardarIntervencion()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl mt-4 transition">
+            Registrar
+        </button>
+    </div>
+</div>
+
+<!-- Modal llanta -->
+<div id="modal-llanta" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 mx-4 w-full max-w-sm">
+        <div class="flex justify-between items-center mb-4">
+            <h3 id="modal-llanta-titulo" class="font-bold text-lg text-gray-800">Registrar llanta</h3>
+            <button onclick="cerrarModalLlanta()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <div class="space-y-3">
+            <input id="ll-marca" type="text" placeholder="Marca (Michelin)" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            <input id="ll-referencia" type="text" placeholder="Referencia (165/65R13)" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            <input id="ll-km" type="number" placeholder="Km al instalar (deja vacío = km actual)" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+        </div>
+        <input id="ll-posicion" type="hidden">
+        <button onclick="guardarLlanta()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl mt-4 transition">
+            Guardar
+        </button>
+    </div>
+</div>
+
+<!-- Modal documento -->
+<div id="modal-documento" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 mx-4 w-full max-w-sm">
+        <div class="flex justify-between items-center mb-4">
+            <h3 id="modal-doc-titulo" class="font-bold text-lg text-gray-800">Actualizar documento</h3>
+            <button onclick="cerrarModalDocumento()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <input id="doc-tipo" type="hidden">
+        <div class="space-y-3">
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Fecha de vencimiento</label>
+                <input id="doc-vencimiento" type="date" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Valor pagado ($)</label>
+                <input id="doc-valor" type="number" placeholder="580000" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+            <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Fecha de pago</label>
+                <input id="doc-fecha-pago" type="date" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
+            </div>
+        </div>
+        <button onclick="guardarDocumento()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 rounded-xl mt-4 transition">
+            Guardar
+        </button>
+    </div>
+</div>
+
+<!-- Modal fotos vehículo -->
+<div id="modal-fotos-vehiculo" class="hidden fixed inset-0 z-50 bg-black/50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl p-5 pb-8 max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg text-gray-800">📷 Fotos del vehículo</h3>
+            <button onclick="cerrarFotosVehiculo()" class="text-gray-400 text-2xl">&times;</button>
+        </div>
+        <div id="grid-fotos-vehiculo" class="grid grid-cols-3 gap-2 mb-4"></div>
+        <label class="block w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-center cursor-pointer transition">
+            + Agregar foto
+            <input type="file" accept="image/*" class="hidden" onchange="subirFotoVehiculo(this)">
+        </label>
+    </div>
+</div>
+
+<script>
+const BASE = '/api/garaje';
+let usuarioNombre = '';
+let vehiculoActual = null;
+let vehiculoEditandoId = null;
+let llantaPosicion = null;
+let tipoIntervencion = 'correctivo';
+let itemsIntervencion = [];
+
+function toast(msg, err) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (err ? 'toast-err' : 'toast-ok');
+    setTimeout(() => t.className = 'toast', 2500);
+}
+
+function mostrar(id) {
+    ['pantalla-login','pantalla-main','pantalla-vehiculo',
+     'seccion-repostes','seccion-intervenciones','seccion-llantas','seccion-documentos']
+    .forEach(s => document.getElementById(s).classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    window.scrollTo(0,0);
+}
+
+// ===== LOGIN =====
+let telGuardado = '';
+
+async function loginPaso1() {
+    const tel = document.getElementById('inp-tel').value.trim().replace(/\D/g,'');
+    if (tel.length < 10) return toast('Ingresa un celular válido', true);
+    telGuardado = tel;
+    try {
+        const r = await fetch(BASE + '/login', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({telefono: tel})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            usuarioNombre = d.nombre;
+            await cargarVehiculos();
+        } else if (d.error === 'nombre_requerido') {
+            document.getElementById('login-paso1').classList.add('hidden');
+            document.getElementById('login-paso2').classList.remove('hidden');
+        } else {
+            toast(d.error || 'Error', true);
+        }
+    } catch(e) { toast('Error de conexión', true); }
+}
+
+async function loginPaso2() {
+    const nombre = document.getElementById('inp-nombre').value.trim();
+    if (!nombre) return toast('Ingresa tu nombre', true);
+    try {
+        const r = await fetch(BASE + '/login', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({telefono: telGuardado, nombre})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            usuarioNombre = d.nombre;
+            await cargarVehiculos();
+        } else {
+            toast(d.error || 'Error', true);
+        }
+    } catch(e) { toast('Error de conexión', true); }
+}
+
+function volverPaso1() {
+    document.getElementById('login-paso1').classList.remove('hidden');
+    document.getElementById('login-paso2').classList.add('hidden');
+}
+
+// ===== VEHÍCULOS =====
+async function cargarVehiculos() {
+    try {
+        const r = await fetch(BASE + '/vehiculos');
+        const d = await r.json();
+        if (d.error === 'sin_sesion') { mostrar('pantalla-login'); return; }
+        if (!d.ok) return;
+        document.getElementById('hdr-nombre').textContent = usuarioNombre || '';
+        const lista = document.getElementById('lista-vehiculos');
+        if (!d.vehiculos.length) {
+            lista.innerHTML = '';
+            document.getElementById('sin-vehiculos').classList.remove('hidden');
+        } else {
+            document.getElementById('sin-vehiculos').classList.add('hidden');
+            lista.innerHTML = d.vehiculos.map(v => `
+                <div onclick="abrirVehiculo(${v.id})" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition border border-gray-100">
+                    <div class="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                        ${v.foto ? `<img src="${v.foto}" class="w-full h-full object-cover">` : '<span class="text-3xl">🚗</span>'}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-extrabold text-gray-800 text-lg">${v.apodo || v.marca || 'Mi vehículo'}</p>
+                        <p class="text-sm text-gray-500">${[v.marca, v.linea, v.anio].filter(Boolean).join(' · ')}</p>
+                        <p class="text-sm text-yellow-600 font-semibold">${v.km_actual ? v.km_actual.toLocaleString() + ' km' : ''}</p>
+                    </div>
+                    <span class="text-gray-300 text-xl">›</span>
+                </div>
+            `).join('');
+        }
+        mostrar('pantalla-main');
+    } catch(e) { toast('Error cargando vehículos', true); }
+}
+
+async function abrirVehiculo(vid) {
+    try {
+        const r = await fetch(BASE + '/vehiculos');
+        const d = await r.json();
+        const v = d.vehiculos.find(x => x.id == vid);
+        if (!v) return;
+        vehiculoActual = v;
+
+        document.getElementById('veh-apodo').textContent = v.apodo || v.marca || 'Mi vehículo';
+        document.getElementById('veh-subtitulo').textContent = [v.marca, v.linea, v.anio, v.color, v.placa].filter(Boolean).join(' · ');
+        document.getElementById('veh-km').textContent = v.km_actual ? v.km_actual.toLocaleString() + ' km' : 'Sin km';
+
+        const fotoHeader = document.getElementById('veh-foto-header');
+        const iconoHeader = document.getElementById('veh-icono-header');
+        if (v.foto) {
+            fotoHeader.innerHTML = `<img src="${v.foto}" class="w-full h-full object-cover">`;
+        } else {
+            fotoHeader.innerHTML = `<span class="text-3xl" id="veh-icono-header">🚗</span>`;
+        }
+
+        mostrar('pantalla-vehiculo');
+        cargarAlertas();
+    } catch(e) { toast('Error', true); }
+}
+
+function volverALista() { cargarVehiculos(); }
+
+// ===== ALERTAS =====
+async function cargarAlertas() {
+    if (!vehiculoActual) return;
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/alertas`);
+        const d = await r.json();
+        const panel = document.getElementById('panel-alertas');
+        const lista = document.getElementById('lista-alertas');
+        if (d.ok && d.alertas.length) {
+            lista.innerHTML = d.alertas.map(a => `
+                <div class="flex items-center gap-2 px-3 py-2 rounded-xl ${a.nivel === 'rojo' ? 'bg-red-50 text-red-700' : 'bg-yellow-50 text-yellow-700'}">
+                    <span>${a.nivel === 'rojo' ? '🔴' : '🟡'}</span>
+                    <span class="text-sm font-semibold">${a.mensaje}</span>
+                </div>
+            `).join('');
+            panel.classList.remove('hidden');
+        } else {
+            panel.classList.add('hidden');
+        }
+    } catch(e) {}
+}
+
+// ===== MODAL VEHÍCULO =====
+function abrirAgregarVehiculo() {
+    vehiculoEditandoId = null;
+    document.getElementById('modal-vehiculo-titulo').textContent = 'Agregar vehículo';
+    ['vf-apodo','vf-marca','vf-linea','vf-anio','vf-color','vf-placa','vf-km'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('modal-vehiculo').classList.remove('hidden');
+}
+
+function abrirEditarVehiculo() {
+    if (!vehiculoActual) return;
+    vehiculoEditandoId = vehiculoActual.id;
+    document.getElementById('modal-vehiculo-titulo').textContent = 'Editar vehículo';
+    document.getElementById('vf-apodo').value = vehiculoActual.apodo || '';
+    document.getElementById('vf-marca').value = vehiculoActual.marca || '';
+    document.getElementById('vf-linea').value = vehiculoActual.linea || '';
+    document.getElementById('vf-anio').value = vehiculoActual.anio || '';
+    document.getElementById('vf-color').value = vehiculoActual.color || '';
+    document.getElementById('vf-placa').value = vehiculoActual.placa || '';
+    document.getElementById('vf-km').value = vehiculoActual.km_actual || '';
+    document.getElementById('modal-vehiculo').classList.remove('hidden');
+}
+
+function cerrarModalVehiculo() { document.getElementById('modal-vehiculo').classList.add('hidden'); }
+
+async function guardarVehiculo() {
+    const body = {
+        apodo: document.getElementById('vf-apodo').value.trim(),
+        marca: document.getElementById('vf-marca').value.trim(),
+        linea: document.getElementById('vf-linea').value.trim(),
+        anio: parseInt(document.getElementById('vf-anio').value) || null,
+        color: document.getElementById('vf-color').value.trim(),
+        placa: document.getElementById('vf-placa').value.trim(),
+        km_actual: parseInt(document.getElementById('vf-km').value) || 0
+    };
+    try {
+        let url = vehiculoEditandoId ? `${BASE}/vehiculo/${vehiculoEditandoId}` : `${BASE}/vehiculo`;
+        const r = await fetch(url, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (d.ok) {
+            cerrarModalVehiculo();
+            toast('Guardado');
+            cargarVehiculos();
+        } else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error de conexión', true); }
+}
+
+// ===== KM =====
+function abrirActualizarKm() {
+    document.getElementById('inp-km-nuevo').value = vehiculoActual?.km_actual || '';
+    document.getElementById('modal-km').classList.remove('hidden');
+}
+function cerrarModalKm() { document.getElementById('modal-km').classList.add('hidden'); }
+async function guardarKm() {
+    const km = parseInt(document.getElementById('inp-km-nuevo').value);
+    if (!km) return toast('Ingresa el kilometraje', true);
+    try {
+        const body = {...vehiculoActual, km_actual: km};
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (d.ok) {
+            vehiculoActual.km_actual = km;
+            document.getElementById('veh-km').textContent = km.toLocaleString() + ' km';
+            cerrarModalKm();
+            toast('Kilometraje actualizado');
+            cargarAlertas();
+        } else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error', true); }
+}
+
+// ===== SECCIONES =====
+function abrirSeccion(nombre) {
+    mostrar('seccion-' + nombre);
+    if (nombre === 'repostes') cargarRepostes();
+    if (nombre === 'intervenciones') cargarIntervenciones();
+    if (nombre === 'llantas') cargarLlantas();
+    if (nombre === 'documentos') cargarDocumentos();
+}
+function cerrarSeccion() { mostrar('pantalla-vehiculo'); }
+
+// ===== REPOSTES =====
+async function cargarRepostes() {
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/repostes`);
+        const d = await r.json();
+        const lista = document.getElementById('lista-repostes');
+        if (!d.ok || !d.repostes.length) {
+            lista.innerHTML = '<p class="text-center text-gray-400 py-8">Sin repostes registrados</p>';
+            return;
+        }
+        lista.innerHTML = d.repostes.map(rep => `
+            <div class="bg-white rounded-2xl p-4 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="font-bold text-gray-800">$${rep.valor_pagado.toLocaleString()}</p>
+                        <p class="text-sm text-gray-500">${rep.km.toLocaleString()} km ${rep.gasolinera_nombre ? '· ' + rep.gasolinera_nombre : ''}</p>
+                    </div>
+                    <p class="text-xs text-gray-400">${rep.fechahora ? rep.fechahora.slice(0,10) : ''}</p>
+                </div>
+                ${rep.km_recorridos ? `
+                <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100">
+                    <div class="text-center"><p class="text-xs text-gray-400">Km recorridos</p><p class="font-bold text-sm">${rep.km_recorridos.toLocaleString()}</p></div>
+                    <div class="text-center"><p class="text-xs text-gray-400">km/galón</p><p class="font-bold text-sm text-green-600">${rep.km_galon || '-'}</p></div>
+                    <div class="text-center"><p class="text-xs text-gray-400">$/km</p><p class="font-bold text-sm text-blue-600">${rep.costo_km ? '$'+rep.costo_km : '-'}</p></div>
+                </div>` : ''}
+            </div>
+        `).join('');
+    } catch(e) { toast('Error cargando repostes', true); }
+}
+
+async function abrirModalReposte() {
+    document.getElementById('modal-reposte').classList.remove('hidden');
+    document.getElementById('rep-km').value = vehiculoActual?.km_actual || '';
+    // Precargar último reposte
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/ultimo-reposte`);
+        const d = await r.json();
+        if (d.ok && d.precio_galon) {
+            document.getElementById('rep-precio-galon').value = d.precio_galon;
+            document.getElementById('rep-gasolinera').value = d.gasolinera_nombre || '';
+            document.getElementById('rep-gasolinera-id').value = d.gasolinera_id || '';
+        }
+    } catch(e) {}
+}
+function cerrarModalReposte() { document.getElementById('modal-reposte').classList.add('hidden'); }
+async function guardarReposte() {
+    const km = parseInt(document.getElementById('rep-km').value);
+    const valor = parseFloat(document.getElementById('rep-valor').value);
+    const precio_galon = parseFloat(document.getElementById('rep-precio-galon').value);
+    if (!km || !valor || !precio_galon) return toast('Completa km, valor y precio del galón', true);
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/reposte`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                km, valor_pagado: valor, precio_galon,
+                gasolinera_nombre: document.getElementById('rep-gasolinera').value.trim(),
+                gasolinera_id: document.getElementById('rep-gasolinera-id').value || null
+            })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            vehiculoActual.km_actual = km;
+            document.getElementById('veh-km').textContent = km.toLocaleString() + ' km';
+            cerrarModalReposte();
+            toast('Reposte registrado');
+            cargarRepostes();
+        } else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error', true); }
+}
+
+// ===== INTERVENCIONES =====
+function selTipo(tipo) {
+    tipoIntervencion = tipo;
+    document.getElementById('btn-tipo-correctivo').className = `flex-1 py-2 rounded-xl border-2 font-semibold text-sm transition ${tipo==='correctivo' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('btn-tipo-preventivo').className = `flex-1 py-2 rounded-xl border-2 font-semibold text-sm transition ${tipo==='preventivo' ? 'border-yellow-500 bg-yellow-50 text-yellow-600' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('panel-intervalo').classList.toggle('hidden', tipo !== 'preventivo');
+}
+
+function abrirModalIntervencion() {
+    tipoIntervencion = 'correctivo';
+    itemsIntervencion = [];
+    selTipo('correctivo');
+    ['int-desc','int-km','int-intervalo-km','int-intervalo-dias'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('int-km').value = vehiculoActual?.km_actual || '';
+    document.getElementById('items-intervencion').innerHTML = '';
+    document.getElementById('modal-intervencion').classList.remove('hidden');
+}
+function cerrarModalIntervencion() { document.getElementById('modal-intervencion').classList.add('hidden'); }
+
+function agregarItemIntervencion() {
+    const idx = itemsIntervencion.length;
+    itemsIntervencion.push({tipo: 'repuesto', descripcion: '', proveedor_nombre: '', costo: 0});
+    const cont = document.getElementById('items-intervencion');
+    const div = document.createElement('div');
+    div.className = 'bg-gray-50 rounded-xl p-3 space-y-2';
+    div.id = 'item-' + idx;
+    div.innerHTML = `
+        <div class="flex gap-2">
+            <select onchange="itemsIntervencion[${idx}].tipo=this.value" class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm">
+                <option value="repuesto">Repuesto</option>
+                <option value="mano_obra">Mano de obra</option>
+            </select>
+            <button onclick="eliminarItemIntervencion(${idx})" class="text-red-400 text-lg leading-none">×</button>
+        </div>
+        <input type="text" placeholder="Descripción" oninput="itemsIntervencion[${idx}].descripcion=this.value"
+            class="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+        <div class="grid grid-cols-2 gap-2">
+            <input type="text" placeholder="Proveedor" oninput="itemsIntervencion[${idx}].proveedor_nombre=this.value"
+                class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+            <input type="number" placeholder="Costo $" oninput="itemsIntervencion[${idx}].costo=parseFloat(this.value)||0"
+                class="border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+        </div>
+    `;
+    cont.appendChild(div);
+}
+
+function eliminarItemIntervencion(idx) {
+    itemsIntervencion.splice(idx, 1);
+    abrirModalIntervencion();
+}
+
+async function guardarIntervencion() {
+    const desc = document.getElementById('int-desc').value.trim();
+    if (!desc) return toast('Describe la intervención', true);
+    const body = {
+        tipo: tipoIntervencion,
+        descripcion: desc,
+        km: parseInt(document.getElementById('int-km').value) || null,
+        intervalo_km: parseInt(document.getElementById('int-intervalo-km').value) || null,
+        intervalo_dias: parseInt(document.getElementById('int-intervalo-dias').value) || null,
+        items: itemsIntervencion.filter(it => it.descripcion)
+    };
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/intervencion`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (d.ok) {
+            cerrarModalIntervencion();
+            toast('Intervención registrada');
+            cargarIntervenciones();
+            cargarAlertas();
+        } else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error', true); }
+}
+
+async function cargarIntervenciones() {
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/intervenciones`);
+        const d = await r.json();
+        const lista = document.getElementById('lista-intervenciones');
+        if (!d.ok || !d.intervenciones.length) {
+            lista.innerHTML = '<p class="text-center text-gray-400 py-8">Sin intervenciones registradas</p>';
+            return;
+        }
+        lista.innerHTML = d.intervenciones.map(inv => `
+            <div class="bg-white rounded-2xl p-4 shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${inv.tipo==='preventivo' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">${inv.tipo}</span>
+                        <p class="font-bold text-gray-800 mt-1">${inv.descripcion}</p>
+                        <p class="text-sm text-gray-500">${inv.km ? inv.km.toLocaleString() + ' km' : ''} ${inv.intervalo_km ? '· cada ' + inv.intervalo_km.toLocaleString() + ' km' : ''}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400">${inv.fechahora ? inv.fechahora.slice(0,10) : ''}</p>
+                        <p class="font-bold text-gray-800 text-sm">$${inv.total.toLocaleString()}</p>
+                    </div>
+                </div>
+                ${inv.items.length ? `<div class="border-t pt-2 space-y-1">${inv.items.map(it => `
+                    <div class="flex justify-between text-xs text-gray-500">
+                        <span>${it.tipo === 'mano_obra' ? '🔧' : '🔩'} ${it.descripcion}${it.proveedor_nombre ? ' · ' + it.proveedor_nombre : ''}</span>
+                        <span>$${it.costo.toLocaleString()}</span>
+                    </div>`).join('')}</div>` : ''}
+            </div>
+        `).join('');
+    } catch(e) { toast('Error cargando intervenciones', true); }
+}
+
+// ===== LLANTAS =====
+async function cargarLlantas() {
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/llantas`);
+        const d = await r.json();
+        const detalle = document.getElementById('detalle-llantas');
+        const posiciones = ['del_izq','del_der','tra_izq','tra_der','repuesto'];
+        posiciones.forEach(pos => {
+            const llanta = d.llantas.find(l => l.posicion === pos);
+            const btn = document.getElementById('btn-' + pos);
+            if (llanta) {
+                btn.classList.add('border-yellow-400', 'bg-yellow-50');
+                btn.classList.remove('border-gray-200', 'bg-gray-100');
+                btn.innerHTML = `<span class="text-xs font-bold text-gray-700">${pos.replace('_',' ')}</span><span class="text-xs text-yellow-600">${llanta.km_acumulado.toLocaleString()} km</span>`;
+            } else {
+                btn.classList.remove('border-yellow-400', 'bg-yellow-50');
+                btn.classList.add('border-gray-200', 'bg-gray-100');
+                btn.innerHTML = `<span class="text-xs font-bold text-gray-500">${pos.replace('_',' ')}</span><span class="text-xs text-gray-400">Sin datos</span>`;
+            }
+        });
+        if (!d.llantas.length) {
+            detalle.innerHTML = '<p class="text-center text-gray-400 py-4 text-sm">Toca una posición para registrar</p>';
+        } else {
+            detalle.innerHTML = d.llantas.map(l => `
+                <div class="bg-white rounded-xl p-3 flex justify-between items-center shadow-sm">
+                    <div>
+                        <p class="font-semibold text-sm text-gray-800">${l.posicion.replace('_',' ')} · ${l.marca || ''} ${l.referencia || ''}</p>
+                        <p class="text-xs text-gray-500">Desde km ${l.km_instalacion.toLocaleString()}</p>
+                    </div>
+                    <p class="font-bold text-yellow-600 text-sm">${l.km_acumulado.toLocaleString()} km</p>
+                </div>
+            `).join('');
+        }
+    } catch(e) { toast('Error cargando llantas', true); }
+}
+
+function abrirModalLlanta(posicion) {
+    llantaPosicion = posicion;
+    const nombre = posicion.replace('_',' ');
+    document.getElementById('modal-llanta-titulo').textContent = `Llanta: ${nombre}`;
+    document.getElementById('ll-posicion').value = posicion;
+    ['ll-marca','ll-referencia','ll-km'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('modal-llanta').classList.remove('hidden');
+}
+function cerrarModalLlanta() { document.getElementById('modal-llanta').classList.add('hidden'); }
+async function guardarLlanta() {
+    const posicion = document.getElementById('ll-posicion').value;
+    if (!posicion) return;
+    const body = {
+        posicion,
+        marca: document.getElementById('ll-marca').value.trim(),
+        referencia: document.getElementById('ll-referencia').value.trim(),
+        km_instalacion: parseInt(document.getElementById('ll-km').value) || null
+    };
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/llanta`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModalLlanta(); toast('Llanta registrada'); cargarLlantas(); }
+        else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error', true); }
+}
+
+// ===== DOCUMENTOS =====
+const SEMAFOROS = { verde:'🟢', amarillo:'🟡', rojo:'🔴', vencido:'🟣' };
+const NOMBRES_DOC = { soat:'SOAT', rtm:'Revisión Técnico-Mecánica', impuesto:'Impuesto Vehicular' };
+
+async function cargarDocumentos() {
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/documentos`);
+        const d = await r.json();
+        ['soat','rtm','impuesto'].forEach(tipo => {
+            const doc = d.documentos.find(x => x.tipo === tipo);
+            const info = document.getElementById(tipo + '-info');
+            const sem = document.getElementById(tipo + '-semaforo');
+            if (doc) {
+                info.textContent = `Vence: ${doc.vencimiento} · ${doc.dias_restantes >= 0 ? doc.dias_restantes + ' días' : 'Vencido'}`;
+                sem.textContent = SEMAFOROS[doc.semaforo] || '⚪';
+            } else {
+                info.textContent = 'Sin registro';
+                sem.textContent = '⚪';
+            }
+        });
+    } catch(e) {}
+}
+
+function abrirModalDocumento(tipo) {
+    document.getElementById('doc-tipo').value = tipo;
+    document.getElementById('modal-doc-titulo').textContent = NOMBRES_DOC[tipo] || tipo;
+    ['doc-vencimiento','doc-valor','doc-fecha-pago'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('modal-documento').classList.remove('hidden');
+}
+function cerrarModalDocumento() { document.getElementById('modal-documento').classList.add('hidden'); }
+async function guardarDocumento() {
+    const tipo = document.getElementById('doc-tipo').value;
+    const vencimiento = document.getElementById('doc-vencimiento').value;
+    if (!vencimiento) return toast('Ingresa la fecha de vencimiento', true);
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/documento`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                tipo, vencimiento,
+                valor_pagado: parseFloat(document.getElementById('doc-valor').value) || null,
+                fecha_pago: document.getElementById('doc-fecha-pago').value || null
+            })
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModalDocumento(); toast('Guardado'); cargarDocumentos(); cargarAlertas(); }
+        else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error', true); }
+}
+
+// ===== FOTOS VEHÍCULO =====
+async function abrirFotosVehiculo() {
+    document.getElementById('modal-fotos-vehiculo').classList.remove('hidden');
+    await cargarFotosVehiculo();
+}
+function cerrarFotosVehiculo() { document.getElementById('modal-fotos-vehiculo').classList.add('hidden'); }
+async function cargarFotosVehiculo() {
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/fotos`);
+        const d = await r.json();
+        const grid = document.getElementById('grid-fotos-vehiculo');
+        grid.innerHTML = (d.fotos || []).map(f => `
+            <div class="relative aspect-square">
+                <img src="${f.imagen}" class="w-full h-full object-cover rounded-xl">
+                <button onclick="eliminarFotoVehiculo(${f.id})" class="absolute top-1 right-1 bg-black/50 text-white rounded-full w-6 h-6 text-xs font-bold">×</button>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+async function subirFotoVehiculo(input) {
+    if (!input.files[0]) return;
+    const formData = new FormData();
+    formData.append('foto', input.files[0]);
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/foto`, {method:'POST', body: formData});
+        const d = await r.json();
+        if (d.ok) {
+            toast('Foto subida');
+            cargarFotosVehiculo();
+            // Actualizar foto header si es la primera
+            if (!vehiculoActual.foto) {
+                vehiculoActual.foto = d.url;
+                document.getElementById('veh-foto-header').innerHTML = `<img src="${d.url}" class="w-full h-full object-cover">`;
+            }
+        } else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error', true); }
+}
+async function eliminarFotoVehiculo(fid) {
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/foto/${fid}`, {method:'DELETE'});
+        const d = await r.json();
+        if (d.ok) { toast('Foto eliminada'); cargarFotosVehiculo(); }
+    } catch(e) {}
+}
+
+// ===== INIT =====
+async function init() {
+    // Verificar si hay sesión activa
+    try {
+        const r = await fetch(BASE + '/vehiculos');
+        const d = await r.json();
+        if (d.error === 'sin_sesion') {
+            mostrar('pantalla-login');
+        } else if (d.ok) {
+            await cargarVehiculos();
+        } else {
+            mostrar('pantalla-login');
+        }
+    } catch(e) {
+        mostrar('pantalla-login');
+    }
+}
+
+init();
+</script>
+
+<!-- Footer -->
+<div class="text-center py-6">
+    <a href="/empieza" class="text-xs text-gray-400 hover:text-yellow-500 transition">Powered by <span class="font-bold">TUC TUC</span></a>
+</div>
+
+</body>
+</html>

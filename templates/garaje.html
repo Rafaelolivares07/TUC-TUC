@@ -89,8 +89,11 @@
     <div class="bg-gray-900 text-white px-4 py-4">
         <button onclick="volverALista()" class="text-yellow-400 text-sm font-semibold mb-2">← Mis vehículos</button>
         <div class="flex items-center gap-3">
-            <div id="veh-foto-header" class="w-16 h-16 rounded-xl bg-gray-700 overflow-hidden flex-shrink-0 flex items-center justify-center cursor-pointer" onclick="abrirFotosVehiculo()">
-                <span class="text-3xl" id="veh-icono-header">🚗</span>
+            <div class="flex flex-col items-center gap-1 cursor-pointer flex-shrink-0" onclick="abrirFotosVehiculo()">
+                <div id="veh-foto-header" class="w-16 h-16 rounded-xl bg-gray-700 overflow-hidden flex items-center justify-center">
+                    <span class="text-3xl" id="veh-icono-header">🚗</span>
+                </div>
+                <span class="text-xs text-yellow-400 font-semibold">📷 Fotos</span>
             </div>
             <div class="flex-1">
                 <h2 id="veh-apodo" class="text-xl font-extrabold"></h2>

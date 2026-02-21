@@ -32,7 +32,7 @@ MEMORIA_DIR = Path(r"C:\Users\RAFAEL OLIVARES\.claude\projects\C--Users-RAFAEL-O
 APP_DIR     = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 
 POLL_INTERVAL = 3    # segundos entre checks
-MAX_HISTORIAL = 20   # mensajes de contexto a incluir
+MAX_HISTORIAL = 10   # mensajes de contexto a incluir
 LOCK_PORT     = 47832
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -145,14 +145,10 @@ def guardar_respuesta(contenido):
 
 
 def leer_memoria():
-    """Lee los archivos de memoria para dar contexto completo."""
+    """Lee solo los archivos esenciales — el historial del chat tiene el resto del contexto."""
     archivos = [
-        ('MEMORY.md',        6000),
-        ('patterns.md',      5000),
-        ('modulos.md',       4000),
-        ('LOG.md',           3000),
-        ('PLAN.md',          4000),
-        ('SESION_ACTIVA.md', 5000),
+        ('MEMORY.md',        3000),
+        ('SESION_ACTIVA.md', 3000),
     ]
     contenido = ""
     for nombre, limite in archivos:

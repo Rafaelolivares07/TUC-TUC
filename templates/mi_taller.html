@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ taller.nombre }} — Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+        .tab-active { border-bottom: 3px solid #f59e0b; color: #d97706; font-weight: 700; }
+        .tab-inactive { border-bottom: 3px solid transparent; color: #6b7280; }
+        .tab-inactive:hover { color: #374151; border-color: #d1d5db; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+        .estado-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+        }
+        .est-recibido   { background:#dbeafe; color:#1d4ed8; }
+        .est-diagnostico{ background:#fef9c3; color:#a16207; }
+        .est-en_proceso { background:#fde8d8; color:#c2410c; }
+        .est-listo      { background:#dcfce7; color:#15803d; }
+        .est-entregado  { background:#f3f4f6; color:#6b7280; }
+        .foto-thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; cursor:pointer; }
+        .zoom-overlay {
+            position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:9998;
+            display:flex; align-items:center; justify-content:center;
+            opacity:0; pointer-events:none; transition:opacity .2s;
+        }
+        .zoom-overlay.active { opacity:1; pointer-events:auto; }
+        .zoom-overlay img { max-width:95vw; max-height:90vh; border-radius:12px; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+<div id="toast" class="toast"></div>
+<div id="zoom-overlay" class="zoom-overlay" onclick="cerrarZoom()">
+    <img id="zoom-img" src="" alt="">
+</div>
+
+<div class="max-w-4xl mx-auto p-4 sm:p-6">
+
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-amber-400">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+                <h1 class="text-2xl font-extrabold text-gray-800">{{ taller.nombre }}</h1>
+                <p class="text-sm text-gray-400 mt-1">Panel del propietario</p>
+            </div>
+            <a href="/taller/{{ slug }}" target="_blank"
+               class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-3 py-2 rounded-lg font-semibold transition">
+                Ver página del cliente →
+            </a>
+        </div>
+        <div class="mt-3 flex items-center gap-2 flex-wrap">
+            <span class="text-gray-400 text-sm">Página pública:</span>
+            <code id="url-publica" class="text-sm bg-gray-100 px-2 py-1 rounded text-amber-700 font-mono"></code>
+            <button onclick="copiarEnlace()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">Copiar</button>
+            <button onclick="compartirWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">WhatsApp</button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-5">
+        <div class="flex border-b overflow-x-auto">
+            <button onclick="cambiarTab('servicios')" id="tab-servicios" class="flex-1 py-4 px-3 text-center text-sm tab-active whitespace-nowrap transition-all">
+                Servicios
+            </button>
+            <button onclick="cambiarTab('ordenes')" id="tab-ordenes" class="flex-1 py-4 px-3 text-center text-sm tab-inactive whitespace-nowrap transition-all">
+                Órdenes
+            </button>
+        </div>
+
+        <!-- ====== TAB: SERVICIOS ====== -->
+        <div id="panel-servicios" class="p-5">
+
+            <!-- Crear nuevo servicio -->
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+                <h3 class="font-bold text-gray-700 mb-3">Agregar servicio</h3>
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <input id="srv-nombre" type="text" placeholder="Nombre del servicio *"
+                               class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
+                        <input id="srv-precio" type="number" placeholder="Precio $" min="0" step="1000"
+                               class="border rounded-lg px-3 py-2 text-sm w-36">
+                        <input id="srv-duracion" type="number" placeholder="Min estimados"
+                               class="border rounded-lg px-3 py-2 text-sm w-36">
+                    </div>
+                    <textarea id="srv-descripcion" placeholder="Descripción del servicio (opcional)" rows="2"
+                              class="border rounded-lg px-3 py-2 text-sm w-full resize-none"></textarea>
+                    <div class="flex justify-end">
+                        <button onclick="crearServicio()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold transition">
+                            Agregar servicio
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de servicios -->
+            <div id="lista-servicios" class="space-y-4">
+                <p class="text-gray-400 text-sm text-center py-6">Cargando servicios…</p>
+            </div>
+        </div>
+
+        <!-- ====== TAB: ÓRDENES ====== -->
+        <div id="panel-ordenes" class="p-5 hidden">
+
+            <!-- Controles: filtro + nueva orden -->
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div class="flex gap-1">
+                    <button onclick="cargarOrdenes('hoy')" id="btn-hoy"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-white transition">Hoy</button>
+                    <button onclick="cargarOrdenes('activos')" id="btn-activos"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Activos</button>
+                    <button onclick="cargarOrdenes('todos')" id="btn-todos"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Todos</button>
+                </div>
+                <button onclick="abrirModalNuevaOrden()"
+                        class="ml-auto bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    + Nueva orden
+                </button>
+            </div>
+
+            <div id="lista-ordenes" class="space-y-3">
+                <p class="text-gray-400 text-sm text-center py-6">Cargando órdenes…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== MODAL: DETALLE ORDEN ====== -->
+<div id="modal-orden" class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 hidden">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b sticky top-0 bg-white">
+            <h2 id="mo-titulo" class="font-bold text-lg text-gray-800"></h2>
+            <button onclick="cerrarModalOrden()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div class="grid grid-cols-2 gap-3 text-sm">
+                <div><span class="text-gray-500">Placa:</span> <strong id="mo-placa"></strong></div>
+                <div><span class="text-gray-500">Estado:</span> <span id="mo-estado-badge"></span></div>
+                <div><span class="text-gray-500">Servicio:</span> <span id="mo-servicio"></span></div>
+                <div><span class="text-gray-500">Precio:</span> <span id="mo-precio"></span></div>
+                <div><span class="text-gray-500">Cliente:</span> <span id="mo-cliente"></span></div>
+                <div><span class="text-gray-500">Tel:</span> <span id="mo-tel"></span></div>
+                <div><span class="text-gray-500">KM entrada:</span> <span id="mo-km"></span></div>
+                <div><span class="text-gray-500">Ingreso:</span> <span id="mo-hora"></span></div>
+            </div>
+            <div id="mo-notas-wrap" class="hidden">
+                <span class="text-gray-500 text-sm">Notas:</span>
+                <p id="mo-notas" class="text-sm text-gray-700 mt-1 bg-gray-50 rounded-lg p-3"></p>
+            </div>
+
+            <!-- Cambiar estado -->
+            <div>
+                <p class="text-sm font-semibold text-gray-700 mb-2">Cambiar estado:</p>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="cambiarEstado('recibido')"    class="est-btn px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition">Recibido</button>
+                    <button onclick="cambiarEstado('diagnostico')" class="est-btn px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-yellow-200 text-yellow-700 hover:bg-yellow-50 transition">Diagnóstico</button>
+                    <button onclick="cambiarEstado('en_proceso')"  class="est-btn px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-orange-200 text-orange-700 hover:bg-orange-50 transition">En proceso</button>
+                    <button onclick="cambiarEstado('listo')"       class="est-btn px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-green-200 text-green-700 hover:bg-green-50 transition">Listo</button>
+                    <button onclick="cambiarEstado('entregado')"   class="est-btn px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition">Entregado</button>
+                </div>
+            </div>
+
+            <!-- Fotos del proceso -->
+            <div>
+                <p class="text-sm font-semibold text-gray-700 mb-2">Fotos del proceso:</p>
+                <div id="mo-fotos" class="flex flex-wrap gap-2 mb-3 min-h-10"></div>
+                <div class="flex gap-2 items-center">
+                    <div id="preview-fo" onclick="document.getElementById('inp-fo').click()"
+                         class="w-14 h-14 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 flex items-center justify-center cursor-pointer hover:bg-amber-100 transition text-amber-400 text-2xl font-bold flex-shrink-0">+</div>
+                    <input type="file" id="inp-fo" accept="image/*" class="hidden" onchange="previsualizarFotoOrden(this)">
+                    <div class="flex-1">
+                        <input id="inp-fo-desc" type="text" placeholder="Descripción de la foto (ej: motor antes, frenos nuevos…)"
+                               class="border rounded-lg px-3 py-2 text-sm w-full">
+                    </div>
+                    <button onclick="subirFotoOrden()" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-semibold flex-shrink-0 transition">Subir</button>
+                </div>
+                <input type="hidden" id="inp-fo-b64" value="">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====== MODAL: NUEVA ORDEN ====== -->
+<div id="modal-nueva-orden" class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 hidden">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b sticky top-0 bg-white">
+            <h2 class="font-bold text-lg text-gray-800">Nueva orden de trabajo</h2>
+            <button onclick="cerrarModalNuevaOrden()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+        </div>
+        <div class="p-5 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-gray-500 font-semibold">Placa *</label>
+                    <input id="no-placa" type="text" placeholder="Ej: ABC123"
+                           class="border rounded-lg px-3 py-2 text-sm w-full mt-1 uppercase">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-semibold">KM entrada</label>
+                    <input id="no-km" type="number" placeholder="Opcional"
+                           class="border rounded-lg px-3 py-2 text-sm w-full mt-1">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Nombre del cliente</label>
+                <input id="no-nombre-cliente" type="text" placeholder="Opcional"
+                       class="border rounded-lg px-3 py-2 text-sm w-full mt-1">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Teléfono del cliente</label>
+                <input id="no-tel-cliente" type="text" placeholder="Opcional — para que vea el estado"
+                       class="border rounded-lg px-3 py-2 text-sm w-full mt-1">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Servicio</label>
+                <select id="no-servicio-sel" class="border rounded-lg px-3 py-2 text-sm w-full mt-1 bg-white">
+                    <option value="">Seleccionar servicio…</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Descripción del trabajo</label>
+                <textarea id="no-desc" placeholder="Detalle adicional…" rows="2"
+                          class="border rounded-lg px-3 py-2 text-sm w-full mt-1 resize-none"></textarea>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Monto total $</label>
+                <input id="no-monto" type="number" placeholder="0"
+                       class="border rounded-lg px-3 py-2 text-sm w-full mt-1">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Notas internas</label>
+                <input id="no-notas" type="text" placeholder="Opcional"
+                       class="border rounded-lg px-3 py-2 text-sm w-full mt-1">
+            </div>
+            <button onclick="guardarNuevaOrden()"
+                    class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-sm transition mt-2">
+                Crear orden
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ====== MODAL: FOTO DE SERVICIO ====== -->
+<div id="modal-foto-srv" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-gray-800">Fotos del servicio</h3>
+            <button onclick="cerrarModalFotoSrv()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+        </div>
+        <div id="mfs-fotos" class="flex flex-wrap gap-2 mb-4 min-h-12"></div>
+        <div class="flex gap-2 items-center">
+            <div id="preview-srv-fo" onclick="document.getElementById('inp-srv-fo').click()"
+                 class="w-12 h-12 rounded-lg border-2 border-dashed border-amber-300 bg-amber-50 flex items-center justify-center cursor-pointer hover:bg-amber-100 transition text-amber-400 text-xl font-bold flex-shrink-0">+</div>
+            <input type="file" id="inp-srv-fo" accept="image/*" class="hidden" onchange="previsualizarFotoSrv(this)">
+            <input type="hidden" id="inp-srv-fo-b64" value="">
+            <button onclick="subirFotoServicio()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0 transition">Agregar foto</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const SLUG = "{{ slug }}";
+let ordenActiva = null;
+let servicioFotoActivo = null;
+let serviciosCache = [];
+let filtroActual = 'hoy';
+
+// ─── UTILS ───
+function toast(msg, ok=true) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+function estadoBadge(e) {
+    const map = {recibido:'est-recibido',diagnostico:'est-diagnostico',en_proceso:'est-en_proceso',listo:'est-listo',entregado:'est-entregado'};
+    const lbl = {recibido:'Recibido',diagnostico:'Diagnóstico',en_proceso:'En proceso',listo:'Listo ✓',entregado:'Entregado'};
+    return `<span class="estado-badge ${map[e]||''}">${lbl[e]||e}</span>`;
+}
+function fmt$(v) { return v != null ? '$' + Number(v).toLocaleString('es-CO') : '—'; }
+function abrirZoom(src) {
+    document.getElementById('zoom-img').src = src;
+    document.getElementById('zoom-overlay').classList.add('active');
+}
+function cerrarZoom() { document.getElementById('zoom-overlay').classList.remove('active'); }
+
+// ─── TABS ───
+function cambiarTab(tab) {
+    ['servicios','ordenes'].forEach(t => {
+        document.getElementById('panel-'+t).classList.toggle('hidden', t !== tab);
+        document.getElementById('tab-'+t).className = 'flex-1 py-4 px-3 text-center text-sm whitespace-nowrap transition-all ' + (t===tab ? 'tab-active':'tab-inactive');
+    });
+    if (tab === 'servicios') cargarServicios();
+    if (tab === 'ordenes')   cargarOrdenes(filtroActual);
+}
+
+// ─── HEADER ───
+function copiarEnlace() {
+    const url = document.getElementById('url-publica').textContent;
+    navigator.clipboard.writeText(url).then(() => toast('Enlace copiado'));
+}
+function compartirWhatsApp() {
+    const url = document.getElementById('url-publica').textContent;
+    window.open('https://wa.me/?text=' + encodeURIComponent('Agenda tu cita en nuestro taller: ' + url));
+}
+
+// ─── SERVICIOS ───
+async function cargarServicios() {
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/servicios`);
+        const d = await r.json();
+        if (!d.ok) { toast(d.error, false); return; }
+        serviciosCache = d.servicios;
+        renderServicios(d.servicios);
+    } catch(e) { toast('Error al cargar servicios', false); }
+}
+
+function renderServicios(lista) {
+    const cont = document.getElementById('lista-servicios');
+    if (!lista.length) {
+        cont.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Sin servicios aún. Crea el primero arriba.</p>';
+        return;
+    }
+    cont.innerHTML = lista.map(s => `
+        <div class="border rounded-xl p-4 bg-white shadow-sm" id="srv-card-${s.id}">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-semibold text-gray-800">${s.nombre}</span>
+                        ${s.categoria ? `<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">${s.categoria}</span>` : ''}
+                    </div>
+                    ${s.descripcion ? `<p class="text-sm text-gray-500 mt-1">${s.descripcion}</p>` : ''}
+                    <div class="flex gap-4 mt-2 text-sm">
+                        ${s.precio != null ? `<span class="font-bold text-amber-600">${fmt$(s.precio)}</span>` : ''}
+                        ${s.duracion_min ? `<span class="text-gray-400">~${s.duracion_min} min</span>` : ''}
+                    </div>
+                </div>
+                <div class="flex gap-2 flex-shrink-0">
+                    <button onclick="abrirModalFotoSrv(${s.id})"
+                            class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold text-gray-600 transition">
+                        📷 Fotos (${s.fotos.length})
+                    </button>
+                    <button onclick="eliminarServicio(${s.id})"
+                            class="text-xs bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg font-semibold text-red-500 transition">
+                        Quitar
+                    </button>
+                </div>
+            </div>
+            ${s.fotos.length ? `
+            <div class="flex gap-2 mt-3 flex-wrap">
+                ${s.fotos.map(f => `<img src="${f.imagen}" class="foto-thumb" onclick="abrirZoom('${f.imagen}')">`).join('')}
+            </div>` : ''}
+        </div>
+    `).join('');
+}
+
+async function crearServicio() {
+    const nombre = document.getElementById('srv-nombre').value.trim();
+    if (!nombre) { toast('El nombre del servicio es requerido', false); return; }
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/servicio/crear`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                nombre,
+                descripcion: document.getElementById('srv-descripcion').value.trim(),
+                precio: document.getElementById('srv-precio').value || null,
+                duracion_min: document.getElementById('srv-duracion').value || null
+            })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Servicio creado');
+            ['srv-nombre','srv-descripcion','srv-precio','srv-duracion'].forEach(id => document.getElementById(id).value = '');
+            cargarServicios();
+        } else { toast(d.error, false); }
+    } catch(e) { toast('Error', false); }
+}
+
+async function eliminarServicio(sid) {
+    if (!confirm('¿Desactivar este servicio?')) return;
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/servicio/${sid}`, {method:'DELETE'});
+        const d = await r.json();
+        if (d.ok) { toast('Servicio eliminado'); cargarServicios(); }
+        else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── FOTOS SERVICIO ───
+function abrirModalFotoSrv(sid) {
+    servicioFotoActivo = sid;
+    document.getElementById('inp-srv-fo-b64').value = '';
+    document.getElementById('preview-srv-fo').innerHTML = '+';
+    cargarFotosServicio(sid);
+    document.getElementById('modal-foto-srv').classList.remove('hidden');
+}
+function cerrarModalFotoSrv() { document.getElementById('modal-foto-srv').classList.add('hidden'); }
+
+async function cargarFotosServicio(sid) {
+    const srv = serviciosCache.find(s => s.id === sid);
+    if (!srv) return;
+    const cont = document.getElementById('mfs-fotos');
+    if (!srv.fotos.length) { cont.innerHTML = '<p class="text-gray-400 text-xs">Sin fotos aún</p>'; return; }
+    cont.innerHTML = srv.fotos.map(f => `
+        <div class="relative">
+            <img src="${f.imagen}" class="foto-thumb" onclick="abrirZoom('${f.imagen}')">
+            <button onclick="eliminarFotoServicio(${sid},${f.id})"
+                    class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none">✕</button>
+        </div>
+    `).join('');
+}
+
+function previsualizarFotoSrv(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('inp-srv-fo-b64').value = e.target.result;
+        document.getElementById('preview-srv-fo').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function subirFotoServicio() {
+    const b64 = document.getElementById('inp-srv-fo-b64').value;
+    if (!b64 || !servicioFotoActivo) { toast('Selecciona una foto primero', false); return; }
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/servicio/${servicioFotoActivo}/foto`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({imagen: b64})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Foto agregada');
+            document.getElementById('inp-srv-fo-b64').value = '';
+            document.getElementById('preview-srv-fo').innerHTML = '+';
+            document.getElementById('inp-srv-fo').value = '';
+            cargarServicios().then(() => cargarFotosServicio(servicioFotoActivo));
+        } else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+async function eliminarFotoServicio(sid, fid) {
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/servicio/${sid}/foto/${fid}`, {method:'DELETE'});
+        const d = await r.json();
+        if (d.ok) { toast('Foto eliminada'); cargarServicios().then(() => cargarFotosServicio(sid)); }
+        else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── ÓRDENES ───
+async function cargarOrdenes(filtro='hoy') {
+    filtroActual = filtro;
+    ['hoy','activos','todos'].forEach(f => {
+        const btn = document.getElementById('btn-'+f);
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition ' +
+            (f===filtro ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+    });
+    const cont = document.getElementById('lista-ordenes');
+    cont.innerHTML = '<p class="text-gray-400 text-sm text-center py-6">Cargando…</p>';
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/ordenes?filtro=${filtro}`);
+        const d = await r.json();
+        if (!d.ok) { toast(d.error, false); return; }
+        renderOrdenes(d.ordenes);
+    } catch(e) { toast('Error', false); }
+}
+
+function renderOrdenes(lista) {
+    const cont = document.getElementById('lista-ordenes');
+    if (!lista.length) {
+        cont.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Sin órdenes en este período.</p>';
+        return;
+    }
+    cont.innerHTML = lista.map(o => `
+        <div class="border rounded-xl p-4 bg-white shadow-sm cursor-pointer hover:shadow-md transition"
+             onclick="abrirOrden(${JSON.stringify(o).replace(/"/g,'&quot;')})">
+            <div class="flex items-start justify-between gap-2">
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-bold text-gray-800 text-base">${o.placa || '—'}</span>
+                        ${estadoBadge(o.estado)}
+                    </div>
+                    <div class="text-sm text-gray-600 mt-1">${o.servicio}</div>
+                    ${o.cliente ? `<div class="text-xs text-gray-400 mt-1">${o.cliente}${o.cliente_tel ? ' · '+o.cliente_tel:''}</div>` : ''}
+                </div>
+                <div class="text-right flex-shrink-0">
+                    ${o.precio != null ? `<div class="font-bold text-amber-600">${fmt$(o.precio)}</div>` : ''}
+                    <div class="text-xs text-gray-400 mt-1">${o.hora}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function abrirOrden(o) {
+    ordenActiva = o;
+    document.getElementById('mo-titulo').textContent = `Orden #${o.id} — ${o.placa || '—'}`;
+    document.getElementById('mo-placa').textContent = o.placa || '—';
+    document.getElementById('mo-estado-badge').innerHTML = estadoBadge(o.estado);
+    document.getElementById('mo-servicio').textContent = o.servicio;
+    document.getElementById('mo-precio').textContent = fmt$(o.precio);
+    document.getElementById('mo-cliente').textContent = o.cliente || '—';
+    document.getElementById('mo-tel').textContent = o.cliente_tel || '—';
+    document.getElementById('mo-km').textContent = o.km_entrada || '—';
+    document.getElementById('mo-hora').textContent = o.hora;
+    const notasW = document.getElementById('mo-notas-wrap');
+    if (o.notas) { notasW.classList.remove('hidden'); document.getElementById('mo-notas').textContent = o.notas; }
+    else notasW.classList.add('hidden');
+    document.getElementById('mo-fotos').innerHTML = '<p class="text-gray-400 text-xs">Cargando fotos…</p>';
+    document.getElementById('inp-fo-b64').value = '';
+    document.getElementById('inp-fo-desc').value = '';
+    document.getElementById('preview-fo').innerHTML = '+';
+    document.getElementById('modal-orden').classList.remove('hidden');
+    cargarFotosOrden(o.id);
+}
+function cerrarModalOrden() { document.getElementById('modal-orden').classList.add('hidden'); ordenActiva = null; }
+
+async function cargarFotosOrden(oid) {
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/orden/${oid}/fotos`);
+        const d = await r.json();
+        const cont = document.getElementById('mo-fotos');
+        if (!d.ok || !d.fotos.length) { cont.innerHTML = '<p class="text-gray-400 text-xs">Sin fotos aún</p>'; return; }
+        cont.innerHTML = d.fotos.map(f => `
+            <div class="text-center">
+                <img src="${f.imagen}" class="foto-thumb" onclick="abrirZoom('${f.imagen}')">
+                ${f.descripcion ? `<p class="text-xs text-gray-500 mt-1 max-w-[72px] truncate">${f.descripcion}</p>` : ''}
+                <p class="text-xs text-gray-300">${f.hora}</p>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+
+async function cambiarEstado(estado) {
+    if (!ordenActiva) return;
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/orden/${ordenActiva.id}/estado`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({estado})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Estado actualizado');
+            ordenActiva.estado = estado;
+            document.getElementById('mo-estado-badge').innerHTML = estadoBadge(estado);
+            cargarOrdenes(filtroActual);
+        } else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+function previsualizarFotoOrden(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('inp-fo-b64').value = e.target.result;
+        document.getElementById('preview-fo').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function subirFotoOrden() {
+    const b64 = document.getElementById('inp-fo-b64').value;
+    if (!b64 || !ordenActiva) { toast('Selecciona una foto', false); return; }
+    const desc = document.getElementById('inp-fo-desc').value.trim();
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/orden/${ordenActiva.id}/foto`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({imagen: b64, descripcion: desc})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Foto subida');
+            document.getElementById('inp-fo-b64').value = '';
+            document.getElementById('inp-fo-desc').value = '';
+            document.getElementById('preview-fo').innerHTML = '+';
+            document.getElementById('inp-fo').value = '';
+            cargarFotosOrden(ordenActiva.id);
+        } else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── NUEVA ORDEN ───
+function abrirModalNuevaOrden() {
+    // Llenar select de servicios
+    const sel = document.getElementById('no-servicio-sel');
+    sel.innerHTML = '<option value="">Sin servicio específico</option>' +
+        serviciosCache.map(s => `<option value="${s.id}">${s.nombre}${s.precio!=null?' — '+fmt$(s.precio):''}</option>`).join('');
+    ['no-placa','no-km','no-nombre-cliente','no-tel-cliente','no-desc','no-monto','no-notas']
+        .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('modal-nueva-orden').classList.remove('hidden');
+}
+function cerrarModalNuevaOrden() { document.getElementById('modal-nueva-orden').classList.add('hidden'); }
+
+async function guardarNuevaOrden() {
+    const placa = document.getElementById('no-placa').value.trim().toUpperCase();
+    if (!placa) { toast('La placa es requerida', false); return; }
+    const srvSel = document.getElementById('no-servicio-sel').value;
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/orden`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                placa,
+                km_entrada: document.getElementById('no-km').value || null,
+                nombre_cliente: document.getElementById('no-nombre-cliente').value.trim(),
+                telefono_cliente: document.getElementById('no-tel-cliente').value.trim(),
+                negocio_servicio_id: srvSel || null,
+                servicio_desc: document.getElementById('no-desc').value.trim(),
+                monto_total: document.getElementById('no-monto').value || null,
+                notas: document.getElementById('no-notas').value.trim()
+            })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Orden creada');
+            cerrarModalNuevaOrden();
+            cambiarTab('ordenes');
+            cargarOrdenes('hoy');
+        } else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── INIT ───
+document.addEventListener('DOMContentLoaded', () => {
+    const base = window.location.origin;
+    document.getElementById('url-publica').textContent = `${base}/taller/${SLUG}`;
+    cargarServicios();
+});
+</script>
+</body>
+</html>

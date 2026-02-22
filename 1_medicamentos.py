@@ -28210,10 +28210,17 @@ def api_garaje_reposte_crear(vid):
                     (gasolinera_nombre,)
                 ).fetchone()
                 gasolinera_id = g['id']
-        row = conn.execute("""
-            INSERT INTO repostes (vehiculo_id, km, valor_pagado, precio_galon, gasolinera_id)
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
-        """, (vid, km, valor, precio_galon, gasolinera_id)).fetchone()
+        fechahora = data.get('fechahora') or None
+        if fechahora:
+            row = conn.execute("""
+                INSERT INTO repostes (vehiculo_id, km, valor_pagado, precio_galon, gasolinera_id, fechahora)
+                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+            """, (vid, km, valor, precio_galon, gasolinera_id, fechahora)).fetchone()
+        else:
+            row = conn.execute("""
+                INSERT INTO repostes (vehiculo_id, km, valor_pagado, precio_galon, gasolinera_id)
+                VALUES (%s, %s, %s, %s, %s) RETURNING id
+            """, (vid, km, valor, precio_galon, gasolinera_id)).fetchone()
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'id': row['id']})

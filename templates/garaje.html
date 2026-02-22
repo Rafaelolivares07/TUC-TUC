@@ -300,6 +300,10 @@
                 <input id="rep-precio-galon" type="number" placeholder="16800" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
             </div>
             <div>
+                <label class="text-sm font-semibold text-gray-600 mb-1 block">Fecha y hora <span class="font-normal text-gray-400">(por defecto: ahora)</span></label>
+                <input id="rep-fecha" type="datetime-local" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none text-gray-700">
+            </div>
+            <div>
                 <label class="text-sm font-semibold text-gray-600 mb-1 block">Gasolinera (opcional)</label>
                 <input id="rep-gasolinera" type="text" placeholder="Terpel Av. 30" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:border-yellow-400 focus:outline-none">
                 <input id="rep-gasolinera-id" type="hidden">
@@ -682,6 +686,8 @@ async function cargarRepostes() {
 async function abrirModalReposte() {
     document.getElementById('modal-reposte').classList.remove('hidden');
     document.getElementById('rep-km').value = vehiculoActual?.km_actual || '';
+    const ahora = new Date();
+    document.getElementById('rep-fecha').value = new Date(ahora - ahora.getTimezoneOffset() * 60000).toISOString().slice(0,16);
     // Precargar último reposte
     try {
         const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/ultimo-reposte`);
@@ -704,6 +710,7 @@ async function guardarReposte() {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({
                 km, valor_pagado: valor, precio_galon,
+                fechahora: document.getElementById('rep-fecha').value || null,
                 gasolinera_nombre: document.getElementById('rep-gasolinera').value.trim(),
                 gasolinera_id: document.getElementById('rep-gasolinera-id').value || null
             })

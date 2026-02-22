@@ -24990,37 +24990,6 @@ def admin_taller_lista():
 
 
 
-@app.route('/api/taller/<slug>/agregar-dias', methods=['POST'])
-def api_taller_agregar_dias(slug):
-    """Agrega días pagados a un taller (modelo calendario)"""
-    if session.get('rol') != 'Administrador':
-        return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
-    data = request.get_json()
-    dias = int(data.get('dias', 0))
-    if dias < 1:
-        return jsonify({'ok': False, 'error': 'Debe agregar al menos 1 día'}), 400
-    try:
-        from datetime import date, timedelta
-        conn = get_db_connection()
-        taller = conn.execute(
-            "SELECT id, dias_pagados FROM negocios WHERE slug = %s AND tipo = 'taller'", (slug,)
-        ).fetchone()
-        if not taller:
-            conn.close()
-            return jsonify({'ok': False, 'error': 'Taller no encontrado'}), 404
-        nuevo_total = (taller['dias_pagados'] or 0) + dias
-        conn.execute(
-            "UPDATE negocios SET dias_pagados = %s WHERE id = %s",
-            (nuevo_total, taller['id'])
-        )
-        conn.commit()
-        conn.close()
-        return jsonify({'ok': True, 'dias_pagados': nuevo_total})
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
 
 @app.route('/admin/restaurante')
 def admin_restaurante_lista():

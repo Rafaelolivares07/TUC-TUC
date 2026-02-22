@@ -28646,6 +28646,21 @@ def crear_tablas_taller(conn):
         )
     """)
     conn.commit()
+    # Migrar columnas faltantes en negocios
+    for alter in [
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS admin_id INTEGER",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(100)",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS token_acceso VARCHAR(64)",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS propietario_id INTEGER",
+        "ALTER TABLE negocios ALTER COLUMN propietario_id DROP NOT NULL",
+    ]:
+        try:
+            conn.execute(alter)
+            conn.commit()
+        except Exception:
+            conn.rollback()
     try:
         n = conn.execute("SELECT COUNT(*) as n FROM servicios_catalogo").fetchone()['n']
         if n == 0:

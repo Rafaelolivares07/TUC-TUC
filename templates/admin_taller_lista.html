@@ -24,13 +24,13 @@
                 <p class="text-sm text-gray-400">{{ talleres|length }} taller{{ 'es' if talleres|length != 1 else '' }} registrado{{ 's' if talleres|length != 1 else '' }}</p>
             </div>
         </div>
-        <a href="/empieza" target="_blank"
-           class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+        <button onclick="document.getElementById('modal-nuevo').classList.remove('hidden')"
+                class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
             </svg>
             Nuevo taller
-        </a>
+        </button>
     </div>
 
     <!-- Lista -->
@@ -92,17 +92,92 @@
     <div class="bg-white rounded-2xl shadow border border-gray-100 p-12 text-center">
         <div class="text-5xl mb-4">🔧</div>
         <h3 class="text-xl font-bold text-gray-700 mb-2">Aún no hay talleres</h3>
-        <p class="text-gray-400 mb-6">Los talleres que se registren desde <strong>/empieza</strong> aparecerán aquí.</p>
-        <a href="/empieza" target="_blank"
-           class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition">
+        <p class="text-gray-400 mb-6">Registra el primer taller desde aquí.</p>
+        <button onclick="document.getElementById('modal-nuevo').classList.remove('hidden')"
+                class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition">
             Registrar primer taller →
-        </a>
+        </button>
     </div>
     {% endif %}
 
 </div>
 
+<!-- Modal nuevo taller -->
+<div id="modal-nuevo" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-5">
+            <h2 class="text-lg font-extrabold text-gray-800">Nuevo taller</h2>
+            <button onclick="cerrarModal()" class="text-gray-400 hover:text-gray-600 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="flex flex-col gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nombre del taller</label>
+                <input id="nuevo-nombre" type="text" placeholder="Ej: Taller El Mecánico"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nombre del administrador</label>
+                <input id="nuevo-admin-nombre" type="text" placeholder="Nombre completo"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Celular del administrador</label>
+                <input id="nuevo-admin-tel" type="tel" placeholder="3001234567"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div id="modal-error" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+            <div id="modal-exito" class="hidden text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 break-all"></div>
+            <button onclick="crearTaller()"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Crear taller
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
+function cerrarModal() {
+    document.getElementById('modal-nuevo').classList.add('hidden');
+    document.getElementById('modal-error').classList.add('hidden');
+    document.getElementById('modal-exito').classList.add('hidden');
+    document.getElementById('nuevo-nombre').value = '';
+    document.getElementById('nuevo-admin-nombre').value = '';
+    document.getElementById('nuevo-admin-tel').value = '';
+}
+
+async function crearTaller() {
+    const nombre = document.getElementById('nuevo-nombre').value.trim();
+    const admin_nombre = document.getElementById('nuevo-admin-nombre').value.trim();
+    const admin_telefono = document.getElementById('nuevo-admin-tel').value.trim();
+    const errEl = document.getElementById('modal-error');
+    const okEl = document.getElementById('modal-exito');
+    errEl.classList.add('hidden');
+    okEl.classList.add('hidden');
+    try {
+        const r = await fetch('/api/taller/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre, admin_nombre, admin_telefono })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            okEl.textContent = `Taller creado. Link de acceso: ${d.link_acceso}`;
+            okEl.classList.remove('hidden');
+            setTimeout(() => location.reload(), 2500);
+        } else {
+            errEl.textContent = d.error || 'Error al crear el taller';
+            errEl.classList.remove('hidden');
+        }
+    } catch(e) {
+        errEl.textContent = 'Error de conexión';
+        errEl.classList.remove('hidden');
+    }
+}
+
 function enviarAcceso(telefono, token, nombre) {
     const url = `${window.location.origin}/taller/${token}`;
     const msg = encodeURIComponent(`Hola! Aquí está el acceso a tu panel de taller *${nombre}* en TUC TUC:\n${url}`);

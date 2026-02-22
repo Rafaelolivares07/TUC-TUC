@@ -24989,65 +24989,6 @@ def admin_taller_lista():
         return f"Error: {e}", 500
 
 
-@app.route('/api/taller/crear', methods=['POST'])
-def api_taller_crear():
-    """Crea un nuevo taller desde el panel admin"""
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
-    data = request.get_json()
-    nombre = data.get('nombre', '').strip()
-    admin_nombre = data.get('admin_nombre', '').strip()
-    admin_telefono = data.get('admin_telefono', '').strip()
-
-    if not nombre:
-        return jsonify({'ok': False, 'error': 'Nombre del taller requerido'}), 400
-    if not admin_nombre or not admin_telefono:
-        return jsonify({'ok': False, 'error': 'Nombre y celular del administrador son requeridos'}), 400
-
-    admin_telefono = ''.join(filter(str.isdigit, admin_telefono))
-    if len(admin_telefono) < 10:
-        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
-
-    slug = generar_slug(nombre)
-    token_acceso = str(uuid.uuid4())
-
-    try:
-        conn = get_db_connection()
-        crear_tablas_taller(conn)
-
-        existente = conn.execute("SELECT id FROM negocios WHERE slug = %s AND tipo = 'taller'", (slug,)).fetchone()
-        if existente:
-            conn.close()
-            return jsonify({'ok': False, 'error': 'Ya existe un taller con ese nombre'}), 400
-
-        tercero = conn.execute(
-            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (admin_telefono,)
-        ).fetchone()
-        if tercero:
-            admin_id = tercero['id']
-            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (admin_nombre, admin_id))
-        else:
-            conn.execute(
-                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)",
-                (admin_nombre, admin_telefono)
-            )
-            admin_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (admin_telefono,)).fetchone()['id']
-
-        conn.execute(
-            "INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso) VALUES (%s, %s, 'taller', %s, %s, %s, %s)",
-            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso)
-        )
-        conn.commit()
-        conn.close()
-
-        link_acceso = f"{request.host_url}taller/acceso/{token_acceso}"
-        return jsonify({'ok': True, 'slug': slug, 'nombre': nombre, 'token_acceso': token_acceso, 'link_acceso': link_acceso})
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
 
 @app.route('/api/taller/<slug>/agregar-dias', methods=['POST'])
 def api_taller_agregar_dias(slug):
@@ -28815,7 +28756,7 @@ def taller_home(slug):
 
 
 @app.route('/api/taller/<slug>/crear', methods=['POST'])
-def api_taller_crear(slug):
+def api_taller_slug_crear(slug):
     data = request.get_json()
     telefono = (data.get('telefono') or '').strip()
     nombre_taller = (data.get('nombre_taller') or '').strip()

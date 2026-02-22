@@ -145,10 +145,11 @@ def guardar_respuesta(contenido):
 
 
 def leer_memoria():
-    """Lee solo los archivos esenciales — el historial del chat tiene el resto del contexto."""
+    """Lee archivos esenciales de memoria del proyecto."""
     archivos = [
         ('MEMORY.md',        3000),
         ('SESION_ACTIVA.md', 3000),
+        ('patterns.md',      2000),
     ]
     contenido = ""
     for nombre, limite in archivos:
@@ -160,6 +161,27 @@ def leer_memoria():
             except Exception:
                 pass
     return contenido
+
+
+def get_contexto_git():
+    """Últimos commits y archivos cambiados — ayuda a Claude a saber qué ya existe."""
+    try:
+        log = subprocess.run(
+            ['git', 'log', '--oneline', '-8'],
+            capture_output=True, text=True, cwd=str(APP_DIR), timeout=10
+        )
+        diff_stat = subprocess.run(
+            ['git', 'diff', 'HEAD~1', '--stat', '--no-color'],
+            capture_output=True, text=True, cwd=str(APP_DIR), timeout=10
+        )
+        resultado = ""
+        if log.returncode == 0 and log.stdout.strip():
+            resultado += f"Últimos commits:\n{log.stdout.strip()}"
+        if diff_stat.returncode == 0 and diff_stat.stdout.strip():
+            resultado += f"\n\nArchivos cambiados en último commit:\n{diff_stat.stdout.strip()[:800]}"
+        return resultado
+    except Exception as e:
+        return f"(no se pudo obtener contexto git: {e})"
 
 
 def construir_bloque(mensajes):
@@ -187,6 +209,7 @@ def llamar_claude(bloque, historial):
         hist_texto += f"\n{nombre}: {m['contenido']}"
 
     memoria = leer_memoria()
+    git_ctx = get_contexto_git()
 
     prompt = f"""Eres Claude Code — el mismo asistente que Rafael usa en su terminal para desarrollar TUC TUC.
 Rafael te escribe desde /admin/chat (puede estar en su celular o en otro dispositivo).
@@ -197,8 +220,17 @@ Responde en español. Sé directo y concreto.
 El proyecto está en: C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos
 El backend principal es: 1_medicamentos.py
 
+⚠️ REGLA CRÍTICA ANTI-DUPLICADOS: Antes de agregar cualquier función o endpoint a 1_medicamentos.py,
+SIEMPRE hacer primero un grep para verificar que no existe ya:
+  grep -n "def NOMBRE_FUNCION" 1_medicamentos.py
+  grep -n "app.route('/api/RUTA'" 1_medicamentos.py
+Si ya existe → editar el existente. NUNCA agregar uno nuevo al final sin verificar.
+
 ━━━ CONTEXTO DEL PROYECTO ━━━
 {memoria}
+
+━━━ GIT — estado reciente ━━━
+{git_ctx}
 
 ━━━ HISTORIAL DEL CHAT ━━━
 {hist_texto if hist_texto else "(inicio de conversación)"}

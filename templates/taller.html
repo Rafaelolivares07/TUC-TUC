@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{% if taller %}{{ taller.nombre }}{% else %}Taller TUC TUC{% endif %}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; background: #f3f4f6; }
+  .badge-recibido   { background:#dbeafe; color:#1e40af; }
+  .badge-diagnostico{ background:#fef9c3; color:#854d0e; }
+  .badge-en_proceso { background:#ffedd5; color:#9a3412; }
+  .badge-listo      { background:#dcfce7; color:#14532d; }
+  .badge-entregado  { background:#f3f4f6; color:#6b7280; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           background:#1f2937; color:#fff; padding:10px 20px; border-radius:8px;
+           font-size:14px; z-index:9999; display:none; max-width:320px; text-align:center; }
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- ═══ PANTALLA: CREAR TALLER ═══ -->
+{% if not taller %}
+<div id="pantalla-crear" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">🔧</div>
+      <h1 class="text-xl font-bold text-gray-800">Registra tu taller</h1>
+      <p class="text-sm text-gray-500 mt-1">URL: /taller/<strong>{{ slug }}</strong></p>
+    </div>
+    <div class="space-y-3">
+      <input id="inp-nombre-taller" type="text" placeholder="Nombre del taller (ej: AutoFix)"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <input id="inp-tel-crear" type="tel" placeholder="Tu teléfono (3001234567)"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <input id="inp-nombre-dueño" type="text" placeholder="Tu nombre"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <button onclick="crearTaller()"
+              class="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold text-sm">
+        Crear taller
+      </button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if taller %}
+<!-- ═══ PANTALLA: LOGIN ═══ -->
+<div id="pantalla-login" class="{% if logueado %}hidden{% endif %} min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">🔧</div>
+      <h1 class="text-xl font-bold text-gray-800">{{ taller.nombre }}</h1>
+      <p class="text-sm text-gray-500 mt-1">Panel del mecánico</p>
+    </div>
+    <!-- Paso 1 -->
+    <div id="login-paso1">
+      <p class="text-sm text-gray-600 mb-3">Tu número de celular:</p>
+      <input id="inp-tel" type="tel" placeholder="3001234567"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3">
+      <button onclick="loginPaso1()"
+              class="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold text-sm">
+        Continuar
+      </button>
+    </div>
+    <!-- Paso 2 (nuevo usuario) -->
+    <div id="login-paso2" class="hidden">
+      <p class="text-sm text-gray-600 mb-1">¿Cómo te llamas?</p>
+      <input id="inp-nombre" type="text" placeholder="Tu nombre"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3">
+      <div class="flex gap-2">
+        <button onclick="volverPaso1()"
+                class="flex-1 border border-gray-300 text-gray-600 rounded-xl py-3 text-sm">
+          Volver
+        </button>
+        <button onclick="loginPaso2()"
+                class="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold text-sm">
+          Entrar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PANTALLA: PANEL PRINCIPAL ═══ -->
+<div id="pantalla-main" class="{% if not logueado %}hidden{% endif %} min-h-screen">
+
+  <!-- Header -->
+  <div class="bg-gray-800 text-white px-4 py-4 sticky top-0 z-10">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="font-bold text-base leading-tight">{{ taller.nombre }}</p>
+        <p id="hdr-mecanico" class="text-xs text-gray-300">{{ mecanico_nombre or '' }}</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="abrirConfigServicios()"
+                class="bg-gray-600 text-white text-xs px-3 py-2 rounded-lg">
+          Servicios
+        </button>
+        <button onclick="mostrarNuevaOrden()"
+                class="bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+          + Nueva orden
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs hoy / todas -->
+  <div class="flex bg-white border-b border-gray-200 sticky top-16 z-10">
+    <button id="tab-hoy" onclick="cargarOrdenes(false)"
+            class="flex-1 py-3 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
+      Hoy
+    </button>
+    <button id="tab-todas" onclick="cargarOrdenes(true)"
+            class="flex-1 py-3 text-sm font-medium text-gray-500 border-b-2 border-transparent">
+      Todas
+    </button>
+  </div>
+
+  <!-- Lista de órdenes -->
+  <div id="lista-ordenes" class="p-4 space-y-3">
+    <p class="text-center text-gray-400 text-sm py-8">Cargando...</p>
+  </div>
+
+</div>
+
+<!-- ═══ PANTALLA: NUEVA ORDEN ═══ -->
+<div id="pantalla-nueva-orden" class="hidden min-h-screen bg-gray-50">
+
+  <!-- Header -->
+  <div class="bg-gray-800 text-white px-4 py-4 flex items-center gap-3">
+    <button onclick="volverMain()" class="text-gray-300 text-lg">&#8592;</button>
+    <span class="font-bold text-base">Nueva orden</span>
+  </div>
+
+  <div class="p-4 space-y-4 max-w-lg mx-auto">
+
+    <!-- Buscar placa -->
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Placa del vehículo</p>
+      <div class="flex gap-2">
+        <input id="inp-placa" type="text" placeholder="ABC-123"
+               class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-400"
+               oninput="this.value=this.value.toUpperCase()">
+        <button onclick="buscarPlaca()"
+                class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+          Buscar
+        </button>
+      </div>
+      <!-- Resultado búsqueda -->
+      <div id="res-vehiculo" class="mt-3 hidden"></div>
+    </div>
+
+    <!-- Servicio -->
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Servicio</p>
+      <select id="sel-servicio" onchange="servicioSeleccionado()"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-2">
+        <option value="">— Elegir del catálogo —</option>
+      </select>
+      <input id="inp-servicio-libre" type="text" placeholder="O escribe el servicio libre..."
+             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+    </div>
+
+    <!-- Monto y km -->
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <p class="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Monto ($)</p>
+          <input id="inp-monto" type="number" placeholder="45000"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <p class="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Km entrada</p>
+          <input id="inp-km" type="number" placeholder="54200"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+    </div>
+
+    <!-- Notas -->
+    <div class="bg-white rounded-xl p-4 shadow-sm">
+      <p class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Notas del mecánico</p>
+      <textarea id="inp-notas" rows="2" placeholder="Observaciones, diagnóstico previo..."
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+    </div>
+
+    <button onclick="crearOrden()"
+            class="w-full bg-blue-600 text-white rounded-xl py-3 font-bold text-base shadow">
+      Crear orden de trabajo
+    </button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: DETALLE / CAMBIAR ESTADO ═══ -->
+<div id="modal-orden" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center">
+  <div class="bg-white rounded-t-2xl w-full max-w-lg p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 id="modal-titulo" class="font-bold text-gray-800 text-base"></h2>
+      <button onclick="cerrarModal()" class="text-gray-400 text-xl font-bold">&#10005;</button>
+    </div>
+    <div id="modal-detalle" class="text-sm text-gray-600 space-y-1 mb-4"></div>
+    <p class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Cambiar estado:</p>
+    <div class="grid grid-cols-5 gap-1 mb-4">
+      <button onclick="cambiarEstado('recibido')"    class="estado-btn bg-blue-100 text-blue-700 rounded-lg py-2 text-xs font-semibold">Recibido</button>
+      <button onclick="cambiarEstado('diagnostico')" class="estado-btn bg-yellow-100 text-yellow-700 rounded-lg py-2 text-xs font-semibold">Diagnóst.</button>
+      <button onclick="cambiarEstado('en_proceso')"  class="estado-btn bg-orange-100 text-orange-700 rounded-lg py-2 text-xs font-semibold">En proc.</button>
+      <button onclick="cambiarEstado('listo')"       class="estado-btn bg-green-100 text-green-700 rounded-lg py-2 text-xs font-semibold">Listo</button>
+      <button onclick="cambiarEstado('entregado')"   class="estado-btn bg-gray-100 text-gray-600 rounded-lg py-2 text-xs font-semibold">Entregado</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: CONFIGURAR SERVICIOS ═══ -->
+<div id="modal-servicios" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center">
+  <div class="bg-white rounded-t-2xl w-full max-w-lg p-5 max-h-screen overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-800 text-base">Catálogo de servicios</h2>
+      <button onclick="cerrarModalServicios()" class="text-gray-400 text-xl font-bold">&#10005;</button>
+    </div>
+    <!-- Lista servicios activos -->
+    <div id="lista-servicios-config" class="mb-4 space-y-2 max-h-48 overflow-y-auto"></div>
+    <!-- Agregar servicio -->
+    <p class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Agregar servicio</p>
+    <select id="sel-catalogo"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <option value="">— Elegir del catálogo global —</option>
+    </select>
+    <div class="flex gap-2 mb-2">
+      <input id="inp-nuevo-servicio" type="text" placeholder="O escribe uno nuevo..."
+             class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <input id="inp-precio-servicio" type="number" placeholder="Precio"
+             class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+    </div>
+    <button onclick="agregarServicio()"
+            class="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold text-sm">
+      Agregar al taller
+    </button>
+  </div>
+</div>
+
+{% endif %}
+
+<script>
+const SLUG = "{{ slug }}";
+let ordenActualId = null;
+let vehiculoActual = null;
+let servicioActualId = null;
+let viendoTodas = false;
+
+function toast(msg, ms=2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', ms);
+}
+
+// ─── LOGIN ───
+function loginPaso1() {
+  const tel = document.getElementById('inp-tel').value.trim();
+  if (!tel) return toast('Ingresa tu teléfono');
+  fetch(`/api/taller/${SLUG}/login`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({telefono: tel})
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok && d.error === 'nombre_requerido') {
+      document.getElementById('login-paso1').classList.add('hidden');
+      document.getElementById('login-paso2').classList.remove('hidden');
+      return;
+    }
+    if (!d.ok) return toast(d.error);
+    entrarPanel(d.nombre);
+  }).catch(()=>toast('Error de conexión'));
+}
+
+function loginPaso2() {
+  const tel    = document.getElementById('inp-tel').value.trim();
+  const nombre = document.getElementById('inp-nombre').value.trim();
+  if (!nombre) return toast('Ingresa tu nombre');
+  fetch(`/api/taller/${SLUG}/login`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({telefono: tel, nombre})
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok) return toast(d.error);
+    entrarPanel(d.nombre);
+  }).catch(()=>toast('Error de conexión'));
+}
+
+function volverPaso1() {
+  document.getElementById('login-paso2').classList.add('hidden');
+  document.getElementById('login-paso1').classList.remove('hidden');
+}
+
+function entrarPanel(nombre) {
+  document.getElementById('pantalla-login').classList.add('hidden');
+  document.getElementById('pantalla-main').classList.remove('hidden');
+  document.getElementById('hdr-mecanico').textContent = nombre;
+  cargarOrdenes(false);
+  cargarServiciosTaller();
+}
+
+// ─── CREAR TALLER ───
+function crearTaller() {
+  const nombre_taller   = document.getElementById('inp-nombre-taller').value.trim();
+  const telefono        = document.getElementById('inp-tel-crear').value.trim();
+  const nombre_persona  = document.getElementById('inp-nombre-dueño').value.trim();
+  if (!nombre_taller || !telefono || !nombre_persona) return toast('Completa todos los campos');
+  fetch(`/api/taller/${SLUG}/crear`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nombre_taller, telefono, nombre_persona})
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok) return toast(d.error);
+    toast('¡Taller creado! Recargando...');
+    setTimeout(()=>location.reload(), 1000);
+  }).catch(()=>toast('Error de conexión'));
+}
+
+// ─── ÓRDENES ───
+function cargarOrdenes(todas) {
+  viendoTodas = todas;
+  document.getElementById('tab-hoy').className   = 'flex-1 py-3 text-sm font-medium border-b-2 ' + (todas ? 'text-gray-500 border-transparent' : 'text-blue-600 border-blue-600');
+  document.getElementById('tab-todas').className = 'flex-1 py-3 text-sm font-medium border-b-2 ' + (todas ? 'text-blue-600 border-blue-600' : 'text-gray-500 border-transparent');
+  const url = `/api/taller/${SLUG}/ordenes` + (todas ? '?todos=1' : '');
+  fetch(url).then(r=>r.json()).then(d=>{
+    if (!d.ok) return toast(d.error);
+    renderOrdenes(d.ordenes);
+  }).catch(()=>toast('Error al cargar'));
+}
+
+const ESTADO_LABEL = {
+  recibido:'Recibido', diagnostico:'Diagnóstico',
+  en_proceso:'En proceso', listo:'Listo', entregado:'Entregado'
+};
+
+function renderOrdenes(ordenes) {
+  const el = document.getElementById('lista-ordenes');
+  if (!ordenes.length) {
+    el.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">Sin órdenes' + (viendoTodas ? '' : ' hoy') + '</p>';
+    return;
+  }
+  el.innerHTML = ordenes.map(o => {
+    const badge = `badge-${o.estado}`;
+    const precio = o.precio ? '$' + Number(o.precio).toLocaleString('es-CO') : '';
+    return `<div class="bg-white rounded-xl p-4 shadow-sm cursor-pointer" onclick="abrirOrden(${o.id}, '${escHtml(o.placa)}', '${escHtml(o.servicio)}', '${o.estado}', ${o.precio||'null'}, ${o.km_entrada||'null'}, '${escHtml(o.notas||'')}', '${escHtml(o.cliente||'')}')">
+      <div class="flex items-start justify-between">
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-gray-800 text-sm">${o.placa || '—'}</p>
+          <p class="text-gray-600 text-sm truncate">${o.servicio}</p>
+          ${o.cliente ? `<p class="text-gray-400 text-xs">${o.cliente}</p>` : ''}
+        </div>
+        <div class="text-right ml-2 flex-shrink-0">
+          <span class="inline-block text-xs font-semibold px-2 py-1 rounded-full ${badge}">${ESTADO_LABEL[o.estado]||o.estado}</span>
+          ${precio ? `<p class="text-xs text-gray-500 mt-1">${precio}</p>` : ''}
+          <p class="text-xs text-gray-400">${o.hora}</p>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) { return (s||'').replace(/'/g,"&#39;").replace(/"/g,"&quot;"); }
+
+// ─── NUEVA ORDEN ───
+let _serviciosTaller = [];
+
+function cargarServiciosTaller() {
+  fetch(`/api/taller/${SLUG}/servicios`).then(r=>r.json()).then(d=>{
+    if (!d.ok) return;
+    _serviciosTaller = d.servicios;
+    const sel = document.getElementById('sel-servicio');
+    sel.innerHTML = '<option value="">— Elegir del catálogo —</option>';
+    d.servicios.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.dataset.precio = s.precio || '';
+      opt.textContent = s.nombre + (s.precio ? ' — $' + Number(s.precio).toLocaleString('es-CO') : '');
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function mostrarNuevaOrden() {
+  vehiculoActual = null;
+  servicioActualId = null;
+  document.getElementById('inp-placa').value = '';
+  document.getElementById('res-vehiculo').innerHTML = '';
+  document.getElementById('res-vehiculo').classList.add('hidden');
+  document.getElementById('sel-servicio').value = '';
+  document.getElementById('inp-servicio-libre').value = '';
+  document.getElementById('inp-monto').value = '';
+  document.getElementById('inp-km').value = '';
+  document.getElementById('inp-notas').value = '';
+  document.getElementById('pantalla-main').classList.add('hidden');
+  document.getElementById('pantalla-nueva-orden').classList.remove('hidden');
+}
+
+function volverMain() {
+  document.getElementById('pantalla-nueva-orden').classList.add('hidden');
+  document.getElementById('pantalla-main').classList.remove('hidden');
+  cargarOrdenes(viendoTodas);
+}
+
+function buscarPlaca() {
+  const placa = document.getElementById('inp-placa').value.trim();
+  if (!placa) return toast('Ingresa la placa');
+  fetch(`/api/taller/${SLUG}/buscar-vehiculo/${encodeURIComponent(placa)}`)
+    .then(r=>r.json()).then(d=>{
+      const res = document.getElementById('res-vehiculo');
+      res.classList.remove('hidden');
+      if (!d.ok) { res.innerHTML = `<p class="text-red-500 text-xs">${d.error}</p>`; return; }
+      if (!d.encontrado) {
+        vehiculoActual = null;
+        res.innerHTML = `<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <p class="text-yellow-800 text-sm font-medium">Vehículo no registrado en Garaje</p>
+          <p class="text-yellow-600 text-xs mt-1">Puedes crear la orden igual. El vehículo se puede registrar en Garaje luego.</p>
+          <a href="/garaje" target="_blank" class="text-blue-600 text-xs underline mt-1 block">Abrir Garaje en nueva pestaña</a>
+        </div>`;
+        return;
+      }
+      const v = d.vehiculo;
+      vehiculoActual = v;
+      if (v.km_actual) document.getElementById('inp-km').value = v.km_actual;
+      res.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-lg p-3">
+        <p class="text-green-800 text-sm font-bold">${v.marca || ''} ${v.linea || ''} ${v.anio || ''}</p>
+        <p class="text-green-700 text-xs">Dueño: ${v.prop_nombre} — ${v.prop_tel}</p>
+        ${v.km_actual ? `<p class="text-green-600 text-xs">Km actual: ${Number(v.km_actual).toLocaleString('es-CO')}</p>` : ''}
+        ${v.ultima ? `<p class="text-green-600 text-xs">Última: ${v.ultima}</p>` : ''}
+      </div>`;
+    }).catch(()=>toast('Error buscando placa'));
+}
+
+function servicioSeleccionado() {
+  const sel = document.getElementById('sel-servicio');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.dataset.precio) {
+    document.getElementById('inp-monto').value = opt.dataset.precio;
+  }
+  servicioActualId = sel.value || null;
+}
+
+function crearOrden() {
+  const placa        = document.getElementById('inp-placa').value.trim().toUpperCase();
+  const sel          = document.getElementById('sel-servicio');
+  const ns_id        = sel.value ? parseInt(sel.value) : null;
+  const srv_libre    = document.getElementById('inp-servicio-libre').value.trim();
+  const monto        = document.getElementById('inp-monto').value.trim();
+  const km           = document.getElementById('inp-km').value.trim();
+  const notas        = document.getElementById('inp-notas').value.trim();
+
+  if (!placa) return toast('Ingresa la placa');
+  if (!ns_id && !srv_libre) return toast('Elige o escribe el servicio');
+
+  const payload = {
+    placa,
+    negocio_servicio_id: ns_id,
+    servicio_desc: srv_libre || null,
+    monto_total: monto ? parseFloat(monto) : null,
+    km_entrada: km ? parseInt(km) : null,
+    notas: notas || null,
+    vehiculo_id: vehiculoActual ? vehiculoActual.id : null,
+    tercero_id: vehiculoActual ? vehiculoActual.prop_id : null,
+  };
+
+  fetch(`/api/taller/${SLUG}/orden`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok) return toast(d.error);
+    toast('Orden creada');
+    setTimeout(()=>volverMain(), 400);
+  }).catch(()=>toast('Error de conexión'));
+}
+
+// ─── MODAL ORDEN ───
+let _ordenAbierta = null;
+
+function abrirOrden(id, placa, servicio, estado, precio, km, notas, cliente) {
+  _ordenAbierta = id;
+  document.getElementById('modal-titulo').textContent = placa + ' — ' + servicio;
+  let det = '';
+  if (cliente) det += `<p>Cliente: ${cliente}</p>`;
+  if (km)      det += `<p>Km entrada: ${Number(km).toLocaleString('es-CO')}</p>`;
+  if (precio)  det += `<p>Monto: $${Number(precio).toLocaleString('es-CO')}</p>`;
+  if (notas)   det += `<p>Notas: ${notas}</p>`;
+  document.getElementById('modal-detalle').innerHTML = det || '<p class="text-gray-400">Sin detalles adicionales</p>';
+  // Highlight estado actual
+  document.querySelectorAll('.estado-btn').forEach(b => b.classList.remove('ring-2','ring-offset-1','ring-gray-400'));
+  const estadosBtns = ['recibido','diagnostico','en_proceso','listo','entregado'];
+  const idx = estadosBtns.indexOf(estado);
+  if (idx >= 0) document.querySelectorAll('.estado-btn')[idx].classList.add('ring-2','ring-offset-1','ring-gray-400');
+  document.getElementById('modal-orden').classList.remove('hidden');
+}
+
+function cerrarModal() {
+  document.getElementById('modal-orden').classList.add('hidden');
+  _ordenAbierta = null;
+}
+
+function cambiarEstado(estado) {
+  if (!_ordenAbierta) return;
+  fetch(`/api/taller/${SLUG}/orden/${_ordenAbierta}/estado`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({estado})
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok) return toast(d.error);
+    cerrarModal();
+    cargarOrdenes(viendoTodas);
+    toast('Estado actualizado');
+  }).catch(()=>toast('Error de conexión'));
+}
+
+// ─── MODAL SERVICIOS CONFIG ───
+function abrirConfigServicios() {
+  const modal = document.getElementById('modal-servicios');
+  modal.classList.remove('hidden');
+  // Cargar servicios del taller
+  fetch(`/api/taller/${SLUG}/servicios`).then(r=>r.json()).then(d=>{
+    const el = document.getElementById('lista-servicios-config');
+    if (!d.servicios.length) { el.innerHTML = '<p class="text-gray-400 text-sm">Sin servicios configurados</p>'; return; }
+    el.innerHTML = d.servicios.map(s =>
+      `<div class="flex justify-between items-center bg-gray-50 rounded-lg px-3 py-2">
+        <span class="text-sm text-gray-700">${s.nombre}</span>
+        <span class="text-xs text-gray-500">${s.precio ? '$'+Number(s.precio).toLocaleString('es-CO') : 'sin precio'}</span>
+      </div>`
+    ).join('');
+  });
+  // Cargar catálogo global
+  fetch(`/api/taller/${SLUG}/catalogo`).then(r=>r.json()).then(d=>{
+    const sel = document.getElementById('sel-catalogo');
+    sel.innerHTML = '<option value="">— Elegir del catálogo global —</option>';
+    d.catalogo.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.nombre;
+      opt.dataset.cat = s.categoria;
+      opt.textContent = s.nombre + ' (' + s.categoria + ')';
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function cerrarModalServicios() {
+  document.getElementById('modal-servicios').classList.add('hidden');
+  cargarServiciosTaller();
+}
+
+function agregarServicio() {
+  const sel    = document.getElementById('sel-catalogo');
+  const libre  = document.getElementById('inp-nuevo-servicio').value.trim();
+  const precio = document.getElementById('inp-precio-servicio').value.trim();
+  let nombre = libre;
+  let categoria = 'general';
+  if (!nombre && sel.value) {
+    nombre = sel.value;
+    categoria = sel.options[sel.selectedIndex].dataset.cat || 'general';
+  }
+  if (!nombre) return toast('Elige o escribe un servicio');
+  fetch(`/api/taller/${SLUG}/servicio`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({nombre, categoria, precio: precio ? parseFloat(precio) : null})
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok) return toast(d.error);
+    toast('Servicio agregado');
+    document.getElementById('inp-nuevo-servicio').value = '';
+    document.getElementById('inp-precio-servicio').value = '';
+    sel.value = '';
+    abrirConfigServicios();
+  }).catch(()=>toast('Error de conexión'));
+}
+
+// ─── INIT ───
+{% if logueado and taller %}
+document.addEventListener('DOMContentLoaded', () => {
+  cargarOrdenes(false);
+  cargarServiciosTaller();
+});
+{% endif %}
+</script>
+</body>
+</html>

@@ -27630,7 +27630,8 @@ def crear_tabla_chat(conn):
     conn.commit()
     # ALTER para BDs existentes
     alters = [
-        "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente'"
+        "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente'",
+        "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS archivado BOOLEAN DEFAULT FALSE",
     ]
     for alter in alters:
         try:
@@ -27648,7 +27649,7 @@ def admin_chat():
         conn = get_db_connection()
         crear_tabla_chat(conn)
         mensajes = conn.execute(
-            "SELECT id, rol, contenido, created_at FROM chat_mensajes ORDER BY id ASC"
+            "SELECT id, rol, contenido, created_at FROM chat_mensajes WHERE archivado = FALSE ORDER BY id ASC"
         ).fetchall()
         conn.close()
         return render_template('chat_admin.html', mensajes=mensajes)
@@ -27694,7 +27695,7 @@ def api_admin_chat_ultimo():
     try:
         conn = get_db_connection()
         row = conn.execute(
-            "SELECT id, rol, contenido FROM chat_mensajes ORDER BY id DESC LIMIT 1"
+            "SELECT id, rol, contenido FROM chat_mensajes WHERE archivado = FALSE ORDER BY id DESC LIMIT 1"
         ).fetchone()
         conn.close()
         if row:
@@ -27714,7 +27715,7 @@ def api_admin_chat_desde(desde_id):
     try:
         conn = get_db_connection()
         row = conn.execute(
-            "SELECT id, rol, contenido FROM chat_mensajes WHERE id > %s AND rol = 'assistant' ORDER BY id ASC LIMIT 1",
+            "SELECT id, rol, contenido FROM chat_mensajes WHERE id > %s AND rol = 'assistant' AND archivado = FALSE ORDER BY id ASC LIMIT 1",
             (desde_id,)
         ).fetchone()
         conn.close()
@@ -27757,10 +27758,12 @@ def api_admin_chat_limpiar():
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
         conn = get_db_connection()
-        conn.execute("TRUNCATE TABLE chat_mensajes RESTART IDENTITY")
+        result = conn.execute(
+            "UPDATE chat_mensajes SET archivado = TRUE WHERE archivado = FALSE RETURNING id"
+        ).fetchall()
         conn.commit()
         conn.close()
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'archivados': len(result)})
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -27778,6 +27781,66 @@ def api_admin_chat_historial():
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'mensajes': [dict(m) for m in mensajes]})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/chat/historico')
+def admin_chat_historico():
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    return render_template('chat_historico.html')
+
+
+@app.route('/api/admin/chat/historico-data')
+def api_admin_chat_historico_data():
+    """Mensajes archivados paginados con búsqueda opcional"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    buscar  = (request.args.get('q') or '').strip()
+    pagina  = max(1, int(request.args.get('p') or 1))
+    por_pag = 50
+    offset  = (pagina - 1) * por_pag
+    try:
+        conn = get_db_connection()
+        if buscar:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM chat_mensajes WHERE archivado = TRUE AND contenido ILIKE %s",
+                (f'%{buscar}%',)
+            ).fetchone()[0]
+            rows = conn.execute(
+                "SELECT id, rol, contenido, created_at FROM chat_mensajes "
+                "WHERE archivado = TRUE AND contenido ILIKE %s "
+                "ORDER BY id DESC LIMIT %s OFFSET %s",
+                (f'%{buscar}%', por_pag, offset)
+            ).fetchall()
+        else:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM chat_mensajes WHERE archivado = TRUE"
+            ).fetchone()[0]
+            rows = conn.execute(
+                "SELECT id, rol, contenido, created_at FROM chat_mensajes "
+                "WHERE archivado = TRUE ORDER BY id DESC LIMIT %s OFFSET %s",
+                (por_pag, offset)
+            ).fetchall()
+        conn.close()
+        mensajes = []
+        for r in rows:
+            mensajes.append({
+                'id':         r['id'],
+                'rol':        r['rol'],
+                'contenido':  r['contenido'],
+                'created_at': r['created_at'].strftime('%Y-%m-%d %H:%M') if r['created_at'] else '',
+            })
+        return jsonify({
+            'ok':       True,
+            'mensajes': mensajes,
+            'total':    total,
+            'paginas':  -(-total // por_pag),  # ceil
+            'pagina':   pagina,
+        })
     except Exception as e:
         conn.rollback()
         conn.close()

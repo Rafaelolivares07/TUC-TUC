@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historial de Chat — TUC TUC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    .msg-user      { background:#1e40af; color:#fff; }
+    .msg-assistant { background:#1f2937; color:#e5e7eb; }
+    .msg-prose     { font-size:0.875rem; line-height:1.5; }
+    .msg-prose pre { background:#111827; border-radius:6px; padding:10px; overflow-x:auto; margin:6px 0; }
+    .msg-prose code{ font-family:monospace; font-size:0.8rem; }
+    .msg-prose p   { margin:4px 0; }
+    .msg-prose ul,
+    .msg-prose ol  { margin:4px 0 4px 16px; }
+    .highlight     { background:#fbbf24; color:#000; border-radius:2px; padding:0 2px; }
+  </style>
+</head>
+<body class="bg-gray-950 min-h-screen text-gray-200">
+
+  <!-- HEADER -->
+  <div class="sticky top-0 z-10 bg-gray-900 border-b border-gray-700 px-4 py-3 flex items-center gap-3">
+    <a href="/admin/chat" class="text-gray-400 hover:text-white transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </a>
+    <h1 class="font-semibold text-white flex-1">Historial archivado</h1>
+    <span id="lbl-total" class="text-xs text-gray-400"></span>
+  </div>
+
+  <!-- BÚSQUEDA -->
+  <div class="px-4 py-3 bg-gray-900 border-b border-gray-800">
+    <div class="flex gap-2">
+      <input id="inp-buscar" type="text" placeholder="Buscar en el historial..."
+        class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        onkeydown="if(event.key==='Enter') buscar()">
+      <button onclick="buscar()"
+        class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition">
+        Buscar
+      </button>
+      <button onclick="limpiarBusqueda()" id="btn-limpiar-busq"
+        class="hidden bg-gray-700 hover:bg-gray-600 text-white text-sm px-3 py-2 rounded-lg transition">
+        ✕
+      </button>
+    </div>
+  </div>
+
+  <!-- MENSAJES -->
+  <div id="contenedor" class="max-w-3xl mx-auto px-4 py-4 space-y-3 pb-24">
+    <div id="estado-carga" class="text-center text-gray-500 py-12 text-sm">Cargando...</div>
+  </div>
+
+  <!-- PAGINACIÓN -->
+  <div id="paginacion" class="hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-700 px-4 py-3 flex justify-center gap-3 z-10">
+    <button id="btn-prev" onclick="irPagina(paginaActual-1)"
+      class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition disabled:opacity-40">
+      ← Anterior
+    </button>
+    <span id="lbl-pagina" class="text-sm text-gray-400 self-center"></span>
+    <button id="btn-next" onclick="irPagina(paginaActual+1)"
+      class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition disabled:opacity-40">
+      Siguiente →
+    </button>
+  </div>
+
+<script>
+let paginaActual = 1;
+let totalPaginas = 1;
+let busquedaActual = '';
+
+async function cargar(pagina, q) {
+  paginaActual = pagina;
+  const params = new URLSearchParams({ p: pagina });
+  if (q) params.set('q', q);
+
+  document.getElementById('estado-carga').textContent = 'Cargando...';
+  document.getElementById('estado-carga').classList.remove('hidden');
+  document.getElementById('contenedor').innerHTML =
+    '<div id="estado-carga" class="text-center text-gray-500 py-12 text-sm">Cargando...</div>';
+
+  const r = await fetch('/api/admin/chat/historico-data?' + params);
+  const d = await r.json();
+  if (!d.ok) {
+    document.getElementById('contenedor').innerHTML =
+      `<div class="text-center text-red-400 py-12 text-sm">Error: ${d.error}</div>`;
+    return;
+  }
+
+  totalPaginas = d.paginas || 1;
+  document.getElementById('lbl-total').textContent =
+    d.total ? `${d.total} mensaje${d.total !== 1 ? 's' : ''}` : '';
+
+  if (d.mensajes.length === 0) {
+    document.getElementById('contenedor').innerHTML =
+      '<div class="text-center text-gray-500 py-12 text-sm">Sin mensajes archivados.</div>';
+    document.getElementById('paginacion').classList.add('hidden');
+    return;
+  }
+
+  // Los mensajes vienen ORDER BY id DESC → invertir para mostrar cronológico
+  const msgs = [...d.mensajes].reverse();
+
+  let html = '';
+  let fechaAnterior = '';
+  for (const m of msgs) {
+    const fecha = m.created_at ? m.created_at.substring(0, 10) : '';
+    if (fecha && fecha !== fechaAnterior) {
+      html += `<div class="text-center text-xs text-gray-500 my-2">${fecha}</div>`;
+      fechaAnterior = fecha;
+    }
+    const esUser = m.rol === 'user';
+    const hora = m.created_at ? m.created_at.substring(11, 16) : '';
+    let contenido = esUser
+      ? escapeHtml(m.contenido)
+      : marked.parse(m.contenido || '');
+    if (busquedaActual) {
+      contenido = resaltar(contenido, busquedaActual);
+    }
+    html += `
+      <div class="rounded-xl px-4 py-3 ${esUser ? 'msg-user ml-8' : 'msg-assistant mr-4'}">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs font-semibold opacity-70">${esUser ? '👤 Rafael' : '🤖 Claude'}</span>
+          ${hora ? `<span class="text-xs opacity-40">${hora}</span>` : ''}
+        </div>
+        <div class="msg-prose">${contenido}</div>
+      </div>`;
+  }
+  document.getElementById('contenedor').innerHTML = html;
+
+  // Paginación
+  const pagDiv = document.getElementById('paginacion');
+  if (totalPaginas > 1) {
+    pagDiv.classList.remove('hidden');
+    document.getElementById('lbl-pagina').textContent = `Página ${paginaActual} de ${totalPaginas}`;
+    document.getElementById('btn-prev').disabled = paginaActual <= 1;
+    document.getElementById('btn-next').disabled = paginaActual >= totalPaginas;
+  } else {
+    pagDiv.classList.add('hidden');
+  }
+
+  window.scrollTo({ top: 0 });
+}
+
+function irPagina(p) {
+  if (p < 1 || p > totalPaginas) return;
+  cargar(p, busquedaActual);
+}
+
+function buscar() {
+  const q = document.getElementById('inp-buscar').value.trim();
+  busquedaActual = q;
+  document.getElementById('btn-limpiar-busq').classList.toggle('hidden', !q);
+  cargar(1, q);
+}
+
+function limpiarBusqueda() {
+  document.getElementById('inp-buscar').value = '';
+  busquedaActual = '';
+  document.getElementById('btn-limpiar-busq').classList.add('hidden');
+  cargar(1, '');
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function resaltar(html, q) {
+  // Solo resaltar en nodos de texto, no en tags HTML
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return html.replace(new RegExp(`(${esc})`, 'gi'),
+    '<mark class="highlight">$1</mark>');
+}
+
+// Cargar al inicio
+cargar(1, '');
+</script>
+</body>
+</html>

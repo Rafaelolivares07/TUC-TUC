@@ -235,15 +235,19 @@ let grabando = false;
 
     reconocedor = new SpeechRecognition();
     reconocedor.lang = 'es';
-    reconocedor.continuous = false;
+    reconocedor.continuous = true;
     reconocedor.interimResults = false;
 
     reconocedor.onresult = function(e) {
-        const transcripcion = e.results[0][0].transcript;
+        // Con continuous=true llegan múltiples resultados; acumular solo los nuevos finales
+        let nuevo = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) nuevo += e.results[i][0].transcript + ' ';
+        }
+        if (!nuevo) return;
         const input = document.getElementById('input-msg');
-        // Añadir al final del texto existente (con espacio si ya hay algo)
         const separador = input.value.trim() ? ' ' : '';
-        input.value = input.value.trim() + separador + transcripcion;
+        input.value = input.value.trim() + separador + nuevo.trim();
         autoResize(input);
         input.focus();
     };
@@ -252,6 +256,7 @@ let grabando = false;
         grabando = false;
         const btn = document.getElementById('btn-mic');
         btn.classList.remove('grabando');
+        btn.textContent = '🎤';
         btn.title = 'Dictar mensaje';
     };
 
@@ -259,6 +264,7 @@ let grabando = false;
         grabando = false;
         const btn = document.getElementById('btn-mic');
         btn.classList.remove('grabando');
+        btn.textContent = '🎤';
         btn.title = 'Dictar mensaje';
         if (e.error === 'network') {
             toast('Este navegador bloqueó el micrófono. Prueba en Chrome.', true);
@@ -270,15 +276,19 @@ let grabando = false;
 
 function toggleMic() {
     if (!reconocedor) return;
+    const btn = document.getElementById('btn-mic');
     if (grabando) {
         reconocedor.stop();
         grabando = false;
+        btn.textContent = '🎤';
+        btn.title = 'Dictar mensaje';
+        btn.classList.remove('grabando');
     } else {
         reconocedor.start();
         grabando = true;
-        const btn = document.getElementById('btn-mic');
+        btn.textContent = '⏹️';
         btn.classList.add('grabando');
-        btn.title = 'Tocá de nuevo para detener';
+        btn.title = 'Tocá para detener';
     }
 }
 // ──────────────────────────────────────────────────────────────────────────

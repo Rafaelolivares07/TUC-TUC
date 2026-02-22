@@ -1482,7 +1482,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -24945,6 +24945,50 @@ def generar_slug(nombre):
     return slug
 
 
+@app.route('/admin/negocios')
+@admin_required
+def admin_negocios():
+    """Submenú de negocios: restaurantes, tiendas, talleres"""
+    try:
+        conn = get_db_connection()
+        total_restaurantes = (conn.execute("SELECT COUNT(*) FROM restaurantes WHERE activo = TRUE").fetchone() or [0])[0]
+        total_tiendas      = (conn.execute("SELECT COUNT(*) FROM tiendas WHERE activo = TRUE").fetchone() or [0])[0]
+        try:
+            total_talleres = (conn.execute("SELECT COUNT(*) FROM negocios WHERE tipo = 'taller' AND activo = TRUE").fetchone() or [0])[0]
+        except Exception:
+            conn.rollback()
+            total_talleres = 0
+        conn.close()
+        return render_template('admin_negocios.html',
+                               total_restaurantes=total_restaurantes,
+                               total_tiendas=total_tiendas,
+                               total_talleres=total_talleres)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/admin/taller')
+@admin_required
+def admin_taller_lista():
+    """Lista talleres registrados en negocios"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        talleres = conn.execute("""
+            SELECT n.id, n.nombre, n.slug, n.admin_nombre, n.admin_telefono,
+                   n.token_acceso, n.dias_pagados, n.activo,
+                   (SELECT COUNT(*) FROM citas_servicio cs WHERE cs.negocio_id = n.id) AS total_citas
+            FROM negocios n
+            WHERE n.tipo = 'taller'
+            ORDER BY n.id DESC
+        """).fetchall()
+        conn.close()
+        return render_template('admin_taller_lista.html', talleres=talleres)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Error: {e}", 500
+
+
 @app.route('/admin/restaurante')
 def admin_restaurante_lista():
     """Lista restaurantes o redirige al primero"""
@@ -27472,7 +27516,7 @@ def api_registro_rapido():
     nombre_due  = data.get('nombre_dueno', '').strip()
     telefono    = ''.join(filter(str.isdigit, data.get('telefono', '')))
 
-    if tipo not in ('restaurante', 'tienda'):
+    if tipo not in ('restaurante', 'tienda', 'taller'):
         return jsonify({'ok': False, 'error': 'Tipo de negocio inválido'}), 400
     if not nombre_neg:
         return jsonify({'ok': False, 'error': 'Nombre del negocio requerido'}), 400
@@ -27522,7 +27566,7 @@ def api_registro_rapido():
             session.permanent     = True
             return jsonify({'ok': True, 'redirect': f'/mi-restaurante/{slug}'})
 
-        else:  # tienda
+        elif tipo == 'tienda':
             crear_tablas_tienda(conn)
             existente = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
             if existente:
@@ -27542,6 +27586,26 @@ def api_registro_rapido():
             session['rol']        = 'Tienda'
             session.permanent     = True
             return jsonify({'ok': True, 'redirect': f'/mi-tienda/{slug}'})
+
+        else:  # taller
+            crear_tablas_taller(conn)
+            existente = conn.execute("SELECT id FROM negocios WHERE slug = %s AND tipo = 'taller'", (slug,)).fetchone()
+            if existente:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Ya existe un taller con ese nombre. Prueba con otro nombre.'}), 400
+            token_acceso = uuid.uuid4().hex
+            cur = conn.execute("""
+                INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo)
+                VALUES (%s, %s, 'taller', %s, %s, %s, %s, 7, TRUE) RETURNING id
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso))
+            conn.commit()
+            conn.close()
+            session['usuario_id'] = tercero_id
+            session['nombre']     = nombre_due
+            session['telefono']   = telefono
+            session['rol']        = 'Taller'
+            session.permanent     = True
+            return jsonify({'ok': True, 'redirect': f'/taller/{slug}'})
 
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -28513,6 +28577,483 @@ def api_garaje_alertas(vid):
         return jsonify({'ok': True, 'alertas': alertas})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════
+#  TALLER TUC TUC — Módulo de talleres mecánicos
+# ═══════════════════════════════════════════════════════════
+
+def crear_tablas_taller(conn):
+    """Self-healing: crear/migrar tablas del módulo Taller."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS negocios (
+            id SERIAL PRIMARY KEY,
+            propietario_id INTEGER NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            slug VARCHAR(50) UNIQUE NOT NULL,
+            tipo VARCHAR(20) NOT NULL DEFAULT 'taller',
+            telefono VARCHAR(20),
+            direccion TEXT,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS servicios_catalogo (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(100) NOT NULL,
+            categoria VARCHAR(50),
+            descripcion TEXT,
+            activo BOOLEAN DEFAULT TRUE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS negocio_servicio (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            servicio_id INTEGER NOT NULL,
+            precio DECIMAL(12,2),
+            duracion_min INTEGER,
+            activo BOOLEAN DEFAULT TRUE
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS citas_servicio (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            tercero_id INTEGER,
+            mecanico_id INTEGER,
+            vehiculo_id INTEGER,
+            placa VARCHAR(20),
+            negocio_servicio_id INTEGER,
+            servicio_desc TEXT,
+            monto_total DECIMAL(12,2),
+            metodo_pago VARCHAR(20),
+            estado VARCHAR(20) NOT NULL DEFAULT 'recibido',
+            notas TEXT,
+            km_entrada INTEGER,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vehiculo_acceso_taller (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            negocio_id INTEGER NOT NULL,
+            estado VARCHAR(20) NOT NULL DEFAULT 'activo',
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    try:
+        n = conn.execute("SELECT COUNT(*) as n FROM servicios_catalogo").fetchone()['n']
+        if n == 0:
+            base = [
+                ('Cambio de aceite', 'motor'), ('Cambio de filtro de aceite', 'motor'),
+                ('Cambio de filtro de aire', 'motor'), ('Cambio de bujías', 'motor'),
+                ('Alineación', 'suspension'), ('Balanceo', 'suspension'),
+                ('Cambio de amortiguadores', 'suspension'),
+                ('Cambio de pastillas de freno', 'frenos'), ('Cambio de discos de freno', 'frenos'),
+                ('Revisión de frenos', 'frenos'),
+                ('Diagnóstico electrónico', 'electrico'), ('Cambio de batería', 'electrico'),
+                ('Revisión general', 'general'), ('Lavado exterior', 'general'),
+                ('Cambio de llantas', 'llantas'), ('Montura y balanceo', 'llantas'),
+            ]
+            for nombre, cat in base:
+                conn.execute(
+                    "INSERT INTO servicios_catalogo (nombre, categoria) VALUES (%s, %s)",
+                    (nombre, cat)
+                )
+            conn.commit()
+    except Exception:
+        conn.rollback()
+    alters = [
+        "ALTER TABLE intervenciones ADD COLUMN IF NOT EXISTS negocio_id INTEGER",
+        "ALTER TABLE intervenciones ADD COLUMN IF NOT EXISTS cita_id INTEGER",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+
+@app.route('/taller/<slug>')
+def taller_home(slug):
+    conn = get_db_connection()
+    crear_tablas_taller(conn)
+    taller = conn.execute(
+        "SELECT id, nombre, slug FROM negocios WHERE slug=%s AND tipo='taller'",
+        (slug,)
+    ).fetchone()
+    taller_data = None
+    if taller:
+        taller_data = dict(taller)
+        session['taller_id'] = taller['id']
+    logueado = session.get('usuario_id') is not None
+    mecanico_nombre = None
+    if logueado and taller_data:
+        try:
+            t = conn.execute(
+                "SELECT nombre FROM terceros WHERE id=%s", (session['usuario_id'],)
+            ).fetchone()
+            mecanico_nombre = t['nombre'] if t else None
+        except Exception:
+            pass
+    conn.close()
+    return render_template('taller.html', taller=taller_data, slug=slug,
+                           logueado=logueado, mecanico_nombre=mecanico_nombre)
+
+
+@app.route('/api/taller/<slug>/crear', methods=['POST'])
+def api_taller_crear(slug):
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip()
+    nombre_taller = (data.get('nombre_taller') or '').strip()
+    nombre_persona = (data.get('nombre_persona') or '').strip()
+    if not telefono or not nombre_taller or not nombre_persona:
+        return jsonify({'ok': False, 'error': 'Datos incompletos'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        existe = conn.execute("SELECT id FROM negocios WHERE slug=%s", (slug,)).fetchone()
+        if existe:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Este taller ya existe'})
+        tercero = conn.execute(
+            "SELECT id FROM terceros WHERE telefono=%s", (telefono,)
+        ).fetchone()
+        if tercero:
+            pid = tercero['id']
+        else:
+            pid = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s,%s) RETURNING id",
+                (nombre_persona, telefono)
+            ).fetchone()['id']
+            conn.commit()
+        nid = conn.execute(
+            "INSERT INTO negocios (propietario_id,nombre,slug,tipo) VALUES (%s,%s,%s,'taller') RETURNING id",
+            (pid, nombre_taller, slug)
+        ).fetchone()['id']
+        conn.commit()
+        session['usuario_id'] = pid
+        session['taller_id'] = nid
+        conn.close()
+        return jsonify({'ok': True, 'nombre': nombre_taller})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/login', methods=['POST'])
+def api_taller_login(slug):
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'})
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'})
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono=%s", (telefono,)
+        ).fetchone()
+        if tercero:
+            session['usuario_id'] = tercero['id']
+            session['taller_id'] = taller['id']
+            conn.close()
+            return jsonify({'ok': True, 'nombre': tercero['nombre'], 'nuevo': False})
+        if not nombre:
+            conn.close()
+            return jsonify({'ok': False, 'nuevo': True, 'error': 'nombre_requerido'})
+        pid = conn.execute(
+            "INSERT INTO terceros (nombre,telefono) VALUES (%s,%s) RETURNING id",
+            (nombre, telefono)
+        ).fetchone()['id']
+        conn.commit()
+        session['usuario_id'] = pid
+        session['taller_id'] = taller['id']
+        conn.close()
+        return jsonify({'ok': True, 'nombre': nombre, 'nuevo': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/buscar-vehiculo/<placa>')
+def api_taller_buscar_vehiculo(slug, placa):
+    try:
+        conn = get_db_connection()
+        pn = placa.upper().replace('-', '').replace(' ', '')
+        v = conn.execute(
+            """SELECT v.id, v.placa, v.marca, v.linea, v.anio, v.color, v.km_actual,
+                      t.id as prop_id, t.nombre as prop_nombre, t.telefono as prop_tel
+               FROM vehiculos v
+               JOIN terceros t ON t.id = v.propietario_id
+               WHERE UPPER(REPLACE(REPLACE(v.placa,'-',''),' ',''))=%s LIMIT 1""",
+            (pn,)
+        ).fetchone()
+        if not v:
+            conn.close()
+            return jsonify({'ok': True, 'encontrado': False})
+        ultima = conn.execute(
+            "SELECT descripcion, fechahora FROM intervenciones WHERE vehiculo_id=%s ORDER BY fechahora DESC LIMIT 1",
+            (v['id'],)
+        ).fetchone()
+        conn.close()
+        return jsonify({
+            'ok': True, 'encontrado': True,
+            'vehiculo': {
+                'id': v['id'], 'placa': v['placa'], 'marca': v['marca'],
+                'linea': v['linea'], 'anio': v['anio'], 'color': v['color'],
+                'km_actual': v['km_actual'], 'prop_id': v['prop_id'],
+                'prop_nombre': v['prop_nombre'], 'prop_tel': v['prop_tel'],
+                'ultima': (ultima['descripcion'] or '') + ' — ' + ultima['fechahora'].strftime('%d/%m/%y') if ultima else None
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/servicios')
+def api_taller_servicios(slug):
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': True, 'servicios': []})
+        rows = conn.execute(
+            """SELECT ns.id, sc.nombre, sc.categoria, ns.precio
+               FROM negocio_servicio ns JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
+               WHERE ns.negocio_id=%s AND ns.activo=TRUE ORDER BY sc.categoria, sc.nombre""",
+            (taller['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'servicios': [
+            {'id': r['id'], 'nombre': r['nombre'], 'categoria': r['categoria'],
+             'precio': float(r['precio']) if r['precio'] else None} for r in rows
+        ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/catalogo')
+def api_taller_catalogo(slug):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT id, nombre, categoria FROM servicios_catalogo WHERE activo=TRUE ORDER BY categoria, nombre"
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'catalogo': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/servicio', methods=['POST'])
+def api_taller_agregar_servicio(slug):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'})
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'})
+        cat = data.get('categoria', 'general')
+        srv = conn.execute(
+            "SELECT id FROM servicios_catalogo WHERE LOWER(nombre)=LOWER(%s)", (nombre,)
+        ).fetchone()
+        if not srv:
+            srv_id = conn.execute(
+                "INSERT INTO servicios_catalogo (nombre,categoria) VALUES (%s,%s) RETURNING id",
+                (nombre, cat)
+            ).fetchone()['id']
+            conn.commit()
+        else:
+            srv_id = srv['id']
+        ex = conn.execute(
+            "SELECT id FROM negocio_servicio WHERE negocio_id=%s AND servicio_id=%s",
+            (taller['id'], srv_id)
+        ).fetchone()
+        if ex:
+            conn.execute(
+                "UPDATE negocio_servicio SET precio=%s, activo=TRUE WHERE id=%s",
+                (data.get('precio'), ex['id'])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO negocio_servicio (negocio_id,servicio_id,precio,duracion_min) VALUES (%s,%s,%s,%s)",
+                (taller['id'], srv_id, data.get('precio'), data.get('duracion_min'))
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/orden', methods=['POST'])
+def api_taller_crear_orden(slug):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'})
+        placa = (data.get('placa') or '').strip().upper()
+        vid = data.get('vehiculo_id')
+        row = conn.execute(
+            """INSERT INTO citas_servicio
+               (negocio_id,mecanico_id,tercero_id,vehiculo_id,placa,
+                negocio_servicio_id,servicio_desc,monto_total,km_entrada,notas)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (taller['id'], session['usuario_id'], data.get('tercero_id'), vid, placa,
+             data.get('negocio_servicio_id'), data.get('servicio_desc'),
+             data.get('monto_total'), data.get('km_entrada'), data.get('notas'))
+        ).fetchone()
+        conn.commit()
+        if vid:
+            ya = conn.execute(
+                "SELECT id FROM vehiculo_acceso_taller WHERE vehiculo_id=%s AND negocio_id=%s",
+                (vid, taller['id'])
+            ).fetchone()
+            if not ya:
+                conn.execute(
+                    "INSERT INTO vehiculo_acceso_taller (vehiculo_id,negocio_id) VALUES (%s,%s)",
+                    (vid, taller['id'])
+                )
+                conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/ordenes')
+def api_taller_ordenes(slug):
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'})
+        todos = request.args.get('todos') == '1'
+        if todos:
+            filas = conn.execute(
+                """SELECT c.id, c.placa, c.servicio_desc, c.monto_total, c.estado,
+                          c.km_entrada, c.notas, c.created_at, t.nombre as cliente,
+                          sc.nombre as s_cat, ns.precio as s_precio
+                   FROM citas_servicio c
+                   LEFT JOIN terceros t ON t.id=c.tercero_id
+                   LEFT JOIN negocio_servicio ns ON ns.id=c.negocio_servicio_id
+                   LEFT JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
+                   WHERE c.negocio_id=%s ORDER BY c.created_at DESC LIMIT 100""",
+                (taller['id'],)
+            ).fetchall()
+        else:
+            filas = conn.execute(
+                """SELECT c.id, c.placa, c.servicio_desc, c.monto_total, c.estado,
+                          c.km_entrada, c.notas, c.created_at, t.nombre as cliente,
+                          sc.nombre as s_cat, ns.precio as s_precio
+                   FROM citas_servicio c
+                   LEFT JOIN terceros t ON t.id=c.tercero_id
+                   LEFT JOIN negocio_servicio ns ON ns.id=c.negocio_servicio_id
+                   LEFT JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
+                   WHERE c.negocio_id=%s AND c.created_at::date=CURRENT_DATE
+                   ORDER BY c.created_at DESC""",
+                (taller['id'],)
+            ).fetchall()
+        conn.close()
+        out = []
+        for f in filas:
+            srv = f['s_cat'] or f['servicio_desc'] or '—'
+            precio = float(f['monto_total']) if f['monto_total'] else (float(f['s_precio']) if f['s_precio'] else None)
+            out.append({'id': f['id'], 'placa': f['placa'], 'servicio': srv,
+                        'precio': precio, 'estado': f['estado'],
+                        'km_entrada': f['km_entrada'], 'notas': f['notas'],
+                        'cliente': f['cliente'], 'hora': f['created_at'].strftime('%H:%M')})
+        return jsonify({'ok': True, 'ordenes': out})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/orden/<int:oid>/estado', methods=['POST'])
+def api_taller_orden_estado(slug, oid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    estado = data.get('estado', '')
+    if estado not in ['recibido', 'diagnostico', 'en_proceso', 'listo', 'entregado']:
+        return jsonify({'ok': False, 'error': 'Estado inválido'})
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        conn.execute(
+            "UPDATE citas_servicio SET estado=%s,updated_at=NOW() WHERE id=%s AND negocio_id=%s",
+            (estado, oid, taller['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/agregar-dias', methods=['POST'])
+@admin_required
+def api_taller_agregar_dias(slug):
+    """Admin: agrega días pagados a un taller"""
+    data = request.get_json()
+    dias = int(data.get('dias', 0))
+    if dias < 1:
+        return jsonify({'ok': False, 'error': 'Días inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE negocios SET dias_pagados = COALESCE(dias_pagados, 0) + %s WHERE slug = %s AND tipo = 'taller'",
+            (dias, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 if __name__ == '__main__':

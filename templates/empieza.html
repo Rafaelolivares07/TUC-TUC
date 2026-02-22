@@ -86,7 +86,7 @@
             <span class="text-2xl shrink-0">🎁</span>
             <div>
                 <p class="font-bold text-amber-700 text-sm">Prueba gratis</p>
-                <p class="text-amber-600 text-xs mt-0.5">Restaurante 2 días · Tienda 4 días. Solo pagas cuando estés listo.</p>
+                <p class="text-amber-600 text-xs mt-0.5">Restaurante 2 días · Tienda 4 días · Taller 7 días. Solo pagas cuando estés listo.</p>
             </div>
         </div>
     </div>
@@ -121,6 +121,22 @@
                         <span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">4 días gratis</span>
                     </div>
                     <p class="text-gray-400 text-sm">Catálogo, carrito y pedidos a domicilio</p>
+                </div>
+                <span class="text-amber-300 text-xl font-bold shrink-0">›</span>
+            </div>
+        </div>
+
+        <!-- Taller Automotriz -->
+        <div onclick="iniciarFlujo('taller')"
+            class="neg-card bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-amber-200">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">🔧</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-extrabold text-gray-800 text-lg">Taller Automotriz</span>
+                        <span class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Órdenes de trabajo, historial de vehículos y más</p>
                 </div>
                 <span class="text-amber-300 text-xl font-bold shrink-0">›</span>
             </div>
@@ -174,7 +190,7 @@ function iniciarFlujo(t) {
     subtipo = 'menu_dia';
     datos   = {};
     if (t === 'restaurante') mSubtipo();
-    else if (t === 'tienda') mNombreNeg();
+    else if (t === 'tienda' || t === 'taller') mNombreNeg();
     else                     mOtro();
 }
 
@@ -214,12 +230,13 @@ function selSubtipo(s) {
 
 function mNombreNeg() {
     paso = 'nombre_neg';
-    const esRest = tipo === 'restaurante';
-    const label  = esRest ? 'restaurante' : 'tienda';
-    const ph     = esRest ? 'Ej: El Buen Sabor' : 'Ej: Moda Express';
+    const esRest   = tipo === 'restaurante';
+    const esTaller = tipo === 'taller';
+    const label    = esRest ? 'restaurante' : esTaller ? 'taller' : 'tienda';
+    const ph       = esRest ? 'Ej: El Buen Sabor' : esTaller ? 'Ej: AutoFix Cali' : 'Ej: Moda Express';
     render(`
         <button onclick="volverDesdeNombreNeg()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
-        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : 'Tienda'}</p>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : esTaller ? 'Taller Automotriz' : 'Tienda'}</p>
         <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Cómo se llama tu ${label}?</h3>
         <p class="text-gray-400 text-sm mb-5">Este será el nombre que verán tus clientes</p>
         <input id="iNomNeg" type="text" placeholder="${ph}"
@@ -238,6 +255,7 @@ function volverDesdeNombreNeg() {
     if (tipo === 'restaurante') mSubtipo();
     else cerrar();
 }
+
 
 function avNomNeg() {
     const v = val('iNomNeg');
@@ -279,7 +297,7 @@ function avNomDueno() {
 
 function mTelefono() {
     paso = 'telefono';
-    const dias = tipo === 'restaurante' ? '2' : '4';
+    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : '4';
     render(`
         <button onclick="mNombreDueno()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
         <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Último paso</p>
@@ -407,7 +425,7 @@ async function enviarOtro() {
 // ─── Modales de éxito ──────────────────────────────────
 
 function mExito(redirect) {
-    const dias = tipo === 'restaurante' ? '2' : '4';
+    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : '4';
     render(`
         <div class="text-center py-4">
             <div class="text-6xl mb-4">🎉</div>

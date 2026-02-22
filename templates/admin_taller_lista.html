@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talleres — TUC TUC Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background: #f3f4f6; }</style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+<div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-3">
+            <a href="/admin/negocios" class="text-gray-400 hover:text-gray-600 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+            <div>
+                <h1 class="text-2xl font-extrabold text-gray-800">Talleres</h1>
+                <p class="text-sm text-gray-400">{{ talleres|length }} taller{{ 'es' if talleres|length != 1 else '' }} registrado{{ 's' if talleres|length != 1 else '' }}</p>
+            </div>
+        </div>
+        <a href="/empieza" target="_blank"
+           class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Nuevo taller
+        </a>
+    </div>
+
+    <!-- Lista -->
+    {% if talleres %}
+    <div class="flex flex-col gap-4">
+        {% for t in talleres %}
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-5">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <a href="/taller/{{ t.slug }}" target="_blank"
+                           class="font-bold text-gray-800 hover:text-blue-600 transition">{{ t.nombre }}</a>
+                        <span class="text-xs text-gray-400">/taller/{{ t.slug }}</span>
+                        {% if not t.activo %}
+                        <span class="text-xs bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full">Inactivo</span>
+                        {% endif %}
+                    </div>
+                    {% if t.admin_nombre %}
+                    <p class="text-sm text-gray-500">
+                        <span class="font-semibold">Admin:</span> {{ t.admin_nombre }}
+                        <span class="text-gray-400 ml-1">{{ t.admin_telefono }}</span>
+                    </p>
+                    {% endif %}
+                    <p class="text-xs text-gray-400 mt-1">{{ t.total_citas }} orden{{ 'es' if t.total_citas != 1 else '' }} de trabajo</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    {% if t.dias_pagados %}
+                    <span class="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg">
+                        {{ t.dias_pagados }} días
+                    </span>
+                    {% endif %}
+                    <a href="/taller/{{ t.slug }}" target="_blank"
+                       class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold px-3 py-1.5 rounded-lg transition">
+                        Ver panel →
+                    </a>
+                    {% if t.token_acceso and t.admin_telefono %}
+                    <button onclick="enviarAcceso('{{ t.admin_telefono }}', '{{ t.token_acceso }}', '{{ t.nombre }}')"
+                            class="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+                        WhatsApp
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Agregar días -->
+            <div class="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                <input type="number" id="dias-{{ t.slug }}" placeholder="Días" min="1"
+                       class="border rounded px-2 py-1 text-xs w-16 text-center">
+                <input type="text" id="nota-{{ t.slug }}" placeholder="Nota (opcional)"
+                       class="border rounded px-2 py-1 text-xs flex-1">
+                <button onclick="agregarDias('{{ t.slug }}')"
+                        class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded font-semibold">
+                    + Agregar días
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl shadow border border-gray-100 p-12 text-center">
+        <div class="text-5xl mb-4">🔧</div>
+        <h3 class="text-xl font-bold text-gray-700 mb-2">Aún no hay talleres</h3>
+        <p class="text-gray-400 mb-6">Los talleres que se registren desde <strong>/empieza</strong> aparecerán aquí.</p>
+        <a href="/empieza" target="_blank"
+           class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl transition">
+            Registrar primer taller →
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+function enviarAcceso(telefono, token, nombre) {
+    const url = `${window.location.origin}/taller/${token}`;
+    const msg = encodeURIComponent(`Hola! Aquí está el acceso a tu panel de taller *${nombre}* en TUC TUC:\n${url}`);
+    window.open(`https://wa.me/57${telefono}?text=${msg}`, '_blank');
+}
+
+async function agregarDias(slug) {
+    const dias = document.getElementById(`dias-${slug}`).value;
+    const nota = document.getElementById(`nota-${slug}`).value;
+    if (!dias || parseInt(dias) < 1) { alert('Ingresa un número de días válido'); return; }
+    try {
+        const r = await fetch(`/api/taller/${slug}/agregar-dias`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ dias: parseInt(dias), nota })
+        });
+        const d = await r.json();
+        if (d.ok) { location.reload(); }
+        else { alert(d.error || 'Error al agregar días'); }
+    } catch(e) { alert('Error de conexión'); }
+}
+</script>
+</body>
+</html>

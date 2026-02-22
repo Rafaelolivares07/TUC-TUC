@@ -61,13 +61,18 @@
 
     {% for m in mensajes %}
     <div class="flex {% if m.rol == 'user' %}justify-end{% else %}justify-start{% endif %}">
-        <div class="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed
-            {% if m.rol == 'user' %}msg-user rounded-br-sm{% else %}msg-assistant rounded-bl-sm{% endif %}">
-            {% if m.rol == 'assistant' %}
-            <div class="prose-sm" data-markdown="{{ m.contenido | e }}"></div>
-            {% else %}
-            {{ m.contenido }}
-            {% endif %}
+        <div class="flex flex-col {% if m.rol == 'user' %}items-end{% else %}items-start{% endif %} gap-0.5">
+            <div class="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+                {% if m.rol == 'user' %}msg-user rounded-br-sm{% else %}msg-assistant rounded-bl-sm{% endif %}">
+                {% if m.rol == 'assistant' %}
+                <div class="prose-sm" data-markdown="{{ m.contenido | e }}"></div>
+                {% else %}
+                {{ m.contenido }}
+                {% endif %}
+            </div>
+            <span class="text-[10px] text-gray-400 px-1">
+                {{ m.created_at.strftime('%d/%m %H:%M') if m.created_at else '' }}
+            </span>
         </div>
     </div>
     {% endfor %}
@@ -208,9 +213,19 @@ async function pollRespuesta() {
     } catch(e) {}
 }
 
+function horaActual() {
+    const n = new Date();
+    const d = String(n.getDate()).padStart(2,'0') + '/' + String(n.getMonth()+1).padStart(2,'0');
+    const h = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+    return d + ' ' + h;
+}
+
 function agregarBurbuja(rol, contenido) {
     const wrap = document.createElement('div');
     wrap.className = 'flex ' + (rol === 'user' ? 'justify-end' : 'justify-start');
+
+    const col = document.createElement('div');
+    col.className = 'flex flex-col ' + (rol === 'user' ? 'items-end' : 'items-start') + ' gap-0.5';
 
     const burbuja = document.createElement('div');
     burbuja.className = 'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ' +
@@ -222,7 +237,13 @@ function agregarBurbuja(rol, contenido) {
         burbuja.textContent = contenido;
     }
 
-    wrap.appendChild(burbuja);
+    const ts = document.createElement('span');
+    ts.className = 'text-[10px] text-gray-400 px-1';
+    ts.textContent = horaActual();
+
+    col.appendChild(burbuja);
+    col.appendChild(ts);
+    wrap.appendChild(col);
     document.getElementById('mensajes').insertBefore(wrap, document.getElementById('typing'));
     scrollFondo();
 }

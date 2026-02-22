@@ -27632,6 +27632,7 @@ def crear_tabla_chat(conn):
     alters = [
         "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente'",
         "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS archivado BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE chat_mensajes ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC'",
     ]
     for alter in alters:
         try:

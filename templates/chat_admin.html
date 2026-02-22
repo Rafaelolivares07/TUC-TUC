@@ -70,9 +70,8 @@
                 {{ m.contenido }}
                 {% endif %}
             </div>
-            <span class="text-[10px] text-gray-400 px-1">
-                {{ m.created_at.strftime('%d/%m %H:%M') if m.created_at else '' }}
-            </span>
+            <span class="text-[10px] text-gray-400 px-1"
+                  data-ts="{{ m.created_at.isoformat() if m.created_at else '' }}"></span>
         </div>
     </div>
     {% endfor %}
@@ -123,6 +122,19 @@ hayPendientes = true;
 mostrarTyping(true);
 {% endif %}
 {% endif %}
+
+// Formatear timestamps de mensajes guardados en hora local del navegador
+document.querySelectorAll('[data-ts]').forEach(el => {
+    const iso = el.dataset.ts;
+    if (iso) {
+        const d = new Date(iso);
+        const dd = String(d.getDate()).padStart(2,'0');
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const hh = String(d.getHours()).padStart(2,'0');
+        const mi = String(d.getMinutes()).padStart(2,'0');
+        el.textContent = dd + '/' + mm + ' ' + hh + ':' + mi;
+    }
+});
 
 scrollFondo();
 

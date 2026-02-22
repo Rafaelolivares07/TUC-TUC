@@ -58,13 +58,49 @@
                 Ver página del cliente →
             </a>
         </div>
+        <!-- Link clientes -->
         <div class="mt-3 flex items-center gap-2 flex-wrap">
-            <span class="text-gray-400 text-sm">Página pública:</span>
+            <span class="text-gray-400 text-xs font-semibold uppercase tracking-wide">Clientes:</span>
             <code id="url-publica" class="text-sm bg-gray-100 px-2 py-1 rounded text-amber-700 font-mono"></code>
             <button onclick="copiarEnlace()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">Copiar</button>
             <button onclick="compartirWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">WhatsApp</button>
         </div>
+        <!-- Link staff -->
+        <div class="mt-2 flex items-center gap-2 flex-wrap">
+            <span class="text-gray-400 text-xs font-semibold uppercase tracking-wide">Staff:</span>
+            <code id="url-staff" class="text-sm bg-blue-50 px-2 py-1 rounded text-blue-700 font-mono"></code>
+            <button onclick="copiarStaff()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">Copiar</button>
+            <button onclick="abrirPinModal()" class="text-xs bg-blue-100 hover:bg-blue-200 px-3 py-1 rounded-lg font-bold text-blue-700 transition">Configurar PIN</button>
+        </div>
     </div>
+
+<!-- Modal PIN staff -->
+<div id="modal-pin" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-extrabold text-gray-800">PIN de colaboradores</h3>
+            <button onclick="cerrarPinModal()" class="text-gray-400 hover:text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">Los colaboradores usarán este PIN para acceder al panel de staff en <code class="text-blue-600">/taller/{{ slug }}/staff</code>.</p>
+        <input id="inp-pin-staff" type="text" inputmode="numeric" maxlength="10" placeholder="Ej: 1234"
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-center text-xl tracking-widest font-bold focus:outline-none focus:ring-2 focus:ring-blue-400 mb-4">
+        <div id="pin-msg" class="hidden text-sm rounded-lg px-3 py-2 mb-3"></div>
+        <div class="flex gap-2">
+            <button onclick="guardarPinStaff()"
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Guardar PIN
+            </button>
+            <button onclick="guardarPinStaff(true)"
+                    class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-4 py-2.5 rounded-xl transition">
+                Quitar PIN
+            </button>
+        </div>
+    </div>
+</div>
 
     <!-- Tabs -->
     <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-5">
@@ -310,6 +346,43 @@ function copiarEnlace() {
 function compartirWhatsApp() {
     const url = document.getElementById('url-publica').textContent;
     window.open('https://wa.me/?text=' + encodeURIComponent('Agenda tu cita en nuestro taller: ' + url));
+}
+function copiarStaff() {
+    const url = document.getElementById('url-staff').textContent;
+    navigator.clipboard.writeText(url).then(() => toast('Enlace staff copiado'));
+}
+function abrirPinModal() {
+    document.getElementById('modal-pin').classList.remove('hidden');
+    document.getElementById('pin-msg').classList.add('hidden');
+    document.getElementById('inp-pin-staff').focus();
+}
+function cerrarPinModal() {
+    document.getElementById('modal-pin').classList.add('hidden');
+}
+async function guardarPinStaff(quitar=false) {
+    const pin = quitar ? '' : document.getElementById('inp-pin-staff').value.trim();
+    const msgEl = document.getElementById('pin-msg');
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/pin-staff`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin})
+        });
+        const d = await r.json();
+        msgEl.classList.remove('hidden', 'text-green-700', 'bg-green-50', 'text-red-600', 'bg-red-50');
+        if (d.ok) {
+            msgEl.textContent = quitar ? 'PIN eliminado' : 'PIN guardado';
+            msgEl.classList.add('text-green-700', 'bg-green-50');
+            setTimeout(() => cerrarPinModal(), 1200);
+        } else {
+            msgEl.textContent = d.error || 'Error';
+            msgEl.classList.add('text-red-600', 'bg-red-50');
+        }
+    } catch(e) {
+        msgEl.classList.remove('hidden');
+        msgEl.textContent = 'Error de conexión';
+        msgEl.classList.add('text-red-600', 'bg-red-50');
+    }
 }
 
 // ─── SERVICIOS ───
@@ -639,6 +712,7 @@ async function guardarNuevaOrden() {
 document.addEventListener('DOMContentLoaded', () => {
     const base = window.location.origin;
     document.getElementById('url-publica').textContent = `${base}/taller/${SLUG}`;
+    document.getElementById('url-staff').textContent = `${base}/taller/${SLUG}/staff`;
     cargarServicios();
 });
 </script>

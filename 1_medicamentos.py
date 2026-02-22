@@ -28676,6 +28676,7 @@ def crear_tablas_taller(conn):
         "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0",
         "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS propietario_id INTEGER",
         "ALTER TABLE negocios ALTER COLUMN propietario_id DROP NOT NULL",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS pin_staff VARCHAR(10)",
     ]:
         try:
             conn.execute(alter)
@@ -28744,6 +28745,270 @@ def taller_home(slug):
     conn.close()
     return render_template('taller.html', taller=taller_data, slug=slug,
                            logueado=logueado, mecanico_nombre=mecanico_nombre)
+
+
+@app.route('/taller/<slug>/staff')
+def taller_staff(slug):
+    """Panel de colaboradores del taller (mecánicos, recepcionistas) — acceso por PIN"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        taller = conn.execute(
+            "SELECT id, nombre, slug, pin_staff FROM negocios WHERE slug=%s AND tipo='taller' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not taller:
+            return "Taller no encontrado", 404
+        tiene_pin = bool(taller['pin_staff'])
+        return render_template('taller_staff.html', taller=taller, slug=slug, tiene_pin=tiene_pin)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/taller/<slug>/verificar-pin', methods=['POST'])
+def api_taller_verificar_pin(slug):
+    """Verifica PIN de staff del taller"""
+    data = request.get_json()
+    pin = (data.get('pin') or '').strip()
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT pin_staff FROM negocios WHERE slug=%s AND tipo='taller' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not taller:
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'}), 404
+        if not taller['pin_staff']:
+            return jsonify({'ok': False, 'error': 'El dueño aún no ha configurado el PIN de acceso'}), 400
+        if pin == taller['pin_staff']:
+            return jsonify({'ok': True})
+        return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/taller/<slug>/staff/ordenes')
+def api_taller_staff_ordenes(slug):
+    """Listar órdenes del taller — staff autenticado con PIN"""
+    pin = request.args.get('pin', '').strip()
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        taller = conn.execute(
+            "SELECT id, pin_staff FROM negocios WHERE slug=%s AND tipo='taller' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'}), 404
+        if not taller['pin_staff'] or pin != taller['pin_staff']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'PIN inválido'}), 403
+        filtro = request.args.get('filtro', 'hoy')
+        if filtro == 'todos':
+            where = ""
+        elif filtro == 'activos':
+            where = "AND c.estado NOT IN ('entregado')"
+        else:
+            where = "AND c.created_at::date = CURRENT_DATE"
+        filas = conn.execute(f"""
+            SELECT c.id, c.placa, c.servicio_desc, c.monto_total, c.estado,
+                   c.km_entrada, c.notas, c.created_at, c.updated_at,
+                   t.nombre as cliente, t.telefono as cliente_tel,
+                   ns.nombre_personalizado, sc.nombre as cat_nombre
+            FROM citas_servicio c
+            LEFT JOIN terceros t ON t.id=c.tercero_id
+            LEFT JOIN negocio_servicio ns ON ns.id=c.negocio_servicio_id
+            LEFT JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
+            WHERE c.negocio_id=%s {where}
+            ORDER BY c.created_at DESC LIMIT 200
+        """, (taller['id'],)).fetchall()
+        conn.close()
+        out = []
+        for f in filas:
+            srv = f['nombre_personalizado'] or f['cat_nombre'] or f['servicio_desc'] or '—'
+            out.append({
+                'id': f['id'], 'placa': f['placa'], 'servicio': srv,
+                'precio': float(f['monto_total']) if f['monto_total'] else None,
+                'estado': f['estado'], 'km_entrada': f['km_entrada'], 'notas': f['notas'],
+                'cliente': f['cliente'], 'cliente_tel': f['cliente_tel'],
+                'hora': f['created_at'].strftime('%d/%m/%Y %H:%M'),
+                'actualizado': f['updated_at'].strftime('%d/%m/%Y %H:%M') if f['updated_at'] else None
+            })
+        return jsonify({'ok': True, 'ordenes': out})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/taller/<slug>/staff/orden', methods=['POST'])
+def api_taller_staff_crear_orden(slug):
+    """Crear orden de trabajo — staff autenticado con PIN"""
+    data = request.get_json()
+    pin = (data.get('pin') or '').strip()
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        taller = conn.execute(
+            "SELECT id, pin_staff FROM negocios WHERE slug=%s AND tipo='taller' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'}), 404
+        if not taller['pin_staff'] or pin != taller['pin_staff']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'PIN inválido'}), 403
+        placa = (data.get('placa') or '').strip().upper()
+        nombre_cliente = (data.get('nombre_cliente') or '').strip()
+        telefono_cliente = (data.get('telefono_cliente') or '').strip()
+        tercero_id = None
+        if telefono_cliente:
+            tc = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (telefono_cliente,)).fetchone()
+            if tc:
+                tercero_id = tc['id']
+            elif nombre_cliente:
+                tercero_id = conn.execute(
+                    "INSERT INTO terceros (nombre, telefono) VALUES (%s,%s) RETURNING id",
+                    (nombre_cliente, telefono_cliente)
+                ).fetchone()['id']
+                conn.commit()
+        vid = None
+        if placa:
+            pn = placa.replace('-', '').replace(' ', '')
+            v = conn.execute(
+                "SELECT id FROM vehiculos WHERE UPPER(REPLACE(REPLACE(placa,'-',''),' ',''))=%s LIMIT 1", (pn,)
+            ).fetchone()
+            vid = v['id'] if v else None
+        row = conn.execute("""
+            INSERT INTO citas_servicio
+              (negocio_id, tercero_id, vehiculo_id, placa,
+               negocio_servicio_id, servicio_desc, monto_total, km_entrada, notas)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (
+            taller['id'], tercero_id, vid, placa,
+            data.get('negocio_servicio_id'), data.get('servicio_desc'),
+            data.get('monto_total') or None, data.get('km_entrada') or None, data.get('notas')
+        )).fetchone()
+        conn.commit()
+        if vid:
+            ya = conn.execute(
+                "SELECT id FROM vehiculo_acceso_taller WHERE vehiculo_id=%s AND negocio_id=%s",
+                (vid, taller['id'])
+            ).fetchone()
+            if not ya:
+                conn.execute(
+                    "INSERT INTO vehiculo_acceso_taller (vehiculo_id,negocio_id) VALUES (%s,%s)",
+                    (vid, taller['id'])
+                )
+                conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/taller/<slug>/staff/orden/<int:cita_id>/estado', methods=['PATCH'])
+def api_taller_staff_cambiar_estado(slug, cita_id):
+    """Cambiar estado de una orden — staff autenticado con PIN"""
+    data = request.get_json()
+    pin = (data.get('pin') or '').strip()
+    nuevo_estado = (data.get('estado') or '').strip()
+    estados_validos = ('recibido', 'diagnostico', 'en_proceso', 'listo', 'entregado')
+    if nuevo_estado not in estados_validos:
+        return jsonify({'ok': False, 'error': 'Estado inválido'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        taller = conn.execute(
+            "SELECT id, pin_staff FROM negocios WHERE slug=%s AND tipo='taller' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'}), 404
+        if not taller['pin_staff'] or pin != taller['pin_staff']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'PIN inválido'}), 403
+        conn.execute(
+            "UPDATE citas_servicio SET estado=%s, updated_at=NOW() WHERE id=%s AND negocio_id=%s",
+            (nuevo_estado, cita_id, taller['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/taller/<slug>/staff/servicios')
+def api_taller_staff_servicios(slug):
+    """Lista servicios del taller para el dropdown de nueva orden (staff)"""
+    pin = request.args.get('pin', '').strip()
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        taller = conn.execute(
+            "SELECT id, pin_staff FROM negocios WHERE slug=%s AND tipo='taller' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'}), 404
+        if not taller['pin_staff'] or pin != taller['pin_staff']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'PIN inválido'}), 403
+        rows = conn.execute("""
+            SELECT ns.id, COALESCE(ns.nombre_personalizado, sc.nombre) as nombre,
+                   sc.categoria, ns.precio
+            FROM negocio_servicio ns
+            LEFT JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
+            WHERE ns.negocio_id=%s AND ns.activo=TRUE
+            ORDER BY nombre
+        """, (taller['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'servicios': [
+            {'id': r['id'], 'nombre': r['nombre'], 'categoria': r['categoria'],
+             'precio': float(r['precio']) if r['precio'] else None}
+            for r in rows
+        ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mi-taller/<slug>/pin-staff', methods=['POST'])
+def api_mi_taller_set_pin_staff(slug):
+    """Dueño configura el PIN de acceso para colaboradores"""
+    data = request.get_json()
+    pin = (data.get('pin') or '').strip()
+    try:
+        conn = get_db_connection()
+        crear_tablas_taller(conn)
+        taller = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'",
+            (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute(
+            "UPDATE negocios SET pin_staff=%s WHERE id=%s",
+            (pin or None, taller['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/taller/<slug>/crear', methods=['POST'])

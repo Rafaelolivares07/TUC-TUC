@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ taller.nombre }} — Staff</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+        .tab-active { border-bottom: 3px solid #3b82f6; color: #1d4ed8; font-weight: 700; }
+        .tab-inactive { border-bottom: 3px solid transparent; color: #6b7280; }
+        .tab-inactive:hover { color: #374151; border-color: #d1d5db; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+            z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .toast-ok { background: #059669; }
+        .toast-err { background: #dc2626; }
+        .estado-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+        }
+        .est-recibido    { background:#dbeafe; color:#1d4ed8; }
+        .est-diagnostico { background:#fef9c3; color:#a16207; }
+        .est-en_proceso  { background:#fde8d8; color:#c2410c; }
+        .est-listo       { background:#dcfce7; color:#15803d; }
+        .est-entregado   { background:#f3f4f6; color:#6b7280; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+<div id="toast" class="toast"></div>
+
+{% if tiene_pin %}
+<!-- ─── Overlay PIN ─── -->
+<div id="overlay-pin" class="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-2xl p-8 max-w-xs w-full text-center border border-gray-700">
+        <div class="text-4xl mb-4">🔧</div>
+        <h2 class="text-xl font-bold text-white mb-1">{{ taller.nombre }}</h2>
+        <p class="text-sm text-gray-400 mb-6">Ingresa el PIN de colaboradores</p>
+        <input id="inp-pin" type="password" inputmode="numeric" maxlength="10" placeholder="PIN"
+               class="w-full text-center text-2xl tracking-widest font-bold bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 mb-4"
+               onkeydown="if(event.key==='Enter') verificarPin()">
+        <button onclick="verificarPin()"
+                class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition">
+            Entrar
+        </button>
+        <p id="pin-error" class="text-red-400 text-sm mt-3 hidden"></p>
+    </div>
+</div>
+{% endif %}
+
+<!-- ─── App ─── -->
+<div id="app-content" class="{{ 'hidden' if tiene_pin else '' }}">
+
+    <div class="max-w-3xl mx-auto p-4">
+
+        <!-- Header -->
+        <div class="bg-white rounded-2xl shadow-lg p-4 mb-4 border-t-4 border-blue-400 flex items-center justify-between gap-3">
+            <div>
+                <h1 class="text-xl font-extrabold text-gray-800">{{ taller.nombre }}</h1>
+                <p class="text-xs text-gray-400 mt-0.5">Panel de colaboradores</p>
+            </div>
+            <a href="/taller/{{ slug }}" class="text-xs text-gray-400 hover:text-gray-600 transition">Ver público →</a>
+        </div>
+
+        <!-- Tabs -->
+        <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-4">
+            <div class="flex border-b">
+                <button onclick="cambiarTab('ordenes')" id="tab-ordenes"
+                        class="flex-1 py-4 px-3 text-center text-sm tab-active whitespace-nowrap transition-all">
+                    Órdenes
+                </button>
+                <button onclick="cambiarTab('nueva')" id="tab-nueva"
+                        class="flex-1 py-4 px-3 text-center text-sm tab-inactive whitespace-nowrap transition-all">
+                    Nueva orden
+                </button>
+            </div>
+
+            <!-- ====== TAB: ÓRDENES ====== -->
+            <div id="panel-ordenes" class="p-4">
+                <!-- Filtros -->
+                <div class="flex gap-2 mb-4 flex-wrap">
+                    <button onclick="cargarOrdenes('hoy')" id="fil-hoy"
+                            class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-blue-600 text-white transition">
+                        Hoy
+                    </button>
+                    <button onclick="cargarOrdenes('activos')" id="fil-activos"
+                            class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-gray-100 text-gray-600 transition">
+                        Activos
+                    </button>
+                    <button onclick="cargarOrdenes('todos')" id="fil-todos"
+                            class="text-xs px-3 py-1.5 rounded-lg font-semibold bg-gray-100 text-gray-600 transition">
+                        Todos
+                    </button>
+                    <button onclick="cargarOrdenes(filtroActual)"
+                            class="ml-auto text-xs px-3 py-1.5 rounded-lg font-semibold bg-gray-100 text-gray-500 hover:bg-gray-200 transition">
+                        Actualizar
+                    </button>
+                </div>
+                <div id="lista-ordenes">
+                    <p class="text-sm text-gray-400 text-center py-8">Cargando...</p>
+                </div>
+            </div>
+
+            <!-- ====== TAB: NUEVA ORDEN ====== -->
+            <div id="panel-nueva" class="p-4 hidden">
+                <div class="flex flex-col gap-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Placa</label>
+                            <input id="no-placa" type="text" placeholder="ABC123"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                   oninput="this.value=this.value.toUpperCase()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Km entrada</label>
+                            <input id="no-km" type="number" placeholder="45230"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Nombre cliente</label>
+                            <input id="no-nombre" type="text" placeholder="Nombre"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Celular cliente</label>
+                            <input id="no-tel" type="tel" placeholder="3001234567"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Servicio</label>
+                        <select id="no-servicio"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="">— Sin seleccionar —</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Descripción del trabajo</label>
+                        <textarea id="no-desc" rows="2" placeholder="Detalle del servicio..."
+                                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Monto ($)</label>
+                            <input id="no-monto" type="number" placeholder="0"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Notas internas</label>
+                            <input id="no-notas" type="text" placeholder="Opcional"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                    </div>
+                    <button onclick="crearOrden()"
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition text-sm mt-1">
+                        Registrar orden
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const SLUG = '{{ slug }}';
+const BASE_STAFF = `/api/taller/${SLUG}/staff`;
+const BASE_VERIFY = `/api/taller/${SLUG}/verificar-pin`;
+let PIN = '';
+let filtroActual = 'hoy';
+
+// ─── TOAST ───
+function toast(msg, ok=true) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
+    setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── PIN ───
+async function verificarPin() {
+    const pin = document.getElementById('inp-pin').value.trim();
+    if (!pin) return;
+    try {
+        const r = await fetch(BASE_VERIFY, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            PIN = pin;
+            localStorage.setItem(`pin_staff_${SLUG}`, pin);
+            document.getElementById('overlay-pin').remove();
+            document.getElementById('app-content').classList.remove('hidden');
+            iniciarApp();
+        } else {
+            const errEl = document.getElementById('pin-error');
+            errEl.textContent = d.error || 'PIN incorrecto';
+            errEl.classList.remove('hidden');
+            document.getElementById('inp-pin').value = '';
+            document.getElementById('inp-pin').focus();
+        }
+    } catch(e) {
+        const errEl = document.getElementById('pin-error');
+        errEl.textContent = 'Error de conexión';
+        errEl.classList.remove('hidden');
+    }
+}
+
+async function autoVerificarPin() {
+    const pinGuardado = localStorage.getItem(`pin_staff_${SLUG}`);
+    if (!pinGuardado) return false;
+    try {
+        const r = await fetch(BASE_VERIFY, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin: pinGuardado})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            PIN = pinGuardado;
+            document.getElementById('overlay-pin')?.remove();
+            document.getElementById('app-content').classList.remove('hidden');
+            return true;
+        } else {
+            localStorage.removeItem(`pin_staff_${SLUG}`);
+        }
+    } catch(e) {}
+    return false;
+}
+
+// ─── TABS ───
+function cambiarTab(tab) {
+    document.getElementById('panel-ordenes').classList.toggle('hidden', tab !== 'ordenes');
+    document.getElementById('panel-nueva').classList.toggle('hidden', tab !== 'nueva');
+    document.getElementById('tab-ordenes').className = 'flex-1 py-4 px-3 text-center text-sm whitespace-nowrap transition-all ' + (tab === 'ordenes' ? 'tab-active' : 'tab-inactive');
+    document.getElementById('tab-nueva').className = 'flex-1 py-4 px-3 text-center text-sm whitespace-nowrap transition-all ' + (tab === 'nueva' ? 'tab-active' : 'tab-inactive');
+}
+
+// ─── ÓRDENES ───
+const ESTADOS = {
+    recibido: 'Recibido', diagnostico: 'Diagnóstico',
+    en_proceso: 'En proceso', listo: 'Listo', entregado: 'Entregado'
+};
+const SIGUIENTE = {
+    recibido: 'diagnostico', diagnostico: 'en_proceso',
+    en_proceso: 'listo', listo: 'entregado'
+};
+
+function badgeEstado(e) {
+    return `<span class="estado-badge est-${e}">${ESTADOS[e] || e}</span>`;
+}
+
+async function cargarOrdenes(filtro) {
+    filtroActual = filtro;
+    ['hoy','activos','todos'].forEach(f => {
+        const btn = document.getElementById(`fil-${f}`);
+        if (!btn) return;
+        btn.className = 'text-xs px-3 py-1.5 rounded-lg font-semibold transition ' +
+            (f === filtro ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600');
+    });
+    const cont = document.getElementById('lista-ordenes');
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Cargando...</p>';
+    try {
+        const r = await fetch(`${BASE_STAFF}/ordenes?pin=${encodeURIComponent(PIN)}&filtro=${filtro}`);
+        const d = await r.json();
+        if (!d.ok) { cont.innerHTML = `<p class="text-sm text-red-500 text-center py-8">${d.error}</p>`; return; }
+        if (!d.ordenes.length) {
+            cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Sin órdenes</p>';
+            return;
+        }
+        cont.innerHTML = d.ordenes.map(o => `
+            <div class="border border-gray-200 rounded-xl p-3 mb-3 bg-white">
+                <div class="flex items-start justify-between gap-2 flex-wrap">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                            <span class="font-bold text-gray-800 text-sm">${o.placa || '—'}</span>
+                            ${badgeEstado(o.estado)}
+                        </div>
+                        <p class="text-xs text-gray-600">${o.servicio}</p>
+                        ${o.cliente ? `<p class="text-xs text-gray-400">${o.cliente}${o.cliente_tel ? ' · ' + o.cliente_tel : ''}</p>` : ''}
+                        ${o.precio ? `<p class="text-xs font-semibold text-gray-700 mt-0.5">$${o.precio.toLocaleString()}</p>` : ''}
+                        <p class="text-xs text-gray-300 mt-0.5">${o.hora}</p>
+                    </div>
+                    ${SIGUIENTE[o.estado] ? `
+                    <button onclick="avanzarEstado(${o.id}, '${SIGUIENTE[o.estado]}')"
+                            class="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold px-3 py-1.5 rounded-lg transition shrink-0">
+                        → ${ESTADOS[SIGUIENTE[o.estado]]}
+                    </button>` : ''}
+                </div>
+                ${o.notas ? `<p class="text-xs text-gray-400 mt-2 border-t border-gray-100 pt-2">${o.notas}</p>` : ''}
+            </div>
+        `).join('');
+    } catch(e) {
+        cont.innerHTML = '<p class="text-sm text-red-500 text-center py-8">Error de conexión</p>';
+    }
+}
+
+async function avanzarEstado(id, nuevoEstado) {
+    try {
+        const r = await fetch(`${BASE_STAFF}/orden/${id}/estado`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin: PIN, estado: nuevoEstado})
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Estado actualizado'); cargarOrdenes(filtroActual); }
+        else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── NUEVA ORDEN ───
+let servicios = [];
+
+async function cargarServicios() {
+    try {
+        const r = await fetch(`${BASE_STAFF}/servicios?pin=${encodeURIComponent(PIN)}`);
+        const d = await r.json();
+        if (!d.ok) return;
+        servicios = d.servicios;
+        const sel = document.getElementById('no-servicio');
+        sel.innerHTML = '<option value="">— Sin seleccionar —</option>';
+        d.servicios.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.nombre + (s.precio ? ` — $${s.precio.toLocaleString()}` : '');
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
+
+async function crearOrden() {
+    const srvSel = document.getElementById('no-servicio').value;
+    const servSel = servicios.find(s => s.id == srvSel);
+    const monto = document.getElementById('no-monto').value || (servSel ? servSel.precio : null);
+    try {
+        const r = await fetch(`${BASE_STAFF}/orden`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                pin: PIN,
+                placa: document.getElementById('no-placa').value.trim(),
+                nombre_cliente: document.getElementById('no-nombre').value.trim(),
+                telefono_cliente: document.getElementById('no-tel').value.trim(),
+                negocio_servicio_id: srvSel || null,
+                servicio_desc: document.getElementById('no-desc').value.trim(),
+                monto_total: monto || null,
+                km_entrada: document.getElementById('no-km').value || null,
+                notas: document.getElementById('no-notas').value.trim()
+            })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Orden registrada');
+            ['no-placa','no-km','no-nombre','no-tel','no-desc','no-monto','no-notas'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            document.getElementById('no-servicio').value = '';
+            cambiarTab('ordenes');
+            cargarOrdenes('hoy');
+        } else toast(d.error, false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── INIT ───
+function iniciarApp() {
+    cargarOrdenes('hoy');
+    cargarServicios();
+}
+
+const TIENE_PIN = {{ 'true' if tiene_pin else 'false' }};
+if (TIENE_PIN) {
+    autoVerificarPin().then(ok => { if (ok) iniciarApp(); });
+} else {
+    iniciarApp();
+}
+</script>
+</body>
+</html>

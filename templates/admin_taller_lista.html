@@ -62,12 +62,12 @@
                         {{ t.dias_pagados }} días
                     </span>
                     {% endif %}
-                    <a href="/taller/{{ t.slug }}" target="_blank"
+                    <a href="/mi-taller/{{ t.slug }}" target="_blank"
                        class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold px-3 py-1.5 rounded-lg transition">
                         Ver panel →
                     </a>
-                    {% if t.token_acceso and t.admin_telefono %}
-                    <button onclick="enviarAcceso('{{ t.admin_telefono }}', '{{ t.token_acceso }}', '{{ t.nombre }}')"
+                    {% if t.admin_telefono %}
+                    <button onclick="enviarAcceso('{{ t.admin_telefono }}', '{{ t.slug }}', '{{ t.nombre }}')"
                             class="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold px-3 py-1.5 rounded-lg transition">
                         WhatsApp
                     </button>
@@ -178,8 +178,8 @@ async function crearTaller() {
     }
 }
 
-function enviarAcceso(telefono, token, nombre) {
-    const url = `${window.location.origin}/taller/${token}`;
+function enviarAcceso(telefono, slug, nombre) {
+    const url = `${window.location.origin}/mi-taller/${slug}`;
     const msg = encodeURIComponent(`Hola! Aquí está el acceso a tu panel de taller *${nombre}* en TUC TUC:\n${url}`);
     window.open(`https://wa.me/57${telefono}?text=${msg}`, '_blank');
 }

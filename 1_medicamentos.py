@@ -27833,7 +27833,7 @@ def api_admin_chat_historico_data():
                 'id':         r['id'],
                 'rol':        r['rol'],
                 'contenido':  r['contenido'],
-                'created_at': r['created_at'].strftime('%Y-%m-%d %H:%M') if r['created_at'] else '',
+                'created_at': r['created_at'].isoformat() if r['created_at'] else '',
             })
         return jsonify({
             'ok':       True,

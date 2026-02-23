@@ -104,13 +104,14 @@ async function cargar(pagina, q) {
   let html = '';
   let fechaAnterior = '';
   for (const m of msgs) {
-    const fecha = m.created_at ? m.created_at.substring(0, 10) : '';
+    const dt = m.created_at ? new Date(m.created_at) : null;
+    const fecha = dt ? dt.toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
     if (fecha && fecha !== fechaAnterior) {
       html += `<div class="text-center text-xs text-gray-500 my-2">${fecha}</div>`;
       fechaAnterior = fecha;
     }
     const esUser = m.rol === 'user';
-    const hora = m.created_at ? m.created_at.substring(11, 16) : '';
+    const hora = dt ? dt.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
     let contenido = esUser
       ? escapeHtml(m.contenido)
       : marked.parse(m.contenido || '');

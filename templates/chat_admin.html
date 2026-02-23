@@ -221,6 +221,7 @@ async function pollRespuesta() {
     if (!hayPendientes) return;
     try {
         const r    = await fetch('/api/admin/chat/desde/' + ultimoId);
+        if (r.status === 401) { location.reload(); return; }
         const data = await r.json();
         if (data.ok && data.encontrado) {
             ultimoId = data.id;
@@ -230,6 +231,13 @@ async function pollRespuesta() {
         }
     } catch(e) {}
 }
+
+// Al volver de background (móvil) — forzar poll inmediato
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && hayPendientes) {
+        pollRespuesta();
+    }
+});
 
 function horaActual() {
     const n = new Date();

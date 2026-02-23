@@ -24622,8 +24622,13 @@ def api_admin_db_log_cambios():
 # MÓDULO RESTAURANTE - MENÚ DEL DÍA
 # =====================================================
 
+_restaurante_tablas_listas = False
+
 def crear_tablas_restaurante(conn):
     """Self-healing: crear todas las tablas del módulo restaurante"""
+    global _restaurante_tablas_listas
+    if _restaurante_tablas_listas:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS restaurantes (
             id SERIAL PRIMARY KEY,
@@ -24729,10 +24734,16 @@ def crear_tablas_restaurante(conn):
                 conn.rollback()
             except:
                 pass
+    _restaurante_tablas_listas = True
 
+
+_tienda_tablas_listas = False
 
 def crear_tablas_tienda(conn):
     """Self-healing: crear todas las tablas del módulo tienda ecommerce"""
+    global _tienda_tablas_listas
+    if _tienda_tablas_listas:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS tiendas (
             id SERIAL PRIMARY KEY,
@@ -24842,10 +24853,16 @@ def crear_tablas_tienda(conn):
                 conn.rollback()
             except:
                 pass
+    _tienda_tablas_listas = True
 
+
+_garaje_tablas_listas = False
 
 def crear_tablas_garaje(conn):
     """Self-healing: crear todas las tablas del módulo Garaje TUC TUC"""
+    global _garaje_tablas_listas
+    if _garaje_tablas_listas:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS vehiculos (
             id SERIAL PRIMARY KEY,
@@ -24933,6 +24950,7 @@ def crear_tablas_garaje(conn):
             conn.commit()
         except Exception:
             conn.rollback()
+    _garaje_tablas_listas = True
 
 
 def generar_slug(nombre):
@@ -28680,8 +28698,13 @@ def api_garaje_talleres_tuctuc(vid):
 #  TALLER TUC TUC — Módulo de talleres mecánicos
 # ═══════════════════════════════════════════════════════════
 
+_taller_tablas_listas = False
+
 def crear_tablas_taller(conn):
-    """Self-healing: crear/migrar tablas del módulo Taller."""
+    """Self-healing: crear/migrar tablas del módulo Taller. Se ejecuta solo una vez por proceso."""
+    global _taller_tablas_listas
+    if _taller_tablas_listas:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS negocios (
             id SERIAL PRIMARY KEY,
@@ -28815,6 +28838,7 @@ def crear_tablas_taller(conn):
             conn.commit()
         except Exception:
             conn.rollback()
+    _taller_tablas_listas = True
 
 
 @app.route('/taller/<slug>')

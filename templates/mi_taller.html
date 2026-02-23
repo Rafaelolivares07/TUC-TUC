@@ -27,7 +27,7 @@
         .est-en_proceso { background:#fde8d8; color:#c2410c; }
         .est-listo      { background:#dcfce7; color:#15803d; }
         .est-entregado  { background:#f3f4f6; color:#6b7280; }
-        .foto-thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; cursor:pointer; }
+        .foto-thumb { width:100px; height:100px; object-fit:cover; border-radius:8px; cursor:pointer; }
         .zoom-overlay {
             position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:9998;
             display:flex; align-items:center; justify-content:center;
@@ -302,6 +302,40 @@
     </div>
 </div>
 
+<div id="modal-editar-srv" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-gray-800">Editar servicio</h3>
+            <button onclick="cerrarEditarSrv()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">✕</button>
+        </div>
+        <input type="hidden" id="edit-srv-id">
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 mb-1">Nombre *</label>
+                <input id="edit-srv-nombre" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nombre del servicio">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 mb-1">Descripción</label>
+                <textarea id="edit-srv-desc" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm resize-none" placeholder="Descripción opcional"></textarea>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Precio ($)</label>
+                    <input id="edit-srv-precio" type="number" step="100" min="0" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="0">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Duración (min)</label>
+                    <input id="edit-srv-duracion" type="number" min="0" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="60">
+                </div>
+            </div>
+        </div>
+        <div class="flex gap-2 mt-5">
+            <button onclick="cerrarEditarSrv()" class="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold">Cancelar</button>
+            <button onclick="guardarEdicionSrv()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl text-sm font-semibold transition">Guardar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const SLUG = "{{ slug }}";
 let ordenActiva = null;
@@ -416,10 +450,14 @@ function renderServicios(lista) {
                         ${s.duracion_min ? `<span class="text-gray-400">~${s.duracion_min} min</span>` : ''}
                     </div>
                 </div>
-                <div class="flex gap-2 flex-shrink-0">
+                <div class="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                     <button onclick="abrirModalFotoSrv(${s.id})"
                             class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold text-gray-600 transition">
                         📷 Fotos (${s.fotos.length})
+                    </button>
+                    <button onclick="abrirEditarSrv(${s.id})"
+                            class="text-xs bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-semibold text-blue-600 transition">
+                        ✏️ Editar
                     </button>
                     <button onclick="eliminarServicio(${s.id})"
                             class="text-xs bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg font-semibold text-red-500 transition">
@@ -466,6 +504,41 @@ async function eliminarServicio(sid) {
         if (d.ok) { toast('Servicio eliminado'); cargarServicios(); }
         else toast(d.error, false);
     } catch(e) { toast('Error', false); }
+}
+
+// ─── EDITAR SERVICIO ───
+function abrirEditarSrv(sid) {
+    const s = serviciosCache.find(x => x.id === sid);
+    if (!s) return;
+    document.getElementById('edit-srv-id').value = sid;
+    document.getElementById('edit-srv-nombre').value = s.nombre || '';
+    document.getElementById('edit-srv-desc').value = s.descripcion || '';
+    document.getElementById('edit-srv-precio').value = s.precio != null ? s.precio : '';
+    document.getElementById('edit-srv-duracion').value = s.duracion_min || '';
+    document.getElementById('modal-editar-srv').classList.remove('hidden');
+}
+function cerrarEditarSrv() {
+    document.getElementById('modal-editar-srv').classList.add('hidden');
+}
+async function guardarEdicionSrv() {
+    const sid = document.getElementById('edit-srv-id').value;
+    const nombre = document.getElementById('edit-srv-nombre').value.trim();
+    if (!nombre) { toast('El nombre es requerido', false); return; }
+    try {
+        const r = await fetch(`/api/mi-taller/${SLUG}/servicio/${sid}`, {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                nombre,
+                descripcion: document.getElementById('edit-srv-desc').value.trim(),
+                precio: document.getElementById('edit-srv-precio').value || null,
+                duracion_min: document.getElementById('edit-srv-duracion').value || null
+            })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Servicio actualizado'); cerrarEditarSrv(); cargarServicios(); }
+        else toast(d.error, false);
+    } catch(e) { toast('Error al guardar', false); }
 }
 
 // ─── FOTOS SERVICIO ───

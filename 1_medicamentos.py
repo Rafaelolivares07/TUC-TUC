@@ -29707,6 +29707,48 @@ def api_mi_taller_servicio_del(slug, sid):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/mi-taller/<slug>/servicio/<int:sid>', methods=['PUT'])
+def api_mi_taller_servicio_edit(slug, sid):
+    """Editar nombre/descripción/precio/duración de un servicio del taller"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'})
+    try:
+        conn = get_db_connection()
+        taller = conn.execute(
+            "SELECT id, admin_id, propietario_id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not taller:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Taller no encontrado'})
+        if not es_admin and uid != taller['admin_id'] and uid != taller['propietario_id']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'sin_permiso'})
+        conn.execute("""
+            UPDATE negocio_servicio
+            SET nombre_personalizado=%s, descripcion=%s, precio=%s, duracion_min=%s
+            WHERE id=%s AND negocio_id=%s
+        """, (
+            nombre,
+            data.get('descripcion', ''),
+            data.get('precio') or None,
+            data.get('duracion_min') or None,
+            sid, taller['id']
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 @app.route('/api/mi-taller/<slug>/ordenes')
 def api_mi_taller_ordenes(slug):
     """Todas las órdenes del taller (solo dueño)"""

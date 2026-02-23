@@ -19,7 +19,7 @@
   .est-en_proceso  { background:#fde8d8; color:#c2410c; }
   .est-listo       { background:#dcfce7; color:#15803d; }
   .est-entregado   { background:#f3f4f6; color:#6b7280; }
-  .foto-thumb { width:72px; height:72px; object-fit:cover; border-radius:8px; cursor:pointer; }
+  .foto-thumb { width:100px; height:100px; object-fit:cover; border-radius:8px; cursor:pointer; }
   .zoom-overlay {
     position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:9998;
     display:flex; align-items:center; justify-content:center;
@@ -185,7 +185,7 @@ async function cargarServiciosPublicos() {
                             ${s.categoria ? `<span class="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">${s.categoria}</span>` : ''}
                         </div>
                     </div>
-                    ${s.fotos.length ? `<img src="${s.fotos[0]}" onclick="abrirZoom('${s.fotos[0]}')" class="w-20 h-20 object-cover rounded-xl cursor-pointer flex-shrink-0">` : ''}
+                    ${s.fotos.length ? `<img src="${s.fotos[0]}" onclick="abrirZoom('${s.fotos[0]}')" class="w-28 h-28 object-cover rounded-xl cursor-pointer flex-shrink-0">` : ''}
                 </div>
                 ${s.fotos.length > 1 ? `
                 <div class="flex gap-2 mt-3 flex-wrap">

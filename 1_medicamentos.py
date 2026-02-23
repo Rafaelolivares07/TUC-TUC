@@ -28806,6 +28806,8 @@ def crear_tablas_taller(conn):
         "ALTER TABLE negocio_servicio ADD COLUMN IF NOT EXISTS nombre_personalizado VARCHAR(200)",
         "ALTER TABLE negocio_servicio ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE negocio_servicio ALTER COLUMN servicio_id DROP NOT NULL",
+        "ALTER TABLE negocio_servicio ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'servicio'",
+        "ALTER TABLE negocio_servicio ADD COLUMN IF NOT EXISTS visible_publico BOOLEAN NOT NULL DEFAULT TRUE",
     ]
     for sql in alters:
         try:
@@ -29568,11 +29570,12 @@ def api_mi_taller_servicios(slug):
             return jsonify({'ok': False, 'error': 'sin_permiso'})
         rows = conn.execute("""
             SELECT ns.id, ns.nombre_personalizado, ns.descripcion, ns.precio, ns.duracion_min,
+                   ns.tipo, ns.visible_publico,
                    sc.nombre as cat_nombre, sc.categoria
             FROM negocio_servicio ns
             LEFT JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
             WHERE ns.negocio_id=%s AND ns.activo=TRUE
-            ORDER BY ns.id
+            ORDER BY ns.tipo, ns.id
         """, (taller['id'],)).fetchall()
         out = []
         for r in rows:
@@ -29587,6 +29590,8 @@ def api_mi_taller_servicios(slug):
                 'descripcion': r['descripcion'] or '',
                 'precio': float(r['precio']) if r['precio'] else None,
                 'duracion_min': r['duracion_min'],
+                'tipo': r['tipo'] or 'servicio',
+                'visible_publico': r['visible_publico'] if r['visible_publico'] is not None else True,
                 'fotos': [{'id': f['id'], 'imagen': f['imagen']} for f in fotos]
             })
         conn.close()
@@ -29618,15 +29623,20 @@ def api_mi_taller_crear_servicio(slug):
         if not es_admin and uid != taller['admin_id'] and uid != taller['propietario_id']:
             conn.close()
             return jsonify({'ok': False, 'error': 'sin_permiso'})
+        tipo = data.get('tipo', 'servicio')
+        if tipo not in ('servicio', 'repuesto'):
+            tipo = 'servicio'
+        visible = bool(data.get('visible_publico', True))
         sid = conn.execute("""
             INSERT INTO negocio_servicio
-              (negocio_id, servicio_id, nombre_personalizado, descripcion, precio, duracion_min)
-            VALUES (%s, NULL, %s, %s, %s, %s) RETURNING id
+              (negocio_id, servicio_id, nombre_personalizado, descripcion, precio, duracion_min, tipo, visible_publico)
+            VALUES (%s, NULL, %s, %s, %s, %s, %s, %s) RETURNING id
         """, (
             taller['id'], nombre,
             data.get('descripcion', ''),
             data.get('precio'),
-            data.get('duracion_min')
+            data.get('duracion_min'),
+            tipo, visible
         )).fetchone()['id']
         conn.commit()
         conn.close()
@@ -29760,15 +29770,21 @@ def api_mi_taller_servicio_edit(slug, sid):
         if not es_admin and uid != taller['admin_id'] and uid != taller['propietario_id']:
             conn.close()
             return jsonify({'ok': False, 'error': 'sin_permiso'})
+        tipo = data.get('tipo', 'servicio')
+        if tipo not in ('servicio', 'repuesto'):
+            tipo = 'servicio'
+        visible = bool(data.get('visible_publico', True))
         conn.execute("""
             UPDATE negocio_servicio
-            SET nombre_personalizado=%s, descripcion=%s, precio=%s, duracion_min=%s
+            SET nombre_personalizado=%s, descripcion=%s, precio=%s, duracion_min=%s,
+                tipo=%s, visible_publico=%s
             WHERE id=%s AND negocio_id=%s
         """, (
             nombre,
             data.get('descripcion', ''),
             data.get('precio') or None,
             data.get('duracion_min') or None,
+            tipo, visible,
             sid, taller['id']
         ))
         conn.commit()
@@ -30037,11 +30053,12 @@ def api_taller_servicios_publicos(slug):
             return jsonify({'ok': True, 'servicios': []})
         rows = conn.execute("""
             SELECT ns.id, ns.nombre_personalizado, ns.descripcion, ns.precio, ns.duracion_min,
+                   ns.tipo,
                    sc.nombre as cat_nombre, sc.categoria
             FROM negocio_servicio ns
             LEFT JOIN servicios_catalogo sc ON sc.id=ns.servicio_id
-            WHERE ns.negocio_id=%s AND ns.activo=TRUE
-            ORDER BY ns.id
+            WHERE ns.negocio_id=%s AND ns.activo=TRUE AND ns.visible_publico=TRUE
+            ORDER BY ns.tipo, ns.id
         """, (taller['id'],)).fetchall()
         out = []
         for r in rows:
@@ -30056,6 +30073,7 @@ def api_taller_servicios_publicos(slug):
                 'descripcion': r['descripcion'] or '',
                 'precio': float(r['precio']) if r['precio'] else None,
                 'duracion_min': r['duracion_min'],
+                'tipo': r['tipo'] or 'servicio',
                 'fotos': [f['imagen'] for f in fotos]
             })
         conn.close()

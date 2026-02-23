@@ -826,26 +826,35 @@ async function cargarIntervenciones() {
             lista.innerHTML = '<p class="text-center text-gray-400 py-8">Sin intervenciones registradas</p>';
             return;
         }
-        lista.innerHTML = d.intervenciones.map(inv => `
-            <div class="bg-white rounded-2xl p-4 shadow-sm">
+        lista.innerHTML = d.intervenciones.map(inv => {
+            const esTaller = inv.fuente === 'taller_tuc';
+            const badgeClass = esTaller
+                ? 'bg-blue-100 text-blue-700'
+                : (inv.tipo === 'preventivo' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700');
+            const badgeText = esTaller ? ('🏪 ' + inv.taller_nombre) : inv.tipo;
+            const estadoBadge = esTaller && inv.estado
+                ? `<span class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 ml-1">${inv.estado}</span>` : '';
+            const totalStr = inv.total != null ? '$' + inv.total.toLocaleString() : '';
+            return `
+            <div class="bg-white rounded-2xl p-4 shadow-sm ${esTaller ? 'border border-blue-100' : ''}">
                 <div class="flex justify-between items-start mb-2">
                     <div>
-                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${inv.tipo==='preventivo' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">${inv.tipo}</span>
-                        <p class="font-bold text-gray-800 mt-1">${inv.descripcion}</p>
+                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass}">${badgeText}</span>${estadoBadge}
+                        <p class="font-bold text-gray-800 mt-1">${inv.descripcion || ''}</p>
                         <p class="text-sm text-gray-500">${inv.km ? inv.km.toLocaleString() + ' km' : ''} ${inv.intervalo_km ? '· cada ' + inv.intervalo_km.toLocaleString() + ' km' : ''}</p>
                     </div>
                     <div class="text-right">
                         <p class="text-xs text-gray-400">${inv.fechahora ? inv.fechahora.slice(0,10) : ''}</p>
-                        <p class="font-bold text-gray-800 text-sm">$${inv.total.toLocaleString()}</p>
+                        <p class="font-bold text-gray-800 text-sm">${totalStr}</p>
                     </div>
                 </div>
-                ${inv.items.length ? `<div class="border-t pt-2 space-y-1">${inv.items.map(it => `
+                ${inv.items && inv.items.length ? `<div class="border-t pt-2 space-y-1">${inv.items.map(it => `
                     <div class="flex justify-between text-xs text-gray-500">
                         <span>${it.tipo === 'mano_obra' ? '🔧' : '🔩'} ${it.descripcion}${it.proveedor_nombre ? ' · ' + it.proveedor_nombre : ''}</span>
                         <span>$${it.costo.toLocaleString()}</span>
                     </div>`).join('')}</div>` : ''}
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     } catch(e) { toast('Error cargando intervenciones', true); }
 }
 

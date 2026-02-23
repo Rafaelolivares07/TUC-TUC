@@ -28447,6 +28447,7 @@ def api_garaje_intervenciones(vid):
             total = sum(float(it['costo'] or 0) for it in items)
             resultado.append({
                 'id': r['id'],
+                'fuente': 'manual',
                 'fechahora': r['fechahora'].isoformat() if r['fechahora'] else None,
                 'km': r['km'], 'tipo': r['tipo'], 'descripcion': r['descripcion'],
                 'intervalo_km': r['intervalo_km'], 'intervalo_dias': r['intervalo_dias'],
@@ -28455,6 +28456,33 @@ def api_garaje_intervenciones(vid):
                            'costo': float(it['costo'] or 0), 'proveedor_nombre': it['proveedor_nombre']}
                           for it in items]
             })
+
+        # Agregar visitas a talleres TUC TUC como intervenciones con fuente 'taller_tuc'
+        visitas = conn.execute("""
+            SELECT cs.id, cs.servicio_desc, cs.km_entrada, cs.created_at,
+                   cs.estado, cs.monto_total, n.nombre as taller_nombre
+            FROM citas_servicio cs
+            JOIN negocios n ON n.id = cs.negocio_id
+            WHERE cs.vehiculo_id = %s
+        """, (vid,)).fetchall()
+        for v in visitas:
+            resultado.append({
+                'id': v['id'],
+                'fuente': 'taller_tuc',
+                'taller_nombre': v['taller_nombre'],
+                'fechahora': v['created_at'].isoformat() if v['created_at'] else None,
+                'km': v['km_entrada'],
+                'tipo': 'taller_tuc',
+                'descripcion': v['servicio_desc'],
+                'estado': v['estado'],
+                'intervalo_km': None, 'intervalo_dias': None,
+                'total': float(v['monto_total']) if v['monto_total'] else None,
+                'items': []
+            })
+
+        # Ordenar por fecha descendente unificado
+        resultado.sort(key=lambda x: x['fechahora'] or '', reverse=True)
+
         conn.close()
         return jsonify({'ok': True, 'intervenciones': resultado})
     except Exception as e:

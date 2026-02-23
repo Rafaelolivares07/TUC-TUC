@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compraventas — TUC TUC Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background: #f3f4f6; }</style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+<div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-3">
+            <a href="/admin/negocios" class="text-gray-400 hover:text-gray-600 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+            <div>
+                <h1 class="text-2xl font-extrabold text-gray-800">Compraventas</h1>
+                <p class="text-sm text-gray-400">{{ compraventas|length }} compraventa{{ 's' if compraventas|length != 1 else '' }} registrada{{ 's' if compraventas|length != 1 else '' }}</p>
+            </div>
+        </div>
+        <button onclick="document.getElementById('modal-nuevo').classList.remove('hidden')"
+                class="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            Nueva compraventa
+        </button>
+    </div>
+
+    <!-- Lista -->
+    {% if compraventas %}
+    <div class="flex flex-col gap-4">
+        {% for c in compraventas %}
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-5">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <a href="/compraventa/{{ c.slug }}" target="_blank"
+                           class="font-bold text-gray-800 hover:text-violet-600 transition">{{ c.nombre }}</a>
+                        <span class="text-xs text-gray-400">/compraventa/{{ c.slug }}</span>
+                        {% if not c.activo %}
+                        <span class="text-xs bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full">Inactiva</span>
+                        {% endif %}
+                    </div>
+                    {% if c.propietario_nombre %}
+                    <p class="text-sm text-gray-500">
+                        <span class="font-semibold">Dueño:</span> {{ c.propietario_nombre }}
+                        {% if c.propietario_telefono %}<span class="text-gray-400 ml-1">{{ c.propietario_telefono }}</span>{% endif %}
+                    </p>
+                    {% endif %}
+                    <p class="text-xs text-gray-400 mt-1">{{ c.total_vehiculos }} vehículo{{ 's' if c.total_vehiculos != 1 else '' }}</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <a href="/compraventa/{{ c.slug }}/admin" target="_blank"
+                       class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold px-3 py-1.5 rounded-lg transition">
+                        Ver panel →
+                    </a>
+                    {% if c.propietario_telefono %}
+                    <button onclick="enviarAcceso('{{ c.propietario_telefono }}', '{{ c.slug }}', '{{ c.nombre }}')"
+                            class="text-xs bg-green-500 hover:bg-green-600 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+                        WhatsApp
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl shadow border border-gray-100 p-12 text-center">
+        <div class="text-5xl mb-4">🚗</div>
+        <h3 class="text-xl font-bold text-gray-700 mb-2">Aún no hay compraventas</h3>
+        <p class="text-gray-400 mb-6">Registra la primera desde aquí.</p>
+        <button onclick="document.getElementById('modal-nuevo').classList.remove('hidden')"
+                class="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold px-6 py-3 rounded-xl transition">
+            Registrar primera compraventa →
+        </button>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- Modal nueva compraventa -->
+<div id="modal-nuevo" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-5">
+            <h2 class="text-lg font-extrabold text-gray-800">Nueva compraventa</h2>
+            <button onclick="cerrarModal()" class="text-gray-400 hover:text-gray-600 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="flex flex-col gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nombre de la compraventa</label>
+                <input id="nuevo-nombre" type="text" placeholder="Ej: AutoCompra Cali"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nombre del dueño</label>
+                <input id="nuevo-dueno-nombre" type="text" placeholder="Nombre completo"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Celular del dueño</label>
+                <input id="nuevo-dueno-tel" type="tel" placeholder="3001234567"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
+            </div>
+            <div id="modal-error" class="hidden text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2"></div>
+            <div id="modal-exito" class="hidden text-sm text-violet-700 bg-violet-50 rounded-lg px-3 py-2 break-all"></div>
+            <button onclick="crearCompraventa()"
+                    class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Crear compraventa
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function cerrarModal() {
+    document.getElementById('modal-nuevo').classList.add('hidden');
+    document.getElementById('modal-error').classList.add('hidden');
+    document.getElementById('modal-exito').classList.add('hidden');
+    document.getElementById('nuevo-nombre').value = '';
+    document.getElementById('nuevo-dueno-nombre').value = '';
+    document.getElementById('nuevo-dueno-tel').value = '';
+}
+
+async function crearCompraventa() {
+    const nombre = document.getElementById('nuevo-nombre').value.trim();
+    const nombre_dueno = document.getElementById('nuevo-dueno-nombre').value.trim();
+    const telefono_dueno = document.getElementById('nuevo-dueno-tel').value.trim();
+    const errEl = document.getElementById('modal-error');
+    const okEl = document.getElementById('modal-exito');
+    errEl.classList.add('hidden');
+    okEl.classList.add('hidden');
+    try {
+        const r = await fetch('/api/admin/compraventa/crear', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre, nombre_dueno, telefono_dueno })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            okEl.textContent = `Compraventa creada. Panel: ${window.location.origin}${d.link_admin}`;
+            okEl.classList.remove('hidden');
+            setTimeout(() => location.reload(), 2500);
+        } else {
+            errEl.textContent = d.error || 'Error al crear la compraventa';
+            errEl.classList.remove('hidden');
+        }
+    } catch(e) {
+        errEl.textContent = 'Error de conexión';
+        errEl.classList.remove('hidden');
+    }
+}
+
+function enviarAcceso(telefono, slug, nombre) {
+    const url = `${window.location.origin}/compraventa/${slug}/admin`;
+    const msg = encodeURIComponent(`Hola! Aquí está el acceso a tu panel de compraventa *${nombre}* en TUC TUC:\n${url}`);
+    window.open(`https://wa.me/57${telefono}?text=${msg}`, '_blank');
+}
+</script>
+</body>
+</html>

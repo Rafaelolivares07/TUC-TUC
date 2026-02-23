@@ -24981,12 +24981,18 @@ def admin_negocios():
         except Exception:
             conn.rollback()
             total_inmobiliarias = 0
+        try:
+            total_compraventas = (conn.execute("SELECT COUNT(*) FROM negocios WHERE tipo = 'compraventa' AND activo = TRUE").fetchone() or [0])[0]
+        except Exception:
+            conn.rollback()
+            total_compraventas = 0
         conn.close()
         return render_template('admin_negocios.html',
                                total_restaurantes=total_restaurantes,
                                total_tiendas=total_tiendas,
                                total_talleres=total_talleres,
-                               total_inmobiliarias=total_inmobiliarias)
+                               total_inmobiliarias=total_inmobiliarias,
+                               total_compraventas=total_compraventas)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -25030,6 +25036,29 @@ def admin_inmobiliaria_lista():
         """).fetchall()
         conn.close()
         return render_template('admin_inmobiliaria_lista.html', inmobiliarias=inmobiliarias)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Error: {e}", 500
+
+
+@app.route('/admin/compraventa')
+@admin_required
+def admin_compraventa_lista():
+    """Lista compraventas registradas"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        compraventas = conn.execute("""
+            SELECT n.id, n.nombre, n.slug, n.activo,
+                   t.nombre AS propietario_nombre, t.telefono AS propietario_telefono,
+                   (SELECT COUNT(*) FROM compraventa_vehiculos cv WHERE cv.negocio_id = n.id) AS total_vehiculos
+            FROM negocios n
+            LEFT JOIN terceros t ON t.id = n.propietario_id
+            WHERE n.tipo = 'compraventa'
+            ORDER BY n.id DESC
+        """).fetchall()
+        conn.close()
+        return render_template('admin_compraventa_lista.html', compraventas=compraventas)
     except Exception as e:
         import traceback; traceback.print_exc()
         return f"Error: {e}", 500
@@ -31353,6 +31382,85 @@ def api_compraventa_login():
         conn.close()
         return jsonify({'ok': True, 'id': tercero['id'], 'nombre': tercero['nombre']})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/crear', methods=['POST'])
+def api_compraventa_crear():
+    """Crear nueva compraventa desde /empieza — requiere sesión previa de /api/compraventa/login"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'})
+    slug = generar_slug(nombre)
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        existe = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='compraventa'", (slug,)
+        ).fetchone()
+        if existe:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya existe una compraventa con ese nombre'})
+        conn.execute(
+            "INSERT INTO negocios (propietario_id, nombre, slug, tipo, activo) VALUES (%s, %s, %s, 'compraventa', TRUE)",
+            (uid, nombre, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'slug': slug})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/admin/compraventa/crear', methods=['POST'])
+@admin_required
+def api_admin_compraventa_crear():
+    """Crear compraventa desde panel TUC TUC admin"""
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    nombre_dueno = (data.get('nombre_dueno') or '').strip()
+    telefono_dueno = ''.join(filter(str.isdigit, data.get('telefono_dueno') or ''))
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre de la compraventa requerido'})
+    if len(telefono_dueno) < 10:
+        return jsonify({'ok': False, 'error': 'Celular del dueño requerido (mín. 10 dígitos)'})
+    if not nombre_dueno:
+        return jsonify({'ok': False, 'error': 'Nombre del dueño requerido'})
+    slug = generar_slug(nombre)
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        existente = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='compraventa'", (slug,)
+        ).fetchone()
+        if existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya existe una compraventa con ese nombre'})
+        tercero = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (telefono_dueno,)).fetchone()
+        if tercero:
+            propietario_id = tercero['id']
+        else:
+            row_t = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                (nombre_dueno, telefono_dueno)
+            ).fetchone()
+            propietario_id = row_t['id']
+        conn.execute(
+            "INSERT INTO negocios (propietario_id, nombre, slug, tipo, activo) VALUES (%s, %s, %s, 'compraventa', TRUE)",
+            (propietario_id, nombre, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'slug': slug, 'link_admin': f'/compraventa/{slug}/admin'})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
         return jsonify({'ok': False, 'error': str(e)})
 
 

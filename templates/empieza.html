@@ -158,6 +158,22 @@
             </div>
         </div>
 
+        <!-- Compraventa de Vehículos -->
+        <div onclick="iniciarFlujo('compraventa')"
+            class="neg-card bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-amber-200">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">🚗</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-extrabold text-gray-800 text-lg">Compraventa</span>
+                        <span class="bg-violet-100 text-violet-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Bolsa de vehículos usados — publica y vende con tu portal propio</p>
+                </div>
+                <span class="text-amber-300 text-xl font-bold shrink-0">›</span>
+            </div>
+        </div>
+
         <!-- Otro tipo -->
         <div onclick="iniciarFlujo('otro')"
             class="neg-card bg-white border-2 border-dashed border-gray-200 rounded-2xl p-5 hover:border-gray-300">
@@ -206,7 +222,7 @@ function iniciarFlujo(t) {
     subtipo = 'menu_dia';
     datos   = {};
     if (t === 'restaurante') mSubtipo();
-    else if (t === 'tienda' || t === 'taller') mNombreNeg();
+    else if (t === 'tienda' || t === 'taller' || t === 'compraventa') mNombreNeg();
     else if (t === 'inmobiliaria')             mNombreNeg();
     else                                        mOtro();
 }
@@ -247,14 +263,15 @@ function selSubtipo(s) {
 
 function mNombreNeg() {
     paso = 'nombre_neg';
-    const esRest   = tipo === 'restaurante';
-    const esTaller = tipo === 'taller';
-    const esInmo   = tipo === 'inmobiliaria';
-    const label    = esRest ? 'restaurante' : esTaller ? 'taller' : esInmo ? 'inmobiliaria' : 'tienda';
-    const ph       = esRest ? 'Ej: El Buen Sabor' : esTaller ? 'Ej: AutoFix Cali' : esInmo ? 'Ej: Inmobiliaria Central' : 'Ej: Moda Express';
+    const esRest         = tipo === 'restaurante';
+    const esTaller       = tipo === 'taller';
+    const esInmo         = tipo === 'inmobiliaria';
+    const esCompraventa  = tipo === 'compraventa';
+    const label    = esRest ? 'restaurante' : esTaller ? 'taller' : esInmo ? 'inmobiliaria' : esCompraventa ? 'compraventa' : 'tienda';
+    const ph       = esRest ? 'Ej: El Buen Sabor' : esTaller ? 'Ej: AutoFix Cali' : esInmo ? 'Ej: Inmobiliaria Central' : esCompraventa ? 'Ej: AutoCompra Cali' : 'Ej: Moda Express';
     render(`
         <button onclick="volverDesdeNombreNeg()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
-        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : esTaller ? 'Taller Automotriz' : esInmo ? 'Inmobiliaria' : 'Tienda'}</p>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : esTaller ? 'Taller Automotriz' : esInmo ? 'Inmobiliaria' : esCompraventa ? 'Compraventa' : 'Tienda'}</p>
         <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Cómo se llama tu ${label}?</h3>
         <p class="text-gray-400 text-sm mb-5">Este será el nombre que verán tus clientes</p>
         <input id="iNomNeg" type="text" placeholder="${ph}"
@@ -316,7 +333,7 @@ function avNomDueno() {
 
 function mTelefono() {
     paso = 'telefono';
-    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : '4';
+    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : '4';
     render(`
         <button onclick="mNombreDueno()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
         <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Último paso</p>
@@ -369,6 +386,32 @@ async function crear() {
                 mExito(`/inmobiliaria/${dInmo.slug}/admin`);
             } else {
                 err('eTel', dInmo.error || 'Ocurrió un error, intenta de nuevo');
+                btn.disabled = false; btn.textContent = '¡Crear mi negocio! 🚀';
+            }
+        } else if (tipo === 'compraventa') {
+            // Paso 1: login/registro del tercero
+            const rLogin = await fetch('/api/compraventa/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ telefono: datos.telefono, nombre: datos.nombre_dueno })
+            });
+            const dLogin = await rLogin.json();
+            if (!dLogin.ok) {
+                err('eTel', dLogin.error || 'Error al registrar usuario');
+                btn.disabled = false; btn.textContent = '¡Crear mi negocio! 🚀';
+                return;
+            }
+            // Paso 2: crear compraventa
+            const rComp = await fetch('/api/compraventa/crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre: datos.nombre_negocio })
+            });
+            const dComp = await rComp.json();
+            if (dComp.ok) {
+                mExito(`/compraventa/${dComp.slug}/admin`);
+            } else {
+                err('eTel', dComp.error || 'Ocurrió un error, intenta de nuevo');
                 btn.disabled = false; btn.textContent = '¡Crear mi negocio! 🚀';
             }
         } else {
@@ -472,7 +515,7 @@ async function enviarOtro() {
 // ─── Modales de éxito ──────────────────────────────────
 
 function mExito(redirect) {
-    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : '4';
+    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : '4';
     render(`
         <div class="text-center py-4">
             <div class="text-6xl mb-4">🎉</div>

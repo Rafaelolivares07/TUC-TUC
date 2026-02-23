@@ -24847,10 +24847,27 @@ def crear_tablas_tienda(conn):
     """)
     conn.commit()
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_productos (
+            id SERIAL PRIMARY KEY,
+            codigo_barra VARCHAR(50) UNIQUE,
+            nombre VARCHAR(255) NOT NULL,
+            descripcion TEXT,
+            imagen TEXT,
+            categoria VARCHAR(100),
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
     alters = [
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
+        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS codigo_barra VARCHAR(50)",
+        "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
+        "CREATE INDEX IF NOT EXISTS idx_productos_tienda_catalogo ON productos_tienda(catalogo_id)",
     ]
     for sql in alters:
         try:
@@ -26780,7 +26797,7 @@ def api_tienda_productos(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
+            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
             (tienda['id'],)
         ).fetchall()
         resultado = []
@@ -26793,6 +26810,8 @@ def api_tienda_productos(slug):
                 'precio': float(p['precio']), 'imagen': p['imagen'] or '',
                 'disponible': p['disponible'], 'orden': p['orden'],
                 'descripcion': p['descripcion'] or '',
+                'codigo_barra': p['codigo_barra'] or '',
+                'catalogo_id': p['catalogo_id'],
                 'tiene_variantes': nv > 0
             })
         conn.close()
@@ -26812,6 +26831,8 @@ def api_tienda_producto_crear(slug):
     precio = data.get('precio', 0)
     producto_id = data.get('id')
     descripcion = data.get('descripcion', '').strip()
+    codigo_barra = data.get('codigo_barra', '').strip() or None
+    catalogo_id = data.get('catalogo_id') or None
 
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
@@ -26827,21 +26848,61 @@ def api_tienda_producto_crear(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
 
+        # Si tiene código de barras y aún no está en el catálogo, crearlo
+        if codigo_barra and not catalogo_id:
+            existing = conn.execute(
+                "SELECT id FROM catalogo_productos WHERE codigo_barra = %s", (codigo_barra,)
+            ).fetchone()
+            if existing:
+                catalogo_id = existing['id']
+            else:
+                cat_row = conn.execute(
+                    "INSERT INTO catalogo_productos (codigo_barra, nombre, descripcion, categoria) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (codigo_barra, nombre, descripcion or None, categoria or None)
+                ).fetchone()
+                catalogo_id = cat_row['id']
+                conn.commit()
+
         if producto_id:
             conn.execute(
-                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s, descripcion = %s WHERE id = %s AND tienda_id = %s",
-                (nombre, categoria, precio, descripcion or None, producto_id, tienda['id'])
+                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s, descripcion = %s, catalogo_id = %s, codigo_barra = %s WHERE id = %s AND tienda_id = %s",
+                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, producto_id, tienda['id'])
             )
             nuevo_id = producto_id
         else:
             row = conn.execute(
-                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio, descripcion) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (tienda['id'], nombre, categoria, precio, descripcion or None)
+                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (tienda['id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra)
             ).fetchone()
             nuevo_id = row['id']
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'id': nuevo_id})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/catalogo/buscar')
+def api_catalogo_buscar():
+    """Busca un producto en el catálogo compartido por código de barras"""
+    codigo = request.args.get('codigo', '').strip()
+    if not codigo:
+        return jsonify({'ok': False, 'error': 'Código requerido'}), 400
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT id, nombre, descripcion, imagen, categoria FROM catalogo_productos WHERE codigo_barra = %s",
+            (codigo,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return jsonify({'ok': True, 'encontrado': True, 'producto': {
+                'id': row['id'], 'nombre': row['nombre'],
+                'descripcion': row['descripcion'] or '',
+                'imagen': row['imagen'] or '',
+                'categoria': row['categoria'] or ''
+            }})
+        return jsonify({'ok': True, 'encontrado': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

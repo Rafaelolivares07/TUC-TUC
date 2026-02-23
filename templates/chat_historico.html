@@ -71,6 +71,13 @@ let paginaActual = 1;
 let totalPaginas = 1;
 let busquedaActual = '';
 
+// Si el string no trae timezone (mensajes viejos en BD), asumir UTC
+function parseFecha(s) {
+  if (!s) return null;
+  if (!/Z|[+-]\d{2}:\d{2}$/.test(s)) s = s.replace(' ', 'T') + 'Z';
+  return new Date(s);
+}
+
 async function cargar(pagina, q) {
   paginaActual = pagina;
   const params = new URLSearchParams({ p: pagina });
@@ -104,7 +111,7 @@ async function cargar(pagina, q) {
   let html = '';
   let fechaAnterior = '';
   for (const m of msgs) {
-    const dt = m.created_at ? new Date(m.created_at) : null;
+    const dt = parseFecha(m.created_at);
     const fecha = dt ? dt.toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
     if (fecha && fecha !== fechaAnterior) {
       html += `<div class="text-center text-xs text-gray-500 my-2">${fecha}</div>`;

@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Admin — {{ neg.nombre }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .tab-btn.active { border-bottom:3px solid #dc2626; color:#dc2626; font-weight:700; }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- PANTALLA: LOGIN -->
+<div id="pantalla-login" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">🚗</div>
+      <h1 class="text-xl font-bold text-gray-800">{{ neg.nombre }}</h1>
+      <p class="text-sm text-gray-500 mt-1">Panel de compraventa</p>
+    </div>
+    <div class="space-y-3">
+      <input id="inp-tel" type="tel" placeholder="Tu teléfono de acceso"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <div id="inp-nombre-wrap" class="hidden">
+        <input id="inp-nombre" type="text" placeholder="Tu nombre"
+               class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      </div>
+      <button onclick="login()" class="w-full bg-red-600 text-white rounded-xl py-3 font-semibold text-sm">Entrar</button>
+    </div>
+    <div class="mt-4 border-t pt-4 text-center">
+      <a href="/compraventa/{{ slug }}" class="text-xs text-red-600 font-medium">Ver portal público →</a>
+    </div>
+  </div>
+</div>
+
+<!-- PANTALLA: ADMIN -->
+<div id="pantalla-admin" class="hidden">
+  <!-- Header -->
+  <div class="bg-white shadow-sm sticky top-0 z-40">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div>
+        <h1 class="font-bold text-gray-800 text-base">{{ neg.nombre }}</h1>
+        <p class="text-xs text-gray-500">Panel de administración</p>
+      </div>
+      <a href="/compraventa/{{ slug }}" target="_blank"
+         class="text-xs text-red-700 font-medium border border-red-200 px-3 py-1.5 rounded-xl">Ver portal</a>
+    </div>
+    <!-- Tabs -->
+    <div class="max-w-4xl mx-auto px-4 flex gap-4 border-t border-gray-100 overflow-x-auto">
+      <button onclick="verTab('inventario')" id="tab-inventario" class="tab-btn active text-sm py-3 px-1 whitespace-nowrap">Inventario</button>
+      <button onclick="verTab('leads')" id="tab-leads" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Contactos</button>
+      <button onclick="verTab('apariencia')" id="tab-apariencia" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Apariencia</button>
+    </div>
+  </div>
+
+  <!-- TAB: INVENTARIO -->
+  <div id="seccion-inventario" class="max-w-4xl mx-auto px-4 py-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-gray-700">Vehículos del lote</h2>
+      <button onclick="nuevoVehiculo()" class="bg-red-600 text-white text-xs font-semibold px-4 py-2 rounded-xl">+ Nuevo</button>
+    </div>
+    <div id="lista-vehiculos" class="space-y-3">
+      <div class="text-center py-16 text-gray-400">
+        <div class="text-5xl mb-3">⏳</div>
+        <p>Cargando...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: LEADS -->
+  <div id="seccion-leads" class="hidden max-w-4xl mx-auto px-4 py-4">
+    <h2 class="font-semibold text-gray-700 mb-3">Interesados</h2>
+    <div id="lista-leads" class="space-y-3">
+      <div class="text-center py-16 text-gray-400">
+        <div class="text-5xl mb-3">⏳</div>
+        <p>Cargando...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: APARIENCIA -->
+  <div id="seccion-apariencia" class="hidden max-w-4xl mx-auto px-4 py-4">
+    <div class="bg-white rounded-2xl shadow-sm p-5 space-y-5">
+      <h2 class="font-bold text-gray-800">Personalizar portal</h2>
+
+      <!-- Imagen Header -->
+      <div>
+        <p class="text-sm font-semibold text-gray-700 mb-2">Imagen de fondo / banner</p>
+        <div id="preview-header" class="w-full h-32 rounded-xl bg-gray-100 overflow-hidden mb-2 flex items-center justify-center">
+          <span class="text-gray-400 text-sm">Sin imagen</span>
+        </div>
+        <div class="flex gap-2">
+          <input id="inp-imagen-url" type="text" placeholder="URL de la imagen"
+                 class="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+          <button onclick="guardarImagen()" class="bg-red-600 text-white text-xs font-semibold px-4 py-2 rounded-xl">Guardar</button>
+          <button onclick="quitarImagen()" class="bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-2 rounded-xl">Quitar</button>
+        </div>
+      </div>
+
+      <!-- Tema -->
+      <div>
+        <p class="text-sm font-semibold text-gray-700 mb-2">Tema del portal</p>
+        <div class="flex gap-3">
+          <button id="btn-tema-claro" onclick="guardarTema('claro')"
+                  class="flex-1 border-2 border-red-500 bg-white text-gray-800 rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
+            ☀️ Claro
+          </button>
+          <button id="btn-tema-oscuro" onclick="guardarTema('oscuro')"
+                  class="flex-1 border-2 border-gray-200 bg-gray-800 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
+            🌙 Oscuro
+          </button>
+        </div>
+      </div>
+
+      <!-- Mostrar nombre -->
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-semibold text-gray-700">Mostrar nombre del negocio</p>
+          <p class="text-xs text-gray-400">Visible en el header del portal público</p>
+        </div>
+        <button id="btn-toggle-nombre" onclick="toggleNombre()"
+                class="w-12 h-6 rounded-full bg-red-500 relative transition-colors">
+          <span id="toggle-knob" class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVO VEHÍCULO -->
+<div id="modal-vehiculo" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-800">Nuevo vehículo</h2>
+      <button onclick="cerrarModalVehiculo()" class="text-gray-400 text-xl">✕</button>
+    </div>
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <input id="v-placa" type="text" placeholder="Placa" class="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 uppercase">
+        <input id="v-anio" type="number" placeholder="Año" class="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      </div>
+      <input id="v-marca" type="text" placeholder="Marca" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <input id="v-linea" type="text" placeholder="Línea / referencia" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <div class="grid grid-cols-2 gap-3">
+        <input id="v-color" type="text" placeholder="Color" class="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+        <input id="v-km" type="number" placeholder="Kilometraje" class="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      </div>
+      <input id="v-precio" type="number" placeholder="Precio de venta" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <div class="flex gap-3">
+        <button onclick="cerrarModalVehiculo()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="crearVehiculo()" class="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold">Agregar al lote</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR PRECIO / ESTADO -->
+<div id="modal-precio" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-800">Editar vehículo</h2>
+      <button onclick="cerrarModalPrecio()" class="text-gray-400 text-xl">✕</button>
+    </div>
+    <div class="space-y-3">
+      <input id="p-precio" type="number" placeholder="Precio de venta" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <select id="p-estado" class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white">
+        <option value="disponible">Disponible</option>
+        <option value="reservado">Reservado</option>
+        <option value="vendido">Vendido</option>
+      </select>
+      <div class="flex gap-3">
+        <button onclick="cerrarModalPrecio()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="guardarPrecio()" class="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLUG = "{{ slug }}";
+let mostrarNombre = true;
+let vidEditar = null;
+let temaActual = 'claro';
+
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast toast-${tipo} show`;
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── LOGIN ──────────────────────────────────────────────────────────────
+async function login() {
+  const tel = document.getElementById('inp-tel').value.trim();
+  const nombre = document.getElementById('inp-nombre').value.trim();
+  if (!tel) { toast('Ingresa tu teléfono', 'err'); return; }
+  try {
+    const r = await fetch('/api/compraventa/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({telefono: tel, nombre})
+    });
+    const d = await r.json();
+    if (d.ok) { mostrarAdmin(); }
+    else if (d.error === 'nombre_requerido') {
+      document.getElementById('inp-nombre-wrap').classList.remove('hidden');
+      toast('Ingresa tu nombre para registrarte', 'err');
+    } else {
+      toast(d.error || 'Error', 'err');
+    }
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+function mostrarAdmin() {
+  document.getElementById('pantalla-login').classList.add('hidden');
+  document.getElementById('pantalla-admin').classList.remove('hidden');
+  cargarInventario();
+  cargarInfo();
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────
+const SECCIONES = ['inventario', 'leads', 'apariencia'];
+function verTab(tab) {
+  SECCIONES.forEach(s => {
+    document.getElementById(`seccion-${s}`).classList.toggle('hidden', s !== tab);
+    document.getElementById(`tab-${s}`).classList.toggle('active', s === tab);
+    if (s !== tab) document.getElementById(`tab-${s}`).classList.add('text-gray-500');
+    else document.getElementById(`tab-${s}`).classList.remove('text-gray-500');
+  });
+  if (tab === 'leads') cargarLeads();
+}
+
+// ── INVENTARIO ────────────────────────────────────────────────────────
+async function cargarInventario() {
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/admin/inventario`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error || 'Error', 'err'); return; }
+    const lista = document.getElementById('lista-vehiculos');
+    if (!d.vehiculos.length) {
+      lista.innerHTML = '<div class="text-center py-12 text-gray-400"><div class="text-5xl mb-2">🚗</div><p>Sin vehículos en el lote</p></div>';
+      return;
+    }
+    lista.innerHTML = d.vehiculos.map(v => `
+      <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div class="flex gap-3 p-3">
+          ${v.foto ? `<img src="${v.foto}" class="w-20 h-16 rounded-xl object-cover flex-shrink-0">` :
+            `<div class="w-20 h-16 rounded-xl bg-gray-100 flex items-center justify-center text-2xl flex-shrink-0">🚗</div>`}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <p class="font-bold text-gray-800 text-sm truncate">${v.marca||''} ${v.linea||''} ${v.anio||''}</p>
+              <span class="text-xs px-2 py-0.5 rounded-lg flex-shrink-0 ${v.estado==='disponible'?'bg-green-100 text-green-700':v.estado==='reservado'?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-500'}">${v.estado}</span>
+            </div>
+            <p class="text-xs text-gray-500">${v.placa||'Sin placa'} · ${v.color||''} ${v.km_actual?`· ${Number(v.km_actual).toLocaleString()} km`:''}</p>
+            <p class="font-bold text-red-600 text-sm mt-0.5">${v.precio_ofertado ? '$'+Number(v.precio_ofertado).toLocaleString('es-CO') : 'Sin precio'}</p>
+          </div>
+        </div>
+        <div class="px-3 pb-3 flex gap-2">
+          <button onclick="abrirModalPrecio(${v.vid}, ${v.precio_ofertado||0}, '${v.estado}')"
+                  class="flex-1 bg-gray-100 text-gray-700 text-xs font-medium py-2 rounded-xl">Editar precio</button>
+          <a href="/autos/${v.vid}" target="_blank"
+             class="flex-1 bg-red-50 text-red-700 text-xs font-medium py-2 rounded-xl text-center">Ver ficha</a>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+function nuevoVehiculo() { document.getElementById('modal-vehiculo').classList.remove('hidden'); }
+function cerrarModalVehiculo() { document.getElementById('modal-vehiculo').classList.add('hidden'); }
+
+async function crearVehiculo() {
+  const placa = document.getElementById('v-placa').value.trim().toUpperCase();
+  const marca = document.getElementById('v-marca').value.trim();
+  const linea = document.getElementById('v-linea').value.trim();
+  const anio = document.getElementById('v-anio').value;
+  const color = document.getElementById('v-color').value.trim();
+  const km_actual = parseInt(document.getElementById('v-km').value) || 0;
+  const precio = parseFloat(document.getElementById('v-precio').value) || null;
+  if (!marca) { toast('Ingresa la marca', 'err'); return; }
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/vehiculo/crear`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({placa, marca, linea, anio: parseInt(anio)||null, color, km_actual, precio})
+    });
+    const d = await r.json();
+    if (d.ok) { toast('Vehículo agregado al lote'); cerrarModalVehiculo(); cargarInventario(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+function abrirModalPrecio(vid, precio, estado) {
+  vidEditar = vid;
+  document.getElementById('p-precio').value = precio || '';
+  document.getElementById('p-estado').value = estado || 'disponible';
+  document.getElementById('modal-precio').classList.remove('hidden');
+}
+function cerrarModalPrecio() { document.getElementById('modal-precio').classList.add('hidden'); vidEditar = null; }
+
+async function guardarPrecio() {
+  if (!vidEditar) return;
+  const precio = parseFloat(document.getElementById('p-precio').value) || null;
+  const estado = document.getElementById('p-estado').value;
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/vehiculo/${vidEditar}/precio`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({precio, estado})
+    });
+    const d = await r.json();
+    if (d.ok) { toast('Guardado'); cerrarModalPrecio(); cargarInventario(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+// ── LEADS ─────────────────────────────────────────────────────────────
+async function cargarLeads() {
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/admin/leads`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error || 'Error', 'err'); return; }
+    const lista = document.getElementById('lista-leads');
+    if (!d.leads.length) {
+      lista.innerHTML = '<div class="text-center py-12 text-gray-400"><div class="text-4xl mb-2">📭</div><p>Sin contactos aún</p></div>';
+      return;
+    }
+    lista.innerHTML = d.leads.map(l => `
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="flex items-start justify-between mb-1">
+          <p class="font-semibold text-gray-800 text-sm">${l.nombre || 'Anónimo'}</p>
+          <span class="text-xs text-gray-400">${l.fecha}</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-1">📞 <a href="tel:${l.telefono}" class="text-blue-600">${l.telefono}</a> · ${l.vehiculo}</p>
+        ${l.mensaje ? `<p class="text-sm text-gray-600 bg-gray-50 rounded-lg p-2 mt-1">${l.mensaje}</p>` : ''}
+      </div>
+    `).join('');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+// ── APARIENCIA ────────────────────────────────────────────────────────
+async function cargarInfo() {
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/admin/info`);
+    const d = await r.json();
+    if (!d.ok) return;
+    const n = d.negocio;
+    temaActual = n.tema || 'claro';
+    mostrarNombre = n.mostrar_nombre !== false;
+    if (n.imagen_header) {
+      const prev = document.getElementById('preview-header');
+      prev.innerHTML = `<img src="${n.imagen_header}" class="w-full h-full object-cover">`;
+      document.getElementById('inp-imagen-url').value = n.imagen_header;
+    }
+    actualizarBotonesTema();
+    actualizarToggleNombre();
+  } catch(e) {}
+}
+
+function actualizarBotonesTema() {
+  document.getElementById('btn-tema-claro').classList.toggle('border-red-500', temaActual === 'claro');
+  document.getElementById('btn-tema-claro').classList.toggle('border-gray-200', temaActual !== 'claro');
+  document.getElementById('btn-tema-oscuro').classList.toggle('border-red-500', temaActual === 'oscuro');
+  document.getElementById('btn-tema-oscuro').classList.toggle('border-gray-200', temaActual !== 'oscuro');
+}
+
+function actualizarToggleNombre() {
+  const btn = document.getElementById('btn-toggle-nombre');
+  const knob = document.getElementById('toggle-knob');
+  btn.classList.toggle('bg-red-500', mostrarNombre);
+  btn.classList.toggle('bg-gray-300', !mostrarNombre);
+  knob.classList.toggle('translate-x-0', !mostrarNombre);
+  knob.classList.toggle('-translate-x-6', mostrarNombre);
+}
+
+async function guardarImagen() {
+  const imagen = document.getElementById('inp-imagen-url').value.trim();
+  if (!imagen) { toast('Ingresa una URL de imagen', 'err'); return; }
+  const prev = document.getElementById('preview-header');
+  prev.innerHTML = `<img src="${imagen}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=text-red-400 class=text-sm>URL inválida</span>'">`;
+  await personalizar({imagen_header: imagen});
+}
+
+async function quitarImagen() {
+  document.getElementById('inp-imagen-url').value = '';
+  document.getElementById('preview-header').innerHTML = '<span class="text-gray-400 text-sm">Sin imagen</span>';
+  await personalizar({imagen_header: ''});
+}
+
+async function guardarTema(tema) {
+  temaActual = tema;
+  actualizarBotonesTema();
+  await personalizar({tema});
+}
+
+async function toggleNombre() {
+  mostrarNombre = !mostrarNombre;
+  actualizarToggleNombre();
+  await personalizar({mostrar_nombre: mostrarNombre});
+}
+
+async function personalizar(campos) {
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/admin/personalizar`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(campos)
+    });
+    const d = await r.json();
+    if (d.ok) toast('Guardado');
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+// Auto-login si hay sesión activa
+(async () => {
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/admin/info`);
+    const d = await r.json();
+    if (d.ok) mostrarAdmin();
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

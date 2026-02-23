@@ -28460,12 +28460,32 @@ def api_garaje_intervenciones(vid):
         # Agregar visitas a talleres TUC TUC como intervenciones con fuente 'taller_tuc'
         visitas = conn.execute("""
             SELECT cs.id, cs.servicio_desc, cs.km_entrada, cs.created_at,
-                   cs.estado, cs.monto_total, n.nombre as taller_nombre
+                   cs.estado, cs.monto_total, cs.notas, n.nombre as taller_nombre,
+                   COALESCE(ns.nombre_personalizado, sc.nombre) as servicio_nombre
             FROM citas_servicio cs
             JOIN negocios n ON n.id = cs.negocio_id
+            LEFT JOIN negocio_servicio ns ON ns.id = cs.negocio_servicio_id
+            LEFT JOIN servicios_catalogo sc ON sc.id = ns.servicio_id
             WHERE cs.vehiculo_id = %s
+            ORDER BY cs.created_at DESC
         """, (vid,)).fetchall()
         for v in visitas:
+            nombre_servicio = v['servicio_nombre'] or v['servicio_desc'] or ''
+            items_taller = []
+            if nombre_servicio:
+                items_taller.append({
+                    'tipo': 'servicio',
+                    'descripcion': nombre_servicio,
+                    'costo': float(v['monto_total']) if v['monto_total'] else 0,
+                    'proveedor_nombre': None
+                })
+            if v['notas']:
+                items_taller.append({
+                    'tipo': 'nota',
+                    'descripcion': v['notas'],
+                    'costo': 0,
+                    'proveedor_nombre': None
+                })
             resultado.append({
                 'id': v['id'],
                 'fuente': 'taller_tuc',
@@ -28473,11 +28493,11 @@ def api_garaje_intervenciones(vid):
                 'fechahora': v['created_at'].isoformat() if v['created_at'] else None,
                 'km': v['km_entrada'],
                 'tipo': 'taller_tuc',
-                'descripcion': v['servicio_desc'],
+                'descripcion': nombre_servicio,
                 'estado': v['estado'],
                 'intervalo_km': None, 'intervalo_dias': None,
                 'total': float(v['monto_total']) if v['monto_total'] else None,
-                'items': []
+                'items': items_taller
             })
 
         # Ordenar por fecha descendente unificado
@@ -30365,6 +30385,9 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS whatsapp VARCHAR(20)",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS logo_url TEXT",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS imagen_header TEXT",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",
@@ -30383,7 +30406,7 @@ def crear_tablas_inmobiliaria(conn):
 def _inmo_tiene_acceso(conn, slug, uid):
     """Retorna el row de la inmobiliaria si el uid es propietario o colaborador, else None."""
     return conn.execute(
-        """SELECT id, nombre, slug FROM inmobiliarias
+        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias
            WHERE slug=%s AND activa=TRUE
              AND (propietario_id=%s
                   OR id IN (SELECT inmobiliaria_id FROM inmobiliaria_colaboradores
@@ -30437,7 +30460,9 @@ def inmobiliaria_portal(slug):
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
         inmo = conn.execute(
-            "SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            """SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono,
+                      imagen_header, tema, mostrar_nombre
+               FROM inmobiliarias WHERE slug=%s AND activa=TRUE""",
             (slug,)
         ).fetchone()
         conn.close()
@@ -30972,7 +30997,8 @@ def api_inmobiliaria_admin_info(slug):
         conn.close()
         if not inmo:
             return jsonify({'ok': False, 'error': 'Sin acceso'})
-        return jsonify({'ok': True, 'inmobiliaria': dict(inmo)})
+        data = dict(inmo)
+        return jsonify({'ok': True, 'inmobiliaria': data, 'inmo': data})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
 
@@ -31137,6 +31163,670 @@ def api_inmobiliaria_admin_leads(slug):
             'prop_slug': l['prop_slug'],
             'fecha': l['created_at'].strftime('%d/%m/%Y %H:%M')
         } for l in leads]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# MÓDULO: BOLSA AUTOMOTRIZ  (venta de vehículos particulares + compraventas)
+# ═══════════════════════════════════════════════════════════════════════
+
+_automotriz_tablas_listas = False
+
+
+def crear_tablas_automotriz(conn):
+    """Self-healing: tablas bolsa automotriz. Una vez por proceso."""
+    global _automotriz_tablas_listas
+    if _automotriz_tablas_listas:
+        return
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bolsa_automotriz (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            tercero_id INTEGER NOT NULL,
+            precio NUMERIC(15,2),
+            estado VARCHAR(20) DEFAULT 'activo',
+            descripcion TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS compraventa_vehiculos (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            vehiculo_id INTEGER NOT NULL,
+            precio_ofertado NUMERIC(15,2),
+            estado VARCHAR(20) DEFAULT 'disponible',
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(negocio_id, vehiculo_id)
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS leads_auto (
+            id SERIAL PRIMARY KEY,
+            vehiculo_id INTEGER NOT NULL,
+            nombre VARCHAR(100),
+            telefono VARCHAR(20),
+            mensaje TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    alters = [
+        "ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS tercero_id INTEGER",
+        "ALTER TABLE bolsa_automotriz ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE bolsa_automotriz ADD COLUMN IF NOT EXISTS km_venta INTEGER",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS imagen_header TEXT",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS logo_url TEXT",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS whatsapp VARCHAR(20)",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    _automotriz_tablas_listas = True
+
+
+def _compraventa_tiene_acceso(conn, slug, uid):
+    """Retorna el negocio si uid es propietario o admin. None si no."""
+    return conn.execute(
+        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, whatsapp
+           FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE
+             AND (propietario_id=%s OR admin_id=%s)""",
+        (slug, uid, uid)
+    ).fetchone()
+
+
+# ─── RUTAS DE PÁGINA ───────────────────────────────────────────────────
+
+@app.route('/autos')
+def bolsa_autos():
+    """Bolsa automotriz pública TUC TUC"""
+    return render_template('autos.html')
+
+
+@app.route('/autos/<int:vid>')
+def auto_ficha(vid):
+    """Ficha detalle de un vehículo en venta"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        ba = conn.execute(
+            """SELECT ba.id, ba.precio, ba.descripcion, ba.km_venta, ba.estado,
+                      v.placa, v.marca, v.linea, v.anio, v.color, v.apodo, v.km_actual,
+                      t.nombre as vendedor_nombre, t.telefono as vendedor_tel
+               FROM bolsa_automotriz ba
+               JOIN vehiculos v ON v.id = ba.vehiculo_id
+               LEFT JOIN terceros t ON t.id = ba.tercero_id
+               WHERE ba.vehiculo_id=%s AND ba.estado='activo'""",
+            (vid,)
+        ).fetchone()
+        if not ba:
+            conn.close()
+            return render_template('autos.html'), 404
+        fotos = conn.execute(
+            "SELECT imagen FROM vehiculo_fotos WHERE vehiculo_id=%s ORDER BY orden, fechahora",
+            (vid,)
+        ).fetchall()
+        conn.close()
+        return render_template('auto_ficha.html',
+                               auto=dict(ba), fotos=[f['imagen'] for f in fotos], vid=vid)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/compraventa/<slug>')
+def compraventa_portal(slug):
+    """Portal público de la compraventa"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = conn.execute(
+            """SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono,
+                      imagen_header, tema, mostrar_nombre
+               FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE""",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not neg:
+            return "Compraventa no encontrada", 404
+        return render_template('compraventa_portal.html', neg=dict(neg), slug=slug)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/compraventa/<slug>/admin')
+def compraventa_admin(slug):
+    """Panel de administración de la compraventa"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = conn.execute(
+            "SELECT id, nombre, slug FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not neg:
+            return "Compraventa no encontrada", 404
+        return render_template('compraventa_admin.html', neg=dict(neg), slug=slug)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+# ─── API: LOGIN ────────────────────────────────────────────────────────
+
+@app.route('/api/compraventa/login', methods=['POST'])
+def api_compraventa_login():
+    """Login/registro con teléfono para compraventa"""
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        tercero = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE telefono=%s", (telefono,)
+        ).fetchone()
+        if not tercero:
+            if not nombre:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'nombre_requerido'})
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id, nombre, telefono",
+                (nombre, telefono)
+            )
+            tercero = cur.fetchone()
+            conn.commit()
+        session['usuario_id'] = tercero['id']
+        session['usuario_nombre'] = tercero['nombre']
+        conn.close()
+        return jsonify({'ok': True, 'id': tercero['id'], 'nombre': tercero['nombre']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API: BOLSA PÚBLICA ────────────────────────────────────────────────
+
+@app.route('/api/bolsa-automotriz/listar')
+def api_bolsa_automotriz_listar():
+    """Lista pública de vehículos en venta"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        rows = conn.execute(
+            """SELECT ba.vehiculo_id as vid, ba.precio, ba.km_venta, ba.descripcion,
+                      v.placa, v.marca, v.linea, v.anio, v.color, v.apodo,
+                      (SELECT imagen FROM vehiculo_fotos WHERE vehiculo_id=v.id ORDER BY orden LIMIT 1) as foto
+               FROM bolsa_automotriz ba
+               JOIN vehiculos v ON v.id=ba.vehiculo_id
+               WHERE ba.estado='activo'
+               ORDER BY ba.updated_at DESC LIMIT 100"""
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'autos': [{
+            'vid': r['vid'], 'precio': float(r['precio']) if r['precio'] else None,
+            'km': r['km_venta'], 'descripcion': r['descripcion'],
+            'placa': r['placa'], 'marca': r['marca'], 'linea': r['linea'],
+            'anio': r['anio'], 'color': r['color'], 'apodo': r['apodo'],
+            'foto': r['foto']
+        } for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventas/listar')
+def api_compraventas_listar():
+    """Lista pública de compraventas activas (para que propietario comparta su vehículo)"""
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT id, nombre, slug FROM negocios WHERE tipo='compraventa' AND activo=TRUE ORDER BY nombre"
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'compraventas': [{'id': r['id'], 'nombre': r['nombre'], 'slug': r['slug']} for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/autos/<int:vid>/contactar', methods=['POST'])
+def api_auto_contactar(vid):
+    """Lead de un interesado en un vehículo"""
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    telefono = (data.get('telefono') or '').strip()
+    mensaje = (data.get('mensaje') or '').strip()
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        conn.execute(
+            "INSERT INTO leads_auto (vehiculo_id, nombre, telefono, mensaje) VALUES (%s,%s,%s,%s)",
+            (vid, nombre, telefono, mensaje)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API: GARAJE → poner en venta ─────────────────────────────────────
+
+@app.route('/api/garaje/vehiculo/<int:vid>/vender', methods=['POST'])
+def api_garaje_vehiculo_vender(vid):
+    """Propietario pone su vehículo en la bolsa automotriz"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    precio = data.get('precio')
+    descripcion = (data.get('descripcion') or '').strip()
+    km_venta = data.get('km_venta')
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        v = conn.execute(
+            "SELECT id, propietario_id FROM vehiculos WHERE id=%s AND propietario_id=%s",
+            (vid, uid)
+        ).fetchone()
+        if not v:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Vehículo no encontrado'})
+        # Upsert: si ya está en bolsa, actualiza; si no, inserta
+        existe = conn.execute(
+            "SELECT id FROM bolsa_automotriz WHERE vehiculo_id=%s AND tercero_id=%s",
+            (vid, uid)
+        ).fetchone()
+        if existe:
+            conn.execute(
+                """UPDATE bolsa_automotriz SET precio=%s, descripcion=%s, km_venta=%s,
+                          estado='activo', updated_at=NOW() WHERE id=%s""",
+                (precio, descripcion, km_venta, existe['id'])
+            )
+        else:
+            conn.execute(
+                """INSERT INTO bolsa_automotriz (vehiculo_id, tercero_id, precio, descripcion, km_venta)
+                   VALUES (%s,%s,%s,%s,%s)""",
+                (vid, uid, precio, descripcion, km_venta)
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/retirar-venta', methods=['POST'])
+def api_garaje_vehiculo_retirar_venta(vid):
+    """Propietario retira su vehículo de la bolsa"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        conn.execute(
+            "UPDATE bolsa_automotriz SET estado='pausado', updated_at=NOW() WHERE vehiculo_id=%s AND tercero_id=%s",
+            (vid, uid)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/garaje/vehiculo/<int:vid>/compartir-compraventas', methods=['POST'])
+def api_garaje_vehiculo_compartir(vid):
+    """Propietario comparte su vehículo con compraventas seleccionadas"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    negocio_ids = data.get('negocio_ids', [])
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        v = conn.execute(
+            "SELECT id FROM vehiculos WHERE id=%s AND propietario_id=%s", (vid, uid)
+        ).fetchone()
+        if not v:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        for nid in negocio_ids:
+            try:
+                conn.execute(
+                    """INSERT INTO compraventa_vehiculos (negocio_id, vehiculo_id)
+                       VALUES (%s,%s) ON CONFLICT (negocio_id, vehiculo_id) DO UPDATE SET estado='disponible'""",
+                    (nid, vid)
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API: COMPRAVENTA — ADMIN ──────────────────────────────────────────
+
+@app.route('/api/compraventa/<slug>/admin/info')
+def api_compraventa_admin_info(slug):
+    """Info de la compraventa — solo admin"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        conn.close()
+        return jsonify({'ok': True, 'negocio': {
+            'id': neg['id'], 'nombre': neg['nombre'], 'slug': neg['slug'],
+            'imagen_header': neg['imagen_header'], 'tema': neg['tema'],
+            'mostrar_nombre': neg['mostrar_nombre'], 'whatsapp': neg['whatsapp']
+        }})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/admin/inventario')
+def api_compraventa_admin_inventario(slug):
+    """Lista de vehículos del lote"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        rows = conn.execute(
+            """SELECT cv.id as rel_id, cv.estado, cv.precio_ofertado,
+                      v.id as vid, v.placa, v.marca, v.linea, v.anio, v.color, v.apodo, v.km_actual,
+                      (SELECT imagen FROM vehiculo_fotos WHERE vehiculo_id=v.id ORDER BY orden LIMIT 1) as foto
+               FROM compraventa_vehiculos cv
+               JOIN vehiculos v ON v.id=cv.vehiculo_id
+               WHERE cv.negocio_id=%s ORDER BY cv.created_at DESC""",
+            (neg['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'vehiculos': [{
+            'rel_id': r['rel_id'], 'estado': r['estado'],
+            'precio_ofertado': float(r['precio_ofertado']) if r['precio_ofertado'] else None,
+            'vid': r['vid'], 'placa': r['placa'], 'marca': r['marca'],
+            'linea': r['linea'], 'anio': r['anio'], 'color': r['color'],
+            'apodo': r['apodo'], 'km_actual': r['km_actual'], 'foto': r['foto']
+        } for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/vehiculo/crear', methods=['POST'])
+def api_compraventa_vehiculo_crear(slug):
+    """La compraventa crea un vehículo nuevo en su lote"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        # tercero_id = None (vehículo propiedad del lote)
+        cur = conn.execute(
+            """INSERT INTO vehiculos (propietario_id, placa, marca, linea, anio, color, km_actual)
+               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (uid,
+             (data.get('placa') or '').upper(),
+             data.get('marca', ''), data.get('linea', ''),
+             data.get('anio'), data.get('color', ''), data.get('km_actual', 0))
+        )
+        vid = cur.fetchone()['id']
+        conn.commit()
+        # Asociar al lote con precio
+        conn.execute(
+            """INSERT INTO compraventa_vehiculos (negocio_id, vehiculo_id, precio_ofertado)
+               VALUES (%s,%s,%s) ON CONFLICT (negocio_id, vehiculo_id) DO NOTHING""",
+            (neg['id'], vid, data.get('precio'))
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'vehiculo_id': vid})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/vehiculo/<int:vid>/fotos', methods=['POST'])
+def api_compraventa_vehiculo_fotos(slug, vid):
+    """Subir foto a un vehículo del lote"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'imagen requerida'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        # Verificar que el vehículo pertenece al lote
+        rel = conn.execute(
+            "SELECT id FROM compraventa_vehiculos WHERE negocio_id=%s AND vehiculo_id=%s",
+            (neg['id'], vid)
+        ).fetchone()
+        if not rel:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Vehículo no es del lote'})
+        orden = conn.execute(
+            "SELECT COALESCE(MAX(orden)+1,0) FROM vehiculo_fotos WHERE vehiculo_id=%s", (vid,)
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO vehiculo_fotos (vehiculo_id, imagen, orden) VALUES (%s,%s,%s)",
+            (vid, imagen, orden)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/vehiculo/<int:vid>/precio', methods=['POST'])
+def api_compraventa_vehiculo_precio(slug, vid):
+    """Actualizar precio ofertado del vehículo en el lote"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    precio = data.get('precio')
+    estado = data.get('estado', 'disponible')
+    if estado not in ('disponible', 'reservado', 'vendido'):
+        return jsonify({'ok': False, 'error': 'Estado inválido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        conn.execute(
+            "UPDATE compraventa_vehiculos SET precio_ofertado=%s, estado=%s WHERE negocio_id=%s AND vehiculo_id=%s",
+            (precio, estado, neg['id'], vid)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/admin/leads')
+def api_compraventa_admin_leads(slug):
+    """Leads de interesados en vehículos del lote"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        leads = conn.execute(
+            """SELECT l.id, l.nombre, l.telefono, l.mensaje, l.created_at,
+                      v.placa, v.marca, v.linea
+               FROM leads_auto l
+               JOIN vehiculos v ON v.id=l.vehiculo_id
+               JOIN compraventa_vehiculos cv ON cv.vehiculo_id=v.id
+               WHERE cv.negocio_id=%s ORDER BY l.created_at DESC LIMIT 100""",
+            (neg['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'leads': [{
+            'id': l['id'], 'nombre': l['nombre'], 'telefono': l['telefono'],
+            'mensaje': l['mensaje'],
+            'vehiculo': f"{l['marca']} {l['linea']} ({l['placa']})",
+            'fecha': l['created_at'].strftime('%d/%m/%Y %H:%M')
+        } for l in leads]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API: PERSONALIZACIÓN ──────────────────────────────────────────────
+
+@app.route('/api/inmobiliaria/<slug>/admin/personalizar', methods=['POST'])
+def api_inmobiliaria_personalizar(slug):
+    """Actualizar imagen_header, tema y mostrar_nombre de la inmobiliaria"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        campos = {}
+        if 'imagen_header' in data:
+            campos['imagen_header'] = data['imagen_header'] or None
+        if 'tema' in data:
+            if data['tema'] not in ('claro', 'oscuro'):
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Tema inválido'})
+            campos['tema'] = data['tema']
+        if 'mostrar_nombre' in data:
+            campos['mostrar_nombre'] = bool(data['mostrar_nombre'])
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+        sets = ', '.join(f"{k}=%s" for k in campos)
+        vals = list(campos.values()) + [inmo['id']]
+        conn.execute(f"UPDATE inmobiliarias SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/admin/personalizar', methods=['POST'])
+def api_compraventa_personalizar(slug):
+    """Actualizar imagen_header, tema y mostrar_nombre de la compraventa"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        campos = {}
+        if 'imagen_header' in data:
+            campos['imagen_header'] = data['imagen_header'] or None
+        if 'tema' in data:
+            if data['tema'] not in ('claro', 'oscuro'):
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Tema inválido'})
+            campos['tema'] = data['tema']
+        if 'mostrar_nombre' in data:
+            campos['mostrar_nombre'] = bool(data['mostrar_nombre'])
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+        sets = ', '.join(f"{k}=%s" for k in campos)
+        vals = list(campos.values()) + [neg['id']]
+        conn.execute(f"UPDATE negocios SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API: COMPRAVENTA PÚBLICA ──────────────────────────────────────────
+
+@app.route('/api/compraventa/<slug>/inventario')
+def api_compraventa_inventario_publico(slug):
+    """Inventario público del lote"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'})
+        rows = conn.execute(
+            """SELECT cv.precio_ofertado, cv.estado,
+                      v.id as vid, v.placa, v.marca, v.linea, v.anio, v.color, v.apodo, v.km_actual,
+                      (SELECT imagen FROM vehiculo_fotos WHERE vehiculo_id=v.id ORDER BY orden LIMIT 1) as foto
+               FROM compraventa_vehiculos cv
+               JOIN vehiculos v ON v.id=cv.vehiculo_id
+               WHERE cv.negocio_id=%s AND cv.estado IN ('disponible','reservado')
+               ORDER BY cv.created_at DESC""",
+            (neg['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'vehiculos': [{
+            'vid': r['vid'], 'precio': float(r['precio_ofertado']) if r['precio_ofertado'] else None,
+            'estado': r['estado'], 'placa': r['placa'], 'marca': r['marca'],
+            'linea': r['linea'], 'anio': r['anio'], 'color': r['color'],
+            'apodo': r['apodo'], 'km_actual': r['km_actual'], 'foto': r['foto']
+        } for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
 

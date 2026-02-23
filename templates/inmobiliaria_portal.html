@@ -1,12 +1,30 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" id="html-root">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>{{ inmo.nombre }} — TUC TUC</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  (function() {
+    const tema = "{{ inmo.tema | default('claro') }}";
+    if (tema === 'oscuro') document.documentElement.classList.add('dark');
+  })();
+</script>
 <style>
-  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  body { font-family: system-ui, sans-serif; }
+  .dark body, .dark { background:#111827; color:#f9fafb; }
+  .dark .bg-white { background:#1f2937 !important; }
+  .dark .bg-gray-50 { background:#111827 !important; }
+  .dark .bg-gray-100 { background:#374151 !important; }
+  .dark .text-gray-800 { color:#f9fafb !important; }
+  .dark .text-gray-700 { color:#e5e7eb !important; }
+  .dark .text-gray-600 { color:#d1d5db !important; }
+  .dark .text-gray-500 { color:#9ca3af !important; }
+  .dark .border-gray-200, .dark .border-gray-300 { border-color:#374151 !important; }
+  .dark .shadow-sm { box-shadow:0 1px 3px rgba(0,0,0,.4) !important; }
+  body { background:#f3f4f6; }
+  .dark body { background:#111827; }
   .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
            padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
            z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
@@ -21,6 +39,23 @@
 <div id="toast" class="toast"></div>
 
 <!-- HEADER INMOBILIARIA -->
+{% if inmo.imagen_header %}
+<div class="relative h-40 sm:h-52 overflow-hidden">
+  <img src="{{ inmo.imagen_header }}" class="w-full h-full object-cover">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+    {% if inmo.mostrar_nombre %}
+    <h1 class="text-white font-bold text-xl drop-shadow">{{ inmo.nombre }}</h1>
+    {% endif %}
+    {% if inmo.whatsapp %}
+    <a href="https://wa.me/{{ inmo.whatsapp }}" target="_blank"
+       class="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow">WhatsApp</a>
+    {% endif %}
+  </div>
+</div>
+<div class="bg-white shadow-sm">
+  <div class="max-w-5xl mx-auto px-4 py-3">
+{% else %}
 <div class="bg-white shadow-sm">
   <div class="max-w-5xl mx-auto px-4 py-5">
     <div class="flex items-center gap-4 mb-4">
@@ -30,7 +65,7 @@
         <div class="w-16 h-16 rounded-2xl bg-blue-700 flex items-center justify-center text-3xl text-white shadow-sm">🏢</div>
       {% endif %}
       <div class="flex-1">
-        <h1 class="text-xl font-bold text-gray-800">{{ inmo.nombre }}</h1>
+        {% if inmo.mostrar_nombre %}<h1 class="text-xl font-bold text-gray-800">{{ inmo.nombre }}</h1>{% endif %}
         {% if inmo.descripcion %}<p class="text-sm text-gray-500 mt-0.5">{{ inmo.descripcion }}</p>{% endif %}
       </div>
       {% if inmo.whatsapp %}
@@ -38,8 +73,9 @@
          class="bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-xl">WhatsApp</a>
       {% endif %}
     </div>
+{% endif %}
     <!-- Filtros -->
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap gap-2 {% if inmo.imagen_header %}mt-0{% else %}{% endif %}">
       <button onclick="filtrar('')" id="btn-todos" class="filtro-btn bg-blue-700 text-white text-sm px-4 py-2 rounded-xl font-medium">Todas</button>
       <button onclick="filtrar('venta')" id="btn-venta" class="filtro-btn bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-xl font-medium">En venta</button>
       <button onclick="filtrar('alquiler')" id="btn-alquiler" class="filtro-btn bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-xl font-medium">En alquiler</button>

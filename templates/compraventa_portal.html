@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es" id="html-root">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{{ neg.nombre }} — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Aplicar tema antes de renderizar para evitar flash
+  (function() {
+    const tema = "{{ neg.tema | default('claro') }}";
+    if (tema === 'oscuro') document.documentElement.classList.add('dark');
+  })();
+</script>
+<style>
+  body { font-family: system-ui, sans-serif; }
+  .dark body, .dark { background:#111827; color:#f9fafb; }
+  .dark .bg-white { background:#1f2937 !important; }
+  .dark .bg-gray-50 { background:#111827 !important; }
+  .dark .bg-gray-100 { background:#374151 !important; }
+  .dark .text-gray-800 { color:#f9fafb !important; }
+  .dark .text-gray-700 { color:#e5e7eb !important; }
+  .dark .text-gray-600 { color:#d1d5db !important; }
+  .dark .text-gray-500 { color:#9ca3af !important; }
+  .dark .border-gray-200, .dark .border-gray-300 { border-color:#374151 !important; }
+  .dark .shadow-sm { box-shadow:0 1px 3px rgba(0,0,0,.4) !important; }
+  body { background:#f3f4f6; }
+  .dark body { background:#111827; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .card-auto { transition:box-shadow .2s; }
+  .card-auto:hover { box-shadow:0 8px 24px rgba(0,0,0,.12); }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- HEADER CON IMAGEN PERSONALIZABLE -->
+{% if neg.imagen_header %}
+<div class="relative h-40 sm:h-52 overflow-hidden">
+  <img src="{{ neg.imagen_header }}" class="w-full h-full object-cover">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+    {% if neg.mostrar_nombre %}
+    <h1 class="text-white font-bold text-xl drop-shadow">{{ neg.nombre }}</h1>
+    {% endif %}
+    {% if neg.whatsapp %}
+    <a href="https://wa.me/{{ neg.whatsapp }}" target="_blank"
+       class="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow">WhatsApp</a>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="bg-white shadow-sm">
+  <div class="max-w-5xl mx-auto px-4 py-5 flex items-center gap-4">
+    {% if neg.logo_url %}
+    <img src="{{ neg.logo_url }}" class="w-16 h-16 rounded-2xl object-cover shadow-sm">
+    {% else %}
+    <div class="w-16 h-16 rounded-2xl bg-red-600 flex items-center justify-center text-3xl text-white shadow-sm">🚗</div>
+    {% endif %}
+    <div class="flex-1">
+      {% if neg.mostrar_nombre %}
+      <h1 class="text-xl font-bold text-gray-800">{{ neg.nombre }}</h1>
+      {% endif %}
+      {% if neg.descripcion %}<p class="text-sm text-gray-500 mt-0.5">{{ neg.descripcion }}</p>{% endif %}
+    </div>
+    {% if neg.whatsapp %}
+    <a href="https://wa.me/{{ neg.whatsapp }}" target="_blank"
+       class="bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-xl">WhatsApp</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- FILTRO BÚSQUEDA -->
+<div class="max-w-5xl mx-auto px-4 py-4">
+  <input id="inp-buscar" type="text" placeholder="Buscar marca, línea, año..."
+         oninput="filtrar()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white">
+</div>
+
+<!-- GRID DE VEHÍCULOS -->
+<div class="max-w-5xl mx-auto px-4 pb-8">
+  <div id="grid-autos" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="col-span-full text-center py-16 text-gray-400">
+      <div class="text-5xl mb-3">⏳</div>
+      <p>Cargando inventario...</p>
+    </div>
+  </div>
+  <div id="sin-resultados" class="hidden text-center py-16 text-gray-400">
+    <div class="text-5xl mb-3">🔍</div>
+    <p>Sin resultados</p>
+  </div>
+</div>
+
+<!-- MODAL CONTACTO -->
+<div id="modal-contacto" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6">
+    <h2 class="font-bold text-gray-800 mb-1">Me interesa este vehículo</h2>
+    <p id="c-auto-titulo" class="text-xs text-gray-500 mb-4"></p>
+    <div class="space-y-3">
+      <input id="c-nombre" type="text" placeholder="Tu nombre" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <input id="c-tel" type="tel" placeholder="Tu teléfono" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <textarea id="c-msg" rows="2" placeholder="Mensaje (opcional)" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"></textarea>
+      <div class="flex gap-3">
+        <button onclick="cerrarContacto()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="enviarContacto()" class="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold">Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLUG = "{{ neg.slug }}";
+let todosLosAutos = [];
+let vidContacto = null;
+
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast toast-${tipo} show`;
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function formatPrecio(p) {
+  if (!p) return 'Precio a convenir';
+  return '$' + Number(p).toLocaleString('es-CO');
+}
+
+function renderAutos(lista) {
+  const g = document.getElementById('grid-autos');
+  const sin = document.getElementById('sin-resultados');
+  if (!lista.length) { g.innerHTML = ''; sin.classList.remove('hidden'); return; }
+  sin.classList.add('hidden');
+  g.innerHTML = lista.map(a => `
+    <div class="card-auto bg-white rounded-2xl shadow-sm overflow-hidden">
+      <a href="/autos/${a.vid}" class="block">
+        <div class="aspect-video bg-gray-100 relative overflow-hidden">
+          ${a.foto ? `<img src="${a.foto}" class="w-full h-full object-cover">` :
+            `<div class="w-full h-full flex items-center justify-center text-4xl">🚗</div>`}
+          ${a.estado === 'reservado' ? `<div class="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-lg">Reservado</div>` : ''}
+        </div>
+        <div class="p-4 pb-2">
+          <h3 class="font-bold text-gray-800 text-sm">${a.marca || ''} ${a.linea || ''} ${a.anio ? a.anio : ''}</h3>
+          <p class="text-xs text-gray-500 mt-0.5">${a.placa || 'Sin placa'} · ${a.color || ''} ${a.km_actual ? `· ${Number(a.km_actual).toLocaleString()} km` : ''}</p>
+          <p class="text-red-600 font-bold mt-2 text-base">${formatPrecio(a.precio)}</p>
+        </div>
+      </a>
+      <div class="px-4 pb-4">
+        <button onclick="abrirContacto(${a.vid}, '${(a.marca||'')} ${(a.linea||'')} ${(a.anio||'')}');"
+                class="w-full bg-red-600 text-white text-xs font-semibold py-2 rounded-xl mt-1">
+          Me interesa
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filtrar() {
+  const q = document.getElementById('inp-buscar').value.toLowerCase();
+  if (!q) { renderAutos(todosLosAutos); return; }
+  const f = todosLosAutos.filter(a =>
+    [a.marca, a.linea, a.anio, a.color, a.placa].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
+  );
+  renderAutos(f);
+}
+
+function abrirContacto(vid, titulo) {
+  vidContacto = vid;
+  document.getElementById('c-auto-titulo').textContent = titulo;
+  document.getElementById('modal-contacto').classList.remove('hidden');
+}
+function cerrarContacto() { document.getElementById('modal-contacto').classList.add('hidden'); vidContacto = null; }
+
+async function enviarContacto() {
+  if (!vidContacto) return;
+  const nombre = document.getElementById('c-nombre').value.trim();
+  const telefono = document.getElementById('c-tel').value.trim();
+  const mensaje = document.getElementById('c-msg').value.trim();
+  if (!telefono) { toast('Ingresa tu teléfono', 'err'); return; }
+  try {
+    const r = await fetch(`/api/autos/${vidContacto}/contactar`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({nombre, telefono, mensaje})
+    });
+    const d = await r.json();
+    if (d.ok) { toast('Mensaje enviado'); cerrarContacto(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+async function cargar() {
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/inventario`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error || 'Error', 'err'); return; }
+    todosLosAutos = d.vehiculos;
+    renderAutos(todosLosAutos);
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+cargar();
+</script>
+</body>
+</html>

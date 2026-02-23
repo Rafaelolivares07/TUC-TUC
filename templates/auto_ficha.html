@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{{ auto.marca }} {{ auto.linea }} — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .thumb.activa { ring: 2px solid #dc2626; }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- HEADER -->
+<div class="bg-white shadow-sm sticky top-0 z-40">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+    <a href="/autos" class="text-gray-400 text-xl">←</a>
+    <div class="flex-1">
+      <h1 class="font-bold text-gray-800 text-base">{{ auto.marca or '' }} {{ auto.linea or '' }}</h1>
+      <p class="text-xs text-gray-500">{{ auto.placa or 'Sin placa' }} · {{ auto.anio or '' }}</p>
+    </div>
+    <span class="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-xl">En venta</span>
+  </div>
+</div>
+
+<div class="max-w-3xl mx-auto px-4 py-5 space-y-5">
+
+  <!-- GALERÍA -->
+  {% set fotos = fotos %}
+  <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+    {% if fotos %}
+    <div class="aspect-video bg-gray-100 relative overflow-hidden">
+      <img id="foto-grande" src="{{ fotos[0] }}" class="w-full h-full object-cover cursor-pointer" onclick="abrirZoom(this.src)">
+    </div>
+    {% if fotos|length > 1 %}
+    <div class="flex gap-2 p-3 overflow-x-auto">
+      {% for f in fotos %}
+      <img src="{{ f }}" onclick="cambiarFoto('{{ f }}')"
+           class="thumb w-16 h-16 rounded-xl object-cover cursor-pointer border-2 border-transparent hover:border-red-500 flex-shrink-0">
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="aspect-video bg-gray-100 flex items-center justify-center text-6xl">🚗</div>
+    {% endif %}
+  </div>
+
+  <!-- PRECIO + INFO PRINCIPAL -->
+  <div class="bg-white rounded-2xl shadow-sm p-5">
+    <div class="flex items-start justify-between mb-4">
+      <div>
+        <p class="text-3xl font-bold text-red-600">
+          {% if auto.precio %}${{ "{:,.0f}".format(auto.precio) }}{% else %}A convenir{% endif %}
+        </p>
+        {% if auto.km_venta %}<p class="text-sm text-gray-500 mt-0.5">{{ "{:,}".format(auto.km_venta) }} km registrados al publicar</p>{% endif %}
+      </div>
+      <button onclick="abrirContacto()" class="bg-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl">Contactar</button>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs text-gray-400">Marca / Línea</p>
+        <p class="font-semibold text-gray-800 text-sm">{{ auto.marca or '—' }} {{ auto.linea or '' }}</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs text-gray-400">Año</p>
+        <p class="font-semibold text-gray-800 text-sm">{{ auto.anio or '—' }}</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs text-gray-400">Color</p>
+        <p class="font-semibold text-gray-800 text-sm">{{ auto.color or '—' }}</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs text-gray-400">Placa</p>
+        <p class="font-semibold text-gray-800 text-sm">{{ auto.placa or '—' }}</p>
+      </div>
+      {% if auto.km_actual %}
+      <div class="bg-gray-50 rounded-xl p-3 col-span-2">
+        <p class="text-xs text-gray-400">Kilometraje actual</p>
+        <p class="font-semibold text-gray-800 text-sm">{{ "{:,}".format(auto.km_actual) }} km</p>
+      </div>
+      {% endif %}
+    </div>
+    {% if auto.descripcion %}
+    <div class="mt-4 border-t pt-4">
+      <p class="text-xs text-gray-400 mb-1">Descripción del vendedor</p>
+      <p class="text-sm text-gray-700">{{ auto.descripcion }}</p>
+    </div>
+    {% endif %}
+    {% if auto.vendedor_nombre %}
+    <div class="mt-4 border-t pt-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-base">👤</div>
+      <div>
+        <p class="text-xs text-gray-400">Vendedor</p>
+        <p class="text-sm font-semibold text-gray-700">{{ auto.vendedor_nombre }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- HISTORIAL TUC TUC (se carga dinámicamente si el vehículo tiene registro) -->
+  <div id="historial-wrap" class="hidden">
+    <h2 class="font-bold text-gray-700 mb-2 text-sm">Historial verificado TUC TUC</h2>
+    <div id="historial-lista" class="space-y-2"></div>
+  </div>
+
+</div>
+
+<!-- MODAL CONTACTO -->
+<div id="modal-contacto" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6">
+    <h2 class="font-bold text-gray-800 mb-4">Contactar al vendedor</h2>
+    <div class="space-y-3">
+      <input id="c-nombre" type="text" placeholder="Tu nombre" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <input id="c-tel" type="tel" placeholder="Tu teléfono" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      <textarea id="c-msg" rows="2" placeholder="Mensaje (opcional)" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"></textarea>
+      <div class="flex gap-3">
+        <button onclick="cerrarContacto()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="enviarContacto()" class="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold">Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ZOOM FOTO -->
+<div id="modal-zoom" onclick="this.classList.add('hidden')" class="fixed inset-0 bg-black/90 z-50 items-center justify-center hidden">
+  <img id="zoom-img" class="max-w-full max-h-full object-contain p-4">
+</div>
+
+<script>
+const VID = {{ vid }};
+
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast toast-${tipo} show`;
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function cambiarFoto(src) {
+  document.getElementById('foto-grande').src = src;
+  document.querySelectorAll('.thumb').forEach(t => t.classList.toggle('border-red-500', t.src === src));
+}
+
+function abrirZoom(src) {
+  document.getElementById('zoom-img').src = src;
+  document.getElementById('modal-zoom').classList.remove('hidden');
+  document.getElementById('modal-zoom').classList.add('flex');
+}
+
+function abrirContacto() { document.getElementById('modal-contacto').classList.remove('hidden'); }
+function cerrarContacto() { document.getElementById('modal-contacto').classList.add('hidden'); }
+
+async function enviarContacto() {
+  const nombre = document.getElementById('c-nombre').value.trim();
+  const telefono = document.getElementById('c-tel').value.trim();
+  const mensaje = document.getElementById('c-msg').value.trim();
+  if (!telefono) { toast('Ingresa tu teléfono', 'err'); return; }
+  try {
+    const r = await fetch(`/api/autos/${VID}/contactar`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({nombre, telefono, mensaje})
+    });
+    const d = await r.json();
+    if (d.ok) { toast('Mensaje enviado'); cerrarContacto(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+async function cargarHistorial() {
+  try {
+    const r = await fetch(`/api/garaje/vehiculo/${VID}/intervenciones`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.ok || !d.intervenciones?.length) return;
+    const wrap = document.getElementById('historial-wrap');
+    const lista = document.getElementById('historial-lista');
+    wrap.classList.remove('hidden');
+    lista.innerHTML = d.intervenciones.map(i => `
+      <div class="bg-white rounded-xl shadow-sm p-3 flex items-start gap-3">
+        <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-base flex-shrink-0">🔧</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <p class="font-semibold text-gray-800 text-xs">${i.nombre_taller || i.descripcion || 'Intervención'}</p>
+            <span class="text-xs text-gray-400">${i.fecha || ''}</span>
+          </div>
+          ${i.km ? `<p class="text-xs text-gray-500">${Number(i.km).toLocaleString()} km</p>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+cargarHistorial();
+</script>
+</body>
+</html>

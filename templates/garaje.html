@@ -139,6 +139,62 @@
             <p class="font-bold text-gray-800">Talleres TUC TUC</p>
             <p class="text-xs text-gray-500">Visitas registradas por talleres afiliados</p>
         </button>
+        <button onclick="abrirModalVender()" id="btn-poner-venta" class="col-span-2 bg-red-50 rounded-2xl p-4 shadow-sm border border-red-200 text-left hover:border-red-400 transition">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-3xl mb-1">💰</div>
+                    <p class="font-bold text-gray-800">Poner en venta</p>
+                    <p class="text-xs text-gray-500">Publicar en la Bolsa Automotriz TUC TUC</p>
+                </div>
+                <div id="badge-en-venta" class="hidden bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-lg">En venta</div>
+            </div>
+        </button>
+    </div>
+</div>
+
+<!-- MODAL: PONER EN VENTA -->
+<div id="modal-vender" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden">
+    <div class="bg-white rounded-t-2xl w-full max-w-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 id="modal-vender-titulo" class="font-bold text-gray-800">Poner en venta</h2>
+            <button onclick="cerrarModalVender()" class="text-gray-400 text-xl">✕</button>
+        </div>
+
+        <!-- PASO 1: datos de venta -->
+        <div id="paso1-venta" class="space-y-3">
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Precio de venta</label>
+                <input id="v-precio-venta" type="number" placeholder="Ej: 25000000"
+                       class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mt-1">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Kilometraje al publicar</label>
+                <input id="v-km-venta" type="number" placeholder="Km actuales del vehículo"
+                       class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mt-1">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-semibold">Descripción para el comprador</label>
+                <textarea id="v-desc-venta" rows="3" placeholder="Cuéntale al comprador el estado del vehículo..."
+                          class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none mt-1"></textarea>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="cerrarModalVender()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+                <button onclick="publicarEnVenta()" class="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold">Publicar</button>
+            </div>
+            <div id="btn-retirar-venta-wrap" class="hidden text-center">
+                <button onclick="retirarDeVenta()" class="text-xs text-gray-400 underline">Retirar de la venta</button>
+            </div>
+        </div>
+
+        <!-- PASO 2: compartir con compraventas -->
+        <div id="paso2-venta" class="hidden space-y-3">
+            <p class="text-sm text-gray-500">Selecciona los lotes de compraventa que quieres que vean tu vehículo. También lo verán todos en la bolsa pública.</p>
+            <div id="lista-compraventas-check" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            <div class="flex gap-3 pt-2">
+                <button onclick="cerrarModalVender()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Omitir</button>
+                <button onclick="compartirConCompraventas()" class="flex-1 bg-red-600 text-white rounded-xl py-3 text-sm font-semibold">Compartir</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -850,8 +906,8 @@ async function cargarIntervenciones() {
                 </div>
                 ${inv.items && inv.items.length ? `<div class="border-t pt-2 space-y-1">${inv.items.map(it => `
                     <div class="flex justify-between text-xs text-gray-500">
-                        <span>${it.tipo === 'mano_obra' ? '🔧' : '🔩'} ${it.descripcion}${it.proveedor_nombre ? ' · ' + it.proveedor_nombre : ''}</span>
-                        <span>$${it.costo.toLocaleString()}</span>
+                        <span>${it.tipo === 'mano_obra' ? '🔧' : it.tipo === 'nota' ? '📝' : '🔧'} ${it.descripcion}${it.proveedor_nombre ? ' · ' + it.proveedor_nombre : ''}</span>
+                        <span>${it.costo > 0 ? '$' + it.costo.toLocaleString() : ''}</span>
                     </div>`).join('')}</div>` : ''}
             </div>`;
         }).join('');
@@ -1065,6 +1121,119 @@ async function init() {
 }
 
 init();
+
+// ── BOLSA AUTOMOTRIZ ─────────────────────────────────────────────────
+
+function abrirModalVender() {
+    if (!vehiculoActual) return;
+    document.getElementById('v-km-venta').value = vehiculoActual.km_actual || '';
+    document.getElementById('modal-vender').classList.remove('hidden');
+    // Si ya está en venta, mostrar botón de retirar
+    verificarEnVenta();
+}
+
+function cerrarModalVender() {
+    document.getElementById('modal-vender').classList.add('hidden');
+    document.getElementById('paso1-venta').classList.remove('hidden');
+    document.getElementById('paso2-venta').classList.add('hidden');
+    document.getElementById('modal-vender-titulo').textContent = 'Poner en venta';
+}
+
+async function verificarEnVenta() {
+    // Solo muestra el badge y el botón retirar si ya tiene publicación activa
+    // (verificación optimista: si el usuario llega aquí es porque puede publicar)
+}
+
+async function publicarEnVenta() {
+    if (!vehiculoActual) return;
+    const precio = parseFloat(document.getElementById('v-precio-venta').value) || null;
+    const km_venta = parseInt(document.getElementById('v-km-venta').value) || null;
+    const descripcion = document.getElementById('v-desc-venta').value.trim();
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/vender`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({precio, km_venta, descripcion})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('¡Vehículo publicado en la Bolsa Automotriz!');
+            document.getElementById('badge-en-venta').classList.remove('hidden');
+            document.getElementById('btn-retirar-venta-wrap').classList.remove('hidden');
+            // Pasar al paso 2: compartir con compraventas
+            await mostrarPaso2Compraventas();
+        } else {
+            toast(d.error || 'Error al publicar', 'err');
+        }
+    } catch(e) {
+        toast('Error de conexión', 'err');
+    }
+}
+
+async function mostrarPaso2Compraventas() {
+    document.getElementById('paso1-venta').classList.add('hidden');
+    document.getElementById('paso2-venta').classList.remove('hidden');
+    document.getElementById('modal-vender-titulo').textContent = 'Compartir con lotes';
+    const contenedor = document.getElementById('lista-compraventas-check');
+    contenedor.innerHTML = '<p class="text-xs text-gray-400">Cargando...</p>';
+    try {
+        const r = await fetch('/api/compraventas/listar');
+        const d = await r.json();
+        if (d.ok && d.compraventas.length > 0) {
+            contenedor.innerHTML = d.compraventas.map(c => `
+                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" value="${c.id}" class="check-compraventa w-4 h-4 accent-red-600">
+                    <span class="text-sm font-medium text-gray-800">${c.nombre}</span>
+                    <span class="text-xs text-gray-400 ml-auto">/compraventa/${c.slug}</span>
+                </label>`).join('');
+        } else {
+            contenedor.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No hay lotes de compraventa registrados aún.</p>';
+        }
+    } catch(e) {
+        contenedor.innerHTML = '<p class="text-xs text-red-400">Error al cargar</p>';
+    }
+}
+
+async function compartirConCompraventas() {
+    if (!vehiculoActual) return;
+    const checks = document.querySelectorAll('.check-compraventa:checked');
+    const negocio_ids = Array.from(checks).map(c => parseInt(c.value));
+    if (negocio_ids.length === 0) { cerrarModalVender(); return; }
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/compartir-compraventas`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({negocio_ids})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast(`Compartido con ${negocio_ids.length} lote${negocio_ids.length > 1 ? 's' : ''}`);
+        } else {
+            toast(d.error || 'Error al compartir', 'err');
+        }
+    } catch(e) {
+        toast('Error de conexión', 'err');
+    }
+    cerrarModalVender();
+}
+
+async function retirarDeVenta() {
+    if (!vehiculoActual) return;
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/retirar-venta`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Vehículo retirado de la bolsa');
+            document.getElementById('badge-en-venta').classList.add('hidden');
+            cerrarModalVender();
+        } else {
+            toast(d.error || 'Error', 'err');
+        }
+    } catch(e) {
+        toast('Error de conexión', 'err');
+    }
+}
 </script>
 
 <!-- Footer -->

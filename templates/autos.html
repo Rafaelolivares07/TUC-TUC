@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Autos en venta — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .card-auto { transition:box-shadow .2s; }
+  .card-auto:hover { box-shadow:0 8px 24px rgba(0,0,0,.12); }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- HEADER -->
+<div class="bg-white shadow-sm sticky top-0 z-40">
+  <div class="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-xl text-white shadow-sm">🚗</div>
+    <div class="flex-1">
+      <h1 class="font-bold text-gray-800">Bolsa Automotriz</h1>
+      <p class="text-xs text-gray-500">TUC TUC — Vehículos en venta</p>
+    </div>
+    <a href="/garaje" class="text-xs text-blue-700 border border-blue-200 px-3 py-1.5 rounded-xl font-medium">Mi Garaje</a>
+  </div>
+  <!-- Filtro búsqueda -->
+  <div class="max-w-5xl mx-auto px-4 pb-3">
+    <input id="inp-buscar" type="text" placeholder="Buscar marca, línea, año..."
+           oninput="filtrar()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+  </div>
+</div>
+
+<!-- GRID -->
+<div class="max-w-5xl mx-auto px-4 py-5">
+  <div id="grid-autos" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="col-span-full text-center py-16 text-gray-400">
+      <div class="text-5xl mb-3">⏳</div>
+      <p>Cargando vehículos...</p>
+    </div>
+  </div>
+  <div id="sin-resultados" class="hidden text-center py-16 text-gray-400">
+    <div class="text-5xl mb-3">🔍</div>
+    <p>Sin resultados</p>
+  </div>
+</div>
+
+<script>
+let todosLosAutos = [];
+
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast toast-${tipo} show`;
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function formatPrecio(p) {
+  if (!p) return 'Precio a convenir';
+  return '$' + Number(p).toLocaleString('es-CO');
+}
+
+function renderAutos(lista) {
+  const g = document.getElementById('grid-autos');
+  const sin = document.getElementById('sin-resultados');
+  if (!lista.length) {
+    g.innerHTML = '';
+    sin.classList.remove('hidden');
+    return;
+  }
+  sin.classList.add('hidden');
+  g.innerHTML = lista.map(a => `
+    <a href="/autos/${a.vid}" class="card-auto bg-white rounded-2xl shadow-sm overflow-hidden block">
+      <div class="aspect-video bg-gray-100 relative overflow-hidden">
+        ${a.foto ? `<img src="${a.foto}" class="w-full h-full object-cover">` :
+          `<div class="w-full h-full flex items-center justify-center text-4xl">🚗</div>`}
+        <div class="absolute top-2 right-2 bg-white/90 backdrop-blur text-xs font-bold px-2 py-1 rounded-lg text-gray-700">
+          ${a.anio || ''}
+        </div>
+      </div>
+      <div class="p-4">
+        <h3 class="font-bold text-gray-800 text-sm">${a.marca || ''} ${a.linea || ''} ${a.apodo ? `"${a.apodo}"` : ''}</h3>
+        <p class="text-xs text-gray-500 mt-0.5">${a.placa || 'Sin placa'} · ${a.color || ''} ${a.km ? `· ${Number(a.km).toLocaleString()} km` : ''}</p>
+        <p class="text-red-600 font-bold mt-2">${formatPrecio(a.precio)}</p>
+      </div>
+    </a>
+  `).join('');
+}
+
+function filtrar() {
+  const q = document.getElementById('inp-buscar').value.toLowerCase();
+  if (!q) { renderAutos(todosLosAutos); return; }
+  const f = todosLosAutos.filter(a =>
+    [a.marca, a.linea, a.anio, a.color, a.placa, a.apodo]
+      .filter(Boolean).some(v => String(v).toLowerCase().includes(q))
+  );
+  renderAutos(f);
+}
+
+async function cargar() {
+  try {
+    const r = await fetch('/api/bolsa-automotriz/listar');
+    const d = await r.json();
+    if (!d.ok) { toast(d.error || 'Error cargando', 'err'); return; }
+    todosLosAutos = d.autos;
+    renderAutos(todosLosAutos);
+  } catch(e) {
+    toast('Error de conexión', 'err');
+  }
+}
+
+cargar();
+</script>
+</body>
+</html>

@@ -56,9 +56,10 @@
       <a href="/inmobiliaria/{{ slug }}" target="_blank" class="text-xs text-blue-700 font-medium border border-blue-200 px-3 py-1.5 rounded-xl">Ver portal</a>
     </div>
     <!-- Tabs -->
-    <div class="max-w-4xl mx-auto px-4 flex gap-4 border-t border-gray-100">
-      <button onclick="verTab('propiedades')" id="tab-propiedades" class="tab-btn active text-sm py-3 px-1">Propiedades</button>
-      <button onclick="verTab('leads')" id="tab-leads" class="tab-btn text-sm py-3 px-1 text-gray-500">Contactos</button>
+    <div class="max-w-4xl mx-auto px-4 flex gap-4 border-t border-gray-100 overflow-x-auto">
+      <button onclick="verTab('propiedades')" id="tab-propiedades" class="tab-btn active text-sm py-3 px-1 whitespace-nowrap">Propiedades</button>
+      <button onclick="verTab('leads')" id="tab-leads" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Contactos</button>
+      <button onclick="verTab('apariencia')" id="tab-apariencia" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Apariencia</button>
     </div>
   </div>
 
@@ -81,6 +82,54 @@
     <h2 class="font-semibold text-gray-700 mb-3">Contactos interesados</h2>
     <div id="lista-leads" class="space-y-3">
       <div class="text-center py-16 text-gray-400"><p>Cargando...</p></div>
+    </div>
+  </div>
+
+  <!-- TAB: APARIENCIA -->
+  <div id="seccion-apariencia" class="hidden max-w-4xl mx-auto px-4 py-4">
+    <div class="bg-white rounded-2xl shadow-sm p-5 space-y-5">
+      <h2 class="font-bold text-gray-800">Personalizar portal</h2>
+
+      <!-- Imagen Header -->
+      <div>
+        <p class="text-sm font-semibold text-gray-700 mb-2">Imagen de fondo / banner</p>
+        <div id="preview-header" class="w-full h-32 rounded-xl bg-gray-100 overflow-hidden mb-2 flex items-center justify-center">
+          <span class="text-gray-400 text-sm">Sin imagen</span>
+        </div>
+        <div class="flex gap-2">
+          <input id="inp-imagen-url" type="text" placeholder="URL de la imagen"
+                 class="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <button onclick="guardarImagen()" class="bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl">Guardar</button>
+          <button onclick="quitarImagen()" class="bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-2 rounded-xl">Quitar</button>
+        </div>
+      </div>
+
+      <!-- Tema -->
+      <div>
+        <p class="text-sm font-semibold text-gray-700 mb-2">Tema del portal</p>
+        <div class="flex gap-3">
+          <button id="btn-tema-claro" onclick="guardarTema('claro')"
+                  class="flex-1 border-2 border-blue-700 bg-white text-gray-800 rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
+            ☀️ Claro
+          </button>
+          <button id="btn-tema-oscuro" onclick="guardarTema('oscuro')"
+                  class="flex-1 border-2 border-gray-200 bg-gray-800 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
+            🌙 Oscuro
+          </button>
+        </div>
+      </div>
+
+      <!-- Mostrar nombre -->
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-semibold text-gray-700">Mostrar nombre del negocio</p>
+          <p class="text-xs text-gray-400">Visible en el header del portal público</p>
+        </div>
+        <button id="btn-toggle-nombre" onclick="toggleNombre()"
+                class="w-12 h-6 rounded-full bg-blue-700 relative transition-colors">
+          <span id="toggle-knob" class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"></span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -163,14 +212,88 @@ async function login() {
   } catch(e) { toast('Error de conexión', 'err'); }
 }
 
+let temaActualInmo = 'claro';
+let mostrarNombreInmo = true;
+
 function verTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  ['propiedades', 'leads'].forEach(s => {
+  ['propiedades', 'leads', 'apariencia'].forEach(s => {
     document.getElementById('seccion-' + s).classList.toggle('hidden', s !== tab);
   });
   if (tab === 'leads') cargarLeads();
   if (tab === 'propiedades') cargarPropiedades();
+  if (tab === 'apariencia') cargarInfoApariencia();
+}
+
+async function cargarInfoApariencia() {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/info`);
+    const d = await r.json();
+    if (!d.ok) return;
+    const n = d.inmo || d;
+    temaActualInmo = n.tema || 'claro';
+    mostrarNombreInmo = n.mostrar_nombre !== false;
+    if (n.imagen_header) {
+      document.getElementById('preview-header').innerHTML = `<img src="${n.imagen_header}" class="w-full h-full object-cover">`;
+      document.getElementById('inp-imagen-url').value = n.imagen_header;
+    }
+    actualizarBotonesTema();
+    actualizarToggleNombre();
+  } catch(e) {}
+}
+
+function actualizarBotonesTema() {
+  document.getElementById('btn-tema-claro').classList.toggle('border-blue-700', temaActualInmo === 'claro');
+  document.getElementById('btn-tema-claro').classList.toggle('border-gray-200', temaActualInmo !== 'claro');
+  document.getElementById('btn-tema-oscuro').classList.toggle('border-blue-700', temaActualInmo === 'oscuro');
+  document.getElementById('btn-tema-oscuro').classList.toggle('border-gray-200', temaActualInmo !== 'oscuro');
+}
+
+function actualizarToggleNombre() {
+  const btn = document.getElementById('btn-toggle-nombre');
+  const knob = document.getElementById('toggle-knob');
+  btn.classList.toggle('bg-blue-700', mostrarNombreInmo);
+  btn.classList.toggle('bg-gray-300', !mostrarNombreInmo);
+  knob.classList.toggle('-translate-x-6', mostrarNombreInmo);
+  knob.classList.toggle('translate-x-0', !mostrarNombreInmo);
+}
+
+async function guardarImagen() {
+  const imagen = document.getElementById('inp-imagen-url').value.trim();
+  if (!imagen) { toast('Ingresa una URL de imagen', 'err'); return; }
+  document.getElementById('preview-header').innerHTML = `<img src="${imagen}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=text-red-400>URL inválida</span>'">`;
+  await personalizarInmo({imagen_header: imagen});
+}
+
+async function quitarImagen() {
+  document.getElementById('inp-imagen-url').value = '';
+  document.getElementById('preview-header').innerHTML = '<span class="text-gray-400 text-sm">Sin imagen</span>';
+  await personalizarInmo({imagen_header: ''});
+}
+
+async function guardarTema(tema) {
+  temaActualInmo = tema;
+  actualizarBotonesTema();
+  await personalizarInmo({tema});
+}
+
+async function toggleNombre() {
+  mostrarNombreInmo = !mostrarNombreInmo;
+  actualizarToggleNombre();
+  await personalizarInmo({mostrar_nombre: mostrarNombreInmo});
+}
+
+async function personalizarInmo(campos) {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/personalizar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(campos)
+    });
+    const d = await r.json();
+    if (d.ok) toast('Guardado');
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
 }
 
 async function cargarPropiedades() {

@@ -24858,6 +24858,16 @@ def crear_tablas_tienda(conn):
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tienda_cajeros (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            pin VARCHAR(10) NOT NULL,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
     conn.commit()
 
     alters = [
@@ -24869,8 +24879,13 @@ def crear_tablas_tienda(conn):
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS codigo_barra VARCHAR(50)",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT 0",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo'",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_cajero INTEGER",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS nombre_cajero VARCHAR(100)",
+        "ALTER TABLE tienda_cajeros ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_tercero_cajero INTEGER REFERENCES terceros(id)",
         "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
         "CREATE INDEX IF NOT EXISTS idx_productos_tienda_catalogo ON productos_tienda(catalogo_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
     ]
     for sql in alters:
         try:
@@ -27152,6 +27167,9 @@ def api_tienda_pedido_crear(slug):
     cliente_id = data.get('cliente_id')
     metodo_pago = data.get('metodo_pago', 'efectivo')
     items = data.get('items', [])
+    id_cajero = data.get('id_cajero')
+    nombre_cajero = data.get('nombre_cajero', '').strip() or None
+    id_tercero_cajero = data.get('id_tercero_cajero')
 
     if not items:
         return jsonify({'ok': False, 'error': 'El carrito esta vacio'}), 400
@@ -27196,9 +27214,9 @@ def api_tienda_pedido_crear(slug):
 
         # Crear pedido
         conn.execute("""
-            INSERT INTO pedidos_tienda (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas, metodo_pago)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (tienda['id'], cliente_id, nombre_cliente or None, telefono_cliente or None, direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago))
+            INSERT INTO pedidos_tienda (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (tienda['id'], cliente_id, nombre_cliente or None, telefono_cliente or None, direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero))
         pedido_id = conn.execute("SELECT currval(pg_get_serial_sequence('pedidos_tienda', 'id'))").fetchone()[0]
 
         # Insertar items y descontar stock
@@ -27259,24 +27277,28 @@ def tienda_caja(slug):
 
 @app.route('/api/tienda/<slug>/verificar-pin-caja', methods=['POST'])
 def api_tienda_verificar_pin_caja(slug):
-    """Verifica el PIN de acceso a la caja"""
+    """Verifica el PIN de acceso a la caja — retorna datos del cajero"""
     data = request.get_json()
     pin = (data.get('pin') or '').strip()
     if not pin:
         return jsonify({'ok': False, 'error': 'PIN requerido'}), 400
     try:
         conn = get_db_connection()
+        crear_tablas_tienda(conn)
         tienda = conn.execute(
-            "SELECT id, pin_caja FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+            "SELECT id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        cajero = conn.execute(
+            "SELECT id, nombre, tercero_id FROM tienda_cajeros WHERE tienda_id = %s AND pin = %s AND activo = TRUE",
+            (tienda['id'], pin)
         ).fetchone()
         conn.close()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        if not tienda['pin_caja']:
-            return jsonify({'ok': False, 'error': 'El administrador aún no ha configurado el PIN de caja'}), 403
-        if pin != tienda['pin_caja']:
-            return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 403
-        return jsonify({'ok': True})
+        if not cajero:
+            return jsonify({'ok': False, 'error': 'PIN incorrecto o cajero inactivo'}), 403
+        return jsonify({'ok': True, 'id_cajero': cajero['id'], 'nombre_cajero': cajero['nombre'], 'tercero_id': cajero['tercero_id']})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -27310,6 +27332,127 @@ def api_tienda_pin_caja(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/tienda/<slug>/cajeros', methods=['GET'])
+def api_tienda_cajeros_listar(slug):
+    """Lista cajeros de la tienda"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        cajeros = conn.execute(
+            "SELECT id, nombre, pin, activo FROM tienda_cajeros WHERE tienda_id = %s ORDER BY id",
+            (tienda['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'cajeros': [{'id': c['id'], 'nombre': c['nombre'], 'pin': c['pin'], 'activo': c['activo']} for c in cajeros]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/cajero', methods=['POST'])
+def api_tienda_cajero_crear(slug):
+    """Crear cajero — busca o crea tercero por teléfono"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip()
+    nombre_custom = (data.get('nombre') or '').strip()  # nombre opcional
+    pin = (data.get('pin') or '').strip()
+    if not telefono or not pin:
+        return jsonify({'ok': False, 'error': 'Teléfono y PIN requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        # Verificar PIN único en la tienda
+        existente = conn.execute(
+            "SELECT id FROM tienda_cajeros WHERE tienda_id = %s AND pin = %s",
+            (tienda['id'], pin)
+        ).fetchone()
+        if existente:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya existe un cajero con ese PIN'}), 409
+        # Buscar o crear tercero por teléfono
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono = %s", (telefono,)
+        ).fetchone()
+        if not tercero:
+            nombre = nombre_custom or telefono
+            conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)",
+                (nombre, telefono)
+            )
+            conn.commit()
+            tercero = conn.execute(
+                "SELECT id, nombre FROM terceros WHERE telefono = %s", (telefono,)
+            ).fetchone()
+        tercero_id = tercero['id']
+        nombre = nombre_custom or tercero['nombre']
+        cajero = conn.execute(
+            "INSERT INTO tienda_cajeros (tienda_id, tercero_id, nombre, pin) VALUES (%s, %s, %s, %s) RETURNING id",
+            (tienda['id'], tercero_id, nombre, pin)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': cajero['id'], 'nombre': nombre, 'tercero_id': tercero_id})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/cajero/<int:cajero_id>/toggle', methods=['POST'])
+def api_tienda_cajero_toggle(slug, cajero_id):
+    """Activar / desactivar cajero"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute(
+            "UPDATE tienda_cajeros SET activo = NOT activo WHERE id = %s AND tienda_id = %s",
+            (cajero_id, tienda['id'])
+        )
+        conn.commit()
+        nuevo = conn.execute("SELECT activo FROM tienda_cajeros WHERE id = %s", (cajero_id,)).fetchone()
+        conn.close()
+        return jsonify({'ok': True, 'activo': nuevo['activo']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/cajero/<int:cajero_id>', methods=['DELETE'])
+def api_tienda_cajero_eliminar(slug, cajero_id):
+    """Eliminar cajero"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("DELETE FROM tienda_cajeros WHERE id = %s AND tienda_id = %s", (cajero_id, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/tienda/<slug>/pedidos')
 def api_tienda_pedidos(slug):
     """Lista pedidos de la tienda (para polling del dueño)"""
@@ -27323,7 +27466,8 @@ def api_tienda_pedidos(slug):
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
 
         pedidos = conn.execute("""
-            SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, estado, total, notas, created_at
+            SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, estado, total, notas, created_at,
+                   nombre_cajero, metodo_pago
             FROM pedidos_tienda WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
             ORDER BY created_at DESC
         """, (tienda['id'],)).fetchall()
@@ -27343,6 +27487,8 @@ def api_tienda_pedidos(slug):
                 'total': float(p['total']),
                 'notas': p['notas'] or '',
                 'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else '',
+                'nombre_cajero': p['nombre_cajero'] or '',
+                'metodo_pago': p['metodo_pago'] or 'efectivo',
                 'items': [{'nombre': i['nombre_producto'], 'cantidad': i['cantidad'], 'precio': float(i['precio_unitario'])} for i in items]
             })
         conn.close()

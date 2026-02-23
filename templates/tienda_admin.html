@@ -218,19 +218,41 @@
                 </div>
             </div>
 
-            <!-- PIN Caja -->
+            <!-- Cajeros -->
             <div class="mb-8">
-                <h3 class="font-bold text-gray-700 mb-1">PIN de Caja</h3>
-                <p class="text-sm text-gray-500 mb-3">Los cajeros usan este PIN para acceder a <a href="/tienda/{{ tienda.slug }}/caja" target="_blank" class="text-blue-500 underline">/tienda/{{ tienda.slug }}/caja</a>.</p>
-                <div class="flex gap-2">
-                    <input id="inp-pin-caja" type="text" inputmode="numeric" maxlength="10"
-                           placeholder="Ej: 1234"
-                           class="border rounded-lg px-3 py-2 text-sm w-36 tracking-widest">
-                    <button onclick="guardarPinCaja()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Guardar PIN</button>
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-bold text-gray-700">Cajeros</h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Cada cajero tiene su propio nombre y PIN para acceder a
+                            <a href="/tienda/{{ tienda.slug }}/caja" target="_blank" class="text-blue-500 underline">la caja</a>.
+                        </p>
+                    </div>
                     <a href="/tienda/{{ tienda.slug }}/caja" target="_blank"
-                       class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1">
+                       class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 shrink-0">
                         🛒 Abrir caja
                     </a>
+                </div>
+
+                <!-- Lista cajeros -->
+                <div id="lista-cajeros" class="space-y-2 mb-4"></div>
+
+                <!-- Formulario agregar -->
+                <div class="bg-gray-50 rounded-xl p-4 border border-dashed border-gray-300">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">Agregar cajero</p>
+                    <div class="flex flex-wrap gap-2">
+                        <input id="nuevo-cajero-telefono" type="tel" inputmode="numeric" placeholder="Teléfono del cajero"
+                               class="border rounded-lg px-3 py-2 text-sm flex-1 min-w-0">
+                        <input id="nuevo-cajero-nombre" type="text" placeholder="Nombre (opcional)"
+                               class="border rounded-lg px-3 py-2 text-sm flex-1 min-w-0">
+                        <input id="nuevo-cajero-pin" type="text" inputmode="numeric" maxlength="10"
+                               placeholder="PIN (ej: 1234)"
+                               class="border rounded-lg px-3 py-2 text-sm w-32 tracking-widest">
+                        <button onclick="agregarCajero()"
+                                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            Agregar
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">El cajero se vincula al tercero con ese teléfono (se crea si no existe).</p>
                 </div>
             </div>
         </div>
@@ -268,6 +290,7 @@ function cambiarTab(tab) {
             'flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2';
     });
     if (tab === 'pedidos') cargarPedidos();
+    if (tab === 'acceso') cargarCajeros();
 }
 
 // === URL pública y enlaces ===
@@ -665,10 +688,14 @@ async function cargarPedidos() {
                 </div>
                 <ul class="mb-3 space-y-1">${itemsHtml}</ul>
                 <div class="flex items-center justify-between">
-                    <span class="font-bold text-rose-600">Total: $${p.total.toLocaleString()}</span>
+                    <div>
+                        <span class="font-bold text-rose-600">Total: $${p.total.toLocaleString()}</span>
+                        <span class="text-xs text-gray-400 ml-2">${p.metodo_pago || 'efectivo'}</span>
+                    </div>
                     ${nextEstado[p.estado] ? `<button onclick="cambiarEstado(${p.id}, '${nextEstado[p.estado]}')" class="text-sm bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-semibold">${nextEstado[p.estado] === 'preparando' ? 'Preparar' : nextEstado[p.estado] === 'listo' ? 'Marcar listo' : 'Entregar'}</button>` : '<span class="text-xs text-gray-400">Entregado</span>'}
                 </div>
-                ${p.notas ? `<p class="text-xs text-gray-400 mt-2 italic">${p.notas}</p>` : ''}
+                ${p.nombre_cajero ? `<p class="text-xs text-gray-400 mt-2">Cajero: ${p.nombre_cajero}</p>` : ''}
+                ${p.notas ? `<p class="text-xs text-gray-400 mt-1 italic">${p.notas}</p>` : ''}
             </div>`;
         }).join('');
     } catch(e) { console.error(e); }
@@ -750,26 +777,83 @@ async function toggleMostrarNombre() {
     } catch(e) { toast('Error de conexion', true); }
 }
 
-// === Acceso: PIN Caja ===
-async function cargarPinCaja() {
+// === Cajeros ===
+async function cargarCajeros() {
     try {
-        const r = await fetch(BASE + '/pin-caja');
+        const r = await fetch(BASE + '/cajeros');
         const d = await r.json();
-        if (d.ok) document.getElementById('inp-pin-caja').value = d.pin_caja || '';
-    } catch {}
+        if (!d.ok) return;
+        const cont = document.getElementById('lista-cajeros');
+        if (!d.cajeros.length) {
+            cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-3">Sin cajeros aún</p>';
+            return;
+        }
+        cont.innerHTML = d.cajeros.map(c => `
+            <div class="flex items-center gap-3 bg-white rounded-xl border px-4 py-3">
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-800 text-sm">${c.nombre}</p>
+                    <p class="text-xs text-gray-400 font-mono">PIN: ${c.pin}</p>
+                </div>
+                <button onclick="enviarCajeroWA('${c.nombre.replace(/'/g, "\\'")}', '${c.pin}')"
+                        class="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded-lg font-semibold">
+                    📲 WA
+                </button>
+                <button onclick="toggleCajero(${c.id})"
+                        class="text-xs px-2 py-1 rounded-lg font-semibold ${c.activo ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}">
+                    ${c.activo ? 'Activo' : 'Inactivo'}
+                </button>
+                <button onclick="eliminarCajero(${c.id})"
+                        class="text-xs text-red-400 hover:text-red-600 font-bold px-1">✕</button>
+            </div>
+        `).join('');
+    } catch { toast('Error cargando cajeros', true); }
 }
-async function guardarPinCaja() {
-    const pin = document.getElementById('inp-pin-caja').value.trim();
+
+async function agregarCajero() {
+    const telefono = document.getElementById('nuevo-cajero-telefono').value.trim();
+    const nombre = document.getElementById('nuevo-cajero-nombre').value.trim();
+    const pin = document.getElementById('nuevo-cajero-pin').value.trim();
+    if (!telefono || !pin) { toast('Teléfono y PIN requeridos', true); return; }
     try {
-        const r = await fetch(BASE + '/pin-caja', {
+        const r = await fetch(BASE + '/cajero', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({pin_caja: pin})
+            body: JSON.stringify({telefono, nombre, pin})
         });
         const d = await r.json();
-        if (d.ok) toast('PIN de caja guardado');
+        if (d.ok) {
+            toast('Cajero agregado');
+            document.getElementById('nuevo-cajero-telefono').value = '';
+            document.getElementById('nuevo-cajero-nombre').value = '';
+            document.getElementById('nuevo-cajero-pin').value = '';
+            cargarCajeros();
+        } else toast(d.error || 'Error', true);
+    } catch { toast('Error de conexion', true); }
+}
+
+async function toggleCajero(id) {
+    try {
+        const r = await fetch(`${BASE}/cajero/${id}/toggle`, {method: 'POST'});
+        const d = await r.json();
+        if (d.ok) { cargarCajeros(); }
         else toast(d.error || 'Error', true);
     } catch { toast('Error de conexion', true); }
+}
+
+async function eliminarCajero(id) {
+    if (!confirm('¿Eliminar este cajero?')) return;
+    try {
+        const r = await fetch(`${BASE}/cajero/${id}`, {method: 'DELETE'});
+        const d = await r.json();
+        if (d.ok) { toast('Cajero eliminado'); cargarCajeros(); }
+        else toast(d.error || 'Error', true);
+    } catch { toast('Error de conexion', true); }
+}
+
+function enviarCajeroWA(nombre, pin) {
+    const url = `${location.origin}/tienda/{{ tienda.slug }}/caja`;
+    const msg = `Hola ${nombre}! Acá está tu enlace de cajero:\n${url}\n\nTu PIN de acceso: ${pin}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // === Acceso: Telegram ===
@@ -835,7 +919,7 @@ async function cargarSuscripcion() {
 // === Init ===
 cargarProductos();
 cargarSuscripcion();
-cargarPinCaja();
+cargarCajeros();
 // Polling pedidos cada 5 segundos
 pollingInterval = setInterval(() => {
     if (!document.getElementById('panel-pedidos').classList.contains('hidden')) {

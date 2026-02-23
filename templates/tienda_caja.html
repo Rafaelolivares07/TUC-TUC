@@ -25,11 +25,33 @@
             #lista-productos { max-height: 75vh; }
             #carrito-items { max-height: 50vh; }
         }
+
+        /* ── Ticket de impresión ── */
+        #ticket-print { display: none; }
+        @media print {
+            body > *:not(#ticket-print) { display: none !important; }
+            #ticket-print {
+                display: block !important;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                width: 280px;
+                margin: 0 auto;
+                padding: 8px;
+                color: #000;
+            }
+            #ticket-print .sep { border-top: 1px dashed #000; margin: 6px 0; }
+            #ticket-print .linea { display: flex; justify-content: space-between; }
+            #ticket-print .total-line { font-size: 16px; font-weight: bold; }
+            #ticket-print .centro { text-align: center; }
+        }
     </style>
 </head>
 <body class="min-h-screen">
 
 <div id="toast" class="toast"></div>
+
+<!-- ── Ticket oculto para imprimir ──────────────────────────────────────── -->
+<div id="ticket-print"></div>
 
 <!-- ── PANTALLA LOGIN PIN ─────────────────────────────────────────────── -->
 <div id="pantalla-pin" class="min-h-screen flex items-center justify-center p-4">
@@ -61,6 +83,7 @@
         <div class="flex items-center gap-2">
             <h1 class="font-bold text-gray-800 text-lg">{{ tienda.nombre }}</h1>
             <span class="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">Caja</span>
+            <span id="badge-cajero" class="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full hidden"></span>
         </div>
         <button onclick="cerrarSesionCaja()" class="text-xs text-gray-400 hover:text-gray-600">Salir</button>
     </div>
@@ -144,25 +167,50 @@
 
 <!-- ── Modal recibo ─────────────────────────────────────────────────── -->
 <div id="modal-recibo" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center">
-        <div class="text-4xl mb-2">✅</div>
-        <h2 class="font-bold text-xl mb-1">Venta registrada</h2>
-        <p id="recibo-total" class="text-3xl font-black text-green-600 mb-1"></p>
-        <p id="recibo-metodo" class="text-sm text-gray-500 mb-4"></p>
-        <p id="recibo-cliente" class="text-sm text-gray-600 mb-4"></p>
-        <button onclick="nuevaVenta()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-lg">
-            Nueva venta
-        </button>
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+        <div class="text-center mb-4">
+            <div class="text-4xl mb-2">✅</div>
+            <h2 class="font-bold text-xl mb-1">Venta registrada</h2>
+            <p id="recibo-total" class="text-3xl font-black text-green-600 mb-1"></p>
+            <p id="recibo-metodo" class="text-sm text-gray-500"></p>
+            <p id="recibo-cajero" class="text-xs text-gray-400 mt-0.5"></p>
+        </div>
+
+        <!-- Detalle items -->
+        <div id="recibo-items" class="border rounded-xl p-3 mb-4 space-y-1 max-h-48 overflow-y-auto text-sm"></div>
+
+        <!-- Botones -->
+        <div class="space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="imprimirTicket()"
+                        class="flex items-center justify-center gap-1.5 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-50 text-sm">
+                    🖨️ Imprimir
+                </button>
+                <button id="btn-wa-recibo" onclick="compartirWhatsApp()"
+                        class="flex items-center justify-center gap-1.5 bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 rounded-xl text-sm">
+                    📲 WhatsApp
+                </button>
+            </div>
+            <button onclick="nuevaVenta()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-lg">
+                Nueva venta
+            </button>
+        </div>
     </div>
 </div>
 
 <script>
 const SLUG = '{{ slug }}';
+const TIENDA_NOMBRE = '{{ tienda.nombre }}';
 let productos = [];
 let carrito = [];
 let categoriaActiva = '';
 let metodoPago = 'efectivo';
 let autenticado = false;
+let cajeroId = null;
+let cajeroNombre = '';
+let cajeroTerceroId = null;
+// Datos del último recibo (para ticket e imprimir)
+let ultimoRecibo = null;
 
 // ── PIN ──────────────────────────────────────────────────────────────────────
 
@@ -178,6 +226,13 @@ async function verificarPin() {
         const d = await r.json();
         if (d.ok) {
             autenticado = true;
+            cajeroId = d.id_cajero;
+            cajeroNombre = d.nombre_cajero;
+            cajeroTerceroId = d.tercero_id || null;
+            // Mostrar badge de cajero
+            const badge = document.getElementById('badge-cajero');
+            badge.textContent = `👤 ${cajeroNombre}`;
+            badge.classList.remove('hidden');
             document.getElementById('pantalla-pin').classList.add('hidden');
             document.getElementById('pantalla-caja').classList.remove('hidden');
             cargarProductos();
@@ -197,7 +252,11 @@ document.getElementById('pin-input').addEventListener('keydown', e => {
 
 function cerrarSesionCaja() {
     autenticado = false;
+    cajeroId = null;
+    cajeroNombre = '';
+    cajeroTerceroId = null;
     carrito = [];
+    document.getElementById('badge-cajero').classList.add('hidden');
     document.getElementById('pantalla-caja').classList.add('hidden');
     document.getElementById('pantalla-pin').classList.remove('hidden');
     document.getElementById('pin-input').value = '';
@@ -359,7 +418,10 @@ async function cobrar() {
         tipo_entrega: 'caja',
         metodo_pago: metodoPago,
         nombre_cliente: nombre || 'Venta en caja',
-        telefono_cliente: telefono || ''
+        telefono_cliente: telefono || '',
+        id_cajero: cajeroId,
+        nombre_cajero: cajeroNombre,
+        id_tercero_cajero: cajeroTerceroId
     };
 
     try {
@@ -370,7 +432,16 @@ async function cobrar() {
         });
         const d = await r.json();
         if (d.ok) {
-            mostrarRecibo(d.total, nombre);
+            const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+            ultimoRecibo = {
+                total,
+                metodo: metodoPago,
+                cliente: nombre,
+                telefono,
+                cajero: cajeroNombre,
+                items: carrito.map(i => ({...i}))
+            };
+            mostrarRecibo();
         } else {
             toast(d.error || 'Error al registrar venta', true);
             btn.disabled = false;
@@ -383,17 +454,81 @@ async function cobrar() {
     }
 }
 
-function mostrarRecibo(total, nombre) {
+function mostrarRecibo() {
+    const r = ultimoRecibo;
     const metodos = {efectivo: '💵 Efectivo', qr: '📲 QR', tarjeta: '💳 Tarjeta', transferencia: '🏦 Transferencia'};
-    document.getElementById('recibo-total').textContent = `$${total.toLocaleString('es-CO')}`;
-    document.getElementById('recibo-metodo').textContent = metodos[metodoPago] || metodoPago;
-    document.getElementById('recibo-cliente').textContent = nombre ? `Cliente: ${nombre}` : '';
+    document.getElementById('recibo-total').textContent = `$${r.total.toLocaleString('es-CO')}`;
+    document.getElementById('recibo-metodo').textContent = metodos[r.metodo] || r.metodo;
+    document.getElementById('recibo-cajero').textContent = r.cajero ? `Cajero: ${r.cajero}` : '';
+
+    // Detalle de items
+    const itemsEl = document.getElementById('recibo-items');
+    itemsEl.innerHTML = r.items.map(i => `
+        <div class="flex justify-between text-gray-700">
+            <span>${i.cantidad}x ${i.nombre}</span>
+            <span class="font-semibold">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+        </div>
+    `).join('') + `
+        <div class="border-t mt-2 pt-2 flex justify-between font-bold text-gray-900">
+            <span>Total</span>
+            <span>$${r.total.toLocaleString('es-CO')}</span>
+        </div>`;
+
+    // Mostrar botón WA solo si hay teléfono
+    document.getElementById('btn-wa-recibo').style.display = r.telefono ? '' : 'none';
+
     document.getElementById('modal-recibo').classList.remove('hidden');
+}
+
+// ── Ticket impresión ─────────────────────────────────────────────────────────
+
+function imprimirTicket() {
+    const r = ultimoRecibo;
+    if (!r) return;
+    const metodos = {efectivo: 'Efectivo', qr: 'QR', tarjeta: 'Tarjeta', transferencia: 'Transferencia'};
+    const ahora = new Date().toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+
+    let lineasItems = r.items.map(i => {
+        const total = `$${(i.precio * i.cantidad).toLocaleString('es-CO')}`;
+        const desc = `${i.cantidad}x ${i.nombre}`;
+        // Alinear precio a la derecha en 32 chars
+        const spaces = Math.max(1, 32 - desc.length - total.length);
+        return `<div class="linea"><span>${desc}</span><span>${total}</span></div>`;
+    }).join('');
+
+    document.getElementById('ticket-print').innerHTML = `
+        <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
+        <div class="centro" style="font-size:11px;">${ahora}</div>
+        ${r.cajero ? `<div class="centro" style="font-size:11px;">Cajero: ${r.cajero}</div>` : ''}
+        ${r.cliente ? `<div class="centro" style="font-size:11px;">Cliente: ${r.cliente}</div>` : ''}
+        <div class="sep"></div>
+        ${lineasItems}
+        <div class="sep"></div>
+        <div class="linea total-line"><span>TOTAL</span><span>$${r.total.toLocaleString('es-CO')}</span></div>
+        <div style="font-size:11px;">Pago: ${metodos[r.metodo] || r.metodo}</div>
+        <div class="sep"></div>
+        <div class="centro" style="font-size:11px; margin-top:8px;">¡Gracias por su compra!</div>
+    `;
+    window.print();
+}
+
+// ── WhatsApp ─────────────────────────────────────────────────────────────────
+
+function compartirWhatsApp() {
+    const r = ultimoRecibo;
+    if (!r || !r.telefono) return;
+    const metodos = {efectivo: 'Efectivo', qr: 'QR', tarjeta: 'Tarjeta', transferencia: 'Transferencia'};
+    const lineas = r.items.map(i => `  ${i.cantidad}x ${i.nombre} — $${(i.precio * i.cantidad).toLocaleString('es-CO')}`).join('\n');
+    const texto = `*${TIENDA_NOMBRE}* — Recibo de compra\n\n${lineas}\n\n*Total: $${r.total.toLocaleString('es-CO')}*\nPago: ${metodos[r.metodo] || r.metodo}\n\n¡Gracias por su compra!`;
+    // Limpiar teléfono: solo dígitos
+    const tel = r.telefono.replace(/\D/g, '');
+    window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
 }
 
 function nuevaVenta() {
     document.getElementById('modal-recibo').classList.add('hidden');
     carrito = [];
+    ultimoRecibo = null;
     document.getElementById('nombre-cliente').value = '';
     document.getElementById('tel-cliente').value = '';
     renderCarrito();

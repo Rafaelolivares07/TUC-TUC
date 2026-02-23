@@ -24976,11 +24976,17 @@ def admin_negocios():
         except Exception:
             conn.rollback()
             total_talleres = 0
+        try:
+            total_inmobiliarias = (conn.execute("SELECT COUNT(*) FROM inmobiliarias WHERE activa = TRUE").fetchone() or [0])[0]
+        except Exception:
+            conn.rollback()
+            total_inmobiliarias = 0
         conn.close()
         return render_template('admin_negocios.html',
                                total_restaurantes=total_restaurantes,
                                total_tiendas=total_tiendas,
-                               total_talleres=total_talleres)
+                               total_talleres=total_talleres,
+                               total_inmobiliarias=total_inmobiliarias)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -25007,6 +25013,26 @@ def admin_taller_lista():
         return f"Error: {e}", 500
 
 
+@app.route('/admin/inmobiliaria')
+@admin_required
+def admin_inmobiliaria_lista():
+    """Lista inmobiliarias registradas"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmobiliarias = conn.execute("""
+            SELECT i.id, i.nombre, i.slug, i.telefono, i.whatsapp, i.activa,
+                   t.nombre AS propietario_nombre,
+                   (SELECT COUNT(*) FROM propiedad_inmobiliaria pi WHERE pi.inmobiliaria_id = i.id) AS total_propiedades
+            FROM inmobiliarias i
+            LEFT JOIN terceros t ON t.id = i.propietario_id
+            ORDER BY i.id DESC
+        """).fetchall()
+        conn.close()
+        return render_template('admin_inmobiliaria_lista.html', inmobiliarias=inmobiliarias)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Error: {e}", 500
 
 
 @app.route('/admin/restaurante')
@@ -30853,6 +30879,52 @@ def api_inmobiliaria_crear():
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'id': row['id'], 'slug': slug})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/admin/inmobiliaria/crear', methods=['POST'])
+@admin_required
+def api_admin_inmobiliaria_crear():
+    """Crear inmobiliaria desde panel TUC TUC admin — crea tercero si no existe"""
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    telefono_dueno = ''.join(filter(str.isdigit, data.get('telefono_dueno') or ''))
+    nombre_dueno = (data.get('nombre_dueno') or '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre de la inmobiliaria requerido'})
+    if len(telefono_dueno) < 10:
+        return jsonify({'ok': False, 'error': 'Celular del dueño requerido (mín. 10 dígitos)'})
+    if not nombre_dueno:
+        return jsonify({'ok': False, 'error': 'Nombre del dueño requerido'})
+    slug = _slugify_inmo(nombre)
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        tercero = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (telefono_dueno,)).fetchone()
+        if tercero:
+            propietario_id = tercero['id']
+        else:
+            row_t = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                (nombre_dueno, telefono_dueno)
+            ).fetchone()
+            conn.commit()
+            propietario_id = row_t['id']
+        existe = conn.execute("SELECT id FROM inmobiliarias WHERE slug=%s", (slug,)).fetchone()
+        if existe:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ese nombre/slug ya existe'})
+        row = conn.execute(
+            "INSERT INTO inmobiliarias (propietario_id, nombre, slug, telefono, whatsapp) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (propietario_id, nombre, slug, telefono_dueno, telefono_dueno)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id'], 'slug': slug,
+                        'link_admin': f'/inmobiliaria/{slug}/admin'})
     except Exception as e:
         conn.rollback()
         conn.close()

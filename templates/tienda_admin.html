@@ -217,6 +217,22 @@
                     <button onclick="guardarTelegram()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Guardar</button>
                 </div>
             </div>
+
+            <!-- PIN Caja -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-1">PIN de Caja</h3>
+                <p class="text-sm text-gray-500 mb-3">Los cajeros usan este PIN para acceder a <a href="/tienda/{{ tienda.slug }}/caja" target="_blank" class="text-blue-500 underline">/tienda/{{ tienda.slug }}/caja</a>.</p>
+                <div class="flex gap-2">
+                    <input id="inp-pin-caja" type="text" inputmode="numeric" maxlength="10"
+                           placeholder="Ej: 1234"
+                           class="border rounded-lg px-3 py-2 text-sm w-36 tracking-widest">
+                    <button onclick="guardarPinCaja()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Guardar PIN</button>
+                    <a href="/tienda/{{ tienda.slug }}/caja" target="_blank"
+                       class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1">
+                        🛒 Abrir caja
+                    </a>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -734,6 +750,28 @@ async function toggleMostrarNombre() {
     } catch(e) { toast('Error de conexion', true); }
 }
 
+// === Acceso: PIN Caja ===
+async function cargarPinCaja() {
+    try {
+        const r = await fetch(BASE + '/pin-caja');
+        const d = await r.json();
+        if (d.ok) document.getElementById('inp-pin-caja').value = d.pin_caja || '';
+    } catch {}
+}
+async function guardarPinCaja() {
+    const pin = document.getElementById('inp-pin-caja').value.trim();
+    try {
+        const r = await fetch(BASE + '/pin-caja', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin_caja: pin})
+        });
+        const d = await r.json();
+        if (d.ok) toast('PIN de caja guardado');
+        else toast(d.error || 'Error', true);
+    } catch { toast('Error de conexion', true); }
+}
+
 // === Acceso: Telegram ===
 async function guardarTelegram() {
     const chat_id = document.getElementById('inp-telegram').value.trim();
@@ -797,6 +835,7 @@ async function cargarSuscripcion() {
 // === Init ===
 cargarProductos();
 cargarSuscripcion();
+cargarPinCaja();
 // Polling pedidos cada 5 segundos
 pollingInterval = setInterval(() => {
     if (!document.getElementById('panel-pedidos').classList.contains('hidden')) {

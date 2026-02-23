@@ -24863,9 +24863,12 @@ def crear_tablas_tienda(conn):
     alters = [
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS pin_caja VARCHAR(10)",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS codigo_barra VARCHAR(50)",
+        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT 0",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo'",
         "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
         "CREATE INDEX IF NOT EXISTS idx_productos_tienda_catalogo ON productos_tienda(catalogo_id)",
     ]
@@ -27147,11 +27150,12 @@ def api_tienda_pedido_crear(slug):
     tipo_entrega = data.get('tipo_entrega', 'domicilio')
     notas = data.get('notas', '').strip()
     cliente_id = data.get('cliente_id')
+    metodo_pago = data.get('metodo_pago', 'efectivo')
     items = data.get('items', [])
 
     if not items:
         return jsonify({'ok': False, 'error': 'El carrito esta vacio'}), 400
-    if not nombre_cliente:
+    if not nombre_cliente and tipo_entrega != 'caja':
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
 
     try:
@@ -27192,17 +27196,21 @@ def api_tienda_pedido_crear(slug):
 
         # Crear pedido
         conn.execute("""
-            INSERT INTO pedidos_tienda (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (tienda['id'], cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas or None))
+            INSERT INTO pedidos_tienda (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega, total, notas, metodo_pago)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (tienda['id'], cliente_id, nombre_cliente or None, telefono_cliente or None, direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago))
         pedido_id = conn.execute("SELECT currval(pg_get_serial_sequence('pedidos_tienda', 'id'))").fetchone()[0]
 
-        # Insertar items
+        # Insertar items y descontar stock
         for it in items_validos:
             conn.execute("""
                 INSERT INTO items_pedido_tienda (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
                 VALUES (%s, %s, %s, %s, %s)
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
+            conn.execute(
+                "UPDATE productos_tienda SET stock = GREATEST(0, stock - %s) WHERE id = %s",
+                (it['cantidad'], it['producto_id'])
+            )
 
         conn.commit()
         conn.close()
@@ -27225,6 +27233,79 @@ def api_tienda_pedido_crear(slug):
                 pass
 
         return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Caja POS ──────────────────────────────────────────────────────────────────
+
+@app.route('/tienda/<slug>/caja')
+def tienda_caja(slug):
+    """Pantalla POS de la tienda — acceso por PIN"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT id, nombre, imagen_header, color_primario FROM tiendas WHERE slug = %s AND activo = TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not tienda:
+            return "Tienda no encontrada", 404
+        return render_template('tienda_caja.html', tienda=tienda, slug=slug)
+    except Exception as e:
+        return str(e), 500
+
+
+@app.route('/api/tienda/<slug>/verificar-pin-caja', methods=['POST'])
+def api_tienda_verificar_pin_caja(slug):
+    """Verifica el PIN de acceso a la caja"""
+    data = request.get_json()
+    pin = (data.get('pin') or '').strip()
+    if not pin:
+        return jsonify({'ok': False, 'error': 'PIN requerido'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT id, pin_caja FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if not tienda['pin_caja']:
+            return jsonify({'ok': False, 'error': 'El administrador aún no ha configurado el PIN de caja'}), 403
+        if pin != tienda['pin_caja']:
+            return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 403
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/pin-caja', methods=['GET', 'POST'])
+def api_tienda_pin_caja(slug):
+    """GET: obtiene PIN actual. POST: actualiza PIN."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT id, pin_caja FROM tiendas WHERE slug = %s", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if request.method == 'GET':
+            conn.close()
+            return jsonify({'ok': True, 'pin_caja': tienda['pin_caja'] or ''})
+        data = request.get_json()
+        nuevo_pin = (data.get('pin_caja') or '').strip()
+        conn.execute(
+            "UPDATE tiendas SET pin_caja = %s WHERE id = %s",
+            (nuevo_pin or None, tienda['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

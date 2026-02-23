@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{{ inmo.nombre }} — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .card-prop { transition:box-shadow .2s; }
+  .card-prop:hover { box-shadow:0 8px 24px rgba(0,0,0,.12); }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- HEADER INMOBILIARIA -->
+<div class="bg-white shadow-sm">
+  <div class="max-w-5xl mx-auto px-4 py-5">
+    <div class="flex items-center gap-4 mb-4">
+      {% if inmo.logo_url %}
+        <img src="{{ inmo.logo_url }}" class="w-16 h-16 rounded-2xl object-cover shadow-sm">
+      {% else %}
+        <div class="w-16 h-16 rounded-2xl bg-blue-700 flex items-center justify-center text-3xl text-white shadow-sm">🏢</div>
+      {% endif %}
+      <div class="flex-1">
+        <h1 class="text-xl font-bold text-gray-800">{{ inmo.nombre }}</h1>
+        {% if inmo.descripcion %}<p class="text-sm text-gray-500 mt-0.5">{{ inmo.descripcion }}</p>{% endif %}
+      </div>
+      {% if inmo.whatsapp %}
+      <a href="https://wa.me/{{ inmo.whatsapp }}" target="_blank"
+         class="bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-xl">WhatsApp</a>
+      {% endif %}
+    </div>
+    <!-- Filtros -->
+    <div class="flex flex-wrap gap-2">
+      <button onclick="filtrar('')" id="btn-todos" class="filtro-btn bg-blue-700 text-white text-sm px-4 py-2 rounded-xl font-medium">Todas</button>
+      <button onclick="filtrar('venta')" id="btn-venta" class="filtro-btn bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-xl font-medium">En venta</button>
+      <button onclick="filtrar('alquiler')" id="btn-alquiler" class="filtro-btn bg-gray-100 text-gray-700 text-sm px-4 py-2 rounded-xl font-medium">En alquiler</button>
+    </div>
+  </div>
+</div>
+
+<!-- GRID -->
+<div class="max-w-5xl mx-auto px-4 py-5">
+  <div id="grid-props" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="col-span-full text-center py-16 text-gray-400">
+      <div class="text-5xl mb-3">⏳</div>
+      <p>Cargando propiedades...</p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LEAD -->
+<div id="modal-lead" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6">
+    <h2 class="font-bold text-gray-800 mb-4">Contactar sobre esta propiedad</h2>
+    <div class="space-y-3">
+      <input id="lead-nombre" type="text" placeholder="Tu nombre" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <input id="lead-tel" type="tel" placeholder="Tu teléfono" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <textarea id="lead-msg" rows="2" placeholder="Mensaje (opcional)" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      <div class="flex gap-3">
+        <button onclick="cerrarLead()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="enviarLead()" class="flex-1 bg-blue-700 text-white rounded-xl py-3 text-sm font-semibold">Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLUG_INMO = "{{ inmo.slug }}";
+let slugLead = null;
+
+function toast(msg, tipo='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (tipo === 'ok' ? 'toast-ok' : 'toast-err');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function fmt(precio) {
+  if (!precio) return 'Consultar';
+  return '$' + Number(precio).toLocaleString('es-CO');
+}
+
+let filtroActual = '';
+
+function filtrar(modalidad) {
+  filtroActual = modalidad;
+  document.querySelectorAll('.filtro-btn').forEach(b => {
+    b.className = b.className.replace('bg-blue-700 text-white', 'bg-gray-100 text-gray-700');
+  });
+  const activo = modalidad === '' ? 'btn-todos' : (modalidad === 'venta' ? 'btn-venta' : 'btn-alquiler');
+  const btn = document.getElementById(activo);
+  btn.className = btn.className.replace('bg-gray-100 text-gray-700', 'bg-blue-700 text-white');
+  cargarPropiedades();
+}
+
+async function cargarPropiedades() {
+  const params = new URLSearchParams();
+  if (filtroActual) params.set('modalidad', filtroActual);
+  const g = document.getElementById('grid-props');
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG_INMO}/propiedades?` + params);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error || 'Error', 'err'); return; }
+    if (!d.propiedades.length) {
+      g.innerHTML = '<div class="col-span-full text-center py-16 text-gray-400"><div class="text-5xl mb-3">🏚️</div><p>Sin propiedades en este filtro</p></div>';
+      return;
+    }
+    g.innerHTML = d.propiedades.map(p => `
+      <div class="card-prop bg-white rounded-2xl shadow-sm overflow-hidden cursor-pointer" onclick="verFicha('${p.slug}')">
+        <div class="h-44 bg-gray-100 relative">
+          ${p.foto ? `<img src="${p.foto}" class="w-full h-full object-cover" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-4xl text-gray-300">🏠</div>'}
+          <span class="absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-lg ${p.modalidad === 'venta' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-800'}">${p.modalidad.toUpperCase()}</span>
+        </div>
+        <div class="p-4">
+          <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 mb-1">${p.titulo}</h3>
+          <p class="text-xs text-gray-500 mb-2">📍 ${p.ciudad || '—'}</p>
+          <p class="font-bold text-blue-700 text-base mb-3">${fmt(p.precio)}</p>
+          <div class="flex gap-3 text-xs text-gray-500 mb-3">
+            ${p.habitaciones ? `<span>🛏️ ${p.habitaciones}</span>` : ''}
+            ${p.banos ? `<span>🚿 ${p.banos}</span>` : ''}
+            ${p.m2 ? `<span>📐 ${p.m2}m²</span>` : ''}
+          </div>
+          <button onclick="event.stopPropagation(); abrirLead('${p.slug}')"
+                  class="w-full border-2 border-blue-700 text-blue-700 rounded-xl py-2 text-xs font-semibold hover:bg-blue-50 transition">
+            Me interesa
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+function verFicha(slug) {
+  window.location.href = `/inmobiliaria/${SLUG_INMO}/p/${slug}`;
+}
+
+function abrirLead(slug) {
+  slugLead = slug;
+  document.getElementById('modal-lead').classList.remove('hidden');
+}
+
+function cerrarLead() {
+  slugLead = null;
+  document.getElementById('modal-lead').classList.add('hidden');
+}
+
+async function enviarLead() {
+  const nombre = document.getElementById('lead-nombre').value.trim();
+  const tel = document.getElementById('lead-tel').value.trim();
+  const msg = document.getElementById('lead-msg').value.trim();
+  if (!nombre || !tel) { toast('Nombre y teléfono requeridos', 'err'); return; }
+  try {
+    const r = await fetch(`/api/propiedad/${slugLead}/lead`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ nombre, telefono: tel, mensaje: msg })
+    });
+    const d = await r.json();
+    if (d.ok) { toast('¡Mensaje enviado! Te contactarán pronto'); cerrarLead(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+cargarPropiedades();
+</script>
+</body>
+</html>

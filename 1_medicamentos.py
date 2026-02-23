@@ -1482,7 +1482,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -30179,6 +30179,864 @@ def api_taller_cliente_orden_fotos(slug, oid):
              'hora': f['created_at'].strftime('%d/%m/%Y %H:%M')}
             for f in fotos
         ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
+# MÓDULO INMOBILIARIA TUC TUC
+# URLs: /propiedades  /propiedades/p/<slug>
+#       /mis-propiedades
+#       /inmobiliaria/<slug>  /inmobiliaria/<slug>/p/<slug_prop>
+#       /inmobiliaria/<slug>/admin
+# ═══════════════════════════════════════════════════════════════
+
+import unicodedata as _unicodedata
+import re as _re_inmo
+
+def _slugify_inmo(texto):
+    """Genera slug normalizado (sin tildes, sin espacios)"""
+    txt = _unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode()
+    slug = _re_inmo.sub(r'[^\w\s-]', '', txt.lower())
+    return _re_inmo.sub(r'[\s_-]+', '-', slug).strip('-')[:70]
+
+
+_inmobiliaria_tablas_listas = False
+
+def crear_tablas_inmobiliaria(conn):
+    """Self-healing: crear/migrar tablas del módulo Inmobiliaria. Una vez por proceso."""
+    global _inmobiliaria_tablas_listas
+    if _inmobiliaria_tablas_listas:
+        return
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS inmobiliarias (
+            id SERIAL PRIMARY KEY,
+            propietario_id INTEGER NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            slug VARCHAR(60) UNIQUE NOT NULL,
+            telefono VARCHAR(20),
+            whatsapp VARCHAR(20),
+            logo_url TEXT,
+            descripcion TEXT,
+            activa BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS categorias_propiedad (
+            id SERIAL PRIMARY KEY,
+            inmobiliaria_id INTEGER,
+            nombre VARCHAR(60) NOT NULL,
+            activa BOOLEAN DEFAULT TRUE
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS propiedades (
+            id SERIAL PRIMARY KEY,
+            slug VARCHAR(120) UNIQUE NOT NULL,
+            inmobiliaria_id INTEGER,
+            id_tercero_propietario INTEGER,
+            titulo VARCHAR(200) NOT NULL,
+            descripcion TEXT,
+            modalidad VARCHAR(10) NOT NULL DEFAULT 'venta',
+            precio NUMERIC(15,2),
+            categoria_id INTEGER,
+            m2 NUMERIC(10,2),
+            habitaciones INTEGER,
+            banos INTEGER,
+            parqueadero BOOLEAN DEFAULT FALSE,
+            estrato INTEGER,
+            lat NUMERIC(10,7),
+            lon NUMERIC(10,7),
+            direccion TEXT,
+            ciudad VARCHAR(80),
+            estado VARCHAR(20) DEFAULT 'disponible',
+            publicar_en_bolsa BOOLEAN DEFAULT FALSE,
+            disponible_inmobiliarias BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS propiedad_fotos (
+            id SERIAL PRIMARY KEY,
+            propiedad_id INTEGER NOT NULL,
+            url TEXT NOT NULL,
+            descripcion VARCHAR(200),
+            orden INTEGER DEFAULT 0,
+            es_principal BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS propiedad_inmobiliaria (
+            id SERIAL PRIMARY KEY,
+            propiedad_id INTEGER NOT NULL,
+            inmobiliaria_id INTEGER NOT NULL,
+            estado VARCHAR(20) DEFAULT 'activa',
+            added_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(propiedad_id, inmobiliaria_id)
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS leads_propiedad (
+            id SERIAL PRIMARY KEY,
+            propiedad_id INTEGER NOT NULL,
+            id_tercero INTEGER,
+            nombre VARCHAR(100),
+            telefono VARCHAR(20),
+            mensaje TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS inmobiliaria_colaboradores (
+            id SERIAL PRIMARY KEY,
+            inmobiliaria_id INTEGER NOT NULL,
+            id_tercero INTEGER NOT NULL,
+            rol VARCHAR(20) DEFAULT 'agente',
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(inmobiliaria_id, id_tercero)
+        )
+    """)
+    conn.commit()
+    alters = [
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS whatsapp VARCHAR(20)",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS logo_url TEXT",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
+        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS parqueadero BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS estrato INTEGER",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    _inmobiliaria_tablas_listas = True
+
+
+def _inmo_tiene_acceso(conn, slug, uid):
+    """Retorna el row de la inmobiliaria si el uid es propietario o colaborador, else None."""
+    return conn.execute(
+        """SELECT id, nombre, slug FROM inmobiliarias
+           WHERE slug=%s AND activa=TRUE
+             AND (propietario_id=%s
+                  OR id IN (SELECT inmobiliaria_id FROM inmobiliaria_colaboradores
+                            WHERE id_tercero=%s AND activo=TRUE))""",
+        (slug, uid, uid)
+    ).fetchone()
+
+
+# ─────────── RUTAS DE PÁGINA ───────────
+
+@app.route('/propiedades')
+def bolsa_propiedades():
+    """Bolsa pública TUC TUC"""
+    return render_template('bolsa_propiedades.html')
+
+
+@app.route('/propiedades/p/<slug>')
+def ficha_propiedad_bolsa(slug):
+    """Ficha individual en la bolsa"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        prop = conn.execute(
+            "SELECT * FROM propiedades WHERE slug=%s AND publicar_en_bolsa=TRUE AND estado='disponible'",
+            (slug,)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return render_template('bolsa_propiedades.html'), 404
+        fotos = conn.execute(
+            "SELECT url, descripcion, es_principal FROM propiedad_fotos WHERE propiedad_id=%s ORDER BY es_principal DESC, orden",
+            (prop['id'],)
+        ).fetchall()
+        conn.close()
+        return render_template('propiedad_ficha.html',
+                               prop=dict(prop), fotos=[dict(f) for f in fotos], modo='bolsa', inmo=None)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/mis-propiedades')
+def mis_propiedades():
+    """Portal del propietario — gestiona sus propiedades"""
+    return render_template('mis_propiedades.html')
+
+
+@app.route('/inmobiliaria/<slug>')
+def inmobiliaria_portal(slug):
+    """Portal público de la inmobiliaria"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = conn.execute(
+            "SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not inmo:
+            return "Inmobiliaria no encontrada", 404
+        return render_template('inmobiliaria_portal.html', inmo=dict(inmo), slug=slug)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/inmobiliaria/<slug>/p/<slug_prop>')
+def inmobiliaria_ficha_propiedad(slug, slug_prop):
+    """Ficha individual dentro del portal de una inmobiliaria"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = conn.execute(
+            "SELECT id, nombre, slug, whatsapp FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            (slug,)
+        ).fetchone()
+        if not inmo:
+            conn.close()
+            return "Inmobiliaria no encontrada", 404
+        prop = conn.execute(
+            """SELECT p.* FROM propiedades p
+               JOIN propiedad_inmobiliaria pi ON pi.propiedad_id=p.id
+               WHERE p.slug=%s AND pi.inmobiliaria_id=%s AND pi.estado='activa'""",
+            (slug_prop, inmo['id'])
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return "Propiedad no encontrada", 404
+        fotos = conn.execute(
+            "SELECT url, descripcion, es_principal FROM propiedad_fotos WHERE propiedad_id=%s ORDER BY es_principal DESC, orden",
+            (prop['id'],)
+        ).fetchall()
+        conn.close()
+        return render_template('propiedad_ficha.html',
+                               prop=dict(prop), fotos=[dict(f) for f in fotos],
+                               inmo=dict(inmo), modo='inmobiliaria')
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/inmobiliaria/<slug>/admin')
+def inmobiliaria_admin(slug):
+    """Panel de administración de la inmobiliaria"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = conn.execute(
+            "SELECT id, nombre, slug FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not inmo:
+            return "Inmobiliaria no encontrada", 404
+        return render_template('inmobiliaria_admin.html', inmo=dict(inmo), slug=slug)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+# ─────────── API: LOGIN (propietario / inmobiliaria) ───────────
+
+@app.route('/api/inmobiliaria/login', methods=['POST'])
+def api_inmobiliaria_login():
+    """Login/registro con teléfono para acceso a módulo inmobiliario"""
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'})
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono=%s", (telefono,)
+        ).fetchone()
+        if tercero:
+            session['usuario_id'] = tercero['id']
+            conn.close()
+            return jsonify({'ok': True, 'nombre': tercero['nombre'], 'nuevo': False})
+        if not nombre:
+            conn.close()
+            return jsonify({'ok': False, 'nuevo': True, 'error': 'nombre_requerido'})
+        row = conn.execute(
+            "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+            (nombre, telefono)
+        ).fetchone()
+        conn.commit()
+        session['usuario_id'] = row['id']
+        conn.close()
+        return jsonify({'ok': True, 'nombre': nombre, 'nuevo': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── APIs: MIS PROPIEDADES (propietario directo) ───────────
+
+@app.route('/api/mis-propiedades')
+def api_mis_propiedades_lista():
+    """Lista propiedades del usuario en sesión"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        props = conn.execute(
+            """SELECT p.id, p.slug, p.titulo, p.modalidad, p.precio, p.ciudad, p.estado,
+                      p.publicar_en_bolsa, p.disponible_inmobiliarias, p.created_at,
+                      (SELECT url FROM propiedad_fotos WHERE propiedad_id=p.id AND es_principal=TRUE LIMIT 1) as foto_principal,
+                      (SELECT COUNT(*) FROM propiedad_fotos WHERE propiedad_id=p.id) as num_fotos,
+                      (SELECT COUNT(*) FROM leads_propiedad WHERE propiedad_id=p.id) as num_leads
+               FROM propiedades p WHERE p.id_tercero_propietario=%s ORDER BY p.created_at DESC""",
+            (uid,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'propiedades': [{
+            'id': p['id'], 'slug': p['slug'], 'titulo': p['titulo'],
+            'modalidad': p['modalidad'],
+            'precio': float(p['precio']) if p['precio'] else None,
+            'ciudad': p['ciudad'], 'estado': p['estado'],
+            'publicar_en_bolsa': p['publicar_en_bolsa'],
+            'disponible_inmobiliarias': p['disponible_inmobiliarias'],
+            'foto_principal': p['foto_principal'],
+            'num_fotos': p['num_fotos'], 'num_leads': p['num_leads'],
+            'created_at': p['created_at'].strftime('%d/%m/%Y')
+        } for p in props]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mis-propiedades/crear', methods=['POST'])
+def api_mis_propiedades_crear():
+    """Crear nueva propiedad como propietario directo"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    titulo = (data.get('titulo') or '').strip()
+    if not titulo:
+        return jsonify({'ok': False, 'error': 'Título requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        slug_base = _slugify_inmo(titulo)
+        row = conn.execute(
+            """INSERT INTO propiedades
+               (slug, id_tercero_propietario, titulo, descripcion, modalidad, precio,
+                m2, habitaciones, banos, parqueadero, estrato, lat, lon, direccion, ciudad,
+                publicar_en_bolsa, disponible_inmobiliarias)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               RETURNING id""",
+            (slug_base + '-tmp', uid, titulo,
+             (data.get('descripcion') or '').strip(),
+             data.get('modalidad', 'venta'),
+             data.get('precio') or None, data.get('m2') or None,
+             data.get('habitaciones') or None, data.get('banos') or None,
+             bool(data.get('parqueadero', False)), data.get('estrato') or None,
+             data.get('lat') or None, data.get('lon') or None,
+             (data.get('direccion') or '').strip(), (data.get('ciudad') or '').strip(),
+             bool(data.get('publicar_en_bolsa', False)),
+             bool(data.get('disponible_inmobiliarias', False)))
+        ).fetchone()
+        pid = row['id']
+        conn.execute("UPDATE propiedades SET slug=%s WHERE id=%s", (f"{slug_base}-{pid}", pid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': pid, 'slug': f"{slug_base}-{pid}"})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mis-propiedades/<int:pid>/editar', methods=['POST'])
+def api_mis_propiedades_editar(pid):
+    """Editar propiedad propia"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        prop = conn.execute(
+            "SELECT id FROM propiedades WHERE id=%s AND id_tercero_propietario=%s", (pid, uid)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        campos = {k: data[k] for k in [
+            'titulo', 'descripcion', 'modalidad', 'precio', 'm2', 'habitaciones',
+            'banos', 'parqueadero', 'estrato', 'lat', 'lon', 'direccion', 'ciudad',
+            'publicar_en_bolsa', 'disponible_inmobiliarias', 'estado'
+        ] if k in data}
+        if not campos:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin campos para actualizar'})
+        set_sql = ', '.join([f"{k}=%s" for k in campos])
+        conn.execute(f"UPDATE propiedades SET {set_sql}, updated_at=NOW() WHERE id=%s",
+                     list(campos.values()) + [pid])
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mis-propiedades/<int:pid>/fotos', methods=['POST'])
+def api_mis_propiedades_fotos(pid):
+    """Subir foto a una propiedad del propietario"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    if 'foto' not in request.files:
+        return jsonify({'ok': False, 'error': 'Sin archivo'})
+    try:
+        conn = get_db_connection()
+        prop = conn.execute(
+            "SELECT id FROM propiedades WHERE id=%s AND id_tercero_propietario=%s", (pid, uid)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        import os as _os, uuid as _uuid
+        archivo = request.files['foto']
+        ext = _os.path.splitext(archivo.filename)[1].lower() or '.jpg'
+        nombre_archivo = f"prop_{pid}_{_uuid.uuid4().hex[:8]}{ext}"
+        ruta = _os.path.join('static', 'propiedades', nombre_archivo)
+        _os.makedirs(_os.path.join('static', 'propiedades'), exist_ok=True)
+        archivo.save(ruta)
+        es_principal = request.form.get('es_principal') == 'true'
+        if es_principal:
+            conn.execute("UPDATE propiedad_fotos SET es_principal=FALSE WHERE propiedad_id=%s", (pid,))
+        orden = (conn.execute(
+            "SELECT COALESCE(MAX(orden),0)+1 as sig FROM propiedad_fotos WHERE propiedad_id=%s", (pid,)
+        ).fetchone())['sig']
+        conn.execute(
+            "INSERT INTO propiedad_fotos (propiedad_id, url, descripcion, orden, es_principal) VALUES (%s, %s, %s, %s, %s)",
+            (pid, f"/static/propiedades/{nombre_archivo}", request.form.get('descripcion', ''), orden, es_principal)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'url': f"/static/propiedades/{nombre_archivo}"})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mis-propiedades/<int:pid>', methods=['DELETE'])
+def api_mis_propiedades_eliminar(pid):
+    """Pausar propiedad (soft delete)"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        prop = conn.execute(
+            "SELECT id FROM propiedades WHERE id=%s AND id_tercero_propietario=%s", (pid, uid)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        conn.execute("UPDATE propiedades SET estado='pausada', updated_at=NOW() WHERE id=%s", (pid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── APIs: BOLSA PÚBLICA ───────────
+
+@app.route('/api/bolsa/propiedades')
+def api_bolsa_propiedades():
+    """Lista propiedades en la bolsa pública con filtros opcionales"""
+    modalidad = request.args.get('modalidad')
+    ciudad = request.args.get('ciudad')
+    precio_min = request.args.get('precio_min')
+    precio_max = request.args.get('precio_max')
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        where = ["p.publicar_en_bolsa=TRUE", "p.estado='disponible'"]
+        params = []
+        if modalidad:
+            where.append("p.modalidad=%s"); params.append(modalidad)
+        if ciudad:
+            where.append("p.ciudad ILIKE %s"); params.append(f"%{ciudad}%")
+        if precio_min:
+            where.append("p.precio >= %s"); params.append(float(precio_min))
+        if precio_max:
+            where.append("p.precio <= %s"); params.append(float(precio_max))
+        sql = f"""SELECT p.id, p.slug, p.titulo, p.modalidad, p.precio, p.ciudad, p.m2,
+                         p.habitaciones, p.banos, p.direccion, p.created_at,
+                         (SELECT url FROM propiedad_fotos WHERE propiedad_id=p.id AND es_principal=TRUE LIMIT 1) as foto
+                  FROM propiedades p WHERE {' AND '.join(where)} ORDER BY p.created_at DESC LIMIT 60"""
+        props = conn.execute(sql, params).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'propiedades': [{
+            'id': p['id'], 'slug': p['slug'], 'titulo': p['titulo'],
+            'modalidad': p['modalidad'],
+            'precio': float(p['precio']) if p['precio'] else None,
+            'ciudad': p['ciudad'], 'm2': float(p['m2']) if p['m2'] else None,
+            'habitaciones': p['habitaciones'], 'banos': p['banos'],
+            'direccion': p['direccion'], 'foto': p['foto'],
+            'fecha': p['created_at'].strftime('%d/%m/%Y')
+        } for p in props]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/bolsa/propiedad/<slug>')
+def api_bolsa_propiedad_detalle(slug):
+    """Detalle de propiedad en la bolsa"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        prop = conn.execute(
+            "SELECT * FROM propiedades WHERE slug=%s AND publicar_en_bolsa=TRUE AND estado='disponible'",
+            (slug,)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrada'})
+        fotos = conn.execute(
+            "SELECT url, descripcion, es_principal FROM propiedad_fotos WHERE propiedad_id=%s ORDER BY es_principal DESC, orden",
+            (prop['id'],)
+        ).fetchall()
+        conn.close()
+        p = dict(prop)
+        p['precio'] = float(p['precio']) if p['precio'] else None
+        p['m2'] = float(p['m2']) if p['m2'] else None
+        p['lat'] = float(p['lat']) if p['lat'] else None
+        p['lon'] = float(p['lon']) if p['lon'] else None
+        p['created_at'] = p['created_at'].strftime('%d/%m/%Y')
+        p['updated_at'] = p['updated_at'].strftime('%d/%m/%Y') if p.get('updated_at') else None
+        return jsonify({'ok': True, 'propiedad': p, 'fotos': [dict(f) for f in fotos]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/propiedad/<slug>/lead', methods=['POST'])
+def api_propiedad_lead(slug):
+    """Registrar interesado en una propiedad"""
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    telefono = (data.get('telefono') or '').strip()
+    mensaje = (data.get('mensaje') or '').strip()
+    if not nombre or not telefono:
+        return jsonify({'ok': False, 'error': 'Nombre y teléfono requeridos'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        prop = conn.execute("SELECT id FROM propiedades WHERE slug=%s", (slug,)).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        uid = session.get('usuario_id')
+        conn.execute(
+            "INSERT INTO leads_propiedad (propiedad_id, id_tercero, nombre, telefono, mensaje) VALUES (%s, %s, %s, %s, %s)",
+            (prop['id'], uid, nombre, telefono, mensaje)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── APIs: PORTAL INMOBILIARIA (público) ───────────
+
+@app.route('/api/inmobiliaria/<slug>')
+def api_inmobiliaria_info(slug):
+    """Info pública de la inmobiliaria"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = conn.execute(
+            "SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            (slug,)
+        ).fetchone()
+        conn.close()
+        if not inmo:
+            return jsonify({'ok': False, 'error': 'No encontrada'})
+        return jsonify({'ok': True, 'inmobiliaria': dict(inmo)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/propiedades')
+def api_inmobiliaria_propiedades(slug):
+    """Propiedades del portal de la inmobiliaria (vista pública)"""
+    modalidad = request.args.get('modalidad')
+    ciudad = request.args.get('ciudad')
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = conn.execute(
+            "SELECT id FROM inmobiliarias WHERE slug=%s AND activa=TRUE", (slug,)
+        ).fetchone()
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Inmobiliaria no encontrada'})
+        where = ["pi.inmobiliaria_id=%s", "pi.estado='activa'", "p.estado='disponible'"]
+        params = [inmo['id']]
+        if modalidad:
+            where.append("p.modalidad=%s"); params.append(modalidad)
+        if ciudad:
+            where.append("p.ciudad ILIKE %s"); params.append(f"%{ciudad}%")
+        sql = f"""SELECT p.id, p.slug, p.titulo, p.modalidad, p.precio, p.ciudad, p.m2,
+                         p.habitaciones, p.banos, p.direccion,
+                         (SELECT url FROM propiedad_fotos WHERE propiedad_id=p.id AND es_principal=TRUE LIMIT 1) as foto
+                  FROM propiedades p JOIN propiedad_inmobiliaria pi ON pi.propiedad_id=p.id
+                  WHERE {' AND '.join(where)} ORDER BY pi.added_at DESC LIMIT 60"""
+        props = conn.execute(sql, params).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'propiedades': [{
+            'id': p['id'], 'slug': p['slug'], 'titulo': p['titulo'],
+            'modalidad': p['modalidad'],
+            'precio': float(p['precio']) if p['precio'] else None,
+            'ciudad': p['ciudad'], 'm2': float(p['m2']) if p['m2'] else None,
+            'habitaciones': p['habitaciones'], 'banos': p['banos'],
+            'foto': p['foto']
+        } for p in props]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── APIs: ADMIN INMOBILIARIA ───────────
+
+@app.route('/api/inmobiliaria/crear', methods=['POST'])
+def api_inmobiliaria_crear():
+    """Registrar nueva inmobiliaria"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    slug = _slugify_inmo(data.get('slug') or nombre)
+    if not nombre or not slug:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        existe = conn.execute("SELECT id FROM inmobiliarias WHERE slug=%s", (slug,)).fetchone()
+        if existe:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ese slug ya existe'})
+        row = conn.execute(
+            """INSERT INTO inmobiliarias (propietario_id, nombre, slug, telefono, whatsapp, descripcion)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+            (uid, nombre, slug,
+             (data.get('telefono') or '').strip(),
+             (data.get('whatsapp') or '').strip(),
+             (data.get('descripcion') or '').strip())
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id'], 'slug': slug})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/info')
+def api_inmobiliaria_admin_info(slug):
+    """Info de la inmobiliaria — solo admin/colaborador"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        conn.close()
+        if not inmo:
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        return jsonify({'ok': True, 'inmobiliaria': dict(inmo)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/propiedades')
+def api_inmobiliaria_admin_propiedades(slug):
+    """Lista propiedades del portal con stats"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        props = conn.execute(
+            """SELECT p.id, p.slug, p.titulo, p.modalidad, p.precio, p.ciudad, p.estado,
+                      pi.estado as estado_portal, pi.added_at,
+                      (SELECT url FROM propiedad_fotos WHERE propiedad_id=p.id AND es_principal=TRUE LIMIT 1) as foto,
+                      (SELECT COUNT(*) FROM leads_propiedad WHERE propiedad_id=p.id) as num_leads
+               FROM propiedades p JOIN propiedad_inmobiliaria pi ON pi.propiedad_id=p.id
+               WHERE pi.inmobiliaria_id=%s ORDER BY pi.added_at DESC""",
+            (inmo['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'propiedades': [{
+            'id': p['id'], 'slug': p['slug'], 'titulo': p['titulo'],
+            'modalidad': p['modalidad'],
+            'precio': float(p['precio']) if p['precio'] else None,
+            'ciudad': p['ciudad'], 'estado': p['estado'],
+            'estado_portal': p['estado_portal'], 'foto': p['foto'],
+            'num_leads': p['num_leads'],
+            'added_at': p['added_at'].strftime('%d/%m/%Y')
+        } for p in props]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/propiedades/crear', methods=['POST'])
+def api_inmobiliaria_admin_crear_propiedad(slug):
+    """Crear propiedad directamente en el portal"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    titulo = (data.get('titulo') or '').strip()
+    if not titulo:
+        return jsonify({'ok': False, 'error': 'Título requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        slug_base = _slugify_inmo(titulo)
+        row = conn.execute(
+            """INSERT INTO propiedades
+               (slug, inmobiliaria_id, titulo, descripcion, modalidad, precio, m2,
+                habitaciones, banos, parqueadero, estrato, lat, lon, direccion, ciudad, publicar_en_bolsa)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (slug_base + '-tmp', inmo['id'], titulo,
+             (data.get('descripcion') or '').strip(),
+             data.get('modalidad', 'venta'),
+             data.get('precio') or None, data.get('m2') or None,
+             data.get('habitaciones') or None, data.get('banos') or None,
+             bool(data.get('parqueadero', False)), data.get('estrato') or None,
+             data.get('lat') or None, data.get('lon') or None,
+             (data.get('direccion') or '').strip(), (data.get('ciudad') or '').strip(),
+             bool(data.get('publicar_en_bolsa', False)))
+        ).fetchone()
+        pid = row['id']
+        conn.execute("UPDATE propiedades SET slug=%s WHERE id=%s", (f"{slug_base}-{pid}", pid))
+        conn.execute(
+            "INSERT INTO propiedad_inmobiliaria (propiedad_id, inmobiliaria_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (pid, inmo['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': pid, 'slug': f"{slug_base}-{pid}"})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/propiedades/<int:pid>/fotos', methods=['POST'])
+def api_inmobiliaria_admin_foto(slug, pid):
+    """Subir foto a propiedad del portal"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    if 'foto' not in request.files:
+        return jsonify({'ok': False, 'error': 'Sin archivo'})
+    try:
+        conn = get_db_connection()
+        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        rel = conn.execute(
+            "SELECT id FROM propiedad_inmobiliaria WHERE propiedad_id=%s AND inmobiliaria_id=%s",
+            (pid, inmo['id'])
+        ).fetchone()
+        if not rel:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no pertenece al portal'})
+        import os as _os2, uuid as _uuid2
+        archivo = request.files['foto']
+        ext = _os2.path.splitext(archivo.filename)[1].lower() or '.jpg'
+        nombre_archivo = f"prop_{pid}_{_uuid2.uuid4().hex[:8]}{ext}"
+        ruta = _os2.path.join('static', 'propiedades', nombre_archivo)
+        _os2.makedirs(_os2.path.join('static', 'propiedades'), exist_ok=True)
+        archivo.save(ruta)
+        es_principal = request.form.get('es_principal') == 'true'
+        if es_principal:
+            conn.execute("UPDATE propiedad_fotos SET es_principal=FALSE WHERE propiedad_id=%s", (pid,))
+        orden = (conn.execute(
+            "SELECT COALESCE(MAX(orden),0)+1 as sig FROM propiedad_fotos WHERE propiedad_id=%s", (pid,)
+        ).fetchone())['sig']
+        conn.execute(
+            "INSERT INTO propiedad_fotos (propiedad_id, url, descripcion, orden, es_principal) VALUES (%s, %s, %s, %s, %s)",
+            (pid, f"/static/propiedades/{nombre_archivo}", request.form.get('descripcion', ''), orden, es_principal)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'url': f"/static/propiedades/{nombre_archivo}"})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/leads')
+def api_inmobiliaria_admin_leads(slug):
+    """Lista de leads del portal"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        leads = conn.execute(
+            """SELECT l.id, l.nombre, l.telefono, l.mensaje, l.created_at,
+                      p.titulo as propiedad, p.slug as prop_slug
+               FROM leads_propiedad l
+               JOIN propiedades p ON p.id=l.propiedad_id
+               JOIN propiedad_inmobiliaria pi ON pi.propiedad_id=p.id
+               WHERE pi.inmobiliaria_id=%s ORDER BY l.created_at DESC LIMIT 100""",
+            (inmo['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'leads': [{
+            'id': l['id'], 'nombre': l['nombre'], 'telefono': l['telefono'],
+            'mensaje': l['mensaje'], 'propiedad': l['propiedad'],
+            'prop_slug': l['prop_slug'],
+            'fecha': l['created_at'].strftime('%d/%m/%Y %H:%M')
+        } for l in leads]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
 

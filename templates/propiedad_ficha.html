@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{{ prop.titulo }} — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .foto-thumb { width:80px; height:80px; object-fit:cover; border-radius:10px; cursor:pointer; border:2px solid transparent; }
+  .foto-thumb.active { border-color:#1d4ed8; }
+  .zoom-overlay { position:fixed; inset:0; background:rgba(0,0,0,.88); z-index:9998;
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .2s; }
+  .zoom-overlay.active { opacity:1; pointer-events:auto; }
+  .zoom-overlay img { max-width:95vw; max-height:90vh; border-radius:12px; }
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+<div id="zoom-overlay" class="zoom-overlay" onclick="cerrarZoom()">
+  <img id="zoom-img" src="" alt="">
+</div>
+
+<!-- HEADER -->
+<div class="bg-white shadow-sm sticky top-0 z-40">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+    <button onclick="history.back()" class="text-gray-500 text-xl">←</button>
+    <span class="font-semibold text-gray-800 text-sm truncate">{{ prop.titulo }}</span>
+    {% if modo == 'inmobiliaria' and inmo %}
+      <a href="/inmobiliaria/{{ inmo.slug }}" class="ml-auto text-xs text-blue-700 font-medium">← Portal</a>
+    {% else %}
+      <a href="/propiedades" class="ml-auto text-xs text-blue-700 font-medium">← Bolsa</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- GALERIA -->
+{% set fotos = fotos %}
+<div class="max-w-3xl mx-auto px-4 pt-4">
+  <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div class="h-64 sm:h-80 bg-gray-100 relative">
+      {% if fotos %}
+        <img id="foto-principal" src="{{ fotos[0].url }}" alt="{{ prop.titulo }}"
+             class="w-full h-full object-cover cursor-pointer" onclick="zoomFoto(this.src)">
+      {% else %}
+        <div class="w-full h-full flex items-center justify-center text-6xl text-gray-300">🏠</div>
+      {% endif %}
+    </div>
+    {% if fotos|length > 1 %}
+    <div class="flex gap-2 p-3 overflow-x-auto">
+      {% for f in fotos %}
+        <img src="{{ f.url }}" alt="" class="foto-thumb {% if loop.first %}active{% endif %}"
+             onclick="cambiarFoto('{{ f.url }}', this)">
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- DETALLE -->
+<div class="max-w-3xl mx-auto px-4 py-4 space-y-4">
+  <!-- Precio y modalidad -->
+  <div class="bg-white rounded-2xl shadow-sm p-5">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <span class="text-xs font-bold px-2 py-1 rounded-lg mr-2
+          {% if prop.modalidad == 'venta' %}bg-blue-100 text-blue-700{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+          {{ prop.modalidad|upper }}
+        </span>
+        {% if prop.estado != 'disponible' %}
+          <span class="text-xs font-bold px-2 py-1 rounded-lg bg-red-100 text-red-700">{{ prop.estado|upper }}</span>
+        {% endif %}
+      </div>
+    </div>
+    <h1 class="text-xl font-bold text-gray-800 mb-1">{{ prop.titulo }}</h1>
+    <p class="text-gray-500 text-sm mb-3">📍 {{ prop.direccion or '' }}{% if prop.ciudad %} · {{ prop.ciudad }}{% endif %}{% if prop.estrato %} · Estrato {{ prop.estrato }}{% endif %}</p>
+    <p class="text-2xl font-bold text-blue-700">
+      {% if prop.precio %}${{ "{:,.0f}".format(prop.precio) }}{% else %}Precio a consultar{% endif %}
+    </p>
+    <div class="flex flex-wrap gap-4 mt-4 text-sm text-gray-600">
+      {% if prop.habitaciones %}<span>🛏️ {{ prop.habitaciones }} hab.</span>{% endif %}
+      {% if prop.banos %}<span>🚿 {{ prop.banos }} baños</span>{% endif %}
+      {% if prop.m2 %}<span>📐 {{ prop.m2 }}m²</span>{% endif %}
+      {% if prop.parqueadero %}<span>🚗 Parqueadero</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- Descripcion -->
+  {% if prop.descripcion %}
+  <div class="bg-white rounded-2xl shadow-sm p-5">
+    <h2 class="font-semibold text-gray-700 mb-2">Descripción</h2>
+    <p class="text-sm text-gray-600 leading-relaxed">{{ prop.descripcion }}</p>
+  </div>
+  {% endif %}
+
+  <!-- Inmobiliaria si aplica -->
+  {% if modo == 'inmobiliaria' and inmo %}
+  <div class="bg-white rounded-2xl shadow-sm p-5 flex items-center gap-4">
+    {% if inmo.logo_url %}
+      <img src="{{ inmo.logo_url }}" class="w-12 h-12 rounded-xl object-cover">
+    {% else %}
+      <div class="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-xl">🏢</div>
+    {% endif %}
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold text-gray-800 text-sm">{{ inmo.nombre }}</p>
+      <p class="text-xs text-gray-500">Portal inmobiliario</p>
+    </div>
+    {% if inmo.whatsapp %}
+    <a href="https://wa.me/{{ inmo.whatsapp }}?text=Hola, me interesa la propiedad: {{ prop.titulo }}"
+       target="_blank"
+       class="bg-green-500 text-white text-xs font-semibold px-3 py-2 rounded-xl">WhatsApp</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Boton de contacto -->
+  <button onclick="abrirLead()" class="w-full bg-blue-700 text-white rounded-2xl py-4 font-bold text-base shadow-md">
+    Me interesa esta propiedad
+  </button>
+</div>
+
+<!-- MODAL LEAD -->
+<div id="modal-lead" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6">
+    <h2 class="font-bold text-gray-800 mb-4">Contactar sobre esta propiedad</h2>
+    <div class="space-y-3">
+      <input id="lead-nombre" type="text" placeholder="Tu nombre"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <input id="lead-tel" type="tel" placeholder="Tu teléfono"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <textarea id="lead-msg" rows="2" placeholder="Mensaje (opcional)"
+                class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      <div class="flex gap-3">
+        <button onclick="cerrarLead()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="enviarLead()" class="flex-1 bg-blue-700 text-white rounded-xl py-3 text-sm font-semibold">Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLUG = "{{ prop.slug }}";
+
+function toast(msg, tipo='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (tipo === 'ok' ? 'toast-ok' : 'toast-err');
+  setTimeout(() => t.className = 'toast', 3500);
+}
+
+function cambiarFoto(url, el) {
+  document.getElementById('foto-principal').src = url;
+  document.querySelectorAll('.foto-thumb').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function zoomFoto(src) {
+  document.getElementById('zoom-img').src = src;
+  document.getElementById('zoom-overlay').classList.add('active');
+}
+
+function cerrarZoom() {
+  document.getElementById('zoom-overlay').classList.remove('active');
+}
+
+function abrirLead() {
+  document.getElementById('modal-lead').classList.remove('hidden');
+}
+
+function cerrarLead() {
+  document.getElementById('modal-lead').classList.add('hidden');
+}
+
+async function enviarLead() {
+  const nombre = document.getElementById('lead-nombre').value.trim();
+  const tel = document.getElementById('lead-tel').value.trim();
+  const msg = document.getElementById('lead-msg').value.trim();
+  if (!nombre || !tel) { toast('Nombre y teléfono requeridos', 'err'); return; }
+  try {
+    const r = await fetch(`/api/propiedad/${SLUG}/lead`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ nombre, telefono: tel, mensaje: msg })
+    });
+    const d = await r.json();
+    if (d.ok) { toast('¡Mensaje enviado! Te contactarán pronto'); cerrarLead(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+</script>
+</body>
+</html>

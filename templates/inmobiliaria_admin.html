@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Admin — {{ inmo.nombre }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+           padding:10px 20px; border-radius:8px; color:#fff; font-size:14px;
+           z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; min-width:200px; text-align:center;}
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+  .tab-btn.active { border-bottom:3px solid #1d4ed8; color:#1d4ed8; font-weight:700; }
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+
+<!-- PANTALLA: LOGIN -->
+<div id="pantalla-login" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">🏢</div>
+      <h1 class="text-xl font-bold text-gray-800">{{ inmo.nombre }}</h1>
+      <p class="text-sm text-gray-500 mt-1">Admin de inmobiliaria</p>
+    </div>
+    <div class="space-y-3">
+      <input id="inp-tel" type="tel" placeholder="Tu teléfono de acceso"
+             class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <div id="inp-nombre-wrap" class="hidden">
+        <input id="inp-nombre" type="text" placeholder="Tu nombre"
+               class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <button onclick="login()" class="w-full bg-blue-700 text-white rounded-xl py-3 font-semibold text-sm">
+        Entrar
+      </button>
+    </div>
+    <div class="mt-4 border-t pt-4 text-center">
+      <a href="/inmobiliaria/{{ slug }}" class="text-xs text-blue-600 font-medium">Ver portal público →</a>
+    </div>
+  </div>
+</div>
+
+<!-- PANTALLA: ADMIN -->
+<div id="pantalla-admin" class="hidden">
+  <!-- Header -->
+  <div class="bg-white shadow-sm sticky top-0 z-40">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div>
+        <h1 class="font-bold text-gray-800 text-base">{{ inmo.nombre }}</h1>
+        <p class="text-xs text-gray-500">Panel de administración</p>
+      </div>
+      <a href="/inmobiliaria/{{ slug }}" target="_blank" class="text-xs text-blue-700 font-medium border border-blue-200 px-3 py-1.5 rounded-xl">Ver portal</a>
+    </div>
+    <!-- Tabs -->
+    <div class="max-w-4xl mx-auto px-4 flex gap-4 border-t border-gray-100">
+      <button onclick="verTab('propiedades')" id="tab-propiedades" class="tab-btn active text-sm py-3 px-1">Propiedades</button>
+      <button onclick="verTab('leads')" id="tab-leads" class="tab-btn text-sm py-3 px-1 text-gray-500">Contactos</button>
+    </div>
+  </div>
+
+  <!-- TAB: PROPIEDADES -->
+  <div id="seccion-propiedades" class="max-w-4xl mx-auto px-4 py-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-gray-700">Propiedades del portal</h2>
+      <button onclick="nuevaPropiedad()" class="bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl">+ Nueva</button>
+    </div>
+    <div id="lista-props" class="space-y-3">
+      <div class="text-center py-16 text-gray-400">
+        <div class="text-5xl mb-3">⏳</div>
+        <p>Cargando...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: LEADS -->
+  <div id="seccion-leads" class="hidden max-w-4xl mx-auto px-4 py-4">
+    <h2 class="font-semibold text-gray-700 mb-3">Contactos interesados</h2>
+    <div id="lista-leads" class="space-y-3">
+      <div class="text-center py-16 text-gray-400"><p>Cargando...</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVA PROPIEDAD -->
+<div id="modal-prop" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden overflow-y-auto">
+  <div class="bg-white rounded-t-2xl w-full max-w-lg p-6 mt-10" style="max-height:90vh; overflow-y:auto;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-800 text-lg">Nueva propiedad</h2>
+      <button onclick="cerrarModal()" class="text-gray-400 text-2xl leading-none">×</button>
+    </div>
+    <div class="space-y-3">
+      <input id="f-titulo" type="text" placeholder="Título *" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <div class="grid grid-cols-2 gap-3">
+        <select id="f-modalidad" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+          <option value="venta">Venta</option>
+          <option value="alquiler">Alquiler</option>
+        </select>
+        <input id="f-precio" type="number" placeholder="Precio (COP)" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <input id="f-ciudad" type="text" placeholder="Ciudad" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input id="f-direccion" type="text" placeholder="Dirección" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <input id="f-hab" type="number" placeholder="Hab." class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input id="f-banos" type="number" placeholder="Baños" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input id="f-m2" type="number" placeholder="m²" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      </div>
+      <textarea id="f-desc" rows="3" placeholder="Descripción" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      <label class="flex items-center gap-2 cursor-pointer border border-gray-200 rounded-xl px-4 py-3">
+        <input id="f-bolsa" type="checkbox" class="accent-blue-700">
+        <span class="text-sm text-gray-700">Publicar también en la bolsa pública de TUC TUC</span>
+      </label>
+      <div class="flex gap-3 pt-2">
+        <button onclick="cerrarModal()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
+        <button onclick="crearPropiedad()" class="flex-1 bg-blue-700 text-white rounded-xl py-3 text-sm font-semibold">Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLUG = "{{ slug }}";
+
+function toast(msg, tipo='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (tipo === 'ok' ? 'toast-ok' : 'toast-err');
+  setTimeout(() => t.className = 'toast', 3500);
+}
+
+async function login() {
+  const tel = document.getElementById('inp-tel').value.trim();
+  const nombre = document.getElementById('inp-nombre').value.trim();
+  if (!tel) { toast('Ingresa tu teléfono', 'err'); return; }
+  try {
+    const r = await fetch('/api/inmobiliaria/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ telefono: tel, nombre })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      // verificar acceso
+      const r2 = await fetch(`/api/inmobiliaria/${SLUG}/admin/info`);
+      const d2 = await r2.json();
+      if (d2.ok) {
+        document.getElementById('pantalla-login').classList.add('hidden');
+        document.getElementById('pantalla-admin').classList.remove('hidden');
+        cargarPropiedades();
+      } else {
+        toast('No tienes acceso a esta inmobiliaria', 'err');
+      }
+    } else if (d.error === 'nombre_requerido') {
+      document.getElementById('inp-nombre-wrap').classList.remove('hidden');
+      toast('Ingresa tu nombre', 'err');
+    } else {
+      toast(d.error || 'Error', 'err');
+    }
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+function verTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  ['propiedades', 'leads'].forEach(s => {
+    document.getElementById('seccion-' + s).classList.toggle('hidden', s !== tab);
+  });
+  if (tab === 'leads') cargarLeads();
+  if (tab === 'propiedades') cargarPropiedades();
+}
+
+async function cargarPropiedades() {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/propiedades`);
+    const d = await r.json();
+    if (!d.ok) { if (d.error === 'sin_sesion') mostrarLogin(); return; }
+    const lista = document.getElementById('lista-props');
+    if (!d.propiedades.length) {
+      lista.innerHTML = `<div class="text-center py-16 text-gray-400">
+        <div class="text-5xl mb-3">🏚️</div><p>Sin propiedades en el portal</p>
+        <button onclick="nuevaPropiedad()" class="mt-4 bg-blue-700 text-white px-6 py-2 rounded-xl text-sm font-semibold">Agregar la primera</button>
+      </div>`;
+      return;
+    }
+    lista.innerHTML = d.propiedades.map(p => `
+      <div class="bg-white rounded-2xl shadow-sm p-4 flex gap-4">
+        <div class="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+          ${p.foto ? `<img src="${p.foto}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-2xl text-gray-300">🏠</div>'}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-800 text-sm truncate">${p.titulo}</p>
+          <p class="text-xs text-gray-500">${p.ciudad || '—'} · ${p.modalidad}</p>
+          <p class="text-blue-700 font-bold text-sm">${p.precio ? '$' + Number(p.precio).toLocaleString('es-CO') : 'Consultar'}</p>
+          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-lg">${p.num_leads} contactos</span>
+        </div>
+        <div class="flex flex-col gap-2 flex-shrink-0">
+          <a href="/inmobiliaria/${SLUG}/p/${p.slug}" target="_blank"
+             class="text-xs border border-blue-300 rounded-lg px-3 py-1.5 text-blue-700 text-center">Ver</a>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+async function cargarLeads() {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/leads`);
+    const d = await r.json();
+    if (!d.ok) return;
+    const lista = document.getElementById('lista-leads');
+    if (!d.leads.length) {
+      lista.innerHTML = '<div class="text-center py-16 text-gray-400"><div class="text-5xl mb-3">📭</div><p>Sin contactos aún</p></div>';
+      return;
+    }
+    lista.innerHTML = d.leads.map(l => `
+      <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <p class="font-semibold text-gray-800 text-sm">${l.nombre}</p>
+            <p class="text-xs text-gray-500">${l.fecha}</p>
+          </div>
+          <a href="https://wa.me/${l.telefono.replace(/D/g,'')}" target="_blank"
+             class="bg-green-500 text-white text-xs font-semibold px-3 py-1.5 rounded-xl">WhatsApp</a>
+        </div>
+        <p class="text-xs text-blue-700 font-medium mb-1">→ ${l.propiedad}</p>
+        ${l.mensaje ? `<p class="text-xs text-gray-600 italic">"${l.mensaje}"</p>` : ''}
+      </div>
+    `).join('');
+  } catch(e) { toast('Error', 'err'); }
+}
+
+function mostrarLogin() {
+  document.getElementById('pantalla-login').classList.remove('hidden');
+  document.getElementById('pantalla-admin').classList.add('hidden');
+}
+
+function nuevaPropiedad() {
+  ['f-titulo','f-precio','f-ciudad','f-direccion','f-hab','f-banos','f-m2','f-desc'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('f-modalidad').value = 'venta';
+  document.getElementById('f-bolsa').checked = false;
+  document.getElementById('modal-prop').classList.remove('hidden');
+}
+
+function cerrarModal() {
+  document.getElementById('modal-prop').classList.add('hidden');
+}
+
+async function crearPropiedad() {
+  const datos = {
+    titulo: document.getElementById('f-titulo').value.trim(),
+    modalidad: document.getElementById('f-modalidad').value,
+    precio: document.getElementById('f-precio').value || null,
+    ciudad: document.getElementById('f-ciudad').value.trim(),
+    direccion: document.getElementById('f-direccion').value.trim(),
+    habitaciones: document.getElementById('f-hab').value || null,
+    banos: document.getElementById('f-banos').value || null,
+    m2: document.getElementById('f-m2').value || null,
+    descripcion: document.getElementById('f-desc').value.trim(),
+    publicar_en_bolsa: document.getElementById('f-bolsa').checked,
+  };
+  if (!datos.titulo) { toast('El título es requerido', 'err'); return; }
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/propiedades/crear`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(datos)
+    });
+    const d = await r.json();
+    if (d.ok) { toast('Propiedad creada'); cerrarModal(); cargarPropiedades(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+// Auto-check sesión
+(async () => {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/info`);
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('pantalla-login').classList.add('hidden');
+      document.getElementById('pantalla-admin').classList.remove('hidden');
+      cargarPropiedades();
+    }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

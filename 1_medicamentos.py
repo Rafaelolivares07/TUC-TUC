@@ -22274,16 +22274,24 @@ def api_conductor_cancelar_viaje(servicio_id):
         conn = get_db_connection()
 
         # Verificar si es viaje programado y obtener datos para push
+        # LEFT JOIN porque en rutas personales tercero_id = usuario_id (no está en terceros)
         viaje = conn.execute("""
-            SELECT s.fecha_programada, t.push_token
+            SELECT s.fecha_programada, s.tipo_servicio, t.push_token
             FROM solicitudes_transporte s
-            JOIN terceros t ON s.tercero_id = t.id
+            LEFT JOIN terceros t ON s.tercero_id = t.id
             WHERE s.id = %s AND s.conductor_id = %s AND s.estado IN ('aceptada', 'recogiendo', 'en_curso')
         """, (servicio_id, session['usuario_id'])).fetchone()
 
         if not viaje:
             conn.close()
             return jsonify({'ok': False, 'error': 'No se pudo cancelar el viaje'}), 400
+
+        # Ruta personal: solo borrar el registro, no hay pasajero que notificar
+        if viaje['tipo_servicio'] == 'personal':
+            conn.execute("DELETE FROM solicitudes_transporte WHERE id = %s", (servicio_id,))
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True})
 
         es_programado = viaje['fecha_programada'] is not None
         push_token = viaje['push_token']

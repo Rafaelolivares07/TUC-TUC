@@ -76,10 +76,8 @@ async function cargar(pagina, q) {
   const params = new URLSearchParams({ p: pagina });
   if (q) params.set('q', q);
 
-  document.getElementById('estado-carga').textContent = 'Cargando...';
-  document.getElementById('estado-carga').classList.remove('hidden');
   document.getElementById('contenedor').innerHTML =
-    '<div id="estado-carga" class="text-center text-gray-500 py-12 text-sm">Cargando...</div>';
+    '<div class="text-center text-gray-500 py-12 text-sm">Cargando...</div>';
 
   const r = await fetch('/api/admin/chat/historico-data?' + params);
   const d = await r.json();

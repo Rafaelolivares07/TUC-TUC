@@ -741,7 +741,7 @@
         let modoLibre = false;
         let estiloOscuro = false;
         const NIVELES_VISTA = [0, 65, 75, 85]; // 2D, suave, medio, máximo
-        let nivelVista = 3; // inicia en máximo
+        let nivelVista = parseInt(localStorage.getItem('tuctuc_nivelVista') ?? '3', 10);
         let ubicacionAnterior = null;
         let velocidadActual = 0;
         let headingActual = 0;
@@ -800,6 +800,10 @@
 
         // Inicialización
         document.addEventListener('DOMContentLoaded', async function() {
+            // Sincronizar label del botón con la vista guardada
+            const btnVista = document.getElementById('btn-vista');
+            if (btnVista) btnVista.textContent = nivelVista === 0 ? '2D' : nivelVista + '/3';
+
             await inicializarMapa();
             iniciarWatchPosition();
             await verificarViajeActivo();
@@ -826,7 +830,7 @@
                 style: crearEstilo('light'),
                 center: [-76.5320, 3.4516],
                 zoom: CONFIG.ZOOM_DEFAULT,
-                pitch: 85,
+                pitch: NIVELES_VISTA[nivelVista],
                 bearing: 0,
                 maxPitch: 85,
                 attributionControl: false
@@ -2245,6 +2249,7 @@
             nivelVista = (nivelVista + 1) % NIVELES_VISTA.length;
             const pitch = NIVELES_VISTA[nivelVista];
             mapa.easeTo({ pitch, duration: 500 });
+            localStorage.setItem('tuctuc_nivelVista', nivelVista);
             const btn = document.getElementById('btn-vista');
             btn.textContent = nivelVista === 0 ? '2D' : nivelVista + '/3';
         }

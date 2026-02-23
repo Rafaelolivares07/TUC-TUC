@@ -237,7 +237,9 @@
                 <div>
                     <label class="text-xs text-gray-500 font-semibold">Placa *</label>
                     <input id="no-placa" type="text" placeholder="Ej: ABC123"
-                           class="border rounded-lg px-3 py-2 text-sm w-full mt-1 uppercase">
+                           class="border rounded-lg px-3 py-2 text-sm w-full mt-1 uppercase"
+                           onblur="buscarVehiculoPorPlaca()">
+                    <p id="no-placa-info" class="text-xs text-green-600 mt-1 hidden"></p>
                 </div>
                 <div>
                     <label class="text-xs text-gray-500 font-semibold">KM entrada</label>
@@ -740,6 +742,26 @@ async function subirFotoOrden() {
     } catch(e) { toast('Error', false); }
 }
 
+// ─── BUSCAR VEHÍCULO POR PLACA (desde Garaje) ───
+async function buscarVehiculoPorPlaca() {
+    const placa = document.getElementById('no-placa').value.trim().toUpperCase();
+    const info = document.getElementById('no-placa-info');
+    info.classList.add('hidden');
+    if (!placa) return;
+    try {
+        const r = await fetch(`/api/taller/${SLUG}/buscar-vehiculo/${placa}`);
+        const d = await r.json();
+        if (!d.ok || !d.encontrado) return;
+        const v = d.vehiculo;
+        if (v.prop_nombre) document.getElementById('no-nombre-cliente').value = v.prop_nombre;
+        if (v.prop_tel)    document.getElementById('no-tel-cliente').value   = v.prop_tel;
+        let txt = `Garaje: ${v.marca || ''} ${v.linea || ''} ${v.anio || ''}`.trim();
+        if (v.ultima) txt += ` — Últ: ${v.ultima}`;
+        info.textContent = txt;
+        info.classList.remove('hidden');
+    } catch(e) {}
+}
+
 // ─── NUEVA ORDEN ───
 function abrirModalNuevaOrden() {
     // Llenar select de servicios
@@ -748,6 +770,7 @@ function abrirModalNuevaOrden() {
         serviciosCache.map(s => `<option value="${s.id}">${s.nombre}${s.precio!=null?' — '+fmt$(s.precio):''}</option>`).join('');
     ['no-placa','no-km','no-nombre-cliente','no-tel-cliente','no-desc','no-monto','no-notas']
         .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('no-placa-info').classList.add('hidden');
     document.getElementById('modal-nueva-orden').classList.remove('hidden');
 }
 function cerrarModalNuevaOrden() { document.getElementById('modal-nueva-orden').classList.add('hidden'); }

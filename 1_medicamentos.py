@@ -28645,6 +28645,37 @@ def api_garaje_alertas(vid):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/garaje/vehiculo/<int:vid>/talleres')
+def api_garaje_talleres_tuctuc(vid):
+    """Historial de visitas a talleres TUC TUC para este vehículo (desde citas_servicio)."""
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT cs.id, cs.servicio_desc, cs.km_entrada, cs.created_at,
+                   cs.estado, cs.monto_total,
+                   n.nombre as taller_nombre
+            FROM citas_servicio cs
+            JOIN negocios n ON n.id = cs.negocio_id
+            WHERE cs.vehiculo_id = %s
+            ORDER BY cs.created_at DESC
+        """, (vid,)).fetchall()
+        conn.close()
+        visitas = []
+        for r in rows:
+            visitas.append({
+                'id': r['id'],
+                'taller_nombre': r['taller_nombre'],
+                'descripcion': r['servicio_desc'],
+                'km': r['km_entrada'],
+                'estado': r['estado'],
+                'total': float(r['monto_total']) if r['monto_total'] else None,
+                'fecha': r['created_at'].strftime('%d/%m/%Y') if r['created_at'] else None
+            })
+        return jsonify({'ok': True, 'visitas': visitas})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 # ═══════════════════════════════════════════════════════════
 #  TALLER TUC TUC — Módulo de talleres mecánicos
 # ═══════════════════════════════════════════════════════════

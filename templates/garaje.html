@@ -112,7 +112,7 @@
         <div id="lista-alertas" class="space-y-2"></div>
     </div>
 
-    <!-- 4 accesos principales -->
+    <!-- Accesos principales -->
     <div class="grid grid-cols-2 gap-3 p-4">
         <button onclick="abrirSeccion('repostes')" class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left hover:border-yellow-400 transition">
             <div class="text-3xl mb-2">⛽</div>
@@ -133,6 +133,11 @@
             <div class="text-3xl mb-2">📄</div>
             <p class="font-bold text-gray-800">Documentos</p>
             <p class="text-xs text-gray-500">SOAT, RTM, Impuesto</p>
+        </button>
+        <button onclick="abrirSeccion('talleres')" class="col-span-2 bg-amber-50 rounded-2xl p-4 shadow-sm border border-amber-200 text-left hover:border-amber-400 transition">
+            <div class="text-3xl mb-2">🏪</div>
+            <p class="font-bold text-gray-800">Talleres TUC TUC</p>
+            <p class="text-xs text-gray-500">Visitas registradas por talleres afiliados</p>
         </button>
     </div>
 </div>
@@ -236,6 +241,15 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- ===== SECCIÓN TALLERES TUC TUC ===== -->
+<div id="seccion-talleres" class="hidden max-w-lg mx-auto">
+    <div class="bg-white border-b px-4 py-3 flex items-center gap-3">
+        <button onclick="cerrarSeccion()" class="text-gray-500 font-semibold">←</button>
+        <h2 class="font-bold text-gray-800">🏪 Talleres TUC TUC</h2>
+    </div>
+    <div id="lista-talleres" class="p-4 space-y-3"></div>
 </div>
 
 <!-- ========== MODALES ========== -->
@@ -435,7 +449,7 @@ function toast(msg, err) {
 
 function mostrar(id) {
     ['pantalla-login','pantalla-main','pantalla-vehiculo',
-     'seccion-repostes','seccion-intervenciones','seccion-llantas','seccion-documentos']
+     'seccion-repostes','seccion-intervenciones','seccion-llantas','seccion-documentos','seccion-talleres']
     .forEach(s => document.getElementById(s).classList.add('hidden'));
     document.getElementById(id).classList.remove('hidden');
     window.scrollTo(0,0);
@@ -650,6 +664,7 @@ function abrirSeccion(nombre) {
     if (nombre === 'intervenciones') cargarIntervenciones();
     if (nombre === 'llantas') cargarLlantas();
     if (nombre === 'documentos') cargarDocumentos();
+    if (nombre === 'talleres') cargarTalleresTucTuc();
 }
 function cerrarSeccion() { mostrar('pantalla-vehiculo'); }
 
@@ -832,6 +847,36 @@ async function cargarIntervenciones() {
             </div>
         `).join('');
     } catch(e) { toast('Error cargando intervenciones', true); }
+}
+
+// ===== TALLERES TUC TUC =====
+async function cargarTalleresTucTuc() {
+    const lista = document.getElementById('lista-talleres');
+    lista.innerHTML = '<p class="text-center text-gray-400 py-8">Cargando…</p>';
+    try {
+        const r = await fetch(`${BASE}/vehiculo/${vehiculoActual.id}/talleres`);
+        const d = await r.json();
+        if (!d.ok || !d.visitas.length) {
+            lista.innerHTML = '<p class="text-center text-gray-400 py-8">Sin visitas a talleres TUC TUC registradas</p>';
+            return;
+        }
+        lista.innerHTML = d.visitas.map(v => `
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <p class="font-bold text-gray-800">${v.taller_nombre}</p>
+                        <p class="text-sm text-gray-600 mt-0.5">${v.descripcion || 'Sin descripción'}</p>
+                        ${v.estado ? `<span class="text-xs px-2 py-0.5 rounded-full font-semibold mt-1 inline-block
+                            ${v.estado==='entregado'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}">${v.estado}</span>` : ''}
+                    </div>
+                    <div class="text-right shrink-0">
+                        <p class="text-xs text-gray-400">${v.fecha}</p>
+                        ${v.km ? `<p class="text-xs text-gray-500">${Number(v.km).toLocaleString()} km</p>` : ''}
+                        ${v.total ? `<p class="text-sm font-bold text-amber-600">$${Number(v.total).toLocaleString()}</p>` : ''}
+                    </div>
+                </div>
+            </div>`).join('');
+    } catch(e) { lista.innerHTML = '<p class="text-center text-gray-400 py-8">Error cargando historial</p>'; }
 }
 
 // ===== LLANTAS =====

@@ -117,14 +117,42 @@
       </div>
       <div class="flex gap-3 pt-2">
         <button onclick="cerrarModal()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
-        <button onclick="guardarPropiedad()" class="flex-1 bg-blue-700 text-white rounded-xl py-3 text-sm font-semibold">Guardar</button>
+        <button id="btn-guardar" onclick="guardarPropiedad()" class="flex-1 bg-blue-700 text-white rounded-xl py-3 text-sm font-semibold">Guardar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: FOTOS -->
+<div id="modal-fotos" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden overflow-y-auto">
+  <div class="bg-white rounded-t-2xl w-full max-w-lg p-6 mt-10" style="max-height:90vh; overflow-y:auto;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-800 text-lg">Fotos de la propiedad</h2>
+      <button onclick="cerrarModalFotos()" class="text-gray-400 text-2xl leading-none">×</button>
+    </div>
+
+    <!-- Grid de fotos actuales -->
+    <div id="grid-fotos" class="grid grid-cols-3 gap-2 mb-4"></div>
+
+    <!-- Subir nueva foto -->
+    <div class="border-2 border-dashed border-gray-300 rounded-xl p-4">
+      <p class="text-xs font-semibold text-gray-600 mb-2">Agregar foto</p>
+      <input id="inp-foto" type="file" accept="image/*" class="w-full text-sm text-gray-500 mb-3">
+      <label class="flex items-center gap-2 cursor-pointer mb-3">
+        <input id="chk-principal" type="checkbox" class="accent-blue-700">
+        <span class="text-sm text-gray-700">Marcar como foto principal</span>
+      </label>
+      <button id="btn-subir-foto" onclick="subirFoto()" class="w-full bg-blue-700 text-white rounded-xl py-2.5 text-sm font-semibold">
+        Subir foto
+      </button>
     </div>
   </div>
 </div>
 
 <script>
 let propiedadEditandoId = null;
+let propiedadFotosId = null;
+let propiedadesCache = {};
 
 function toast(msg, tipo='ok') {
   const t = document.getElementById('toast');
@@ -162,6 +190,8 @@ async function cargarPropiedades() {
     const r = await fetch('/api/mis-propiedades');
     const d = await r.json();
     if (!d.ok) { if (d.error === 'sin_sesion') mostrarLogin(); return; }
+    propiedadesCache = {};
+    d.propiedades.forEach(p => { propiedadesCache[p.id] = p; });
     const lista = document.getElementById('lista-props');
     if (!d.propiedades.length) {
       lista.innerHTML = `<div class="text-center py-16 text-gray-400">
@@ -173,22 +203,28 @@ async function cargarPropiedades() {
     }
     lista.innerHTML = d.propiedades.map(p => `
       <div class="bg-white rounded-2xl shadow-sm p-4 flex gap-4">
-        <div class="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-          ${p.foto_principal ? `<img src="${p.foto_principal}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-2xl text-gray-300">🏠</div>'}
+        <div class="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onclick="abrirFotos(${p.id})">
+          ${p.foto_principal
+            ? `<img src="${p.foto_principal}" class="w-full h-full object-cover">`
+            : '<div class="w-full h-full flex items-center justify-center text-2xl text-gray-300">🏠</div>'}
         </div>
         <div class="flex-1 min-w-0">
           <p class="font-semibold text-gray-800 text-sm truncate">${p.titulo}</p>
           <p class="text-xs text-gray-500">${p.ciudad || ''} · ${p.modalidad}</p>
           <p class="text-blue-700 font-bold text-sm">${p.precio ? '$' + Number(p.precio).toLocaleString('es-CO') : 'Consultar'}</p>
-          <div class="flex gap-2 mt-2">
+          <div class="flex flex-wrap gap-1.5 mt-2">
             ${p.publicar_en_bolsa ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg font-medium">Bolsa</span>' : ''}
             ${p.disponible_inmobiliarias ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-lg font-medium">Inmobiliarias</span>' : ''}
             <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-lg">${p.num_leads} contactos</span>
+            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-lg">${p.num_fotos} fotos</span>
           </div>
         </div>
-        <div class="flex flex-col gap-2 flex-shrink-0">
+        <div class="flex flex-col gap-1.5 flex-shrink-0">
           <button onclick="editarProp(${p.id})" class="text-xs border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600">Editar</button>
-          <a href="/propiedades/p/${p.slug}" target="_blank" class="text-xs border border-blue-300 rounded-lg px-3 py-1.5 text-blue-700 text-center">Ver</a>
+          <button onclick="abrirFotos(${p.id})" class="text-xs border border-blue-300 rounded-lg px-3 py-1.5 text-blue-700">Fotos</button>
+          <a href="/propiedades/p/${p.slug}" target="_blank" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-gray-500 text-center">Ver</a>
+          <button onclick="eliminarProp(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')" class="text-xs border border-orange-200 rounded-lg px-3 py-1.5 text-orange-500">Pausar</button>
+          <button onclick="eliminarPropPermanente(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')" class="text-xs border border-red-400 rounded-lg px-3 py-1.5 text-red-600 font-semibold">Eliminar</button>
         </div>
       </div>
     `).join('');
@@ -203,7 +239,9 @@ function mostrarLogin() {
 function nuevaPropiedad() {
   propiedadEditandoId = null;
   document.getElementById('modal-titulo').textContent = 'Nueva propiedad';
-  ['f-titulo','f-precio','f-ciudad','f-direccion','f-hab','f-banos','f-m2','f-estrato','f-desc'].forEach(id => { document.getElementById(id).value = ''; });
+  ['f-titulo','f-precio','f-ciudad','f-direccion','f-hab','f-banos','f-m2','f-estrato','f-desc'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
   document.getElementById('f-modalidad').value = 'venta';
   document.getElementById('f-parqueadero').checked = false;
   document.getElementById('f-bolsa').checked = false;
@@ -215,10 +253,24 @@ function cerrarModal() {
   document.getElementById('modal-prop').classList.add('hidden');
 }
 
-async function editarProp(id) {
-  // TODO: cargar datos del prop por id
+function editarProp(id) {
+  const p = propiedadesCache[id];
+  if (!p) { toast('No se encontraron los datos', 'err'); return; }
   propiedadEditandoId = id;
   document.getElementById('modal-titulo').textContent = 'Editar propiedad';
+  document.getElementById('f-titulo').value = p.titulo || '';
+  document.getElementById('f-modalidad').value = p.modalidad || 'venta';
+  document.getElementById('f-precio').value = p.precio || '';
+  document.getElementById('f-ciudad').value = p.ciudad || '';
+  document.getElementById('f-direccion').value = p.direccion || '';
+  document.getElementById('f-hab').value = p.habitaciones || '';
+  document.getElementById('f-banos').value = p.banos || '';
+  document.getElementById('f-m2').value = p.m2 || '';
+  document.getElementById('f-estrato').value = p.estrato || '';
+  document.getElementById('f-parqueadero').checked = !!p.parqueadero;
+  document.getElementById('f-desc').value = p.descripcion || '';
+  document.getElementById('f-bolsa').checked = !!p.publicar_en_bolsa;
+  document.getElementById('f-inmobiliarias').checked = !!p.disponible_inmobiliarias;
   document.getElementById('modal-prop').classList.remove('hidden');
 }
 
@@ -239,13 +291,108 @@ async function guardarPropiedad() {
     disponible_inmobiliarias: document.getElementById('f-inmobiliarias').checked,
   };
   if (!datos.titulo) { toast('El título es requerido', 'err'); return; }
+  const btn = document.getElementById('btn-guardar');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
   try {
-    let url = '/api/mis-propiedades/crear';
-    let method = 'POST';
-    if (propiedadEditandoId) { url = `/api/mis-propiedades/${propiedadEditandoId}/editar`; }
-    const r = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(datos) });
+    const url = propiedadEditandoId
+      ? `/api/mis-propiedades/${propiedadEditandoId}/editar`
+      : '/api/mis-propiedades/crear';
+    const r = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(datos) });
     const d = await r.json();
     if (d.ok) { toast('Propiedad guardada'); cerrarModal(); cargarPropiedades(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Guardar'; }
+}
+
+async function eliminarProp(id, titulo) {
+  if (!confirm(`¿Pausar "${titulo}"?\n\nLa propiedad dejará de mostrarse en la bolsa pero no se elimina.`)) return;
+  try {
+    const r = await fetch(`/api/mis-propiedades/${id}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { toast('Propiedad pausada'); cargarPropiedades(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+async function eliminarPropPermanente(id, titulo) {
+  if (!confirm(`¿Eliminar "${titulo}"?\n\nEsta acción es PERMANENTE y borrará la propiedad y todas sus fotos. No se puede deshacer.`)) return;
+  if (!confirm(`Confirma de nuevo: ¿eliminar permanentemente "${titulo}"?`)) return;
+  try {
+    const r = await fetch(`/api/mis-propiedades/${id}/eliminar`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { toast('Propiedad eliminada'); cargarPropiedades(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+/* ── FOTOS ── */
+async function abrirFotos(id) {
+  propiedadFotosId = id;
+  document.getElementById('grid-fotos').innerHTML = '<p class="col-span-3 text-sm text-gray-400 text-center py-4">Cargando…</p>';
+  document.getElementById('inp-foto').value = '';
+  document.getElementById('chk-principal').checked = false;
+  document.getElementById('modal-fotos').classList.remove('hidden');
+  await cargarFotos(id);
+}
+
+function cerrarModalFotos() {
+  document.getElementById('modal-fotos').classList.add('hidden');
+  propiedadFotosId = null;
+}
+
+async function cargarFotos(pid) {
+  try {
+    const r = await fetch(`/api/mis-propiedades/${pid}/fotos`);
+    const d = await r.json();
+    const grid = document.getElementById('grid-fotos');
+    if (!d.ok) { grid.innerHTML = `<p class="col-span-3 text-sm text-red-500 text-center">${d.error}</p>`; return; }
+    if (!d.fotos.length) {
+      grid.innerHTML = '<p class="col-span-3 text-sm text-gray-400 text-center py-4">Sin fotos aún</p>';
+      return;
+    }
+    grid.innerHTML = d.fotos.map(f => `
+      <div class="relative group rounded-xl overflow-hidden bg-gray-100" style="aspect-ratio:1">
+        <img src="${f.url}" class="w-full h-full object-cover">
+        ${f.es_principal ? '<span class="absolute top-1 left-1 bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">Principal</span>' : ''}
+        <button onclick="eliminarFoto(${f.id})"
+          class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs font-bold leading-none opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+      </div>
+    `).join('');
+  } catch(e) { toast('Error cargando fotos', 'err'); }
+}
+
+async function subirFoto() {
+  const input = document.getElementById('inp-foto');
+  if (!input.files.length) { toast('Selecciona una imagen', 'err'); return; }
+  if (!propiedadFotosId) return;
+  const fd = new FormData();
+  fd.append('foto', input.files[0]);
+  fd.append('es_principal', document.getElementById('chk-principal').checked ? 'true' : 'false');
+  const btn = document.getElementById('btn-subir-foto');
+  btn.disabled = true;
+  btn.textContent = 'Subiendo…';
+  try {
+    const r = await fetch(`/api/mis-propiedades/${propiedadFotosId}/fotos`, { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Foto subida');
+      input.value = '';
+      document.getElementById('chk-principal').checked = false;
+      await cargarFotos(propiedadFotosId);
+      cargarPropiedades();
+    } else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de conexión', 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Subir foto'; }
+}
+
+async function eliminarFoto(fid) {
+  if (!confirm('¿Eliminar esta foto?')) return;
+  try {
+    const r = await fetch(`/api/mis-propiedades/${propiedadFotosId}/fotos/${fid}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { toast('Foto eliminada'); await cargarFotos(propiedadFotosId); cargarPropiedades(); }
     else toast(d.error || 'Error', 'err');
   } catch(e) { toast('Error de conexión', 'err'); }
 }
@@ -258,8 +405,6 @@ async function guardarPropiedad() {
     if (d.ok) {
       document.getElementById('pantalla-login').classList.add('hidden');
       document.getElementById('pantalla-dashboard').classList.remove('hidden');
-      const r2 = await fetch('/api/mis-propiedades');
-      // ya está en sesión
       cargarPropiedades();
     }
   } catch(e) {}

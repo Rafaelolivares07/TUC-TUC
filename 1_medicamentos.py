@@ -30904,7 +30904,9 @@ def api_mis_propiedades_lista():
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
         props = conn.execute(
-            """SELECT p.id, p.slug, p.titulo, p.modalidad, p.precio, p.ciudad, p.estado,
+            """SELECT p.id, p.slug, p.titulo, p.descripcion, p.modalidad, p.precio,
+                      p.ciudad, p.direccion, p.estado, p.habitaciones, p.banos,
+                      p.m2, p.estrato, p.parqueadero,
                       p.publicar_en_bolsa, p.disponible_inmobiliarias, p.created_at,
                       (SELECT url FROM propiedad_fotos WHERE propiedad_id=p.id AND es_principal=TRUE LIMIT 1) as foto_principal,
                       (SELECT COUNT(*) FROM propiedad_fotos WHERE propiedad_id=p.id) as num_fotos,
@@ -30915,9 +30917,14 @@ def api_mis_propiedades_lista():
         conn.close()
         return jsonify({'ok': True, 'propiedades': [{
             'id': p['id'], 'slug': p['slug'], 'titulo': p['titulo'],
+            'descripcion': p['descripcion'] or '',
             'modalidad': p['modalidad'],
             'precio': float(p['precio']) if p['precio'] else None,
-            'ciudad': p['ciudad'], 'estado': p['estado'],
+            'ciudad': p['ciudad'] or '', 'direccion': p['direccion'] or '',
+            'estado': p['estado'],
+            'habitaciones': p['habitaciones'], 'banos': p['banos'],
+            'm2': float(p['m2']) if p['m2'] else None,
+            'estrato': p['estrato'], 'parqueadero': p['parqueadero'],
             'publicar_en_bolsa': p['publicar_en_bolsa'],
             'disponible_inmobiliarias': p['disponible_inmobiliarias'],
             'foto_principal': p['foto_principal'],
@@ -31006,6 +31013,57 @@ def api_mis_propiedades_editar(pid):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/mis-propiedades/<int:pid>/fotos', methods=['GET'])
+def api_mis_propiedades_fotos_lista(pid):
+    """Listar fotos de una propiedad del propietario"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        prop = conn.execute(
+            "SELECT id FROM propiedades WHERE id=%s AND id_tercero_propietario=%s", (pid, uid)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        fotos = conn.execute(
+            "SELECT id, url, descripcion, orden, es_principal FROM propiedad_fotos WHERE propiedad_id=%s ORDER BY orden",
+            (pid,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'fotos': [
+            {'id': f['id'], 'url': f['url'], 'descripcion': f['descripcion'] or '',
+             'orden': f['orden'], 'es_principal': f['es_principal']} for f in fotos
+        ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mis-propiedades/<int:pid>/fotos/<int:fid>', methods=['DELETE'])
+def api_mis_propiedades_foto_eliminar(pid, fid):
+    """Eliminar una foto de una propiedad del propietario"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        prop = conn.execute(
+            "SELECT id FROM propiedades WHERE id=%s AND id_tercero_propietario=%s", (pid, uid)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        conn.execute("DELETE FROM propiedad_fotos WHERE id=%s AND propiedad_id=%s", (fid, pid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 @app.route('/api/mis-propiedades/<int:pid>/fotos', methods=['POST'])
 def api_mis_propiedades_fotos(pid):
     """Subir foto a una propiedad del propietario"""
@@ -31063,6 +31121,31 @@ def api_mis_propiedades_eliminar(pid):
             conn.close()
             return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
         conn.execute("UPDATE propiedades SET estado='pausada', updated_at=NOW() WHERE id=%s", (pid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mis-propiedades/<int:pid>/eliminar', methods=['DELETE'])
+def api_mis_propiedades_eliminar_permanente(pid):
+    """Eliminar propiedad permanentemente (borra fotos y el registro)"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        prop = conn.execute(
+            "SELECT id FROM propiedades WHERE id=%s AND id_tercero_propietario=%s", (pid, uid)
+        ).fetchone()
+        if not prop:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
+        conn.execute("DELETE FROM propiedad_fotos WHERE propiedad_id=%s", (pid,))
+        conn.execute("DELETE FROM propiedades WHERE id=%s", (pid,))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

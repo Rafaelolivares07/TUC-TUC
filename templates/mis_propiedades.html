@@ -78,29 +78,62 @@
       <button onclick="cerrarModal()" class="text-gray-400 text-2xl leading-none">×</button>
     </div>
     <div class="space-y-3">
-      <input id="f-titulo" type="text" placeholder="Título *" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-      <div class="grid grid-cols-2 gap-3">
-        <select id="f-modalidad" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-          <option value="venta">Venta</option>
-          <option value="alquiler">Alquiler</option>
-        </select>
-        <input id="f-precio" type="number" placeholder="Precio (COP)" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+      <div>
+        <label class="text-xs font-medium text-gray-500 mb-1 block">Título *</label>
+        <input id="f-titulo" type="text" placeholder="Ej: Apartamento amplio en el centro" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
       <div class="grid grid-cols-2 gap-3">
-        <input id="f-ciudad" type="text" placeholder="Ciudad" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-        <input id="f-direccion" type="text" placeholder="Dirección" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Modalidad</label>
+          <select id="f-modalidad" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="venta">Venta</option>
+            <option value="alquiler">Alquiler</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Precio (COP)</label>
+          <input id="f-precio" type="number" placeholder="Ej: 250000000" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Ciudad</label>
+          <input id="f-ciudad" type="text" placeholder="Ej: Bogotá" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Dirección</label>
+          <input id="f-direccion" type="text" placeholder="Ej: Calle 10 #5-20" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
       </div>
       <div class="grid grid-cols-3 gap-3">
-        <input id="f-hab" type="number" placeholder="Hab." class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-        <input id="f-banos" type="number" placeholder="Baños" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-        <input id="f-m2" type="number" placeholder="m²" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Habitaciones</label>
+          <input id="f-hab" type="number" placeholder="0" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Baños</label>
+          <input id="f-banos" type="number" placeholder="0" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Área (m²)</label>
+          <input id="f-m2" type="number" placeholder="0" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
-        <input id="f-estrato" type="number" placeholder="Estrato (1-6)" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-        <input id="f-parqueadero" type="number" min="0" max="10" placeholder="Parqueaderos (0=ninguno)" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Estrato (1–6)</label>
+          <input id="f-estrato" type="number" placeholder="Ej: 3" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Parqueaderos</label>
+          <input id="f-parqueadero" type="number" min="0" max="10" placeholder="0 = ninguno" class="w-full border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
       </div>
-      <textarea id="f-desc" rows="3" placeholder="Descripción de la propiedad"
-                class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      <div>
+        <label class="text-xs font-medium text-gray-500 mb-1 block">Descripción</label>
+        <textarea id="f-desc" rows="3" placeholder="Describe la propiedad: características, estado, puntos de interés cercanos..."
+                  class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+      </div>
       <div class="bg-blue-50 rounded-xl p-4 space-y-2">
         <p class="text-xs font-semibold text-blue-800">Visibilidad</p>
         <label class="flex items-center gap-2 cursor-pointer">

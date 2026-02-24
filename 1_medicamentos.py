@@ -30737,8 +30737,13 @@ def crear_tablas_inmobiliaria(conn):
     _inmobiliaria_tablas_listas = True
 
 
-def _inmo_tiene_acceso(conn, slug, uid):
-    """Retorna el row de la inmobiliaria si el uid es propietario o colaborador, else None."""
+def _inmo_tiene_acceso(conn, slug, uid, es_admin=False):
+    """Retorna el row de la inmobiliaria si el uid es propietario/colaborador o es admin sistema."""
+    if es_admin:
+        return conn.execute(
+            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            (slug,)
+        ).fetchone()
     return conn.execute(
         """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias
            WHERE slug=%s AND activa=TRUE
@@ -31405,12 +31410,13 @@ def api_admin_inmobiliaria_crear():
 def api_inmobiliaria_admin_info(slug):
     """Info de la inmobiliaria — solo admin/colaborador"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
-        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         conn.close()
         if not inmo:
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -31424,12 +31430,13 @@ def api_inmobiliaria_admin_info(slug):
 def api_inmobiliaria_admin_propiedades(slug):
     """Lista propiedades del portal con stats"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
-        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not inmo:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -31460,7 +31467,8 @@ def api_inmobiliaria_admin_propiedades(slug):
 def api_inmobiliaria_admin_crear_propiedad(slug):
     """Crear propiedad directamente en el portal"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     data = request.get_json()
     titulo = (data.get('titulo') or '').strip()
@@ -31469,7 +31477,7 @@ def api_inmobiliaria_admin_crear_propiedad(slug):
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
-        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not inmo:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -31508,13 +31516,14 @@ def api_inmobiliaria_admin_crear_propiedad(slug):
 def api_inmobiliaria_admin_foto(slug, pid):
     """Subir foto a propiedad del portal"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     if 'foto' not in request.files:
         return jsonify({'ok': False, 'error': 'Sin archivo'})
     try:
         conn = get_db_connection()
-        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not inmo:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -31555,12 +31564,13 @@ def api_inmobiliaria_admin_foto(slug, pid):
 def api_inmobiliaria_admin_leads(slug):
     """Lista de leads del portal"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
-        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not inmo:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -31653,8 +31663,13 @@ def crear_tablas_automotriz(conn):
     _automotriz_tablas_listas = True
 
 
-def _compraventa_tiene_acceso(conn, slug, uid):
-    """Retorna el negocio si uid es propietario o admin. None si no."""
+def _compraventa_tiene_acceso(conn, slug, uid, es_admin=False):
+    """Retorna el negocio si uid es propietario/admin o es admin sistema."""
+    if es_admin:
+        return conn.execute(
+            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, whatsapp FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
     return conn.execute(
         """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, whatsapp
            FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE
@@ -32023,12 +32038,13 @@ def api_garaje_vehiculo_compartir(vid):
 def api_compraventa_admin_info(slug):
     """Info de la compraventa — solo admin"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32046,12 +32062,13 @@ def api_compraventa_admin_info(slug):
 def api_compraventa_admin_inventario(slug):
     """Lista de vehículos del lote"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32080,13 +32097,14 @@ def api_compraventa_admin_inventario(slug):
 def api_compraventa_vehiculo_crear(slug):
     """La compraventa crea un vehículo nuevo en su lote"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     data = request.get_json()
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32118,7 +32136,8 @@ def api_compraventa_vehiculo_crear(slug):
 def api_compraventa_vehiculo_fotos(slug, vid):
     """Subir foto a un vehículo del lote"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     data = request.get_json()
     imagen = data.get('imagen', '')
@@ -32127,7 +32146,7 @@ def api_compraventa_vehiculo_fotos(slug, vid):
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32157,7 +32176,8 @@ def api_compraventa_vehiculo_fotos(slug, vid):
 def api_compraventa_vehiculo_precio(slug, vid):
     """Actualizar precio ofertado del vehículo en el lote"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     data = request.get_json()
     precio = data.get('precio')
@@ -32167,7 +32187,7 @@ def api_compraventa_vehiculo_precio(slug, vid):
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32186,12 +32206,13 @@ def api_compraventa_vehiculo_precio(slug, vid):
 def api_compraventa_admin_leads(slug):
     """Leads de interesados en vehículos del lote"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32221,13 +32242,14 @@ def api_compraventa_admin_leads(slug):
 def api_inmobiliaria_personalizar(slug):
     """Actualizar imagen_header, tema y mostrar_nombre de la inmobiliaria"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     data = request.get_json()
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
-        inmo = _inmo_tiene_acceso(conn, slug, uid)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not inmo:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})
@@ -32258,13 +32280,14 @@ def api_inmobiliaria_personalizar(slug):
 def api_compraventa_personalizar(slug):
     """Actualizar imagen_header, tema y mostrar_nombre de la compraventa"""
     uid = session.get('usuario_id')
-    if not uid:
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
     data = request.get_json()
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
-        neg = _compraventa_tiene_acceso(conn, slug, uid)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
         if not neg:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'})

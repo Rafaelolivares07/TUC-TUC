@@ -32235,6 +32235,937 @@ def api_compraventa_inventario_publico(slug):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+# ══════════════════════════════════════════════════════════
+#  MÓDULO HOSPEDAJE TUC TUC
+# ══════════════════════════════════════════════════════════
+
+_hospedaje_tablas_listas = False
+
+def crear_tablas_hospedaje(conn):
+    """Self-healing: crear todas las tablas del módulo Hospedaje TUC TUC"""
+    global _hospedaje_tablas_listas
+    if _hospedaje_tablas_listas:
+        return
+    # negocios ya existe en crear_tablas_taller; llamamos para garantizarla
+    crear_tablas_taller(conn)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hospedaje_tipos_unidad (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            capacidad INTEGER DEFAULT 2,
+            precio_base NUMERIC(10,2) DEFAULT 0,
+            descripcion TEXT,
+            imagen TEXT,
+            permite_seleccion_cliente BOOLEAN DEFAULT false,
+            activo BOOLEAN DEFAULT true,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hospedaje_unidades (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            tipo_unidad_id INTEGER NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            descripcion TEXT,
+            activa BOOLEAN DEFAULT true,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hospedaje_tarifas (
+            id SERIAL PRIMARY KEY,
+            tipo_unidad_id INTEGER NOT NULL,
+            nombre_temporada VARCHAR(100),
+            fecha_desde DATE NOT NULL,
+            fecha_hasta DATE NOT NULL,
+            precio_noche NUMERIC(10,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hospedaje_bloqueos (
+            id SERIAL PRIMARY KEY,
+            unidad_id INTEGER NOT NULL,
+            fecha_desde DATE NOT NULL,
+            fecha_hasta DATE NOT NULL,
+            motivo VARCHAR(255),
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pedidos_hospedaje (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            unidad_id INTEGER,
+            tipo_unidad_id INTEGER NOT NULL,
+            nombre_huesped VARCHAR(100) NOT NULL,
+            telefono_huesped VARCHAR(20),
+            fecha_entrada DATE NOT NULL,
+            fecha_salida DATE NOT NULL,
+            huespedes INTEGER DEFAULT 1,
+            notas TEXT,
+            total NUMERIC(10,2) DEFAULT 0,
+            anticipo NUMERIC(10,2) DEFAULT 0,
+            saldo_pagado BOOLEAN DEFAULT false,
+            metodo_pago VARCHAR(30) DEFAULT 'efectivo',
+            estado VARCHAR(20) DEFAULT 'pendiente',
+            id_tercero INTEGER,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS resenas (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            tipo VARCHAR(20) NOT NULL,
+            pedido_id INTEGER,
+            tercero_id INTEGER,
+            nombre_autor VARCHAR(100),
+            calificacion SMALLINT NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
+            comentario TEXT,
+            respuesta TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    alters = [
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS imagen_header TEXT",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    _hospedaje_tablas_listas = True
+
+
+def _dueno_hospedaje(slug):
+    """Helper: retorna (negocio_dict, error_response). Verifica que el uid de sesión es dueño."""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
+        return None, jsonify({'ok': False, 'error': 'sin_sesion'})
+    conn = get_db_connection()
+    crear_tablas_hospedaje(conn)
+    neg = conn.execute(
+        "SELECT * FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)
+    ).fetchone()
+    conn.close()
+    if not neg:
+        return None, jsonify({'ok': False, 'error': 'Hospedaje no encontrado'})
+    if not es_admin and uid != neg['admin_id'] and uid != neg['propietario_id']:
+        return None, jsonify({'ok': False, 'error': 'sin_permiso'})
+    return dict(neg), None
+
+
+# ─── ADMIN PLATAFORMA ─────────────────────────────────────
+
+@app.route('/admin/hospedaje')
+@admin_required
+def admin_hospedaje_lista():
+    """Lista hospedajes registrados"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        hospedajes = conn.execute("""
+            SELECT n.id, n.nombre, n.slug, n.admin_nombre, n.admin_telefono,
+                   n.token_acceso, n.dias_pagados, n.activo,
+                   (SELECT COUNT(*) FROM pedidos_hospedaje ph WHERE ph.negocio_id = n.id) AS total_reservas
+            FROM negocios n
+            WHERE n.tipo = 'hospedaje'
+            ORDER BY n.id DESC
+        """).fetchall()
+        conn.close()
+        return render_template('admin_hospedaje_lista.html', hospedajes=hospedajes)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Error: {e}", 500
+
+
+@app.route('/api/admin/hospedaje/crear', methods=['POST'])
+@admin_required
+def api_admin_hospedaje_crear():
+    """Crear nuevo hospedaje desde panel admin"""
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    admin_nombre = (data.get('admin_nombre') or '').strip()
+    admin_telefono = (data.get('admin_telefono') or '').strip()
+    if not nombre or not admin_telefono:
+        return jsonify({'ok': False, 'error': 'Nombre y teléfono requeridos'}), 400
+    slug = nombre.lower().replace(' ', '-')
+    import re
+    slug = re.sub(r'[^a-z0-9\-]', '', slug)[:50]
+    token_acceso = str(uuid.uuid4())
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        if conn.execute("SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)).fetchone():
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya existe un hospedaje con ese nombre'}), 400
+        tercero = conn.execute("SELECT id FROM terceros WHERE telefono=%s LIMIT 1", (admin_telefono,)).fetchone()
+        if tercero:
+            admin_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre=%s WHERE id=%s", (admin_nombre, admin_id))
+        else:
+            conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)", (admin_nombre, admin_telefono))
+            admin_id = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (admin_telefono,)).fetchone()['id']
+        conn.execute(
+            "INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo) "
+            "VALUES (%s, %s, 'hospedaje', %s, %s, %s, %s, 7, TRUE)",
+            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso)
+        )
+        conn.commit()
+        conn.close()
+        link = f"{request.host_url}h/acceso/{token_acceso}"
+        return jsonify({'ok': True, 'slug': slug, 'nombre': nombre, 'token_acceso': token_acceso, 'link_acceso': link})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ─── ACCESO DUEÑO ─────────────────────────────────────────
+
+@app.route('/h/acceso/<token>')
+def hospedaje_acceso_token(token):
+    """Link mágico: loguea al dueño del hospedaje"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT * FROM negocios WHERE token_acceso=%s AND tipo='hospedaje' AND activo=TRUE", (token,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return "Enlace inválido o expirado", 404
+        tercero = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id=%s", (neg['admin_id'],)).fetchone()
+        conn.close()
+        if not tercero:
+            return "Usuario no encontrado", 404
+        session['usuario_id'] = tercero['id']
+        session['nombre'] = tercero['nombre']
+        session['telefono'] = tercero['telefono'] if tercero['telefono'] else ''
+        session['rol'] = 'Hospedaje'
+        session.permanent = True
+        session.modified = True
+        return redirect(f"/mi-hospedaje/{neg['slug']}")
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+# ─── PANEL DUEÑO ──────────────────────────────────────────
+
+@app.route('/mi-hospedaje/<slug>')
+def mi_hospedaje(slug):
+    """Panel del dueño del hospedaje"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT * FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return "Hospedaje no encontrado", 404
+        uid = session.get('usuario_id')
+        es_admin = session.get('rol') == 'Administrador'
+        if not uid and not es_admin:
+            conn.close()
+            return redirect(f'/hospedaje/{slug}')
+        if not es_admin and uid != neg['admin_id'] and uid != neg['propietario_id']:
+            conn.close()
+            return redirect(f'/hospedaje/{slug}')
+        conn.close()
+        return render_template('mi_hospedaje.html', neg=dict(neg), slug=slug)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Error: {e}", 500
+
+
+# ─── API TIPOS DE UNIDAD ──────────────────────────────────
+
+@app.route('/api/mi-hospedaje/<slug>/tipos')
+def api_hospedaje_tipos(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        rows = conn.execute("""
+            SELECT t.*, COUNT(u.id) AS total_unidades
+            FROM hospedaje_tipos_unidad t
+            LEFT JOIN hospedaje_unidades u ON u.tipo_unidad_id = t.id
+            WHERE t.negocio_id=%s
+            GROUP BY t.id
+            ORDER BY t.orden, t.id
+        """, (neg['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'tipos': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/tipo', methods=['POST'])
+def api_hospedaje_tipo_crear(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        row = conn.execute(
+            "INSERT INTO hospedaje_tipos_unidad (negocio_id, nombre, capacidad, precio_base, descripcion, imagen, permite_seleccion_cliente, orden) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (neg['id'], nombre, data.get('capacidad', 2), data.get('precio_base', 0),
+             data.get('descripcion', ''), data.get('imagen', ''),
+             bool(data.get('permite_seleccion_cliente', False)), data.get('orden', 0))
+        ).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/tipo/<int:tid>', methods=['PUT'])
+def api_hospedaje_tipo_editar(slug, tid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute("""
+            UPDATE hospedaje_tipos_unidad SET
+                nombre=%s, capacidad=%s, precio_base=%s, descripcion=%s,
+                imagen=%s, permite_seleccion_cliente=%s, orden=%s, activo=%s
+            WHERE id=%s AND negocio_id=%s
+        """, (data.get('nombre'), data.get('capacidad', 2), data.get('precio_base', 0),
+              data.get('descripcion', ''), data.get('imagen', ''),
+              bool(data.get('permite_seleccion_cliente', False)), data.get('orden', 0),
+              bool(data.get('activo', True)), tid, neg['id']))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/tipo/<int:tid>', methods=['DELETE'])
+def api_hospedaje_tipo_eliminar(slug, tid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        tiene = conn.execute(
+            "SELECT id FROM hospedaje_unidades WHERE tipo_unidad_id=%s LIMIT 1", (tid,)
+        ).fetchone()
+        if tiene:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tiene unidades asignadas. Elimínalas primero.'})
+        conn.execute("DELETE FROM hospedaje_tipos_unidad WHERE id=%s AND negocio_id=%s", (tid, neg['id']))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API UNIDADES ─────────────────────────────────────────
+
+@app.route('/api/mi-hospedaje/<slug>/unidades')
+def api_hospedaje_unidades(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        rows = conn.execute("""
+            SELECT u.*, t.nombre AS tipo_nombre, t.capacidad, t.precio_base
+            FROM hospedaje_unidades u
+            JOIN hospedaje_tipos_unidad t ON t.id = u.tipo_unidad_id
+            WHERE u.negocio_id=%s
+            ORDER BY u.orden, u.id
+        """, (neg['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'unidades': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/unidad', methods=['POST'])
+def api_hospedaje_unidad_crear(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    tipo_unidad_id = data.get('tipo_unidad_id')
+    if not nombre or not tipo_unidad_id:
+        return jsonify({'ok': False, 'error': 'Nombre y tipo requeridos'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        row = conn.execute(
+            "INSERT INTO hospedaje_unidades (negocio_id, tipo_unidad_id, nombre, descripcion, orden) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (neg['id'], tipo_unidad_id, nombre, data.get('descripcion', ''), data.get('orden', 0))
+        ).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/unidad/<int:uid_>', methods=['PUT'])
+def api_hospedaje_unidad_editar(slug, uid_):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute("""
+            UPDATE hospedaje_unidades SET
+                nombre=%s, descripcion=%s, tipo_unidad_id=%s, orden=%s, activa=%s
+            WHERE id=%s AND negocio_id=%s
+        """, (data.get('nombre'), data.get('descripcion', ''), data.get('tipo_unidad_id'),
+              data.get('orden', 0), bool(data.get('activa', True)), uid_, neg['id']))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/unidad/<int:uid_>', methods=['DELETE'])
+def api_hospedaje_unidad_eliminar(slug, uid_):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute("DELETE FROM hospedaje_unidades WHERE id=%s AND negocio_id=%s", (uid_, neg['id']))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API TARIFAS ──────────────────────────────────────────
+
+@app.route('/api/mi-hospedaje/<slug>/tarifas')
+def api_hospedaje_tarifas(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        rows = conn.execute("""
+            SELECT tar.*, t.nombre AS tipo_nombre
+            FROM hospedaje_tarifas tar
+            JOIN hospedaje_tipos_unidad t ON t.id = tar.tipo_unidad_id
+            WHERE t.negocio_id=%s
+            ORDER BY tar.fecha_desde DESC
+        """, (neg['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'tarifas': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/tarifa', methods=['POST'])
+def api_hospedaje_tarifa_crear(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        row = conn.execute(
+            "INSERT INTO hospedaje_tarifas (tipo_unidad_id, nombre_temporada, fecha_desde, fecha_hasta, precio_noche) "
+            "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (data['tipo_unidad_id'], data.get('nombre_temporada', ''),
+             data['fecha_desde'], data['fecha_hasta'], data['precio_noche'])
+        ).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/tarifa/<int:tid>', methods=['DELETE'])
+def api_hospedaje_tarifa_eliminar(slug, tid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute("""
+            DELETE FROM hospedaje_tarifas
+            WHERE id=%s AND tipo_unidad_id IN (
+                SELECT id FROM hospedaje_tipos_unidad WHERE negocio_id=%s
+            )
+        """, (tid, neg['id']))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API BLOQUEOS ─────────────────────────────────────────
+
+@app.route('/api/mi-hospedaje/<slug>/bloqueos')
+def api_hospedaje_bloqueos(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        rows = conn.execute("""
+            SELECT b.*, u.nombre AS unidad_nombre
+            FROM hospedaje_bloqueos b
+            JOIN hospedaje_unidades u ON u.id = b.unidad_id
+            WHERE u.negocio_id=%s
+            ORDER BY b.fecha_desde DESC
+        """, (neg['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'bloqueos': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/bloqueo', methods=['POST'])
+def api_hospedaje_bloqueo_crear(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        row = conn.execute(
+            "INSERT INTO hospedaje_bloqueos (unidad_id, fecha_desde, fecha_hasta, motivo) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (data['unidad_id'], data['fecha_desde'], data['fecha_hasta'], data.get('motivo', ''))
+        ).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/bloqueo/<int:bid>', methods=['DELETE'])
+def api_hospedaje_bloqueo_eliminar(slug, bid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute("""
+            DELETE FROM hospedaje_bloqueos
+            WHERE id=%s AND unidad_id IN (
+                SELECT id FROM hospedaje_unidades WHERE negocio_id=%s
+            )
+        """, (bid, neg['id']))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── API RESERVAS (panel dueño) ───────────────────────────
+
+@app.route('/api/mi-hospedaje/<slug>/reservas')
+def api_hospedaje_reservas(slug):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    estado = request.args.get('estado', '')
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        q = """
+            SELECT ph.*, t.nombre AS tipo_nombre,
+                   u.nombre AS unidad_nombre,
+                   (ph.fecha_salida - ph.fecha_entrada) AS noches
+            FROM pedidos_hospedaje ph
+            JOIN hospedaje_tipos_unidad t ON t.id = ph.tipo_unidad_id
+            LEFT JOIN hospedaje_unidades u ON u.id = ph.unidad_id
+            WHERE ph.negocio_id=%s
+        """
+        params = [neg['id']]
+        if estado:
+            q += " AND ph.estado=%s"
+            params.append(estado)
+        q += " ORDER BY ph.created_at DESC"
+        rows = conn.execute(q, params).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'reservas': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/reserva/<int:rid>/asignar', methods=['PATCH'])
+def api_hospedaje_reserva_asignar(slug, rid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    unidad_id = data.get('unidad_id')
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute(
+            "UPDATE pedidos_hospedaje SET unidad_id=%s WHERE id=%s AND negocio_id=%s",
+            (unidad_id, rid, neg['id'])
+        )
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/reserva/<int:rid>/estado', methods=['PATCH'])
+def api_hospedaje_reserva_estado(slug, rid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    nuevo_estado = (data.get('estado') or '').strip()
+    estados_validos = ('pendiente', 'confirmada', 'en_curso', 'completada', 'cancelada', 'no_show')
+    if nuevo_estado not in estados_validos:
+        return jsonify({'ok': False, 'error': 'Estado inválido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute(
+            "UPDATE pedidos_hospedaje SET estado=%s WHERE id=%s AND negocio_id=%s",
+            (nuevo_estado, rid, neg['id'])
+        )
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/resena/<int:reid>/responder', methods=['POST'])
+def api_hospedaje_resena_responder(slug, reid):
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    data = request.get_json() or {}
+    respuesta = (data.get('respuesta') or '').strip()
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        conn.execute(
+            "UPDATE resenas SET respuesta=%s WHERE id=%s AND negocio_id=%s AND tipo='hospedaje'",
+            (respuesta, reid, neg['id'])
+        )
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback(); conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─── VISTA PÚBLICA ────────────────────────────────────────
+
+@app.route('/hospedaje/<slug>')
+def hospedaje_publico(slug):
+    """Página pública: vitrina, disponibilidad y reservas"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT * FROM negocios WHERE slug=%s AND tipo='hospedaje' AND activo=TRUE", (slug,)
+        ).fetchone()
+        conn.close()
+        if not neg:
+            return "Hospedaje no encontrado", 404
+        return render_template('hospedaje_publico.html', neg=dict(neg), slug=slug)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/hospedaje/<slug>/info')
+def api_hospedaje_info(slug):
+    """Info pública + tipos de unidad activos con foto y precio"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT id, nombre, descripcion, imagen_header, telefono FROM negocios WHERE slug=%s AND tipo='hospedaje' AND activo=TRUE",
+            (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'})
+        tipos = conn.execute("""
+            SELECT t.id, t.nombre, t.capacidad, t.precio_base, t.descripcion, t.imagen,
+                   t.permite_seleccion_cliente,
+                   COUNT(u.id) AS total_unidades,
+                   COALESCE(
+                       (SELECT AVG(r.calificacion) FROM resenas r WHERE r.negocio_id=t.negocio_id AND r.tipo='hospedaje'),
+                       0
+                   ) AS rating
+            FROM hospedaje_tipos_unidad t
+            LEFT JOIN hospedaje_unidades u ON u.tipo_unidad_id=t.id AND u.activa=TRUE
+            WHERE t.negocio_id=%s AND t.activo=TRUE
+            GROUP BY t.id
+            ORDER BY t.orden, t.id
+        """, (neg['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'neg': dict(neg), 'tipos': [dict(t) for t in tipos]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/hospedaje/<slug>/disponibilidad')
+def api_hospedaje_disponibilidad(slug):
+    """Retorna unidades disponibles para un tipo en un rango de fechas"""
+    tipo_id = request.args.get('tipo_id')
+    entrada = request.args.get('entrada')   # YYYY-MM-DD
+    salida = request.args.get('salida')     # YYYY-MM-DD
+    if not tipo_id or not entrada or not salida:
+        return jsonify({'ok': False, 'error': 'Parámetros requeridos: tipo_id, entrada, salida'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje' AND activo=TRUE", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'})
+        # Conteo de unidades disponibles del tipo en el rango
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM hospedaje_unidades WHERE tipo_unidad_id=%s AND activa=TRUE", (tipo_id,)
+        ).fetchone()['n']
+        ocupadas = conn.execute("""
+            SELECT COUNT(DISTINCT ph.unidad_id) AS n
+            FROM pedidos_hospedaje ph
+            WHERE ph.tipo_unidad_id=%s
+              AND ph.estado NOT IN ('cancelada', 'no_show')
+              AND ph.fecha_entrada < %s AND ph.fecha_salida > %s
+              AND ph.unidad_id IS NOT NULL
+        """, (tipo_id, salida, entrada)).fetchone()['n']
+        bloqueadas = conn.execute("""
+            SELECT COUNT(*) AS n FROM hospedaje_bloqueos b
+            JOIN hospedaje_unidades u ON u.id=b.unidad_id
+            WHERE u.tipo_unidad_id=%s
+              AND b.fecha_desde < %s AND b.fecha_hasta > %s
+        """, (tipo_id, salida, entrada)).fetchone()['n']
+        disponibles = max(0, total - ocupadas - bloqueadas)
+        # Si el tipo permite selección de cliente, devolver unidades libres
+        unidades_libres = []
+        tipo = conn.execute(
+            "SELECT permite_seleccion_cliente FROM hospedaje_tipos_unidad WHERE id=%s", (tipo_id,)
+        ).fetchone()
+        if tipo and tipo['permite_seleccion_cliente']:
+            rows = conn.execute("""
+                SELECT id, nombre FROM hospedaje_unidades
+                WHERE tipo_unidad_id=%s AND activa=TRUE
+                  AND id NOT IN (
+                    SELECT COALESCE(unidad_id,0) FROM pedidos_hospedaje
+                    WHERE tipo_unidad_id=%s AND estado NOT IN ('cancelada','no_show')
+                      AND fecha_entrada < %s AND fecha_salida > %s AND unidad_id IS NOT NULL
+                  )
+                  AND id NOT IN (
+                    SELECT b.unidad_id FROM hospedaje_bloqueos b
+                    WHERE b.fecha_desde < %s AND b.fecha_hasta > %s
+                  )
+                ORDER BY orden, id
+            """, (tipo_id, tipo_id, salida, entrada, salida, entrada)).fetchall()
+            unidades_libres = [dict(r) for r in rows]
+        # Tarifa vigente
+        tarifa = conn.execute("""
+            SELECT precio_noche, nombre_temporada FROM hospedaje_tarifas
+            WHERE tipo_unidad_id=%s AND fecha_desde <= %s AND fecha_hasta >= %s
+            ORDER BY fecha_desde DESC LIMIT 1
+        """, (tipo_id, entrada, salida)).fetchone()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'total': total,
+            'disponibles': disponibles,
+            'unidades_libres': unidades_libres,
+            'tarifa': dict(tarifa) if tarifa else None
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/hospedaje/<slug>/reservar', methods=['POST'])
+def api_hospedaje_reservar(slug):
+    """Crear una reserva (pública — no requiere sesión)"""
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    telefono = (data.get('telefono') or '').strip()
+    tipo_id = data.get('tipo_id')
+    entrada = data.get('entrada')
+    salida = data.get('salida')
+    huespedes = int(data.get('huespedes', 1))
+    if not nombre or not tipo_id or not entrada or not salida:
+        return jsonify({'ok': False, 'error': 'Nombre, tipo, entrada y salida son obligatorios'})
+    try:
+        from datetime import date
+        d_entrada = date.fromisoformat(entrada)
+        d_salida = date.fromisoformat(salida)
+        noches = (d_salida - d_entrada).days
+        if noches <= 0:
+            return jsonify({'ok': False, 'error': 'La fecha de salida debe ser posterior a la entrada'})
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje' AND activo=TRUE", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Hospedaje no encontrado'})
+        # Verificar disponibilidad
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM hospedaje_unidades WHERE tipo_unidad_id=%s AND activa=TRUE", (tipo_id,)
+        ).fetchone()['n']
+        if total == 0:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay unidades de ese tipo'})
+        ocupadas = conn.execute("""
+            SELECT COUNT(DISTINCT unidad_id) AS n FROM pedidos_hospedaje
+            WHERE tipo_unidad_id=%s AND estado NOT IN ('cancelada','no_show')
+              AND fecha_entrada < %s AND fecha_salida > %s AND unidad_id IS NOT NULL
+        """, (tipo_id, salida, entrada)).fetchone()['n']
+        bloqueadas = conn.execute("""
+            SELECT COUNT(*) AS n FROM hospedaje_bloqueos b
+            JOIN hospedaje_unidades u ON u.id=b.unidad_id
+            WHERE u.tipo_unidad_id=%s AND b.fecha_desde < %s AND b.fecha_hasta > %s
+        """, (tipo_id, salida, entrada)).fetchone()['n']
+        if (total - ocupadas - bloqueadas) <= 0:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin disponibilidad para esas fechas'})
+        # Precio
+        tarifa = conn.execute("""
+            SELECT precio_noche FROM hospedaje_tarifas
+            WHERE tipo_unidad_id=%s AND fecha_desde <= %s AND fecha_hasta >= %s
+            ORDER BY fecha_desde DESC LIMIT 1
+        """, (tipo_id, entrada, salida)).fetchone()
+        tipo_row = conn.execute("SELECT precio_base FROM hospedaje_tipos_unidad WHERE id=%s", (tipo_id,)).fetchone()
+        precio_noche = float(tarifa['precio_noche']) if tarifa else float(tipo_row['precio_base'])
+        total_precio = precio_noche * noches
+        # Unidad asignada si selección cliente
+        unidad_id = data.get('unidad_id')
+        # Crear tercero si tiene teléfono
+        id_tercero = None
+        if telefono:
+            t = conn.execute("SELECT id FROM terceros WHERE telefono=%s LIMIT 1", (telefono,)).fetchone()
+            if t:
+                id_tercero = t['id']
+            else:
+                conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)", (nombre, telefono))
+                id_tercero = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (telefono,)).fetchone()['id']
+        row = conn.execute(
+            """INSERT INTO pedidos_hospedaje
+               (negocio_id, tipo_unidad_id, unidad_id, nombre_huesped, telefono_huesped,
+                fecha_entrada, fecha_salida, huespedes, notas, total, metodo_pago, estado, id_tercero)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pendiente',%s) RETURNING id""",
+            (neg['id'], tipo_id, unidad_id or None, nombre, telefono,
+             entrada, salida, huespedes, data.get('notas', ''),
+             total_precio, data.get('metodo_pago', 'efectivo'), id_tercero)
+        ).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'reserva_id': row['id'], 'total': total_precio, 'noches': noches})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/hospedaje/<slug>/resenas')
+def api_hospedaje_resenas(slug):
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje' AND activo=TRUE", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'})
+        rows = conn.execute("""
+            SELECT id, nombre_autor, calificacion, comentario, respuesta, created_at
+            FROM resenas WHERE negocio_id=%s AND tipo='hospedaje'
+            ORDER BY created_at DESC LIMIT 50
+        """, (neg['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'resenas': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/hospedaje/<slug>/resena', methods=['POST'])
+def api_hospedaje_resena_crear(slug):
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip() or 'Anónimo'
+    calificacion = int(data.get('calificacion', 5))
+    comentario = (data.get('comentario') or '').strip()
+    if calificacion < 1 or calificacion > 5:
+        return jsonify({'ok': False, 'error': 'Calificación entre 1 y 5'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje' AND activo=TRUE", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'})
+        pedido_id = data.get('pedido_id')
+        row = conn.execute(
+            "INSERT INTO resenas (negocio_id, tipo, pedido_id, nombre_autor, calificacion, comentario) "
+            "VALUES (%s,'hospedaje',%s,%s,%s,%s) RETURNING id",
+            (neg['id'], pedido_id, nombre, calificacion, comentario)
+        ).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

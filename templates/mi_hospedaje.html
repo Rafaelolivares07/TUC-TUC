@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ neg.nombre }} — Mi Hospedaje</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
+        .tab-btn.active { background: #4f46e5; color: #fff; }
+        .tab-btn { transition: all .2s; }
+        .estado-chip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+        .est-pendiente  { background:#fef3c7; color:#92400e; }
+        .est-confirmada { background:#d1fae5; color:#065f46; }
+        .est-en_curso   { background:#dbeafe; color:#1e40af; }
+        .est-completada { background:#f3f4f6; color:#374151; }
+        .est-cancelada  { background:#fee2e2; color:#991b1b; }
+        .est-no_show    { background:#fce7f3; color:#831843; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+<!-- Header -->
+<div class="bg-indigo-700 text-white px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <span class="text-2xl">🏨</span>
+        <div>
+            <h1 class="font-extrabold text-lg leading-tight">{{ neg.nombre }}</h1>
+            <a href="/hospedaje/{{ slug }}" target="_blank"
+               class="text-indigo-200 text-xs hover:text-white transition">/hospedaje/{{ slug }} →</a>
+        </div>
+    </div>
+    <a href="/hospedaje/{{ slug }}" target="_blank"
+       class="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+        Ver pública
+    </a>
+</div>
+
+<!-- Tabs -->
+<div class="bg-white border-b border-gray-200 px-4">
+    <div class="flex gap-1 overflow-x-auto py-2 scrollbar-hide">
+        <button class="tab-btn active text-xs font-semibold px-4 py-2 rounded-lg whitespace-nowrap" data-tab="reservas" onclick="cambiarTab(this)">Reservas</button>
+        <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="tipos" onclick="cambiarTab(this)">Tipos de unidad</button>
+        <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="unidades" onclick="cambiarTab(this)">Unidades</button>
+        <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="tarifas" onclick="cambiarTab(this)">Tarifas</button>
+        <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="bloqueos" onclick="cambiarTab(this)">Bloqueos</button>
+        <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="resenas" onclick="cambiarTab(this)">Reseñas</button>
+    </div>
+</div>
+
+<div class="max-w-3xl mx-auto p-4 flex flex-col gap-4">
+
+<!-- ══ TAB: RESERVAS ══ -->
+<div id="tab-reservas" class="tab-content flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+        <h2 class="font-bold text-gray-800">Reservas</h2>
+        <select id="filtro-estado" onchange="cargarReservas()" class="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
+            <option value="">Todas</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmada">Confirmada</option>
+            <option value="en_curso">En curso</option>
+            <option value="completada">Completada</option>
+            <option value="cancelada">Cancelada</option>
+            <option value="no_show">No show</option>
+        </select>
+    </div>
+    <div id="lista-reservas" class="flex flex-col gap-3">
+        <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+<!-- ══ TAB: TIPOS DE UNIDAD ══ -->
+<div id="tab-tipos" class="tab-content hidden flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+        <h2 class="font-bold text-gray-800">Tipos de unidad</h2>
+        <button onclick="abrirModalTipo()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+            + Agregar tipo
+        </button>
+    </div>
+    <p class="text-xs text-gray-400">Ej: Habitación Doble, Suite, Cabaña. Cada tipo puede tener varias unidades reales.</p>
+    <div id="lista-tipos" class="flex flex-col gap-3">
+        <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+<!-- ══ TAB: UNIDADES ══ -->
+<div id="tab-unidades" class="tab-content hidden flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+        <h2 class="font-bold text-gray-800">Unidades físicas</h2>
+        <button onclick="abrirModalUnidad()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+            + Agregar unidad
+        </button>
+    </div>
+    <p class="text-xs text-gray-400">Las habitaciones, cabañas o cuartos reales. Ej: "Hab 101", "Cabaña del Río".</p>
+    <div id="lista-unidades" class="flex flex-col gap-3">
+        <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+<!-- ══ TAB: TARIFAS ══ -->
+<div id="tab-tarifas" class="tab-content hidden flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+        <h2 class="font-bold text-gray-800">Tarifas por temporada</h2>
+        <button onclick="abrirModalTarifa()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+            + Agregar tarifa
+        </button>
+    </div>
+    <p class="text-xs text-gray-400">Precio por noche en un rango de fechas. Si no hay tarifa, se usa el precio base del tipo.</p>
+    <div id="lista-tarifas" class="flex flex-col gap-3">
+        <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+<!-- ══ TAB: BLOQUEOS ══ -->
+<div id="tab-bloqueos" class="tab-content hidden flex flex-col gap-4">
+    <div class="flex items-center justify-between">
+        <h2 class="font-bold text-gray-800">Bloqueos</h2>
+        <button onclick="abrirModalBloqueo()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+            + Bloquear fechas
+        </button>
+    </div>
+    <p class="text-xs text-gray-400">Bloquea una unidad para mantenimiento o uso personal.</p>
+    <div id="lista-bloqueos" class="flex flex-col gap-3">
+        <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+<!-- ══ TAB: RESEÑAS ══ -->
+<div id="tab-resenas" class="tab-content hidden flex flex-col gap-4">
+    <h2 class="font-bold text-gray-800">Reseñas de huéspedes</h2>
+    <div id="lista-resenas" class="flex flex-col gap-3">
+        <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+</div><!-- end max-w -->
+
+<!-- ══ MODAL TIPO ══ -->
+<div id="modal-tipo" class="hidden fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-gray-800" id="modal-tipo-title">Nuevo tipo de unidad</h3>
+            <button onclick="cerrarModal('modal-tipo')" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <input type="hidden" id="tipo-id">
+        <div class="flex flex-col gap-3">
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Nombre*</label>
+                <input id="tipo-nombre" type="text" placeholder="Ej: Habitación Doble"
+                       class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Capacidad (personas)</label>
+                    <input id="tipo-capacidad" type="number" min="1" value="2"
+                           class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Precio base/noche</label>
+                    <input id="tipo-precio" type="number" min="0" step="0.01" placeholder="0.00"
+                           class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Descripción</label>
+                <textarea id="tipo-descripcion" rows="2" placeholder="Describe este tipo de unidad..."
+                          class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" id="tipo-seleccion" class="rounded accent-indigo-600">
+                El huésped puede elegir su unidad exacta
+            </label>
+            <div id="modal-tipo-err" class="hidden text-sm text-red-600 bg-red-50 rounded px-3 py-2"></div>
+            <button onclick="guardarTipo()"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL UNIDAD ══ -->
+<div id="modal-unidad" class="hidden fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-gray-800" id="modal-unidad-title">Nueva unidad</h3>
+            <button onclick="cerrarModal('modal-unidad')" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <input type="hidden" id="unidad-id">
+        <div class="flex flex-col gap-3">
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Tipo de unidad*</label>
+                <select id="unidad-tipo-id"
+                        class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Nombre de la unidad*</label>
+                <input id="unidad-nombre" type="text" placeholder="Ej: Habitación 101"
+                       class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Descripción</label>
+                <textarea id="unidad-descripcion" rows="2" placeholder="Vista al mar, piso 2..."
+                          class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+            <div id="modal-unidad-err" class="hidden text-sm text-red-600 bg-red-50 rounded px-3 py-2"></div>
+            <button onclick="guardarUnidad()"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL TARIFA ══ -->
+<div id="modal-tarifa" class="hidden fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-gray-800">Nueva tarifa</h3>
+            <button onclick="cerrarModal('modal-tarifa')" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div class="flex flex-col gap-3">
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Tipo de unidad*</label>
+                <select id="tarifa-tipo-id"
+                        class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </select>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Nombre temporada</label>
+                <input id="tarifa-temporada" type="text" placeholder="Ej: Semana Santa, Diciembre..."
+                       class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Desde*</label>
+                    <input id="tarifa-desde" type="date"
+                           class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Hasta*</label>
+                    <input id="tarifa-hasta" type="date"
+                           class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Precio por noche*</label>
+                <input id="tarifa-precio" type="number" min="0" step="0.01" placeholder="0.00"
+                       class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div id="modal-tarifa-err" class="hidden text-sm text-red-600 bg-red-50 rounded px-3 py-2"></div>
+            <button onclick="guardarTarifa()"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Guardar tarifa
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL BLOQUEO ══ -->
+<div id="modal-bloqueo" class="hidden fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-gray-800">Bloquear fechas</h3>
+            <button onclick="cerrarModal('modal-bloqueo')" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div class="flex flex-col gap-3">
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Unidad*</label>
+                <select id="bloqueo-unidad-id"
+                        class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Desde*</label>
+                    <input id="bloqueo-desde" type="date"
+                           class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Hasta*</label>
+                    <input id="bloqueo-hasta" type="date"
+                           class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs font-semibold text-gray-600">Motivo</label>
+                <input id="bloqueo-motivo" type="text" placeholder="Ej: Mantenimiento, uso personal..."
+                       class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div id="modal-bloqueo-err" class="hidden text-sm text-red-600 bg-red-50 rounded px-3 py-2"></div>
+            <button onclick="guardarBloqueo()"
+                    class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+                Bloquear fechas
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MODAL ASIGNAR UNIDAD ══ -->
+<div id="modal-asignar" class="hidden fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-extrabold text-gray-800">Asignar unidad</h3>
+            <button onclick="cerrarModal('modal-asignar')" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <input type="hidden" id="asignar-rid">
+        <p id="asignar-info" class="text-sm text-gray-600 mb-3"></p>
+        <div>
+            <label class="text-xs font-semibold text-gray-600">Unidad a asignar*</label>
+            <select id="asignar-unidad-id"
+                    class="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </select>
+        </div>
+        <div id="modal-asignar-err" class="hidden mt-2 text-sm text-red-600 bg-red-50 rounded px-3 py-2"></div>
+        <button onclick="confirmarAsignar()"
+                class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+            Confirmar asignación
+        </button>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-xl z-[100] transition-all"></div>
+
+<script>
+const SLUG = '{{ slug }}';
+let tipos = [], unidades = [], tiposCache = [];
+
+function toast(msg, ok=true) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-xl z-[100] transition-all ${ok ? 'bg-gray-900' : 'bg-red-600'}`;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+function cerrarModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function cambiarTab(btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active','bg-indigo-600','text-white');
+        b.classList.add('text-gray-500');
+    });
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+    btn.classList.add('active');
+    btn.classList.remove('text-gray-500');
+    const tab = btn.dataset.tab;
+    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    if (tab === 'reservas')  cargarReservas();
+    if (tab === 'tipos')     cargarTipos();
+    if (tab === 'unidades')  cargarUnidades();
+    if (tab === 'tarifas')   { cargarTipos(); cargarTarifas(); }
+    if (tab === 'bloqueos')  { cargarUnidades(); cargarBloqueos(); }
+    if (tab === 'resenas')   cargarResenas();
+}
+
+// ─── RESERVAS ────────────────────────────────────────────
+async function cargarReservas() {
+    const estado = document.getElementById('filtro-estado').value;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/reservas?estado=${estado}`);
+        const d = await r.json();
+        const el = document.getElementById('lista-reservas');
+        if (!d.ok) { el.innerHTML = `<p class="text-red-500 text-sm">${d.error}</p>`; return; }
+        if (!d.reservas.length) {
+            el.innerHTML = '<div class="bg-white rounded-xl p-8 text-center text-gray-400">Sin reservas</div>';
+            return;
+        }
+        el.innerHTML = d.reservas.map(rv => `
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                        <span class="font-bold text-gray-800">${rv.nombre_huesped}</span>
+                        <span class="estado-chip est-${rv.estado}">${rv.estado.replace('_',' ')}</span>
+                    </div>
+                    <p class="text-xs text-gray-500">${rv.tipo_nombre}${rv.unidad_nombre ? ' · ' + rv.unidad_nombre : ' · <span class="text-amber-500">Sin asignar</span>'}</p>
+                    <p class="text-xs text-gray-500">
+                        ${rv.fecha_entrada} → ${rv.fecha_salida}
+                        (${rv.noches} noche${rv.noches != 1 ? 's' : ''}) · ${rv.huespedes} huésped${rv.huespedes != 1 ? 'es' : ''}
+                    </p>
+                    ${rv.telefono_huesped ? `<a href="https://wa.me/57${rv.telefono_huesped}" target="_blank" class="text-xs text-green-600 font-semibold">📱 ${rv.telefono_huesped}</a>` : ''}
+                    ${rv.notas ? `<p class="text-xs text-gray-400 italic mt-1">${rv.notas}</p>` : ''}
+                </div>
+                <div class="text-right shrink-0">
+                    <p class="font-bold text-indigo-700 text-sm">$${parseFloat(rv.total).toLocaleString()}</p>
+                    ${rv.anticipo > 0 ? `<p class="text-xs text-gray-400">Anticipo: $${parseFloat(rv.anticipo).toLocaleString()}</p>` : ''}
+                </div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                <button onclick="abrirAsignar(${rv.id}, '${rv.nombre_huesped}', ${rv.tipo_unidad_id})"
+                        class="text-xs bg-indigo-50 text-indigo-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-indigo-100">
+                    Asignar unidad
+                </button>
+                <select onchange="cambiarEstado(${rv.id}, this.value)"
+                        class="text-xs border border-gray-300 rounded-lg px-2 py-1.5 bg-white">
+                    <option value="">Cambiar estado...</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="en_curso">En curso</option>
+                    <option value="completada">Completada</option>
+                    <option value="cancelada">Cancelada</option>
+                    <option value="no_show">No show</option>
+                </select>
+            </div>
+        </div>`).join('');
+    } catch(e) { toast('Error al cargar reservas', false); }
+}
+
+async function cambiarEstado(rid, estado) {
+    if (!estado) return;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/reserva/${rid}/estado`, {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ estado })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Estado actualizado'); cargarReservas(); }
+        else toast(d.error || 'Error', false);
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function abrirAsignar(rid, nombre, tipoId) {
+    document.getElementById('asignar-rid').value = rid;
+    document.getElementById('asignar-info').textContent = `Asignar unidad a reserva de ${nombre}`;
+    const sel = document.getElementById('asignar-unidad-id');
+    sel.innerHTML = '<option value="">Cargando...</option>';
+    document.getElementById('modal-asignar-err').classList.add('hidden');
+    document.getElementById('modal-asignar').classList.remove('hidden');
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/unidades`);
+        const d = await r.json();
+        const filtradas = d.unidades.filter(u => u.tipo_unidad_id == tipoId && u.activa);
+        sel.innerHTML = filtradas.length
+            ? filtradas.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('')
+            : '<option value="">Sin unidades de este tipo</option>';
+    } catch(e) { sel.innerHTML = '<option>Error</option>'; }
+}
+
+async function confirmarAsignar() {
+    const rid = document.getElementById('asignar-rid').value;
+    const unidad_id = document.getElementById('asignar-unidad-id').value;
+    if (!unidad_id) { document.getElementById('modal-asignar-err').textContent='Selecciona una unidad'; document.getElementById('modal-asignar-err').classList.remove('hidden'); return; }
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/reserva/${rid}/asignar`, {
+            method: 'PATCH',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ unidad_id: parseInt(unidad_id) })
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModal('modal-asignar'); toast('Unidad asignada'); cargarReservas(); }
+        else { document.getElementById('modal-asignar-err').textContent = d.error||'Error'; document.getElementById('modal-asignar-err').classList.remove('hidden'); }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+// ─── TIPOS ───────────────────────────────────────────────
+async function cargarTipos() {
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tipos`);
+        const d = await r.json();
+        tiposCache = d.tipos || [];
+        const el = document.getElementById('lista-tipos');
+        if (!d.ok) { el.innerHTML = `<p class="text-red-500 text-sm">${d.error}</p>`; return; }
+        if (!d.tipos.length) {
+            el.innerHTML = '<div class="bg-white rounded-xl p-8 text-center text-gray-400">Sin tipos. Agrega uno.</div>';
+            return;
+        }
+        el.innerHTML = d.tipos.map(t => `
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-gray-800">${t.nombre} <span class="text-gray-400 font-normal text-sm">· ${t.capacidad} pers.</span></p>
+                    <p class="text-sm text-indigo-700 font-semibold">$${parseFloat(t.precio_base).toLocaleString()}/noche</p>
+                    ${t.descripcion ? `<p class="text-xs text-gray-400 mt-1">${t.descripcion}</p>` : ''}
+                    <p class="text-xs text-gray-400 mt-1">${t.total_unidades} unidad${t.total_unidades!=1?'es':''} · ${t.permite_seleccion_cliente?'cliente elige unidad':'dueño asigna'}</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button onclick='editarTipo(${JSON.stringify(t)})' class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold px-3 py-1.5 rounded-lg">Editar</button>
+                    <button onclick="eliminarTipo(${t.id})" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-3 py-1.5 rounded-lg">Eliminar</button>
+                </div>
+            </div>
+        </div>`).join('');
+    } catch(e) { toast('Error al cargar tipos', false); }
+}
+
+function abrirModalTipo() {
+    document.getElementById('tipo-id').value = '';
+    document.getElementById('tipo-nombre').value = '';
+    document.getElementById('tipo-capacidad').value = 2;
+    document.getElementById('tipo-precio').value = '';
+    document.getElementById('tipo-descripcion').value = '';
+    document.getElementById('tipo-seleccion').checked = false;
+    document.getElementById('modal-tipo-title').textContent = 'Nuevo tipo de unidad';
+    document.getElementById('modal-tipo-err').classList.add('hidden');
+    document.getElementById('modal-tipo').classList.remove('hidden');
+}
+
+function editarTipo(t) {
+    document.getElementById('tipo-id').value = t.id;
+    document.getElementById('tipo-nombre').value = t.nombre;
+    document.getElementById('tipo-capacidad').value = t.capacidad;
+    document.getElementById('tipo-precio').value = t.precio_base;
+    document.getElementById('tipo-descripcion').value = t.descripcion || '';
+    document.getElementById('tipo-seleccion').checked = t.permite_seleccion_cliente;
+    document.getElementById('modal-tipo-title').textContent = 'Editar tipo de unidad';
+    document.getElementById('modal-tipo-err').classList.add('hidden');
+    document.getElementById('modal-tipo').classList.remove('hidden');
+}
+
+async function guardarTipo() {
+    const id = document.getElementById('tipo-id').value;
+    const payload = {
+        nombre: document.getElementById('tipo-nombre').value.trim(),
+        capacidad: parseInt(document.getElementById('tipo-capacidad').value) || 2,
+        precio_base: parseFloat(document.getElementById('tipo-precio').value) || 0,
+        descripcion: document.getElementById('tipo-descripcion').value.trim(),
+        permite_seleccion_cliente: document.getElementById('tipo-seleccion').checked,
+        activo: true
+    };
+    const errEl = document.getElementById('modal-tipo-err');
+    if (!payload.nombre) { errEl.textContent='Nombre requerido'; errEl.classList.remove('hidden'); return; }
+    try {
+        const url = id ? `/api/mi-hospedaje/${SLUG}/tipo/${id}` : `/api/mi-hospedaje/${SLUG}/tipo`;
+        const r = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModal('modal-tipo'); toast('Tipo guardado'); cargarTipos(); }
+        else { errEl.textContent = d.error||'Error'; errEl.classList.remove('hidden'); }
+    } catch(e) { errEl.textContent='Error de conexión'; errEl.classList.remove('hidden'); }
+}
+
+async function eliminarTipo(id) {
+    if (!confirm('¿Eliminar este tipo? Solo funciona si no tiene unidades.')) return;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tipo/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) { toast('Tipo eliminado'); cargarTipos(); }
+        else toast(d.error || 'Error', false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── UNIDADES ─────────────────────────────────────────────
+async function cargarUnidades() {
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/unidades`);
+        const d = await r.json();
+        unidades = d.unidades || [];
+        const el = document.getElementById('lista-unidades');
+        if (!d.ok) { el.innerHTML = `<p class="text-red-500 text-sm">${d.error}</p>`; return; }
+        if (!d.unidades.length) {
+            el.innerHTML = '<div class="bg-white rounded-xl p-8 text-center text-gray-400">Sin unidades. Primero crea un tipo.</div>';
+            return;
+        }
+        el.innerHTML = d.unidades.map(u => `
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-4 flex items-center justify-between gap-3">
+            <div>
+                <p class="font-bold text-gray-800">${u.nombre} <span class="text-gray-400 font-normal text-sm">· ${u.tipo_nombre}</span></p>
+                ${u.descripcion ? `<p class="text-xs text-gray-400">${u.descripcion}</p>` : ''}
+                <span class="text-xs ${u.activa ? 'text-green-600' : 'text-red-500'} font-semibold">${u.activa ? 'Activa' : 'Inactiva'}</span>
+            </div>
+            <button onclick="eliminarUnidad(${u.id})" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-3 py-1.5 rounded-lg">Eliminar</button>
+        </div>`).join('');
+    } catch(e) { toast('Error al cargar unidades', false); }
+}
+
+async function abrirModalUnidad() {
+    // Cargar tipos para el select
+    if (!tiposCache.length) {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tipos`);
+        const d = await r.json();
+        tiposCache = d.tipos || [];
+    }
+    const sel = document.getElementById('unidad-tipo-id');
+    sel.innerHTML = tiposCache.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('') || '<option>Sin tipos — crea uno primero</option>';
+    document.getElementById('unidad-id').value = '';
+    document.getElementById('unidad-nombre').value = '';
+    document.getElementById('unidad-descripcion').value = '';
+    document.getElementById('modal-unidad-err').classList.add('hidden');
+    document.getElementById('modal-unidad').classList.remove('hidden');
+}
+
+async function guardarUnidad() {
+    const payload = {
+        nombre: document.getElementById('unidad-nombre').value.trim(),
+        tipo_unidad_id: parseInt(document.getElementById('unidad-tipo-id').value),
+        descripcion: document.getElementById('unidad-descripcion').value.trim()
+    };
+    const errEl = document.getElementById('modal-unidad-err');
+    if (!payload.nombre) { errEl.textContent='Nombre requerido'; errEl.classList.remove('hidden'); return; }
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/unidad`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModal('modal-unidad'); toast('Unidad creada'); cargarUnidades(); }
+        else { errEl.textContent = d.error||'Error'; errEl.classList.remove('hidden'); }
+    } catch(e) { errEl.textContent='Error'; errEl.classList.remove('hidden'); }
+}
+
+async function eliminarUnidad(id) {
+    if (!confirm('¿Eliminar esta unidad?')) return;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/unidad/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) { toast('Unidad eliminada'); cargarUnidades(); }
+        else toast(d.error||'Error', false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── TARIFAS ──────────────────────────────────────────────
+async function cargarTarifas() {
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tarifas`);
+        const d = await r.json();
+        const el = document.getElementById('lista-tarifas');
+        if (!d.ok) { el.innerHTML = `<p class="text-red-500 text-sm">${d.error}</p>`; return; }
+        if (!d.tarifas.length) {
+            el.innerHTML = '<div class="bg-white rounded-xl p-8 text-center text-gray-400">Sin tarifas. Se usa el precio base del tipo.</div>';
+            return;
+        }
+        el.innerHTML = d.tarifas.map(t => `
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-4 flex items-center justify-between gap-3">
+            <div>
+                <p class="font-bold text-gray-800">${t.tipo_nombre} <span class="text-indigo-700">$${parseFloat(t.precio_noche).toLocaleString()}/noche</span></p>
+                ${t.nombre_temporada ? `<p class="text-xs text-gray-500">${t.nombre_temporada}</p>` : ''}
+                <p class="text-xs text-gray-400">${t.fecha_desde} → ${t.fecha_hasta}</p>
+            </div>
+            <button onclick="eliminarTarifa(${t.id})" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-3 py-1.5 rounded-lg">Eliminar</button>
+        </div>`).join('');
+    } catch(e) { toast('Error al cargar tarifas', false); }
+}
+
+async function abrirModalTarifa() {
+    if (!tiposCache.length) {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tipos`);
+        const d = await r.json();
+        tiposCache = d.tipos || [];
+    }
+    const sel = document.getElementById('tarifa-tipo-id');
+    sel.innerHTML = tiposCache.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('') || '<option>Sin tipos</option>';
+    ['tarifa-temporada','tarifa-desde','tarifa-hasta','tarifa-precio'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('modal-tarifa-err').classList.add('hidden');
+    document.getElementById('modal-tarifa').classList.remove('hidden');
+}
+
+async function guardarTarifa() {
+    const payload = {
+        tipo_unidad_id: parseInt(document.getElementById('tarifa-tipo-id').value),
+        nombre_temporada: document.getElementById('tarifa-temporada').value.trim(),
+        fecha_desde: document.getElementById('tarifa-desde').value,
+        fecha_hasta: document.getElementById('tarifa-hasta').value,
+        precio_noche: parseFloat(document.getElementById('tarifa-precio').value)
+    };
+    const errEl = document.getElementById('modal-tarifa-err');
+    if (!payload.fecha_desde || !payload.fecha_hasta || !payload.precio_noche) {
+        errEl.textContent='Fechas y precio requeridos'; errEl.classList.remove('hidden'); return;
+    }
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tarifa`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModal('modal-tarifa'); toast('Tarifa creada'); cargarTarifas(); }
+        else { errEl.textContent = d.error||'Error'; errEl.classList.remove('hidden'); }
+    } catch(e) { errEl.textContent='Error'; errEl.classList.remove('hidden'); }
+}
+
+async function eliminarTarifa(id) {
+    if (!confirm('¿Eliminar esta tarifa?')) return;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/tarifa/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) { toast('Tarifa eliminada'); cargarTarifas(); }
+        else toast(d.error||'Error', false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── BLOQUEOS ─────────────────────────────────────────────
+async function cargarBloqueos() {
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/bloqueos`);
+        const d = await r.json();
+        const el = document.getElementById('lista-bloqueos');
+        if (!d.ok) { el.innerHTML = `<p class="text-red-500 text-sm">${d.error}</p>`; return; }
+        if (!d.bloqueos.length) {
+            el.innerHTML = '<div class="bg-white rounded-xl p-8 text-center text-gray-400">Sin bloqueos activos.</div>';
+            return;
+        }
+        el.innerHTML = d.bloqueos.map(b => `
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-4 flex items-center justify-between gap-3">
+            <div>
+                <p class="font-bold text-gray-800">${b.unidad_nombre}</p>
+                <p class="text-xs text-gray-500">${b.fecha_desde} → ${b.fecha_hasta}</p>
+                ${b.motivo ? `<p class="text-xs text-gray-400 italic">${b.motivo}</p>` : ''}
+            </div>
+            <button onclick="eliminarBloqueo(${b.id})" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-semibold px-3 py-1.5 rounded-lg">Eliminar</button>
+        </div>`).join('');
+    } catch(e) { toast('Error al cargar bloqueos', false); }
+}
+
+async function abrirModalBloqueo() {
+    const r = await fetch(`/api/mi-hospedaje/${SLUG}/unidades`);
+    const d = await r.json();
+    const sel = document.getElementById('bloqueo-unidad-id');
+    sel.innerHTML = (d.unidades||[]).filter(u=>u.activa).map(u => `<option value="${u.id}">${u.nombre}</option>`).join('') || '<option>Sin unidades</option>';
+    ['bloqueo-desde','bloqueo-hasta','bloqueo-motivo'].forEach(id => document.getElementById(id).value='');
+    document.getElementById('modal-bloqueo-err').classList.add('hidden');
+    document.getElementById('modal-bloqueo').classList.remove('hidden');
+}
+
+async function guardarBloqueo() {
+    const payload = {
+        unidad_id: parseInt(document.getElementById('bloqueo-unidad-id').value),
+        fecha_desde: document.getElementById('bloqueo-desde').value,
+        fecha_hasta: document.getElementById('bloqueo-hasta').value,
+        motivo: document.getElementById('bloqueo-motivo').value.trim()
+    };
+    const errEl = document.getElementById('modal-bloqueo-err');
+    if (!payload.fecha_desde || !payload.fecha_hasta) {
+        errEl.textContent='Fechas requeridas'; errEl.classList.remove('hidden'); return;
+    }
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/bloqueo`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (d.ok) { cerrarModal('modal-bloqueo'); toast('Bloqueo guardado'); cargarBloqueos(); }
+        else { errEl.textContent = d.error||'Error'; errEl.classList.remove('hidden'); }
+    } catch(e) { errEl.textContent='Error'; errEl.classList.remove('hidden'); }
+}
+
+async function eliminarBloqueo(id) {
+    if (!confirm('¿Eliminar bloqueo?')) return;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/bloqueo/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) { toast('Bloqueo eliminado'); cargarBloqueos(); }
+        else toast(d.error||'Error', false);
+    } catch(e) { toast('Error', false); }
+}
+
+// ─── RESEÑAS ──────────────────────────────────────────────
+async function cargarResenas() {
+    try {
+        const r = await fetch(`/api/hospedaje/${SLUG}/resenas`);
+        const d = await r.json();
+        const el = document.getElementById('lista-resenas');
+        if (!d.ok) { el.innerHTML = `<p class="text-red-500 text-sm">${d.error}</p>`; return; }
+        if (!d.resenas.length) {
+            el.innerHTML = '<div class="bg-white rounded-xl p-8 text-center text-gray-400">Aún sin reseñas.</div>';
+            return;
+        }
+        el.innerHTML = d.resenas.map(res => `
+        <div class="bg-white rounded-xl shadow border border-gray-100 p-4">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div>
+                    <p class="font-semibold text-gray-800">${res.nombre_autor}</p>
+                    <p class="text-yellow-500 text-sm">${'★'.repeat(res.calificacion)}${'☆'.repeat(5-res.calificacion)}</p>
+                </div>
+                <p class="text-xs text-gray-400">${res.created_at.slice(0,10)}</p>
+            </div>
+            ${res.comentario ? `<p class="text-sm text-gray-600">${res.comentario}</p>` : ''}
+            ${res.respuesta ? `
+            <div class="mt-2 bg-indigo-50 rounded-lg p-3 text-sm text-indigo-800">
+                <span class="font-semibold">Tu respuesta:</span> ${res.respuesta}
+            </div>` : `
+            <div class="mt-2 flex gap-2">
+                <input type="text" id="resp-${res.id}" placeholder="Responder a esta reseña..."
+                       class="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <button onclick="responderResena(${res.id})" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+                    Responder
+                </button>
+            </div>`}
+        </div>`).join('');
+    } catch(e) { toast('Error al cargar reseñas', false); }
+}
+
+async function responderResena(id) {
+    const respuesta = document.getElementById(`resp-${id}`).value.trim();
+    if (!respuesta) return;
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/resena/${id}/responder`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ respuesta })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Respuesta guardada'); cargarResenas(); }
+        else toast(d.error||'Error', false);
+    } catch(e) { toast('Error', false); }
+}
+
+// Init
+cargarReservas();
+</script>
+</body>
+</html>

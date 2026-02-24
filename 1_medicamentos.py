@@ -30651,7 +30651,7 @@ def crear_tablas_inmobiliaria(conn):
             m2 NUMERIC(10,2),
             habitaciones INTEGER,
             banos INTEGER,
-            parqueadero BOOLEAN DEFAULT FALSE,
+            parqueadero SMALLINT DEFAULT 0,
             estrato INTEGER,
             lat NUMERIC(10,7),
             lon NUMERIC(10,7),
@@ -30722,7 +30722,8 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",
-        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS parqueadero BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS parqueadero SMALLINT DEFAULT 0",
+        "ALTER TABLE propiedades ALTER COLUMN parqueadero TYPE SMALLINT USING parqueadero::int",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS estrato INTEGER",
     ]
     for sql in alters:
@@ -30961,7 +30962,7 @@ def api_mis_propiedades_crear():
              data.get('modalidad', 'venta'),
              data.get('precio') or None, data.get('m2') or None,
              data.get('habitaciones') or None, data.get('banos') or None,
-             bool(data.get('parqueadero', False)), data.get('estrato') or None,
+             int(data.get('parqueadero') or 0), data.get('estrato') or None,
              data.get('lat') or None, data.get('lon') or None,
              (data.get('direccion') or '').strip(), (data.get('ciudad') or '').strip(),
              bool(data.get('publicar_en_bolsa', False)),
@@ -31481,7 +31482,7 @@ def api_inmobiliaria_admin_crear_propiedad(slug):
              data.get('modalidad', 'venta'),
              data.get('precio') or None, data.get('m2') or None,
              data.get('habitaciones') or None, data.get('banos') or None,
-             bool(data.get('parqueadero', False)), data.get('estrato') or None,
+             int(data.get('parqueadero') or 0), data.get('estrato') or None,
              data.get('lat') or None, data.get('lon') or None,
              (data.get('direccion') or '').strip(), (data.get('ciudad') or '').strip(),
              bool(data.get('publicar_en_bolsa', False)))

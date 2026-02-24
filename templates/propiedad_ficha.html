@@ -89,7 +89,7 @@
       {% if prop.habitaciones %}<span>🛏️ {{ prop.habitaciones }} hab.</span>{% endif %}
       {% if prop.banos %}<span>🚿 {{ prop.banos }} baños</span>{% endif %}
       {% if prop.m2 %}<span>📐 {{ prop.m2 }}m²</span>{% endif %}
-      {% if prop.parqueadero %}<span>🚗 Parqueadero</span>{% endif %}
+      {% if prop.parqueadero %}<span>🚗 {{ prop.parqueadero }} parqueadero{% if prop.parqueadero > 1 %}s{% endif %}</span>{% endif %}
     </div>
   </div>
 

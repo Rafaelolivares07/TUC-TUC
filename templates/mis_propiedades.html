@@ -97,10 +97,7 @@
       </div>
       <div class="grid grid-cols-2 gap-3">
         <input id="f-estrato" type="number" placeholder="Estrato (1-6)" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-        <label class="flex items-center gap-2 border border-gray-300 rounded-xl px-4 py-3 cursor-pointer">
-          <input id="f-parqueadero" type="checkbox" class="accent-blue-700">
-          <span class="text-sm text-gray-700">Parqueadero</span>
-        </label>
+        <input id="f-parqueadero" type="number" min="0" max="10" placeholder="Parqueaderos (0=ninguno)" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
       <textarea id="f-desc" rows="3" placeholder="Descripción de la propiedad"
                 class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
@@ -243,7 +240,7 @@ function nuevaPropiedad() {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-modalidad').value = 'venta';
-  document.getElementById('f-parqueadero').checked = false;
+  document.getElementById('f-parqueadero').value = '';
   document.getElementById('f-bolsa').checked = false;
   document.getElementById('f-inmobiliarias').checked = false;
   document.getElementById('modal-prop').classList.remove('hidden');
@@ -267,7 +264,7 @@ function editarProp(id) {
   document.getElementById('f-banos').value = p.banos || '';
   document.getElementById('f-m2').value = p.m2 || '';
   document.getElementById('f-estrato').value = p.estrato || '';
-  document.getElementById('f-parqueadero').checked = !!p.parqueadero;
+  document.getElementById('f-parqueadero').value = p.parqueadero || 0;
   document.getElementById('f-desc').value = p.descripcion || '';
   document.getElementById('f-bolsa').checked = !!p.publicar_en_bolsa;
   document.getElementById('f-inmobiliarias').checked = !!p.disponible_inmobiliarias;
@@ -285,7 +282,7 @@ async function guardarPropiedad() {
     banos: document.getElementById('f-banos').value || null,
     m2: document.getElementById('f-m2').value || null,
     estrato: document.getElementById('f-estrato').value || null,
-    parqueadero: document.getElementById('f-parqueadero').checked,
+    parqueadero: parseInt(document.getElementById('f-parqueadero').value) || 0,
     descripcion: document.getElementById('f-desc').value.trim(),
     publicar_en_bolsa: document.getElementById('f-bolsa').checked,
     disponible_inmobiliarias: document.getElementById('f-inmobiliarias').checked,

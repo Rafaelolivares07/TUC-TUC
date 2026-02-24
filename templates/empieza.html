@@ -86,7 +86,7 @@
             <span class="text-2xl shrink-0">🎁</span>
             <div>
                 <p class="font-bold text-amber-700 text-sm">Prueba gratis</p>
-                <p class="text-amber-600 text-xs mt-0.5">Restaurante 2 días · Tienda 4 días · Taller 7 días · Inmobiliaria 14 días. Solo pagas cuando estés listo.</p>
+                <p class="text-amber-600 text-xs mt-0.5">Restaurante 2 días · Tienda 4 días · Taller 7 días · Inmobiliaria 14 días · Hospedaje 7 días. Solo pagas cuando estés listo.</p>
             </div>
         </div>
     </div>
@@ -174,6 +174,22 @@
             </div>
         </div>
 
+        <!-- Hospedaje -->
+        <div onclick="iniciarFlujo('hospedaje')"
+            class="neg-card bg-white border-2 border-gray-100 rounded-2xl p-5 shadow-sm hover:border-cyan-200">
+            <div class="flex items-center gap-4">
+                <span class="text-4xl">🏨</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-extrabold text-gray-800 text-lg">Hospedaje</span>
+                        <span class="bg-cyan-100 text-cyan-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                    </div>
+                    <p class="text-gray-400 text-sm">Hotel, cabaña, hostal o Airbnb — reservas y calendario online</p>
+                </div>
+                <span class="text-amber-300 text-xl font-bold shrink-0">›</span>
+            </div>
+        </div>
+
         <!-- Otro tipo -->
         <div onclick="iniciarFlujo('otro')"
             class="neg-card bg-white border-2 border-dashed border-gray-200 rounded-2xl p-5 hover:border-gray-300">
@@ -222,7 +238,7 @@ function iniciarFlujo(t) {
     subtipo = 'menu_dia';
     datos   = {};
     if (t === 'restaurante') mSubtipo();
-    else if (t === 'tienda' || t === 'taller' || t === 'compraventa') mNombreNeg();
+    else if (t === 'tienda' || t === 'taller' || t === 'compraventa' || t === 'hospedaje') mNombreNeg();
     else if (t === 'inmobiliaria')             mNombreNeg();
     else                                        mOtro();
 }
@@ -267,11 +283,12 @@ function mNombreNeg() {
     const esTaller       = tipo === 'taller';
     const esInmo         = tipo === 'inmobiliaria';
     const esCompraventa  = tipo === 'compraventa';
-    const label    = esRest ? 'restaurante' : esTaller ? 'taller' : esInmo ? 'inmobiliaria' : esCompraventa ? 'compraventa' : 'tienda';
-    const ph       = esRest ? 'Ej: El Buen Sabor' : esTaller ? 'Ej: AutoFix Cali' : esInmo ? 'Ej: Inmobiliaria Central' : esCompraventa ? 'Ej: AutoCompra Cali' : 'Ej: Moda Express';
+    const esHospedaje    = tipo === 'hospedaje';
+    const label    = esRest ? 'restaurante' : esTaller ? 'taller' : esInmo ? 'inmobiliaria' : esCompraventa ? 'compraventa' : esHospedaje ? 'hospedaje' : 'tienda';
+    const ph       = esRest ? 'Ej: El Buen Sabor' : esTaller ? 'Ej: AutoFix Cali' : esInmo ? 'Ej: Inmobiliaria Central' : esCompraventa ? 'Ej: AutoCompra Cali' : esHospedaje ? 'Ej: Hotel Las Palmas' : 'Ej: Moda Express';
     render(`
         <button onclick="volverDesdeNombreNeg()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
-        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : esTaller ? 'Taller Automotriz' : esInmo ? 'Inmobiliaria' : esCompraventa ? 'Compraventa' : 'Tienda'}</p>
+        <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">${esRest ? 'Restaurante' : esTaller ? 'Taller Automotriz' : esInmo ? 'Inmobiliaria' : esCompraventa ? 'Compraventa' : esHospedaje ? 'Hospedaje' : 'Tienda'}</p>
         <h3 class="text-2xl font-extrabold text-gray-800 mb-1">¿Cómo se llama tu ${label}?</h3>
         <p class="text-gray-400 text-sm mb-5">Este será el nombre que verán tus clientes</p>
         <input id="iNomNeg" type="text" placeholder="${ph}"
@@ -333,7 +350,7 @@ function avNomDueno() {
 
 function mTelefono() {
     paso = 'telefono';
-    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : '4';
+    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : tipo === 'hospedaje' ? '7' : '4';
     render(`
         <button onclick="mNombreDueno()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
         <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Último paso</p>
@@ -412,6 +429,32 @@ async function crear() {
                 mExito(`/compraventa/${dComp.slug}/admin`);
             } else {
                 err('eTel', dComp.error || 'Ocurrió un error, intenta de nuevo');
+                btn.disabled = false; btn.textContent = '¡Crear mi negocio! 🚀';
+            }
+        } else if (tipo === 'hospedaje') {
+            // Paso 1: login/registro del tercero
+            const rLogin = await fetch('/api/hospedaje/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ telefono: datos.telefono, nombre: datos.nombre_dueno })
+            });
+            const dLogin = await rLogin.json();
+            if (!dLogin.ok) {
+                err('eTel', dLogin.error || 'Error al registrar usuario');
+                btn.disabled = false; btn.textContent = '¡Crear mi negocio! 🚀';
+                return;
+            }
+            // Paso 2: crear hospedaje
+            const rHosp = await fetch('/api/hospedaje/crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre: datos.nombre_negocio })
+            });
+            const dHosp = await rHosp.json();
+            if (dHosp.ok) {
+                mExito(`/mi-hospedaje/${dHosp.slug}`);
+            } else {
+                err('eTel', dHosp.error || 'Ocurrió un error, intenta de nuevo');
                 btn.disabled = false; btn.textContent = '¡Crear mi negocio! 🚀';
             }
         } else {
@@ -515,7 +558,7 @@ async function enviarOtro() {
 // ─── Modales de éxito ──────────────────────────────────
 
 function mExito(redirect) {
-    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : '4';
+    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : tipo === 'hospedaje' ? '7' : '4';
     render(`
         <div class="text-center py-4">
             <div class="text-6xl mb-4">🎉</div>

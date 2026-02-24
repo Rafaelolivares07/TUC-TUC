@@ -25029,13 +25029,19 @@ def admin_negocios():
         except Exception:
             conn.rollback()
             total_compraventas = 0
+        try:
+            total_hospedajes = (conn.execute("SELECT COUNT(*) FROM negocios WHERE tipo = 'hospedaje' AND activo = TRUE").fetchone() or [0])[0]
+        except Exception:
+            conn.rollback()
+            total_hospedajes = 0
         conn.close()
         return render_template('admin_negocios.html',
                                total_restaurantes=total_restaurantes,
                                total_tiendas=total_tiendas,
                                total_talleres=total_talleres,
                                total_inmobiliarias=total_inmobiliarias,
-                               total_compraventas=total_compraventas)
+                               total_compraventas=total_compraventas,
+                               total_hospedajes=total_hospedajes)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -32389,6 +32395,72 @@ def admin_hospedaje_lista():
     except Exception as e:
         import traceback; traceback.print_exc()
         return f"Error: {e}", 500
+
+
+@app.route('/api/hospedaje/login', methods=['POST'])
+def api_hospedaje_login():
+    """Login/registro con teléfono para hospedaje (desde /empieza)"""
+    data = request.get_json()
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'})
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE telefono=%s", (telefono,)
+        ).fetchone()
+        if not tercero:
+            if not nombre:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'nombre_requerido'})
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id, nombre, telefono",
+                (nombre, telefono)
+            )
+            tercero = cur.fetchone()
+            conn.commit()
+        session['usuario_id'] = tercero['id']
+        session['usuario_nombre'] = tercero['nombre']
+        conn.close()
+        return jsonify({'ok': True, 'id': tercero['id'], 'nombre': tercero['nombre']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/hospedaje/crear', methods=['POST'])
+def api_hospedaje_crear():
+    """Crear nuevo hospedaje desde /empieza — requiere sesión previa de /api/hospedaje/login"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'})
+    slug = generar_slug(nombre)
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        existe = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)
+        ).fetchone()
+        if existe:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya existe un hospedaje con ese nombre'})
+        tercero = conn.execute("SELECT nombre, telefono FROM terceros WHERE id=%s", (uid,)).fetchone()
+        conn.execute(
+            "INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, dias_pagados, activo) "
+            "VALUES (%s, %s, 'hospedaje', %s, %s, %s, 7, TRUE)",
+            (nombre, slug, uid, tercero['nombre'] if tercero else '', tercero['telefono'] if tercero else '')
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'slug': slug})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
 
 
 @app.route('/api/admin/hospedaje/crear', methods=['POST'])

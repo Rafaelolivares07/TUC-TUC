@@ -30723,7 +30723,9 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS parqueadero SMALLINT DEFAULT 0",
-        "ALTER TABLE propiedades ALTER COLUMN parqueadero TYPE SMALLINT USING parqueadero::int",
+        "ALTER TABLE propiedades ALTER COLUMN parqueadero DROP DEFAULT",
+        "ALTER TABLE propiedades ALTER COLUMN parqueadero TYPE SMALLINT USING parqueadero::integer::smallint",
+        "ALTER TABLE propiedades ALTER COLUMN parqueadero SET DEFAULT 0",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS estrato INTEGER",
     ]
     for sql in alters:

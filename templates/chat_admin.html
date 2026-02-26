@@ -409,6 +409,36 @@ function sugerirMensajeCommit(lineas) {
     return `${prefix}: ${n} archivo${n > 1 ? 's' : ''} actualizado${n > 1 ? 's' : ''}`;
 }
 
+// ── Polling de tarea git (Render) ────────────────────────────────────
+async function _pollTareaGit(tareaId, onListo, onError) {
+    const MAX_INTENTOS = 60; // 60 × 2s = 2 min máx
+    let intentos = 0;
+    return new Promise((resolve) => {
+        const interval = setInterval(async () => {
+            intentos++;
+            try {
+                const r = await fetch(`/api/admin/git/tarea/${tareaId}`);
+                const d = await r.json();
+                if (!d.ok) { clearInterval(interval); onError(d.error || 'Error'); resolve(); return; }
+                if (d.estado === 'listo' || d.estado === 'error') {
+                    clearInterval(interval);
+                    if (d.estado === 'listo') onListo(d.resultado);
+                    else onError((d.resultado && d.resultado.error) || 'Error al ejecutar git');
+                    resolve();
+                } else if (intentos >= MAX_INTENTOS) {
+                    clearInterval(interval);
+                    onError('Timeout — git bridge no respondió en 2 minutos. ¿Está corriendo start_bridge.bat?');
+                    resolve();
+                }
+            } catch(e) {
+                clearInterval(interval);
+                onError('Error de red: ' + e.message);
+                resolve();
+            }
+        }, 2000);
+    });
+}
+
 async function abrirModalCommit() {
     document.getElementById('modal-commit').classList.remove('hidden');
     document.getElementById('commit-output').classList.add('hidden');
@@ -417,14 +447,35 @@ async function abrirModalCommit() {
     document.getElementById('git-status-lista').innerHTML = '<span class="text-gray-500">Cargando...</span>';
     document.getElementById('btn-commit').disabled = false;
     document.getElementById('btn-commit').textContent = 'Commit & Push';
+    const lista = document.getElementById('git-status-lista');
     // Cargar git status
     try {
         const r = await fetch('/api/admin/git/status');
         const d = await r.json();
-        const lista = document.getElementById('git-status-lista');
+        // ── Modo Render: esperar al bridge local ─────────────────
+        if (d.ok && d.pendiente) {
+            lista.innerHTML = '<span class="text-yellow-400">⏳ Consultando PC local (git bridge)...</span>';
+            await _pollTareaGit(d.tarea_id,
+                (resultado) => {
+                    const lineas = resultado.lineas || [];
+                    if (lineas.length > 0) {
+                        lista.innerHTML = lineas.map(l => `<div>${escHtml(l)}</div>`).join('');
+                        const campo = document.getElementById('commit-msg');
+                        if (campo && !campo.value) {
+                            campo.value = sugerirMensajeCommit(lineas);
+                            setTimeout(() => { campo.focus(); campo.select(); }, 100);
+                        }
+                    } else {
+                        lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
+                    }
+                },
+                (err) => { lista.innerHTML = `<span class="text-red-400">${escHtml(err)}</span>`; }
+            );
+            return;
+        }
+        // ── Modo local: resultado inmediato ───────────────────────
         if (d.ok && d.lineas.length > 0) {
             lista.innerHTML = d.lineas.map(l => `<div>${escHtml(l)}</div>`).join('');
-            // Pre-llenar mensaje sugerido
             document.getElementById('commit-msg').value = sugerirMensajeCommit(d.lineas);
         } else if (d.ok && d.lineas.length === 0) {
             lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
@@ -432,7 +483,7 @@ async function abrirModalCommit() {
             lista.innerHTML = `<span class="text-red-400">${escHtml(d.error || 'Error')}</span>`;
         }
     } catch(e) {
-        document.getElementById('git-status-lista').innerHTML = '<span class="text-red-400">No se pudo consultar git status</span>';
+        lista.innerHTML = '<span class="text-red-400">No se pudo consultar git status</span>';
     }
     // Seleccionar el texto sugerido para que sea fácil reemplazarlo
     const campo = document.getElementById('commit-msg');
@@ -459,6 +510,34 @@ async function ejecutarCommit() {
             body: JSON.stringify({ mensaje: msg })
         });
         const d = await r.json();
+        // ── Modo Render: esperar al bridge local ─────────────────
+        if (d.ok && d.pendiente) {
+            out.textContent = '⏳ Esperando que git bridge ejecute en PC local...';
+            await _pollTareaGit(d.tarea_id,
+                (resultado) => {
+                    let texto = '';
+                    (resultado.pasos || []).forEach(p => {
+                        texto += `$ ${p.cmd}\n`;
+                        if (p.out) texto += p.out.trim() + '\n';
+                        texto += '\n';
+                    });
+                    if (resultado.error) texto += `\nERROR: ${resultado.error}`;
+                    out.textContent = texto.trim() || '✓ Completado';
+                    btn.textContent = '✓ Commit & Push completado';
+                    btn.classList.add('bg-green-600');
+                    btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                },
+                (err) => {
+                    out.textContent = 'ERROR: ' + err;
+                    btn.textContent = '✗ Falló — ver output';
+                    btn.classList.add('bg-red-600');
+                    btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                    btn.disabled = false;
+                }
+            );
+            return;
+        }
+        // ── Modo local: resultado inmediato ───────────────────────
         let texto = '';
         (d.pasos || []).forEach(p => {
             texto += `$ ${p.cmd}\n`;

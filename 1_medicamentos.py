@@ -22086,9 +22086,12 @@ def api_admin_git_status():
         proyecto = os.path.dirname(os.path.abspath(__file__))
         result = subprocess.run(
             ['git', 'status', '--short'],
-            cwd=proyecto, capture_output=True, text=True, timeout=10
+            cwd=proyecto, capture_output=True, text=True, timeout=10,
+            encoding='utf-8', errors='replace'
         )
-        lineas = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        if result.returncode != 0:
+            return jsonify({'ok': False, 'error': result.stderr or 'git error', 'rc': result.returncode}), 500
+        lineas = [l for l in result.stdout.split('\n') if l.strip()] if result.stdout.strip() else []
         return jsonify({'ok': True, 'lineas': lineas, 'total': len(lineas)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -22108,17 +22111,49 @@ def api_admin_git_commit_push():
     pasos = []
     try:
         # git add -A
-        r = subprocess.run(['git', 'add', '-A'], cwd=proyecto, capture_output=True, text=True, timeout=15)
+        r = subprocess.run(['git', 'add', '-A'], cwd=proyecto, capture_output=True, text=True, timeout=15,
+                           encoding='utf-8', errors='replace')
         pasos.append({'cmd': 'git add -A', 'ok': r.returncode == 0, 'out': r.stdout + r.stderr})
         if r.returncode != 0:
             return jsonify({'ok': False, 'pasos': pasos, 'error': 'git add falló'}), 500
+        # ── Chequeo de info sensible ──────────────────────────────
+        import re as _re
+        # 1) Archivos peligrosos en staging
+        _r_names = subprocess.run(['git', 'diff', '--staged', '--name-only'],
+                                   cwd=proyecto, capture_output=True, text=True, timeout=10,
+                                   encoding='utf-8', errors='replace')
+        _ARCH_SENSIBLES = ['.env', 'serviceaccountkey', 'firebase-adminsdk',
+                           'credentials.json', 'secrets.', 'private_key.json']
+        for _arch in (_r_names.stdout or '').strip().split('\n'):
+            for _pat in _ARCH_SENSIBLES:
+                if _pat in _arch.lower():
+                    subprocess.run(['git', 'reset', 'HEAD'], cwd=proyecto, capture_output=True)
+                    return jsonify({'ok': False, 'pasos': pasos,
+                                    'error': f'⚠️ Archivo sensible detectado: {_arch} — commit cancelado'}), 400
+        # 2) Patrones de claves en el diff
+        _r_diff = subprocess.run(['git', 'diff', '--staged'],
+                                  cwd=proyecto, capture_output=True, text=True, timeout=15,
+                                  encoding='utf-8', errors='replace')
+        _PATRONES = [
+            (r'\bAIzaSy[A-Za-z0-9_\-]{33}\b', 'Google/Firebase API key'),
+            (r'-----BEGIN (RSA |EC )?PRIVATE KEY-----', 'Private key'),
+            (r'"private_key"\s*:\s*"-----BEGIN', 'Firebase private key en JSON'),
+            (r'AAAA[A-Za-z0-9_\-]{40,}', 'Token tipo FCM/JWT largo'),
+        ]
+        for _pat, _nombre in _PATRONES:
+            if _re.search(_pat, _r_diff.stdout or ''):
+                subprocess.run(['git', 'reset', 'HEAD'], cwd=proyecto, capture_output=True)
+                return jsonify({'ok': False, 'pasos': pasos,
+                                'error': f'⚠️ {_nombre} detectada en el diff — commit cancelado'}), 400
         # git commit
-        r = subprocess.run(['git', 'commit', '-m', mensaje], cwd=proyecto, capture_output=True, text=True, timeout=15)
+        r = subprocess.run(['git', 'commit', '-m', mensaje], cwd=proyecto, capture_output=True, text=True, timeout=15,
+                           encoding='utf-8', errors='replace')
         pasos.append({'cmd': 'git commit', 'ok': r.returncode == 0, 'out': r.stdout + r.stderr})
         if r.returncode != 0:
             return jsonify({'ok': False, 'pasos': pasos, 'error': 'git commit falló (¿sin cambios?)'}), 500
         # git push
-        r = subprocess.run(['git', 'push'], cwd=proyecto, capture_output=True, text=True, timeout=30)
+        r = subprocess.run(['git', 'push'], cwd=proyecto, capture_output=True, text=True, timeout=30,
+                           encoding='utf-8', errors='replace')
         pasos.append({'cmd': 'git push', 'ok': r.returncode == 0, 'out': r.stdout + r.stderr})
         if r.returncode != 0:
             return jsonify({'ok': False, 'pasos': pasos, 'error': 'git push falló'}), 500
@@ -29305,7 +29340,7 @@ def taller_home(slug):
     conn = get_db_connection()
     crear_tablas_taller(conn)
     taller = conn.execute(
-        "SELECT id, nombre, slug FROM negocios WHERE slug=%s AND tipo='taller'",
+        "SELECT id, nombre, slug, imagen_header FROM negocios WHERE slug=%s AND tipo='taller'",
         (slug,)
     ).fetchone()
     taller_data = None
@@ -30640,6 +30675,32 @@ def api_taller_cliente_orden_fotos(slug, oid):
         ]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/taller/<slug>/imagen-header', methods=['POST'])
+def api_taller_imagen_header(slug):
+    """Subir o quitar imagen header del taller"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    try:
+        conn = get_db_connection()
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller'", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute(
+            "UPDATE negocios SET imagen_header=%s WHERE id=%s",
+            (imagen if imagen else None, neg['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -33275,6 +33336,32 @@ def api_hospedaje_info(slug):
         return jsonify({'ok': True, 'neg': dict(neg), 'tipos': [dict(t) for t in tipos]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/hospedaje/<slug>/imagen-header', methods=['POST'])
+def api_hospedaje_imagen_header(slug):
+    """Subir o quitar imagen header del hospedaje"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    try:
+        conn = get_db_connection()
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute(
+            "UPDATE negocios SET imagen_header=%s WHERE id=%s",
+            (imagen if imagen else None, neg['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/hospedaje/<slug>/disponibilidad')

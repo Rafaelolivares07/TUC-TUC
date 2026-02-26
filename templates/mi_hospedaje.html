@@ -46,6 +46,7 @@
         <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="tarifas" onclick="cambiarTab(this)">Tarifas</button>
         <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="bloqueos" onclick="cambiarTab(this)">Bloqueos</button>
         <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="resenas" onclick="cambiarTab(this)">Reseñas</button>
+        <button class="tab-btn text-xs font-semibold px-4 py-2 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap" data-tab="apariencia" onclick="cambiarTab(this)">Apariencia</button>
     </div>
 </div>
 
@@ -131,6 +132,29 @@
     <h2 class="font-bold text-gray-800">Reseñas de huéspedes</h2>
     <div id="lista-resenas" class="flex flex-col gap-3">
         <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+    </div>
+</div>
+
+<!-- ══ TAB: APARIENCIA ══ -->
+<div id="tab-apariencia" class="tab-content hidden">
+    <div class="bg-white rounded-2xl shadow-sm p-5 space-y-5">
+        <h2 class="font-bold text-gray-800">Personalizar portal</h2>
+
+        <!-- Imagen Header -->
+        <div>
+            <p class="text-sm font-semibold text-gray-700 mb-2">Imagen de fondo / banner</p>
+            <div id="hosp-preview-header" class="w-full h-32 rounded-xl bg-gray-100 overflow-hidden mb-2 flex items-center justify-center">
+                <span class="text-gray-400 text-sm">Sin imagen</span>
+            </div>
+            <div class="flex gap-2">
+                <label class="flex-1 flex items-center gap-2 border border-gray-300 rounded-xl px-3 py-2 text-sm cursor-pointer hover:border-indigo-400 transition">
+                    <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <span class="text-gray-400">Seleccionar imagen</span>
+                    <input type="file" accept="image/*" class="hidden" onchange="subirImagenHeaderHosp(this)">
+                </label>
+                <button onclick="quitarImagenHeaderHosp()" class="bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-2 rounded-xl">Quitar</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -355,6 +379,7 @@ function cambiarTab(btn) {
     if (tab === 'tarifas')   { cargarTipos(); cargarTarifas(); }
     if (tab === 'bloqueos')  { cargarUnidades(); cargarBloqueos(); }
     if (tab === 'resenas')   cargarResenas();
+    if (tab === 'apariencia') cargarAparienciaHosp();
 }
 
 // ─── RESERVAS ────────────────────────────────────────────
@@ -801,6 +826,62 @@ async function responderResena(id) {
         if (d.ok) { toast('Respuesta guardada'); cargarResenas(); }
         else toast(d.error||'Error', false);
     } catch(e) { toast('Error', false); }
+}
+
+// ─── APARIENCIA ──────────────────────────────────────────
+async function cargarAparienciaHosp() {
+    try {
+        const r = await fetch(`/api/mi-hospedaje/${SLUG}/info`);
+        const d = await r.json();
+        if (!d.ok) return;
+        if (d.neg && d.neg.imagen_header) {
+            document.getElementById('hosp-preview-header').innerHTML =
+                `<img src="${d.neg.imagen_header}" class="w-full h-full object-cover">`;
+        }
+    } catch(e) {}
+}
+
+function subirImagenHeaderHosp(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast('Imagen muy pesada (máx 5MB)', false); return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const TW = 800, TH = 267;
+            const scale = Math.max(TW / img.width, TH / img.height);
+            const sw = img.width * scale, sh = img.height * scale;
+            canvas.width = TW; canvas.height = TH;
+            canvas.getContext('2d').drawImage(img, (TW - sw) / 2, (TH - sh) / 2, sw, sh);
+            const base64 = canvas.toDataURL('image/jpeg', 0.75);
+            document.getElementById('hosp-preview-header').innerHTML =
+                `<img src="${base64}" class="w-full h-full object-cover">`;
+            guardarImagenHeaderHosp(base64);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+async function quitarImagenHeaderHosp() {
+    document.getElementById('hosp-preview-header').innerHTML =
+        '<span class="text-gray-400 text-sm">Sin imagen</span>';
+    await guardarImagenHeaderHosp('');
+}
+
+async function guardarImagenHeaderHosp(imagen) {
+    try {
+        const r = await fetch(`/api/hospedaje/${SLUG}/imagen-header`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({imagen})
+        });
+        const d = await r.json();
+        if (d.ok) toast('Imagen guardada');
+        else toast(d.error || 'Error', false);
+    } catch(e) { toast('Error de conexión', false); }
 }
 
 // Init

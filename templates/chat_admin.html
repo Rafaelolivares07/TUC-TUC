@@ -387,6 +387,28 @@ async function limpiarChat() {
 }
 
 // ── Commit & Push ────────────────────────────────────
+function sugerirMensajeCommit(lineas) {
+    const modulos = new Set();
+    for (const l of lineas) {
+        const arch = l.trim().split(/\s+/).pop().toLowerCase();
+        if (arch.includes('inmobiliaria'))      modulos.add('inmobiliaria');
+        else if (arch.includes('compraventa'))  modulos.add('compraventa');
+        else if (arch.includes('hospedaje'))    modulos.add('hospedaje');
+        else if (arch.includes('taller'))       modulos.add('taller');
+        else if (arch.includes('restaurante'))  modulos.add('restaurante');
+        else if (arch.includes('tienda'))       modulos.add('tienda');
+        else if (arch.includes('transport') || arch.includes('conductor')) modulos.add('transporte');
+        else if (arch.includes('chat'))         modulos.add('chat');
+        else if (arch.includes('admin'))        modulos.add('admin');
+        else if (arch.includes('1_medicamentos')) modulos.add('backend');
+        else                                    modulos.add('misc');
+    }
+    const mods = [...modulos].filter(m => m !== 'misc');
+    const prefix = mods.length ? mods.join('/') : 'misc';
+    const n = lineas.length;
+    return `${prefix}: ${n} archivo${n > 1 ? 's' : ''} actualizado${n > 1 ? 's' : ''}`;
+}
+
 async function abrirModalCommit() {
     document.getElementById('modal-commit').classList.remove('hidden');
     document.getElementById('commit-output').classList.add('hidden');
@@ -402,6 +424,8 @@ async function abrirModalCommit() {
         const lista = document.getElementById('git-status-lista');
         if (d.ok && d.lineas.length > 0) {
             lista.innerHTML = d.lineas.map(l => `<div>${escHtml(l)}</div>`).join('');
+            // Pre-llenar mensaje sugerido
+            document.getElementById('commit-msg').value = sugerirMensajeCommit(d.lineas);
         } else if (d.ok && d.lineas.length === 0) {
             lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
         } else {
@@ -410,7 +434,9 @@ async function abrirModalCommit() {
     } catch(e) {
         document.getElementById('git-status-lista').innerHTML = '<span class="text-red-400">No se pudo consultar git status</span>';
     }
-    setTimeout(() => document.getElementById('commit-msg').focus(), 100);
+    // Seleccionar el texto sugerido para que sea fácil reemplazarlo
+    const campo = document.getElementById('commit-msg');
+    setTimeout(() => { campo.focus(); campo.select(); }, 100);
 }
 
 function cerrarModalCommit() {

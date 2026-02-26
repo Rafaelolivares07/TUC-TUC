@@ -111,6 +111,9 @@
             <button onclick="cambiarTab('ordenes')" id="tab-ordenes" class="flex-1 py-4 px-3 text-center text-sm tab-inactive whitespace-nowrap transition-all">
                 Órdenes
             </button>
+            <button onclick="cambiarTab('apariencia')" id="tab-apariencia" class="flex-1 py-4 px-3 text-center text-sm tab-inactive whitespace-nowrap transition-all">
+                Apariencia
+            </button>
         </div>
 
         <!-- ====== TAB: SERVICIOS ====== -->
@@ -299,6 +302,30 @@
                 Crear orden
             </button>
         </div>
+
+        <!-- ====== TAB: APARIENCIA ====== -->
+        <div id="panel-apariencia" class="p-5 hidden">
+            <div class="space-y-5">
+                <h3 class="font-bold text-gray-800">Personalizar portal</h3>
+
+                <!-- Imagen Header -->
+                <div>
+                    <p class="text-sm font-semibold text-gray-700 mb-2">Imagen de fondo / banner</p>
+                    <div id="taller-preview-header" class="w-full h-32 rounded-xl bg-gray-100 overflow-hidden mb-2 flex items-center justify-center">
+                        <span class="text-gray-400 text-sm">Sin imagen</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <label class="flex-1 flex items-center gap-2 border border-gray-300 rounded-xl px-3 py-2 text-sm cursor-pointer hover:border-amber-400 transition">
+                            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <span class="text-gray-400">Seleccionar imagen</span>
+                            <input type="file" accept="image/*" class="hidden" onchange="subirImagenHeaderTaller(this)">
+                        </label>
+                        <button onclick="quitarImagenHeaderTaller()" class="bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-2 rounded-xl">Quitar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -398,12 +425,13 @@ function cerrarZoom() { document.getElementById('zoom-overlay').classList.remove
 
 // ─── TABS ───
 function cambiarTab(tab) {
-    ['servicios','ordenes'].forEach(t => {
+    ['servicios','ordenes','apariencia'].forEach(t => {
         document.getElementById('panel-'+t).classList.toggle('hidden', t !== tab);
         document.getElementById('tab-'+t).className = 'flex-1 py-4 px-3 text-center text-sm whitespace-nowrap transition-all ' + (t===tab ? 'tab-active':'tab-inactive');
     });
-    if (tab === 'servicios') cargarServicios();
-    if (tab === 'ordenes')   cargarOrdenes(filtroActual);
+    if (tab === 'servicios')  cargarServicios();
+    if (tab === 'ordenes')    cargarOrdenes(filtroActual);
+    if (tab === 'apariencia') cargarAparienciaTaller();
 }
 
 // ─── HEADER ───
@@ -899,6 +927,62 @@ async function guardarNuevaOrden() {
 }
 
 // ─── INIT ───
+// ─── APARIENCIA ───
+async function cargarAparienciaTaller() {
+    try {
+        const r = await fetch(`/api/taller/${SLUG}/info`);
+        const d = await r.json();
+        if (!d.ok) return;
+        if (d.taller && d.taller.imagen_header) {
+            document.getElementById('taller-preview-header').innerHTML =
+                `<img src="${d.taller.imagen_header}" class="w-full h-full object-cover">`;
+        }
+    } catch(e) {}
+}
+
+function subirImagenHeaderTaller(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast('Imagen muy pesada (máx 5MB)', false); return; }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const TW = 800, TH = 267;
+            const scale = Math.max(TW / img.width, TH / img.height);
+            const sw = img.width * scale, sh = img.height * scale;
+            canvas.width = TW; canvas.height = TH;
+            canvas.getContext('2d').drawImage(img, (TW - sw) / 2, (TH - sh) / 2, sw, sh);
+            const base64 = canvas.toDataURL('image/jpeg', 0.75);
+            document.getElementById('taller-preview-header').innerHTML =
+                `<img src="${base64}" class="w-full h-full object-cover">`;
+            guardarImagenHeaderTaller(base64);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+
+async function quitarImagenHeaderTaller() {
+    document.getElementById('taller-preview-header').innerHTML =
+        '<span class="text-gray-400 text-sm">Sin imagen</span>';
+    await guardarImagenHeaderTaller('');
+}
+
+async function guardarImagenHeaderTaller(imagen) {
+    try {
+        const r = await fetch(`/api/taller/${SLUG}/imagen-header`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({imagen})
+        });
+        const d = await r.json();
+        if (d.ok) toast('Imagen guardada');
+        else toast(d.error || 'Error', false);
+    } catch(e) { toast('Error de conexión', false); }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const base = window.location.origin;
     document.getElementById('url-publica').textContent = `${base}/taller/${SLUG}`;

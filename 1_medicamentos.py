@@ -22117,6 +22117,17 @@ def api_admin_git_status():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/git/claude-status')
+def api_admin_git_claude_status():
+    """Devuelve si Claude está actualmente trabajando (lock file .claude_working existe)."""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False}), 403
+    import os
+    proyecto = os.path.dirname(os.path.abspath(__file__))
+    trabajando = os.path.exists(os.path.join(proyecto, '.claude_working'))
+    return jsonify({'ok': True, 'trabajando': trabajando})
+
+
 @app.route('/api/admin/git/commit-push', methods=['POST'])
 def api_admin_git_commit_push():
     """Hace git add -A, commit y push al repositorio.
@@ -22149,6 +22160,9 @@ def api_admin_git_commit_push():
     # ── Modo local: ejecutar directamente ─────────────────────────
     import subprocess, re as _re
     proyecto = os.path.dirname(os.path.abspath(__file__))
+    # Chequear si Claude está trabajando
+    if os.path.exists(os.path.join(proyecto, '.claude_working')):
+        return jsonify({'ok': False, 'error': '⚠️ Claude está trabajando ahora mismo — espera a que termine antes de commitear'}), 409
     pasos = []
     try:
         # git add -A
@@ -25235,7 +25249,7 @@ def admin_inmobiliaria_lista():
         crear_tablas_inmobiliaria(conn)
         inmobiliarias = conn.execute("""
             SELECT i.id, i.nombre, i.slug, i.telefono, i.whatsapp, i.activa,
-                   i.bolsa_habilitada,
+                   i.bolsa_habilitada, i.descripcion,
                    t.nombre AS propietario_nombre,
                    (SELECT COUNT(*) FROM propiedad_inmobiliaria pi WHERE pi.inmobiliaria_id = i.id) AS total_propiedades
             FROM inmobiliarias i
@@ -31619,6 +31633,32 @@ def api_admin_inmobiliaria_bolsa(inmo_id):
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'bolsa_habilitada': habilitada})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/admin/inmobiliaria/<int:inmo_id>/editar', methods=['POST'])
+@admin_required
+def api_admin_inmobiliaria_editar(inmo_id):
+    """Editar datos básicos de una inmobiliaria (solo admin TUC TUC)"""
+    data = request.get_json()
+    campos = {}
+    for campo in ('nombre', 'telefono', 'whatsapp', 'descripcion'):
+        if campo in data:
+            val = data[campo].strip() if isinstance(data[campo], str) else data[campo]
+            campos[campo] = val or None
+    if not campos:
+        return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+    try:
+        conn = get_db_connection()
+        sets = ', '.join(f"{k}=%s" for k in campos)
+        vals = list(campos.values()) + [inmo_id]
+        conn.execute(f"UPDATE inmobiliarias SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         conn.rollback()
         conn.close()

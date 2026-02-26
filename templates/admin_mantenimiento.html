@@ -1006,6 +1006,18 @@
             if (!msg) { document.getElementById('commit-msg-mant').focus(); return; }
             const btn = document.getElementById('btn-commit-mant');
             const out = document.getElementById('commit-output-mant');
+            // ── Pre-chequeo: ¿Claude está trabajando? ──────────────────────
+            try {
+                const sc = await fetch('/api/admin/git/claude-status');
+                if (sc.ok) {
+                    const sd = await sc.json();
+                    if (sd.trabajando) {
+                        out.classList.remove('hidden');
+                        out.innerHTML = '<span style="color:#f87171;font-weight:bold;">⚠️ Claude está trabajando en este momento — espera a que termine antes de commitear.</span>';
+                        return;
+                    }
+                }
+            } catch(_) { /* Si falla el chequeo (ej. Render) dejamos pasar — el bridge también lo chequea */ }
             btn.disabled = true;
             btn.textContent = 'Ejecutando...';
             out.classList.remove('hidden');

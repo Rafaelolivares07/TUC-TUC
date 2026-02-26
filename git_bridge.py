@@ -230,6 +230,8 @@ def procesar_tarea(tarea):
     elif tipo == 'commit-push':
         if not mensaje:
             ok, resultado = False, {'error': 'Mensaje de commit vacío'}
+        elif (APP_DIR / '.claude_working').exists():
+            ok, resultado = False, {'error': '⚠️ Claude está trabajando ahora mismo — espera a que termine antes de commitear'}
         else:
             ok, resultado = ejecutar_commit_push(mensaje)
     else:

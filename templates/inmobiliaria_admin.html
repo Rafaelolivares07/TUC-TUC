@@ -511,6 +511,7 @@ async function crearPropiedad() {
     if (d.ok) {
       document.getElementById('pantalla-login').classList.add('hidden');
       document.getElementById('pantalla-admin').classList.remove('hidden');
+      aplicarConfigBolsa((d.inmobiliaria || d.inmo || {}).bolsa_habilitada);
       cargarPropiedades();
     }
   } catch(e) {}

@@ -459,14 +459,15 @@ async function abrirModalCommit() {
                 (resultado) => {
                     const lineas = resultado.lineas || [];
                     if (lineas.length > 0) {
-                        lista.innerHTML = lineas.map(l => `<div>${escHtml(l)}</div>`).join('');
+                        const n = lineas.length;
+                        lista.innerHTML = `<div class="text-yellow-300 mb-1">📝 ${n} archivo${n > 1 ? 's' : ''} pendiente${n > 1 ? 's' : ''} de commit:</div>` + lineas.map(l => `<div class="text-green-400">${escHtml(l)}</div>`).join('');
                         const campo = document.getElementById('commit-msg');
                         if (campo && !campo.value) {
                             campo.value = sugerirMensajeCommit(lineas);
                             setTimeout(() => { campo.focus(); campo.select(); }, 100);
                         }
                     } else {
-                        lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
+                        lista.innerHTML = '<span class="text-green-400">✅ Todo en GitHub — sin cambios pendientes</span>';
                     }
                 },
                 (err) => {
@@ -478,10 +479,11 @@ async function abrirModalCommit() {
         }
         // ── Modo local: resultado inmediato ───────────────────────
         if (d.ok && d.lineas.length > 0) {
-            lista.innerHTML = d.lineas.map(l => `<div>${escHtml(l)}</div>`).join('');
+            const n = d.lineas.length;
+            lista.innerHTML = `<div class="text-yellow-300 mb-1">📝 ${n} archivo${n > 1 ? 's' : ''} pendiente${n > 1 ? 's' : ''} de commit:</div>` + d.lineas.map(l => `<div class="text-green-400">${escHtml(l)}</div>`).join('');
             document.getElementById('commit-msg').value = sugerirMensajeCommit(d.lineas);
         } else if (d.ok && d.lineas.length === 0) {
-            lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
+            lista.innerHTML = '<span class="text-green-400">✅ Todo en GitHub — sin cambios pendientes</span>';
         } else {
             lista.innerHTML = `<span class="text-red-400">${escHtml(d.error || 'Error')}</span>`;
         }
@@ -506,6 +508,7 @@ async function ejecutarCommit() {
     btn.textContent = 'Ejecutando...';
     out.classList.remove('hidden');
     out.textContent = 'Procesando...';
+    document.getElementById('git-status-lista').innerHTML = '<span class="text-yellow-400">⚙️ Ejecutando commit & push...</span>';
     try {
         const r = await fetch('/api/admin/git/commit-push', {
             method: 'POST',
@@ -529,6 +532,7 @@ async function ejecutarCommit() {
                     btn.textContent = '✓ Commit & Push completado';
                     btn.classList.add('bg-green-600');
                     btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                    document.getElementById('git-status-lista').innerHTML = '<span class="text-green-400">✅ Commiteado y en GitHub</span>';
                 },
                 (err) => {
                     out.textContent = 'ERROR: ' + err;
@@ -554,6 +558,7 @@ async function ejecutarCommit() {
             btn.textContent = '✓ Listo';
             btn.classList.add('bg-green-600');
             btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+            document.getElementById('git-status-lista').innerHTML = '<span class="text-green-400">✅ Commiteado y en GitHub</span>';
         } else {
             btn.textContent = '✗ Falló';
             btn.classList.add('bg-red-600');

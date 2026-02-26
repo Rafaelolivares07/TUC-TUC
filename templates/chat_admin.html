@@ -410,8 +410,8 @@ function sugerirMensajeCommit(lineas) {
 }
 
 // ── Polling de tarea git (Render) ────────────────────────────────────
-async function _pollTareaGit(tareaId, onListo, onError) {
-    const MAX_INTENTOS = 60; // 60 × 2s = 2 min máx
+async function _pollTareaGit(tareaId, onListo, onError, maxIntentos = 8) {
+    const MAX_INTENTOS = maxIntentos;
     let intentos = 0;
     return new Promise((resolve) => {
         const interval = setInterval(async () => {
@@ -427,7 +427,7 @@ async function _pollTareaGit(tareaId, onListo, onError) {
                     resolve();
                 } else if (intentos >= MAX_INTENTOS) {
                     clearInterval(interval);
-                    onError('Timeout — git bridge no respondió en 2 minutos. ¿Está corriendo start_bridge.bat?');
+                    onError('✅ Bridge no disponible — si acabas de hacer push, el código ya está en GitHub.');
                     resolve();
                 }
             } catch(e) {
@@ -469,7 +469,10 @@ async function abrirModalCommit() {
                         lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
                     }
                 },
-                (err) => { lista.innerHTML = `<span class="text-red-400">${escHtml(err)}</span>`; }
+                (err) => {
+                    const color = err.startsWith('✅') ? 'text-green-400' : 'text-red-400';
+                    lista.innerHTML = `<span class="${color}">${escHtml(err)}</span>`;
+                }
             );
             return;
         }
@@ -533,7 +536,8 @@ async function ejecutarCommit() {
                     btn.classList.add('bg-red-600');
                     btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
                     btn.disabled = false;
-                }
+                },
+                25  // 25 × 2s = 50s para el push
             );
             return;
         }

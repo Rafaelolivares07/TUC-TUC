@@ -1482,7 +1482,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -22078,10 +22078,30 @@ def api_guardar_push_token():
 
 @app.route('/api/admin/git/status', methods=['GET'])
 def api_admin_git_status():
-    """Devuelve git status --short del repositorio"""
+    """Devuelve git status --short del repositorio.
+    En Render: encola la tarea en BD para que git_bridge.py la ejecute localmente.
+    En local:  ejecuta git directamente."""
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo admin'}), 403
-    import subprocess, os
+    import os
+    # ── Modo Render: delegar al git bridge local ──────────────────
+    if os.getenv('RENDER'):
+        try:
+            conn = get_db_connection()
+            crear_tabla_tareas_git(conn)
+            row = conn.execute(
+                "INSERT INTO tareas_git (tipo, estado) VALUES ('status', 'pendiente') RETURNING id",
+            ).fetchone()
+            conn.commit()
+            tarea_id = row['id']
+            conn.close()
+            return jsonify({'ok': True, 'pendiente': True, 'tarea_id': tarea_id})
+        except Exception as e:
+            try: conn.rollback(); conn.close()
+            except: pass
+            return jsonify({'ok': False, 'error': str(e)}), 500
+    # ── Modo local: ejecutar directamente ─────────────────────────
+    import subprocess
     try:
         proyecto = os.path.dirname(os.path.abspath(__file__))
         result = subprocess.run(
@@ -22099,14 +22119,35 @@ def api_admin_git_status():
 
 @app.route('/api/admin/git/commit-push', methods=['POST'])
 def api_admin_git_commit_push():
-    """Hace git add -A, commit y push al repositorio"""
+    """Hace git add -A, commit y push al repositorio.
+    En Render: encola la tarea en BD para que git_bridge.py la ejecute localmente.
+    En local:  ejecuta git directamente."""
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo admin'}), 403
-    import subprocess, os
+    import os
     data = request.get_json() or {}
     mensaje = (data.get('mensaje') or '').strip()
     if not mensaje:
         return jsonify({'ok': False, 'error': 'Mensaje de commit requerido'}), 400
+    # ── Modo Render: delegar al git bridge local ──────────────────
+    if os.getenv('RENDER'):
+        try:
+            conn = get_db_connection()
+            crear_tabla_tareas_git(conn)
+            row = conn.execute(
+                "INSERT INTO tareas_git (tipo, mensaje, estado) VALUES ('commit-push', %s, 'pendiente') RETURNING id",
+                (mensaje,)
+            ).fetchone()
+            conn.commit()
+            tarea_id = row['id']
+            conn.close()
+            return jsonify({'ok': True, 'pendiente': True, 'tarea_id': tarea_id})
+        except Exception as e:
+            try: conn.rollback(); conn.close()
+            except: pass
+            return jsonify({'ok': False, 'error': str(e)}), 500
+    # ── Modo local: ejecutar directamente ─────────────────────────
+    import subprocess, re as _re
     proyecto = os.path.dirname(os.path.abspath(__file__))
     pasos = []
     try:
@@ -22117,7 +22158,6 @@ def api_admin_git_commit_push():
         if r.returncode != 0:
             return jsonify({'ok': False, 'pasos': pasos, 'error': 'git add falló'}), 500
         # ── Chequeo de info sensible ──────────────────────────────
-        import re as _re
         # 1) Archivos peligrosos en staging
         _r_names = subprocess.run(['git', 'diff', '--staged', '--name-only'],
                                    cwd=proyecto, capture_output=True, text=True, timeout=10,
@@ -22162,6 +22202,36 @@ def api_admin_git_commit_push():
         return jsonify({'ok': False, 'pasos': pasos, 'error': 'Timeout — revisa la conexión o las credenciales git'}), 500
     except Exception as e:
         return jsonify({'ok': False, 'pasos': pasos, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/git/tarea/<int:tarea_id>', methods=['GET'])
+def api_admin_git_tarea(tarea_id):
+    """Consulta el estado/resultado de una tarea git encolada (solo Render)."""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo admin'}), 403
+    try:
+        conn = get_db_connection()
+        crear_tabla_tareas_git(conn)
+        row = conn.execute(
+            "SELECT id, tipo, estado, resultado, created_at::text FROM tareas_git WHERE id = %s",
+            (tarea_id,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return jsonify({'ok': False, 'error': 'Tarea no encontrada'}), 404
+        estado = row['estado']
+        if estado in ('listo', 'error'):
+            import json as _json
+            try:
+                resultado = _json.loads(row['resultado'])
+            except Exception:
+                resultado = {'raw': row['resultado']}
+            return jsonify({'ok': True, 'estado': estado, 'resultado': resultado})
+        return jsonify({'ok': True, 'estado': estado})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/admin/test-push', methods=['POST'])
@@ -28104,6 +28174,21 @@ def crear_tabla_chat(conn):
             conn.commit()
         except Exception:
             conn.rollback()
+
+
+def crear_tabla_tareas_git(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tareas_git (
+            id         SERIAL PRIMARY KEY,
+            tipo       VARCHAR(20)  NOT NULL,          -- 'status' | 'commit-push'
+            mensaje    TEXT,                            -- mensaje del commit (solo para commit-push)
+            estado     VARCHAR(20)  NOT NULL DEFAULT 'pendiente',  -- pendiente | procesando | listo | error
+            resultado  TEXT,                            -- output del comando git
+            created_at TIMESTAMPTZ  DEFAULT NOW(),
+            updated_at TIMESTAMPTZ  DEFAULT NOW()
+        )
+    """)
+    conn.commit()
 
 
 @app.route('/admin/chat')

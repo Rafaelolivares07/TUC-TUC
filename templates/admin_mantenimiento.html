@@ -904,14 +904,93 @@
             }
         }
 
+        function sugerirMensajeCommit(lineas) {
+            const modulos = new Set();
+            for (const l of lineas) {
+                const arch = l.trim().split(/\s+/).pop().toLowerCase();
+                if (arch.includes('inmobiliaria'))      modulos.add('inmobiliaria');
+                else if (arch.includes('compraventa'))  modulos.add('compraventa');
+                else if (arch.includes('hospedaje'))    modulos.add('hospedaje');
+                else if (arch.includes('taller'))       modulos.add('taller');
+                else if (arch.includes('restaurante'))  modulos.add('restaurante');
+                else if (arch.includes('tienda'))       modulos.add('tienda');
+                else if (arch.includes('transport') || arch.includes('conductor')) modulos.add('transporte');
+                else if (arch.includes('chat'))         modulos.add('chat');
+                else if (arch.includes('admin'))        modulos.add('admin');
+                else if (arch.includes('1_medicamentos')) modulos.add('backend');
+                else                                    modulos.add('misc');
+            }
+            const mods = [...modulos].filter(m => m !== 'misc');
+            const prefix = mods.length ? mods.join('/') : 'misc';
+            const n = lineas.length;
+            return `${prefix}: ${n} archivo${n > 1 ? 's' : ''} actualizado${n > 1 ? 's' : ''}`;
+        }
+
+        // ── Polling de tarea git (Render) ────────────────────────────────────
+        async function _pollTareaGit(tareaId, onListo, onError) {
+            const MAX_INTENTOS = 60; // 60 × 2s = 2 min máx
+            let intentos = 0;
+            return new Promise((resolve) => {
+                const interval = setInterval(async () => {
+                    intentos++;
+                    try {
+                        const r = await fetch(`/api/admin/git/tarea/${tareaId}`);
+                        const d = await r.json();
+                        if (!d.ok) { clearInterval(interval); onError(d.error || 'Error'); resolve(); return; }
+                        if (d.estado === 'listo' || d.estado === 'error') {
+                            clearInterval(interval);
+                            if (d.estado === 'listo') onListo(d.resultado);
+                            else onError((d.resultado && d.resultado.error) || 'Error al ejecutar git');
+                            resolve();
+                        } else if (intentos >= MAX_INTENTOS) {
+                            clearInterval(interval);
+                            onError('Timeout — git bridge no respondió en 2 minutos. ¿Está corriendo start_bridge.bat?');
+                            resolve();
+                        }
+                    } catch(e) {
+                        clearInterval(interval);
+                        onError('Error de red: ' + e.message);
+                        resolve();
+                    }
+                }, 2000);
+            });
+        }
+
         async function cargarGitStatus() {
             const el = document.getElementById('git-status-mant');
             el.innerHTML = '<span class="text-gray-500">Cargando...</span>';
             try {
                 const r = await fetch('/api/admin/git/status');
                 const d = await r.json();
+                // ── Modo Render: esperar al bridge local ─────────────────
+                if (d.ok && d.pendiente) {
+                    el.innerHTML = '<span class="text-yellow-400">⏳ Consultando PC local (git bridge)...</span>';
+                    await _pollTareaGit(d.tarea_id,
+                        (resultado) => {
+                            const lineas = resultado.lineas || [];
+                            if (lineas.length > 0) {
+                                el.innerHTML = lineas.map(l => `<div>${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`).join('');
+                                const campo = document.getElementById('commit-msg-mant');
+                                if (campo && !campo.value) {
+                                    campo.value = sugerirMensajeCommit(lineas);
+                                    setTimeout(() => { campo.focus(); campo.select(); }, 100);
+                                }
+                            } else {
+                                el.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
+                            }
+                        },
+                        (err) => { el.innerHTML = `<span class="text-red-400">${err}</span>`; }
+                    );
+                    return;
+                }
+                // ── Modo local: resultado inmediato ───────────────────────
                 if (d.ok && d.lineas.length > 0) {
                     el.innerHTML = d.lineas.map(l => `<div>${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`).join('');
+                    const campo = document.getElementById('commit-msg-mant');
+                    if (campo && !campo.value) {
+                        campo.value = sugerirMensajeCommit(d.lineas);
+                        setTimeout(() => { campo.focus(); campo.select(); }, 100);
+                    }
                 } else if (d.ok && d.lineas.length === 0) {
                     el.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
                 } else {
@@ -938,6 +1017,35 @@
                     body: JSON.stringify({ mensaje: msg })
                 });
                 const d = await r.json();
+                // ── Modo Render: esperar al bridge local ─────────────────
+                if (d.ok && d.pendiente) {
+                    out.textContent = '⏳ Esperando que git bridge ejecute en PC local...';
+                    await _pollTareaGit(d.tarea_id,
+                        (resultado) => {
+                            let texto = '';
+                            (resultado.pasos || []).forEach(p => {
+                                texto += `$ ${p.cmd}\n`;
+                                if (p.out) texto += p.out.trim() + '\n';
+                                texto += '\n';
+                            });
+                            if (resultado.error) texto += `\nERROR: ${resultado.error}`;
+                            out.textContent = texto.trim() || '✓ Completado';
+                            btn.textContent = '✓ Commit & Push completado';
+                            btn.classList.add('bg-green-600');
+                            btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                            cargarGitStatus();
+                        },
+                        (err) => {
+                            out.textContent = 'ERROR: ' + err;
+                            btn.textContent = '✗ Falló — ver output';
+                            btn.classList.add('bg-red-600');
+                            btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                            btn.disabled = false;
+                        }
+                    );
+                    return;
+                }
+                // ── Modo local: resultado inmediato ───────────────────────
                 let texto = '';
                 (d.pasos || []).forEach(p => {
                     texto += `$ ${p.cmd}\n`;

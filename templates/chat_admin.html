@@ -483,7 +483,7 @@ async function abrirModalCommit() {
             lista.innerHTML = `<span class="text-red-400">${escHtml(d.error || 'Error')}</span>`;
         }
     } catch(e) {
-        lista.innerHTML = '<span class="text-red-400">No se pudo consultar git status</span>';
+        lista.innerHTML = `<span class="text-red-400">Error al consultar git status: ${escHtml(e.message || String(e))}</span>`;
     }
     // Seleccionar el texto sugerido para que sea fácil reemplazarlo
     const campo = document.getElementById('commit-msg');

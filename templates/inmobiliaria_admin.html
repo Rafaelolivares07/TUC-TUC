@@ -66,6 +66,7 @@
     <!-- Tabs -->
     <div class="max-w-4xl mx-auto px-4 flex gap-4 border-t border-gray-100 overflow-x-auto">
       <button onclick="verTab('propiedades')" id="tab-propiedades" class="tab-btn active text-sm py-3 px-1 whitespace-nowrap">Propiedades</button>
+      <button onclick="verTab('bolsa')" id="tab-bolsa" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Bolsa pública</button>
       <button onclick="verTab('leads')" id="tab-leads" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Contactos</button>
       <button onclick="verTab('apariencia')" id="tab-apariencia" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Apariencia</button>
     </div>
@@ -82,6 +83,17 @@
         <div class="text-5xl mb-3">⏳</div>
         <p>Cargando...</p>
       </div>
+    </div>
+  </div>
+
+  <!-- TAB: BOLSA PÚBLICA -->
+  <div id="seccion-bolsa" class="hidden max-w-4xl mx-auto px-4 py-4">
+    <div class="mb-3">
+      <h2 class="font-semibold text-gray-700">Bolsa pública de propiedades</h2>
+      <p class="text-xs text-gray-400 mt-0.5">Propiedades disponibles que sus dueños autorizaron para portales inmobiliarios</p>
+    </div>
+    <div id="lista-bolsa" class="space-y-3">
+      <div class="text-center py-16 text-gray-400"><p>Cargando...</p></div>
     </div>
   </div>
 
@@ -138,6 +150,18 @@
           <span id="toggle-knob" class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"></span>
         </button>
       </div>
+
+      <!-- Bolsa pública TUC TUC -->
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-semibold text-gray-700">Bolsa pública de TUC TUC</p>
+          <p class="text-xs text-gray-400">Permite publicar propiedades en la bolsa comunal y agregar propiedades de terceros</p>
+        </div>
+        <button id="btn-toggle-bolsa" onclick="toggleBolsaHabilitada()"
+                class="w-12 h-6 rounded-full bg-blue-700 relative transition-colors">
+          <span id="toggle-knob-bolsa" class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"></span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -168,10 +192,12 @@
         <input id="f-m2" type="number" placeholder="m²" class="border border-gray-300 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
       </div>
       <textarea id="f-desc" rows="3" placeholder="Descripción" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
-      <label class="flex items-center gap-2 cursor-pointer border border-gray-200 rounded-xl px-4 py-3">
-        <input id="f-bolsa" type="checkbox" class="accent-blue-700">
-        <span class="text-sm text-gray-700">Publicar también en la bolsa pública de TUC TUC</span>
-      </label>
+      <div id="wrap-bolsa">
+        <label class="flex items-center gap-2 cursor-pointer border border-gray-200 rounded-xl px-4 py-3">
+          <input id="f-bolsa" type="checkbox" class="accent-blue-700">
+          <span class="text-sm text-gray-700">Publicar también en la bolsa pública de TUC TUC</span>
+        </label>
+      </div>
       <div class="flex gap-3 pt-2">
         <button onclick="cerrarModal()" class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
         <button onclick="crearPropiedad()" class="flex-1 bg-blue-700 text-white rounded-xl py-3 text-sm font-semibold">Crear</button>
@@ -182,6 +208,7 @@
 
 <script>
 const SLUG = "{{ slug }}";
+let bolsaHabilitada = true;
 
 function toast(msg, tipo='ok') {
   const t = document.getElementById('toast');
@@ -226,12 +253,65 @@ let mostrarNombreInmo = true;
 function verTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  ['propiedades', 'leads', 'apariencia'].forEach(s => {
+  ['propiedades', 'bolsa', 'leads', 'apariencia'].forEach(s => {
     document.getElementById('seccion-' + s).classList.toggle('hidden', s !== tab);
   });
   if (tab === 'leads') cargarLeads();
   if (tab === 'propiedades') cargarPropiedades();
+  if (tab === 'bolsa') cargarBolsa();
   if (tab === 'apariencia') cargarInfoApariencia();
+}
+
+async function cargarBolsa() {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/bolsa`);
+    const d = await r.json();
+    const lista = document.getElementById('lista-bolsa');
+    if (!d.ok) { lista.innerHTML = '<div class="text-center py-10 text-red-400">Error al cargar</div>'; return; }
+    if (!d.propiedades.length) {
+      lista.innerHTML = `<div class="text-center py-16 text-gray-400">
+        <div class="text-5xl mb-3">📭</div>
+        <p class="text-sm">No hay propiedades disponibles en la bolsa</p>
+        <p class="text-xs text-gray-400 mt-1">Los dueños deben marcar su propiedad como disponible para inmobiliarias</p>
+      </div>`;
+      return;
+    }
+    lista.innerHTML = d.propiedades.map(p => `
+      <div class="bg-white rounded-2xl shadow-sm p-4 flex gap-4" id="bolsa-item-${p.id}">
+        <div class="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+          ${p.foto ? `<img src="${p.foto}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-xl text-gray-300">🏠</div>'}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-800 text-sm truncate">${p.titulo}</p>
+          <p class="text-xs text-gray-500">${p.ciudad || '—'} · ${p.modalidad}</p>
+          <p class="text-blue-700 font-bold text-sm">${p.precio ? '$' + Number(p.precio).toLocaleString('es-CO') : 'Consultar'}</p>
+          <p class="text-xs text-gray-400">${[p.habitaciones ? p.habitaciones + ' hab' : null, p.banos ? p.banos + ' baños' : null, p.m2 ? p.m2 + ' m²' : null].filter(Boolean).join(' · ') || ''}</p>
+        </div>
+        <div class="flex-shrink-0 flex items-center">
+          <button onclick="agregarDesdeBolsa(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')"
+                  class="bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-xl">
+            + Agregar
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+async function agregarDesdeBolsa(propiedadId, titulo) {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/bolsa/agregar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ propiedad_id: propiedadId })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Propiedad agregada al portal');
+      document.getElementById('bolsa-item-' + propiedadId)?.remove();
+    } else {
+      toast(d.error || 'Error', 'err');
+    }
+  } catch(e) { toast('Error de conexión', 'err'); }
 }
 
 async function cargarInfoApariencia() {
@@ -242,12 +322,14 @@ async function cargarInfoApariencia() {
     const n = d.inmo || d;
     temaActualInmo = n.tema || 'claro';
     mostrarNombreInmo = n.mostrar_nombre !== false;
+    bolsaHabilitada = n.bolsa_habilitada !== false;
     if (n.imagen_header) {
       document.getElementById('preview-header').innerHTML = `<img src="${n.imagen_header}" class="w-full h-full object-cover">`;
       document.getElementById('inp-imagen-url').value = n.imagen_header;
     }
     actualizarBotonesTema();
     actualizarToggleNombre();
+    actualizarToggleBolsa();
   } catch(e) {}
 }
 
@@ -290,6 +372,25 @@ async function toggleNombre() {
   mostrarNombreInmo = !mostrarNombreInmo;
   actualizarToggleNombre();
   await personalizarInmo({mostrar_nombre: mostrarNombreInmo});
+}
+
+function actualizarToggleBolsa() {
+  const btn = document.getElementById('btn-toggle-bolsa');
+  const knob = document.getElementById('toggle-knob-bolsa');
+  if (!btn) return;
+  btn.classList.toggle('bg-blue-700', bolsaHabilitada);
+  btn.classList.toggle('bg-gray-300', !bolsaHabilitada);
+  knob.classList.toggle('-translate-x-6', bolsaHabilitada);
+  knob.classList.toggle('translate-x-0', !bolsaHabilitada);
+  // Mostrar/ocultar el checkbox en el modal de crear/editar propiedad
+  const wrap = document.getElementById('wrap-bolsa');
+  if (wrap) wrap.classList.toggle('hidden', !bolsaHabilitada);
+}
+
+async function toggleBolsaHabilitada() {
+  bolsaHabilitada = !bolsaHabilitada;
+  actualizarToggleBolsa();
+  await personalizarInmo({bolsa_habilitada: bolsaHabilitada});
 }
 
 async function personalizarInmo(campos) {

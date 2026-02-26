@@ -30719,6 +30719,7 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS imagen_header TEXT",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS bolsa_habilitada BOOLEAN DEFAULT TRUE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",
@@ -30741,11 +30742,11 @@ def _inmo_tiene_acceso(conn, slug, uid, es_admin=False):
     """Retorna el row de la inmobiliaria si el uid es propietario/colaborador o es admin sistema."""
     if es_admin:
         return conn.execute(
-            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, bolsa_habilitada FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
             (slug,)
         ).fetchone()
     return conn.execute(
-        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias
+        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, bolsa_habilitada FROM inmobiliarias
            WHERE slug=%s AND activa=TRUE
              AND (propietario_id=%s
                   OR id IN (SELECT inmobiliaria_id FROM inmobiliaria_colaboradores
@@ -31594,6 +31595,75 @@ def api_inmobiliaria_admin_leads(slug):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/inmobiliaria/<slug>/admin/bolsa')
+def api_inmobiliaria_admin_bolsa(slug):
+    """Propiedades disponibles en bolsa pública que no están aún en este portal"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        props = conn.execute(
+            """SELECT p.id, p.slug, p.titulo, p.modalidad, p.precio, p.ciudad,
+                      p.habitaciones, p.banos, p.m2,
+                      (SELECT url FROM propiedad_fotos WHERE propiedad_id=p.id ORDER BY id LIMIT 1) AS foto
+               FROM propiedades p
+               WHERE p.disponible_inmobiliarias=TRUE
+                 AND p.estado='disponible'
+                 AND p.id NOT IN (
+                     SELECT propiedad_id FROM propiedad_inmobiliaria WHERE inmobiliaria_id=%s
+                 )
+               ORDER BY p.created_at DESC LIMIT 50""",
+            (inmo['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'propiedades': [{
+            'id': p['id'], 'slug': p['slug'], 'titulo': p['titulo'],
+            'modalidad': p['modalidad'], 'precio': str(p['precio']) if p['precio'] else None,
+            'ciudad': p['ciudad'], 'habitaciones': p['habitaciones'],
+            'banos': p['banos'], 'm2': p['m2'], 'foto': p['foto']
+        } for p in props]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/bolsa/agregar', methods=['POST'])
+def api_inmobiliaria_admin_bolsa_agregar(slug):
+    """Agrega una propiedad de la bolsa pública al portal de la inmobiliaria"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
+        return jsonify({'ok': False, 'error': 'sin_sesion'})
+    data = request.get_json() or {}
+    propiedad_id = data.get('propiedad_id')
+    if not propiedad_id:
+        return jsonify({'ok': False, 'error': 'Falta propiedad_id'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        conn.execute(
+            "INSERT INTO propiedad_inmobiliaria (propiedad_id, inmobiliaria_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (propiedad_id, inmo['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # MÓDULO: BOLSA AUTOMOTRIZ  (venta de vehículos particulares + compraventas)
 # ═══════════════════════════════════════════════════════════════════════
@@ -32263,6 +32333,8 @@ def api_inmobiliaria_personalizar(slug):
             campos['tema'] = data['tema']
         if 'mostrar_nombre' in data:
             campos['mostrar_nombre'] = bool(data['mostrar_nombre'])
+        if 'bolsa_habilitada' in data:
+            campos['bolsa_habilitada'] = bool(data['bolsa_habilitada'])
         if not campos:
             conn.close()
             return jsonify({'ok': False, 'error': 'Nada que actualizar'})

@@ -30942,11 +30942,11 @@ def _inmo_tiene_acceso(conn, slug, uid, es_admin=False):
     """Retorna el row de la inmobiliaria si el uid es propietario/colaborador o es admin sistema."""
     if es_admin:
         return conn.execute(
-            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, bolsa_habilitada FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
             (slug,)
         ).fetchone()
     return conn.execute(
-        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias
+        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, bolsa_habilitada FROM inmobiliarias
            WHERE slug=%s AND activa=TRUE
              AND (propietario_id=%s
                   OR id IN (SELECT inmobiliaria_id FROM inmobiliaria_colaboradores

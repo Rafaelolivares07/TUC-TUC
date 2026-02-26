@@ -42,7 +42,9 @@
       "Bash(not exist\" al cargar items del carrito para usuario logueado.\n\nCausa: En PostgreSQL las tablas/columnas fueron migradas con \nnombres en MAYÚSCULAS. El query usaba nombres lowercase sin comillas \nque PostgreSQL no reconoce.\n\nSolución: Usar nombres exactos con comillas dobles en query:\n- existencias → \"EXISTENCIAS\"\n- medicamentos → \"MEDICAMENTOS\"  \n- id_medicamento → \"ID_MEDICAMENTO\"\n- estado → \"ESTADO\"\n- etc.\n\nArchivo: 1_medicamentos.py líneas 1778-1792\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(does not exist\" al actualizar items del carrito a estado pendiente.\n\nCausa: La tabla existencias no tiene columna fecha_actualizacion.\n\nSolución: Quitar fecha_actualizacion del UPDATE de existencias en \nprocesar_pedido. Solo actualizar estado y pedido_id.\n\nArchivo: 1_medicamentos.py líneas 1950-1956\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(pg_dump:*)",
-      "Bash(move:*)"
+      "Bash(move:*)",
+      "Bash(\"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\" -h localhost -U postgres -d tuctuc_local -c \"SELECT * FROM festivos ORDER BY fecha;\")",
+      "Bash(git filter-branch:*)"
     ],
     "deny": [],
     "ask": []

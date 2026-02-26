@@ -44,7 +44,41 @@
     <div class="ml-auto flex items-center gap-3">
         <span id="estado-bridge" class="text-xs text-gray-400">🟢 Listo</span>
         <a href="/admin/chat/historico" class="text-xs text-gray-400 hover:text-blue-400 transition">Historial</a>
+        <button onclick="abrirModalCommit()" class="text-xs bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg transition font-medium">⬆ Commit & Push</button>
         <button onclick="limpiarChat()" class="text-xs text-gray-400 hover:text-red-500 transition">Limpiar</button>
+    </div>
+</div>
+
+<!-- Modal Commit & Push -->
+<div id="modal-commit" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+            <h3 class="font-bold text-gray-800 text-lg">Commit & Push</h3>
+            <button onclick="cerrarModalCommit()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <!-- git status -->
+        <div>
+            <p class="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Archivos modificados</p>
+            <div id="git-status-lista" class="bg-gray-900 text-green-400 rounded-xl p-3 text-xs font-mono min-h-[60px] max-h-48 overflow-y-auto">
+                <span class="text-gray-500">Cargando...</span>
+            </div>
+        </div>
+        <!-- Mensaje -->
+        <div>
+            <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1">Mensaje del commit</label>
+            <input id="commit-msg" type="text" placeholder="ej: inmobiliaria: fix modal editar"
+                class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition"
+                onkeydown="if(event.key==='Enter') ejecutarCommit()">
+        </div>
+        <!-- Output -->
+        <div id="commit-output" class="hidden bg-gray-900 text-gray-300 rounded-xl p-3 text-xs font-mono max-h-40 overflow-y-auto whitespace-pre-wrap"></div>
+        <!-- Botones -->
+        <div class="flex gap-3 justify-end">
+            <button onclick="cerrarModalCommit()" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition">Cancelar</button>
+            <button id="btn-commit" onclick="ejecutarCommit()" class="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-sm font-semibold transition">
+                Commit & Push
+            </button>
+        </div>
     </div>
 </div>
 
@@ -350,6 +384,82 @@ async function limpiarChat() {
         const d = await r.json();
         if (d.ok) location.reload();
     } catch(e) {}
+}
+
+// ── Commit & Push ────────────────────────────────────
+async function abrirModalCommit() {
+    document.getElementById('modal-commit').classList.remove('hidden');
+    document.getElementById('commit-output').classList.add('hidden');
+    document.getElementById('commit-output').textContent = '';
+    document.getElementById('commit-msg').value = '';
+    document.getElementById('git-status-lista').innerHTML = '<span class="text-gray-500">Cargando...</span>';
+    document.getElementById('btn-commit').disabled = false;
+    document.getElementById('btn-commit').textContent = 'Commit & Push';
+    // Cargar git status
+    try {
+        const r = await fetch('/api/admin/git/status');
+        const d = await r.json();
+        const lista = document.getElementById('git-status-lista');
+        if (d.ok && d.lineas.length > 0) {
+            lista.innerHTML = d.lineas.map(l => `<div>${escHtml(l)}</div>`).join('');
+        } else if (d.ok && d.lineas.length === 0) {
+            lista.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
+        } else {
+            lista.innerHTML = `<span class="text-red-400">${escHtml(d.error || 'Error')}</span>`;
+        }
+    } catch(e) {
+        document.getElementById('git-status-lista').innerHTML = '<span class="text-red-400">No se pudo consultar git status</span>';
+    }
+    setTimeout(() => document.getElementById('commit-msg').focus(), 100);
+}
+
+function cerrarModalCommit() {
+    document.getElementById('modal-commit').classList.add('hidden');
+}
+
+async function ejecutarCommit() {
+    const msg = document.getElementById('commit-msg').value.trim();
+    if (!msg) { document.getElementById('commit-msg').focus(); return; }
+    const btn = document.getElementById('btn-commit');
+    const out = document.getElementById('commit-output');
+    btn.disabled = true;
+    btn.textContent = 'Ejecutando...';
+    out.classList.remove('hidden');
+    out.textContent = 'Procesando...';
+    try {
+        const r = await fetch('/api/admin/git/commit-push', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mensaje: msg })
+        });
+        const d = await r.json();
+        let texto = '';
+        (d.pasos || []).forEach(p => {
+            texto += `$ ${p.cmd}\n`;
+            if (p.out) texto += p.out.trim() + '\n';
+            texto += '\n';
+        });
+        if (d.error) texto += `\nERROR: ${d.error}`;
+        out.textContent = texto.trim();
+        if (d.ok) {
+            btn.textContent = '✓ Listo';
+            btn.classList.add('bg-green-600');
+            btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+        } else {
+            btn.textContent = '✗ Falló';
+            btn.classList.add('bg-red-600');
+            btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+            btn.disabled = false;
+        }
+    } catch(e) {
+        out.textContent = 'Error de red: ' + e.message;
+        btn.textContent = 'Reintentar';
+        btn.disabled = false;
+    }
+}
+
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 </script>
 

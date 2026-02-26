@@ -158,6 +158,14 @@
                     Log de Cambios
                 </span>
             </button>
+            <button class="tab-btn" onclick="cambiarTab('git')">
+                <span class="flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    Git
+                </span>
+            </button>
         </div>
     </div>
 
@@ -303,6 +311,54 @@
                         Cargar más
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Tab Git -->
+        <div id="tab-git" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6 max-w-2xl">
+                <h3 class="text-lg font-bold mb-1">Git — Control de versiones</h3>
+                <p class="text-sm text-gray-500 mb-6">Commit y push directo al repositorio, o abre el chat con Claude.</p>
+
+                <!-- Acceso al chat -->
+                <a href="/admin/chat" class="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition mb-6">
+                    <div class="w-10 h-10 bg-amber-400 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0">C</div>
+                    <div>
+                        <p class="font-semibold text-gray-800 text-sm">Chat con Claude</p>
+                        <p class="text-xs text-gray-500">Hablar con el asistente de desarrollo, pedir cambios de código, hacer deploy.</p>
+                    </div>
+                    <svg class="w-5 h-5 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+
+                <!-- git status -->
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Archivos modificados</p>
+                        <button onclick="cargarGitStatus()" class="text-xs text-blue-500 hover:underline">Actualizar</button>
+                    </div>
+                    <div id="git-status-mant" class="bg-gray-900 text-green-400 rounded-xl p-3 text-xs font-mono min-h-[60px] max-h-48 overflow-y-auto">
+                        <span class="text-gray-500">Haz clic en "Actualizar" para ver cambios</span>
+                    </div>
+                </div>
+
+                <!-- Mensaje -->
+                <div class="mb-4">
+                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1">Mensaje del commit</label>
+                    <input id="commit-msg-mant" type="text" placeholder="ej: fix: corrección en modal de propiedades"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-400 transition"
+                        onkeydown="if(event.key==='Enter') ejecutarCommitMant()">
+                </div>
+
+                <!-- Output -->
+                <div id="commit-output-mant" class="hidden bg-gray-900 text-gray-300 rounded-xl p-3 text-xs font-mono max-h-48 overflow-y-auto whitespace-pre-wrap mb-4"></div>
+
+                <!-- Botón -->
+                <button id="btn-commit-mant" onclick="ejecutarCommitMant()"
+                    class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-sm font-semibold transition">
+                    ⬆ Commit & Push
+                </button>
             </div>
         </div>
     </div>
@@ -842,6 +898,69 @@
             // Cargar log si es necesario
             if (tab === 'log') {
                 cargarLog();
+            }
+            if (tab === 'git') {
+                cargarGitStatus();
+            }
+        }
+
+        async function cargarGitStatus() {
+            const el = document.getElementById('git-status-mant');
+            el.innerHTML = '<span class="text-gray-500">Cargando...</span>';
+            try {
+                const r = await fetch('/api/admin/git/status');
+                const d = await r.json();
+                if (d.ok && d.lineas.length > 0) {
+                    el.innerHTML = d.lineas.map(l => `<div>${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`).join('');
+                } else if (d.ok && d.lineas.length === 0) {
+                    el.innerHTML = '<span class="text-gray-500">Sin cambios pendientes</span>';
+                } else {
+                    el.innerHTML = `<span class="text-red-400">${d.error || 'Error'}</span>`;
+                }
+            } catch(e) {
+                el.innerHTML = '<span class="text-red-400">Error al consultar git status</span>';
+            }
+        }
+
+        async function ejecutarCommitMant() {
+            const msg = document.getElementById('commit-msg-mant').value.trim();
+            if (!msg) { document.getElementById('commit-msg-mant').focus(); return; }
+            const btn = document.getElementById('btn-commit-mant');
+            const out = document.getElementById('commit-output-mant');
+            btn.disabled = true;
+            btn.textContent = 'Ejecutando...';
+            out.classList.remove('hidden');
+            out.textContent = 'Procesando...';
+            try {
+                const r = await fetch('/api/admin/git/commit-push', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ mensaje: msg })
+                });
+                const d = await r.json();
+                let texto = '';
+                (d.pasos || []).forEach(p => {
+                    texto += `$ ${p.cmd}\n`;
+                    if (p.out) texto += p.out.trim() + '\n';
+                    texto += '\n';
+                });
+                if (d.error) texto += `\nERROR: ${d.error}`;
+                out.textContent = texto.trim();
+                if (d.ok) {
+                    btn.textContent = '✓ Commit & Push completado';
+                    btn.classList.add('bg-green-600');
+                    btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                    cargarGitStatus();
+                } else {
+                    btn.textContent = '✗ Falló — ver output';
+                    btn.classList.add('bg-red-600');
+                    btn.classList.remove('bg-gray-800', 'hover:bg-gray-700');
+                    btn.disabled = false;
+                }
+            } catch(e) {
+                out.textContent = 'Error de red: ' + e.message;
+                btn.textContent = '⬆ Commit & Push';
+                btn.disabled = false;
             }
         }
 

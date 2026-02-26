@@ -22076,6 +22076,59 @@ def api_guardar_push_token():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/git/status', methods=['GET'])
+def api_admin_git_status():
+    """Devuelve git status --short del repositorio"""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo admin'}), 403
+    import subprocess, os
+    try:
+        proyecto = os.path.dirname(os.path.abspath(__file__))
+        result = subprocess.run(
+            ['git', 'status', '--short'],
+            cwd=proyecto, capture_output=True, text=True, timeout=10
+        )
+        lineas = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        return jsonify({'ok': True, 'lineas': lineas, 'total': len(lineas)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/git/commit-push', methods=['POST'])
+def api_admin_git_commit_push():
+    """Hace git add -A, commit y push al repositorio"""
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo admin'}), 403
+    import subprocess, os
+    data = request.get_json() or {}
+    mensaje = (data.get('mensaje') or '').strip()
+    if not mensaje:
+        return jsonify({'ok': False, 'error': 'Mensaje de commit requerido'}), 400
+    proyecto = os.path.dirname(os.path.abspath(__file__))
+    pasos = []
+    try:
+        # git add -A
+        r = subprocess.run(['git', 'add', '-A'], cwd=proyecto, capture_output=True, text=True, timeout=15)
+        pasos.append({'cmd': 'git add -A', 'ok': r.returncode == 0, 'out': r.stdout + r.stderr})
+        if r.returncode != 0:
+            return jsonify({'ok': False, 'pasos': pasos, 'error': 'git add falló'}), 500
+        # git commit
+        r = subprocess.run(['git', 'commit', '-m', mensaje], cwd=proyecto, capture_output=True, text=True, timeout=15)
+        pasos.append({'cmd': 'git commit', 'ok': r.returncode == 0, 'out': r.stdout + r.stderr})
+        if r.returncode != 0:
+            return jsonify({'ok': False, 'pasos': pasos, 'error': 'git commit falló (¿sin cambios?)'}), 500
+        # git push
+        r = subprocess.run(['git', 'push'], cwd=proyecto, capture_output=True, text=True, timeout=30)
+        pasos.append({'cmd': 'git push', 'ok': r.returncode == 0, 'out': r.stdout + r.stderr})
+        if r.returncode != 0:
+            return jsonify({'ok': False, 'pasos': pasos, 'error': 'git push falló'}), 500
+        return jsonify({'ok': True, 'pasos': pasos})
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'pasos': pasos, 'error': 'Timeout — revisa la conexión o las credenciales git'}), 500
+    except Exception as e:
+        return jsonify({'ok': False, 'pasos': pasos, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/test-push', methods=['POST'])
 def api_admin_test_push():
     """Envía una notificación push de prueba"""
@@ -25077,6 +25130,7 @@ def admin_inmobiliaria_lista():
         crear_tablas_inmobiliaria(conn)
         inmobiliarias = conn.execute("""
             SELECT i.id, i.nombre, i.slug, i.telefono, i.whatsapp, i.activa,
+                   i.bolsa_habilitada,
                    t.nombre AS propietario_nombre,
                    (SELECT COUNT(*) FROM propiedad_inmobiliaria pi WHERE pi.inmobiliaria_id = i.id) AS total_propiedades
             FROM inmobiliarias i
@@ -30742,11 +30796,11 @@ def _inmo_tiene_acceso(conn, slug, uid, es_admin=False):
     """Retorna el row de la inmobiliaria si el uid es propietario/colaborador o es admin sistema."""
     if es_admin:
         return conn.execute(
-            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, bolsa_habilitada FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            "SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
             (slug,)
         ).fetchone()
     return conn.execute(
-        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre, bolsa_habilitada FROM inmobiliarias
+        """SELECT id, nombre, slug, imagen_header, tema, mostrar_nombre FROM inmobiliarias
            WHERE slug=%s AND activa=TRUE
              AND (propietario_id=%s
                   OR id IN (SELECT inmobiliaria_id FROM inmobiliaria_colaboradores
@@ -31401,6 +31455,24 @@ def api_admin_inmobiliaria_crear():
         conn.close()
         return jsonify({'ok': True, 'id': row['id'], 'slug': slug,
                         'link_admin': f'/inmobiliaria/{slug}/admin'})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/admin/inmobiliaria/<int:inmo_id>/bolsa', methods=['POST'])
+@admin_required
+def api_admin_inmobiliaria_bolsa(inmo_id):
+    """Habilitar/deshabilitar bolsa pública para una inmobiliaria (solo admin TUC TUC)"""
+    data = request.get_json()
+    habilitada = bool(data.get('habilitada', True))
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE inmobiliarias SET bolsa_habilitada=%s WHERE id=%s", (habilitada, inmo_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'bolsa_habilitada': habilitada})
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -32333,8 +32405,6 @@ def api_inmobiliaria_personalizar(slug):
             campos['tema'] = data['tema']
         if 'mostrar_nombre' in data:
             campos['mostrar_nombre'] = bool(data['mostrar_nombre'])
-        if 'bolsa_habilitada' in data:
-            campos['bolsa_habilitada'] = bool(data['bolsa_habilitada'])
         if not campos:
             conn.close()
             return jsonify({'ok': False, 'error': 'Nada que actualizar'})

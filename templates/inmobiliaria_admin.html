@@ -151,17 +151,6 @@
         </button>
       </div>
 
-      <!-- Bolsa pública TUC TUC -->
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-semibold text-gray-700">Bolsa pública de TUC TUC</p>
-          <p class="text-xs text-gray-400">Permite publicar propiedades en la bolsa comunal y agregar propiedades de terceros</p>
-        </div>
-        <button id="btn-toggle-bolsa" onclick="toggleBolsaHabilitada()"
-                class="w-12 h-6 rounded-full bg-blue-700 relative transition-colors">
-          <span id="toggle-knob-bolsa" class="absolute right-1 top-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm"></span>
-        </button>
-      </div>
     </div>
   </div>
 </div>
@@ -208,7 +197,6 @@
 
 <script>
 const SLUG = "{{ slug }}";
-let bolsaHabilitada = true;
 
 function toast(msg, tipo='ok') {
   const t = document.getElementById('toast');
@@ -322,14 +310,12 @@ async function cargarInfoApariencia() {
     const n = d.inmo || d;
     temaActualInmo = n.tema || 'claro';
     mostrarNombreInmo = n.mostrar_nombre !== false;
-    bolsaHabilitada = n.bolsa_habilitada !== false;
     if (n.imagen_header) {
       document.getElementById('preview-header').innerHTML = `<img src="${n.imagen_header}" class="w-full h-full object-cover">`;
       document.getElementById('inp-imagen-url').value = n.imagen_header;
     }
     actualizarBotonesTema();
     actualizarToggleNombre();
-    actualizarToggleBolsa();
   } catch(e) {}
 }
 
@@ -374,24 +360,6 @@ async function toggleNombre() {
   await personalizarInmo({mostrar_nombre: mostrarNombreInmo});
 }
 
-function actualizarToggleBolsa() {
-  const btn = document.getElementById('btn-toggle-bolsa');
-  const knob = document.getElementById('toggle-knob-bolsa');
-  if (!btn) return;
-  btn.classList.toggle('bg-blue-700', bolsaHabilitada);
-  btn.classList.toggle('bg-gray-300', !bolsaHabilitada);
-  knob.classList.toggle('-translate-x-6', bolsaHabilitada);
-  knob.classList.toggle('translate-x-0', !bolsaHabilitada);
-  // Mostrar/ocultar el checkbox en el modal de crear/editar propiedad
-  const wrap = document.getElementById('wrap-bolsa');
-  if (wrap) wrap.classList.toggle('hidden', !bolsaHabilitada);
-}
-
-async function toggleBolsaHabilitada() {
-  bolsaHabilitada = !bolsaHabilitada;
-  actualizarToggleBolsa();
-  await personalizarInmo({bolsa_habilitada: bolsaHabilitada});
-}
 
 async function personalizarInmo(campos) {
   try {

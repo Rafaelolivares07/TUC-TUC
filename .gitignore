@@ -50,6 +50,14 @@ static/tuc-tuc-4f1e5-firebase-adminsdk-fbsvc-*.json
 # Backups de base de datos (archivos grandes, info sensible)
 backups/*.sql
 backups/*.json
+backups/*.csv
+
+# Archivos multimedia y binarios que no son código
+*.mp4
+*.avi
+*.mov
+*.jfif
+static/*.zip
 
 # Memoria interna de Claude Code (puede contener keys y contexto privado)
 .claude/projects/

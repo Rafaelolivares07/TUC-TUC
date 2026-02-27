@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ neg.nombre }} — Mi Hospedaje</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
@@ -21,6 +22,16 @@
 </head>
 <body class="min-h-screen">
 
+<!-- Overlay QR grande -->
+<div id="overlay-qr" class="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-5 hidden" onclick="cerrarQR()">
+    <div id="qr-grande" class="rounded-2xl overflow-hidden shadow-2xl"></div>
+    <button onclick="event.stopPropagation(); window.open('https://wa.me/?text='+encodeURIComponent('Reserva en {{ neg.nombre }}: '+location.origin+'/hospedaje/{{ slug }}'))"
+            class="bg-green-500 hover:bg-green-600 text-white font-bold px-8 py-3 rounded-2xl text-base shadow-lg">
+        Compartir por WhatsApp
+    </button>
+    <span class="text-white/60 text-sm">Toca para cerrar</span>
+</div>
+
 <!-- Header -->
 <div class="bg-indigo-700 text-white px-4 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
@@ -31,10 +42,16 @@
                class="text-indigo-200 text-xs hover:text-white transition">/hospedaje/{{ slug }} →</a>
         </div>
     </div>
-    <a href="/hospedaje/{{ slug }}" target="_blank"
-       class="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
-        Ver pública
-    </a>
+    <div class="flex items-center gap-3">
+        <div class="flex flex-col items-center gap-0.5 cursor-pointer" onclick="abrirQR()">
+            <div id="qr-hospedaje" class="rounded-lg overflow-hidden bg-white"></div>
+            <span class="text-indigo-200 text-xs">Escanear</span>
+        </div>
+        <a href="/hospedaje/{{ slug }}" target="_blank"
+           class="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+            Ver pública
+        </a>
+    </div>
 </div>
 
 {% if neg.dias_pagados %}
@@ -359,6 +376,27 @@
 <script>
 const SLUG = '{{ slug }}';
 let tipos = [], unidades = [], tiposCache = [];
+
+// QR hospedaje
+const _urlHosp = location.origin + '/hospedaje/' + SLUG;
+document.addEventListener('DOMContentLoaded', () => {
+    new QRCode(document.getElementById('qr-hospedaje'), {
+        text: _urlHosp, width: 60, height: 60,
+        colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+    });
+});
+let _qrHospGrande = false;
+function abrirQR() {
+    if (!_qrHospGrande) {
+        new QRCode(document.getElementById('qr-grande'), {
+            text: _urlHosp, width: 260, height: 260,
+            colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+        });
+        _qrHospGrande = true;
+    }
+    document.getElementById('overlay-qr').classList.remove('hidden');
+}
+function cerrarQR() { document.getElementById('overlay-qr').classList.add('hidden'); }
 
 function toast(msg, ok=true) {
     const el = document.getElementById('toast');

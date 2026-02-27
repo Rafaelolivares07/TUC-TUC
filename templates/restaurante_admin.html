@@ -27,6 +27,16 @@
 
 <div id="toast" class="toast"></div>
 
+<!-- Overlay QR grande -->
+<div id="overlay-qr" class="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-5 hidden" onclick="cerrarQR()">
+    <div id="qr-grande" class="rounded-2xl overflow-hidden shadow-2xl"></div>
+    <button onclick="event.stopPropagation(); compartirWhatsApp()"
+            class="bg-green-500 hover:bg-green-600 text-white font-bold px-8 py-3 rounded-2xl text-base shadow-lg">
+        Compartir por WhatsApp
+    </button>
+    <span class="text-white/60 text-sm">Toca para cerrar</span>
+</div>
+
 {% if restaurante %}
 <!-- ============================================ -->
 <!-- PANEL ADMIN DE UN RESTAURANTE                -->
@@ -35,16 +45,24 @@
 
     <!-- Header -->
     <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-t-4 border-amber-500">
-        <div class="flex items-center justify-between">
-            <h1 class="text-3xl font-extrabold text-gray-800">{{ restaurante.nombre }}</h1>
-            <div id="badge-dias" class="hidden text-sm font-bold px-3 py-1 rounded-full"></div>
-        </div>
-        <!-- Enlace público del restaurante -->
-        <div class="mt-3 flex items-center gap-2 flex-wrap">
-            <span class="text-gray-400 text-sm">Pagina publica:</span>
-            <code id="url-publica" class="text-sm bg-gray-100 px-2 py-1 rounded text-amber-700 font-mono"></code>
-            <button onclick="copiarEnlace()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">Copiar</button>
-            <button onclick="compartirWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">WhatsApp</button>
+        <div class="flex items-start gap-4">
+            <div class="flex-1">
+                <div class="flex items-center justify-between">
+                    <h1 class="text-3xl font-extrabold text-gray-800">{{ restaurante.nombre }}</h1>
+                    <div id="badge-dias" class="hidden text-sm font-bold px-3 py-1 rounded-full"></div>
+                </div>
+                <!-- Enlace público del restaurante -->
+                <div class="mt-3 flex items-center gap-2 flex-wrap">
+                    <span class="text-gray-400 text-sm">Pagina publica:</span>
+                    <code id="url-publica" class="text-sm bg-gray-100 px-2 py-1 rounded text-amber-700 font-mono"></code>
+                    <button onclick="copiarEnlace()" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">Copiar</button>
+                    <button onclick="compartirWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">WhatsApp</button>
+                </div>
+            </div>
+            <div class="flex-shrink-0 flex flex-col items-center gap-1 cursor-pointer" onclick="abrirQR()">
+                <div id="qr-restaurante" class="rounded-lg overflow-hidden"></div>
+                <span class="text-xs text-gray-400">Escanear</span>
+            </div>
         </div>
     </div>
 
@@ -1514,15 +1532,33 @@ if (SLUG) {
     cargarPines();
     cargarSuscripcion();
 
-    // Mostrar URL pública
+    // Mostrar URL pública y QR
+    const _urlRest = `${location.origin}/r/${SLUG}`;
     const urlPub = document.getElementById('url-publica');
-    if (urlPub) urlPub.textContent = `${location.origin}/r/${SLUG}`;
+    if (urlPub) urlPub.textContent = _urlRest;
+    new QRCode(document.getElementById('qr-restaurante'), {
+        text: _urlRest, width: 80, height: 80,
+        colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+    });
 
     // Fechas del reporte: default hoy
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('rpt-desde').value = hoy;
     document.getElementById('rpt-hasta').value = hoy;
 }
+
+let _qrRestGrande = false;
+function abrirQR() {
+    if (!_qrRestGrande) {
+        new QRCode(document.getElementById('qr-grande'), {
+            text: `${location.origin}/r/${SLUG}`, width: 260, height: 260,
+            colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+        });
+        _qrRestGrande = true;
+    }
+    document.getElementById('overlay-qr').classList.remove('hidden');
+}
+function cerrarQR() { document.getElementById('overlay-qr').classList.add('hidden'); }
 
 function copiarEnlace() {
     const url = `${location.origin}/r/${SLUG}`;

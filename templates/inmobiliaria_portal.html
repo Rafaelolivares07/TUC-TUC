@@ -49,7 +49,7 @@
     <div class="flex items-center justify-between mb-3">
       {% if inmo.mostrar_nombre %}<h1 class="text-xl font-bold text-gray-800">{{ inmo.nombre }}</h1>{% else %}<div></div>{% endif %}
       {% if inmo.whatsapp %}
-      <a href="https://wa.me/{{ inmo.whatsapp }}" target="_blank"
+      <a href="https://wa.me/57{{ inmo.whatsapp }}" target="_blank"
          class="bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-xl">WhatsApp</a>
       {% endif %}
     </div>
@@ -68,7 +68,7 @@
         {% if inmo.descripcion %}<p class="text-sm text-gray-500 mt-0.5">{{ inmo.descripcion }}</p>{% endif %}
       </div>
       {% if inmo.whatsapp %}
-      <a href="https://wa.me/{{ inmo.whatsapp }}" target="_blank"
+      <a href="https://wa.me/57{{ inmo.whatsapp }}" target="_blank"
          class="bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-xl">WhatsApp</a>
       {% endif %}
     </div>

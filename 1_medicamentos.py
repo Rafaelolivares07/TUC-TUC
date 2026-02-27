@@ -27092,23 +27092,26 @@ def api_tienda_producto_crear(slug):
     """Crear o editar producto"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    data = request.get_json()
-    nombre = data.get('nombre', '').strip()
-    categoria = data.get('categoria', '').strip()
-    precio = data.get('precio', 0)
-    producto_id = data.get('id')
-    descripcion = data.get('descripcion', '').strip()
-    codigo_barra = data.get('codigo_barra', '').strip() or None
-    catalogo_id = data.get('catalogo_id') or None
-
-    if not nombre:
-        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    conn = None
     try:
-        precio = float(precio)
-    except:
-        return jsonify({'ok': False, 'error': 'Precio invalido'}), 400
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({'ok': False, 'error': 'Datos invalidos'}), 400
+        nombre = data.get('nombre', '').strip()
+        categoria = data.get('categoria', '').strip()
+        precio = data.get('precio', 0)
+        producto_id = data.get('id')
+        descripcion = data.get('descripcion', '').strip()
+        codigo_barra = data.get('codigo_barra', '').strip() or None
+        catalogo_id = data.get('catalogo_id') or None
 
-    try:
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+        try:
+            precio = float(precio)
+        except:
+            return jsonify({'ok': False, 'error': 'Precio invalido'}), 400
+
         conn = get_db_connection()
         tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
@@ -27146,6 +27149,9 @@ def api_tienda_producto_crear(slug):
         conn.close()
         return jsonify({'ok': True, 'id': nuevo_id})
     except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

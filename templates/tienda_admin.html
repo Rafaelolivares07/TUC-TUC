@@ -6,6 +6,10 @@
     <title>{% if tienda %}{{ tienda.nombre }}{% else %}Tiendas{% endif %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+    <script src="https://unpkg.com/@protomaps/basemaps@5/dist/basemaps.js" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
@@ -273,35 +277,25 @@
 
         <!-- ====== TAB: UBICACIÓN ====== -->
         <div id="panel-ubicacion" class="p-5 hidden">
-            <h2 class="font-semibold text-gray-700 mb-1">Ubicación de la tienda</h2>
-            <p class="text-xs text-gray-400 mb-4">Esta ubicación permitirá que tus clientes lleguen hasta aquí con TUC TUC.</p>
+            <h2 class="font-semibold text-gray-700 mb-2">Ubicación de la tienda</h2>
+            <p class="text-xs text-gray-400 mb-3">Toca el mapa para marcar el punto exacto de tu negocio, o usa el GPS.</p>
             {% if tienda.lat and tienda.lon %}
-            <div id="coords-actuales" class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-800">
-                📍 Ubicación guardada: <span id="txt-lat">{{ tienda.lat }}</span>, <span id="txt-lon">{{ tienda.lon }}</span>
+            <div id="coords-guardadas" class="bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
+                📍 Ubicación guardada
             </div>
             {% else %}
-            <div id="coords-actuales" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-800">
-                📍 Ubicación guardada: <span id="txt-lat"></span>, <span id="txt-lon"></span>
+            <div id="coords-guardadas" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
+                📍 Ubicación guardada
             </div>
             {% endif %}
-            <button onclick="capturarUbicacion()" class="w-full bg-blue-600 text-white font-semibold py-4 rounded-xl text-base mb-3 flex items-center justify-center gap-2">
+            <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
+                <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
+            </div>
+            <button onclick="gpsUbicacion()"
+                class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
                 📡 Capturar mi ubicación actual (GPS)
             </button>
-            <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
-                <p class="text-xs text-gray-500 mb-3">O ingresa manualmente:</p>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs text-gray-500">Latitud</label>
-                        <input id="inp-lat" type="number" step="any" value="{{ tienda.lat | default('') }}" placeholder="3.4516"
-                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1">
-                    </div>
-                    <div>
-                        <label class="text-xs text-gray-500">Longitud</label>
-                        <input id="inp-lon" type="number" step="any" value="{{ tienda.lon | default('') }}" placeholder="-76.5320"
-                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1">
-                    </div>
-                </div>
-            </div>
+            <p class="text-xs text-gray-400 text-center mb-3" id="txt-coords-ub">Toca el mapa para marcar el punto</p>
             <button onclick="guardarUbicacion()" class="w-full bg-green-600 text-white font-semibold py-4 rounded-xl text-base">
                 Guardar ubicación
             </button>
@@ -340,37 +334,72 @@ function cambiarTab(tab) {
     });
     if (tab === 'pedidos') cargarPedidos();
     if (tab === 'acceso') cargarCajeros();
+    if (tab === 'ubicacion') iniciarMapaUbicacion();
 }
 
-// ── UBICACIÓN ────────────────────────────────────────────────
-function capturarUbicacion() {
+// ── UBICACIÓN (mapa propio) ───────────────────────────────────
+let _mapaUbic = null, _markerUbic = null;
+let _latUbic = {{ tienda.lat | default('null') }};
+let _lonUbic = {{ tienda.lon | default('null') }};
+
+function iniciarMapaUbicacion() {
+    if (_mapaUbic) { _mapaUbic.resize(); return; }
+    const protocol = new pmtiles.Protocol();
+    maplibregl.addProtocol('pmtiles', protocol.tile);
+    const centerLat = _latUbic || 3.4516;
+    const centerLon = _lonUbic || -76.5320;
+    _mapaUbic = new maplibregl.Map({
+        container: 'mapa-ubicacion',
+        style: {
+            version: 8,
+            glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+            sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
+            sources: { protomaps: { type: 'vector', url: 'pmtiles:///static/maps/cali.pmtiles', attribution: '&copy; OpenStreetMap' } },
+            layers: basemaps.layers('protomaps', basemaps.namedFlavor('light'), { lang: 'es' })
+        },
+        center: [centerLon, centerLat],
+        zoom: _latUbic ? 17 : 14,
+        attributionControl: false
+    });
+    if (_latUbic && _lonUbic) _colocarMarker(_lonUbic, _latUbic);
+    _mapaUbic.on('click', e => _colocarMarker(e.lngLat.lng, e.lngLat.lat));
+}
+
+function _colocarMarker(lon, lat) {
+    if (_markerUbic) _markerUbic.remove();
+    const el = document.createElement('div');
+    el.innerHTML = `<svg width="32" height="40" viewBox="0 0 32 40" fill="none"><path d="M16 0C9.37 0 4 5.37 4 12c0 9 12 28 12 28S28 21 28 12C28 5.37 22.63 0 16 0Z" fill="#dc2626"/><circle cx="16" cy="12" r="5" fill="white"/></svg>`;
+    _markerUbic = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([lon, lat]).addTo(_mapaUbic);
+    _latUbic = lat; _lonUbic = lon;
+    document.getElementById('txt-coords-ub').textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+function gpsUbicacion() {
     if (!navigator.geolocation) { toast('GPS no disponible', true); return; }
-    toast('Capturando ubicación...', false);
+    toast('Localizando...', false);
     navigator.geolocation.getCurrentPosition(
         pos => {
-            document.getElementById('inp-lat').value = pos.coords.latitude.toFixed(7);
-            document.getElementById('inp-lon').value = pos.coords.longitude.toFixed(7);
-            toast('Ubicación capturada — toca Guardar', false);
+            if (_mapaUbic) {
+                _mapaUbic.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 });
+                _colocarMarker(pos.coords.longitude, pos.coords.latitude);
+            }
         },
         () => toast('No se pudo obtener GPS', true),
         { enableHighAccuracy: true, timeout: 10000 }
     );
 }
+
 async function guardarUbicacion() {
-    const lat = parseFloat(document.getElementById('inp-lat').value);
-    const lon = parseFloat(document.getElementById('inp-lon').value);
-    if (isNaN(lat) || isNaN(lon)) { toast('Ingresa coordenadas válidas', true); return; }
+    if (_latUbic === null || _lonUbic === null) { toast('Toca el mapa para marcar tu ubicación', true); return; }
     try {
         const r = await fetch(`/api/tienda/${SLUG}/admin/ubicacion`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({lat, lon})
+            body: JSON.stringify({ lat: _latUbic, lon: _lonUbic })
         });
         const d = await r.json();
         if (d.ok) {
             toast('Ubicación guardada', false);
-            document.getElementById('txt-lat').textContent = lat.toFixed(5);
-            document.getElementById('txt-lon').textContent = lon.toFixed(5);
-            document.getElementById('coords-actuales').classList.remove('hidden');
+            document.getElementById('coords-guardadas').classList.remove('hidden');
         } else { toast(d.error || 'Error', true); }
     } catch(e) { toast('Error de conexión', true); }
 }

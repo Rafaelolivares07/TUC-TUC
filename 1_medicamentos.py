@@ -28041,7 +28041,20 @@ def api_tienda_producto_imagen_extra_eliminar(slug, producto_id, imagen_id):
 @app.route('/empieza')
 def landing_empieza():
     """Landing page para captar prospectos"""
-    return render_template('empieza.html')
+    cfg = {}
+    try:
+        conn = get_db_connection()
+        crear_tabla_config_tipologia(conn)
+        rows = conn.execute("SELECT tipo, dias_gratis FROM config_tipologia").fetchall()
+        cfg = {r['tipo']: {'dias_gratis': r['dias_gratis']} for r in rows}
+        conn.close()
+    except Exception:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+    return render_template('empieza.html', cfg=cfg)
 
 
 @app.route('/api/prospecto', methods=['POST'])

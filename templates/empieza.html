@@ -86,7 +86,7 @@
             <span class="text-2xl shrink-0">🎁</span>
             <div>
                 <p class="font-bold text-amber-700 text-sm">Prueba gratis</p>
-                <p class="text-amber-600 text-xs mt-0.5">Restaurante 2 días · Tienda 4 días · Taller 7 días · Inmobiliaria 14 días · Hospedaje 7 días. Solo pagas cuando estés listo.</p>
+                <p class="text-amber-600 text-xs mt-0.5">{%- set sep = namespace(v='') -%}{%- for t, lbl in [('restaurante','Restaurante'),('tienda','Tienda'),('taller','Taller'),('hospedaje','Hospedaje'),('inmobiliaria','Inmobiliaria'),('compraventa','Compraventa')] -%}{%- set d = cfg.get(t, {}).get('dias_gratis', 0) -%}{%- if d > 0 -%}{{ sep.v }}{{ lbl }} {{ d }} días{%- set sep.v = ' · ' -%}{%- endif -%}{%- endfor -%}. Solo pagas cuando estés listo.</p>
             </div>
         </div>
     </div>
@@ -102,7 +102,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Restaurante</span>
-                        <span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">2 días gratis</span>
+                        {% set d = cfg.get('restaurante', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Menú del día o carta — pedidos en mesa, para llevar y online</p>
                 </div>
@@ -118,7 +118,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Tienda Online</span>
-                        <span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">4 días gratis</span>
+                        {% set d = cfg.get('tienda', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Catálogo, carrito y pedidos a domicilio</p>
                 </div>
@@ -134,7 +134,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Taller Automotriz</span>
-                        <span class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                        {% set d = cfg.get('taller', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Órdenes de trabajo, historial de vehículos y más</p>
                 </div>
@@ -150,7 +150,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Inmobiliaria</span>
-                        <span class="bg-green-100 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                        {% set d = cfg.get('inmobiliaria', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-green-100 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Portal de propiedades, bolsa inmobiliaria y leads</p>
                 </div>
@@ -166,7 +166,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Compraventa</span>
-                        <span class="bg-violet-100 text-violet-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                        {% set d = cfg.get('compraventa', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-violet-100 text-violet-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Bolsa de vehículos usados — publica y vende con tu portal propio</p>
                 </div>
@@ -182,7 +182,7 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Hospedaje</span>
-                        <span class="bg-cyan-100 text-cyan-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>
+                        {% set d = cfg.get('hospedaje', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-cyan-100 text-cyan-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Hotel, cabaña, hostal o Airbnb — reservas y calendario online</p>
                 </div>
@@ -224,6 +224,10 @@
     </div>
 </div>
 
+
+<script>
+const CFG = {{ cfg | tojson }};
+</script>
 
 <script>
 let tipo    = '';
@@ -350,7 +354,7 @@ function avNomDueno() {
 
 function mTelefono() {
     paso = 'telefono';
-    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : tipo === 'hospedaje' ? '7' : '4';
+    const dias = (CFG[tipo] && CFG[tipo].dias_gratis) ? CFG[tipo].dias_gratis : 0;
     render(`
         <button onclick="mNombreDueno()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
         <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Último paso</p>
@@ -558,7 +562,7 @@ async function enviarOtro() {
 // ─── Modales de éxito ──────────────────────────────────
 
 function mExito(redirect) {
-    const dias = tipo === 'restaurante' ? '2' : tipo === 'taller' ? '7' : tipo === 'inmobiliaria' ? '14' : tipo === 'compraventa' ? '7' : tipo === 'hospedaje' ? '7' : '4';
+    const dias = (CFG[tipo] && CFG[tipo].dias_gratis) ? CFG[tipo].dias_gratis : 0;
     render(`
         <div class="text-center py-4">
             <div class="text-6xl mb-4">🎉</div>

@@ -27097,12 +27097,12 @@ def api_tienda_producto_crear(slug):
         data = request.get_json(force=True)
         if not data:
             return jsonify({'ok': False, 'error': 'Datos invalidos'}), 400
-        nombre = data.get('nombre', '').strip()
-        categoria = data.get('categoria', '').strip()
+        nombre = (data.get('nombre') or '').strip()
+        categoria = (data.get('categoria') or '').strip()
         precio = data.get('precio', 0)
         producto_id = data.get('id')
-        descripcion = data.get('descripcion', '').strip()
-        codigo_barra = data.get('codigo_barra', '').strip() or None
+        descripcion = (data.get('descripcion') or '').strip()
+        codigo_barra = (data.get('codigo_barra') or '').strip() or None
         catalogo_id = data.get('catalogo_id') or None
 
         if not nombre:

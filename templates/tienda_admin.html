@@ -26,6 +26,16 @@
 
 <div id="toast" class="toast"></div>
 
+<!-- Overlay QR grande -->
+<div id="overlay-qr" class="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center gap-5 hidden" onclick="cerrarQR()">
+    <div id="qr-grande" class="rounded-2xl overflow-hidden shadow-2xl"></div>
+    <button onclick="event.stopPropagation(); compartirWhatsApp()"
+            class="bg-green-500 hover:bg-green-600 text-white font-bold px-8 py-3 rounded-2xl text-base shadow-lg">
+        Compartir por WhatsApp
+    </button>
+    <span class="text-white/60 text-sm">Toca para cerrar</span>
+</div>
+
 {% if tienda %}
 <!-- ============================================ -->
 <!-- PANEL ADMIN DE UNA TIENDA                    -->
@@ -47,7 +57,7 @@
                     <button onclick="compartirWhatsApp()" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">WhatsApp</button>
                 </div>
             </div>
-            <div class="flex-shrink-0 flex flex-col items-center gap-1">
+            <div class="flex-shrink-0 flex flex-col items-center gap-1 cursor-pointer" onclick="abrirQR()">
                 <div id="qr-tienda" class="rounded-lg overflow-hidden"></div>
                 <span class="text-xs text-gray-400">Escanear</span>
             </div>
@@ -301,6 +311,21 @@ new QRCode(document.getElementById('qr-tienda'), {
     text: URL_PUBLICA, width: 80, height: 80,
     colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
 });
+
+let _qrGrandeGenerado = false;
+function abrirQR() {
+    if (!_qrGrandeGenerado) {
+        new QRCode(document.getElementById('qr-grande'), {
+            text: URL_PUBLICA, width: 260, height: 260,
+            colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+        });
+        _qrGrandeGenerado = true;
+    }
+    document.getElementById('overlay-qr').classList.remove('hidden');
+}
+function cerrarQR() {
+    document.getElementById('overlay-qr').classList.add('hidden');
+}
 
 function copiarEnlace() {
     navigator.clipboard.writeText(URL_PUBLICA);

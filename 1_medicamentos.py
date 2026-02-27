@@ -25201,7 +25201,7 @@ def crear_tabla_config_tipologia(conn):
         ('compraventa', 0, 'calendario'),
     ]:
         conn.execute(
-            "INSERT INTO config_tipologia (tipo, dias_gratis, modo_descuento) VALUES (%s, %s, %s) ON CONFLICT (tipo) DO NOTHING",
+            "INSERT INTO config_tipologia (tipo, dias_gratis, modo_descuento) VALUES (%s, %s, %s) ON CONFLICT (tipo) DO NOTHING RETURNING tipo",
             (tipo, dias, modo)
         )
     conn.commit()
@@ -32972,7 +32972,7 @@ def api_admin_config_tipologia(tipo):
         crear_tabla_config_tipologia(conn)
         conn.execute(
             "INSERT INTO config_tipologia (tipo, dias_gratis, modo_descuento) VALUES (%s, %s, %s) "
-            "ON CONFLICT (tipo) DO UPDATE SET dias_gratis=%s, modo_descuento=%s",
+            "ON CONFLICT (tipo) DO UPDATE SET dias_gratis=%s, modo_descuento=%s RETURNING tipo",
             (tipo, dias_gratis, modo_descuento, dias_gratis, modo_descuento)
         )
         conn.commit()

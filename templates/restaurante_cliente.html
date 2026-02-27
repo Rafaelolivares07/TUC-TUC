@@ -66,7 +66,7 @@
     <!-- Imagen de portada -->
     {% if restaurante.imagen_header %}
     <div class="w-full">
-        <img src="{{ restaurante.imagen_header }}" class="w-full h-40 object-cover" alt="{{ restaurante.nombre }}">
+        <img src="{{ restaurante.imagen_header }}" class="w-full aspect-[3/1] object-cover" alt="{{ restaurante.nombre }}">
     </div>
     {% endif %}
 

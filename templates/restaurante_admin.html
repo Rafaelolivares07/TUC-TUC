@@ -327,7 +327,7 @@
                 <div id="header-preview" class="{% if not restaurante.imagen_header %}hidden{% endif %} mb-3">
                     <img id="header-img-preview"
                          src="{{ restaurante.imagen_header or '' }}"
-                         class="w-full h-32 object-cover rounded-xl border">
+                         class="w-full aspect-[3/1] object-cover rounded-xl border">
                     <button onclick="quitarImagenHeader()" class="mt-2 text-xs text-red-500 hover:text-red-700 font-semibold">Quitar imagen</button>
                 </div>
 
@@ -1414,12 +1414,13 @@ async function subirImagenHeader(input) {
         const img = new Image();
         img.onload = function() {
             const canvas = document.createElement('canvas');
-            const MAX_W = 800;
-            let w = img.width, h = img.height;
-            if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
-            canvas.width = w;
-            canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const TW = 1200, TH = 400;
+            const srcRatio = img.width / img.height, tgtRatio = TW / TH;
+            let sx, sy, sw, sh;
+            if (srcRatio > tgtRatio) { sh = img.height; sw = sh * tgtRatio; sy = 0; sx = (img.width - sw) / 2; }
+            else { sw = img.width; sh = sw / tgtRatio; sx = 0; sy = (img.height - sh) / 2; }
+            canvas.width = TW; canvas.height = TH;
+            canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
             const base64 = canvas.toDataURL('image/jpeg', 0.75);
 
             fetch(`${BASE}/imagen-header`, {

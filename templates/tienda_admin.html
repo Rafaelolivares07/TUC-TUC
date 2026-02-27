@@ -141,7 +141,7 @@
             <!-- Imagen de portada -->
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-3">Imagen de portada</h3>
-                <div id="preview-header" class="w-full h-40 bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden" onclick="document.getElementById('inp-header').click()">
+                <div id="preview-header" class="w-full aspect-[3/1] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden" onclick="document.getElementById('inp-header').click()">
                     {% if tienda.imagen_header %}
                     <img src="{{ tienda.imagen_header }}" class="w-full h-full object-cover">
                     {% else %}
@@ -723,11 +723,13 @@ async function subirHeader(input) {
         const img = new Image();
         img.onload = async () => {
             const canvas = document.createElement('canvas');
-            const max = 800;
-            let w = img.width, h = img.height;
-            if (w > max) { h = h * max / w; w = max; }
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const TW = 1200, TH = 400;
+            const srcRatio = img.width / img.height, tgtRatio = TW / TH;
+            let sx, sy, sw, sh;
+            if (srcRatio > tgtRatio) { sh = img.height; sw = sh * tgtRatio; sy = 0; sx = (img.width - sw) / 2; }
+            else { sw = img.width; sh = sw / tgtRatio; sx = 0; sy = (img.height - sh) / 2; }
+            canvas.width = TW; canvas.height = TH;
+            canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
             const base64 = canvas.toDataURL('image/jpeg', 0.75);
             try {
                 const r = await fetch(BASE + '/imagen-header', {

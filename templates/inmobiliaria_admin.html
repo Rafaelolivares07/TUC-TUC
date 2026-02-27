@@ -113,7 +113,7 @@
       <!-- Imagen Header -->
       <div>
         <p class="text-sm font-semibold text-gray-700 mb-2">Imagen de fondo / banner</p>
-        <div id="preview-header" class="w-full h-32 rounded-xl bg-gray-100 overflow-hidden mb-2 flex items-center justify-center">
+        <div id="preview-header" class="w-full aspect-[3/1] rounded-xl bg-gray-100 overflow-hidden mb-2 flex items-center justify-center">
           <span class="text-gray-400 text-sm">Sin imagen</span>
         </div>
         <div class="flex gap-2">
@@ -357,11 +357,13 @@ function subirImagenHeader(input) {
     const img = new Image();
     img.onload = function() {
       const canvas = document.createElement('canvas');
-      const TW = 800, TH = 267;
-      const scale = Math.max(TW / img.width, TH / img.height);
-      const sw = img.width * scale, sh = img.height * scale;
+      const TW = 1200, TH = 400;
+      const srcRatio = img.width / img.height, tgtRatio = TW / TH;
+      let sx, sy, sw, sh;
+      if (srcRatio > tgtRatio) { sh = img.height; sw = sh * tgtRatio; sy = 0; sx = (img.width - sw) / 2; }
+      else { sw = img.width; sh = sw / tgtRatio; sx = 0; sy = (img.height - sh) / 2; }
       canvas.width = TW; canvas.height = TH;
-      canvas.getContext('2d').drawImage(img, (TW - sw) / 2, (TH - sh) / 2, sw, sh);
+      canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
       const base64 = canvas.toDataURL('image/jpeg', 0.75);
       document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
       personalizarInmo({imagen_header: base64});

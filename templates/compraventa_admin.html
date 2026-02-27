@@ -81,6 +81,7 @@
       <button onclick="verTab('inventario')" id="tab-inventario" class="tab-btn active text-sm py-3 px-1 whitespace-nowrap">Inventario</button>
       <button onclick="verTab('leads')" id="tab-leads" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Contactos</button>
       <button onclick="verTab('apariencia')" id="tab-apariencia" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Apariencia</button>
+      <button onclick="verTab('ubicacion')" id="tab-ubicacion" class="tab-btn text-sm py-3 px-1 text-gray-500 whitespace-nowrap">Ubicación</button>
     </div>
   </div>
 
@@ -157,6 +158,52 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- TAB: UBICACIÓN -->
+  <div id="seccion-ubicacion" class="hidden max-w-4xl mx-auto px-4 py-6">
+    <h2 class="font-semibold text-gray-700 mb-1">Ubicación del negocio</h2>
+    <p class="text-xs text-gray-400 mb-4">
+      Esta ubicación se usará para que tus clientes puedan llegar hasta aquí con TUC TUC.
+    </p>
+
+    {% if neg.lat and neg.lon %}
+    <div id="coords-actuales" class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-800">
+      📍 Ubicación guardada: <span id="txt-lat">{{ neg.lat }}</span>, <span id="txt-lon">{{ neg.lon }}</span>
+    </div>
+    {% else %}
+    <div id="coords-actuales" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-800">
+      📍 Ubicación guardada: <span id="txt-lat"></span>, <span id="txt-lon"></span>
+    </div>
+    {% endif %}
+
+    <button onclick="capturarUbicacion()"
+      class="w-full bg-blue-600 text-white font-semibold py-4 rounded-xl text-base mb-3 flex items-center justify-center gap-2">
+      📡 Capturar mi ubicación actual (GPS)
+    </button>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+      <p class="text-xs text-gray-500 mb-3">O ingresa manualmente:</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-gray-500">Latitud</label>
+          <input id="inp-lat" type="number" step="any" placeholder="3.4516"
+            value="{{ neg.lat | default('') }}"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500">Longitud</label>
+          <input id="inp-lon" type="number" step="any" placeholder="-76.5320"
+            value="{{ neg.lon | default('') }}"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1">
+        </div>
+      </div>
+    </div>
+
+    <button onclick="guardarUbicacion()"
+      class="w-full bg-green-600 text-white font-semibold py-4 rounded-xl text-base">
+      Guardar ubicación
+    </button>
   </div>
 </div>
 
@@ -251,7 +298,7 @@ function mostrarAdmin() {
 }
 
 // ── TABS ──────────────────────────────────────────────────────────────
-const SECCIONES = ['inventario', 'leads', 'apariencia'];
+const SECCIONES = ['inventario', 'leads', 'apariencia', 'ubicacion'];
 function verTab(tab) {
   SECCIONES.forEach(s => {
     document.getElementById(`seccion-${s}`).classList.toggle('hidden', s !== tab);
@@ -488,6 +535,42 @@ function abrirQR() {
 }
 function cerrarQR() {
   document.getElementById('overlay-qr').classList.add('hidden');
+}
+
+function capturarUbicacion() {
+  if (!navigator.geolocation) { toast('GPS no disponible', 'err'); return; }
+  toast('Capturando...', 'ok');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById('inp-lat').value = pos.coords.latitude.toFixed(7);
+      document.getElementById('inp-lon').value = pos.coords.longitude.toFixed(7);
+      toast('Ubicación capturada — toca Guardar', 'ok');
+    },
+    () => toast('No se pudo obtener GPS', 'err'),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+async function guardarUbicacion() {
+  const lat = parseFloat(document.getElementById('inp-lat').value);
+  const lon = parseFloat(document.getElementById('inp-lon').value);
+  if (isNaN(lat) || isNaN(lon)) { toast('Ingresa coordenadas válidas', 'err'); return; }
+  try {
+    const r = await fetch(`/api/compraventa/${SLUG}/admin/ubicacion`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lat, lon})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Ubicación guardada', 'ok');
+      document.getElementById('txt-lat').textContent = lat.toFixed(5);
+      document.getElementById('txt-lon').textContent = lon.toFixed(5);
+      document.getElementById('coords-actuales').classList.remove('hidden');
+    } else {
+      toast(d.error || 'Error', 'err');
+    }
+  } catch(e) { toast('Error de conexión', 'err'); }
 }
 </script>
 </body>

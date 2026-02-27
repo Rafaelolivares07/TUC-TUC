@@ -79,6 +79,9 @@
             <button onclick="cambiarTab('acceso')" id="tab-acceso" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
                 Acceso
             </button>
+            <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
+                Ubicación
+            </button>
         </div>
 
         <!-- ====== TAB: CATÁLOGO DE PRODUCTOS ====== -->
@@ -268,6 +271,41 @@
             </div>
         </div>
 
+        <!-- ====== TAB: UBICACIÓN ====== -->
+        <div id="panel-ubicacion" class="p-5 hidden">
+            <h2 class="font-semibold text-gray-700 mb-1">Ubicación de la tienda</h2>
+            <p class="text-xs text-gray-400 mb-4">Esta ubicación permitirá que tus clientes lleguen hasta aquí con TUC TUC.</p>
+            {% if tienda.lat and tienda.lon %}
+            <div id="coords-actuales" class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-800">
+                📍 Ubicación guardada: <span id="txt-lat">{{ tienda.lat }}</span>, <span id="txt-lon">{{ tienda.lon }}</span>
+            </div>
+            {% else %}
+            <div id="coords-actuales" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-800">
+                📍 Ubicación guardada: <span id="txt-lat"></span>, <span id="txt-lon"></span>
+            </div>
+            {% endif %}
+            <button onclick="capturarUbicacion()" class="w-full bg-blue-600 text-white font-semibold py-4 rounded-xl text-base mb-3 flex items-center justify-center gap-2">
+                📡 Capturar mi ubicación actual (GPS)
+            </button>
+            <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+                <p class="text-xs text-gray-500 mb-3">O ingresa manualmente:</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-gray-500">Latitud</label>
+                        <input id="inp-lat" type="number" step="any" value="{{ tienda.lat | default('') }}" placeholder="3.4516"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">Longitud</label>
+                        <input id="inp-lon" type="number" step="any" value="{{ tienda.lon | default('') }}" placeholder="-76.5320"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1">
+                    </div>
+                </div>
+            </div>
+            <button onclick="guardarUbicacion()" class="w-full bg-green-600 text-white font-semibold py-4 rounded-xl text-base">
+                Guardar ubicación
+            </button>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -294,7 +332,7 @@ function toast(msg, error) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','personalizar','acceso'].forEach(t => {
+    ['catalogo','pedidos','personalizar','acceso','ubicacion'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
         document.getElementById('tab-' + t).className = (t === tab) ?
             'flex-1 py-4 text-center text-sm tab-active transition-all whitespace-nowrap px-2' :
@@ -302,6 +340,39 @@ function cambiarTab(tab) {
     });
     if (tab === 'pedidos') cargarPedidos();
     if (tab === 'acceso') cargarCajeros();
+}
+
+// ── UBICACIÓN ────────────────────────────────────────────────
+function capturarUbicacion() {
+    if (!navigator.geolocation) { toast('GPS no disponible', true); return; }
+    toast('Capturando ubicación...', false);
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            document.getElementById('inp-lat').value = pos.coords.latitude.toFixed(7);
+            document.getElementById('inp-lon').value = pos.coords.longitude.toFixed(7);
+            toast('Ubicación capturada — toca Guardar', false);
+        },
+        () => toast('No se pudo obtener GPS', true),
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+async function guardarUbicacion() {
+    const lat = parseFloat(document.getElementById('inp-lat').value);
+    const lon = parseFloat(document.getElementById('inp-lon').value);
+    if (isNaN(lat) || isNaN(lon)) { toast('Ingresa coordenadas válidas', true); return; }
+    try {
+        const r = await fetch(`/api/tienda/${SLUG}/admin/ubicacion`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({lat, lon})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Ubicación guardada', false);
+            document.getElementById('txt-lat').textContent = lat.toFixed(5);
+            document.getElementById('txt-lon').textContent = lon.toFixed(5);
+            document.getElementById('coords-actuales').classList.remove('hidden');
+        } else { toast(d.error || 'Error', true); }
+    } catch(e) { toast('Error de conexión', true); }
 }
 
 // === URL pública y enlaces ===

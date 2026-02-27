@@ -24935,6 +24935,8 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
         "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
     ]
     for sql in alters:
         try:
@@ -25090,6 +25092,8 @@ def crear_tablas_tienda(conn):
         "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
         "CREATE INDEX IF NOT EXISTS idx_productos_tienda_catalogo ON productos_tienda(catalogo_id)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
     ]
     for sql in alters:
         try:
@@ -25907,6 +25911,38 @@ def api_restaurante_mostrar_nombre(slug):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/admin/ubicacion', methods=['POST'])
+def api_restaurante_ubicacion(slug):
+    """Guardar coordenadas del restaurante"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    conn = None
+    try:
+        data = request.get_json(force=True)
+        lat = data.get('lat')
+        lon = data.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id FROM restaurantes WHERE slug=%s AND admin_id=%s", (slug, uid)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        conn.execute("UPDATE restaurantes SET lat=%s, lon=%s WHERE id=%s", (lat, lon, rest['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -27351,6 +27387,38 @@ def api_tienda_mostrar_nombre(slug):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
+def api_tienda_ubicacion(slug):
+    """Guardar coordenadas de la tienda"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    conn = None
+    try:
+        data = request.get_json(force=True)
+        lat = data.get('lat')
+        lon = data.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute(
+            "SELECT id FROM tiendas WHERE slug=%s AND admin_id=%s", (slug, uid)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        conn.execute("UPDATE tiendas SET lat=%s, lon=%s WHERE id=%s", (lat, lon, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -30898,6 +30966,38 @@ def api_taller_imagen_header(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/taller/<slug>/admin/ubicacion', methods=['POST'])
+def api_taller_ubicacion(slug):
+    """Guardar coordenadas del taller"""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    conn = None
+    try:
+        data = request.get_json(force=True)
+        lat = data.get('lat')
+        lon = data.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+        conn = get_db_connection()
+        neg = conn.execute(
+            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller' AND propietario_id=%s",
+            (slug, uid)
+        ).fetchone()
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        conn.execute("UPDATE negocios SET lat=%s, lon=%s WHERE id=%s", (lat, lon, neg['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ═══════════════════════════════════════════════════════════════
 # MÓDULO INMOBILIARIA TUC TUC
 # URLs: /propiedades  /propiedades/p/<slug>
@@ -31031,6 +31131,8 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS bolsa_habilitada BOOLEAN DEFAULT TRUE",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",
@@ -32490,7 +32592,8 @@ def api_compraventa_admin_info(slug):
         return jsonify({'ok': True, 'negocio': {
             'id': neg['id'], 'nombre': neg['nombre'], 'slug': neg['slug'],
             'imagen_header': neg['imagen_header'], 'tema': neg['tema'],
-            'mostrar_nombre': neg['mostrar_nombre'], 'whatsapp': neg['whatsapp']
+            'mostrar_nombre': neg['mostrar_nombre'], 'whatsapp': neg['whatsapp'],
+            'lat': neg['lat'], 'lon': neg['lon']
         }})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
@@ -32714,6 +32817,37 @@ def api_inmobiliaria_personalizar(slug):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/inmobiliaria/<slug>/admin/ubicacion', methods=['POST'])
+def api_inmobiliaria_ubicacion(slug):
+    """Guardar coordenadas de la inmobiliaria"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    conn = None
+    try:
+        data = request.get_json(force=True)
+        lat = data.get('lat')
+        lon = data.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+        conn = get_db_connection()
+        crear_tablas_inmobiliaria(conn)
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        conn.execute("UPDATE inmobiliarias SET lat=%s, lon=%s WHERE id=%s", (lat, lon, inmo['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/inmobiliaria/<slug>/agregar-dias', methods=['POST'])
 @admin_required
 def api_inmobiliaria_agregar_dias(slug):
@@ -32773,6 +32907,37 @@ def api_compraventa_personalizar(slug):
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/admin/ubicacion', methods=['POST'])
+def api_compraventa_ubicacion(slug):
+    """Guardar coordenadas de la compraventa"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    if not uid and not es_admin:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    conn = None
+    try:
+        data = request.get_json(force=True)
+        lat = data.get('lat')
+        lon = data.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+        conn = get_db_connection()
+        crear_tablas_automotriz(conn)
+        neg = _compraventa_tiene_acceso(conn, slug, uid, es_admin=es_admin)
+        if not neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        conn.execute("UPDATE negocios SET lat=%s, lon=%s WHERE id=%s", (lat, lon, neg['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/compraventa/<slug>/agregar-dias', methods=['POST'])
@@ -33703,6 +33868,31 @@ def api_hospedaje_imagen_header(slug):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/hospedaje/<slug>/admin/ubicacion', methods=['POST'])
+def api_hospedaje_ubicacion(slug):
+    """Guardar coordenadas del hospedaje"""
+    neg, err = _dueno_hospedaje(slug)
+    if err:
+        return err
+    conn = None
+    try:
+        data = request.get_json(force=True)
+        lat = data.get('lat')
+        lon = data.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+        conn = get_db_connection()
+        conn.execute("UPDATE negocios SET lat=%s, lon=%s WHERE id=%s", (lat, lon, neg['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

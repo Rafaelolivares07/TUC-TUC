@@ -30992,6 +30992,7 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
         "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS bolsa_habilitada BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS ciudad VARCHAR(80)",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS publicar_en_bolsa BOOLEAN DEFAULT FALSE",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS disponible_inmobiliarias BOOLEAN DEFAULT FALSE",

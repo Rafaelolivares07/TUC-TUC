@@ -25077,6 +25077,7 @@ def crear_tablas_tienda(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS fecha_vence DATE",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS pin_caja VARCHAR(10)",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS color_primario VARCHAR(20) DEFAULT '#f59e0b'",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS codigo_barra VARCHAR(50)",

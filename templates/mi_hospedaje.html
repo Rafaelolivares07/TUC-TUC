@@ -37,6 +37,13 @@
     </a>
 </div>
 
+{% if neg.dias_pagados %}
+<div class="bg-indigo-50 border-b border-indigo-100 px-4 py-2 flex items-center gap-2">
+    <span class="text-indigo-500 text-sm">🎁</span>
+    <span class="text-xs font-semibold text-indigo-700">{{ neg.dias_pagados }} días disponibles en tu plan</span>
+</div>
+{% endif %}
+
 <!-- Tabs -->
 <div class="bg-white border-b border-gray-200 px-4">
     <div class="flex gap-1 overflow-x-auto py-2 scrollbar-hide">

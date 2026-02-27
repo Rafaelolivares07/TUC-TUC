@@ -67,13 +67,12 @@
 
   <!-- Header del taller -->
   {% if taller.imagen_header %}
-  <div class="relative h-40 sm:h-52 overflow-hidden">
+  <div class="h-40 sm:h-52 overflow-hidden">
     <img src="{{ taller.imagen_header }}" class="w-full h-full object-cover">
-    <div class="absolute inset-0 bg-black/40"></div>
-    <div class="absolute bottom-4 left-4 right-4">
-      <h1 class="text-white font-bold text-xl drop-shadow">{{ taller.nombre }}</h1>
-      <p class="text-white/80 text-sm drop-shadow">Taller mecánico</p>
-    </div>
+  </div>
+  <div class="bg-amber-500 text-white px-5 py-4">
+    <h1 class="text-xl font-bold">{{ taller.nombre }}</h1>
+    <p class="text-amber-100 text-sm mt-0.5">Taller mecánico</p>
   </div>
   {% else %}
   <div class="bg-amber-500 text-white px-5 py-5">

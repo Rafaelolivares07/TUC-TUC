@@ -25249,7 +25249,7 @@ def admin_inmobiliaria_lista():
         crear_tablas_inmobiliaria(conn)
         inmobiliarias = conn.execute("""
             SELECT i.id, i.nombre, i.slug, i.telefono, i.whatsapp, i.activa,
-                   i.bolsa_habilitada, i.descripcion,
+                   i.bolsa_habilitada, i.descripcion, i.dias_pagados,
                    t.nombre AS propietario_nombre,
                    (SELECT COUNT(*) FROM propiedad_inmobiliaria pi WHERE pi.inmobiliaria_id = i.id) AS total_propiedades
             FROM inmobiliarias i
@@ -25271,7 +25271,7 @@ def admin_compraventa_lista():
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
         compraventas = conn.execute("""
-            SELECT n.id, n.nombre, n.slug, n.activo,
+            SELECT n.id, n.nombre, n.slug, n.activo, n.dias_pagados,
                    t.nombre AS propietario_nombre, t.telefono AS propietario_telefono,
                    (SELECT COUNT(*) FROM compraventa_vehiculos cv WHERE cv.negocio_id = n.id) AS total_vehiculos
             FROM negocios n
@@ -28155,7 +28155,7 @@ def api_registro_rapido():
             session['telefono']   = telefono
             session['rol']        = 'Taller'
             session.permanent     = True
-            return jsonify({'ok': True, 'redirect': f'/taller/{slug}'})
+            return jsonify({'ok': True, 'redirect': f'/mi-taller/{slug}'})
 
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -31068,7 +31068,7 @@ def inmobiliaria_admin(slug):
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
         inmo = conn.execute(
-            "SELECT id, nombre, slug FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
+            "SELECT id, nombre, slug, dias_pagados FROM inmobiliarias WHERE slug=%s AND activa=TRUE",
             (slug,)
         ).fetchone()
         conn.close()
@@ -32071,7 +32071,7 @@ def compraventa_admin(slug):
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
         neg = conn.execute(
-            "SELECT id, nombre, slug FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE",
+            "SELECT id, nombre, slug, dias_pagados FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE",
             (slug,)
         ).fetchone()
         conn.close()
@@ -32604,6 +32604,29 @@ def api_inmobiliaria_personalizar(slug):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/inmobiliaria/<slug>/agregar-dias', methods=['POST'])
+@admin_required
+def api_inmobiliaria_agregar_dias(slug):
+    """Admin: agrega días pagados a una inmobiliaria"""
+    data = request.get_json()
+    dias = int(data.get('dias', 0))
+    if dias < 1:
+        return jsonify({'ok': False, 'error': 'Días inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE inmobiliarias SET dias_pagados = COALESCE(dias_pagados, 0) + %s WHERE slug = %s",
+            (dias, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/compraventa/<slug>/admin/personalizar', methods=['POST'])
 def api_compraventa_personalizar(slug):
     """Actualizar imagen_header, tema y mostrar_nombre de la compraventa"""
@@ -32640,6 +32663,29 @@ def api_compraventa_personalizar(slug):
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/compraventa/<slug>/agregar-dias', methods=['POST'])
+@admin_required
+def api_compraventa_agregar_dias(slug):
+    """Admin: agrega días pagados a una compraventa"""
+    data = request.get_json()
+    dias = int(data.get('dias', 0))
+    if dias < 1:
+        return jsonify({'ok': False, 'error': 'Días inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE negocios SET dias_pagados = COALESCE(dias_pagados, 0) + %s WHERE slug = %s AND tipo = 'compraventa'",
+            (dias, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ─── API: COMPRAVENTA PÚBLICA ──────────────────────────────────────────
@@ -32832,6 +32878,29 @@ def admin_hospedaje_lista():
     except Exception as e:
         import traceback; traceback.print_exc()
         return f"Error: {e}", 500
+
+
+@app.route('/api/hospedaje/<slug>/agregar-dias', methods=['POST'])
+@admin_required
+def api_hospedaje_agregar_dias(slug):
+    """Admin: agrega días pagados a un hospedaje"""
+    data = request.get_json()
+    dias = int(data.get('dias', 0))
+    if dias < 1:
+        return jsonify({'ok': False, 'error': 'Días inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE negocios SET dias_pagados = COALESCE(dias_pagados, 0) + %s WHERE slug = %s AND tipo = 'hospedaje'",
+            (dias, slug)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/hospedaje/login', methods=['POST'])

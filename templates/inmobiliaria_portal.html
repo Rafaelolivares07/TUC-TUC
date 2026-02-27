@@ -40,20 +40,20 @@
 
 <!-- HEADER INMOBILIARIA -->
 {% if inmo.imagen_header %}
-<div class="relative aspect-[3/1] overflow-hidden">
-  <img src="{{ inmo.imagen_header }}" class="absolute inset-0 w-full h-full object-cover">
-  <div class="absolute bottom-4 left-4 right-4 flex items-end justify-between">
-    {% if inmo.mostrar_nombre %}
-    <h1 class="text-white font-bold text-xl drop-shadow">{{ inmo.nombre }}</h1>
-    {% endif %}
-    {% if inmo.whatsapp %}
-    <a href="https://wa.me/{{ inmo.whatsapp }}" target="_blank"
-       class="bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow">WhatsApp</a>
-    {% endif %}
-  </div>
+<div class="aspect-[3/1] overflow-hidden">
+  <img src="{{ inmo.imagen_header }}" class="w-full h-full object-cover">
 </div>
 <div class="bg-white shadow-sm">
-  <div class="max-w-5xl mx-auto px-4 py-3">
+  <div class="max-w-5xl mx-auto px-4 py-4">
+    {% if inmo.mostrar_nombre or inmo.whatsapp %}
+    <div class="flex items-center justify-between mb-3">
+      {% if inmo.mostrar_nombre %}<h1 class="text-xl font-bold text-gray-800">{{ inmo.nombre }}</h1>{% else %}<div></div>{% endif %}
+      {% if inmo.whatsapp %}
+      <a href="https://wa.me/{{ inmo.whatsapp }}" target="_blank"
+         class="bg-green-500 text-white text-sm font-semibold px-4 py-2 rounded-xl">WhatsApp</a>
+      {% endif %}
+    </div>
+    {% endif %}
 {% else %}
 <div class="bg-white shadow-sm">
   <div class="max-w-5xl mx-auto px-4 py-5">

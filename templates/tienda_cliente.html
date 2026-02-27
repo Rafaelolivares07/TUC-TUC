@@ -58,11 +58,11 @@
 
     <!-- Header / Portada -->
     {% if tienda.imagen_header %}
-    <div class="relative">
+    <div>
         <img src="{{ tienda.imagen_header }}" class="w-full aspect-[3/1] object-cover">
         {% if tienda.mostrar_nombre | default(true) %}
-        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
-            <h1 class="text-2xl font-extrabold text-white">{{ tienda.nombre }}</h1>
+        <div class="p-4 pb-2">
+            <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
         </div>
         {% endif %}
     </div>

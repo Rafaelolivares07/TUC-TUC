@@ -120,18 +120,8 @@
             </button>
         </div>
 
-        <!-- PASO 5: Punto B (Destino) -->
+        <!-- PASO 5: Resumen -->
         <div id="paso-5" class="paso flex-col items-center fade-in">
-            <label class="text-gray-400 text-lg mb-2 text-center">Punto de destino</label>
-            <p class="text-gray-500 text-sm mb-6 text-center">Toca para capturar tu ubicación GPS actual</p>
-            <div class="grid grid-cols-2 gap-4 w-full max-w-sm mx-auto" id="chips-punto-b">
-                <!-- Se generan dinámicamente (sin el chip ya usado en punto A) -->
-            </div>
-            <div id="confirmacion-b" class="hidden mt-4 text-green-400 text-center text-lg font-medium"></div>
-        </div>
-
-        <!-- PASO 6: Resumen -->
-        <div id="paso-6" class="paso flex-col items-center fade-in">
             <label class="text-gray-400 text-lg mb-4 text-center">Confirmar captura</label>
             <div class="w-full max-w-sm mx-auto bg-gray-800 rounded-2xl p-5 space-y-4">
                 <div>
@@ -146,15 +136,9 @@
                             class="w-full bg-gray-700 text-yellow-400 text-2xl font-bold py-3 rounded-xl border border-gray-600 focus:border-yellow-500 focus:outline-none pl-10 text-center">
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <span class="text-gray-500 text-sm">Recogida</span>
-                        <p id="resumen-punto-a" class="text-white font-medium"></p>
-                    </div>
-                    <div>
-                        <span class="text-gray-500 text-sm">Destino</span>
-                        <p id="resumen-punto-b" class="text-white font-medium"></p>
-                    </div>
+                <div>
+                    <span class="text-gray-500 text-sm">Recogida</span>
+                    <p id="resumen-punto-a" class="text-white font-medium"></p>
                 </div>
                 <div>
                     <span class="text-gray-500 text-sm">Teléfono</span>
@@ -166,8 +150,8 @@
             </button>
         </div>
 
-        <!-- PASO 7: QR + WhatsApp -->
-        <div id="paso-7" class="paso flex-col items-center fade-in">
+        <!-- PASO 6: QR + WhatsApp -->
+        <div id="paso-6" class="paso flex-col items-center fade-in">
             <label class="text-green-400 text-xl mb-2 text-center font-bold">Captura guardada</label>
             <p class="text-gray-400 text-sm mb-4 text-center">Muestra el QR al pasajero o envía por WhatsApp</p>
 
@@ -185,8 +169,25 @@
                 Copiar enlace
             </button>
 
+            <button onclick="irCapturarDestino()" class="w-full max-w-sm mx-auto mt-3 py-4 bg-yellow-500 text-gray-900 rounded-2xl font-bold text-lg text-center">
+                📍 Capturar destino
+            </button>
+
             <a href="/conductor" class="w-full max-w-sm mx-auto mt-3 py-4 bg-gray-800 text-gray-400 rounded-2xl font-bold text-lg text-center block border border-gray-700">
                 Volver al panel
+            </a>
+        </div>
+
+        <!-- PASO 7: Punto B (Destino) — al bajarse el pasajero -->
+        <div id="paso-7" class="paso flex-col items-center fade-in">
+            <label class="text-gray-400 text-lg mb-2 text-center">¿Dónde se bajó?</label>
+            <p class="text-gray-500 text-sm mb-6 text-center">Toca para capturar tu ubicación GPS actual</p>
+            <div class="grid grid-cols-2 gap-4 w-full max-w-sm mx-auto" id="chips-punto-b">
+                <!-- Se generan dinámicamente (sin el chip ya usado en punto A) -->
+            </div>
+            <div id="confirmacion-b" class="hidden mt-4 text-green-400 text-center text-lg font-medium"></div>
+            <a href="/conductor" id="btn-omitir-destino" class="w-full max-w-sm mx-auto mt-6 py-4 bg-gray-800 text-gray-400 rounded-2xl font-bold text-lg text-center block border border-gray-700">
+                Omitir
             </a>
         </div>
 
@@ -208,6 +209,7 @@
         let pasoActual = 1;
         const totalPasos = 7;
         let inviteUrl = '';
+        let capturaId = null;
 
         // Chips disponibles para punto B
         const todosLosChips = [
@@ -258,15 +260,15 @@
                     return;
                 }
                 captura.telefono = tel.replace(/\D/g, '');
+                llenarResumen();
                 mostrarPaso(5);
-                generarChipsPuntoB();
             }
         }
 
         function saltarTelefono() {
             captura.telefono = '';
+            llenarResumen();
             mostrarPaso(5);
-            generarChipsPuntoB();
         }
 
         function capturarPunto(punto, etiqueta) {
@@ -295,10 +297,7 @@
                         document.getElementById('confirmacion-b').classList.remove('hidden');
                         document.getElementById('confirmacion-b').textContent =
                             '✓ ' + etiqueta + ' capturado';
-                        setTimeout(() => {
-                            llenarResumen();
-                            mostrarPaso(6);
-                        }, 800);
+                        setTimeout(() => actualizarDestino(), 800);
                     }
                 },
                 (err) => {
@@ -329,10 +328,38 @@
             document.getElementById('resumen-tarifa').value = captura.tarifa;
             document.getElementById('resumen-punto-a').textContent =
                 captura.puntoA.etiqueta + ' 📍';
-            document.getElementById('resumen-punto-b').textContent =
-                captura.puntoB.etiqueta + ' 📍';
             document.getElementById('resumen-telefono').textContent =
                 captura.telefono || 'No proporcionado';
+        }
+
+        function irCapturarDestino() {
+            generarChipsPuntoB();
+            document.getElementById('confirmacion-b').classList.add('hidden');
+            mostrarPaso(7);
+        }
+
+        async function actualizarDestino() {
+            if (!capturaId) { mostrarToast('Sin captura activa', 'error'); return; }
+            try {
+                const r = await fetch('/api/conductor/captura/' + capturaId + '/destino', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        punto_b_lat: captura.puntoB.lat,
+                        punto_b_lon: captura.puntoB.lon,
+                        punto_b_etiqueta: captura.puntoB.etiqueta
+                    })
+                });
+                const d = await r.json();
+                if (d.ok) {
+                    mostrarToast('Destino guardado ✓', 'ok');
+                    setTimeout(() => window.location.href = '/conductor', 1500);
+                } else {
+                    mostrarToast(d.error || 'Error al guardar destino', 'error');
+                }
+            } catch(e) {
+                mostrarToast('Error de conexión', 'error');
+            }
         }
 
         function guardarCaptura() {
@@ -350,10 +377,7 @@
                 telefono: captura.telefono || null,
                 punto_a_lat: captura.puntoA.lat,
                 punto_a_lon: captura.puntoA.lon,
-                punto_a_etiqueta: captura.puntoA.etiqueta,
-                punto_b_lat: captura.puntoB.lat,
-                punto_b_lon: captura.puntoB.lon,
-                punto_b_etiqueta: captura.puntoB.etiqueta
+                punto_a_etiqueta: captura.puntoA.etiqueta
             };
 
             fetch('/api/conductor/captura', {
@@ -364,6 +388,7 @@
             .then(r => r.json())
             .then(data => {
                 if (data.ok) {
+                    capturaId = data.captura_id;
                     mostrarToast('Pasajero capturado', 'ok');
                     mostrarInvitacion(data);
                 } else {
@@ -406,8 +431,7 @@
                 document.getElementById('btn-whatsapp').classList.add('flex');
             }
 
-            // Ocultar header cancelar, mostrar paso 7
-            mostrarPaso(7);
+            mostrarPaso(6);
         }
 
         function enviarWhatsApp() {
@@ -448,9 +472,7 @@
 
         // Enter key avanza al siguiente paso
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && [1, 2, 4].includes(pasoActual)) {
-                siguiente();
-            }
+            if (e.key === 'Enter' && [1, 2, 4].includes(pasoActual)) siguiente();
         });
 
         // Iniciar en paso 1

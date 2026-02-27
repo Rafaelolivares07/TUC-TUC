@@ -23946,8 +23946,8 @@ def api_conductor_captura():
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     if not tarifa_referencia:
         return jsonify({'ok': False, 'error': 'Tarifa requerida'}), 400
-    if not punto_a_lat or not punto_b_lat:
-        return jsonify({'ok': False, 'error': 'Ambos puntos GPS son requeridos'}), 400
+    if not punto_a_lat:
+        return jsonify({'ok': False, 'error': 'Punto de recogida GPS requerido'}), 400
 
     token = uuid.uuid4().hex[:12]
     precio_oferta = float(tarifa_final or tarifa_referencia) - 5000
@@ -24045,16 +24045,47 @@ def api_conductor_captura():
               punto_b_lat, punto_b_lon, punto_b_etiqueta,
               token, precio_oferta))
 
+        cur2 = conn.execute("SELECT id FROM capturas_pasajero WHERE token = %s", (token,)).fetchone()
+        captura_id = cur2[0] if cur2 else None
         conn.commit()
         conn.close()
         return jsonify({
             'ok': True,
             'token': token,
+            'captura_id': captura_id,
             'precio_oferta': precio_oferta,
             'nombre': nombre,
             'telefono': telefono
         })
     except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/conductor/captura/<int:captura_id>/destino', methods=['PATCH'])
+def api_conductor_captura_destino(captura_id):
+    """Actualiza el punto de destino de una captura ya guardada"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    lat = data.get('punto_b_lat')
+    lon = data.get('punto_b_lon')
+    etiqueta = data.get('punto_b_etiqueta', '')
+    if not lat or not lon:
+        return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE capturas_pasajero SET punto_b_lat=%s, punto_b_lon=%s, punto_b_etiqueta=%s WHERE id=%s AND conductor_id=%s",
+            (lat, lon, etiqueta, captura_id, session['usuario_id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

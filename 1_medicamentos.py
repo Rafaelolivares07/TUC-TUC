@@ -25178,12 +25178,43 @@ def generar_slug(nombre):
     return slug
 
 
+_config_tipologia_lista = False
+
+def crear_tabla_config_tipologia(conn):
+    """Crea tabla de configuración por tipología y rellena defaults si no existen"""
+    global _config_tipologia_lista
+    if _config_tipologia_lista:
+        return
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS config_tipologia (
+            tipo TEXT PRIMARY KEY,
+            dias_gratis INTEGER NOT NULL DEFAULT 0,
+            modo_descuento TEXT NOT NULL DEFAULT 'calendario'
+        )
+    """)
+    for tipo, dias, modo in [
+        ('restaurante', 2, 'uso_real'),
+        ('tienda',      4, 'calendario'),
+        ('taller',      7, 'calendario'),
+        ('hospedaje',   7, 'calendario'),
+        ('inmobiliaria',0, 'calendario'),
+        ('compraventa', 0, 'calendario'),
+    ]:
+        conn.execute(
+            "INSERT INTO config_tipologia (tipo, dias_gratis, modo_descuento) VALUES (%s, %s, %s) ON CONFLICT (tipo) DO NOTHING",
+            (tipo, dias, modo)
+        )
+    conn.commit()
+    _config_tipologia_lista = True
+
+
 @app.route('/admin/negocios')
 @admin_required
 def admin_negocios():
     """Submenú de negocios: restaurantes, tiendas, talleres"""
     try:
         conn = get_db_connection()
+        crear_tabla_config_tipologia(conn)
         total_restaurantes = (conn.execute("SELECT COUNT(*) FROM restaurantes WHERE activo = TRUE").fetchone() or [0])[0]
         total_tiendas      = (conn.execute("SELECT COUNT(*) FROM tiendas WHERE activo = TRUE").fetchone() or [0])[0]
         try:
@@ -25206,6 +25237,12 @@ def admin_negocios():
         except Exception:
             conn.rollback()
             total_hospedajes = 0
+        try:
+            cfg_rows = conn.execute("SELECT tipo, dias_gratis, modo_descuento FROM config_tipologia").fetchall()
+            cfg = {r['tipo']: {'dias_gratis': r['dias_gratis'], 'modo_descuento': r['modo_descuento']} for r in cfg_rows}
+        except Exception:
+            conn.rollback()
+            cfg = {}
         conn.close()
         return render_template('admin_negocios.html',
                                total_restaurantes=total_restaurantes,
@@ -25213,7 +25250,8 @@ def admin_negocios():
                                total_talleres=total_talleres,
                                total_inmobiliarias=total_inmobiliarias,
                                total_compraventas=total_compraventas,
-                               total_hospedajes=total_hospedajes)
+                               total_hospedajes=total_hospedajes,
+                               cfg=cfg)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -28096,6 +28134,10 @@ def api_registro_rapido():
             tercero_id = cur.fetchone()[0]
             conn.commit()
 
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo=%s", (tipo,)).fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 0
+
         if tipo == 'restaurante':
             crear_tablas_restaurante(conn)
             existente = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
@@ -28105,8 +28147,8 @@ def api_registro_rapido():
             token_acceso = uuid.uuid4().hex
             conn.execute("""
                 INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 2, TRUE)
-            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, dias_gratis))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -28123,11 +28165,11 @@ def api_registro_rapido():
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Ya existe una tienda con ese nombre. Prueba con otro nombre.'}), 400
             token_acceso = uuid.uuid4().hex
-            fecha_vence  = date.today() + timedelta(days=4)
+            fecha_vence  = date.today() + timedelta(days=dias_gratis)
             conn.execute("""
                 INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, fecha_vence, activo)
-                VALUES (%s, %s, %s, %s, %s, %s, 4, %s, TRUE)
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, fecha_vence))
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, fecha_vence))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -28146,8 +28188,8 @@ def api_registro_rapido():
             token_acceso = uuid.uuid4().hex
             cur = conn.execute("""
                 INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo)
-                VALUES (%s, %s, 'taller', %s, %s, %s, %s, 7, TRUE) RETURNING id
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso))
+                VALUES (%s, %s, 'taller', %s, %s, %s, %s, %s, TRUE) RETURNING id
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -30098,6 +30140,9 @@ def api_taller_crear():
     try:
         conn = get_db_connection()
         crear_tablas_taller(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='taller'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 7
 
         existente = conn.execute(
             "SELECT id FROM negocios WHERE slug = %s AND tipo = 'taller'", (slug,)
@@ -30121,8 +30166,8 @@ def api_taller_crear():
 
         conn.execute(
             "INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo) "
-            "VALUES (%s, %s, 'taller', %s, %s, %s, %s, 7, TRUE)",
-            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso)
+            "VALUES (%s, %s, 'taller', %s, %s, %s, %s, %s, TRUE)",
+            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_gratis)
         )
         conn.commit()
         conn.close()
@@ -31554,17 +31599,21 @@ def api_inmobiliaria_crear():
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='inmobiliaria'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 0
         existe = conn.execute("SELECT id FROM inmobiliarias WHERE slug=%s", (slug,)).fetchone()
         if existe:
             conn.close()
             return jsonify({'ok': False, 'error': 'Ese slug ya existe'})
         row = conn.execute(
-            """INSERT INTO inmobiliarias (propietario_id, nombre, slug, telefono, whatsapp, descripcion)
-               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+            """INSERT INTO inmobiliarias (propietario_id, nombre, slug, telefono, whatsapp, descripcion, dias_pagados)
+               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (uid, nombre, slug,
              (data.get('telefono') or '').strip(),
              (data.get('whatsapp') or '').strip(),
-             (data.get('descripcion') or '').strip())
+             (data.get('descripcion') or '').strip(),
+             dias_gratis)
         ).fetchone()
         conn.commit()
         conn.close()
@@ -31593,6 +31642,9 @@ def api_admin_inmobiliaria_crear():
     try:
         conn = get_db_connection()
         crear_tablas_inmobiliaria(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='inmobiliaria'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 0
         tercero = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (telefono_dueno,)).fetchone()
         if tercero:
             propietario_id = tercero['id']
@@ -31608,8 +31660,8 @@ def api_admin_inmobiliaria_crear():
             conn.close()
             return jsonify({'ok': False, 'error': 'Ese nombre/slug ya existe'})
         row = conn.execute(
-            "INSERT INTO inmobiliarias (propietario_id, nombre, slug, telefono, whatsapp) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (propietario_id, nombre, slug, telefono_dueno, telefono_dueno)
+            "INSERT INTO inmobiliarias (propietario_id, nombre, slug, telefono, whatsapp, dias_pagados) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (propietario_id, nombre, slug, telefono_dueno, telefono_dueno, dias_gratis)
         ).fetchone()
         conn.commit()
         conn.close()
@@ -32130,6 +32182,9 @@ def api_compraventa_crear():
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='compraventa'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 0
         existe = conn.execute(
             "SELECT id FROM negocios WHERE slug=%s AND tipo='compraventa'", (slug,)
         ).fetchone()
@@ -32137,8 +32192,8 @@ def api_compraventa_crear():
             conn.close()
             return jsonify({'ok': False, 'error': 'Ya existe una compraventa con ese nombre'})
         conn.execute(
-            "INSERT INTO negocios (propietario_id, nombre, slug, tipo, activo) VALUES (%s, %s, %s, 'compraventa', TRUE)",
-            (uid, nombre, slug)
+            "INSERT INTO negocios (propietario_id, nombre, slug, tipo, dias_pagados, activo) VALUES (%s, %s, %s, 'compraventa', %s, TRUE)",
+            (uid, nombre, slug, dias_gratis)
         )
         conn.commit()
         conn.close()
@@ -32167,6 +32222,9 @@ def api_admin_compraventa_crear():
     try:
         conn = get_db_connection()
         crear_tablas_automotriz(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='compraventa'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 0
         existente = conn.execute(
             "SELECT id FROM negocios WHERE slug=%s AND tipo='compraventa'", (slug,)
         ).fetchone()
@@ -32183,8 +32241,8 @@ def api_admin_compraventa_crear():
             ).fetchone()
             propietario_id = row_t['id']
         conn.execute(
-            "INSERT INTO negocios (propietario_id, nombre, slug, tipo, activo) VALUES (%s, %s, %s, 'compraventa', TRUE)",
-            (propietario_id, nombre, slug)
+            "INSERT INTO negocios (propietario_id, nombre, slug, tipo, dias_pagados, activo) VALUES (%s, %s, %s, 'compraventa', %s, TRUE)",
+            (propietario_id, nombre, slug, dias_gratis)
         )
         conn.commit()
         conn.close()
@@ -32880,6 +32938,38 @@ def admin_hospedaje_lista():
         return f"Error: {e}", 500
 
 
+@app.route('/api/admin/config-tipologia/<tipo>', methods=['POST'])
+@admin_required
+def api_admin_config_tipologia(tipo):
+    """Admin: actualizar configuración de días gratis y modo descuento por tipología"""
+    TIPOS_VALIDOS = {'restaurante', 'tienda', 'taller', 'hospedaje', 'inmobiliaria', 'compraventa'}
+    if tipo not in TIPOS_VALIDOS:
+        return jsonify({'ok': False, 'error': 'Tipo inválido'}), 400
+    data = request.get_json()
+    try:
+        dias_gratis = int(data.get('dias_gratis', 0))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'dias_gratis debe ser un número'}), 400
+    modo_descuento = data.get('modo_descuento', 'calendario')
+    if modo_descuento not in ('uso_real', 'calendario'):
+        return jsonify({'ok': False, 'error': 'Modo inválido'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tabla_config_tipologia(conn)
+        conn.execute(
+            "INSERT INTO config_tipologia (tipo, dias_gratis, modo_descuento) VALUES (%s, %s, %s) "
+            "ON CONFLICT (tipo) DO UPDATE SET dias_gratis=%s, modo_descuento=%s",
+            (tipo, dias_gratis, modo_descuento, dias_gratis, modo_descuento)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/hospedaje/<slug>/agregar-dias', methods=['POST'])
 @admin_required
 def api_hospedaje_agregar_dias(slug):
@@ -32948,6 +33038,9 @@ def api_hospedaje_crear():
     try:
         conn = get_db_connection()
         crear_tablas_hospedaje(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='hospedaje'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 7
         existe = conn.execute(
             "SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)
         ).fetchone()
@@ -32957,8 +33050,8 @@ def api_hospedaje_crear():
         tercero = conn.execute("SELECT nombre, telefono FROM terceros WHERE id=%s", (uid,)).fetchone()
         conn.execute(
             "INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, dias_pagados, activo) "
-            "VALUES (%s, %s, 'hospedaje', %s, %s, %s, 7, TRUE)",
-            (nombre, slug, uid, tercero['nombre'] if tercero else '', tercero['telefono'] if tercero else '')
+            "VALUES (%s, %s, 'hospedaje', %s, %s, %s, %s, TRUE)",
+            (nombre, slug, uid, tercero['nombre'] if tercero else '', tercero['telefono'] if tercero else '', dias_gratis)
         )
         conn.commit()
         conn.close()
@@ -32986,6 +33079,9 @@ def api_admin_hospedaje_crear():
     try:
         conn = get_db_connection()
         crear_tablas_hospedaje(conn)
+        crear_tabla_config_tipologia(conn)
+        cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='hospedaje'").fetchone()
+        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 7
         if conn.execute("SELECT id FROM negocios WHERE slug=%s AND tipo='hospedaje'", (slug,)).fetchone():
             conn.close()
             return jsonify({'ok': False, 'error': 'Ya existe un hospedaje con ese nombre'}), 400
@@ -32998,8 +33094,8 @@ def api_admin_hospedaje_crear():
             admin_id = conn.execute("SELECT id FROM terceros WHERE telefono=%s", (admin_telefono,)).fetchone()['id']
         conn.execute(
             "INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo) "
-            "VALUES (%s, %s, 'hospedaje', %s, %s, %s, %s, 7, TRUE)",
-            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso)
+            "VALUES (%s, %s, 'hospedaje', %s, %s, %s, %s, %s, TRUE)",
+            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_gratis)
         )
         conn.commit()
         conn.close()

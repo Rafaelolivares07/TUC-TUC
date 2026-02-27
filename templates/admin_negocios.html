@@ -28,127 +28,157 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
 
         <!-- Restaurantes -->
-        <a href="/admin/restaurante"
-           class="block bg-white rounded-2xl shadow border border-amber-100 hover:border-amber-300 hover:shadow-lg transition p-6 group">
-            <div class="flex items-center gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow border border-amber-100 hover:shadow-lg transition p-6">
+            <a href="/admin/restaurante" class="flex items-center gap-4 mb-3 group">
                 <div class="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-amber-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h18v2H3V3zm0 4h18v14a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm5 4a1 1 0 112 0 1 1 0 01-2 0zm4 0a1 1 0 112 0 1 1 0 01-2 0zm4 0a1 1 0 112 0 1 1 0 01-2 0z" />
                     </svg>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-gray-800">Restaurantes</h2>
+                <div class="flex-1">
+                    <h2 class="text-lg font-bold text-gray-800 group-hover:text-amber-600 transition">Restaurantes</h2>
                     <p class="text-sm text-gray-400">Menú del día y carta</p>
                 </div>
+                <span class="text-3xl font-extrabold text-amber-500">{{ total_restaurantes }}</span>
+            </a>
+            <div class="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-400 font-semibold">Días gratis:</span>
+                <input type="number" id="dg-restaurante" value="{{ cfg.get('restaurante', {}).get('dias_gratis', 2) }}" min="0" class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center">
+                <select id="md-restaurante" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
+                    <option value="uso_real" {% if cfg.get('restaurante', {}).get('modo_descuento') == 'uso_real' %}selected{% endif %}>Por uso real</option>
+                    <option value="calendario" {% if cfg.get('restaurante', {}).get('modo_descuento', 'calendario') == 'calendario' %}selected{% endif %}>Por calendario</option>
+                </select>
+                <button onclick="guardarConfig('restaurante')" class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-3 py-1.5 rounded font-semibold">Guardar</button>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-4xl font-extrabold text-amber-500">{{ total_restaurantes }}</span>
-                <span class="text-sm text-gray-400">activos</span>
-            </div>
-        </a>
+        </div>
 
         <!-- Tiendas -->
-        <a href="/admin/tienda"
-           class="block bg-white rounded-2xl shadow border border-rose-100 hover:border-rose-300 hover:shadow-lg transition p-6 group">
-            <div class="flex items-center gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow border border-rose-100 hover:shadow-lg transition p-6">
+            <a href="/admin/tienda" class="flex items-center gap-4 mb-3 group">
                 <div class="w-14 h-14 bg-rose-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-rose-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
                     </svg>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-gray-800">Tiendas</h2>
+                <div class="flex-1">
+                    <h2 class="text-lg font-bold text-gray-800 group-hover:text-rose-600 transition">Tiendas</h2>
                     <p class="text-sm text-gray-400">E-commerce y domicilios</p>
                 </div>
+                <span class="text-3xl font-extrabold text-rose-500">{{ total_tiendas }}</span>
+            </a>
+            <div class="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-400 font-semibold">Días gratis:</span>
+                <input type="number" id="dg-tienda" value="{{ cfg.get('tienda', {}).get('dias_gratis', 4) }}" min="0" class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center">
+                <select id="md-tienda" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
+                    <option value="uso_real" {% if cfg.get('tienda', {}).get('modo_descuento') == 'uso_real' %}selected{% endif %}>Por uso real</option>
+                    <option value="calendario" {% if cfg.get('tienda', {}).get('modo_descuento', 'calendario') == 'calendario' %}selected{% endif %}>Por calendario</option>
+                </select>
+                <button onclick="guardarConfig('tienda')" class="bg-rose-500 hover:bg-rose-600 text-white text-xs px-3 py-1.5 rounded font-semibold">Guardar</button>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-4xl font-extrabold text-rose-500">{{ total_tiendas }}</span>
-                <span class="text-sm text-gray-400">activas</span>
-            </div>
-        </a>
+        </div>
 
         <!-- Talleres -->
-        <a href="/admin/taller"
-           class="block bg-white rounded-2xl shadow border border-blue-100 hover:border-blue-300 hover:shadow-lg transition p-6 group">
-            <div class="flex items-center gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow border border-blue-100 hover:shadow-lg transition p-6">
+            <a href="/admin/taller" class="flex items-center gap-4 mb-3 group">
                 <div class="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-gray-800">Talleres</h2>
+                <div class="flex-1">
+                    <h2 class="text-lg font-bold text-gray-800 group-hover:text-blue-600 transition">Talleres</h2>
                     <p class="text-sm text-gray-400">Automotriz y mecánica</p>
                 </div>
+                <span class="text-3xl font-extrabold text-blue-500">{{ total_talleres }}</span>
+            </a>
+            <div class="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-400 font-semibold">Días gratis:</span>
+                <input type="number" id="dg-taller" value="{{ cfg.get('taller', {}).get('dias_gratis', 7) }}" min="0" class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center">
+                <select id="md-taller" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
+                    <option value="uso_real" {% if cfg.get('taller', {}).get('modo_descuento') == 'uso_real' %}selected{% endif %}>Por uso real</option>
+                    <option value="calendario" {% if cfg.get('taller', {}).get('modo_descuento', 'calendario') == 'calendario' %}selected{% endif %}>Por calendario</option>
+                </select>
+                <button onclick="guardarConfig('taller')" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded font-semibold">Guardar</button>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-4xl font-extrabold text-blue-500">{{ total_talleres }}</span>
-                <span class="text-sm text-gray-400">activos</span>
-            </div>
-        </a>
+        </div>
 
         <!-- Inmobiliarias -->
-        <a href="/admin/inmobiliaria"
-           class="block bg-white rounded-2xl shadow border border-green-100 hover:border-green-300 hover:shadow-lg transition p-6 group">
-            <div class="flex items-center gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow border border-green-100 hover:shadow-lg transition p-6">
+            <a href="/admin/inmobiliaria" class="flex items-center gap-4 mb-3 group">
                 <div class="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-green-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 22V12h6v10" />
                     </svg>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-gray-800">Inmobiliarias</h2>
+                <div class="flex-1">
+                    <h2 class="text-lg font-bold text-gray-800 group-hover:text-green-600 transition">Inmobiliarias</h2>
                     <p class="text-sm text-gray-400">Portales y bolsa de propiedades</p>
                 </div>
+                <span class="text-3xl font-extrabold text-green-500">{{ total_inmobiliarias }}</span>
+            </a>
+            <div class="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-400 font-semibold">Días gratis:</span>
+                <input type="number" id="dg-inmobiliaria" value="{{ cfg.get('inmobiliaria', {}).get('dias_gratis', 0) }}" min="0" class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center">
+                <select id="md-inmobiliaria" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
+                    <option value="uso_real" {% if cfg.get('inmobiliaria', {}).get('modo_descuento') == 'uso_real' %}selected{% endif %}>Por uso real</option>
+                    <option value="calendario" {% if cfg.get('inmobiliaria', {}).get('modo_descuento', 'calendario') == 'calendario' %}selected{% endif %}>Por calendario</option>
+                </select>
+                <button onclick="guardarConfig('inmobiliaria')" class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded font-semibold">Guardar</button>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-4xl font-extrabold text-green-500">{{ total_inmobiliarias }}</span>
-                <span class="text-sm text-gray-400">activas</span>
-            </div>
-        </a>
+        </div>
 
         <!-- Compraventas -->
-        <a href="/admin/compraventa"
-           class="block bg-white rounded-2xl shadow border border-violet-100 hover:border-violet-300 hover:shadow-lg transition p-6 group">
-            <div class="flex items-center gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow border border-violet-100 hover:shadow-lg transition p-6">
+            <a href="/admin/compraventa" class="flex items-center gap-4 mb-3 group">
                 <div class="w-14 h-14 bg-violet-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-violet-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0z" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M1 1h4l2.68 13.39a2 2 0 001.98 1.61h9.72a2 2 0 001.95-1.56L23 6H6" />
                     </svg>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-gray-800">Compraventas</h2>
+                <div class="flex-1">
+                    <h2 class="text-lg font-bold text-gray-800 group-hover:text-violet-600 transition">Compraventas</h2>
                     <p class="text-sm text-gray-400">Bolsa de vehículos usados</p>
                 </div>
+                <span class="text-3xl font-extrabold text-violet-500">{{ total_compraventas }}</span>
+            </a>
+            <div class="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-400 font-semibold">Días gratis:</span>
+                <input type="number" id="dg-compraventa" value="{{ cfg.get('compraventa', {}).get('dias_gratis', 0) }}" min="0" class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center">
+                <select id="md-compraventa" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
+                    <option value="uso_real" {% if cfg.get('compraventa', {}).get('modo_descuento') == 'uso_real' %}selected{% endif %}>Por uso real</option>
+                    <option value="calendario" {% if cfg.get('compraventa', {}).get('modo_descuento', 'calendario') == 'calendario' %}selected{% endif %}>Por calendario</option>
+                </select>
+                <button onclick="guardarConfig('compraventa')" class="bg-violet-600 hover:bg-violet-700 text-white text-xs px-3 py-1.5 rounded font-semibold">Guardar</button>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-4xl font-extrabold text-violet-500">{{ total_compraventas }}</span>
-                <span class="text-sm text-gray-400">activas</span>
-            </div>
-        </a>
+        </div>
 
         <!-- Hospedajes -->
-        <a href="/admin/hospedaje"
-           class="block bg-white rounded-2xl shadow border border-cyan-100 hover:border-cyan-300 hover:shadow-lg transition p-6 group">
-            <div class="flex items-center gap-4 mb-4">
+        <div class="bg-white rounded-2xl shadow border border-cyan-100 hover:shadow-lg transition p-6">
+            <a href="/admin/hospedaje" class="flex items-center gap-4 mb-3 group">
                 <div class="w-14 h-14 bg-cyan-50 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-cyan-100 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                 </div>
-                <div>
-                    <h2 class="text-lg font-bold text-gray-800">Hospedajes</h2>
+                <div class="flex-1">
+                    <h2 class="text-lg font-bold text-gray-800 group-hover:text-cyan-600 transition">Hospedajes</h2>
                     <p class="text-sm text-gray-400">Hoteles, cabañas, Airbnb</p>
                 </div>
+                <span class="text-3xl font-extrabold text-cyan-500">{{ total_hospedajes }}</span>
+            </a>
+            <div class="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+                <span class="text-xs text-gray-400 font-semibold">Días gratis:</span>
+                <input type="number" id="dg-hospedaje" value="{{ cfg.get('hospedaje', {}).get('dias_gratis', 7) }}" min="0" class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center">
+                <select id="md-hospedaje" class="border border-gray-300 rounded px-2 py-1 text-xs bg-white">
+                    <option value="uso_real" {% if cfg.get('hospedaje', {}).get('modo_descuento') == 'uso_real' %}selected{% endif %}>Por uso real</option>
+                    <option value="calendario" {% if cfg.get('hospedaje', {}).get('modo_descuento', 'calendario') == 'calendario' %}selected{% endif %}>Por calendario</option>
+                </select>
+                <button onclick="guardarConfig('hospedaje')" class="bg-cyan-600 hover:bg-cyan-700 text-white text-xs px-3 py-1.5 rounded font-semibold">Guardar</button>
             </div>
-            <div class="flex items-baseline gap-1">
-                <span class="text-4xl font-extrabold text-cyan-500">{{ total_hospedajes }}</span>
-                <span class="text-sm text-gray-400">activos</span>
-            </div>
-        </a>
+        </div>
 
     </div>
 
@@ -185,5 +215,32 @@
     </div>
 
 </div>
+
+<div id="toast-cfg" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg z-50 transition-all"></div>
+
+<script>
+function toastCfg(msg, ok) {
+    const t = document.getElementById('toast-cfg');
+    t.textContent = msg;
+    t.className = `fixed bottom-5 left-1/2 -translate-x-1/2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg z-50 ${ok ? 'bg-green-600' : 'bg-red-600'}`;
+    setTimeout(() => t.className = 'hidden', 2500);
+}
+
+async function guardarConfig(tipo) {
+    const dias = parseInt(document.getElementById(`dg-${tipo}`).value);
+    const modo = document.getElementById(`md-${tipo}`).value;
+    if (isNaN(dias) || dias < 0) { toastCfg('Número de días inválido', false); return; }
+    try {
+        const r = await fetch(`/api/admin/config-tipologia/${tipo}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ dias_gratis: dias, modo_descuento: modo })
+        });
+        const d = await r.json();
+        if (d.ok) toastCfg(`${tipo}: ${dias} días gratis · ${modo === 'uso_real' ? 'uso real' : 'calendario'}`, true);
+        else toastCfg(d.error || 'Error al guardar', false);
+    } catch(e) { toastCfg('Error de conexión', false); }
+}
+</script>
 </body>
 </html>

@@ -10,9 +10,50 @@
         body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
         .star { color: #fbbf24; }
         .star-empty { color: #d1d5db; }
+        /* Imagen con fondo blur */
+        .tipo-img-wrap {
+            position: relative; height: 160px; overflow: hidden;
+            background: #e2e8f0; cursor: pointer;
+        }
+        .tipo-img-wrap .img-bg-blur {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; filter: blur(14px) brightness(0.7);
+            transform: scale(1.15); pointer-events: none;
+        }
+        .tipo-img-wrap .img-principal {
+            position: relative; width: 100%; height: 100%;
+            object-fit: contain; z-index: 1;
+        }
+        /* Zoom overlay */
+        .zoom-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 9998;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px; box-sizing: border-box;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .zoom-overlay.active { opacity: 1; pointer-events: auto; }
+        .zoom-overlay img {
+            max-width: 100%; max-height: 85vh;
+            width: auto; height: auto; border-radius: 14px;
+            object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        /* Descripción colapsable */
+        .desc-tipo {
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .desc-tipo.expandida { display: block; -webkit-line-clamp: unset; }
+        .btn-ver-desc {
+            font-size: 0.7rem; color: #4f46e5; font-weight: 600;
+            background: none; border: none; padding: 2px 0; cursor: pointer; display: block;
+        }
     </style>
 </head>
 <body class="min-h-screen">
+
+<div id="zoom-overlay" class="zoom-overlay" onclick="cerrarZoom()">
+    <img id="zoom-img" src="" alt="">
+</div>
 
 <!-- Header -->
 <div class="bg-indigo-700 text-white">
@@ -177,6 +218,19 @@ const SLUG = '{{ slug }}';
 let negInfo = {}, tiposInfo = [];
 let precioNoche = 0, noches = 0;
 
+function abrirZoom(src) {
+    document.getElementById('zoom-img').src = src;
+    document.getElementById('zoom-overlay').classList.add('active');
+}
+function cerrarZoom() { document.getElementById('zoom-overlay').classList.remove('active'); }
+function toggleDescTipo(id, event) {
+    event.stopPropagation();
+    const p = document.getElementById('desc-t-' + id);
+    const btn = document.getElementById('desc-btn-t-' + id);
+    const expandida = p.classList.toggle('expandida');
+    btn.textContent = expandida ? 'Ver menos' : 'Ver más';
+}
+
 function toast(msg, ok=true) {
     const el = document.getElementById('toast');
     el.textContent = msg;
@@ -207,13 +261,21 @@ function renderTipos(tipos) {
     }
     el.innerHTML = tipos.map(t => `
     <div class="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-        ${t.imagen ? `<img src="${t.imagen}" alt="${t.nombre}" class="w-full h-40 object-cover">` : ''}
+        ${t.imagen ? `
+            <div class="tipo-img-wrap" onclick="abrirZoom('${t.imagen}')">
+                <img src="${t.imagen}" alt="" class="img-bg-blur" onerror="this.style.display='none'">
+                <img src="${t.imagen}" alt="${t.nombre}" class="img-principal" onerror="this.src='https://placehold.co/600x400?text=Sin+imagen'">
+            </div>
+        ` : ''}
         <div class="p-4">
             <div class="flex items-start justify-between gap-3">
                 <div class="flex-1">
                     <h3 class="font-bold text-gray-800 text-lg">${t.nombre}</h3>
                     <p class="text-sm text-gray-500 mt-0.5">Hasta ${t.capacidad} persona${t.capacidad!=1?'s':''}</p>
-                    ${t.descripcion ? `<p class="text-sm text-gray-400 mt-2">${t.descripcion}</p>` : ''}
+                    ${t.descripcion ? `
+                        <p class="desc-tipo text-sm text-gray-400 mt-2" id="desc-t-${t.id}">${t.descripcion}</p>
+                        <button class="btn-ver-desc" id="desc-btn-t-${t.id}" onclick="toggleDescTipo(${t.id}, event)">Ver más</button>
+                    ` : ''}
                     ${t.rating > 0 ? `<p class="text-sm mt-2"><span class="text-yellow-400">${'★'.repeat(Math.round(t.rating))}</span> <span class="text-gray-400">(${parseFloat(t.rating).toFixed(1)})</span></p>` : ''}
                 </div>
                 <div class="text-right shrink-0">

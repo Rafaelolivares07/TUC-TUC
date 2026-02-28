@@ -17,6 +17,20 @@
   .card-prop:hover { box-shadow:0 8px 24px rgba(0,0,0,.12); }
   .badge-venta { background:#dbeafe; color:#1d4ed8; }
   .badge-alquiler { background:#fef9c3; color:#92400e; }
+  /* Imagen con fondo blur */
+  .prop-img-wrap {
+    position: relative; width: 100%; height: 100%;
+    background: #e5e7eb; overflow: hidden;
+  }
+  .prop-img-wrap .img-bg-blur {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; filter: blur(14px) brightness(0.7);
+    transform: scale(1.15); pointer-events: none;
+  }
+  .prop-img-wrap .img-principal {
+    position: relative; width: 100%; height: 100%;
+    object-fit: contain; z-index: 1;
+  }
 </style>
 </head>
 <body>
@@ -128,7 +142,11 @@ async function cargarPropiedades() {
     g.innerHTML = d.propiedades.map(p => `
       <div class="card-prop bg-white rounded-2xl shadow-sm overflow-hidden cursor-pointer" onclick="verFicha('${p.slug}')">
         <div class="h-44 bg-gray-100 relative">
-          ${p.foto ? `<img src="${p.foto}" class="w-full h-full object-cover" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-4xl text-gray-300">🏠</div>'}
+          ${p.foto ? `
+            <div class="prop-img-wrap">
+                <img src="${p.foto}" alt="" class="img-bg-blur" loading="lazy" onerror="this.style.display='none'">
+                <img src="${p.foto}" alt="${p.titulo||''}" class="img-principal" loading="lazy" onerror="this.src='https://placehold.co/600x400?text=Sin+foto'">
+            </div>` : '<div class="w-full h-full flex items-center justify-center text-4xl text-gray-300">🏠</div>'}
           <span class="absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-lg ${p.modalidad === 'venta' ? 'badge-venta' : 'badge-alquiler'}">${p.modalidad.toUpperCase()}</span>
         </div>
         <div class="p-4">

@@ -34,6 +34,20 @@
   .toast-err { background:#dc2626; }
   .card-auto { transition:box-shadow .2s; }
   .card-auto:hover { box-shadow:0 8px 24px rgba(0,0,0,.12); }
+  /* Imagen con fondo blur */
+  .auto-img-wrap {
+    position: relative; width: 100%; height: 100%;
+    background: #e5e7eb; overflow: hidden;
+  }
+  .auto-img-wrap .img-bg-blur {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; filter: blur(14px) brightness(0.7);
+    transform: scale(1.15); pointer-events: none;
+  }
+  .auto-img-wrap .img-principal {
+    position: relative; width: 100%; height: 100%;
+    object-fit: contain; z-index: 1;
+  }
 </style>
 </head>
 <body>
@@ -138,7 +152,11 @@ function renderAutos(lista) {
     <div class="card-auto bg-white rounded-2xl shadow-sm overflow-hidden">
       <a href="/autos/${a.vid}" class="block">
         <div class="aspect-video bg-gray-100 relative overflow-hidden">
-          ${a.foto ? `<img src="${a.foto}" class="w-full h-full object-cover">` :
+          ${a.foto ? `
+            <div class="auto-img-wrap">
+                <img src="${a.foto}" alt="" class="img-bg-blur" onerror="this.style.display='none'">
+                <img src="${a.foto}" alt="${a.marca||''} ${a.linea||''}" class="img-principal" onerror="this.src='https://placehold.co/600x400?text=Sin+foto'">
+            </div>` :
             `<div class="w-full h-full flex items-center justify-center text-4xl">🚗</div>`}
           ${a.estado === 'reservado' ? `<div class="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-lg">Reservado</div>` : ''}
         </div>

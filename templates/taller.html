@@ -20,6 +20,30 @@
   .est-listo       { background:#dcfce7; color:#15803d; }
   .est-entregado   { background:#f3f4f6; color:#6b7280; }
   .foto-thumb { width:100px; height:100px; object-fit:cover; border-radius:8px; cursor:pointer; }
+  /* Descripción colapsable */
+  .desc-servicio {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .desc-servicio.expandida { display: block; -webkit-line-clamp: unset; }
+  .btn-ver-desc {
+    font-size: 0.7rem; color: #d97706; font-weight: 600;
+    background: none; border: none; padding: 2px 0; cursor: pointer; display: block;
+  }
+  /* Imagen de servicio con fondo blur */
+  .servicio-img-wrap {
+    position: relative; width: 112px; height: 112px;
+    border-radius: 12px; overflow: hidden; flex-shrink: 0; cursor: pointer;
+  }
+  .servicio-img-wrap .img-bg-blur {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; filter: blur(10px) brightness(0.7);
+    transform: scale(1.15); pointer-events: none;
+  }
+  .servicio-img-wrap .img-principal {
+    position: relative; width: 100%; height: 100%;
+    object-fit: contain; z-index: 1;
+  }
   .zoom-overlay {
     position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:9998;
     display:flex; align-items:center; justify-content:center;
@@ -166,6 +190,13 @@ function abrirZoom(src) {
     document.getElementById('zoom-overlay').classList.add('active');
 }
 function cerrarZoom() { document.getElementById('zoom-overlay').classList.remove('active'); }
+function toggleDescServicio(id, event) {
+    event.stopPropagation();
+    const p = document.getElementById('desc-s-' + id);
+    const btn = document.getElementById('desc-btn-s-' + id);
+    const expandida = p.classList.toggle('expandida');
+    btn.textContent = expandida ? 'Ver menos' : 'Ver más';
+}
 function estadoBadge(e) {
     const map = {recibido:'est-recibido',diagnostico:'est-diagnostico',en_proceso:'est-en_proceso',listo:'est-listo',entregado:'est-entregado'};
     const lbl = {recibido:'Recibido',diagnostico:'Diagnóstico',en_proceso:'En proceso',listo:'Listo ✓',entregado:'Entregado'};
@@ -187,14 +218,22 @@ async function cargarServiciosPublicos() {
                 <div class="flex items-start justify-between gap-3">
                     <div class="flex-1">
                         <p class="font-semibold text-gray-800">${s.nombre}</p>
-                        ${s.descripcion ? `<p class="text-sm text-gray-500 mt-1">${s.descripcion}</p>` : ''}
+                        ${s.descripcion ? `
+                            <p class="desc-servicio text-sm text-gray-500 mt-1" id="desc-s-${s.id}">${s.descripcion}</p>
+                            <button class="btn-ver-desc" id="desc-btn-s-${s.id}" onclick="toggleDescServicio(${s.id}, event)">Ver más</button>
+                        ` : ''}
                         <div class="flex gap-3 mt-2">
                             ${s.precio != null ? `<span class="font-bold text-amber-600">$${Number(s.precio).toLocaleString('es-CO')}</span>` : ''}
                             ${s.duracion_min ? `<span class="text-xs text-gray-400">~${s.duracion_min} min</span>` : ''}
                             ${s.categoria ? `<span class="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">${s.categoria}</span>` : ''}
                         </div>
                     </div>
-                    ${s.fotos.length ? `<img src="${s.fotos[0]}" onclick="abrirZoom('${s.fotos[0]}')" class="w-28 h-28 object-cover rounded-xl cursor-pointer flex-shrink-0">` : ''}
+                    ${s.fotos.length ? `
+                        <div class="servicio-img-wrap" onclick="abrirZoom('${s.fotos[0]}')">
+                            <img src="${s.fotos[0]}" alt="" class="img-bg-blur" onerror="this.style.display='none'">
+                            <img src="${s.fotos[0]}" alt="${s.nombre}" class="img-principal" onerror="this.src='https://placehold.co/400x300?text=Sin+imagen'">
+                        </div>
+                    ` : ''}
                 </div>
                 ${s.fotos.length > 1 ? `
                 <div class="flex gap-2 mt-3 flex-wrap">

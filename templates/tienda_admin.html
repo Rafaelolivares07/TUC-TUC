@@ -408,10 +408,12 @@ async function guardarUbicacion() {
 // === URL pública y enlaces ===
 const URL_PUBLICA = location.origin + '/t/' + SLUG;
 document.getElementById('url-publica').textContent = URL_PUBLICA;
-new QRCode(document.getElementById('qr-tienda'), {
-    text: URL_PUBLICA, width: 80, height: 80,
-    colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
-});
+try {
+    new QRCode(document.getElementById('qr-tienda'), {
+        text: URL_PUBLICA, width: 80, height: 80,
+        colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
+    });
+} catch(e) { console.warn('QRCode no cargó:', e); }
 
 let _qrGrandeGenerado = false;
 function abrirQR() {

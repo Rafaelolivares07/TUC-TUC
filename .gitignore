@@ -61,3 +61,4 @@ static/*.zip
 
 # Memoria interna de Claude Code (puede contener keys y contexto privado)
 .claude/projects/
+bridge_session_id.txt

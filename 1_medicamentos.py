@@ -28376,8 +28376,11 @@ def admin_chat():
         mensajes = conn.execute(
             "SELECT id, rol, contenido, created_at FROM chat_mensajes WHERE archivado = FALSE ORDER BY id ASC"
         ).fetchall()
+        hay_pendientes = conn.execute(
+            "SELECT 1 FROM chat_mensajes WHERE estado IN ('pendiente','procesando') AND archivado = FALSE LIMIT 1"
+        ).fetchone() is not None
         conn.close()
-        return render_template('chat_admin.html', mensajes=mensajes)
+        return render_template('chat_admin.html', mensajes=mensajes, hay_pendientes=hay_pendientes)
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -28443,10 +28446,13 @@ def api_admin_chat_desde(desde_id):
             "SELECT id, rol, contenido FROM chat_mensajes WHERE id > %s AND rol = 'assistant' AND archivado = FALSE ORDER BY id ASC LIMIT 1",
             (desde_id,)
         ).fetchone()
+        hay_procesando = conn.execute(
+            "SELECT 1 FROM chat_mensajes WHERE estado = 'procesando' AND archivado = FALSE LIMIT 1"
+        ).fetchone() is not None
         conn.close()
         if row:
-            return jsonify({'ok': True, 'encontrado': True, 'id': row['id'], 'contenido': row['contenido']})
-        return jsonify({'ok': True, 'encontrado': False})
+            return jsonify({'ok': True, 'encontrado': True, 'id': row['id'], 'contenido': row['contenido'], 'procesando': hay_procesando})
+        return jsonify({'ok': True, 'encontrado': False, 'procesando': hay_procesando})
     except Exception as e:
         conn.rollback()
         conn.close()

@@ -16,6 +16,7 @@ Uso:
 import os
 import sys
 import time
+import uuid
 import socket
 import subprocess
 import psycopg2
@@ -31,10 +32,14 @@ DB_URL      = os.getenv('DATABASE_URL')
 MEMORIA_DIR = Path(r"C:\Users\RAFAEL OLIVARES\.claude\projects\C--Users-RAFAEL-OLIVARES\memory")
 APP_DIR     = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 
-POLL_INTERVAL = 3    # segundos entre checks
-MAX_HISTORIAL = 10   # mensajes de contexto a incluir
-LOCK_PORT     = 47832
+POLL_INTERVAL      = 3    # segundos entre checks
+MAX_HISTORIAL      = 10   # mensajes de contexto a incluir
+LOCK_PORT          = 47832
+BRIDGE_SESSION_FILE = APP_DIR / 'bridge_session_id.txt'
+SESSIONS_DIR       = Path.home() / '.claude' / 'projects'
 # ────────────────────────────────────────────────────────────────────────────
+
+_bridge_session_id = None  # cache en memoria para el proceso actual
 
 _lock_socket = None
 
@@ -163,6 +168,33 @@ def leer_memoria():
     return contenido
 
 
+def obtener_sesion_bridge():
+    """
+    Retorna (session_id, es_primera_vez) para la sesión dedicada del bridge.
+    - Primera vez (sin archivo o sesión no encontrada): crea un nuevo UUID y lo guarda.
+    - Siguientes veces: carga el UUID del archivo y verifica que el .jsonl existe.
+    es_primera_vez=True → usar --session-id (crea la sesión con ese UUID)
+    es_primera_vez=False → usar -r/--resume (carga historial de la sesión)
+    """
+    global _bridge_session_id
+    if _bridge_session_id:
+        return _bridge_session_id, False
+
+    if BRIDGE_SESSION_FILE.exists():
+        session_id = BRIDGE_SESSION_FILE.read_text(encoding='utf-8').strip()
+        if session_id:
+            session_files = list(SESSIONS_DIR.rglob(f'{session_id}.jsonl'))
+            if session_files:
+                _bridge_session_id = session_id
+                return session_id, False
+
+    # Crear nueva sesión dedicada
+    session_id = str(uuid.uuid4())
+    BRIDGE_SESSION_FILE.write_text(session_id, encoding='utf-8')
+    _bridge_session_id = session_id
+    return session_id, True
+
+
 def get_contexto_git():
     """Últimos commits y archivos cambiados — ayuda a Claude a saber qué ya existe."""
     try:
@@ -245,15 +277,23 @@ Si ya existe → editar el existente. NUNCA agregar uno nuevo al final sin verif
                     'CLAUDE_CODE_API_KEY_HELPER', 'ANTHROPIC_API_KEY']:
             env.pop(var, None)
 
+        session_id, es_primera_vez = obtener_sesion_bridge()
+        if es_primera_vez:
+            session_flags = ['--session-id', session_id]
+            print(f"  🆕 Nueva sesión bridge: {session_id}")
+        else:
+            session_flags = ['-r', session_id]
+            print(f"  ↩  Reanudando sesión bridge: {session_id[:8]}...")
+
         result = subprocess.run(
-            ['cmd', '/c', claude_cmd, '-p', '--dangerously-skip-permissions'],
+            ['cmd', '/c', claude_cmd] + session_flags + ['-p', '--dangerously-skip-permissions'],
             input=prompt,
             capture_output=True,
             text=True,
             encoding='utf-8',
             errors='replace',
             cwd=str(APP_DIR),
-            timeout=300,
+            timeout=60,
             env=env
         )
         print(f"  returncode: {result.returncode}")
@@ -264,7 +304,7 @@ Si ya existe → editar el existente. NUNCA agregar uno nuevo al final sin verif
             print(f"  ✗ error: {err[:200]}")
             return f"_(Error al generar respuesta: {err[:100]})_"
     except subprocess.TimeoutExpired:
-        return "_(Timeout al generar respuesta — intenta con un mensaje más corto o espera un momento)_"
+        return "⚠️ No pude procesar tu mensaje a tiempo. Escríbeme de nuevo en un momento."
     except FileNotFoundError:
         return "_(claude no encontrado en PATH — verifica instalación de Claude Code)_"
     except Exception as e:

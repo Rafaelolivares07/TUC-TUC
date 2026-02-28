@@ -142,20 +142,15 @@
 
 <script>
 let ultimoId = {{ mensajes[-1].id if mensajes else 0 }};
-let hayPendientes = false;  // hay mensajes user sin respuesta aún
+let hayPendientes = {{ hay_pendientes | tojson }};  // inicializado desde servidor
 
 // Renderizar markdown en mensajes existentes
 document.querySelectorAll('[data-markdown]').forEach(el => {
     el.innerHTML = marked.parse(el.dataset.markdown);
 });
 
-// Detectar si el último mensaje visible es del user (Claude aún no respondió)
-{% if mensajes %}
-{% if mensajes[-1].rol == 'user' %}
-hayPendientes = true;
-mostrarTyping(true);
-{% endif %}
-{% endif %}
+// Si el servidor indica que hay un mensaje pendiente, activar el indicador
+if (hayPendientes) mostrarTyping(true);
 
 // Si el string no tiene TZ explícita, asumir UTC (mensajes viejos guardados sin offset)
 function parseFecha(iso) {
@@ -257,6 +252,11 @@ async function pollRespuesta() {
         const r    = await fetch('/api/admin/chat/desde/' + ultimoId);
         if (r.status === 401) { location.reload(); return; }
         const data = await r.json();
+        // Claude aún procesando — mantener spinner y seguir polling
+        if (data.procesando && !data.encontrado) {
+            mostrarTyping(true);
+            return;
+        }
         if (data.ok && data.encontrado) {
             ultimoId = data.id;
             agregarBurbuja('assistant', data.contenido);

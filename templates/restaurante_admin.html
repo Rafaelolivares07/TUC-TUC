@@ -405,36 +405,36 @@
             </div>
         </div>
 
-        <!-- ====== TAB: UBICACIÓN ====== -->
-        <div id="panel-ubicacion" class="p-6 hidden">
-            <h2 class="font-semibold text-gray-700 mb-2">Ubicación del restaurante</h2>
-            <p class="text-xs text-gray-400 mb-3">
-                Toca el mapa para marcar el punto exacto de tu negocio, o usa el GPS.
-            </p>
-            {% if restaurante.lat and restaurante.lon %}
-            <div id="coords-guardadas" class="bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
-                📍 Ubicación guardada
-            </div>
-            {% else %}
-            <div id="coords-guardadas" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
-                📍 Ubicación guardada
-            </div>
-            {% endif %}
-            <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
-                <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
-            </div>
-            <button onclick="gpsUbicacion()"
-                class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
-                📡 Mi ubicación (GPS)
-            </button>
-            <p class="text-xs text-gray-400 text-center mb-3" id="txt-coords-ub">Toca el mapa para marcar el punto</p>
-            <button onclick="guardarUbicacion()"
-                class="w-full bg-green-600 text-white font-semibold py-4 rounded-xl text-base">
-                Guardar ubicación
-            </button>
-        </div>
-
     </div>
+</div>
+
+<!-- ====== TAB: UBICACIÓN (fuera del overflow-hidden para que MapLibre renderice) ====== -->
+<div id="panel-ubicacion" class="p-6 hidden bg-white rounded-2xl shadow-lg mb-6 max-w-lg mx-auto">
+    <h2 class="font-semibold text-gray-700 mb-2">Ubicación del restaurante</h2>
+    <p class="text-xs text-gray-400 mb-3">
+        Toca el mapa para marcar el punto exacto de tu negocio, o usa el GPS.
+    </p>
+    {% if restaurante.lat and restaurante.lon %}
+    <div id="coords-guardadas" class="bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
+        📍 Ubicación guardada
+    </div>
+    {% else %}
+    <div id="coords-guardadas" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
+        📍 Ubicación guardada
+    </div>
+    {% endif %}
+    <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
+        <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
+    </div>
+    <button onclick="gpsUbicacion()"
+        class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
+        📡 Mi ubicación (GPS)
+    </button>
+    <p class="text-xs text-gray-400 text-center mb-3" id="txt-coords-ub">Toca el mapa para marcar el punto</p>
+    <button onclick="guardarUbicacion()"
+        class="w-full bg-green-600 text-white font-semibold py-4 rounded-xl text-base">
+        Guardar ubicación
+    </button>
 </div>
 
 {% else %}

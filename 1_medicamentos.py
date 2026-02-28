@@ -24014,13 +24014,13 @@ def api_conductor_captura():
                 conn.execute("""
                     UPDATE terceros SET descuento_bienvenida = GREATEST(descuento_bienvenida, %s)
                     WHERE id = %s
-                """, (int(precio_oferta), tercero_id))
+                """, (5000, tercero_id))
             else:
                 cur = conn.execute("""
                     INSERT INTO terceros (nombre, telefono, referido_por, descuento_bienvenida, fecha_creacion)
                     VALUES (%s, %s, %s, %s, NOW())
                     RETURNING id
-                """, (nombre, telefono, session['usuario_id'], int(precio_oferta)))
+                """, (nombre, telefono, session['usuario_id'], 5000))
                 row = cur.fetchone()
                 tercero_id = row[0] if row else None
         else:
@@ -24029,7 +24029,7 @@ def api_conductor_captura():
                 INSERT INTO terceros (nombre, referido_por, descuento_bienvenida, fecha_creacion)
                 VALUES (%s, %s, %s, NOW())
                 RETURNING id
-            """, (nombre, session['usuario_id'], int(precio_oferta)))
+            """, (nombre, session['usuario_id'], 5000))
             row = cur.fetchone()
             tercero_id = row[0] if row else None
 

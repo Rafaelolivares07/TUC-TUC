@@ -706,7 +706,7 @@ async function cargarCatalogo() {
         const r = await fetch(`${BASE}/opciones`);
         const data = await r.json();
         if (data.ok) {
-            catalogoData = data.opciones.filter(o => o.activo);
+            catalogoData = data.opciones;
             renderCatalogo();
         }
     } catch(e) { console.error(e); }

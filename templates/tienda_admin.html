@@ -437,7 +437,8 @@ function compartirWhatsApp() {
 }
 
 // Link mágico
-document.getElementById('link-magico').textContent = location.origin + '/t/acceso/' + TOKEN;
+const _elLinkMagico = document.getElementById('link-magico');
+if (_elLinkMagico) _elLinkMagico.textContent = location.origin + '/t/acceso/' + TOKEN;
 function copiarLinkMagico() {
     navigator.clipboard.writeText(location.origin + '/t/acceso/' + TOKEN);
     toast('Enlace copiado');

@@ -24,6 +24,16 @@
         .toast.show { opacity: 1; }
         .toast-ok { background: #059669; }
         .toast-err { background: #dc2626; }
+        /* Blur technique — consistente con URL pública */
+        .img-bg-blur {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; filter: blur(12px) brightness(0.7);
+            transform: scale(1.15); pointer-events: none;
+        }
+        .img-principal-admin {
+            position: relative; width: 100%; height: 100%;
+            object-fit: contain; z-index: 1; display: block;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8 min-h-screen">
@@ -123,7 +133,7 @@
                     <textarea id="cat-descripcion" placeholder="Descripción opcional (materiales, tallas disponibles, colores...)" rows="2"
                         class="border rounded-lg px-3 py-2 text-sm w-full resize-none text-gray-600" maxlength="300"></textarea>
                     <div class="flex items-center gap-3">
-                        <div id="preview-nuevo" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition flex items-center justify-center" onclick="document.getElementById('inp-foto-nuevo').click()">
+                        <div id="preview-nuevo" class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-white cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition flex items-center justify-center relative" onclick="document.getElementById('inp-foto-nuevo').click()">
                             <svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         </div>
                         <input type="file" id="inp-foto-nuevo" accept="image/*" class="hidden" onchange="previsualizarNuevo(this)">
@@ -167,9 +177,10 @@
             <!-- Imagen de portada -->
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-3">Imagen de portada</h3>
-                <div id="preview-header" class="w-full aspect-[3/1] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden" onclick="document.getElementById('inp-header').click()">
+                <div id="preview-header" class="w-full min-h-[120px] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden relative" onclick="document.getElementById('inp-header').click()">
                     {% if tienda.imagen_header %}
-                    <img src="{{ tienda.imagen_header }}" class="w-full h-full object-cover">
+                    <img src="{{ tienda.imagen_header }}" class="img-bg-blur" aria-hidden="true">
+                    <img src="{{ tienda.imagen_header }}" class="img-principal-admin" style="height:auto;max-height:280px;">
                     {% else %}
                     <span class="text-gray-400 text-sm">Toca para subir imagen</span>
                     {% endif %}
@@ -493,8 +504,8 @@ function renderProductos() {
             const agotado = !p.disponible;
             html += `<div class="bg-white border rounded-xl p-3 ${agotado ? 'opacity-50' : ''}">
                 <div class="flex items-center gap-3">
-                    <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition" onclick="clickImagen(${p.id})">
-                        ${p.imagen ? `<img src="${p.imagen}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex flex-col items-center justify-center text-gray-400">
+                    <div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition relative" onclick="clickImagen(${p.id})">
+                        ${p.imagen ? `<img src="${p.imagen}" class="img-bg-blur" aria-hidden="true"><img src="${p.imagen}" class="img-principal-admin">` : `<div class="w-full h-full flex flex-col items-center justify-center text-gray-400">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         </div>`}
                     </div>
@@ -561,7 +572,7 @@ function previsualizarNuevo(input) {
             canvas.width = w; canvas.height = h;
             canvas.getContext('2d').drawImage(img, 0, 0, w, h);
             fotoNuevaBase64 = canvas.toDataURL('image/jpeg', 0.7);
-            document.getElementById('preview-nuevo').innerHTML = `<img src="${fotoNuevaBase64}" class="w-full h-full object-cover">`;
+            document.getElementById('preview-nuevo').innerHTML = `<img src="${fotoNuevaBase64}" class="img-bg-blur" aria-hidden="true"><img src="${fotoNuevaBase64}" class="img-principal-admin">`;
             document.getElementById('nombre-foto-nuevo').textContent = file.name;
         };
         img.src = e.target.result;
@@ -874,7 +885,7 @@ async function subirHeader(input) {
                 });
                 const data = await r.json();
                 if (data.ok) {
-                    document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
+                    document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="img-bg-blur" aria-hidden="true"><img src="${base64}" class="img-principal-admin" style="height:auto;max-height:280px;">`;
                     toast('Imagen actualizada');
                 } else toast(data.error || 'Error', true);
             } catch(e) { toast('Error de conexion', true); }
@@ -1224,13 +1235,22 @@ async function agregarDias(slug) {
 
         <!-- Foto principal -->
         <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Foto principal</p>
-        <div class="flex items-center gap-3 mb-5">
-            <div id="fotos-principal-preview" class="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 flex items-center justify-center border-2 border-dashed border-gray-300">
-                <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <div class="flex items-start gap-3 mb-4">
+            <!-- Preview con marco de celular (proporción 3:4) -->
+            <div class="flex-shrink-0 flex flex-col items-center gap-1">
+                <div class="relative bg-gray-900 rounded-xl p-1 shadow-md" style="width:60px;">
+                    <div id="fotos-principal-preview"
+                         class="w-full overflow-hidden bg-gray-100 rounded-lg flex items-center justify-center border border-dashed border-gray-400 relative"
+                         style="aspect-ratio:3/4;">
+                        <svg class="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <p class="text-center text-gray-400 mt-1" style="font-size:9px; line-height:1.2;">📱 vista<br>celular</p>
+                </div>
             </div>
             <div>
                 <p class="text-xs text-gray-500 mb-1">Aparece en el catálogo y en el carrito</p>
-                <button onclick="document.getElementById('inp-foto-principal').click()" class="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-semibold">Cambiar</button>
+                <p class="text-xs text-amber-600 font-medium mb-2">💡 Recomendado: vertical 3:4<br><span class="text-gray-400 font-normal">mínimo 600×800 px — JPG o PNG</span></p>
+                <button onclick="document.getElementById('inp-foto-principal').click()" class="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-semibold">Cambiar foto</button>
                 <input type="file" id="inp-foto-principal" accept="image/*" class="hidden" onchange="subirFotoPrincipal(this)">
             </div>
         </div>
@@ -1256,8 +1276,8 @@ async function abrirFotos(productoId) {
     // Foto principal
     const preview = document.getElementById('fotos-principal-preview');
     preview.innerHTML = p && p.imagen
-        ? `<img src="${p.imagen}" class="w-full h-full object-cover">`
-        : `<svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`;
+        ? `<img src="${p.imagen}" class="img-bg-blur" aria-hidden="true"><img src="${p.imagen}" class="img-principal-admin">`
+        : `<svg class="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`;
 
     document.getElementById('modal-fotos').classList.remove('hidden');
     await cargarFotosExtra();
@@ -1279,9 +1299,10 @@ async function cargarFotosExtra() {
         }
         grid.innerHTML = data.imagenes.map(img => `
             <div class="relative rounded-xl overflow-hidden bg-gray-100 aspect-square">
-                <img src="${img.imagen}" class="w-full h-full object-cover">
+                <img src="${img.imagen}" class="img-bg-blur" aria-hidden="true">
+                <img src="${img.imagen}" class="img-principal-admin">
                 <button onclick="eliminarFotoExtra(${img.id})"
-                    class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none">&times;</button>
+                    class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none z-10">&times;</button>
             </div>
         `).join('');
     } catch(e) { toast('Error cargando fotos', true); }
@@ -1319,7 +1340,7 @@ async function subirFotoPrincipal(input) {
             const data = await r.json();
             if (data.ok) {
                 toast('Foto principal actualizada');
-                document.getElementById('fotos-principal-preview').innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
+                document.getElementById('fotos-principal-preview').innerHTML = `<img src="${base64}" class="img-bg-blur" aria-hidden="true"><img src="${base64}" class="img-principal-admin">`;
                 cargarProductos();
             } else toast(data.error || 'Error', true);
         } catch(e) { toast('Error de conexion', true); }

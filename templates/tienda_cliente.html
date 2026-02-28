@@ -45,6 +45,32 @@
             opacity: 0; pointer-events: none; transition: opacity 0.2s;
         }
         .zoom-overlay.active { opacity: 1; pointer-events: auto; }
+
+        /* Blur technique — imagen completa sin recorte */
+        .prod-img-wrap {
+            position: relative; height: 144px; overflow: hidden;
+            background: #e8e8e8; cursor: pointer;
+        }
+        .tema-oscuro .prod-img-wrap { background: #374151; }
+        .prod-img-wrap .img-bg-blur {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; filter: blur(16px) brightness(0.7);
+            transform: scale(1.15); pointer-events: none;
+        }
+        .prod-img-wrap .img-principal {
+            position: relative; width: 100%; height: 100%;
+            object-fit: contain; z-index: 1;
+        }
+        .header-wrap { position: relative; overflow: hidden; background: #111; }
+        .header-wrap .img-bg-blur {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; filter: blur(20px) brightness(0.5);
+            transform: scale(1.2); pointer-events: none;
+        }
+        .header-wrap .img-principal {
+            position: relative; width: 100%; display: block;
+            object-fit: contain; z-index: 1; max-height: 280px;
+        }
     </style>
 </head>
 <body class="tema-{{ tienda.tema or 'claro' }} pb-20">
@@ -59,7 +85,10 @@
     <!-- Header / Portada -->
     {% if tienda.imagen_header %}
     <div>
-        <img src="{{ tienda.imagen_header }}" class="w-full aspect-[3/1] object-cover">
+        <div class="header-wrap">
+            <img src="{{ tienda.imagen_header }}" class="img-bg-blur" aria-hidden="true">
+            <img src="{{ tienda.imagen_header }}" class="img-principal" alt="{{ tienda.nombre }}">
+        </div>
         {% if tienda.mostrar_nombre | default(true) %}
         <div class="p-4 pb-2">
             <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
@@ -235,8 +264,9 @@ function renderProductos() {
         const agotado = !p.disponible;
         return `<div class="card bg-white border rounded-xl overflow-hidden ${agotado ? 'opacity-50' : ''}" id="prod-${p.id}">
             ${p.imagen ?
-                `<div class="h-36 overflow-hidden cursor-pointer" onclick="${agotado ? '' : `zoomImagen('${p.imagen}')`}">
-                    <img src="${p.imagen}" class="w-full h-full object-cover">
+                `<div class="prod-img-wrap" onclick="${agotado ? '' : `zoomImagen('${p.imagen}')`}">
+                    <img src="${p.imagen}" class="img-bg-blur" aria-hidden="true">
+                    <img src="${p.imagen}" class="img-principal">
                 </div>` :
                 `<div class="h-24 placeholder-sin-img bg-gray-100 flex items-center justify-center">
                     <svg class="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>

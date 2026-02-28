@@ -493,8 +493,8 @@ function cambiarTab(tab) {
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────
 let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ taller.lat | default('null') }};
-let _lonUbic = {{ taller.lon | default('null') }};
+let _latUbic = {{ taller.lat | tojson }};
+let _lonUbic = {{ taller.lon | tojson }};
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }

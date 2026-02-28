@@ -526,8 +526,8 @@ function cerrarQR() {
 }
 
 let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ neg.lat | default('null') }};
-let _lonUbic = {{ neg.lon | default('null') }};
+let _latUbic = {{ neg.lat | tojson }};
+let _lonUbic = {{ neg.lon | tojson }};
 
 function iniciarMapaUbicacion() {
   if (_mapaUbic) { _mapaUbic.resize(); return; }

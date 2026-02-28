@@ -609,8 +609,8 @@ function cambiarTab(tab) {
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────
 let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ restaurante.lat | default('null') }};
-let _lonUbic = {{ restaurante.lon | default('null') }};
+let _latUbic = {{ restaurante.lat | tojson }};
+let _lonUbic = {{ restaurante.lon | tojson }};
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }

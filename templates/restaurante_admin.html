@@ -609,8 +609,8 @@ function cambiarTab(tab) {
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────
 let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ restaurante.lat | tojson }};
-let _lonUbic = {{ restaurante.lon | tojson }};
+let _latUbic = {{ (restaurante.lat if restaurante else None) | tojson }};
+let _lonUbic = {{ (restaurante.lon if restaurante else None) | tojson }};
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }
@@ -751,7 +751,7 @@ function renderCatalogo() {
                             <div class="flex items-center gap-3">
                                 ${TIPO_REST === 'carta' ? `
                                     <div class="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer border-2 ${i.imagen ? 'border-green-300' : 'border-dashed border-gray-300'}"
-                                         onclick="document.getElementById('img-input-${i.id}').click()" title="${i.imagen ? 'Cambiar imagen' : 'Agregar imagen'}">
+                                         onclick="document.getElementById('img-input-${i.id}').click()" title="${i.imagen ? 'Cambiar imagen' : 'Agregar imagen'} · Recomendado: cuadrado 1:1 o vertical 3:4 · mínimo 600×600 px">
                                         ${i.imagen
                                             ? `<img src="${i.imagen}" class="w-full h-full object-cover">`
                                             : `<svg class="w-6 h-6 text-gray-400 m-auto mt-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`}

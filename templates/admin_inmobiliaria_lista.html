@@ -24,13 +24,29 @@
                 <p class="text-sm text-gray-400">{{ inmobiliarias|length }} inmobiliaria{{ 's' if inmobiliarias|length != 1 else '' }} registrada{{ 's' if inmobiliarias|length != 1 else '' }}</p>
             </div>
         </div>
-        <button onclick="document.getElementById('modal-nuevo').classList.remove('hidden')"
-                class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-            </svg>
-            Nueva inmobiliaria
-        </button>
+        <div class="flex items-center gap-2 flex-wrap justify-end">
+            <a href="/propiedades" target="_blank"
+               class="inline-flex items-center gap-1.5 bg-white border border-gray-300 hover:border-green-500 hover:text-green-700 text-gray-600 text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l9-9 9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"/>
+                </svg>
+                Bolsa pública
+            </a>
+            <a href="/mis-propiedades" target="_blank"
+               class="inline-flex items-center gap-1.5 bg-white border border-gray-300 hover:border-blue-500 hover:text-blue-700 text-gray-600 text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                Nueva propiedad
+            </a>
+            <button onclick="document.getElementById('modal-nuevo').classList.remove('hidden')"
+                    class="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                Nueva inmobiliaria
+            </button>
+        </div>
     </div>
 
     <!-- Lista -->

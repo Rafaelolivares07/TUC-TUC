@@ -1482,7 +1482,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -34112,6 +34112,452 @@ def api_hospedaje_resena_crear(slug):
         try: conn.rollback(); conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
+# MÓDULO DOMÓTICA — Dispositivos inteligentes y automatizaciones
+# URLs: /domotica
+#       /api/domotica/...
+#       /api/domotica/reporte  ← llamado por script local
+# ═══════════════════════════════════════════════════════════════
+
+def crear_tablas_domotica(conn):
+    sqls = [
+        """CREATE TABLE IF NOT EXISTS smart_dispositivos (
+            id SERIAL PRIMARY KEY,
+            id_propiedad INTEGER NOT NULL,
+            nombre VARCHAR(200) NOT NULL,
+            tipo VARCHAR(50) NOT NULL DEFAULT 'otro',
+            descripcion TEXT,
+            device_token VARCHAR(100) UNIQUE,
+            mac_address VARCHAR(50),
+            ultimo_bat_pct INTEGER,
+            bat_cargando BOOLEAN DEFAULT FALSE,
+            ultima_lectura TIMESTAMP,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS smart_switches (
+            id SERIAL PRIMARY KEY,
+            id_dispositivo INTEGER NOT NULL,
+            nombre VARCHAR(200) NOT NULL,
+            tuya_device_id VARCHAR(100),
+            estado_actual BOOLEAN DEFAULT FALSE,
+            ultima_accion TIMESTAMP,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS smart_automatizaciones (
+            id SERIAL PRIMARY KEY,
+            id_switch INTEGER NOT NULL,
+            descripcion VARCHAR(200),
+            hora_inicio INTEGER NOT NULL DEFAULT 9,
+            hora_fin INTEGER NOT NULL DEFAULT 16,
+            bat_minimo_pico INTEGER NOT NULL DEFAULT 90,
+            bat_minimo_fuera_pico INTEGER NOT NULL DEFAULT 40,
+            bat_objetivo INTEGER NOT NULL DEFAULT 100,
+            activa BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+    ]
+    for sql in sqls:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+
+def _dom_controlar_tuya(device_id, encender):
+    """Controla un switch Tuya vía API cloud. Retorna True si OK."""
+    try:
+        import tinytuya
+        c = tinytuya.Cloud(
+            apiRegion='us',
+            apiKey=os.getenv('TUYA_CLIENT_ID'),
+            apiSecret=os.getenv('TUYA_CLIENT_SECRET')
+        )
+        c.cloudrequest(
+            f'/v1.0/iot-03/devices/{device_id}/commands',
+            action='POST',
+            post={'commands': [{'code': 'switch_1', 'value': bool(encender)}]}
+        )
+        return True
+    except Exception as e:
+        print(f'[domotica] Error Tuya: {e}')
+        return False
+
+
+def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando):
+    """Evalúa automatizaciones del dispositivo y actúa sobre sus switches si es necesario."""
+    from datetime import datetime
+    hora = datetime.now().hour
+    acciones = []
+    switches = conn.execute(
+        "SELECT * FROM smart_switches WHERE id_dispositivo=%s AND activo=TRUE",
+        (dispositivo_id,)
+    ).fetchall()
+    for sw in switches:
+        autos = conn.execute(
+            "SELECT * FROM smart_automatizaciones WHERE id_switch=%s AND activa=TRUE ORDER BY id LIMIT 1",
+            (sw['id'],)
+        ).fetchall()
+        for auto in autos:
+            en_pico = auto['hora_inicio'] <= hora < auto['hora_fin']
+            umbral = auto['bat_minimo_pico'] if en_pico else auto['bat_minimo_fuera_pico']
+            if bat_pct >= auto['bat_objetivo']:
+                desired = False
+            elif bat_pct < umbral:
+                desired = True
+            else:
+                continue
+            if desired == sw['estado_actual']:
+                continue
+            ok = _dom_controlar_tuya(sw['tuya_device_id'], desired)
+            if ok:
+                conn.execute(
+                    "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
+                    (desired, sw['id'])
+                )
+                conn.commit()
+                acciones.append({
+                    'switch': sw['nombre'],
+                    'accion': 'encendido' if desired else 'apagado',
+                    'razon': f'bat {bat_pct}% {"<" if desired else ">="} umbral {umbral}% ({"pico" if en_pico else "fuera_pico"})'
+                })
+    return acciones
+
+
+# ─────────── RUTA DE PÁGINA ───────────
+
+@app.route('/domotica')
+@admin_required
+def domotica_panel():
+    return render_template('domotica.html')
+
+
+# ─────────── APIs ADMIN ───────────
+
+@app.route('/api/domotica/propiedades')
+def api_domotica_propiedades():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        props = conn.execute("""
+            SELECT p.id, p.titulo, p.ciudad,
+                   COUNT(DISTINCT sd.id) AS total_dispositivos
+            FROM propiedades p
+            LEFT JOIN smart_dispositivos sd ON sd.id_propiedad = p.id
+            GROUP BY p.id, p.titulo, p.ciudad
+            ORDER BY p.id DESC
+        """).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'propiedades': [dict(p) for p in props]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/propiedad/<int:pid>/dispositivos')
+def api_domotica_dispositivos(pid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        devs = conn.execute(
+            "SELECT * FROM smart_dispositivos WHERE id_propiedad=%s ORDER BY id", (pid,)
+        ).fetchall()
+        result = []
+        for d in devs:
+            d = dict(d)
+            switches = conn.execute(
+                "SELECT * FROM smart_switches WHERE id_dispositivo=%s ORDER BY id", (d['id'],)
+            ).fetchall()
+            sw_list = []
+            for sw in switches:
+                sw = dict(sw)
+                autos = conn.execute(
+                    "SELECT * FROM smart_automatizaciones WHERE id_switch=%s ORDER BY id", (sw['id'],)
+                ).fetchall()
+                sw['automatizaciones'] = [dict(a) for a in autos]
+                sw_list.append(sw)
+            d['switches'] = sw_list
+            result.append(d)
+        conn.close()
+        return jsonify({'ok': True, 'dispositivos': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/dispositivo/crear', methods=['POST'])
+def api_domotica_dispositivo_crear():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    tipo = (data.get('tipo') or 'otro').strip()
+    id_propiedad = data.get('id_propiedad')
+    descripcion = (data.get('descripcion') or '').strip()
+    mac_address = (data.get('mac_address') or '').strip()
+    if not nombre or not id_propiedad:
+        return jsonify({'ok': False, 'error': 'Nombre y propiedad requeridos'})
+    import secrets as _sec
+    token = _sec.token_hex(24)
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        row = conn.execute(
+            "INSERT INTO smart_dispositivos (id_propiedad, nombre, tipo, descripcion, mac_address, device_token) "
+            "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+            (id_propiedad, nombre, tipo, descripcion or None, mac_address or None, token)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id'], 'device_token': token})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/dispositivo/<int:did>/editar', methods=['POST'])
+def api_domotica_dispositivo_editar(did):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    campos = {}
+    for f in ('nombre', 'tipo', 'descripcion', 'mac_address'):
+        if f in data:
+            campos[f] = (data[f] or '').strip() or None
+    if not campos:
+        return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+    sets = ', '.join(f'{k}=%s' for k in campos)
+    vals = list(campos.values()) + [did]
+    try:
+        conn = get_db_connection()
+        conn.execute(f"UPDATE smart_dispositivos SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/dispositivo/<int:did>/token/regenerar', methods=['POST'])
+def api_domotica_token_regenerar(did):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    import secrets as _sec
+    token = _sec.token_hex(24)
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE smart_dispositivos SET device_token=%s WHERE id=%s", (token, did))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'device_token': token})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/switch/crear', methods=['POST'])
+def api_domotica_switch_crear():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    id_dispositivo = data.get('id_dispositivo')
+    tuya_device_id = (data.get('tuya_device_id') or '').strip()
+    if not nombre or not id_dispositivo:
+        return jsonify({'ok': False, 'error': 'Nombre y dispositivo requeridos'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        row = conn.execute(
+            "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id) VALUES (%s,%s,%s) RETURNING id",
+            (id_dispositivo, nombre, tuya_device_id or None)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/switch/<int:sid>/editar', methods=['POST'])
+def api_domotica_switch_editar(sid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    campos = {}
+    for f in ('nombre', 'tuya_device_id'):
+        if f in data:
+            campos[f] = (data[f] or '').strip() or None
+    if not campos:
+        return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+    sets = ', '.join(f'{k}=%s' for k in campos)
+    vals = list(campos.values()) + [sid]
+    try:
+        conn = get_db_connection()
+        conn.execute(f"UPDATE smart_switches SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/switch/<int:sid>/toggle', methods=['POST'])
+def api_domotica_switch_toggle(sid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    estado = bool(data.get('estado'))
+    try:
+        conn = get_db_connection()
+        sw = conn.execute("SELECT * FROM smart_switches WHERE id=%s", (sid,)).fetchone()
+        if not sw:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Switch no encontrado'})
+        ok = _dom_controlar_tuya(sw['tuya_device_id'], estado)
+        if ok:
+            conn.execute(
+                "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
+                (estado, sid)
+            )
+            conn.commit()
+        conn.close()
+        return jsonify({'ok': ok, 'estado': estado})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/automatizacion/crear', methods=['POST'])
+def api_domotica_automatizacion_crear():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    id_switch = data.get('id_switch')
+    descripcion = (data.get('descripcion') or '').strip()
+    hora_inicio = int(data.get('hora_inicio', 9))
+    hora_fin = int(data.get('hora_fin', 16))
+    bat_minimo_pico = int(data.get('bat_minimo_pico', 90))
+    bat_minimo_fuera_pico = int(data.get('bat_minimo_fuera_pico', 40))
+    bat_objetivo = int(data.get('bat_objetivo', 100))
+    if not id_switch:
+        return jsonify({'ok': False, 'error': 'Switch requerido'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        row = conn.execute(
+            """INSERT INTO smart_automatizaciones
+               (id_switch, descripcion, hora_inicio, hora_fin, bat_minimo_pico, bat_minimo_fuera_pico, bat_objetivo)
+               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (id_switch, descripcion or None, hora_inicio, hora_fin,
+             bat_minimo_pico, bat_minimo_fuera_pico, bat_objetivo)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/automatizacion/<int:aid>/editar', methods=['POST'])
+def api_domotica_automatizacion_editar(aid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    campos = {}
+    for f in ('descripcion', 'hora_inicio', 'hora_fin', 'bat_minimo_pico', 'bat_minimo_fuera_pico', 'bat_objetivo'):
+        if f in data:
+            campos[f] = data[f]
+    if 'activa' in data:
+        campos['activa'] = bool(data['activa'])
+    if not campos:
+        return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+    sets = ', '.join(f'{k}=%s' for k in campos)
+    vals = list(campos.values()) + [aid]
+    try:
+        conn = get_db_connection()
+        conn.execute(f"UPDATE smart_automatizaciones SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/automatizacion/<int:aid>/eliminar', methods=['POST'])
+def api_domotica_automatizacion_eliminar(aid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM smart_automatizaciones WHERE id=%s", (aid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── API REPORTE (script local, auth por device_token) ───────────
+
+@app.route('/api/domotica/reporte', methods=['POST'])
+def api_domotica_reporte():
+    """Script local reporta estado batería. Auth por device_token."""
+    data = request.get_json() or {}
+    token = (data.get('device_token') or '').strip()
+    bat_pct = data.get('bat_pct')
+    cargando = bool(data.get('cargando', False))
+    if not token or bat_pct is None:
+        return jsonify({'ok': False, 'error': 'device_token y bat_pct requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        dev = conn.execute(
+            "SELECT * FROM smart_dispositivos WHERE device_token=%s AND activo=TRUE", (token,)
+        ).fetchone()
+        if not dev:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Token inválido'}), 401
+        conn.execute(
+            "UPDATE smart_dispositivos SET ultimo_bat_pct=%s, bat_cargando=%s, ultima_lectura=NOW() WHERE id=%s",
+            (int(bat_pct), cargando, dev['id'])
+        )
+        conn.commit()
+        acciones = _dom_evaluar_y_actuar(conn, dev['id'], int(bat_pct), cargando)
+        conn.close()
+        from datetime import datetime
+        return jsonify({'ok': True, 'acciones': acciones, 'bat_pct': int(bat_pct), 'hora': datetime.now().hour})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 if __name__ == '__main__':

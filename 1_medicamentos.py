@@ -34527,7 +34527,7 @@ def api_domotica_automatizacion_eliminar(aid):
 @app.route('/api/domotica/dispositivo/<int:did>/setup-bat')
 @admin_required
 def api_domotica_setup_bat(did):
-    """Genera y descarga un .bat de Windows listo para ejecutar."""
+    """Genera y descarga un .bat de Windows. El script Python va embebido en base64 para evitar problemas de escaping en CMD."""
     try:
         conn = get_db_connection()
         dev = conn.execute("SELECT * FROM smart_dispositivos WHERE id=%s", (did,)).fetchone()
@@ -34537,25 +34537,42 @@ def api_domotica_setup_bat(did):
         token = dev['device_token']
         nombre = dev['nombre']
         server_url = 'https://tuc-tuc.onrender.com' if os.getenv('RENDER') else request.host_url.rstrip('/')
+
+        py_script = (
+            "import time,psutil,requests\n"
+            f"T='{token}'\n"
+            f"S='{server_url}'\n"
+            "print('[monitor] Listo -',T[:8],'...')\n"
+            "while True:\n"
+            "    try:\n"
+            "        b=psutil.sensors_battery()\n"
+            "        if b:\n"
+            "            r=requests.post(S+'/api/domotica/reporte',\n"
+            "                json={'device_token':T,'bat_pct':int(b.percent),'cargando':b.power_plugged},\n"
+            "                timeout=15).json()\n"
+            "            ac=[a['accion']+' '+a['switch'] for a in r.get('acciones',[])]\n"
+            "            print('[monitor]',str(int(b.percent))+'%',\n"
+            "                  'cargando' if b.power_plugged else 'bateria',\n"
+            "                  '|',ac if ac else 'sin cambios')\n"
+            "        else:\n"
+            "            print('[monitor] sin bateria detectada')\n"
+            "    except Exception as e:\n"
+            "        print('[monitor] error:',e)\n"
+            "    time.sleep(300)\n"
+        )
+        import base64
+        encoded = base64.b64encode(py_script.encode('utf-8')).decode('ascii')
+
         bat = (
             "@echo off\r\n"
             f"title Monitor Bateria - {nombre}\r\n"
             "echo Instalando dependencias...\r\n"
             "pip install psutil requests --quiet\r\n"
-            f"echo Iniciando monitor: {nombre}\r\n"
-            "echo (Deja esta ventana abierta)\r\n"
             "echo.\r\n"
-            "python -c \""
-            "import time,psutil,requests;"
-            f"T='{token}';"
-            f"S='{server_url}';"
-            "print('[monitor] Listo');\n"
-            "while 1:\n"
-            " b=psutil.sensors_battery();\n"
-            " r=requests.post(S+'/api/domotica/reporte',json={'device_token':T,'bat_pct':int(b.percent),'cargando':b.power_plugged},timeout=15).json() if b else None;\n"
-            " print('[monitor] bat:'+str(int(b.percent) if b else '?')+'%% acciones:'+str(r.get('acciones',[]) if r else 'sin red'));\n"
-            " time.sleep(300)\r\n"
-            "\"\r\n"
+            f"echo Iniciando monitor: {nombre}\r\n"
+            "echo (Deja esta ventana abierta. Ctrl+C para detener.)\r\n"
+            "echo.\r\n"
+            f"python -c \"import base64; exec(base64.b64decode(b'{encoded}').decode())\"\r\n"
             "pause\r\n"
         )
         from flask import Response

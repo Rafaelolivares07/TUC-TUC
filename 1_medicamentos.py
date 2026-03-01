@@ -34522,6 +34522,53 @@ def api_domotica_automatizacion_eliminar(aid):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+# ─────────── SETUP: genera .bat descargable con token embebido ───────────
+
+@app.route('/api/domotica/dispositivo/<int:did>/setup-bat')
+@admin_required
+def api_domotica_setup_bat(did):
+    """Genera y descarga un .bat de Windows listo para ejecutar."""
+    try:
+        conn = get_db_connection()
+        dev = conn.execute("SELECT * FROM smart_dispositivos WHERE id=%s", (did,)).fetchone()
+        conn.close()
+        if not dev or not dev['device_token']:
+            return "Dispositivo no encontrado", 404
+        token = dev['device_token']
+        nombre = dev['nombre']
+        server_url = 'https://tuc-tuc.onrender.com' if os.getenv('RENDER') else request.host_url.rstrip('/')
+        bat = (
+            "@echo off\r\n"
+            f"title Monitor Bateria - {nombre}\r\n"
+            "echo Instalando dependencias...\r\n"
+            "pip install psutil requests --quiet\r\n"
+            f"echo Iniciando monitor: {nombre}\r\n"
+            "echo (Deja esta ventana abierta)\r\n"
+            "echo.\r\n"
+            "python -c \""
+            "import time,psutil,requests;"
+            f"T='{token}';"
+            f"S='{server_url}';"
+            "print('[monitor] Listo');\n"
+            "while 1:\n"
+            " b=psutil.sensors_battery();\n"
+            " r=requests.post(S+'/api/domotica/reporte',json={'device_token':T,'bat_pct':int(b.percent),'cargando':b.power_plugged},timeout=15).json() if b else None;\n"
+            " print('[monitor] bat:'+str(int(b.percent) if b else '?')+'%% acciones:'+str(r.get('acciones',[]) if r else 'sin red'));\n"
+            " time.sleep(300)\r\n"
+            "\"\r\n"
+            "pause\r\n"
+        )
+        from flask import Response
+        safe_name = ''.join(c for c in nombre if c.isalnum() or c in ' _-').strip().replace(' ', '_')
+        return Response(
+            bat,
+            mimetype='application/octet-stream',
+            headers={'Content-Disposition': f'attachment; filename=monitor_{safe_name}.bat'}
+        )
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
 # ─────────── API REPORTE (script local, auth por device_token) ───────────
 
 @app.route('/api/domotica/reporte', methods=['POST'])

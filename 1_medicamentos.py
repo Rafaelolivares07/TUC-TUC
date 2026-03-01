@@ -34242,6 +34242,7 @@ def crear_tablas_domotica(conn):
             bat_pct INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        "ALTER TABLE smart_dispositivos ADD COLUMN IF NOT EXISTS script_version VARCHAR(20)",
     ]
     for sql in sqls:
         try:
@@ -34610,66 +34611,170 @@ def api_domotica_automatizacion_eliminar(aid):
         return jsonify({'ok': False, 'error': str(e)})
 
 
-# ─────────── SETUP: genera .bat descargable con token embebido ───────────
+# ─────────── SETUP: genera .bat auto-instalable con token embebido ───────────
+
+def _dom_generar_monitor_py(token, server_url, device_id, nombre, version):
+    """Genera el código Python del monitor de batería (para embeber en .bat o servir como script)."""
+    lines = [
+        "import time,psutil,requests,os,sys",
+        "T=" + repr(token),
+        "S=" + repr(server_url),
+        "D=" + str(device_id),
+        "N=" + repr(nombre),
+        "V=" + repr(version),
+        "",
+        "def _upd(sp,sv):",
+        "    if not sv or sv==V or not sp or not os.path.exists(sp):return",
+        "    try:",
+        "        r=requests.get(S+'/api/domotica/dispositivo/'+str(D)+'/script',params={'token':T},timeout=20)",
+        "        if r.status_code==200:",
+        "            open(sp,'wb').write(r.content)",
+        "            print('[monitor] Script actualizado — activo al reiniciar')",
+        "    except Exception as e:print('[monitor] Sin actualizacion:',e)",
+        "",
+        "sp=os.path.abspath(__file__) if hasattr(sys.modules['__main__'],'__file__') else None",
+        "print('[monitor] Iniciando',N,'(v'+V+')')",
+        "primera=True",
+        "while True:",
+        "    try:",
+        "        b=psutil.sensors_battery()",
+        "        if b is None:print('[monitor] Sin bateria detectada')",
+        "        else:",
+        "            pct,carg=int(b.percent),b.power_plugged",
+        "            r=requests.post(S+'/api/domotica/reporte',json={'device_token':T,'bat_pct':pct,'cargando':carg},timeout=15).json()",
+        "            if r.get('ok'):",
+        "                if primera:",
+        "                    primera=False",
+        "                    _upd(sp,r.get('script_version'))",
+        "                ac=r.get('acciones',[])",
+        "                print('[monitor]',str(pct)+'% bateria |',', '.join(a['accion']+' '+a['switch'] for a in ac) if ac else 'sin cambios')",
+        "            else:print('[monitor] Error servidor:',r.get('error'))",
+        "    except requests.exceptions.RequestException as e:print('[monitor] Sin conexion:',e)",
+        "    except Exception as e:print('[monitor] Error:',e)",
+        "    time.sleep(300)",
+    ]
+    return '\n'.join(lines)
+
 
 @app.route('/api/domotica/dispositivo/<int:did>/setup-bat')
 @admin_required
 def api_domotica_setup_bat(did):
-    """Genera y descarga un .bat de Windows. El script Python va embebido en base64 para evitar problemas de escaping en CMD."""
+    """
+    Genera un .bat de Windows que:
+    1. Instala dependencias
+    2. Guarda el script monitor en %APPDATA%\\TucTuc\\
+    3. Instala un lanzador VBS silencioso en Windows Startup (auto-inicio)
+    4. Ejecuta el monitor por primera vez con ventana visible
+    """
+    import base64
+    from datetime import datetime
+    from flask import Response
     try:
         conn = get_db_connection()
+        crear_tablas_domotica(conn)
         dev = conn.execute("SELECT * FROM smart_dispositivos WHERE id=%s", (did,)).fetchone()
-        conn.close()
         if not dev or not dev['device_token']:
+            conn.close()
             return "Dispositivo no encontrado", 404
+
         token = dev['device_token']
         nombre = dev['nombre']
+        token_short = token[:8]
+        safe_name = ''.join(c for c in nombre if c.isalnum() or c in ' _-').strip().replace(' ', '_')
         server_url = 'https://tuc-tuc.onrender.com' if os.getenv('RENDER') else request.host_url.rstrip('/')
+        version = datetime.now().strftime('%Y%m%d%H%M')
 
-        py_script = (
-            "import time,psutil,requests\n"
-            f"T='{token}'\n"
-            f"S='{server_url}'\n"
-            "print('[monitor] Listo -',T[:8],'...')\n"
-            "while True:\n"
-            "    try:\n"
-            "        b=psutil.sensors_battery()\n"
-            "        if b:\n"
-            "            r=requests.post(S+'/api/domotica/reporte',\n"
-            "                json={'device_token':T,'bat_pct':int(b.percent),'cargando':b.power_plugged},\n"
-            "                timeout=15).json()\n"
-            "            ac=[a['accion']+' '+a['switch'] for a in r.get('acciones',[])]\n"
-            "            print('[monitor]',str(int(b.percent))+'%',\n"
-            "                  'cargando' if b.power_plugged else 'bateria',\n"
-            "                  '|',ac if ac else 'sin cambios')\n"
-            "        else:\n"
-            "            print('[monitor] sin bateria detectada')\n"
-            "    except Exception as e:\n"
-            "        print('[monitor] error:',e)\n"
-            "    time.sleep(300)\n"
+        # Guardar version en BD para que el reporte la devuelva
+        try:
+            conn.execute("UPDATE smart_dispositivos SET script_version=%s WHERE id=%s", (version, did))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        conn.close()
+
+        # 1. Script monitor (el que corre en background)
+        monitor_py = _dom_generar_monitor_py(token, server_url, did, nombre, version)
+        monitor_b64 = base64.b64encode(monitor_py.encode('utf-8')).decode('ascii')
+
+        # 2. Script de instalación (corre una vez desde el .bat)
+        #    - Guarda monitor.py en %APPDATA%\TucTuc\
+        #    - Crea VBS silencioso en Startup con la ruta real de python + script
+        setup_py = (
+            "import base64,os,sys\n"
+            "ap=os.path.join(os.environ.get('APPDATA',''),'TucTuc')\n"
+            "os.makedirs(ap,exist_ok=True)\n"
+            f"pp=os.path.join(ap,'monitor_{token_short}.py')\n"
+            f"open(pp,'wb').write(base64.b64decode(b'{monitor_b64}'))\n"
+            "print('[setup] Script guardado en',pp)\n"
+            "sd=os.path.join(os.environ.get('APPDATA',''),'Microsoft','Windows','Start Menu','Programs','Startup')\n"
+            f"vp=os.path.join(sd,'monitor_tuctuc_{token_short}.vbs')\n"
+            "pyexe=sys.executable\n"
+            "vbs='Set WshShell = CreateObject(\"WScript.Shell\")\\n'\n"
+            "vbs+='WshShell.Run Chr(34) & \"'+pyexe+'\" & Chr(34) & \" \" & Chr(34) & \"'+pp+'\" & Chr(34), 0, False\\n'\n"
+            "open(vp,'w').write(vbs)\n"
+            "print('[setup] Instalado en inicio de Windows ->', vp)\n"
         )
-        import base64
-        encoded = base64.b64encode(py_script.encode('utf-8')).decode('ascii')
+        setup_b64 = base64.b64encode(setup_py.encode('utf-8')).decode('ascii')
 
         bat = (
             "@echo off\r\n"
-            f"title Monitor Bateria - {nombre}\r\n"
-            "echo Instalando dependencias...\r\n"
-            "pip install psutil requests --quiet\r\n"
+            f"title Instalando Monitor de Bateria — {nombre}\r\n"
             "echo.\r\n"
-            f"echo Iniciando monitor: {nombre}\r\n"
-            "echo (Deja esta ventana abierta. Ctrl+C para detener.)\r\n"
+            f"echo  TUC TUC — Monitor de Bateria\r\n"
+            f"echo  Dispositivo: {nombre}\r\n"
             "echo.\r\n"
-            f"python -c \"import base64; exec(base64.b64decode(b'{encoded}').decode())\"\r\n"
-            "pause\r\n"
+            "echo  [1/3] Instalando dependencias...\r\n"
+            "pip install psutil requests --quiet 2>NUL\r\n"
+            "echo  Listo.\r\n"
+            "echo.\r\n"
+            "echo  [2/3] Instalando monitor en inicio de Windows...\r\n"
+            f"python -c \"import base64; exec(base64.b64decode(b'{setup_b64}').decode())\"\r\n"
+            "echo.\r\n"
+            "echo  [3/3] Ejecutando por primera vez...\r\n"
+            "echo  (Proximas ejecuciones seran silenciosas en segundo plano)\r\n"
+            "echo.\r\n"
+            f"python \"%APPDATA%\\TucTuc\\monitor_{token_short}.py\"\r\n"
         )
-        from flask import Response
-        safe_name = ''.join(c for c in nombre if c.isalnum() or c in ' _-').strip().replace(' ', '_')
         return Response(
             bat,
             mimetype='application/octet-stream',
-            headers={'Content-Disposition': f'attachment; filename=monitor_{safe_name}.bat'}
+            headers={'Content-Disposition': f'attachment; filename=instalar_monitor_{safe_name}.bat'}
         )
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/domotica/dispositivo/<int:did>/script')
+def api_domotica_script(did):
+    """
+    Sirve el script monitor actualizado. Usado por el monitor para auto-actualizarse.
+    Auth por query param token= (device_token).
+    """
+    import base64
+    from datetime import datetime
+    token = request.args.get('token', '').strip()
+    if not token:
+        return "Token requerido", 401
+    try:
+        conn = get_db_connection()
+        dev = conn.execute(
+            "SELECT * FROM smart_dispositivos WHERE id=%s AND device_token=%s AND activo=TRUE",
+            (did, token)
+        ).fetchone()
+        if not dev:
+            conn.close()
+            return "No autorizado", 401
+        server_url = 'https://tuc-tuc.onrender.com' if os.getenv('RENDER') else request.host_url.rstrip('/')
+        version = datetime.now().strftime('%Y%m%d%H%M')
+        try:
+            conn.execute("UPDATE smart_dispositivos SET script_version=%s WHERE id=%s", (version, did))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        conn.close()
+        monitor_py = _dom_generar_monitor_py(token, server_url, did, dev['nombre'], version)
+        from flask import Response
+        return Response(monitor_py.encode('utf-8'), mimetype='text/plain')
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -34700,9 +34805,59 @@ def api_domotica_reporte():
         )
         conn.commit()
         acciones = _dom_evaluar_y_actuar(conn, dev['id'], int(bat_pct), cargando)
+        script_version = dev['script_version'] if 'script_version' in dev.keys() else None
         conn.close()
         from datetime import datetime
-        return jsonify({'ok': True, 'acciones': acciones, 'bat_pct': int(bat_pct), 'hora': datetime.now().hour})
+        return jsonify({'ok': True, 'acciones': acciones, 'bat_pct': int(bat_pct), 'hora': datetime.now().hour, 'script_version': script_version})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/wizard/crear', methods=['POST'])
+@admin_required
+def api_domotica_wizard_crear():
+    """
+    Crea dispositivo + switch + automatización en un solo paso (flujo asistido).
+    Body: { id_propiedad, tipo, nombre, tuya_device_id, hora_inicio, hora_fin }
+    """
+    import secrets
+    data = request.get_json() or {}
+    id_propiedad = data.get('id_propiedad')
+    tipo = data.get('tipo', 'laptop')
+    nombre = (data.get('nombre') or f'{tipo.capitalize()} — Domótica').strip()
+    tuya_device_id = (data.get('tuya_device_id') or '').strip()
+    hora_inicio = int(data.get('hora_inicio', 9))
+    hora_fin = int(data.get('hora_fin', 16))
+    if not id_propiedad:
+        return jsonify({'ok': False, 'error': 'Propiedad requerida'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        token = secrets.token_hex(16)
+        device_id = conn.execute(
+            "INSERT INTO smart_dispositivos (id_propiedad, nombre, tipo, device_token) VALUES (%s,%s,%s,%s) RETURNING id",
+            (int(id_propiedad), nombre, tipo, token)
+        ).fetchone()['id']
+        conn.commit()
+        switch_id = conn.execute(
+            "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id) VALUES (%s,%s,%s) RETURNING id",
+            (device_id, 'Enchufe inteligente', tuya_device_id or None)
+        ).fetchone()['id']
+        conn.commit()
+        conn.execute(
+            """INSERT INTO smart_automatizaciones
+               (id_switch, descripcion, hora_inicio, hora_fin, bat_minimo_pico, bat_minimo_fuera_pico, bat_objetivo)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (switch_id, f'Solar {hora_inicio}h–{hora_fin}h', hora_inicio, hora_fin, 90, 40, 100)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'device_id': device_id, 'switch_id': switch_id, 'nombre': nombre})
     except Exception as e:
         try:
             conn.rollback()

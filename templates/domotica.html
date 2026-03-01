@@ -30,6 +30,18 @@
   .sub-card { background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; }
   details > summary { cursor:pointer; list-style:none; }
   details > summary::-webkit-details-marker { display:none; }
+  .bat-bar-wrap { background:#e5e7eb; border-radius:99px; height:10px; overflow:hidden; }
+  .bat-bar { height:10px; border-radius:99px; width:0%; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+  .bat-bar.alto  { background:linear-gradient(90deg,#34d399,#059669); }
+  .bat-bar.medio { background:linear-gradient(90deg,#fbbf24,#d97706); }
+  .bat-bar.bajo  { background:linear-gradient(90deg,#f87171,#dc2626); }
+  .log-row { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:start; padding:6px 0; border-bottom:1px solid #f1f5f9; }
+  .log-row:last-child { border-bottom:none; }
+  .log-fuente-laptop    { background:#dbeafe; color:#1d4ed8; }
+  .log-fuente-scheduler { background:#f3e8ff; color:#7c3aed; }
+  .log-fuente-manual    { background:#fef3c7; color:#92400e; }
+  .log-accion-encendido { color:#059669; font-weight:700; }
+  .log-accion-apagado   { color:#6b7280; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -258,14 +270,32 @@ async function cargarDispositivos() {
       return;
     }
     cont.innerHTML = d.dispositivos.map(dev => renderDispositivo(dev)).join('');
+    animarBarras();
   } catch(e) { toast('Error cargando dispositivos', 'err'); }
+}
+
+function barClass(pct) {
+  if (pct >= 80) return 'alto';
+  if (pct >= 40) return 'medio';
+  return 'bajo';
 }
 
 function renderDispositivo(dev) {
   const bat = dev.ultimo_bat_pct;
-  const batHtml = (dev.tipo === 'laptop' || dev.tipo === 'computador') && bat !== null
+  const esLaptop = (dev.tipo === 'laptop' || dev.tipo === 'computador');
+  const batHtml = esLaptop && bat !== null
     ? `<span class="bat-pill ${batClass(bat)}">🔋 ${bat}%${dev.bat_cargando ? ' ⚡' : ''}</span>`
     : '';
+  const batBarHtml = esLaptop && bat !== null ? `
+    <div class="mt-3">
+      <div class="flex justify-between text-xs text-gray-500 mb-1">
+        <span>Carga de batería</span>
+        <span class="font-semibold">${bat}%${dev.bat_cargando ? ' ⚡ cargando' : ''}</span>
+      </div>
+      <div class="bat-bar-wrap">
+        <div class="bat-bar ${barClass(bat)}" data-target="${bat}" id="bat-bar-${dev.id}"></div>
+      </div>
+    </div>` : '';
   const lecturaHtml = dev.ultima_lectura
     ? `<span class="text-xs text-gray-400">última lectura: ${new Date(dev.ultima_lectura).toLocaleString('es-CO')}</span>`
     : '<span class="text-xs text-gray-400">sin lecturas aún</span>';
@@ -308,6 +338,7 @@ function renderDispositivo(dev) {
       ${macHtml}
     </div>
     ${tokenHtml}
+    ${batBarHtml}
     ${(dev.tipo === 'laptop' || dev.tipo === 'computador') ? `
     <div class="mt-3 flex items-center gap-2">
       <button onclick="descargarScript(${dev.id})"
@@ -328,6 +359,17 @@ function renderDispositivo(dev) {
         ${switchesHtml}
       </div>
     </div>
+
+    <!-- ACTIVIDAD -->
+    <details class="mt-4" onToggle="if(this.open) cargarLogs(${dev.id})">
+      <summary class="flex items-center justify-between select-none">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Actividad reciente</span>
+        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </summary>
+      <div id="logs-${dev.id}" class="mt-3 text-xs text-gray-400">Abrí para cargar...</div>
+    </details>
   </div>`;
 }
 
@@ -591,13 +633,67 @@ function descargarScript(devId, token) {
   window.location.href = `/api/domotica/dispositivo/${devId}/setup-bat`;
 }
 
+// ─── ANIMAR BARRAS DE BATERÍA ───
+function animarBarras() {
+  document.querySelectorAll('.bat-bar[data-target]').forEach(bar => {
+    const target = parseInt(bar.dataset.target);
+    requestAnimationFrame(() => {
+      setTimeout(() => { bar.style.width = target + '%'; }, 80);
+    });
+  });
+}
+
+// ─── LOGS DE ACTIVIDAD ───
+async function cargarLogs(devId) {
+  const cont = document.getElementById(`logs-${devId}`);
+  if (!cont) return;
+  cont.innerHTML = '<span class="text-gray-300">Cargando...</span>';
+  try {
+    const r = await fetch(`/api/domotica/dispositivo/${devId}/logs`);
+    const d = await r.json();
+    if (!d.ok) { cont.innerHTML = `<span class="text-red-400">${d.error}</span>`; return; }
+    if (!d.logs.length) {
+      cont.innerHTML = '<span class="text-gray-400">Sin actividad registrada aún.</span>';
+      return;
+    }
+    cont.innerHTML = d.logs.map(l => {
+      const fuente = l.fuente || 'laptop';
+      const hora = l.created_at ? new Date(l.created_at).toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'}) : '';
+      const batTag = l.bat_pct !== null && l.bat_pct !== undefined ? `<span class="text-gray-400">${l.bat_pct}%</span>` : '';
+      const switchTag = l.switch_nombre ? `<span class="font-semibold text-gray-600">${l.switch_nombre}</span> ` : '';
+      return `<div class="log-row">
+        <span class="text-xs font-bold px-2 py-0.5 rounded-full log-fuente-${fuente}">${fuente}</span>
+        <div>
+          ${switchTag}<span class="log-accion-${l.accion}">${l.accion}</span>
+          ${batTag}
+          <p class="text-gray-400 mt-0.5">${l.razon || ''}</p>
+        </div>
+        <span class="text-gray-400 whitespace-nowrap">${hora}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { cont.innerHTML = '<span class="text-red-400">Error cargando logs</span>'; }
+}
+
 // ─── INIT ───
 cargarPropiedades();
 // Auto-refresh del estado de batería cada 30 segundos
-setInterval(() => {
+setInterval(async () => {
   const pid = document.getElementById('sel-propiedad').value;
-  if (pid) cargarDispositivos();
+  if (!pid) return;
+  await cargarDispositivos();
+  animarBarras();
+  // Refrescar logs de paneles abiertos
+  document.querySelectorAll('details[open]').forEach(det => {
+    const logsDiv = det.querySelector('[id^="logs-"]');
+    if (logsDiv) {
+      const devId = logsDiv.id.replace('logs-', '');
+      cargarLogs(parseInt(devId));
+    }
+  });
 }, 30000);
+
+// Animar barras tras carga inicial
+document.addEventListener('DOMContentLoaded', () => setTimeout(animarBarras, 200));
 </script>
 </body>
 </html>

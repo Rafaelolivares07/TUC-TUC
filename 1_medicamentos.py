@@ -1341,6 +1341,69 @@ def verificar_y_enviar_recordatorios():
         traceback.print_exc()
 
 
+def verificar_domotica_scheduler():
+    """
+    Scheduler: controla switches Tuya por horario cuando el laptop está offline.
+    Si un dispositivo no ha reportado en los últimos 15 min → aplica lógica de hora:
+      - Dentro del horario pico → encender
+      - Fuera del horario pico  → apagar
+    Si reportó recientemente, se omite (el script local lo maneja con la batería real).
+    """
+    from datetime import datetime, timedelta
+    try:
+        conn = get_db_connection()
+        hora = datetime.now().hour
+        devs = conn.execute(
+            "SELECT * FROM smart_dispositivos WHERE activo=TRUE"
+        ).fetchall()
+        acciones_total = 0
+        for dev in devs:
+            # Saltar si tiene lectura reciente (< 15 min) — el script local lo maneja
+            if dev['ultima_lectura']:
+                diff = datetime.now() - dev['ultima_lectura']
+                if diff.total_seconds() < 900:
+                    continue
+            switches = conn.execute(
+                "SELECT * FROM smart_switches WHERE id_dispositivo=%s AND activo=TRUE",
+                (dev['id'],)
+            ).fetchall()
+            for sw in switches:
+                auto = conn.execute(
+                    "SELECT * FROM smart_automatizaciones WHERE id_switch=%s AND activa=TRUE ORDER BY id LIMIT 1",
+                    (sw['id'],)
+                ).fetchone()
+                if not auto:
+                    continue
+                en_pico = auto['hora_inicio'] <= hora < auto['hora_fin']
+                desired = en_pico  # sin batería: encender en pico, apagar fuera
+                if desired == sw['estado_actual']:
+                    continue
+                ok = _dom_controlar_tuya(sw['tuya_device_id'], desired)
+                if ok:
+                    razon = f'hora {hora}h: {"pico" if en_pico else "fuera_pico"} — laptop offline'
+                    conn.execute(
+                        "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
+                        (desired, sw['id'])
+                    )
+                    conn.execute(
+                        "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon) VALUES (%s,%s,'scheduler',%s,%s)",
+                        (dev['id'], sw['id'], 'encendido' if desired else 'apagado', razon)
+                    )
+                    conn.commit()
+                    acciones_total += 1
+                    print(f"[DOMOTICA-SCHEDULER] {dev['nombre']}/{sw['nombre']}: {'ON' if desired else 'OFF'} ({razon})")
+        conn.close()
+        if acciones_total == 0:
+            print(f"[DOMOTICA-SCHEDULER] hora {hora}h — sin cambios")
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        print(f"[DOMOTICA-SCHEDULER] Error: {e}")
+
+
 # Inicializar el scheduler en background
 scheduler = BackgroundScheduler()
 
@@ -1353,6 +1416,15 @@ scheduler.add_job(
     replace_existing=True
 )
 
+# Domótica: control de switches por horario (cuando el laptop está offline)
+scheduler.add_job(
+    func=verificar_domotica_scheduler,
+    trigger=IntervalTrigger(minutes=5),
+    id='verificar_domotica',
+    name='Domótica: control switches por horario',
+    replace_existing=True
+)
+
 # Iniciar el scheduler
 scheduler.start()
 
@@ -1360,6 +1432,7 @@ scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
 print("[SCHEDULER] APScheduler inicializado - Verificando recordatorios cada 5 minutos")
+print("[SCHEDULER] APScheduler domótica — control switches cada 5 minutos")
 
 
 # -------------------------------------------------------------------
@@ -34159,6 +34232,16 @@ def crear_tablas_domotica(conn):
             activa BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS smart_logs (
+            id SERIAL PRIMARY KEY,
+            id_dispositivo INTEGER,
+            id_switch INTEGER,
+            fuente VARCHAR(30) DEFAULT 'laptop',
+            accion VARCHAR(30),
+            razon TEXT,
+            bat_pct INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
     for sql in sqls:
         try:
@@ -34188,7 +34271,7 @@ def _dom_controlar_tuya(device_id, encender):
         return False
 
 
-def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando):
+def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando, fuente='laptop'):
     """Evalúa automatizaciones del dispositivo y actúa sobre sus switches si es necesario."""
     from datetime import datetime
     hora = datetime.now().hour
@@ -34219,11 +34302,16 @@ def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando):
                     "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
                     (desired, sw['id'])
                 )
+                razon = f'bat {bat_pct}% {"<" if desired else ">="} umbral {umbral}% ({"pico" if en_pico else "fuera_pico"})'
+                conn.execute(
+                    "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon, bat_pct) VALUES (%s,%s,%s,%s,%s,%s)",
+                    (dispositivo_id, sw['id'], fuente, 'encendido' if desired else 'apagado', razon, bat_pct)
+                )
                 conn.commit()
                 acciones.append({
                     'switch': sw['nombre'],
                     'accion': 'encendido' if desired else 'apagado',
-                    'razon': f'bat {bat_pct}% {"<" if desired else ">="} umbral {umbral}% ({"pico" if en_pico else "fuera_pico"})'
+                    'razon': razon
                 })
     return acciones
 
@@ -34615,6 +34703,44 @@ def api_domotica_reporte():
         conn.close()
         from datetime import datetime
         return jsonify({'ok': True, 'acciones': acciones, 'bat_pct': int(bat_pct), 'hora': datetime.now().hour})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/dispositivo/<int:did>/logs')
+@admin_required
+def api_domotica_logs(did):
+    """Últimas 30 acciones del dispositivo (scheduler + laptop + manual)."""
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        logs = conn.execute(
+            """SELECT sl.id, sl.fuente, sl.accion, sl.razon, sl.bat_pct,
+                      sl.created_at, ss.nombre AS switch_nombre
+               FROM smart_logs sl
+               LEFT JOIN smart_switches ss ON ss.id = sl.id_switch
+               WHERE sl.id_dispositivo=%s
+               ORDER BY sl.created_at DESC LIMIT 30""",
+            (did,)
+        ).fetchall()
+        conn.close()
+        result = []
+        for l in logs:
+            result.append({
+                'id': l['id'],
+                'fuente': l['fuente'],
+                'accion': l['accion'],
+                'razon': l['razon'],
+                'bat_pct': l['bat_pct'],
+                'switch_nombre': l['switch_nombre'],
+                'created_at': l['created_at'].isoformat() if l['created_at'] else None,
+            })
+        return jsonify({'ok': True, 'logs': result})
     except Exception as e:
         try:
             conn.rollback()

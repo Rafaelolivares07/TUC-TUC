@@ -1258,9 +1258,9 @@ async function agregarDias(slug) {
         <!-- Fotos adicionales -->
         <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Fotos adicionales</p>
         <div id="fotos-extra-grid" class="grid grid-cols-3 gap-2 mb-4"></div>
-        <button onclick="document.getElementById('inp-foto-extra').click()" class="w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-rose-400 hover:text-rose-500 transition font-semibold">
+        <label for="inp-foto-extra" class="block w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-rose-400 hover:text-rose-500 transition font-semibold text-center cursor-pointer">
             + Agregar foto
-        </button>
+        </label>
         <input type="file" id="inp-foto-extra" accept="image/*" class="hidden" onchange="subirFotoExtra(this)">
     </div>
 </div>

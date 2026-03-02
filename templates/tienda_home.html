@@ -283,12 +283,30 @@
         }
         
         
-        .producto-imagen {
-            width: 100%;
+        /* Contenedor de imagen con fondo blur */
+        .producto-imagen-wrap {
+            position: relative;
             height: 200px;
+            overflow: hidden;
+            background: #e8e8e8;
+            cursor: pointer;
+        }
+        .producto-imagen-wrap .img-bg-blur {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: blur(18px) brightness(0.72);
+            transform: scale(1.15);
+            pointer-events: none;
+        }
+        .producto-imagen-wrap .img-principal {
+            position: relative;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
-            background: #f9f9f9;
-            padding: 1rem;
+            z-index: 1;
         }
         
         .producto-info {
@@ -314,6 +332,31 @@
             margin-bottom: 0.5rem;
         }
         
+        .producto-descripcion {
+            font-size: 0.85rem;
+            color: #555;
+            line-height: 1.4;
+            margin-bottom: 0.4rem;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .producto-descripcion.expandida {
+            -webkit-line-clamp: unset;
+            display: block;
+        }
+        .btn-ver-desc {
+            font-size: 0.78rem;
+            color: #667eea;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+            margin-bottom: 0.3rem;
+        }
+
         .producto-diagnostico {
             background: #ffe6e6;
             padding: 0.5rem;
@@ -2412,12 +2455,15 @@
             
                 <div class="producto-card" data-producto-id="${p.id}">
                     
-                    <img src="${obtenerUrlImagen(p.imagen)}"
-                        alt="${p.nombre}"
-                        class="producto-imagen"
-                        style="cursor: pointer;"
-                        onerror="this.src='https://placehold.co/300x300?text=Sin+imagen'"
-                        onclick="event.stopPropagation(); abrirModalImagen('${obtenerUrlImagen(p.imagen)}', '${p.nombre}')">
+                    <div class="producto-imagen-wrap"
+                         onclick="event.stopPropagation(); abrirModalImagen('${obtenerUrlImagen(p.imagen)}', '${p.nombre}')">
+                        <img src="${obtenerUrlImagen(p.imagen)}" alt=""
+                             class="img-bg-blur"
+                             onerror="this.style.display='none'">
+                        <img src="${obtenerUrlImagen(p.imagen)}" alt="${p.nombre}"
+                             class="img-principal"
+                             onerror="this.src='https://placehold.co/300x300?text=Sin+imagen'">
+                    </div>
                     <div class="producto-info">
                         <div class="producto-nombre">${p.nombre}</div>
                         <div class="producto-fabricante">${p.fabricante}</div>
@@ -2425,6 +2471,12 @@
                            ${p.concentracion && p.concentracion.toUpperCase() !== 'NONE' ? p.concentracion : ''}
                            ${p.presentacion && p.presentacion.toUpperCase() !== 'NONE' ? p.presentacion : ''}
                         </div>
+
+                        ${p.descripcion ? `
+                        <div>
+                            <p class="producto-descripcion" id="desc-texto-${p.id}">${p.descripcion}</p>
+                            <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDesc(${p.id}, event)">Ver más</button>
+                        </div>` : ''}
                         
                         ${p.diagnostico_detectado ? `
                             <div class="producto-diagnostico">
@@ -2460,6 +2512,15 @@
             if (contadorResultados) {
                 contadorResultados.textContent = `${productos.length} resultado${productos.length !== 1 ? 's' : ''}`;
             }
+        }
+
+        function toggleDesc(id, event) {
+            event.stopPropagation();
+            const p = document.getElementById('desc-texto-' + id);
+            const btn = document.getElementById('desc-btn-' + id);
+            if (!p) return;
+            const expandida = p.classList.toggle('expandida');
+            btn.textContent = expandida ? 'Ver menos' : 'Ver más';
         }
 
         function formatearPrecio(precio) {
@@ -4463,38 +4524,48 @@
             const modal = document.createElement('div');
             modal.style.cssText = `
                 position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.8);
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.92);
                 display: flex;
+                flex-direction: column;
                 align-items: center;
                 justify-content: center;
                 z-index: 9999;
-                cursor: pointer;
+                padding: 16px;
+                box-sizing: border-box;
             `;
-            
+
             const contenido = document.createElement('div');
             contenido.style.cssText = `
                 position: relative;
-                background: white;
-                padding: 20px;
-                border-radius: 10px;
-                max-width: 600px;
-                max-height: 80vh;
-                overflow: auto;
+                background: #111;
+                border-radius: 14px;
+                overflow: hidden;
+                width: 100%;
+                max-width: 380px;
+                max-height: 90vh;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.6);
             `;
-            
+
             contenido.innerHTML = `
-                <img src="${imagenSrc}" alt="${nombreProducto}" style="width: 100%; border-radius: 8px;">
-                <button onclick="this.closest('div').parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px;">✕</button>
+                <img src="${imagenSrc}" alt="${nombreProducto}"
+                     style="width:100%; max-height:72vh; object-fit:contain; display:block; background:#111;">
+                <div style="padding: 10px 14px; background:#111;">
+                    <p style="color:#ddd; font-size:0.85rem; text-align:center; margin:0; line-height:1.3;">${nombreProducto}</p>
+                </div>
+                <button style="position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.6);
+                               color:white; border:none; border-radius:50%; width:36px; height:36px;
+                               cursor:pointer; font-size:18px; display:flex;
+                               align-items:center; justify-content:center; backdrop-filter:blur(4px);">✕</button>
             `;
-            
+            contenido.dataset.modal = '1';
+
+            // El botón X cierra el modal completo
+            contenido.querySelector('button').onclick = () => modal.remove();
             modal.appendChild(contenido);
-            modal.onclick = (e) => {
-                if (e.target === modal) modal.remove();
-            };
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             document.body.appendChild(modal);
         }
         

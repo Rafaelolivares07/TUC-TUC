@@ -264,7 +264,7 @@ function renderProductos() {
         const agotado = !p.disponible;
         return `<div class="card bg-white border rounded-xl overflow-hidden ${agotado ? 'opacity-50' : ''}" id="prod-${p.id}">
             ${p.imagen ?
-                `<div class="prod-img-wrap" onclick="${agotado ? '' : `zoomImagen('${p.imagen}')`}">
+                `<div class="prod-img-wrap" onclick="${agotado ? '' : `abrirModalVariante(${p.id})`}">
                     <img src="${p.imagen}" class="img-bg-blur" aria-hidden="true">
                     <img src="${p.imagen}" class="img-principal">
                 </div>` :
@@ -678,6 +678,12 @@ function confirmarVariante() {
     if (!varCliProducto) return;
     const atributosTotales = document.querySelectorAll('[class*="var-btn-"]');
     const grupos = new Set([...atributosTotales].map(b => b.className.match(/var-btn-\d+/)?.[0]).filter(Boolean));
+    if (grupos.size === 0) {
+        cambiarCantidad(String(varCliProducto.id), 1);
+        cerrarModalVariante();
+        toast('Agregado al carrito');
+        return;
+    }
     if (Object.keys(varCliSeleccion).length < grupos.size) return toast('Elige todas las opciones', true);
 
     const variante = varCliVariantes.find(v =>

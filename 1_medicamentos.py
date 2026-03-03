@@ -34963,7 +34963,28 @@ def api_restaurante_toggle_pin(slug):
 @app.route('/almuerzo')
 def almuerzo_page():
     """Herramienta para procesar menú del día vía texto y crear pedido"""
-    return render_template('almuerzo.html')
+    usuario_pre = None
+    uid     = session.get('usuario_id')
+    nombre  = session.get('nombre', '')
+    telefono = session.get('telefono', '') or ''
+    rol     = session.get('rol', '')
+    if uid and nombre:
+        if rol != 'Administrador':
+            # Roles de terceros (Restaurante, Tienda, TucTuc...): usuario_id ES tercero_id
+            usuario_pre = {'tercero_id': uid, 'nombre': nombre, 'telefono': telefono}
+        elif telefono:
+            # Admin: buscar tercero por teléfono
+            try:
+                conn = get_db_connection()
+                t = conn.execute(
+                    "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+                ).fetchone()
+                conn.close()
+                if t:
+                    usuario_pre = {'tercero_id': t['id'], 'nombre': nombre, 'telefono': telefono}
+            except Exception:
+                pass
+    return render_template('almuerzo.html', usuario_pre=usuario_pre)
 
 
 @app.route('/api/almuerzo/tercero')

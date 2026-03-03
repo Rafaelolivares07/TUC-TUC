@@ -34965,11 +34965,21 @@ def almuerzo_page():
     """Herramienta para procesar menú del día vía texto y crear pedido"""
     usuario_pre = None
     uid = session.get('usuario_id')
-    nombre = session.get('nombre', '') or ''
-    telefono = session.get('telefono', '') or ''
-    # session['usuario_id'] apunta a terceros.id para cualquier usuario del sistema
-    if uid and nombre:
-        usuario_pre = {'tercero_id': uid, 'nombre': nombre, 'telefono': telefono}
+    if uid:
+        try:
+            conn = get_db_connection()
+            t = conn.execute(
+                "SELECT id, nombre, telefono FROM terceros WHERE id = %s", (uid,)
+            ).fetchone()
+            conn.close()
+            if t:
+                usuario_pre = {
+                    'tercero_id': t['id'],
+                    'nombre':     t['nombre'] or '',
+                    'telefono':   t['telefono'] or '',
+                }
+        except Exception:
+            pass
     return render_template('almuerzo.html', usuario_pre=usuario_pre)
 
 

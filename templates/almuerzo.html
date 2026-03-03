@@ -93,10 +93,21 @@
                    class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         </div>
 
-        <button onclick="iniciarConfirmar()"
-                class="mt-5 w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold text-base shadow-sm">
-            ¡Enviar pedido! 🚀
-        </button>
+        <!-- Tres opciones -->
+        <div class="mt-5 space-y-3">
+            <button onclick="iniciarConfirmar()"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold text-base shadow-sm">
+                ¡Hacer mi pedido! 🚀
+            </button>
+            <button onclick="soloCompartirEnlace()"
+                    class="w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 py-3 rounded-2xl font-semibold text-sm">
+                Enviarle el enlace al restaurante (sin pedido)
+            </button>
+            <button onclick="showStep('step-menu')"
+                    class="w-full border border-gray-200 text-gray-500 py-2 rounded-2xl text-sm hover:bg-gray-50">
+                No me convence este menú — ver otro restaurante
+            </button>
+        </div>
     </div>
 
     <!-- STEP 3: resultado -->
@@ -473,6 +484,45 @@ async function enviarPedido() {
         showStep('step-done');
     } catch(e) {
         if (btn) { btn.disabled = false; btn.innerHTML = '¡Enviar pedido! 🚀'; }
+        toast('Error de conexión', false);
+    }
+}
+
+async function soloCompartirEnlace() {
+    const todos = [...state.bloques.sopa, ...state.bloques.principio, ...state.bloques.proteina];
+    const items_menu = todos.filter(i => i.en_menu);
+    if (!items_menu.length) { toast('Marca al menos un ítem del menú', false); return; }
+
+    const payload = {
+        tercero_id:        state.tercero_id || null,
+        restaurante_id:    state.restaurante_nuevo ? null : state.restaurante_id,
+        restaurante_nuevo: state.restaurante_nuevo || null,
+        items:             todos,
+        solo_enlace:       true,
+    };
+
+    const btn = document.querySelector('#step-items button[onclick="soloCompartirEnlace()"]');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Preparando...';
+
+    try {
+        const r = await fetch(`${API}/confirmar`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        btn.disabled = false; btn.innerHTML = 'Enviarle el enlace al restaurante (sin pedido)';
+        if (!data.ok) { toast(data.error, false); return; }
+
+        const url = window.location.origin + data.cocina_url;
+        document.getElementById('link-cocina').href = url;
+        document.getElementById('link-wa-cocina').href =
+            `https://wa.me/?text=${encodeURIComponent(`Hola, mira cómo quedarían tus pedidos acá: ${url}`)}`;
+        document.getElementById('lbl-done-nombre').textContent =
+            'Menú del día cargado — comparte el enlace con el restaurante.';
+        showStep('step-done');
+    } catch(e) {
+        btn.disabled = false; btn.innerHTML = 'Enviarle el enlace al restaurante (sin pedido)';
         toast('Error de conexión', false);
     }
 }

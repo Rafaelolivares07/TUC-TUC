@@ -35196,8 +35196,9 @@ def api_almuerzo_confirmar():
     restaurante_nuevo = data.get('restaurante_nuevo')  # {nombre, nombre_dueno, telefono_dueno}
     items             = data.get('items', [])           # lista completa con en_menu, mi_pedido
     notas             = data.get('notas', '').strip() or None
+    solo_enlace       = data.get('solo_enlace', False)  # True = solo armar menú, sin pedido
 
-    if not tercero_id:
+    if not solo_enlace and not tercero_id:
         return jsonify({'ok': False, 'error': 'Usuario no identificado'}), 400
     items_menu = [i for i in items if i.get('en_menu')]
     if not items_menu:
@@ -35309,43 +35310,44 @@ def api_almuerzo_confirmar():
                 )
         conn.commit()
 
-        # 5. Crear pedido — un ítem estrellado por categoría
-        def get_starred_id(cat):
-            for i in items:
-                if i.get('mi_pedido') and i.get('tipo') == cat:
-                    oid = i.get('opcion_id') or temp_map.get(i.get('temp_id', ''))
-                    return oid
-            return None
+        # 5. Crear pedido — solo si no es solo_enlace
+        if not solo_enlace and tercero_id:
+            def get_starred_id(cat):
+                for i in items:
+                    if i.get('mi_pedido') and i.get('tipo') == cat:
+                        oid = i.get('opcion_id') or temp_map.get(i.get('temp_id', ''))
+                        return oid
+                return None
 
-        sopa_id      = get_starred_id('sopa')
-        principio_id = get_starred_id('principio')
-        proteina_id  = get_starred_id('proteina')
+            sopa_id      = get_starred_id('sopa')
+            principio_id = get_starred_id('principio')
+            proteina_id  = get_starred_id('proteina')
 
-        if sopa_id and principio_id and proteina_id:
-            tipo_pedido = 'completo'
-        elif principio_id and proteina_id:
-            tipo_pedido = 'bandeja'
-        elif sopa_id:
-            tipo_pedido = 'sopa'
-        else:
-            tipo_pedido = 'completo'
+            if sopa_id and principio_id and proteina_id:
+                tipo_pedido = 'completo'
+            elif principio_id and proteina_id:
+                tipo_pedido = 'bandeja'
+            elif sopa_id:
+                tipo_pedido = 'sopa'
+            else:
+                tipo_pedido = 'completo'
 
-        tercero = conn.execute(
-            "SELECT nombre, telefono FROM terceros WHERE id = %s", (tercero_id,)
-        ).fetchone()
-        nombre_c   = tercero['nombre'] if tercero else ''
-        telefono_c = tercero['telefono'] if tercero else ''
+            tercero = conn.execute(
+                "SELECT nombre, telefono FROM terceros WHERE id = %s", (tercero_id,)
+            ).fetchone()
+            nombre_c   = tercero['nombre'] if tercero else ''
+            telefono_c = tercero['telefono'] if tercero else ''
 
-        conn.execute("""
-            INSERT INTO pedidos_restaurante
-              (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id,
-               precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, cliente_id)
-            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, 'para_llevar', %s, %s)
-        """, (restaurante_id, 0, tipo_pedido, sopa_id, proteina_id, principio_id,
-              notas, nombre_c, telefono_c, tercero_id))
-        conn.commit()
+            conn.execute("""
+                INSERT INTO pedidos_restaurante
+                  (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id,
+                   precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, cliente_id)
+                VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, 'para_llevar', %s, %s)
+            """, (restaurante_id, 0, tipo_pedido, sopa_id, proteina_id, principio_id,
+                  notas, nombre_c, telefono_c, tercero_id))
+            conn.commit()
+
         conn.close()
-
         return jsonify({'ok': True, 'slug': slug, 'cocina_url': f'/r/{slug}/cocina'})
 
     except Exception as e:

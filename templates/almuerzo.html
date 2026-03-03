@@ -522,7 +522,7 @@ async function enviarPedido() {
         const url = window.location.origin + data.cocina_url;
         document.getElementById('link-cocina').href = url;
         document.getElementById('link-wa-cocina').href =
-            `https://wa.me/?text=${encodeURIComponent(`¡Hola! Te hice el pedido de hoy por acá: ${url}`)}`;
+            `https://wa.me/?text=${encodeURIComponent(`¡Hola! Te hice el pedido de hoy por acá: ${encodeURI(url)}`)}`;
         document.getElementById('lbl-done-nombre').textContent =
             `Pedido de ${state.nombre} — el restaurante ya lo ve en cocina.`;
         showStep('step-done');
@@ -561,7 +561,7 @@ async function soloCompartirEnlace() {
         const url = window.location.origin + data.cocina_url;
         document.getElementById('link-cocina').href = url;
         document.getElementById('link-wa-cocina').href =
-            `https://wa.me/?text=${encodeURIComponent(`Hola, mira cómo quedarían tus pedidos acá: ${url}`)}`;
+            `https://wa.me/?text=${encodeURIComponent(`Hola, mira cómo quedarían tus pedidos acá: ${encodeURI(url)}`)}`;
         document.getElementById('lbl-done-nombre').textContent =
             'Menú del día cargado — comparte el enlace con el restaurante.';
         showStep('step-done');

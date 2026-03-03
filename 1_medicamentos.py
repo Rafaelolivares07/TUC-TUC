@@ -35063,7 +35063,9 @@ def api_almuerzo_restaurantes():
 
 @app.route('/api/almuerzo/procesar', methods=['POST'])
 def api_almuerzo_procesar():
-    """Procesar texto de menú y clasificar ítems por categoría"""
+    """Procesar texto de menú y clasificar ítems por categoría.
+    Soporta texto de WhatsApp en una sola línea sin comas ni saltos.
+    """
     import unicodedata, re as _re
     data = request.get_json()
     texto = data.get('texto', '')
@@ -35080,9 +35082,33 @@ def api_almuerzo_procesar():
 
     ITEM_SEEDS = {
         'sopa':      ['sancocho', 'ajiaco', 'mondongo', 'changua', 'cuchuco', 'sopa', 'caldo', 'hervido', 'consome', 'cazuela'],
-        'principio': ['frijoles', 'frijol', 'lentejas', 'lenteja', 'garbanzo', 'arveja', 'arroz', 'papa', 'yuca', 'platano', 'ensalada', 'pasta', 'fideos', 'espagueti', 'maiz', 'habas', 'patacones'],
-        'proteina':  ['pollo', 'res', 'cerdo', 'pescado', 'atun', 'salmon', 'tilapia', 'mojarra', 'trucha', 'bistec', 'lomo', 'chuleta', 'pernil', 'pechuga', 'muslo', 'carne', 'milanesa', 'higado', 'corazon', 'costilla', 'chicharron'],
+        'principio': ['frijoles', 'frijol', 'lentejas', 'lenteja', 'garbanzo', 'arveja', 'arroz',
+                      'papa', 'papas', 'yuca', 'platano', 'ensalada', 'pasta', 'fideo', 'fideos',
+                      'espagueti', 'espaguetis', 'maiz', 'habas', 'patacones', 'arepa', 'arepas'],
+        'proteina':  ['pollo', 'res', 'cerdo', 'pescado', 'atun', 'salmon', 'tilapia', 'mojarra',
+                      'trucha', 'bistec', 'lomo', 'chuleta', 'pernil', 'pechuga', 'muslo', 'carne',
+                      'milanesa', 'higado', 'corazon', 'costilla', 'chicharron'],
     }
+
+    # Normalizar diminutivos comunes antes de clasificar
+    DIMINUTIVOS = {
+        'sopita': 'sopa', 'caldito': 'caldo', 'caldita': 'caldo',
+        'arrocito': 'arroz', 'pollito': 'pollo', 'pescadito': 'pescado',
+        'frijolitos': 'frijoles', 'papita': 'papa', 'papitas': 'papas',
+        'carnita': 'carne', 'carnitas': 'carne',
+    }
+
+    # Conectores: cuando el token siguiente a un seed es uno de estos,
+    # se considera parte del mismo ítem (ej. "sopa DE pasta")
+    CONECTORES = {'de', 'del', 'con', 'a', 'al'}
+
+    # Quitar frases de introducción típicas de WhatsApp
+    INTRO_RE = _re.compile(
+        r'^(?:(?:mira|hola|buenas?|buen\s+dia)\b[^,\n]{0,80}\btenemos\s+'
+        r'|(?:para\s+hoy|hoy|el\s+dia\s+de\s+hoy)\s+tenemos\s+'
+        r'|(?:menu\s+del\s+dia|almuerzo\s+del\s+dia)\s*[:\-]?\s*)',
+        _re.IGNORECASE
+    )
 
     def norm(s):
         s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
@@ -35098,13 +35124,67 @@ def api_almuerzo_procesar():
                     return cat
         return None
 
-    def classify_by_seeds(nombre_norm):
-        tokens = set(nombre_norm.split())
+    def seed_cat(token):
+        """Devuelve la categoría del token si es un seed conocido, o None."""
+        t = DIMINUTIVOS.get(token, token)
         for cat, seeds in ITEM_SEEDS.items():
-            for seed in seeds:
-                if seed in tokens or seed in nombre_norm:
-                    return cat
+            if t in seeds:
+                return cat
         return None
+
+    def chunk_to_items(chunk_norm):
+        """Divide un chunk normalizado en ítems con tipo detectado por seeds.
+        Regla clave: si el token anterior era un conector (de/con/al),
+        el siguiente token se trata como modificador del ítem actual,
+        aunque sea seed de otra categoría (ej. 'sopa de pasta').
+        """
+        # Quitar conector inicial residual (ej. "de pollo" → "pollo")
+        chunk_norm = _re.sub(r'^(de|del|con|a|al|y|o)\s+', '', chunk_norm).strip()
+        tokens = chunk_norm.split()
+        items = []
+        cur_toks = []
+        cur_cat = None
+
+        def flush():
+            nonlocal cur_toks, cur_cat
+            toks = list(cur_toks)
+            cat = cur_cat
+            # Limpiar conectores colgantes al final
+            while toks and toks[-1] in CONECTORES:
+                toks.pop()
+            if toks and cat:
+                items.append({'nombre': ' '.join(toks).title(), 'tipo': cat,
+                              'en_bd': False, 'opcion_id': None})
+            cur_toks = []
+            cur_cat = None
+
+        for tok in tokens:
+            tok_n = DIMINUTIVOS.get(tok, tok)
+            cat = seed_cat(tok_n)
+            if cat is not None:
+                if cur_cat is None:
+                    cur_cat, cur_toks = cat, [tok_n]
+                elif cat == cur_cat:
+                    cur_toks.append(tok_n)
+                elif cur_toks and cur_toks[-1] in CONECTORES:
+                    # Token previo fue conector → este token modifica al ítem actual
+                    # (ej. "sopa de [pasta]" → pasta queda en sopa)
+                    cur_toks.append(tok_n)
+                else:
+                    # Cambio real de categoría → guardar ítem actual y empezar nuevo
+                    flush()
+                    cur_cat, cur_toks = cat, [tok_n]
+            elif tok in CONECTORES:
+                if cur_toks:
+                    cur_toks.append(tok)
+            else:
+                # Palabra descriptiva (adjetivo, nombre de preparación, etc.)
+                if cur_toks:
+                    cur_toks.append(tok_n)
+                # Si no hay ítem activo, la palabra es intro residual — descartar
+
+        flush()
+        return items
 
     # Cargar catálogo global de opciones_menu
     try:
@@ -35117,7 +35197,7 @@ def api_almuerzo_procesar():
     except Exception as e:
         return jsonify({'ok': False, 'error': f'Error BD: {e}'}), 500
 
-    catalog = {}  # nombre_norm → {tipo, nombre_original, opcion_id}
+    catalog = {}
     for r in catalog_rows:
         key = norm(r['nombre'])
         if key and key not in catalog:
@@ -35147,39 +35227,60 @@ def api_almuerzo_procesar():
             continue
         linea_norm = norm(linea_strip)
 
-        # Detectar encabezado (puede ser "SOPAS:" o "SOPAS: Sancocho, Ajiaco")
+        # Detectar encabezado de categoría (ej. "SOPAS:" o "SOPAS: Sancocho")
         header = detect_header(linea_norm)
         if header:
             categoria_actual = header
-            # Quitar la palabra del encabezado y procesar el resto si hay contenido
             for hw in CATEGORY_HEADERS[header]:
                 linea_norm = _re.sub(r'\b' + hw + r'\b', '', linea_norm).strip(' :')
             if not linea_norm:
                 continue
 
-        partes = _re.split(r'[,/]', linea_strip if not header else linea_norm)
-        for parte in partes:
-            parte = parte.strip(' *-:•')
-            if not parte or len(parte) < 2:
-                continue
-            parte_norm = norm(parte)
-            if parte_norm in vistos:
+        # Quitar frase de introducción tipo WhatsApp
+        linea_norm = INTRO_RE.sub('', linea_norm).strip()
+        if not linea_norm:
+            continue
+
+        # Dividir por coma, slash, " y ", " o " como separadores de ítems
+        chunks = _re.split(r'[,/]|\s+y\s+|\s+o\s+', linea_norm)
+
+        for chunk in chunks:
+            chunk = chunk.strip(' *-:•')
+            if not chunk or len(chunk) < 2:
                 continue
 
-            match = buscar_en_catalogo(parte_norm)
-            if match:
-                cat = match['tipo']
-                item = {'nombre': match['nombre'], 'tipo': cat, 'en_bd': True, 'opcion_id': match['opcion_id']}
-            else:
-                cat = classify_by_seeds(parte_norm) or categoria_actual
-                nombre_display = parte.strip().title()
-                item = {'nombre': nombre_display, 'tipo': cat, 'en_bd': False, 'opcion_id': None}
+            chunk_items = chunk_to_items(chunk)
 
-            if not cat:
+            if not chunk_items:
+                # Sin seeds: intentar catálogo, luego categoria_actual como fallback
+                match = buscar_en_catalogo(chunk)
+                if match:
+                    nombre_k = norm(match['nombre'])
+                    if nombre_k not in vistos:
+                        vistos.add(nombre_k)
+                        bloques[match['tipo']].append({
+                            'nombre': match['nombre'], 'tipo': match['tipo'],
+                            'en_bd': True, 'opcion_id': match['opcion_id']
+                        })
+                elif categoria_actual and chunk not in vistos:
+                    vistos.add(chunk)
+                    bloques[categoria_actual].append({
+                        'nombre': chunk.title(), 'tipo': categoria_actual,
+                        'en_bd': False, 'opcion_id': None
+                    })
                 continue
-            vistos.add(parte_norm)
-            if cat in bloques:
-                bloques[cat].append(item)
+
+            for it in chunk_items:
+                nombre_n = norm(it['nombre'])
+                if nombre_n in vistos:
+                    continue
+                match = buscar_en_catalogo(nombre_n)
+                if match:
+                    it = {'nombre': match['nombre'], 'tipo': match['tipo'],
+                          'en_bd': True, 'opcion_id': match['opcion_id']}
+                vistos.add(nombre_n)
+                if it['tipo'] in bloques:
+                    bloques[it['tipo']].append(it)
 
     return jsonify({'ok': True, 'bloques': bloques})
 

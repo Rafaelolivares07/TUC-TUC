@@ -241,6 +241,21 @@
                     </div>
                 </div>
                 <p class="text-xs text-gray-400 mt-2">Si cambias el PIN, los empleados con el PIN anterior no podrán entrar.</p>
+                <!-- Toggles requerir PIN -->
+                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="flex items-center justify-between bg-white border rounded-lg px-4 py-3 cursor-pointer select-none">
+                        <span class="text-sm font-medium text-gray-700">Requerir PIN en mesero</span>
+                        <input type="checkbox" id="toggle-pin-mesero" class="sr-only peer"
+                               onchange="togglePin('mesero', this.checked)">
+                        <div class="relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-indigo-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0"></div>
+                    </label>
+                    <label class="flex items-center justify-between bg-white border rounded-lg px-4 py-3 cursor-pointer select-none">
+                        <span class="text-sm font-medium text-gray-700">Requerir PIN en cocina</span>
+                        <input type="checkbox" id="toggle-pin-cocina" class="sr-only peer"
+                               onchange="togglePin('cocina', this.checked)">
+                        <div class="relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-indigo-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0"></div>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -1200,9 +1215,23 @@ async function cargarPines() {
         if (data.ok) {
             document.getElementById('inp-pin-mesero').value = data.pin_mesero || '';
             document.getElementById('inp-pin-cocina').value = data.pin_cocina || '';
+            document.getElementById('toggle-pin-mesero').checked = data.requerir_pin_mesero !== false;
+            document.getElementById('toggle-pin-cocina').checked = data.requerir_pin_cocina !== false;
             actualizarEnlacesWA();
         }
     } catch(e) {}
+}
+
+async function togglePin(rol, valor) {
+    try {
+        const r = await fetch(`${BASE}/toggle-pin`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({rol, valor})
+        });
+        const data = await r.json();
+        if (!data.ok) toast(data.error || 'Error', false);
+    } catch(e) { toast('Error de conexión', false); }
 }
 
 async function guardarPines() {

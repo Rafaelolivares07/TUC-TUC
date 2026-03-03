@@ -1555,7 +1555,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -25010,6 +25010,9 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS requerir_pin_cocina BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS requerir_pin_mesero BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS es_ejemplo BOOLEAN DEFAULT FALSE",
     ]
     for sql in alters:
         try:
@@ -26236,7 +26239,7 @@ def api_restaurante_pines(slug):
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
         rest = conn.execute(
-            "SELECT id, admin_id, pin_mesero, pin_cocina FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+            "SELECT id, admin_id, pin_mesero, pin_cocina, requerir_pin_mesero, requerir_pin_cocina FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
         ).fetchone()
         conn.close()
         if not rest:
@@ -26244,7 +26247,13 @@ def api_restaurante_pines(slug):
         es_admin = session.get('rol') == 'Administrador'
         if not es_admin and usuario_id != rest['admin_id']:
             return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
-        return jsonify({'ok': True, 'pin_mesero': rest['pin_mesero'] or '', 'pin_cocina': rest['pin_cocina'] or ''})
+        return jsonify({
+            'ok': True,
+            'pin_mesero': rest['pin_mesero'] or '',
+            'pin_cocina': rest['pin_cocina'] or '',
+            'requerir_pin_mesero': rest['requerir_pin_mesero'] if rest['requerir_pin_mesero'] is not None else True,
+            'requerir_pin_cocina': rest['requerir_pin_cocina'] if rest['requerir_pin_cocina'] is not None else True,
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -26425,7 +26434,9 @@ def restaurante_mesero(slug):
         # Admin del sistema o dueño del restaurante: entrar sin PIN
         uid = session.get('usuario_id')
         skip_pin = uid and (session.get('rol') == 'Administrador' or uid == rest['admin_id'])
-        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=not skip_pin)
+        requerir = rest['requerir_pin_mesero'] if rest['requerir_pin_mesero'] is not None else True
+        tiene_pin = requerir and not skip_pin
+        return render_template('restaurante_mesero.html', restaurante=rest, tiene_pin=tiene_pin)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -26445,7 +26456,9 @@ def restaurante_cocina(slug):
         # Admin del sistema o dueño del restaurante: entrar sin PIN
         uid = session.get('usuario_id')
         skip_pin = uid and (session.get('rol') == 'Administrador' or uid == rest['admin_id'])
-        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=not skip_pin)
+        requerir = rest['requerir_pin_cocina'] if rest['requerir_pin_cocina'] is not None else True
+        tiene_pin = requerir and not skip_pin
+        return render_template('restaurante_cocina.html', restaurante=rest, tiene_pin=tiene_pin)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -34896,6 +34909,422 @@ def api_domotica_logs(did):
                 'created_at': l['created_at'].isoformat() if l['created_at'] else None,
             })
         return jsonify({'ok': True, 'logs': result})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== RESTAURANTE: TOGGLE PIN =====
+
+@app.route('/api/restaurante/<slug>/toggle-pin', methods=['POST'])
+def api_restaurante_toggle_pin(slug):
+    """Activar/desactivar requerimiento de PIN para mesero o cocina"""
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    rol   = data.get('rol', '')    # 'mesero' o 'cocina'
+    valor = data.get('valor')      # True o False
+    if rol not in ('mesero', 'cocina') or valor is None:
+        return jsonify({'ok': False, 'error': 'Parámetros inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        es_admin = session.get('rol') == 'Administrador'
+        if not es_admin and usuario_id != rest['admin_id']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
+        campo = 'requerir_pin_mesero' if rol == 'mesero' else 'requerir_pin_cocina'
+        conn.execute(f"UPDATE restaurantes SET {campo} = %s WHERE id = %s", (bool(valor), rest['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== MÓDULO ALMUERZO =====
+
+@app.route('/almuerzo')
+def almuerzo_page():
+    """Herramienta para procesar menú del día vía texto y crear pedido"""
+    return render_template('almuerzo.html')
+
+
+@app.route('/api/almuerzo/tercero')
+def api_almuerzo_tercero_get():
+    """Verificar si un teléfono ya existe en terceros"""
+    telefono = ''.join(filter(str.isdigit, request.args.get('telefono', '')))
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Teléfono inválido'}), 400
+    try:
+        conn = get_db_connection()
+        t = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        conn.close()
+        if t:
+            return jsonify({'ok': True, 'existe': True, 'tercero': {'id': t['id'], 'nombre': t['nombre'], 'telefono': t['telefono']}})
+        return jsonify({'ok': True, 'existe': False})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/almuerzo/tercero', methods=['POST'])
+def api_almuerzo_tercero_crear():
+    """Crear o actualizar tercero por teléfono"""
+    data = request.get_json()
+    nombre   = data.get('nombre', '').strip()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    if not nombre or len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Nombre y teléfono requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        existente = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if existente:
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, existente['id']))
+            conn.commit()
+            tercero_id = existente['id']
+        else:
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                (nombre, telefono)
+            )
+            tercero_id = cur.fetchone()[0]
+            conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'tercero_id': tercero_id, 'nombre': nombre, 'telefono': telefono})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/almuerzo/restaurantes')
+def api_almuerzo_restaurantes():
+    """Listar restaurantes menu_dia que no son ejemplos"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rows = conn.execute("""
+            SELECT id, nombre, slug FROM restaurantes
+            WHERE activo = TRUE AND tipo_restaurante = 'menu_dia'
+              AND (es_ejemplo IS NULL OR es_ejemplo = FALSE)
+            ORDER BY nombre
+        """).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'restaurantes': [{'id': r['id'], 'nombre': r['nombre'], 'slug': r['slug']} for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/almuerzo/procesar', methods=['POST'])
+def api_almuerzo_procesar():
+    """Procesar texto de menú y clasificar ítems por categoría"""
+    import unicodedata, re as _re
+    data = request.get_json()
+    texto = data.get('texto', '')
+    if not texto.strip():
+        return jsonify({'ok': False, 'error': 'Texto vacío'}), 400
+
+    STOP_WORDS = {'de', 'con', 'a', 'la', 'el', 'en', 'y', 'o', 'al', 'del', 'se', 'por', 'para', 'un', 'una', 'los', 'las', 'es', 'su'}
+
+    CATEGORY_HEADERS = {
+        'sopa':      ['sopa', 'sopas', 'caldo', 'caldos', 'sancocho'],
+        'principio': ['principio', 'principios', 'acompanamiento', 'acompanamientos', 'acompanante'],
+        'proteina':  ['proteina', 'proteinas', 'carne', 'carnes', 'segundos', 'segundo'],
+    }
+
+    ITEM_SEEDS = {
+        'sopa':      ['sancocho', 'ajiaco', 'mondongo', 'changua', 'cuchuco', 'sopa', 'caldo', 'hervido', 'consome', 'cazuela'],
+        'principio': ['frijoles', 'frijol', 'lentejas', 'lenteja', 'garbanzo', 'arveja', 'arroz', 'papa', 'yuca', 'platano', 'ensalada', 'pasta', 'fideos', 'espagueti', 'maiz', 'habas', 'patacones'],
+        'proteina':  ['pollo', 'res', 'cerdo', 'pescado', 'atun', 'salmon', 'tilapia', 'mojarra', 'trucha', 'bistec', 'lomo', 'chuleta', 'pernil', 'pechuga', 'muslo', 'carne', 'milanesa', 'higado', 'corazon', 'costilla', 'chicharron'],
+    }
+
+    def norm(s):
+        s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+        s = s.lower().strip()
+        s = _re.sub(r'[^a-z0-9\s]', ' ', s)
+        return _re.sub(r'\s+', ' ', s).strip()
+
+    def detect_header(linea_norm):
+        tokens = set(linea_norm.split())
+        for cat, words in CATEGORY_HEADERS.items():
+            for w in words:
+                if w in tokens:
+                    return cat
+        return None
+
+    def classify_by_seeds(nombre_norm):
+        tokens = set(nombre_norm.split())
+        for cat, seeds in ITEM_SEEDS.items():
+            for seed in seeds:
+                if seed in tokens or seed in nombre_norm:
+                    return cat
+        return None
+
+    # Cargar catálogo global de opciones_menu
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        catalog_rows = conn.execute(
+            "SELECT id, tipo, nombre FROM opciones_menu WHERE activo = TRUE"
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'Error BD: {e}'}), 500
+
+    catalog = {}  # nombre_norm → {tipo, nombre_original, opcion_id}
+    for r in catalog_rows:
+        key = norm(r['nombre'])
+        if key and key not in catalog:
+            catalog[key] = {'tipo': r['tipo'], 'nombre': r['nombre'], 'opcion_id': r['id']}
+
+    def buscar_en_catalogo(parte_norm):
+        if parte_norm in catalog:
+            return catalog[parte_norm]
+        tokens = [t for t in parte_norm.split() if t not in STOP_WORDS and len(t) > 2]
+        if not tokens:
+            return None
+        clave = ' '.join(tokens)
+        if clave in catalog:
+            return catalog[clave]
+        for k, v in catalog.items():
+            if all(t in k.split() for t in tokens):
+                return v
+        return None
+
+    bloques = {'sopa': [], 'principio': [], 'proteina': []}
+    categoria_actual = None
+    vistos = set()
+
+    for linea in _re.split(r'[\n\r]+', texto):
+        linea_strip = linea.strip()
+        if not linea_strip:
+            continue
+        linea_norm = norm(linea_strip)
+
+        # Detectar encabezado (puede ser "SOPAS:" o "SOPAS: Sancocho, Ajiaco")
+        header = detect_header(linea_norm)
+        if header:
+            categoria_actual = header
+            # Quitar la palabra del encabezado y procesar el resto si hay contenido
+            for hw in CATEGORY_HEADERS[header]:
+                linea_norm = _re.sub(r'\b' + hw + r'\b', '', linea_norm).strip(' :')
+            if not linea_norm:
+                continue
+
+        partes = _re.split(r'[,/]', linea_strip if not header else linea_norm)
+        for parte in partes:
+            parte = parte.strip(' *-:•')
+            if not parte or len(parte) < 2:
+                continue
+            parte_norm = norm(parte)
+            if parte_norm in vistos:
+                continue
+
+            match = buscar_en_catalogo(parte_norm)
+            if match:
+                cat = match['tipo']
+                item = {'nombre': match['nombre'], 'tipo': cat, 'en_bd': True, 'opcion_id': match['opcion_id']}
+            else:
+                cat = classify_by_seeds(parte_norm) or categoria_actual
+                nombre_display = parte.strip().title()
+                item = {'nombre': nombre_display, 'tipo': cat, 'en_bd': False, 'opcion_id': None}
+
+            if not cat:
+                continue
+            vistos.add(parte_norm)
+            if cat in bloques:
+                bloques[cat].append(item)
+
+    return jsonify({'ok': True, 'bloques': bloques})
+
+
+@app.route('/api/almuerzo/confirmar', methods=['POST'])
+def api_almuerzo_confirmar():
+    """Crear restaurante si nuevo, armar menú del día y crear pedido. Devuelve enlace cocina."""
+    import uuid
+    from datetime import date
+    data = request.get_json()
+
+    tercero_id        = data.get('tercero_id')
+    restaurante_id_in = data.get('restaurante_id')
+    restaurante_nuevo = data.get('restaurante_nuevo')  # {nombre, nombre_dueno, telefono_dueno}
+    items             = data.get('items', [])           # lista completa con en_menu, mi_pedido
+    notas             = data.get('notas', '').strip() or None
+
+    if not tercero_id:
+        return jsonify({'ok': False, 'error': 'Usuario no identificado'}), 400
+    items_menu = [i for i in items if i.get('en_menu')]
+    if not items_menu:
+        return jsonify({'ok': False, 'error': 'No hay ítems para el menú'}), 400
+
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+
+        # 1. Resolver restaurante
+        if restaurante_nuevo:
+            nombre_neg = restaurante_nuevo.get('nombre', '').strip()
+            nombre_due = restaurante_nuevo.get('nombre_dueno', '').strip()
+            tel_due    = ''.join(filter(str.isdigit, restaurante_nuevo.get('telefono_dueno', '')))
+            if not nombre_neg:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Nombre del restaurante requerido'}), 400
+            slug = generar_slug(nombre_neg)
+            base_slug, sufijo = slug, 1
+            while conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone():
+                slug = f'{base_slug}-{sufijo}'
+                sufijo += 1
+            admin_id = None
+            if tel_due:
+                due = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (tel_due,)).fetchone()
+                if due:
+                    admin_id = due['id']
+                else:
+                    cur = conn.execute(
+                        "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                        (nombre_due or nombre_neg, tel_due)
+                    )
+                    admin_id = cur.fetchone()[0]
+                    conn.commit()
+            crear_tabla_config_tipologia(conn)
+            cfg = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo='restaurante'").fetchone()
+            dias_gratis = cfg['dias_gratis'] if cfg else 2
+            cur = conn.execute("""
+                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, requerir_pin_cocina, requerir_pin_mesero, activo)
+                VALUES (%s, %s, 'menu_dia', %s, %s, %s, %s, %s, FALSE, FALSE, TRUE) RETURNING id
+            """, (nombre_neg, slug, admin_id, nombre_due or nombre_neg, tel_due or None, uuid.uuid4().hex, dias_gratis))
+            restaurante_id = cur.fetchone()[0]
+            conn.commit()
+        else:
+            rest = conn.execute(
+                "SELECT id, slug FROM restaurantes WHERE id = %s AND activo = TRUE", (restaurante_id_in,)
+            ).fetchone()
+            if not rest:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+            restaurante_id = rest['id']
+            slug = rest['slug']
+
+        # 2. Crear opciones nuevas (en_bd=False) y mapear temp_id → opcion_id real
+        temp_map = {}  # temp_id → opcion_id
+        for item in items_menu:
+            if item.get('en_bd') and item.get('opcion_id'):
+                temp_map[item.get('temp_id', item['opcion_id'])] = item['opcion_id']
+            else:
+                tipo_item   = item.get('tipo', 'sopa')
+                nombre_item = item.get('nombre', '').strip()
+                if not nombre_item:
+                    continue
+                existente = conn.execute(
+                    "SELECT id FROM opciones_menu WHERE restaurante_id = %s AND LOWER(nombre) = LOWER(%s) AND tipo = %s LIMIT 1",
+                    (restaurante_id, nombre_item, tipo_item)
+                ).fetchone()
+                if existente:
+                    oid = existente['id']
+                else:
+                    cur = conn.execute(
+                        "INSERT INTO opciones_menu (restaurante_id, tipo, nombre, activo) VALUES (%s, %s, %s, TRUE) RETURNING id",
+                        (restaurante_id, tipo_item, nombre_item)
+                    )
+                    oid = cur.fetchone()[0]
+                    conn.commit()
+                temp_map[item.get('temp_id', nombre_item)] = oid
+                item['opcion_id'] = oid  # actualizar para uso posterior
+
+        # 3. Crear o encontrar menu_dia de hoy
+        hoy = date.today().isoformat()
+        menu = conn.execute(
+            "SELECT id FROM menu_dia WHERE restaurante_id = %s AND fecha = %s AND activo = TRUE",
+            (restaurante_id, hoy)
+        ).fetchone()
+        if not menu:
+            cur = conn.execute("""
+                INSERT INTO menu_dia (restaurante_id, fecha, precio_completo, precio_bandeja, precio_sopa, activo)
+                VALUES (%s, %s, 0, 0, 0, TRUE) RETURNING id
+            """, (restaurante_id, hoy))
+            menu_id = cur.fetchone()[0]
+            conn.commit()
+        else:
+            menu_id = menu['id']
+
+        # 4. Agregar ítems al menu_dia_opciones
+        for item in items_menu:
+            oid = item.get('opcion_id') or temp_map.get(item.get('temp_id', ''))
+            if not oid:
+                continue
+            ya = conn.execute(
+                "SELECT id FROM menu_dia_opciones WHERE menu_dia_id = %s AND opcion_id = %s",
+                (menu_id, oid)
+            ).fetchone()
+            if not ya:
+                conn.execute(
+                    "INSERT INTO menu_dia_opciones (menu_dia_id, opcion_id) VALUES (%s, %s)",
+                    (menu_id, oid)
+                )
+        conn.commit()
+
+        # 5. Crear pedido — un ítem estrellado por categoría
+        def get_starred_id(cat):
+            for i in items:
+                if i.get('mi_pedido') and i.get('tipo') == cat:
+                    oid = i.get('opcion_id') or temp_map.get(i.get('temp_id', ''))
+                    return oid
+            return None
+
+        sopa_id      = get_starred_id('sopa')
+        principio_id = get_starred_id('principio')
+        proteina_id  = get_starred_id('proteina')
+
+        if sopa_id and principio_id and proteina_id:
+            tipo_pedido = 'completo'
+        elif principio_id and proteina_id:
+            tipo_pedido = 'bandeja'
+        elif sopa_id:
+            tipo_pedido = 'sopa'
+        else:
+            tipo_pedido = 'completo'
+
+        tercero = conn.execute(
+            "SELECT nombre, telefono FROM terceros WHERE id = %s", (tercero_id,)
+        ).fetchone()
+        nombre_c   = tercero['nombre'] if tercero else ''
+        telefono_c = tercero['telefono'] if tercero else ''
+
+        conn.execute("""
+            INSERT INTO pedidos_restaurante
+              (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id,
+               precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, cliente_id)
+            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, 'para_llevar', %s, %s)
+        """, (restaurante_id, 0, tipo_pedido, sopa_id, proteina_id, principio_id,
+              notas, nombre_c, telefono_c, tercero_id))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'slug': slug, 'cocina_url': f'/r/{slug}/cocina'})
+
     except Exception as e:
         try:
             conn.rollback()

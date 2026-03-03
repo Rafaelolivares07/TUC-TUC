@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Almuerzo del día</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #f8fafc; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .item-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 6px; }
+        .item-row .nombre { flex: 1; font-size: 0.9rem; color: #1e293b; }
+        .item-row .badge-new { font-size: 0.65rem; background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+        .item-row .badge-bd  { font-size: 0.65rem; background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+        .chk-menu  { width: 20px; height: 20px; accent-color: #6366f1; cursor: pointer; flex-shrink: 0; }
+        .btn-star  { font-size: 1.3rem; line-height: 1; background: none; border: none; cursor: pointer; flex-shrink: 0; transition: transform .1s; }
+        .btn-star:active { transform: scale(1.3); }
+        .btn-star.starred { color: #f59e0b; }
+        .btn-star:not(.starred) { color: #d1d5db; }
+        .toast-msg { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 10px 20px; border-radius: 999px; font-size: 0.85rem; z-index: 9999; white-space: nowrap; }
+        .bloque-header { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; }
+        .bloque-label { font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 10px; border-radius: 999px; }
+        .lbl-sopa      { background: #fef9c3; color: #713f12; }
+        .lbl-principio { background: #dcfce7; color: #14532d; }
+        .lbl-proteina  { background: #fce7f3; color: #831843; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #c7d2fe; border-top-color: #6366f1; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen">
+
+<div class="max-w-md mx-auto px-4 pt-6 pb-24">
+
+    <!-- Header -->
+    <div class="mb-5 text-center">
+        <h1 class="text-2xl font-extrabold text-indigo-700 tracking-tight">🥗 Almuerzo del día</h1>
+        <p class="text-sm text-gray-500 mt-1">Procesa el menú y crea tu pedido</p>
+    </div>
+
+    <!-- STEP 1: identificar usuario -->
+    <div id="step-user" class="step active">
+        <div class="bg-white rounded-2xl shadow-sm border p-5">
+            <p class="text-sm font-semibold text-gray-700 mb-3">¿Cuál es tu número de celular?</p>
+            <div class="flex gap-2">
+                <input id="inp-tel" type="tel" inputmode="numeric" maxlength="15" placeholder="3001234567"
+                       class="border rounded-xl px-4 py-2 text-base flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <button onclick="verificarTelefono()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-semibold text-sm">
+                    Continuar
+                </button>
+            </div>
+            <div id="user-nombre-row" class="hidden mt-3">
+                <input id="inp-nombre" type="text" placeholder="Tu nombre" maxlength="80"
+                       class="border rounded-xl px-4 py-2 text-base w-full focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <button onclick="crearUsuario()" class="mt-2 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl font-semibold text-sm">
+                    Guardar y continuar
+                </button>
+            </div>
+            <p id="user-saludo" class="hidden mt-3 text-sm text-green-700 font-medium"></p>
+        </div>
+    </div>
+
+    <!-- STEP 2: seleccionar restaurante + pegar texto -->
+    <div id="step-menu" class="step">
+        <!-- Info usuario -->
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-xs text-gray-500">Pedido para:</span>
+            <span id="lbl-usuario" class="text-sm font-semibold text-indigo-700"></span>
+            <button onclick="resetUsuario()" class="text-xs text-gray-400 underline ml-auto">cambiar</button>
+        </div>
+
+        <!-- Restaurante -->
+        <div class="bg-white rounded-2xl shadow-sm border p-4 mb-4">
+            <p class="text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">Restaurante</p>
+            <select id="sel-restaurante" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="">Cargando...</option>
+            </select>
+            <div class="mt-2">
+                <button onclick="mostrarNuevoRestaurante()" id="btn-toggle-nuevo"
+                        class="text-xs text-indigo-600 underline">+ Crear restaurante nuevo</button>
+            </div>
+            <div id="form-nuevo-rest" class="hidden mt-3 space-y-2">
+                <input id="inp-rest-nombre" type="text" placeholder="Nombre del restaurante"
+                       class="border rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <input id="inp-due-nombre" type="text" placeholder="Nombre del dueño"
+                       class="border rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <input id="inp-due-tel" type="tel" inputmode="numeric" placeholder="Celular del dueño"
+                       class="border rounded-xl px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            </div>
+        </div>
+
+        <!-- Textarea menú -->
+        <div class="bg-white rounded-2xl shadow-sm border p-4 mb-4">
+            <p class="text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">Pega el menú aquí</p>
+            <textarea id="txt-menu" rows="7" placeholder="Ej: Sopas: Sancocho de pollo, Ajiaco&#10;Principios: Frijoles, Arroz&#10;Proteínas: Pechuga asada, Carne a la plancha"
+                      class="w-full border rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono"></textarea>
+        </div>
+
+        <button onclick="procesarMenu()"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-bold text-base shadow-sm">
+            Procesar menú →
+        </button>
+    </div>
+
+    <!-- STEP 3: seleccionar ítems -->
+    <div id="step-items" class="step">
+        <div class="flex items-center gap-2 mb-3">
+            <button onclick="volverAlMenu()" class="text-xs text-indigo-600 underline">← Volver</button>
+            <span class="flex-1"></span>
+            <span class="text-xs text-gray-400">☑ en menú &nbsp;|&nbsp; ★ mi pedido</span>
+        </div>
+
+        <div id="bloques-container"></div>
+
+        <div class="mt-4 bg-white rounded-2xl border p-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1 tracking-wide">Notas (opcional)</label>
+            <input id="inp-notas" type="text" placeholder="Sin cilantro, sin picante..."
+                   class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        </div>
+
+        <button onclick="confirmarPedido()"
+                class="mt-5 w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold text-base shadow-sm">
+            ¡Enviar pedido! 🚀
+        </button>
+    </div>
+
+    <!-- STEP 4: resultado -->
+    <div id="step-done" class="step text-center">
+        <div class="bg-white rounded-2xl shadow-sm border p-8 mt-4">
+            <div class="text-5xl mb-4">✅</div>
+            <h2 class="text-xl font-extrabold text-gray-800 mb-2">¡Pedido creado!</h2>
+            <p class="text-sm text-gray-500 mb-5">El restaurante ya lo ve en cocina. Comparte el enlace si quieres que el dueño lo vea ahora.</p>
+            <a id="link-cocina" href="#" target="_blank"
+               class="block w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-bold text-base mb-3">
+                Ver en cocina
+            </a>
+            <a id="link-wa-cocina" href="#" target="_blank"
+               class="block w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-2xl font-bold text-base mb-3">
+                Enviar enlace por WhatsApp
+            </a>
+            <button onclick="nuevoAlmuerzo()"
+                    class="w-full border border-gray-300 text-gray-600 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50">
+                Procesar otro menú
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const API = '/api/almuerzo';
+let state = {
+    tercero_id: null,
+    nombre: '',
+    telefono: '',
+    restaurante_id: null,
+    restaurante_nuevo: null,
+    bloques: { sopa: [], principio: [], proteina: [] },
+};
+
+// ───── TOAST ─────
+function toast(msg, ok = true) {
+    const t = document.createElement('div');
+    t.className = 'toast-msg';
+    t.style.background = ok ? '#1e293b' : '#dc2626';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2800);
+}
+
+// ───── STEPS ─────
+function showStep(id) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+// ───── USUARIO ─────
+function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+
+async function init() {
+    const tel = lsGet('almuerzo_tel');
+    const nom = lsGet('almuerzo_nom');
+    const tid = lsGet('almuerzo_tid');
+    if (tel && nom && tid) {
+        state.tercero_id = parseInt(tid);
+        state.nombre     = nom;
+        state.telefono   = tel;
+        document.getElementById('lbl-usuario').textContent = nom;
+        await cargarRestaurantes();
+        showStep('step-menu');
+    }
+}
+
+async function verificarTelefono() {
+    const tel = document.getElementById('inp-tel').value.replace(/\D/g,'');
+    if (tel.length < 10) { toast('Teléfono muy corto', false); return; }
+    try {
+        const r = await fetch(`${API}/tercero?telefono=${tel}`);
+        const data = await r.json();
+        if (!data.ok) { toast(data.error, false); return; }
+        if (data.existe) {
+            state.tercero_id = data.tercero.id;
+            state.nombre     = data.tercero.nombre;
+            state.telefono   = data.tercero.telefono;
+            lsSet('almuerzo_tel', state.telefono);
+            lsSet('almuerzo_nom', state.nombre);
+            lsSet('almuerzo_tid', state.tercero_id);
+            document.getElementById('user-saludo').textContent = `¡Hola, ${state.nombre}!`;
+            document.getElementById('user-saludo').classList.remove('hidden');
+            document.getElementById('lbl-usuario').textContent = state.nombre;
+            await cargarRestaurantes();
+            setTimeout(() => showStep('step-menu'), 700);
+        } else {
+            state.telefono = tel;
+            document.getElementById('user-nombre-row').classList.remove('hidden');
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function crearUsuario() {
+    const nombre = document.getElementById('inp-nombre').value.trim();
+    if (!nombre) { toast('Escribe tu nombre', false); return; }
+    try {
+        const r = await fetch(`${API}/tercero`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({nombre, telefono: state.telefono})
+        });
+        const data = await r.json();
+        if (!data.ok) { toast(data.error, false); return; }
+        state.tercero_id = data.tercero_id;
+        state.nombre     = data.nombre;
+        lsSet('almuerzo_tel', state.telefono);
+        lsSet('almuerzo_nom', state.nombre);
+        lsSet('almuerzo_tid', state.tercero_id);
+        document.getElementById('lbl-usuario').textContent = state.nombre;
+        await cargarRestaurantes();
+        showStep('step-menu');
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+function resetUsuario() {
+    localStorage.removeItem('almuerzo_tel');
+    localStorage.removeItem('almuerzo_nom');
+    localStorage.removeItem('almuerzo_tid');
+    state.tercero_id = null;
+    document.getElementById('inp-tel').value = '';
+    document.getElementById('user-nombre-row').classList.add('hidden');
+    document.getElementById('user-saludo').classList.add('hidden');
+    showStep('step-user');
+}
+
+// ───── RESTAURANTE ─────
+async function cargarRestaurantes() {
+    try {
+        const r = await fetch(`${API}/restaurantes`);
+        const data = await r.json();
+        if (!data.ok) return;
+        const sel = document.getElementById('sel-restaurante');
+        sel.innerHTML = '<option value="">— Selecciona un restaurante —</option>';
+        data.restaurantes.forEach(rest => {
+            const opt = document.createElement('option');
+            opt.value = rest.id;
+            opt.textContent = rest.nombre;
+            sel.appendChild(opt);
+        });
+        sel.onchange = () => {
+            state.restaurante_id    = sel.value ? parseInt(sel.value) : null;
+            state.restaurante_nuevo = null;
+            document.getElementById('form-nuevo-rest').classList.add('hidden');
+            document.getElementById('btn-toggle-nuevo').textContent = '+ Crear restaurante nuevo';
+        };
+    } catch(e) {}
+}
+
+function mostrarNuevoRestaurante() {
+    const form = document.getElementById('form-nuevo-rest');
+    const btn  = document.getElementById('btn-toggle-nuevo');
+    if (form.classList.contains('hidden')) {
+        form.classList.remove('hidden');
+        btn.textContent = '× Cancelar nuevo restaurante';
+        document.getElementById('sel-restaurante').value = '';
+        state.restaurante_id = null;
+    } else {
+        form.classList.add('hidden');
+        btn.textContent = '+ Crear restaurante nuevo';
+        state.restaurante_nuevo = null;
+    }
+}
+
+// ───── PROCESAR MENÚ ─────
+async function procesarMenu() {
+    const texto = document.getElementById('txt-menu').value.trim();
+    if (!texto) { toast('Pega el texto del menú', false); return; }
+
+    const esNuevo = !document.getElementById('form-nuevo-rest').classList.contains('hidden');
+    if (esNuevo) {
+        const n = document.getElementById('inp-rest-nombre').value.trim();
+        const d = document.getElementById('inp-due-nombre').value.trim();
+        const t = document.getElementById('inp-due-tel').value.replace(/\D/g,'');
+        if (!n) { toast('Escribe el nombre del restaurante', false); return; }
+        state.restaurante_nuevo = { nombre: n, nombre_dueno: d, telefono_dueno: t };
+        state.restaurante_id    = null;
+    } else {
+        if (!state.restaurante_id) { toast('Selecciona un restaurante', false); return; }
+    }
+
+    const btn = document.querySelector('#step-menu button[onclick="procesarMenu()"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Procesando...';
+
+    try {
+        const r = await fetch(`${API}/procesar`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ texto })
+        });
+        const data = await r.json();
+        btn.disabled = false;
+        btn.innerHTML = 'Procesar menú →';
+        if (!data.ok) { toast(data.error, false); return; }
+        state.bloques = data.bloques;
+        renderBloques();
+        showStep('step-items');
+    } catch(e) {
+        btn.disabled = false;
+        btn.innerHTML = 'Procesar menú →';
+        toast('Error de conexión', false);
+    }
+}
+
+// ───── RENDER BLOQUES ─────
+let tempCounter = 0;
+
+function renderBloques() {
+    const contenedor = document.getElementById('bloques-container');
+    contenedor.innerHTML = '';
+
+    const config = [
+        { cat: 'sopa',      label: 'Caldos / Sopas',  cls: 'lbl-sopa'      },
+        { cat: 'principio', label: 'Principios',       cls: 'lbl-principio' },
+        { cat: 'proteina',  label: 'Proteínas',        cls: 'lbl-proteina'  },
+    ];
+
+    config.forEach(({ cat, label, cls }) => {
+        const header = document.createElement('div');
+        header.className = 'bloque-header';
+        header.innerHTML = `
+            <span class="bloque-label ${cls}">${label}</span>
+            <button onclick="agregarItem('${cat}')" class="text-xs text-indigo-600 font-semibold border border-indigo-200 px-3 py-1 rounded-full hover:bg-indigo-50">+ Agregar</button>
+        `;
+        contenedor.appendChild(header);
+
+        const lista = document.createElement('div');
+        lista.id = `lista-${cat}`;
+        contenedor.appendChild(lista);
+
+        (state.bloques[cat] || []).forEach(item => renderItem(lista, item));
+    });
+}
+
+function renderItem(lista, item) {
+    if (!item.temp_id) {
+        item.temp_id = item.opcion_id || `new_${tempCounter++}`;
+    }
+    item.en_menu   = item.en_menu   !== undefined ? item.en_menu   : true;
+    item.mi_pedido = item.mi_pedido !== undefined ? item.mi_pedido : false;
+
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.id = `row-${item.temp_id}`;
+
+    const badge = item.en_bd
+        ? '<span class="badge-bd">BD</span>'
+        : '<span class="badge-new">nuevo</span>';
+
+    row.innerHTML = `
+        <input type="checkbox" class="chk-menu"
+               ${item.en_menu ? 'checked' : ''}
+               onchange="toggleMenu('${item.temp_id}', this.checked)">
+        <span class="nombre">${item.nombre}${badge}</span>
+        <button class="btn-star ${item.mi_pedido ? 'starred' : ''}"
+                onclick="togglePedido('${item.temp_id}')">★</button>
+    `;
+    lista.appendChild(row);
+}
+
+function toggleMenu(temp_id, val) {
+    const item = encontrarItem(temp_id);
+    if (item) item.en_menu = val;
+}
+
+function togglePedido(temp_id) {
+    const item = encontrarItem(temp_id);
+    if (!item) return;
+    // Solo un estrellado por categoría
+    if (!item.mi_pedido) {
+        (state.bloques[item.tipo] || []).forEach(i => {
+            i.mi_pedido = false;
+            const btn = document.querySelector(`#row-${i.temp_id} .btn-star`);
+            if (btn) btn.classList.remove('starred');
+        });
+        item.mi_pedido = true;
+        const btn = document.querySelector(`#row-${temp_id} .btn-star`);
+        if (btn) btn.classList.add('starred');
+    } else {
+        item.mi_pedido = false;
+        const btn = document.querySelector(`#row-${temp_id} .btn-star`);
+        if (btn) btn.classList.remove('starred');
+    }
+}
+
+function encontrarItem(temp_id) {
+    for (const cat of ['sopa', 'principio', 'proteina']) {
+        const found = (state.bloques[cat] || []).find(i => String(i.temp_id) === String(temp_id));
+        if (found) return found;
+    }
+    return null;
+}
+
+function agregarItem(cat) {
+    const nombre = prompt(`Nombre del ítem (${cat}):`);
+    if (!nombre || !nombre.trim()) return;
+    const item = {
+        nombre:    nombre.trim(),
+        tipo:      cat,
+        en_bd:     false,
+        opcion_id: null,
+        temp_id:   `new_${tempCounter++}`,
+        en_menu:   true,
+        mi_pedido: false,
+    };
+    if (!state.bloques[cat]) state.bloques[cat] = [];
+    state.bloques[cat].push(item);
+    const lista = document.getElementById(`lista-${cat}`);
+    renderItem(lista, item);
+}
+
+function volverAlMenu() {
+    showStep('step-menu');
+}
+
+// ───── CONFIRMAR PEDIDO ─────
+async function confirmarPedido() {
+    const todos = [
+        ...state.bloques.sopa,
+        ...state.bloques.principio,
+        ...state.bloques.proteina,
+    ];
+    const items_menu = todos.filter(i => i.en_menu);
+    if (!items_menu.length) { toast('Marca al menos un ítem', false); return; }
+
+    const payload = {
+        tercero_id:        state.tercero_id,
+        restaurante_id:    state.restaurante_nuevo ? null : state.restaurante_id,
+        restaurante_nuevo: state.restaurante_nuevo || null,
+        items:             todos,
+        notas:             document.getElementById('inp-notas').value.trim() || null,
+    };
+
+    const btn = document.querySelector('#step-items button[onclick="confirmarPedido()"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Enviando...';
+
+    try {
+        const r = await fetch(`${API}/confirmar`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        btn.disabled = false;
+        btn.innerHTML = '¡Enviar pedido! 🚀';
+        if (!data.ok) { toast(data.error, false); return; }
+
+        const url = window.location.origin + data.cocina_url;
+        document.getElementById('link-cocina').href = url;
+        const wa_msg = `¡Hola! Te hice el pedido de hoy por acá: ${url}`;
+        document.getElementById('link-wa-cocina').href = `https://wa.me/?text=${encodeURIComponent(wa_msg)}`;
+        showStep('step-done');
+    } catch(e) {
+        btn.disabled = false;
+        btn.innerHTML = '¡Enviar pedido! 🚀';
+        toast('Error de conexión', false);
+    }
+}
+
+function nuevoAlmuerzo() {
+    state.bloques = { sopa: [], principio: [], proteina: [] };
+    state.restaurante_nuevo = null;
+    document.getElementById('txt-menu').value = '';
+    document.getElementById('inp-notas').value = '';
+    showStep('step-menu');
+}
+
+// ───── INIT ─────
+init();
+</script>
+</body>
+</html>

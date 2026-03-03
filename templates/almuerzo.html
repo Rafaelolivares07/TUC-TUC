@@ -185,14 +185,36 @@ async function init() {
     lsSet('almuerzo_nom', state.nombre);
     lsSet('almuerzo_tel', state.telefono);
     {% else %}
-    // 2. Sin sesión Flask → intentar localStorage
+    // 2. Sin sesión Flask — revisar localStorage (prioridad: almuerzo-específico, luego global)
     const tid = lsGet('almuerzo_tid');
     const nom = lsGet('almuerzo_nom');
-    const tel = lsGet('almuerzo_tel');
     if (tid && nom) {
         state.tercero_id = parseInt(tid);
         state.nombre     = nom;
-        state.telefono   = tel || '';
+        state.telefono   = lsGet('almuerzo_tel') || '';
+    } else {
+        // 3. Claves globales TUC TUC (tienda, checkout, etc.)
+        const telGlobal = lsGet('telefono_usuario');
+        const nomGlobal = lsGet('nombre_usuario');
+        if (telGlobal) {
+            try {
+                const r = await fetch(`${API}/tercero?telefono=${telGlobal}`);
+                const data = await r.json();
+                if (data.ok && data.existe) {
+                    state.tercero_id = data.tercero.id;
+                    state.nombre     = data.tercero.nombre || nomGlobal || '';
+                    state.telefono   = data.tercero.telefono || telGlobal;
+                    // Guardar en claves de almuerzo para próxima visita
+                    lsSet('almuerzo_tid', state.tercero_id);
+                    lsSet('almuerzo_nom', state.nombre);
+                    lsSet('almuerzo_tel', state.telefono);
+                } else if (nomGlobal) {
+                    // Tercero no existe aún: pre-llenar modal al menos con el nombre
+                    state.nombre   = nomGlobal;
+                    state.telefono = telGlobal;
+                }
+            } catch(e) {}
+        }
     }
     {% endif %}
     await cargarRestaurantes();
@@ -370,9 +392,15 @@ function iniciarConfirmar() {
         // Ya identificado → enviar directo
         enviarPedido();
     } else {
-        // Preguntar nombre al final
+        // Preguntar nombre al final — pre-llenar si tenemos datos parciales
+        if (state.nombre) document.getElementById('modal-nombre').value = state.nombre;
+        if (state.telefono) document.getElementById('modal-tel').value = state.telefono;
         document.getElementById('modal-id').classList.add('open');
-        setTimeout(() => document.getElementById('modal-nombre').focus(), 100);
+        setTimeout(() => {
+            const inp = document.getElementById('modal-nombre');
+            inp.focus();
+            if (inp.value) inp.select();
+        }, 100);
     }
 }
 

@@ -34987,17 +34987,19 @@ def api_almuerzo_tercero_get():
 
 @app.route('/api/almuerzo/tercero', methods=['POST'])
 def api_almuerzo_tercero_crear():
-    """Crear o actualizar tercero por teléfono"""
+    """Crear o actualizar tercero — nombre obligatorio, teléfono opcional"""
     data = request.get_json()
     nombre   = data.get('nombre', '').strip()
-    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
-    if not nombre or len(telefono) < 10:
-        return jsonify({'ok': False, 'error': 'Nombre y teléfono requeridos'}), 400
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', ''))) or None
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     try:
         conn = get_db_connection()
-        existente = conn.execute(
-            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
-        ).fetchone()
+        existente = None
+        if telefono:
+            existente = conn.execute(
+                "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+            ).fetchone()
         if existente:
             conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, existente['id']))
             conn.commit()

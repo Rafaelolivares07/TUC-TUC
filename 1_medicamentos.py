@@ -34972,18 +34972,22 @@ def almuerzo_page():
         if rol != 'Administrador':
             # Roles de terceros (Restaurante, Tienda, TucTuc...): usuario_id ES tercero_id
             usuario_pre = {'tercero_id': uid, 'nombre': nombre, 'telefono': telefono}
-        elif telefono:
-            # Admin: buscar tercero por teléfono
-            try:
-                conn = get_db_connection()
-                t = conn.execute(
-                    "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
-                ).fetchone()
-                conn.close()
-                if t:
-                    usuario_pre = {'tercero_id': t['id'], 'nombre': nombre, 'telefono': telefono}
-            except Exception:
-                pass
+        else:
+            # Admin — intentar encontrar su tercero_id por teléfono
+            # Si no se encuentra, igual inyectar nombre para el saludo (tercero_id queda None)
+            tercero_id_admin = None
+            if telefono:
+                try:
+                    conn = get_db_connection()
+                    t = conn.execute(
+                        "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+                    ).fetchone()
+                    conn.close()
+                    if t:
+                        tercero_id_admin = t['id']
+                except Exception:
+                    pass
+            usuario_pre = {'tercero_id': tercero_id_admin, 'nombre': nombre, 'telefono': telefono}
     return render_template('almuerzo.html', usuario_pre=usuario_pre)
 
 

@@ -205,12 +205,14 @@ function resetIdentidad() {
 async function init() {
     // 1. Sesión Flask (prioridad máxima — viene del servidor)
     {% if usuario_pre %}
-    state.tercero_id = {{ usuario_pre.tercero_id }};
+    state.tercero_id = {{ usuario_pre.tercero_id | tojson }};
     state.nombre     = {{ usuario_pre.nombre | tojson }};
     state.telefono   = {{ usuario_pre.telefono | tojson }};
-    lsSet('almuerzo_tid', state.tercero_id);
-    lsSet('almuerzo_nom', state.nombre);
-    lsSet('almuerzo_tel', state.telefono);
+    if (state.tercero_id) {
+        lsSet('almuerzo_tid', state.tercero_id);
+        lsSet('almuerzo_nom', state.nombre);
+        lsSet('almuerzo_tel', state.telefono);
+    }
     {% else %}
     // 2. Sin sesión Flask — revisar localStorage (prioridad: almuerzo-específico, luego global)
     const tid = lsGet('almuerzo_tid');
@@ -239,6 +241,9 @@ async function init() {
                     state.telefono = telGlobal;
                 }
             } catch(e) {}
+        } else if (nomGlobal) {
+            // Tiene nombre en localStorage pero sin teléfono — mostrar saludo igual
+            state.nombre = nomGlobal;
         }
     }
     {% endif %}

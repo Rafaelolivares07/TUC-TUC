@@ -415,9 +415,13 @@ function agregarItem(cat) {
 
 // ───── CONFIRMAR ─────
 function iniciarConfirmar() {
-    const items_menu = [...state.bloques.sopa, ...state.bloques.principio, ...state.bloques.proteina]
-        .filter(i => i.en_menu);
-    if (!items_menu.length) { toast('Marca al menos un ítem', false); return; }
+    const tieneProteina  = state.bloques.proteina.some(i => i.mi_pedido);
+    const tienePrincipio = state.bloques.principio.some(i => i.mi_pedido);
+    if (!tieneProteina && !tienePrincipio) {
+        toast('Marca ★ en al menos una proteína y un principio', false); return;
+    }
+    if (!tieneProteina) { toast('Falta marcar ★ en una proteína', false); return; }
+    if (!tienePrincipio) { toast('Falta marcar ★ en un principio', false); return; }
 
     if (state.tercero_id && state.nombre) {
         // Ya identificado → enviar directo

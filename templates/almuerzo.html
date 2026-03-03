@@ -39,6 +39,10 @@
     <div class="mb-5">
         <h1 class="text-2xl font-extrabold text-indigo-700 tracking-tight">🥗 Almuerzo del día</h1>
         <p class="text-sm text-gray-500 mt-1">Procesa el menú, elige y crea tu pedido</p>
+        <div id="saludo-usuario" class="hidden mt-2 flex items-center gap-2">
+            <span class="text-sm text-indigo-600 font-semibold" id="saludo-nombre"></span>
+            <button onclick="resetIdentidad()" class="text-xs text-gray-400 underline">no soy yo</button>
+        </div>
     </div>
 
     <!-- STEP 1: restaurante + texto -->
@@ -185,6 +189,18 @@ function showStep(id) {
     document.getElementById(id).classList.add('active');
 }
 
+function mostrarSaludo() {
+    if (!state.nombre) return;
+    document.getElementById('saludo-nombre').textContent = `Hola, ${state.nombre} 👋`;
+    document.getElementById('saludo-usuario').classList.remove('hidden');
+}
+
+function resetIdentidad() {
+    state.tercero_id = null; state.nombre = ''; state.telefono = '';
+    ['almuerzo_tid','almuerzo_nom','almuerzo_tel'].forEach(k => localStorage.removeItem(k));
+    document.getElementById('saludo-usuario').classList.add('hidden');
+}
+
 // ───── INIT ─────
 async function init() {
     // 1. Sesión Flask (prioridad máxima — viene del servidor)
@@ -215,12 +231,10 @@ async function init() {
                     state.tercero_id = data.tercero.id;
                     state.nombre     = data.tercero.nombre || nomGlobal || '';
                     state.telefono   = data.tercero.telefono || telGlobal;
-                    // Guardar en claves de almuerzo para próxima visita
                     lsSet('almuerzo_tid', state.tercero_id);
                     lsSet('almuerzo_nom', state.nombre);
                     lsSet('almuerzo_tel', state.telefono);
                 } else if (nomGlobal) {
-                    // Tercero no existe aún: pre-llenar modal al menos con el nombre
                     state.nombre   = nomGlobal;
                     state.telefono = telGlobal;
                 }
@@ -228,6 +242,7 @@ async function init() {
         }
     }
     {% endif %}
+    mostrarSaludo();
     await cargarRestaurantes();
 }
 
@@ -445,6 +460,7 @@ async function confirmarConIdentidad() {
         lsSet('almuerzo_tel', state.telefono);
 
         cerrarModal();
+        mostrarSaludo();
         await enviarPedido();
     } catch(e) {
         btn.disabled = false; btn.innerHTML = '¡Listo, enviar pedido!';

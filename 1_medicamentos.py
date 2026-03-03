@@ -35297,6 +35297,7 @@ def api_almuerzo_confirmar():
         items             = data.get('items', [])
         notas             = (data.get('notas') or '').strip() or None
         solo_enlace       = data.get('solo_enlace', False)
+        tipo_entrega      = data.get('tipo_entrega', 'recoger')
 
         if not solo_enlace and not tercero_id:
             return jsonify({'ok': False, 'error': 'Usuario no identificado'}), 400
@@ -35441,9 +35442,9 @@ def api_almuerzo_confirmar():
                 INSERT INTO pedidos_restaurante
                   (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id,
                    precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, cliente_id)
-                VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, 'para_llevar', %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s)
             """, (restaurante_id, 0, tipo_pedido, sopa_id, proteina_id, principio_id,
-                  notas, nombre_c, telefono_c, tercero_id))
+                  notas, nombre_c, tipo_entrega, telefono_c, tercero_id))
             conn.commit()
 
         conn.close()

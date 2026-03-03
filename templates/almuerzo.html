@@ -91,6 +91,21 @@
 
         <div id="bloques-container"></div>
 
+        <!-- Tipo de entrega -->
+        <div class="mt-4 bg-white rounded-2xl border p-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">¿Cómo lo quieres?</label>
+            <div class="flex gap-2">
+                <button id="btn-recoger" onclick="setEntrega('recoger')"
+                        class="flex-1 py-3 rounded-xl font-semibold text-sm border-2 border-indigo-500 bg-indigo-50 text-indigo-700">
+                    📍 Recoger
+                </button>
+                <button id="btn-domicilio" onclick="setEntrega('domicilio')"
+                        class="flex-1 py-3 rounded-xl font-semibold text-sm border-2 border-gray-200 text-gray-500 hover:bg-gray-50">
+                    🛵 Domicilio
+                </button>
+            </div>
+        </div>
+
         <div class="mt-4 bg-white rounded-2xl border p-4">
             <label class="block text-xs font-semibold text-gray-500 uppercase mb-1 tracking-wide">Notas (opcional)</label>
             <input id="inp-notas" type="text" placeholder="Sin cilantro, sin picante..."
@@ -163,6 +178,7 @@ let state = {
     telefono:          '',
     restaurante_id:    null,
     restaurante_nuevo: null,
+    tipo_entrega:      'recoger',
     bloques: { sopa: [], principio: [], proteina: [] },
 };
 let tempCounter = 0;
@@ -413,6 +429,15 @@ function agregarItem(cat) {
     renderItem(document.getElementById(`lista-${cat}`), item);
 }
 
+// ───── TIPO ENTREGA ─────
+function setEntrega(tipo) {
+    state.tipo_entrega = tipo;
+    const sel   = 'flex-1 py-3 rounded-xl font-semibold text-sm border-2 border-indigo-500 bg-indigo-50 text-indigo-700';
+    const unsel = 'flex-1 py-3 rounded-xl font-semibold text-sm border-2 border-gray-200 text-gray-500 hover:bg-gray-50';
+    document.getElementById('btn-recoger').className   = tipo === 'recoger'   ? sel : unsel;
+    document.getElementById('btn-domicilio').className = tipo === 'domicilio' ? sel : unsel;
+}
+
 // ───── CONFIRMAR ─────
 function iniciarConfirmar() {
     const tieneProteina  = state.bloques.proteina.some(i => i.mi_pedido);
@@ -504,6 +529,7 @@ async function enviarPedido() {
         restaurante_nuevo: state.restaurante_nuevo || null,
         items:             todos,
         notas:             document.getElementById('inp-notas').value.trim() || null,
+        tipo_entrega:      state.tipo_entrega,
     };
 
     const btn = document.querySelector('#step-items button[onclick="iniciarConfirmar()"]');

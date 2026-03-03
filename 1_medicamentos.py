@@ -34965,7 +34965,9 @@ def almuerzo_page():
     """Herramienta para procesar menú del día vía texto y crear pedido"""
     usuario_pre = None
     uid = session.get('usuario_id')
-    if uid:
+    # Excluir login de admin (tabla usuarios) — solo terceros tienen sesión válida aquí
+    es_admin_puro = session.get('rol') == 'Administrador' and not session.get('telefono')
+    if uid and not es_admin_puro:
         try:
             conn = get_db_connection()
             t = conn.execute(

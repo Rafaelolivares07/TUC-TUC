@@ -34964,35 +34964,12 @@ def api_restaurante_toggle_pin(slug):
 def almuerzo_page():
     """Herramienta para procesar menú del día vía texto y crear pedido"""
     usuario_pre = None
-    uid     = session.get('usuario_id')
-    nombre  = session.get('nombre', '')
+    uid = session.get('usuario_id')
+    nombre = session.get('nombre', '') or ''
     telefono = session.get('telefono', '') or ''
-    rol     = session.get('rol', '')
+    # session['usuario_id'] apunta a terceros.id para cualquier usuario del sistema
     if uid and nombre:
-        if rol != 'Administrador':
-            # Roles de terceros (Restaurante, Tienda, TucTuc...): usuario_id ES tercero_id
-            usuario_pre = {'tercero_id': uid, 'nombre': nombre, 'telefono': telefono}
-        else:
-            # Admin — buscar su tercero_id: primero por teléfono, luego por nombre exacto
-            tercero_id_admin = None
-            try:
-                conn = get_db_connection()
-                if telefono:
-                    t = conn.execute(
-                        "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
-                    ).fetchone()
-                    if t:
-                        tercero_id_admin = t['id']
-                if not tercero_id_admin and nombre:
-                    t = conn.execute(
-                        "SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)
-                    ).fetchone()
-                    if t:
-                        tercero_id_admin = t['id']
-                conn.close()
-            except Exception:
-                pass
-            usuario_pre = {'tercero_id': tercero_id_admin, 'nombre': nombre, 'telefono': telefono}
+        usuario_pre = {'tercero_id': uid, 'nombre': nombre, 'telefono': telefono}
     return render_template('almuerzo.html', usuario_pre=usuario_pre)
 
 
@@ -35029,12 +35006,6 @@ def api_almuerzo_tercero_crear():
         if telefono:
             existente = conn.execute(
                 "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
-            ).fetchone()
-        if not existente:
-            # Sin teléfono (o no encontrado por teléfono): buscar por nombre exacto
-            # para no crear duplicados de usuarios que ya existen en el sistema
-            existente = conn.execute(
-                "SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)
             ).fetchone()
         if existente:
             conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, existente['id']))
@@ -35305,22 +35276,22 @@ def api_almuerzo_confirmar():
     """Crear restaurante si nuevo, armar menú del día y crear pedido. Devuelve enlace cocina."""
     import uuid
     from datetime import date
-    data = request.get_json()
-
-    tercero_id        = data.get('tercero_id')
-    restaurante_id_in = data.get('restaurante_id')
-    restaurante_nuevo = data.get('restaurante_nuevo')  # {nombre, nombre_dueno, telefono_dueno}
-    items             = data.get('items', [])           # lista completa con en_menu, mi_pedido
-    notas             = data.get('notas', '').strip() or None
-    solo_enlace       = data.get('solo_enlace', False)  # True = solo armar menú, sin pedido
-
-    if not solo_enlace and not tercero_id:
-        return jsonify({'ok': False, 'error': 'Usuario no identificado'}), 400
-    items_menu = [i for i in items if i.get('en_menu')]
-    if not items_menu:
-        return jsonify({'ok': False, 'error': 'No hay ítems para el menú'}), 400
 
     try:
+        data = request.get_json() or {}
+        tercero_id        = data.get('tercero_id')
+        restaurante_id_in = data.get('restaurante_id')
+        restaurante_nuevo = data.get('restaurante_nuevo')
+        items             = data.get('items', [])
+        notas             = (data.get('notas') or '').strip() or None
+        solo_enlace       = data.get('solo_enlace', False)
+
+        if not solo_enlace and not tercero_id:
+            return jsonify({'ok': False, 'error': 'Usuario no identificado'}), 400
+        items_menu = [i for i in items if i.get('en_menu')]
+        if not items_menu:
+            return jsonify({'ok': False, 'error': 'No hay ítems para el menú'}), 400
+
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
 

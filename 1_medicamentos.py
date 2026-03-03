@@ -34973,20 +34973,25 @@ def almuerzo_page():
             # Roles de terceros (Restaurante, Tienda, TucTuc...): usuario_id ES tercero_id
             usuario_pre = {'tercero_id': uid, 'nombre': nombre, 'telefono': telefono}
         else:
-            # Admin — intentar encontrar su tercero_id por teléfono
-            # Si no se encuentra, igual inyectar nombre para el saludo (tercero_id queda None)
+            # Admin — buscar su tercero_id: primero por teléfono, luego por nombre exacto
             tercero_id_admin = None
-            if telefono:
-                try:
-                    conn = get_db_connection()
+            try:
+                conn = get_db_connection()
+                if telefono:
                     t = conn.execute(
                         "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
                     ).fetchone()
-                    conn.close()
                     if t:
                         tercero_id_admin = t['id']
-                except Exception:
-                    pass
+                if not tercero_id_admin and nombre:
+                    t = conn.execute(
+                        "SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)
+                    ).fetchone()
+                    if t:
+                        tercero_id_admin = t['id']
+                conn.close()
+            except Exception:
+                pass
             usuario_pre = {'tercero_id': tercero_id_admin, 'nombre': nombre, 'telefono': telefono}
     return render_template('almuerzo.html', usuario_pre=usuario_pre)
 
@@ -35024,6 +35029,12 @@ def api_almuerzo_tercero_crear():
         if telefono:
             existente = conn.execute(
                 "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+            ).fetchone()
+        if not existente:
+            # Sin teléfono (o no encontrado por teléfono): buscar por nombre exacto
+            # para no crear duplicados de usuarios que ya existen en el sistema
+            existente = conn.execute(
+                "SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)
             ).fetchone()
         if existente:
             conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, existente['id']))

@@ -423,20 +423,39 @@ function iniciarConfirmar() {
     if (!tieneProteina) { toast('Falta marcar ★ en una proteína', false); return; }
     if (!tienePrincipio) { toast('Falta marcar ★ en un principio', false); return; }
 
-    if (state.tercero_id && state.nombre) {
-        // Ya identificado → enviar directo
+    if (state.tercero_id) {
+        // Identificado con ID → directo
         enviarPedido();
+    } else if (state.nombre) {
+        // Tiene nombre (sesión admin, localStorage global, etc.) pero sin tercero_id
+        // → crear tercero silenciosamente, sin mostrar modal
+        crearTerceroSilencioso().then(() => {
+            if (state.tercero_id) enviarPedido();
+            else toast('No se pudo registrar el usuario', false);
+        });
     } else {
-        // Preguntar nombre al final — pre-llenar si tenemos datos parciales
-        if (state.nombre) document.getElementById('modal-nombre').value = state.nombre;
+        // Sin nombre ni id → pedir datos (usuario completamente nuevo)
         if (state.telefono) document.getElementById('modal-tel').value = state.telefono;
         document.getElementById('modal-id').classList.add('open');
-        setTimeout(() => {
-            const inp = document.getElementById('modal-nombre');
-            inp.focus();
-            if (inp.value) inp.select();
-        }, 100);
+        setTimeout(() => document.getElementById('modal-nombre').focus(), 100);
     }
+}
+
+async function crearTerceroSilencioso() {
+    try {
+        const r = await fetch(`${API}/tercero`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ nombre: state.nombre, telefono: state.telefono || '' })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            state.tercero_id = data.tercero_id;
+            lsSet('almuerzo_tid', state.tercero_id);
+            lsSet('almuerzo_nom', state.nombre);
+            if (state.telefono) lsSet('almuerzo_tel', state.telefono);
+        }
+    } catch(e) {}
 }
 
 function cerrarModal() {

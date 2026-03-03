@@ -35298,6 +35298,10 @@ def api_almuerzo_confirmar():
         notas             = (data.get('notas') or '').strip() or None
         solo_enlace       = data.get('solo_enlace', False)
         tipo_entrega      = data.get('tipo_entrega', 'recoger')
+        precios           = data.get('precios') or {}
+        precio_sopa_in    = float(precios.get('sopa') or 0)
+        precio_bandeja_in = float(precios.get('bandeja') or 0)
+        precio_completo_in= float(precios.get('completo') or 0)
 
         if not solo_enlace and not tercero_id:
             return jsonify({'ok': False, 'error': 'Usuario no identificado'}), 400
@@ -35387,12 +35391,18 @@ def api_almuerzo_confirmar():
         if not menu:
             cur = conn.execute("""
                 INSERT INTO menu_dia (restaurante_id, fecha, precio_completo, precio_bandeja, precio_sopa, activo)
-                VALUES (%s, %s, 0, 0, 0, TRUE) RETURNING id
-            """, (restaurante_id, hoy))
+                VALUES (%s, %s, %s, %s, %s, TRUE) RETURNING id
+            """, (restaurante_id, hoy, precio_completo_in, precio_bandeja_in, precio_sopa_in))
             menu_id = cur.fetchone()[0]
             conn.commit()
         else:
             menu_id = menu['id']
+            if precio_completo_in or precio_bandeja_in or precio_sopa_in:
+                conn.execute("""
+                    UPDATE menu_dia SET precio_completo = %s, precio_bandeja = %s, precio_sopa = %s
+                    WHERE id = %s
+                """, (precio_completo_in, precio_bandeja_in, precio_sopa_in, menu_id))
+                conn.commit()
 
         # 4. Agregar ítems al menu_dia_opciones
         for item in items_menu:
@@ -35438,13 +35448,17 @@ def api_almuerzo_confirmar():
             nombre_c   = tercero['nombre'] if tercero else ''
             telefono_c = tercero['telefono'] if tercero else ''
 
+            precio_pedido = (precio_completo_in if tipo_pedido == 'completo'
+                             else precio_bandeja_in if tipo_pedido == 'bandeja'
+                             else precio_sopa_in)
+
             conn.execute("""
                 INSERT INTO pedidos_restaurante
                   (restaurante_id, mesa_num, tipo, sopa_id, proteina_id, principio_id,
                    precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, cliente_id)
-                VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (restaurante_id, 0, tipo_pedido, sopa_id, proteina_id, principio_id,
-                  notas, nombre_c, tipo_entrega, telefono_c, tercero_id))
+                  precio_pedido, notas, nombre_c, tipo_entrega, telefono_c, tercero_id))
             conn.commit()
 
         conn.close()

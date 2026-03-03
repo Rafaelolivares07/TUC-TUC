@@ -91,6 +91,40 @@
 
         <div id="bloques-container"></div>
 
+        <!-- Precios -->
+        <div class="mt-4 bg-white rounded-2xl border p-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-3 tracking-wide">Precios de hoy</label>
+            <div class="space-y-2">
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-semibold text-yellow-700 w-24">🍲 Sopa</span>
+                    <div class="relative flex-1">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                        <input type="number" inputmode="numeric" id="inp-precio-sopa" placeholder="0"
+                               oninput="state.precios.sopa = parseFloat(this.value)||0"
+                               class="w-full border rounded-xl pl-7 pr-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-semibold text-pink-700 w-24">🍖 Bandeja</span>
+                    <div class="relative flex-1">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                        <input type="number" inputmode="numeric" id="inp-precio-bandeja" placeholder="0"
+                               oninput="state.precios.bandeja = parseFloat(this.value)||0"
+                               class="w-full border rounded-xl pl-7 pr-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-semibold text-green-700 w-24">🥘 Completo</span>
+                    <div class="relative flex-1">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                        <input type="number" inputmode="numeric" id="inp-precio-completo" placeholder="0"
+                               oninput="state.precios.completo = parseFloat(this.value)||0"
+                               class="w-full border rounded-xl pl-7 pr-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Tipo de entrega -->
         <div class="mt-4 bg-white rounded-2xl border p-4">
             <label class="block text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">¿Cómo lo quieres?</label>
@@ -179,6 +213,7 @@ let state = {
     restaurante_id:    null,
     restaurante_nuevo: null,
     tipo_entrega:      'recoger',
+    precios:           { sopa: 0, bandeja: 0, completo: 0 },
     bloques: { sopa: [], principio: [], proteina: [] },
 };
 let tempCounter = 0;
@@ -530,6 +565,7 @@ async function enviarPedido() {
         items:             todos,
         notas:             document.getElementById('inp-notas').value.trim() || null,
         tipo_entrega:      state.tipo_entrega,
+        precios:           state.precios,
     };
 
     const btn = document.querySelector('#step-items button[onclick="iniciarConfirmar()"]');
@@ -600,8 +636,12 @@ async function soloCompartirEnlace() {
 function nuevoAlmuerzo() {
     state.bloques = { sopa: [], principio: [], proteina: [] };
     state.restaurante_nuevo = null;
+    state.precios = { sopa: 0, bandeja: 0, completo: 0 };
     document.getElementById('txt-menu').value = '';
     document.getElementById('inp-notas').value = '';
+    ['inp-precio-sopa','inp-precio-bandeja','inp-precio-completo'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
     showStep('step-menu');
 }
 

@@ -11,13 +11,12 @@
         .step.active { display: block; }
         .item-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fff; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 6px; }
         .item-row .nombre { flex: 1; font-size: 0.9rem; color: #1e293b; }
-        .badge-new { font-size: 0.65rem; background: #fef3c7; color: #92400e; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
-        .badge-bd  { font-size: 0.65rem; background: #dcfce7; color: #166534; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
-        .chk-menu  { width: 20px; height: 20px; accent-color: #6366f1; cursor: pointer; flex-shrink: 0; }
         .btn-star  { font-size: 1.3rem; line-height: 1; background: none; border: none; cursor: pointer; flex-shrink: 0; transition: transform .1s; }
         .btn-star:active { transform: scale(1.3); }
         .btn-star.starred { color: #f59e0b; }
         .btn-star:not(.starred) { color: #d1d5db; }
+        .btn-del   { font-size: 1rem; line-height: 1; background: none; border: none; cursor: pointer; flex-shrink: 0; color: #cbd5e1; padding: 2px 4px; }
+        .btn-del:hover, .btn-del:active { color: #ef4444; }
         .bloque-header { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; }
         .bloque-label { font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 10px; border-radius: 999px; }
         .lbl-sopa      { background: #fef9c3; color: #713f12; }
@@ -25,7 +24,6 @@
         .lbl-proteina  { background: #fce7f3; color: #831843; }
         .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid #c7d2fe; border-top-color: #6366f1; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        /* Modal identificación */
         #modal-id { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500; align-items: flex-end; justify-content: center; }
         #modal-id.open { display: flex; }
         #modal-id-inner { background: #fff; border-radius: 20px 20px 0 0; padding: 28px 20px 36px; width: 100%; max-width: 480px; }
@@ -38,17 +36,15 @@
     <!-- Header -->
     <div class="mb-5">
         <h1 class="text-2xl font-extrabold text-indigo-700 tracking-tight">🥗 Almuerzo del día</h1>
-        <p class="text-sm text-gray-500 mt-1">Procesa el menú, elige y crea tu pedido</p>
+        <p class="text-sm text-gray-500 mt-1">Selecciona el restaurante y arma el menú de hoy</p>
         <div id="saludo-usuario" class="hidden mt-2 flex items-center gap-2">
             <span class="text-sm text-indigo-600 font-semibold" id="saludo-nombre"></span>
             <button onclick="resetIdentidad()" class="text-xs text-gray-400 underline">no soy yo</button>
         </div>
     </div>
 
-    <!-- STEP 1: restaurante + texto -->
+    <!-- STEP 1: selección restaurante -->
     <div id="step-menu" class="step active">
-
-        <!-- Restaurante -->
         <div class="bg-white rounded-2xl shadow-sm border p-4 mb-4">
             <p class="text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">Restaurante</p>
             <select id="sel-restaurante" class="w-full border rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -68,25 +64,17 @@
             </div>
         </div>
 
-        <!-- Textarea menú -->
-        <div class="bg-white rounded-2xl shadow-sm border p-4 mb-4">
-            <p class="text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">Pega el menú aquí</p>
-            <textarea id="txt-menu" rows="7"
-                      placeholder="Ej: Sopas: Sancocho de pollo, Ajiaco&#10;Principios: Frijoles, Arroz&#10;Proteínas: Pechuga asada, Carne a la plancha"
-                      class="w-full border rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono"></textarea>
-        </div>
-
-        <button onclick="procesarMenu()"
+        <button id="btn-continuar" onclick="continuar()"
                 class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-bold text-base shadow-sm">
-            Procesar menú →
+            Continuar →
         </button>
     </div>
 
-    <!-- STEP 2: seleccionar ítems -->
+    <!-- STEP 2: armar menú + seleccionar -->
     <div id="step-items" class="step">
         <div class="flex items-center gap-3 mb-3">
             <button onclick="showStep('step-menu')" class="text-xs text-indigo-600 underline">← Volver</button>
-            <span class="flex-1 text-xs text-gray-400 text-right">☑ en menú &nbsp;|&nbsp; ★ mi pedido</span>
+            <span class="flex-1 text-xs text-gray-400 text-right">★ lo que pido hoy</span>
         </div>
 
         <div id="bloques-container"></div>
@@ -125,7 +113,7 @@
             </div>
         </div>
 
-        <!-- Tipo de entrega -->
+        <!-- Tipo entrega -->
         <div class="mt-4 bg-white rounded-2xl border p-4">
             <label class="block text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">¿Cómo lo quieres?</label>
             <div class="flex gap-2">
@@ -146,7 +134,6 @@
                    class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         </div>
 
-        <!-- Tres opciones -->
         <div class="mt-5 space-y-3">
             <button onclick="iniciarConfirmar()"
                     class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-2xl font-bold text-base shadow-sm">
@@ -179,14 +166,14 @@
             </a>
             <button onclick="nuevoAlmuerzo()"
                     class="w-full border border-gray-300 text-gray-600 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50">
-                Procesar otro menú
+                Pedir en otro restaurante
             </button>
         </div>
     </div>
 
 </div>
 
-<!-- Modal identificación (aparece solo al confirmar, si no hay usuario guardado) -->
+<!-- Modal identificación -->
 <div id="modal-id">
     <div id="modal-id-inner">
         <h3 class="text-lg font-extrabold text-gray-800 mb-1">¿Cómo te llamas?</h3>
@@ -214,7 +201,8 @@ let state = {
     restaurante_nuevo: null,
     tipo_entrega:      'recoger',
     precios:           { sopa: 0, bandeja: 0, completo: 0 },
-    bloques: { sopa: [], principio: [], proteina: [] },
+    bloques:           { sopa: [], principio: [], proteina: [] },
+    catalogo:          { propio: [], global: [] },
 };
 let tempCounter = 0;
 
@@ -254,7 +242,6 @@ function resetIdentidad() {
 
 // ───── INIT ─────
 async function init() {
-    // 1. Sesión Flask (prioridad máxima — viene del servidor)
     {% if usuario_pre %}
     state.tercero_id = {{ usuario_pre.tercero_id | tojson }};
     state.nombre     = {{ usuario_pre.nombre | tojson }};
@@ -265,7 +252,6 @@ async function init() {
         lsSet('almuerzo_tel', state.telefono);
     }
     {% else %}
-    // 2. Sin sesión Flask — revisar localStorage (prioridad: almuerzo-específico, luego global)
     const tid = lsGet('almuerzo_tid');
     const nom = lsGet('almuerzo_nom');
     if (tid && nom) {
@@ -273,7 +259,6 @@ async function init() {
         state.nombre     = nom;
         state.telefono   = lsGet('almuerzo_tel') || '';
     } else {
-        // 3. Claves globales TUC TUC (tienda, checkout, etc.)
         const telGlobal = lsGet('telefono_usuario');
         const nomGlobal = lsGet('nombre_usuario');
         if (telGlobal) {
@@ -293,7 +278,6 @@ async function init() {
                 }
             } catch(e) {}
         } else if (nomGlobal) {
-            // Tiene nombre en localStorage pero sin teléfono — mostrar saludo igual
             state.nombre = nomGlobal;
         }
     }
@@ -340,45 +324,45 @@ function mostrarNuevoRestaurante() {
     }
 }
 
-// ───── PROCESAR ─────
-async function procesarMenu() {
-    const texto = document.getElementById('txt-menu').value.trim();
-    if (!texto) { toast('Pega el texto del menú', false); return; }
-
+// ───── CONTINUAR ─────
+async function continuar() {
     const esNuevo = !document.getElementById('form-nuevo-rest').classList.contains('hidden');
     if (esNuevo) {
         const n = document.getElementById('inp-rest-nombre').value.trim();
         if (!n) { toast('Escribe el nombre del restaurante', false); return; }
         state.restaurante_nuevo = {
-            nombre:          n,
-            nombre_dueno:    document.getElementById('inp-due-nombre').value.trim(),
-            telefono_dueno:  document.getElementById('inp-due-tel').value.replace(/\D/g,''),
+            nombre:         n,
+            nombre_dueno:   document.getElementById('inp-due-nombre').value.trim(),
+            telefono_dueno: document.getElementById('inp-due-tel').value.replace(/\D/g,''),
         };
         state.restaurante_id = null;
     } else {
         if (!state.restaurante_id) { toast('Selecciona un restaurante', false); return; }
+        state.restaurante_nuevo = null;
     }
 
-    const btn = document.querySelector('#step-menu button[onclick="procesarMenu()"]');
+    const btn = document.getElementById('btn-continuar');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Procesando...';
+    btn.innerHTML = '<span class="spinner"></span> Cargando...';
 
     try {
-        const r = await fetch(`${API}/procesar`, {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ texto })
-        });
+        const url = state.restaurante_id
+            ? `${API}/catalogo?restaurante_id=${state.restaurante_id}`
+            : `${API}/catalogo`;
+        const r    = await fetch(url);
         const data = await r.json();
-        btn.disabled = false; btn.innerHTML = 'Procesar menú →';
-        if (!data.ok) { toast(data.error, false); return; }
-        state.bloques = data.bloques;
-        renderBloques();
-        showStep('step-items');
+        state.catalogo = data.ok
+            ? { propio: data.propio || [], global: data.global || [] }
+            : { propio: [], global: [] };
     } catch(e) {
-        btn.disabled = false; btn.innerHTML = 'Procesar menú →';
-        toast('Error de conexión', false);
+        state.catalogo = { propio: [], global: [] };
     }
+
+    btn.disabled = false;
+    btn.innerHTML = 'Continuar →';
+    state.bloques = { sopa: [], principio: [], proteina: [] };
+    renderBloques();
+    showStep('step-items');
 }
 
 // ───── RENDER BLOQUES ─────
@@ -386,53 +370,140 @@ function renderBloques() {
     const contenedor = document.getElementById('bloques-container');
     contenedor.innerHTML = '';
     [
-        { cat:'sopa',      label:'Caldos / Sopas',  cls:'lbl-sopa'      },
-        { cat:'principio', label:'Principios',       cls:'lbl-principio' },
-        { cat:'proteina',  label:'Proteínas',        cls:'lbl-proteina'  },
+        { cat:'sopa',      label:'Caldos / Sopas', cls:'lbl-sopa'      },
+        { cat:'principio', label:'Principios',      cls:'lbl-principio' },
+        { cat:'proteina',  label:'Proteínas',       cls:'lbl-proteina'  },
     ].forEach(({ cat, label, cls }) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'mb-4';
+
+        // Header
         const header = document.createElement('div');
         header.className = 'bloque-header';
-        header.innerHTML = `
-            <span class="bloque-label ${cls}">${label}</span>
-            <button onclick="agregarItem('${cat}')" class="text-xs text-indigo-600 font-semibold border border-indigo-200 px-3 py-1 rounded-full hover:bg-indigo-50">+ Agregar</button>
+        header.innerHTML = `<span class="bloque-label ${cls}">${label}</span>`;
+        wrap.appendChild(header);
+
+        // Chips propio (catálogo del restaurante)
+        const propio = state.catalogo.propio.filter(i => i.tipo === cat);
+        if (propio.length) {
+            const div = document.createElement('div');
+            div.id = `chips-propio-${cat}`;
+            div.className = 'flex flex-wrap gap-2 mb-2';
+            propio.forEach(item => {
+                const yaEsta = state.bloques[cat].some(b => b.opcion_id === item.id);
+                const chip = document.createElement('button');
+                chip.className = `text-sm px-3 py-2 rounded-full border-2 border-indigo-300 bg-indigo-50 text-indigo-700 font-semibold${yaEsta ? ' hidden' : ''}`;
+                chip.dataset.opcionId = item.id;
+                chip.textContent = item.nombre;
+                chip.onclick = () => chipTap(item.nombre, cat, item.id, true, chip);
+                div.appendChild(chip);
+            });
+            wrap.appendChild(div);
+        }
+
+        // Chips globales (sugerencias de otros restaurantes)
+        const global = state.catalogo.global.filter(i => i.tipo === cat).slice(0, 12);
+        if (global.length) {
+            const div = document.createElement('div');
+            div.id = `chips-global-${cat}`;
+            div.className = 'flex flex-wrap gap-1 mb-2';
+            if (propio.length) {
+                const lbl = document.createElement('p');
+                lbl.className = 'w-full text-xs text-gray-400 mt-1 mb-1';
+                lbl.textContent = 'Sugerencias:';
+                div.appendChild(lbl);
+            }
+            global.forEach(item => {
+                const yaEsta = state.bloques[cat].some(b => b.nombre.toLowerCase() === item.nombre.toLowerCase());
+                const chip = document.createElement('button');
+                chip.className = `text-xs px-2 py-1 rounded-full border border-gray-300 bg-white text-gray-500${yaEsta ? ' hidden' : ''}`;
+                chip.dataset.nombre = item.nombre;
+                chip.textContent = item.nombre;
+                chip.onclick = () => chipTap(item.nombre, cat, null, false, chip);
+                div.appendChild(chip);
+            });
+            wrap.appendChild(div);
+        }
+
+        // Input para agregar ítem nuevo
+        const inputDiv = document.createElement('div');
+        inputDiv.className = 'flex gap-2 mb-2 mt-1';
+        inputDiv.innerHTML = `
+            <input type="text" id="inp-nuevo-${cat}" placeholder="Agregar ítem..."
+                   class="flex-1 border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                   onkeydown="if(event.key==='Enter'){agregarItemManual('${cat}');event.preventDefault();}">
+            <button onclick="agregarItemManual('${cat}')"
+                    class="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl text-sm font-semibold hover:bg-indigo-200">+</button>
         `;
-        contenedor.appendChild(header);
+        wrap.appendChild(inputDiv);
+
+        // Lista de ítems del menú de hoy
         const lista = document.createElement('div');
         lista.id = `lista-${cat}`;
-        contenedor.appendChild(lista);
+        wrap.appendChild(lista);
         (state.bloques[cat] || []).forEach(item => renderItem(lista, item));
+
+        contenedor.appendChild(wrap);
     });
 }
 
 function renderItem(lista, item) {
     if (!item.temp_id) item.temp_id = item.opcion_id ? `bd_${item.opcion_id}` : `new_${tempCounter++}`;
-    item.en_menu   = item.en_menu   !== undefined ? item.en_menu   : true;
     item.mi_pedido = item.mi_pedido !== undefined ? item.mi_pedido : false;
 
-    const badge = item.en_bd ? '<span class="badge-bd">BD</span>' : '<span class="badge-new">nuevo</span>';
     const row = document.createElement('div');
     row.className = 'item-row';
     row.id = `row-${item.temp_id}`;
     row.innerHTML = `
-        <input type="checkbox" class="chk-menu" ${item.en_menu ? 'checked' : ''}
-               onchange="toggleMenu('${item.temp_id}', this.checked)">
-        <span class="nombre">${item.nombre}${badge}</span>
+        <span class="nombre">${item.nombre}</span>
         <button class="btn-star ${item.mi_pedido ? 'starred' : ''}"
                 onclick="togglePedido('${item.temp_id}')">★</button>
+        <button class="btn-del" onclick="eliminarItem('${item.temp_id}', '${item.tipo}')">✕</button>
     `;
     lista.appendChild(row);
 }
 
-function toggleMenu(tid, val) {
-    const item = encontrarItem(tid);
-    if (item) item.en_menu = val;
+function chipTap(nombre, cat, opcion_id, en_bd, chipEl) {
+    if (state.bloques[cat].some(b => b.nombre.toLowerCase() === nombre.toLowerCase())) return;
+    const item = {
+        nombre, tipo: cat, en_bd: !!en_bd, opcion_id: opcion_id || null,
+        temp_id: opcion_id ? `bd_${opcion_id}` : `new_${tempCounter++}`,
+        en_menu: true, mi_pedido: false, _chipEl: chipEl
+    };
+    state.bloques[cat].push(item);
+    renderItem(document.getElementById(`lista-${cat}`), item);
+    chipEl.classList.add('hidden');
+}
+
+function agregarItemManual(cat) {
+    const inp    = document.getElementById(`inp-nuevo-${cat}`);
+    const nombre = inp.value.trim();
+    if (!nombre) return;
+    if (state.bloques[cat].some(b => b.nombre.toLowerCase() === nombre.toLowerCase())) {
+        toast('Ya está en el menú', false); return;
+    }
+    const item = {
+        nombre, tipo: cat, en_bd: false, opcion_id: null,
+        temp_id: `new_${tempCounter++}`, en_menu: true, mi_pedido: false, _chipEl: null
+    };
+    state.bloques[cat].push(item);
+    inp.value = '';
+    renderItem(document.getElementById(`lista-${cat}`), item);
+}
+
+function eliminarItem(tid, cat) {
+    const idx = state.bloques[cat].findIndex(i => String(i.temp_id) === String(tid));
+    if (idx === -1) return;
+    const item = state.bloques[cat][idx];
+    state.bloques[cat].splice(idx, 1);
+    document.getElementById(`row-${tid}`)?.remove();
+    if (item._chipEl) item._chipEl.classList.remove('hidden');
 }
 
 function togglePedido(tid) {
     const item = encontrarItem(tid);
     if (!item) return;
     if (!item.mi_pedido) {
-        // Deseleccionar el anterior de la misma categoría
         (state.bloques[item.tipo] || []).forEach(i => {
             i.mi_pedido = false;
             const btn = document.querySelector(`#row-${i.temp_id} .btn-star`);
@@ -454,16 +525,6 @@ function encontrarItem(tid) {
     return null;
 }
 
-function agregarItem(cat) {
-    const nombre = prompt(`Agregar ítem (${cat}):`);
-    if (!nombre?.trim()) return;
-    const item = { nombre: nombre.trim(), tipo: cat, en_bd: false, opcion_id: null,
-                   temp_id: `new_${tempCounter++}`, en_menu: true, mi_pedido: false };
-    if (!state.bloques[cat]) state.bloques[cat] = [];
-    state.bloques[cat].push(item);
-    renderItem(document.getElementById(`lista-${cat}`), item);
-}
-
 // ───── TIPO ENTREGA ─────
 function setEntrega(tipo) {
     state.tipo_entrega = tipo;
@@ -475,6 +536,8 @@ function setEntrega(tipo) {
 
 // ───── CONFIRMAR ─────
 function iniciarConfirmar() {
+    const todos = [...state.bloques.sopa, ...state.bloques.principio, ...state.bloques.proteina];
+    if (!todos.length) { toast('Agrega al menos un ítem al menú', false); return; }
     const tieneProteina  = state.bloques.proteina.some(i => i.mi_pedido);
     const tienePrincipio = state.bloques.principio.some(i => i.mi_pedido);
     if (!tieneProteina && !tienePrincipio) {
@@ -484,17 +547,13 @@ function iniciarConfirmar() {
     if (!tienePrincipio) { toast('Falta marcar ★ en un principio', false); return; }
 
     if (state.tercero_id) {
-        // Identificado con ID → directo
         enviarPedido();
     } else if (state.nombre) {
-        // Tiene nombre (sesión admin, localStorage global, etc.) pero sin tercero_id
-        // → crear tercero silenciosamente, sin mostrar modal
         crearTerceroSilencioso().then(() => {
             if (state.tercero_id) enviarPedido();
             else toast('No se pudo registrar el usuario', false);
         });
     } else {
-        // Sin nombre ni id → pedir datos (usuario completamente nuevo)
         if (state.telefono) document.getElementById('modal-tel').value = state.telefono;
         document.getElementById('modal-id').classList.add('open');
         setTimeout(() => document.getElementById('modal-nombre').focus(), 100);
@@ -578,7 +637,7 @@ async function enviarPedido() {
             body: JSON.stringify(payload)
         });
         const data = await r.json();
-        if (btn) { btn.disabled = false; btn.innerHTML = '¡Enviar pedido! 🚀'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '¡Hacer mi pedido! 🚀'; }
         if (!data.ok) { toast(data.error, false); return; }
 
         const url = window.location.origin + data.cocina_url;
@@ -589,15 +648,14 @@ async function enviarPedido() {
             `Pedido de ${state.nombre} — el restaurante ya lo ve en cocina.`;
         showStep('step-done');
     } catch(e) {
-        if (btn) { btn.disabled = false; btn.innerHTML = '¡Enviar pedido! 🚀'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '¡Hacer mi pedido! 🚀'; }
         toast('Error de conexión', false);
     }
 }
 
 async function soloCompartirEnlace() {
     const todos = [...state.bloques.sopa, ...state.bloques.principio, ...state.bloques.proteina];
-    const items_menu = todos.filter(i => i.en_menu);
-    if (!items_menu.length) { toast('Marca al menos un ítem del menú', false); return; }
+    if (!todos.length) { toast('Agrega al menos un ítem al menú', false); return; }
 
     const payload = {
         tercero_id:        state.tercero_id || null,
@@ -634,10 +692,10 @@ async function soloCompartirEnlace() {
 }
 
 function nuevoAlmuerzo() {
-    state.bloques = { sopa: [], principio: [], proteina: [] };
+    state.bloques          = { sopa: [], principio: [], proteina: [] };
+    state.catalogo         = { propio: [], global: [] };
     state.restaurante_nuevo = null;
-    state.precios = { sopa: 0, bandeja: 0, completo: 0 };
-    document.getElementById('txt-menu').value = '';
+    state.precios          = { sopa: 0, bandeja: 0, completo: 0 };
     document.getElementById('inp-notas').value = '';
     ['inp-precio-sopa','inp-precio-bandeja','inp-precio-completo'].forEach(id => {
         document.getElementById(id).value = '';

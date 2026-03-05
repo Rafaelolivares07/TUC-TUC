@@ -35059,6 +35059,47 @@ def api_almuerzo_restaurantes():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/almuerzo/catalogo')
+def api_almuerzo_catalogo():
+    """Devuelve ítems del catálogo: propio (del restaurante) y global (sugerencias de otros)."""
+    restaurante_id = request.args.get('restaurante_id', type=int)
+    try:
+        conn = get_db_connection()
+        if restaurante_id:
+            propio = conn.execute("""
+                SELECT id, nombre, tipo FROM opciones_menu
+                WHERE restaurante_id = %s AND activo = TRUE
+                ORDER BY tipo, nombre
+            """, (restaurante_id,)).fetchall()
+        else:
+            propio = []
+
+        propio_keys = {(r['nombre'].lower(), r['tipo']) for r in propio}
+
+        if restaurante_id:
+            global_rows = conn.execute("""
+                SELECT DISTINCT nombre, tipo FROM opciones_menu
+                WHERE restaurante_id != %s AND activo = TRUE
+                ORDER BY tipo, nombre
+            """, (restaurante_id,)).fetchall()
+        else:
+            global_rows = conn.execute("""
+                SELECT DISTINCT nombre, tipo FROM opciones_menu
+                WHERE activo = TRUE
+                ORDER BY tipo, nombre
+            """).fetchall()
+
+        global_items = [r for r in global_rows if (r['nombre'].lower(), r['tipo']) not in propio_keys]
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'propio': [{'id': r['id'], 'nombre': r['nombre'], 'tipo': r['tipo']} for r in propio],
+            'global': [{'nombre': r['nombre'], 'tipo': r['tipo']} for r in global_items],
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/almuerzo/procesar', methods=['POST'])
 def api_almuerzo_procesar():
     """Procesar texto de menú y clasificar ítems por categoría.

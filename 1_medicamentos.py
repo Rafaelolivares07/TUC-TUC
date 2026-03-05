@@ -1555,7 +1555,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -33201,6 +33201,22 @@ def crear_tablas_hospedaje(conn):
             conn.commit()
         except Exception:
             conn.rollback()
+
+    # Tabla fotos por tipo de unidad
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS hospedaje_tipo_imagenes (
+                id SERIAL PRIMARY KEY,
+                tipo_id INTEGER NOT NULL,
+                imagen TEXT NOT NULL,
+                orden INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     _hospedaje_tablas_listas = True
 
 
@@ -33931,10 +33947,84 @@ def api_hospedaje_info(slug):
             GROUP BY t.id
             ORDER BY t.orden, t.id
         """, (neg['id'],)).fetchall()
+        tipos_list = []
+        for t in tipos:
+            td = dict(t)
+            fotos = conn.execute(
+                "SELECT imagen FROM hospedaje_tipo_imagenes WHERE tipo_id = %s ORDER BY orden, id",
+                (t['id'],)
+            ).fetchall()
+            td['imagenes'] = [f['imagen'] for f in fotos]
+            tipos_list.append(td)
         conn.close()
-        return jsonify({'ok': True, 'neg': dict(neg), 'tipos': [dict(t) for t in tipos]})
+        return jsonify({'ok': True, 'neg': dict(neg), 'tipos': tipos_list})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/mi-hospedaje/<slug>/tipo/<int:tipo_id>/fotos')
+def api_hospedaje_tipo_fotos_get(slug, tipo_id):
+    """Lista las fotos de un tipo de unidad"""
+    neg, err = _dueno_hospedaje(slug)
+    if err: return err
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        imgs = conn.execute(
+            "SELECT id, imagen, orden FROM hospedaje_tipo_imagenes WHERE tipo_id = %s ORDER BY orden, id",
+            (tipo_id,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'imagenes': [dict(i) for i in imgs]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mi-hospedaje/<slug>/tipo/<int:tipo_id>/fotos', methods=['POST'])
+def api_hospedaje_tipo_fotos_add(slug, tipo_id):
+    """Agrega una foto a un tipo de unidad"""
+    neg, err = _dueno_hospedaje(slug)
+    if err: return err
+    data = request.get_json()
+    imagen = data.get('imagen', '')
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'Imagen requerida'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_hospedaje(conn)
+        max_orden = conn.execute(
+            "SELECT COALESCE(MAX(orden), -1) FROM hospedaje_tipo_imagenes WHERE tipo_id = %s", (tipo_id,)
+        ).fetchone()[0]
+        row = conn.execute(
+            "INSERT INTO hospedaje_tipo_imagenes (tipo_id, imagen, orden) VALUES (%s, %s, %s) RETURNING id",
+            (tipo_id, imagen, max_orden + 1)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row[0]})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mi-hospedaje/<slug>/tipo/<int:tipo_id>/fotos/<int:foto_id>', methods=['DELETE'])
+def api_hospedaje_tipo_fotos_del(slug, tipo_id, foto_id):
+    """Elimina una foto de un tipo de unidad"""
+    neg, err = _dueno_hospedaje(slug)
+    if err: return err
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "DELETE FROM hospedaje_tipo_imagenes WHERE id = %s AND tipo_id = %s", (foto_id, tipo_id)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/hospedaje/<slug>/imagen-header', methods=['POST'])

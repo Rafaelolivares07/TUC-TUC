@@ -27149,6 +27149,68 @@ def promo_tienda_producto(slug, producto_id):
         return f"Error: {e}", 500
 
 
+@app.route('/promo/restaurante/<slug>/<int:opcion_id>/imagen')
+def promo_restaurante_imagen(slug, opcion_id):
+    """Sirve la imagen del plato como URL real para og:image"""
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            """SELECT om.imagen FROM opciones_menu om
+               JOIN restaurantes r ON r.id = om.restaurante_id
+               WHERE r.slug = %s AND om.id = %s""",
+            (slug, opcion_id)
+        ).fetchone()
+        conn.close()
+        if not row or not row['imagen']:
+            return '', 404
+        imagen = row['imagen']
+        import base64
+        from flask import Response
+        if imagen.startswith('data:'):
+            header, b64data = imagen.split(',', 1)
+            mime = header.split(';')[0].replace('data:', '')
+            img_bytes = base64.b64decode(b64data)
+            return Response(img_bytes, mimetype=mime,
+                            headers={'Cache-Control': 'public, max-age=86400'})
+        else:
+            from flask import redirect
+            return redirect(imagen)
+    except Exception as e:
+        return '', 500
+
+
+@app.route('/promo/restaurante/<slug>/<int:opcion_id>')
+def promo_restaurante_opcion(slug, opcion_id):
+    """Página de aterrizaje de un plato para compartir en redes sociales"""
+    try:
+        conn = get_db_connection()
+        rest = conn.execute(
+            "SELECT id, nombre, slug, imagen_header FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return "Restaurante no encontrado", 404
+        opcion = conn.execute(
+            "SELECT id, nombre, descripcion, precio, imagen FROM opciones_menu WHERE id = %s AND restaurante_id = %s AND activo = TRUE",
+            (opcion_id, rest['id'])
+        ).fetchone()
+        conn.close()
+        if not opcion:
+            return "Plato no disponible", 404
+        tiene_imagen = bool(opcion['imagen'])
+        mostrar_foto   = request.args.get('foto',   '1') != '0'
+        mostrar_precio = request.args.get('precio', '1') != '0'
+        mostrar_desc   = request.args.get('desc',   '1') != '0'
+        txt    = request.args.get('txt',    '')
+        leyenda = request.args.get('leyenda', '¿A quién le llevamos?')
+        return render_template('promo_restaurante.html',
+            restaurante=rest, opcion=opcion, tiene_imagen=tiene_imagen,
+            mostrar_foto=mostrar_foto, mostrar_precio=mostrar_precio, mostrar_desc=mostrar_desc,
+            txt=txt, leyenda=leyenda)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
 @app.route('/api/tienda/crear', methods=['POST'])
 def api_tienda_crear():
     """Crea una nueva tienda con dueño"""

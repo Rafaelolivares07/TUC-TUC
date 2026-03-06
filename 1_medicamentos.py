@@ -1555,7 +1555,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -27082,6 +27082,29 @@ def tienda_publica(slug):
                 cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '', 'direccion': tercero['direccion'] or '', 'cliente_id': session['usuario_id']}
 
         return render_template('tienda_cliente.html', tienda=tienda, cliente_data=cliente_data)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/promo/tienda/<slug>/<int:producto_id>')
+def promo_tienda_producto(slug, producto_id):
+    """Página de aterrizaje de un producto para compartir en redes sociales"""
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT id, nombre, slug, imagen_header FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return "Tienda no encontrada", 404
+        producto = conn.execute(
+            "SELECT id, nombre, descripcion, precio, imagen FROM productos_tienda WHERE id = %s AND tienda_id = %s AND disponible = TRUE",
+            (producto_id, tienda['id'])
+        ).fetchone()
+        conn.close()
+        if not producto:
+            return "Producto no disponible", 404
+        return render_template('promo_tienda.html', tienda=tienda, producto=producto)
     except Exception as e:
         return f"Error: {e}", 500
 

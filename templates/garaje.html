@@ -741,7 +741,10 @@ async function cargarRepostes() {
                         <p class="font-bold text-gray-800">$${rep.valor_pagado.toLocaleString()}</p>
                         <p class="text-sm text-gray-500">${rep.km.toLocaleString()} km ${rep.gasolinera_nombre ? '· ' + rep.gasolinera_nombre : ''}</p>
                     </div>
-                    <p class="text-xs text-gray-400">${rep.fechahora ? rep.fechahora.slice(0,10) : ''}</p>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-400">${rep.fechahora ? rep.fechahora.slice(0,10) : ''}</p>
+                        ${rep.precio_galon ? `<p class="text-xs text-gray-500 font-medium">$${rep.precio_galon.toLocaleString()}/gal</p>` : ''}
+                    </div>
                 </div>
                 ${rep.km_recorridos ? `
                 <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-100">

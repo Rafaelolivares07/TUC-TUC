@@ -6,7 +6,13 @@
     <title>{{ producto.nombre }} — {{ tienda.nombre }}</title>
     <meta property="og:title" content="{{ producto.nombre }} — {{ tienda.nombre }}">
     <meta property="og:description" content="{{ producto.descripcion | default('Disponible en TUC TUC') }}">
-    {% if producto.imagen %}<meta property="og:image" content="{{ producto.imagen }}">{% endif %}
+    <meta property="og:type" content="product">
+    <meta property="og:url" content="{{ request.url }}">
+    {% if tiene_imagen %}
+    <meta property="og:image" content="{{ request.url_root }}promo/tienda/{{ tienda.slug }}/{{ producto.id }}/imagen">
+    <meta property="og:image:width" content="800">
+    <meta property="og:image:height" content="800">
+    {% endif %}
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>

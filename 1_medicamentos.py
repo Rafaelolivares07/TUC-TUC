@@ -27086,6 +27086,37 @@ def tienda_publica(slug):
         return f"Error: {e}", 500
 
 
+@app.route('/promo/tienda/<slug>/<int:producto_id>/imagen')
+def promo_tienda_imagen(slug, producto_id):
+    """Sirve la imagen del producto como URL real para og:image"""
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            """SELECT pt.imagen FROM productos_tienda pt
+               JOIN tiendas t ON t.id = pt.tienda_id
+               WHERE t.slug = %s AND pt.id = %s""",
+            (slug, producto_id)
+        ).fetchone()
+        conn.close()
+        if not row or not row['imagen']:
+            return '', 404
+        imagen = row['imagen']
+        import base64
+        from flask import Response
+        # Soporta data:image/jpeg;base64,... y también URLs directas
+        if imagen.startswith('data:'):
+            header, b64data = imagen.split(',', 1)
+            mime = header.split(';')[0].replace('data:', '')
+            img_bytes = base64.b64decode(b64data)
+            return Response(img_bytes, mimetype=mime,
+                            headers={'Cache-Control': 'public, max-age=86400'})
+        else:
+            from flask import redirect
+            return redirect(imagen)
+    except Exception as e:
+        return '', 500
+
+
 @app.route('/promo/tienda/<slug>/<int:producto_id>')
 def promo_tienda_producto(slug, producto_id):
     """Página de aterrizaje de un producto para compartir en redes sociales"""
@@ -27104,7 +27135,8 @@ def promo_tienda_producto(slug, producto_id):
         conn.close()
         if not producto:
             return "Producto no disponible", 404
-        return render_template('promo_tienda.html', tienda=tienda, producto=producto)
+        tiene_imagen = bool(producto['imagen'])
+        return render_template('promo_tienda.html', tienda=tienda, producto=producto, tiene_imagen=tiene_imagen)
     except Exception as e:
         return f"Error: {e}", 500
 

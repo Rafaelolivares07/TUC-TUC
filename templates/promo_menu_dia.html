@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menú del día — {{ restaurante.nombre }}</title>
+    <meta property="og:title" content="Menú del día — {{ restaurante.nombre }}">
+    <meta property="og:description" content="{{ txt if txt else 'Haz tu pedido del menú del día ahora' }}">
+    <meta property="og:type" content="restaurant.menu">
+    <meta property="og:url" content="{{ request.url }}">
+    {% if restaurante.imagen_header %}
+    <meta property="og:image" content="{{ restaurante.imagen_header }}">
+    {% endif %}
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f9fafb; }
+        .tipo-btn { transition: all 0.15s; }
+        .tipo-btn.activo { background: #d97706; color: white; border-color: #d97706; }
+        .opcion-label.seleccionada { background: #fffbeb; border-color: #fbbf24; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 8px; background: #059669; color: white;
+            font-weight: 600; z-index: 9999; opacity: 0; transition: opacity 0.3s; }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+<div id="toast" class="toast"></div>
+
+{% if not menu %}
+<!-- Sin menú hoy -->
+<div class="flex flex-col items-center justify-center min-h-screen px-8 text-center">
+    <div class="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mb-6">
+        <svg class="w-10 h-10 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </div>
+    <h2 class="text-xl font-extrabold text-gray-800 mb-2">{{ restaurante.nombre }}</h2>
+    <p class="text-gray-500">Hoy no hay menú disponible aún.<br>Vuelve más tarde.</p>
+</div>
+
+{% else %}
+
+<!-- Pantalla principal -->
+<div id="pantalla-pedido">
+
+    <!-- Header negocio -->
+    <div class="bg-white border-b px-4 py-3 flex items-center gap-3">
+        {% if restaurante.imagen_header %}
+        <img src="{{ restaurante.imagen_header }}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">
+        {% else %}
+        <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <span class="text-amber-600 font-bold text-sm">{{ restaurante.nombre[0] }}</span>
+        </div>
+        {% endif %}
+        <div>
+            <p class="font-bold text-gray-800 text-sm leading-tight">{{ restaurante.nombre }}</p>
+            <p class="text-xs text-gray-400">Menú del día — en TUC TUC</p>
+        </div>
+    </div>
+
+    <div class="px-5 py-5 max-w-lg mx-auto w-full space-y-5">
+
+        <!-- Tipo de pedido -->
+        <div class="bg-white rounded-xl border p-4">
+            <h2 class="font-bold text-gray-800 mb-3">¿Qué vas a pedir?</h2>
+            <div class="grid grid-cols-3 gap-2">
+                <button class="tipo-btn border-2 border-gray-200 rounded-xl py-3 px-1 text-center text-sm font-semibold text-gray-700"
+                    data-tipo="completo" onclick="seleccionarTipo('completo')">
+                    Completo
+                    {% if mostrar_precios %}
+                    <span class="block text-xs font-bold text-amber-600 mt-1">${{ "{:,.0f}".format(menu.precio_completo).replace(",", ".") }}</span>
+                    {% endif %}
+                </button>
+                {% if menu.precio_bandeja %}
+                <button class="tipo-btn border-2 border-gray-200 rounded-xl py-3 px-1 text-center text-sm font-semibold text-gray-700"
+                    data-tipo="bandeja" onclick="seleccionarTipo('bandeja')">
+                    Bandeja
+                    {% if mostrar_precios %}
+                    <span class="block text-xs font-bold text-amber-600 mt-1">${{ "{:,.0f}".format(menu.precio_bandeja).replace(",", ".") }}</span>
+                    {% endif %}
+                </button>
+                {% endif %}
+                {% if menu.precio_sopa %}
+                <button class="tipo-btn border-2 border-gray-200 rounded-xl py-3 px-1 text-center text-sm font-semibold text-gray-700"
+                    data-tipo="sopa" onclick="seleccionarTipo('sopa')">
+                    Solo sopa
+                    {% if mostrar_precios %}
+                    <span class="block text-xs font-bold text-amber-600 mt-1">${{ "{:,.0f}".format(menu.precio_sopa).replace(",", ".") }}</span>
+                    {% endif %}
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sopas (visible para completo y sopa) -->
+        {% set sopas = opciones_activas | selectattr("tipo", "equalto", "sopa") | list %}
+        {% if sopas %}
+        <div id="seccion-sopa" class="bg-white rounded-xl border p-4 hidden">
+            <h3 class="font-bold text-yellow-700 mb-3 text-sm uppercase tracking-wide">Sopas y Caldos</h3>
+            <div class="space-y-2">
+                {% for op in sopas %}
+                <label class="opcion-label flex items-center gap-3 border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer"
+                    onclick="seleccionarOpcion('sopa', {{ op.opcion_id }}, this)">
+                    <input type="radio" name="sopa" value="{{ op.opcion_id }}" class="hidden">
+                    <div class="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0 radio-circle"></div>
+                    <span class="text-sm font-medium text-gray-800">{{ op.nombre }}</span>
+                    {% if op.recargo and op.recargo > 0 %}
+                    <span class="ml-auto text-xs text-amber-500 font-semibold">+${{ "{:,.0f}".format(op.recargo).replace(",", ".") }}</span>
+                    {% endif %}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Proteínas (visible para completo y bandeja) -->
+        {% set proteinas = opciones_activas | selectattr("tipo", "equalto", "proteina") | list %}
+        {% if proteinas %}
+        <div id="seccion-proteina" class="bg-white rounded-xl border p-4 hidden">
+            <h3 class="font-bold text-red-700 mb-3 text-sm uppercase tracking-wide">Proteínas</h3>
+            <div class="space-y-2">
+                {% for op in proteinas %}
+                <label class="opcion-label flex items-center gap-3 border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer"
+                    onclick="seleccionarOpcion('proteina', {{ op.opcion_id }}, this)">
+                    <input type="radio" name="proteina" value="{{ op.opcion_id }}" class="hidden">
+                    <div class="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0 radio-circle"></div>
+                    <span class="text-sm font-medium text-gray-800">{{ op.nombre }}</span>
+                    {% if op.recargo and op.recargo > 0 %}
+                    <span class="ml-auto text-xs text-amber-500 font-semibold">+${{ "{:,.0f}".format(op.recargo).replace(",", ".") }}</span>
+                    {% endif %}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Principios (visible para completo y bandeja) -->
+        {% set principios = opciones_activas | selectattr("tipo", "equalto", "principio") | list %}
+        {% if principios %}
+        <div id="seccion-principio" class="bg-white rounded-xl border p-4 hidden">
+            <h3 class="font-bold text-green-700 mb-3 text-sm uppercase tracking-wide">Principios</h3>
+            <div class="space-y-2">
+                {% for op in principios %}
+                <label class="opcion-label flex items-center gap-3 border-2 border-gray-200 rounded-xl px-4 py-3 cursor-pointer"
+                    onclick="seleccionarOpcion('principio', {{ op.opcion_id }}, this)">
+                    <input type="radio" name="principio" value="{{ op.opcion_id }}" class="hidden">
+                    <div class="w-4 h-4 rounded-full border-2 border-gray-300 flex-shrink-0 radio-circle"></div>
+                    <span class="text-sm font-medium text-gray-800">{{ op.nombre }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Formulario datos -->
+        <div id="seccion-form" class="bg-white rounded-xl border p-4 hidden">
+            <h2 class="font-bold text-gray-800 mb-4">{{ leyenda }}</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-sm font-semibold text-gray-600 block mb-1">Tu nombre</label>
+                    <input id="campo-nombre" type="text" placeholder="Nombre completo"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div>
+                    <label class="text-sm font-semibold text-gray-600 block mb-1">Tu celular</label>
+                    <input id="campo-telefono" type="tel" placeholder="Número de WhatsApp"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+                <div>
+                    <label class="text-sm font-semibold text-gray-600 block mb-1">¿A dónde te lo llevamos?</label>
+                    <input id="campo-direccion" type="text" placeholder="Dirección de entrega"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                </div>
+            </div>
+
+            <button onclick="hacerPedido()" class="mt-5 w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-2xl text-base transition">
+                Quiero esto
+            </button>
+            <p class="text-center text-xs text-gray-400 mt-3">Al pedir, el restaurante recibirá tu orden al instante.</p>
+        </div>
+
+    </div>
+</div>
+
+<!-- Pantalla de confirmación -->
+<div id="pantalla-confirmacion" class="hidden flex-col items-center justify-center min-h-screen px-8 text-center">
+    <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
+        <svg class="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+    </div>
+    <h2 class="text-2xl font-extrabold text-gray-900 mb-2">¡Pedido enviado!</h2>
+    <p class="text-gray-500 mb-6">Tu menú llegó a <strong>{{ restaurante.nombre }}</strong>. Te contactarán pronto.</p>
+    <a href="/r/{{ restaurante.slug }}" class="text-sm text-amber-600 font-semibold underline">Ver el menú completo</a>
+</div>
+
+{% endif %}
+
+<script>
+const SLUG = '{{ restaurante.slug }}';
+let tipoSeleccionado = null;
+const selecciones = { sopa: null, proteina: null, principio: null };
+
+function toast(msg, err) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = err ? '#dc2626' : '#059669';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function seleccionarTipo(tipo) {
+    tipoSeleccionado = tipo;
+    // Resaltar botón
+    document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('activo'));
+    document.querySelector(`[data-tipo="${tipo}"]`).classList.add('activo');
+    // Mostrar secciones según tipo
+    const mostrarSopa = tipo === 'completo' || tipo === 'sopa';
+    const mostrarBandeja = tipo === 'completo' || tipo === 'bandeja';
+    const sec = (id, show) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', !show);
+    };
+    sec('seccion-sopa', mostrarSopa);
+    sec('seccion-proteina', mostrarBandeja);
+    sec('seccion-principio', mostrarBandeja);
+    sec('seccion-form', true);
+    // Reset selecciones si no aplican
+    if (!mostrarSopa) selecciones.sopa = null;
+    if (!mostrarBandeja) { selecciones.proteina = null; selecciones.principio = null; }
+}
+
+function seleccionarOpcion(cat, id, label) {
+    selecciones[cat] = id;
+    // Resaltar visual
+    const secId = 'seccion-' + cat;
+    document.querySelectorAll(`#${secId} .opcion-label`).forEach(l => {
+        l.classList.remove('seleccionada');
+        l.querySelector('.radio-circle').style.borderColor = '#d1d5db';
+        l.querySelector('.radio-circle').style.background = 'white';
+    });
+    label.classList.add('seleccionada');
+    const circle = label.querySelector('.radio-circle');
+    circle.style.borderColor = '#f59e0b';
+    circle.style.background = '#f59e0b';
+}
+
+async function hacerPedido() {
+    if (!tipoSeleccionado) { toast('Selecciona el tipo de pedido', true); return; }
+    const nombre = document.getElementById('campo-nombre').value.trim();
+    const telefono = document.getElementById('campo-telefono').value.trim();
+    const direccion = document.getElementById('campo-direccion').value.trim();
+    if (!nombre) { toast('Escribe tu nombre', true); return; }
+    if (!telefono) { toast('Escribe tu celular', true); return; }
+    if (!direccion) { toast('Escribe la dirección de entrega', true); return; }
+
+    const body = {
+        tipo: tipoSeleccionado,
+        nombre_cliente: nombre,
+        telefono_cliente: telefono,
+        direccion_cliente: direccion,
+        tipo_entrega: 'domicilio',
+        mesa_num: 0
+    };
+    if (selecciones.sopa) body.sopa_id = selecciones.sopa;
+    if (selecciones.proteina) body.proteina_id = selecciones.proteina;
+    if (selecciones.principio) body.principio_id = selecciones.principio;
+
+    try {
+        const r = await fetch('/api/restaurante/' + SLUG + '/pedido', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('pantalla-pedido').classList.add('hidden');
+            document.getElementById('pantalla-confirmacion').classList.remove('hidden');
+            document.getElementById('pantalla-confirmacion').classList.add('flex');
+        } else {
+            toast(data.error || 'Error al enviar el pedido', true);
+        }
+    } catch(e) {
+        toast('Error de conexión', true);
+    }
+}
+</script>
+
+</body>
+</html>

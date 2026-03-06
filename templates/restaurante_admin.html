@@ -178,6 +178,10 @@
             <button onclick="guardarMenuDia()" class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-lg">
                 Guardar menú del día
             </button>
+            <button id="btn-compartir-menu" onclick="abrirCompartirMenu()" class="hidden mt-3 w-full border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 py-3 rounded-xl font-bold text-base transition flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                Compartir menú de hoy
+            </button>
         </div>
 
         <!-- ====== TAB: MESAS ====== -->
@@ -943,13 +947,16 @@ async function cargarMenuDia() {
         menuActual = data.menu;
         opcionesActivas = data.opciones_activas || [];
 
+        const btnCompartir = document.getElementById('btn-compartir-menu');
         if (menuActual) {
             document.getElementById('menu-precio-completo').value = menuActual.precio_completo;
             document.getElementById('menu-precio-bandeja').value = menuActual.precio_bandeja;
             document.getElementById('menu-precio-sopa').value = menuActual.precio_sopa;
             document.getElementById('menu-estado').textContent = 'Menú guardado';
             document.getElementById('menu-estado').className = 'text-sm text-green-600 font-semibold';
+            if (btnCompartir) btnCompartir.classList.remove('hidden');
         } else {
+            if (btnCompartir) btnCompartir.classList.add('hidden');
             // Pre-llenar con precios del último menú
             const sug = data.precios_sugeridos;
             document.getElementById('menu-precio-completo').value = sug ? sug.precio_completo : '';
@@ -1716,6 +1723,58 @@ function compartirWhatsApp() {
     </a>
 </div>
 
+<!-- Modal Compartir Menú del Día -->
+<div id="modal-compartir-menu" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/50" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-1">
+            <h3 class="font-bold text-gray-800 text-lg">Compartir menú de hoy</h3>
+            <button onclick="document.getElementById('modal-compartir-menu').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <p class="text-sm text-gray-400 mb-4">Los clientes podrán ver el menú y hacer su pedido directamente</p>
+
+        <div class="bg-gray-50 rounded-xl p-4 mb-4 space-y-3">
+            <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Configurar publicación</p>
+
+            <div>
+                <label class="text-sm font-semibold text-gray-700 block mb-1">Texto de la publicación</label>
+                <input id="compartir-menu-txt" type="text" placeholder="Ej: ¡El menú de hoy ya está listo!"
+                    oninput="_actualizarLinksMenu()"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <p class="text-xs text-gray-400 mt-1">Aparece como encabezado en Facebook y en el mensaje de WhatsApp</p>
+            </div>
+
+            <div>
+                <label class="text-sm font-semibold text-gray-700 block mb-1">Leyenda del formulario</label>
+                <input id="compartir-menu-leyenda" type="text" placeholder="¿A quién le llevamos?"
+                    oninput="_actualizarLinksMenu()"
+                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+            </div>
+
+            <div>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input id="compartir-menu-precios" type="checkbox" checked onchange="_actualizarLinksMenu()" class="w-4 h-4 accent-amber-500">
+                    <span class="text-sm text-gray-700">Mostrar precios en la página</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            <a id="compartir-menu-wa" href="#" target="_blank" class="flex items-center gap-3 w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-xl transition">
+                <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12 2C6.48 2 2 6.48 2 12c0 1.9.52 3.68 1.44 5.19L2 22l4.86-1.28A9.96 9.96 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2z"/></svg>
+                WhatsApp
+            </a>
+            <a id="compartir-menu-fb" href="#" target="_blank" class="flex items-center gap-3 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-xl transition">
+                <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                Facebook
+            </a>
+            <button onclick="copiarEnlaceMenu()" class="flex items-center gap-3 w-full bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 px-4 rounded-xl transition">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Copiar enlace
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Compartir Plato -->
 <div id="modal-compartir-opcion" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/50" onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
@@ -1781,6 +1840,36 @@ function compartirWhatsApp() {
 </div>
 
 <script>
+function _buildCompartirMenuUrl() {
+    const base = location.origin + '/promo/restaurante/' + SLUG + '/menu';
+    const params = new URLSearchParams();
+    if (!document.getElementById('compartir-menu-precios').checked) params.set('precios', '0');
+    const txt = document.getElementById('compartir-menu-txt').value.trim();
+    if (txt) params.set('txt', txt);
+    const leyenda = document.getElementById('compartir-menu-leyenda').value.trim();
+    if (leyenda) params.set('leyenda', leyenda);
+    const qs = params.toString();
+    return qs ? base + '?' + qs : base;
+}
+function _actualizarLinksMenu() {
+    const url = _buildCompartirMenuUrl();
+    const txt = document.getElementById('compartir-menu-txt').value.trim();
+    const textoWa = txt ? txt + ' ' + url : 'Menú del día — ' + url;
+    document.getElementById('compartir-menu-wa').href = 'https://wa.me/?text=' + encodeURIComponent(textoWa);
+    document.getElementById('compartir-menu-fb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url);
+}
+function abrirCompartirMenu() {
+    document.getElementById('compartir-menu-txt').value = '';
+    document.getElementById('compartir-menu-leyenda').value = '';
+    document.getElementById('compartir-menu-precios').checked = true;
+    _actualizarLinksMenu();
+    document.getElementById('modal-compartir-menu').classList.remove('hidden');
+}
+function copiarEnlaceMenu() {
+    navigator.clipboard.writeText(_buildCompartirMenuUrl());
+    if (typeof toast === 'function') toast('Enlace copiado');
+    document.getElementById('modal-compartir-menu').classList.add('hidden');
+}
 let _compartirOpcionId = '';
 let _compartirOpcionNombre = '';
 function compartirOpcion(id, nombre) {

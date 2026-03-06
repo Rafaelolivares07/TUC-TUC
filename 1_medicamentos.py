@@ -27149,6 +27149,44 @@ def promo_tienda_producto(slug, producto_id):
         return f"Error: {e}", 500
 
 
+@app.route('/promo/restaurante/<slug>/menu')
+def promo_restaurante_menu_dia(slug):
+    """Página de aterrizaje del menú del día para compartir en redes"""
+    from datetime import date
+    try:
+        conn = get_db_connection()
+        rest = conn.execute(
+            "SELECT id, nombre, slug, imagen_header FROM restaurantes WHERE slug = %s AND activo = TRUE",
+            (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return "Restaurante no encontrado", 404
+        menu = conn.execute("""
+            SELECT id, fecha, precio_completo, precio_bandeja, precio_sopa
+            FROM menu_dia WHERE restaurante_id = %s AND fecha = %s AND activo = TRUE
+        """, (rest['id'], date.today().isoformat())).fetchone()
+        opciones_activas = []
+        if menu:
+            opciones_activas = conn.execute("""
+                SELECT mdo.opcion_id, mdo.agotado, om.tipo, om.nombre, om.recargo
+                FROM menu_dia_opciones mdo
+                JOIN opciones_menu om ON om.id = mdo.opcion_id
+                WHERE mdo.menu_dia_id = %s AND mdo.agotado = FALSE
+                ORDER BY om.tipo, om.nombre
+            """, (menu['id'],)).fetchall()
+        conn.close()
+        mostrar_precios = request.args.get('precios', '1') != '0'
+        txt    = request.args.get('txt',    '')
+        leyenda = request.args.get('leyenda', '¿A quién le llevamos?')
+        return render_template('promo_menu_dia.html',
+            restaurante=rest, menu=menu,
+            opciones_activas=[dict(o) for o in opciones_activas],
+            mostrar_precios=mostrar_precios, txt=txt, leyenda=leyenda)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
 @app.route('/promo/restaurante/<slug>/<int:opcion_id>/imagen')
 def promo_restaurante_imagen(slug, opcion_id):
     """Sirve la imagen del plato como URL real para og:image"""

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ producto.nombre }} — {{ tienda.nombre }}</title>
     <meta property="og:title" content="{{ producto.nombre }} — {{ tienda.nombre }}">
-    <meta property="og:description" content="{{ producto.descripcion | default('Disponible en TUC TUC') }}">
+    <meta property="og:description" content="{{ txt if txt else (producto.descripcion | default('Disponible en TUC TUC')) }}">
     <meta property="og:type" content="product">
     <meta property="og:url" content="{{ request.url }}">
     {% if tiene_imagen %}
@@ -49,6 +49,7 @@
     </div>
 
     <!-- Foto del producto -->
+    {% if mostrar_foto %}
     <div class="img-wrap">
         {% if producto.imagen %}
         <img src="{{ producto.imagen }}" class="img-bg" aria-hidden="true">
@@ -61,19 +62,22 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
 
     <!-- Info producto -->
     <div class="bg-white px-5 py-4 border-b">
         <h1 class="text-xl font-bold text-gray-900">{{ producto.nombre }}</h1>
-        {% if producto.descripcion %}
+        {% if mostrar_desc and producto.descripcion %}
         <p class="text-sm text-gray-500 mt-1">{{ producto.descripcion }}</p>
         {% endif %}
+        {% if mostrar_precio %}
         <p class="text-2xl font-extrabold text-rose-600 mt-3">${{ "{:,.0f}".format(producto.precio).replace(",", ".") }}</p>
+        {% endif %}
     </div>
 
     <!-- Formulario -->
     <div class="px-5 py-6 max-w-lg mx-auto w-full">
-        <h2 class="font-bold text-gray-800 mb-4">¿A quién le llevamos?</h2>
+        <h2 class="font-bold text-gray-800 mb-4">{{ leyenda }}</h2>
 
         <div class="space-y-3">
             <div>

@@ -27136,7 +27136,15 @@ def promo_tienda_producto(slug, producto_id):
         if not producto:
             return "Producto no disponible", 404
         tiene_imagen = bool(producto['imagen'])
-        return render_template('promo_tienda.html', tienda=tienda, producto=producto, tiene_imagen=tiene_imagen)
+        mostrar_foto   = request.args.get('foto',   '1') != '0'
+        mostrar_precio = request.args.get('precio', '1') != '0'
+        mostrar_desc   = request.args.get('desc',   '1') != '0'
+        txt    = request.args.get('txt',    '')
+        leyenda = request.args.get('leyenda', '¿A quién le llevamos?')
+        return render_template('promo_tienda.html',
+            tienda=tienda, producto=producto, tiene_imagen=tiene_imagen,
+            mostrar_foto=mostrar_foto, mostrar_precio=mostrar_precio, mostrar_desc=mostrar_desc,
+            txt=txt, leyenda=leyenda)
     except Exception as e:
         return f"Error: {e}", 500
 

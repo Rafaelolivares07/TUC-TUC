@@ -27088,7 +27088,7 @@ def tienda_publica(slug):
 
 @app.route('/promo/tienda/<slug>/<int:producto_id>/imagen')
 def promo_tienda_imagen(slug, producto_id):
-    """Sirve la imagen del producto como URL real para og:image"""
+    """Devuelve imagen 1200x630 con fondo blur para og:image de Facebook"""
     try:
         conn = get_db_connection()
         row = conn.execute(
@@ -27101,18 +27101,55 @@ def promo_tienda_imagen(slug, producto_id):
         if not row or not row['imagen']:
             return '', 404
         imagen = row['imagen']
-        import base64
+
+        import base64, io
         from flask import Response
-        # Soporta data:image/jpeg;base64,... y también URLs directas
+        from PIL import Image, ImageFilter
+
+        # Obtener bytes de la imagen original
         if imagen.startswith('data:'):
-            header, b64data = imagen.split(',', 1)
-            mime = header.split(';')[0].replace('data:', '')
+            _, b64data = imagen.split(',', 1)
             img_bytes = base64.b64decode(b64data)
-            return Response(img_bytes, mimetype=mime,
-                            headers={'Cache-Control': 'public, max-age=86400'})
         else:
-            from flask import redirect
-            return redirect(imagen)
+            import urllib.request
+            with urllib.request.urlopen(imagen, timeout=5) as resp:
+                img_bytes = resp.read()
+
+        original = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
+
+        # Canvas 1200x630 (formato óptimo Facebook)
+        W, H = 1200, 630
+        canvas = Image.new('RGBA', (W, H), (0, 0, 0, 255))
+
+        # Capa de fondo: imagen escalada a cubrir todo + blur fuerte + oscurecer
+        bg = original.copy()
+        bg_ratio = max(W / bg.width, H / bg.height)
+        bg = bg.resize((int(bg.width * bg_ratio * 1.1), int(bg.height * bg_ratio * 1.1)), Image.LANCZOS)
+        bx = (bg.width - W) // 2
+        by = (bg.height - H) // 2
+        bg = bg.crop((bx, by, bx + W, by + H))
+        bg = bg.filter(ImageFilter.GaussianBlur(radius=20))
+        # Oscurecer fondo
+        dark = Image.new('RGBA', (W, H), (0, 0, 0, 140))
+        canvas.paste(bg.convert('RGB'), (0, 0))
+        canvas.paste(dark, (0, 0), dark)
+
+        # Capa superior: imagen original centrada con contain (máximo 80% del canvas)
+        max_w, max_h = int(W * 0.80), int(H * 0.88)
+        img_ratio = min(max_w / original.width, max_h / original.height)
+        new_w = int(original.width * img_ratio)
+        new_h = int(original.height * img_ratio)
+        fg = original.resize((new_w, new_h), Image.LANCZOS)
+        fx = (W - new_w) // 2
+        fy = (H - new_h) // 2
+        canvas.paste(fg, (fx, fy), fg if fg.mode == 'RGBA' else None)
+
+        # Exportar como JPEG
+        out = io.BytesIO()
+        canvas.convert('RGB').save(out, format='JPEG', quality=88, optimize=True)
+        out.seek(0)
+        return Response(out.read(), mimetype='image/jpeg',
+                        headers={'Cache-Control': 'public, max-age=86400'})
     except Exception as e:
         return '', 500
 

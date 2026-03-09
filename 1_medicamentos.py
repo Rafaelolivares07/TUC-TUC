@@ -31780,12 +31780,14 @@ def api_mis_propiedades_foto_eliminar(pid, fid):
 
 @app.route('/api/mis-propiedades/<int:pid>/fotos', methods=['POST'])
 def api_mis_propiedades_fotos(pid):
-    """Subir foto a una propiedad del propietario"""
+    """Subir foto a una propiedad del propietario (base64 en BD)"""
     uid = session.get('usuario_id')
     if not uid:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
-    if 'foto' not in request.files:
-        return jsonify({'ok': False, 'error': 'Sin archivo'})
+    data = request.get_json(silent=True) or {}
+    imagen = data.get('imagen', '')
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'Sin imagen'})
     try:
         conn = get_db_connection()
         prop = conn.execute(
@@ -31794,26 +31796,19 @@ def api_mis_propiedades_fotos(pid):
         if not prop:
             conn.close()
             return jsonify({'ok': False, 'error': 'Propiedad no encontrada'})
-        import os as _os, uuid as _uuid
-        archivo = request.files['foto']
-        ext = _os.path.splitext(archivo.filename)[1].lower() or '.jpg'
-        nombre_archivo = f"prop_{pid}_{_uuid.uuid4().hex[:8]}{ext}"
-        ruta = _os.path.join('static', 'propiedades', nombre_archivo)
-        _os.makedirs(_os.path.join('static', 'propiedades'), exist_ok=True)
-        archivo.save(ruta)
-        es_principal = request.form.get('es_principal') == 'true'
+        es_principal = data.get('es_principal', False)
         if es_principal:
             conn.execute("UPDATE propiedad_fotos SET es_principal=FALSE WHERE propiedad_id=%s", (pid,))
         orden = (conn.execute(
             "SELECT COALESCE(MAX(orden),0)+1 as sig FROM propiedad_fotos WHERE propiedad_id=%s", (pid,)
         ).fetchone())['sig']
-        conn.execute(
-            "INSERT INTO propiedad_fotos (propiedad_id, url, descripcion, orden, es_principal) VALUES (%s, %s, %s, %s, %s)",
-            (pid, f"/static/propiedades/{nombre_archivo}", request.form.get('descripcion', ''), orden, es_principal)
-        )
+        row = conn.execute(
+            "INSERT INTO propiedad_fotos (propiedad_id, url, descripcion, orden, es_principal) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (pid, imagen, '', orden, es_principal)
+        ).fetchone()
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'url': f"/static/propiedades/{nombre_archivo}"})
+        return jsonify({'ok': True, 'id': row['id'], 'url': imagen})
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -32269,15 +32264,38 @@ def api_inmobiliaria_admin_crear_propiedad(slug):
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/inmobiliaria/<slug>/admin/propiedades/<int:pid>/fotos', methods=['GET'])
+def api_inmobiliaria_admin_fotos_lista(slug, pid):
+    """Listar fotos de una propiedad del portal"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    try:
+        conn = get_db_connection()
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        fotos = conn.execute(
+            "SELECT id, url, es_principal FROM propiedad_fotos WHERE propiedad_id=%s ORDER BY es_principal DESC, orden",
+            (pid,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'fotos': [{'id': f['id'], 'url': f['url'], 'es_principal': f['es_principal']} for f in fotos]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 @app.route('/api/inmobiliaria/<slug>/admin/propiedades/<int:pid>/fotos', methods=['POST'])
 def api_inmobiliaria_admin_foto(slug, pid):
-    """Subir foto a propiedad del portal"""
+    """Subir foto a propiedad del portal (base64 en BD)"""
     uid = session.get('usuario_id')
     es_admin = session.get('rol') == 'Administrador'
     if not uid and not es_admin:
         return jsonify({'ok': False, 'error': 'sin_sesion'})
-    if 'foto' not in request.files:
-        return jsonify({'ok': False, 'error': 'Sin archivo'})
+    data = request.get_json(silent=True) or {}
+    imagen = data.get('imagen', '')
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'Sin imagen'})
     try:
         conn = get_db_connection()
         inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
@@ -32291,26 +32309,40 @@ def api_inmobiliaria_admin_foto(slug, pid):
         if not rel:
             conn.close()
             return jsonify({'ok': False, 'error': 'Propiedad no pertenece al portal'})
-        import os as _os2, uuid as _uuid2
-        archivo = request.files['foto']
-        ext = _os2.path.splitext(archivo.filename)[1].lower() or '.jpg'
-        nombre_archivo = f"prop_{pid}_{_uuid2.uuid4().hex[:8]}{ext}"
-        ruta = _os2.path.join('static', 'propiedades', nombre_archivo)
-        _os2.makedirs(_os2.path.join('static', 'propiedades'), exist_ok=True)
-        archivo.save(ruta)
-        es_principal = request.form.get('es_principal') == 'true'
+        es_principal = data.get('es_principal', False)
         if es_principal:
             conn.execute("UPDATE propiedad_fotos SET es_principal=FALSE WHERE propiedad_id=%s", (pid,))
         orden = (conn.execute(
             "SELECT COALESCE(MAX(orden),0)+1 as sig FROM propiedad_fotos WHERE propiedad_id=%s", (pid,)
         ).fetchone())['sig']
-        conn.execute(
-            "INSERT INTO propiedad_fotos (propiedad_id, url, descripcion, orden, es_principal) VALUES (%s, %s, %s, %s, %s)",
-            (pid, f"/static/propiedades/{nombre_archivo}", request.form.get('descripcion', ''), orden, es_principal)
-        )
+        row = conn.execute(
+            "INSERT INTO propiedad_fotos (propiedad_id, url, descripcion, orden, es_principal) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+            (pid, imagen, '', orden, es_principal)
+        ).fetchone()
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'url': f"/static/propiedades/{nombre_archivo}"})
+        return jsonify({'ok': True, 'id': row['id'], 'url': imagen})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/inmobiliaria/<slug>/admin/propiedades/<int:pid>/fotos/<int:fid>', methods=['DELETE'])
+def api_inmobiliaria_admin_foto_eliminar(slug, pid, fid):
+    """Eliminar foto de una propiedad del portal"""
+    uid = session.get('usuario_id')
+    es_admin = session.get('rol') == 'Administrador'
+    try:
+        conn = get_db_connection()
+        inmo = _inmo_tiene_acceso(conn, slug, uid, es_admin=es_admin)
+        if not inmo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'})
+        conn.execute("DELETE FROM propiedad_fotos WHERE id=%s AND propiedad_id=%s", (fid, pid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         conn.rollback()
         conn.close()

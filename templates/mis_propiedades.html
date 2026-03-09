@@ -165,17 +165,14 @@
     <div id="grid-fotos" class="grid grid-cols-3 gap-2 mb-4"></div>
 
     <!-- Subir nueva foto -->
-    <div class="border-2 border-dashed border-gray-300 rounded-xl p-4">
-      <p class="text-xs font-semibold text-gray-600 mb-2">Agregar foto</p>
-      <input id="inp-foto" type="file" accept="image/*" class="w-full text-sm text-gray-500 mb-3">
-      <label class="flex items-center gap-2 cursor-pointer mb-3">
-        <input id="chk-principal" type="checkbox" class="accent-blue-700">
-        <span class="text-sm text-gray-700">Marcar como foto principal</span>
-      </label>
-      <button id="btn-subir-foto" onclick="subirFoto()" class="w-full bg-blue-700 text-white rounded-xl py-2.5 text-sm font-semibold">
-        Subir foto
-      </button>
-    </div>
+    <label class="block w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-blue-400 hover:text-blue-600 transition font-semibold text-center cursor-pointer">
+      + Agregar fotos
+      <input id="inp-foto" type="file" accept="image/*" multiple class="hidden" onchange="subirFoto(this)">
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer mt-2">
+      <input id="chk-principal" type="checkbox" class="accent-blue-700">
+      <span class="text-sm text-gray-700">Primera foto como principal</span>
+    </label>
   </div>
 </div>
 
@@ -393,28 +390,35 @@ async function cargarFotos(pid) {
   } catch(e) { toast('Error cargando fotos', 'err'); }
 }
 
-async function subirFoto() {
-  const input = document.getElementById('inp-foto');
-  if (!input.files.length) { toast('Selecciona una imagen', 'err'); return; }
-  if (!propiedadFotosId) return;
-  const fd = new FormData();
-  fd.append('foto', input.files[0]);
-  fd.append('es_principal', document.getElementById('chk-principal').checked ? 'true' : 'false');
-  const btn = document.getElementById('btn-subir-foto');
-  btn.disabled = true;
-  btn.textContent = 'Subiendo…';
-  try {
-    const r = await fetch(`/api/mis-propiedades/${propiedadFotosId}/fotos`, { method: 'POST', body: fd });
-    const d = await r.json();
-    if (d.ok) {
-      toast('Foto subida');
-      input.value = '';
-      document.getElementById('chk-principal').checked = false;
-      await cargarFotos(propiedadFotosId);
-      cargarPropiedades();
-    } else toast(d.error || 'Error', 'err');
-  } catch(e) { toast('Error de conexión', 'err'); }
-  finally { btn.disabled = false; btn.textContent = 'Subir foto'; }
+async function subirFoto(input) {
+  const files = Array.from(input.files);
+  if (!files.length || !propiedadFotosId) return;
+  const esPrincipal = document.getElementById('chk-principal').checked;
+  let subidas = 0, errores = 0;
+  for (let i = 0; i < files.length; i++) {
+    await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const r = await fetch(`/api/mis-propiedades/${propiedadFotosId}/fotos`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ imagen: e.target.result, es_principal: esPrincipal && i === 0 })
+          });
+          const d = await r.json();
+          if (d.ok) subidas++;
+          else errores++;
+        } catch(e) { errores++; }
+        resolve();
+      };
+      reader.readAsDataURL(files[i]);
+    });
+  }
+  input.value = '';
+  document.getElementById('chk-principal').checked = false;
+  await cargarFotos(propiedadFotosId);
+  cargarPropiedades();
+  if (errores === 0) toast(subidas === 1 ? 'Foto subida' : `${subidas} fotos subidas`);
+  else toast(`${subidas} subidas, ${errores} fallaron`, 'err');
 }
 
 async function eliminarFoto(fid) {

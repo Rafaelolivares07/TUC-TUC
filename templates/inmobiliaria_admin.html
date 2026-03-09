@@ -479,6 +479,8 @@ async function cargarPropiedades() {
         <div class="flex flex-col gap-2 flex-shrink-0">
           <a href="/inmobiliaria/${SLUG}/p/${p.slug}" target="_blank"
              class="text-xs border border-blue-300 rounded-lg px-3 py-1.5 text-blue-700 text-center">Ver</a>
+          <button onclick="abrirFotosInmo(${p.id})"
+             class="text-xs border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600 text-center">Fotos</button>
         </div>
       </div>
     `).join('');
@@ -660,6 +662,92 @@ async function guardarUbicacion() {
     }
   } catch(e) { toast('Error de conexión', 'err'); }
 }
+
+/* ── FOTOS DE PROPIEDADES ── */
+let _fotoPropId = null;
+
+async function abrirFotosInmo(pid) {
+  _fotoPropId = pid;
+  document.getElementById('inmo-fotos-grid').innerHTML = '<p class="col-span-3 text-sm text-gray-400 text-center py-4">Cargando…</p>';
+  document.getElementById('modal-inmo-fotos').classList.remove('hidden');
+  await cargarFotosInmo();
+}
+
+function cerrarFotosInmo() {
+  document.getElementById('modal-inmo-fotos').classList.add('hidden');
+  _fotoPropId = null;
+}
+
+async function cargarFotosInmo() {
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/propiedades/${_fotoPropId}/fotos`);
+    const d = await r.json();
+    const grid = document.getElementById('inmo-fotos-grid');
+    if (!d.ok) { grid.innerHTML = `<p class="col-span-3 text-sm text-red-500 text-center">${d.error}</p>`; return; }
+    if (!d.fotos.length) { grid.innerHTML = '<p class="col-span-3 text-sm text-gray-400 text-center py-4">Sin fotos aún</p>'; return; }
+    grid.innerHTML = d.fotos.map(f => `
+      <div class="relative group rounded-xl overflow-hidden bg-gray-100" style="aspect-ratio:1">
+        <img src="${f.url}" class="w-full h-full object-cover">
+        ${f.es_principal ? '<span class="absolute top-1 left-1 bg-blue-700 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">Principal</span>' : ''}
+        <button onclick="eliminarFotoInmo(${f.id})"
+          class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs font-bold leading-none opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+      </div>`).join('');
+  } catch(e) { toast('Error cargando fotos', 'err'); }
+}
+
+async function subirFotoInmo(input) {
+  const files = Array.from(input.files);
+  if (!files.length || !_fotoPropId) return;
+  let subidas = 0, errores = 0;
+  for (let i = 0; i < files.length; i++) {
+    await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/propiedades/${_fotoPropId}/fotos`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ imagen: e.target.result, es_principal: i === 0 && subidas === 0 && errores === 0 })
+          });
+          const d = await r.json();
+          if (d.ok) subidas++;
+          else errores++;
+        } catch(e) { errores++; }
+        resolve();
+      };
+      reader.readAsDataURL(files[i]);
+    });
+  }
+  input.value = '';
+  await cargarFotosInmo();
+  cargarPropiedades();
+  if (errores === 0) toast(subidas === 1 ? 'Foto subida' : `${subidas} fotos subidas`);
+  else toast(`${subidas} subidas, ${errores} fallaron`, 'err');
+}
+
+async function eliminarFotoInmo(fid) {
+  if (!confirm('¿Eliminar esta foto?')) return;
+  try {
+    const r = await fetch(`/api/inmobiliaria/${SLUG}/admin/propiedades/${_fotoPropId}/fotos/${fid}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) { await cargarFotosInmo(); cargarPropiedades(); }
+    else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error', 'err'); }
+}
 </script>
+
+<!-- MODAL FOTOS INMOBILIARIA -->
+<div id="modal-inmo-fotos" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden">
+  <div class="bg-white rounded-t-2xl w-full max-w-lg p-5" style="max-height:85vh; overflow-y:auto;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-800 text-lg">Fotos de la propiedad</h2>
+      <button onclick="cerrarFotosInmo()" class="text-gray-400 text-2xl leading-none">×</button>
+    </div>
+    <div id="inmo-fotos-grid" class="grid grid-cols-3 gap-2 mb-4"></div>
+    <label class="block w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-blue-400 hover:text-blue-600 transition font-semibold text-center cursor-pointer">
+      + Agregar fotos
+      <input type="file" accept="image/*" multiple class="hidden" onchange="subirFotoInmo(this)">
+    </label>
+  </div>
+</div>
 </body>
 </html>

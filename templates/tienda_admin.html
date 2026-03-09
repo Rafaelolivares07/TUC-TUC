@@ -1396,10 +1396,14 @@ async function eliminarFotoExtra(imagenId) {
         <!-- Agregar atributo -->
         <div class="bg-purple-50 rounded-xl p-4 mb-4">
             <p class="text-sm font-semibold text-purple-700 mb-3">Agregar atributo</p>
-            <input id="var-atrib-nombre" type="text" placeholder="Nombre del atributo (ej: Talla, Color)" maxlength="50"
-                class="border rounded-lg px-3 py-2 text-sm w-full mb-2">
-            <input id="var-atrib-valores" type="text" placeholder="Valores separados por coma (ej: S, M, L, XL)"
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Nombre del atributo</label>
+            <input id="var-atrib-nombre" type="text" placeholder="ej: Talla  |  ej: Color  |  ej: Material" maxlength="50"
                 class="border rounded-lg px-3 py-2 text-sm w-full mb-3">
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Opciones (separadas por coma)</label>
+            <input id="var-atrib-valores" type="text" placeholder="ej: S, M, L, XL  |  ej: Rojo, Azul, Verde"
+                oninput="previewChips(this.value)"
+                class="border rounded-lg px-3 py-2 text-sm w-full mb-2">
+            <div id="var-chips-preview" class="flex flex-wrap gap-1 mb-3 min-h-[24px]"></div>
             <button onclick="agregarAtributo()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-semibold">
                 Agregar atributo
             </button>
@@ -1483,6 +1487,14 @@ async function cargarVariantes() {
     } catch(e) { toast('Error cargando variantes', true); }
 }
 
+function previewChips(raw) {
+    const chips = raw.split(',').map(v => v.trim()).filter(Boolean);
+    const cont = document.getElementById('var-chips-preview');
+    cont.innerHTML = chips.map(c =>
+        `<span class="bg-purple-200 text-purple-800 text-xs px-2 py-0.5 rounded-full font-semibold">${c}</span>`
+    ).join('');
+}
+
 async function agregarAtributo() {
     const nombre = document.getElementById('var-atrib-nombre').value.trim();
     const valoresRaw = document.getElementById('var-atrib-valores').value.trim();
@@ -1499,6 +1511,7 @@ async function agregarAtributo() {
         if (data.ok) {
             document.getElementById('var-atrib-nombre').value = '';
             document.getElementById('var-atrib-valores').value = '';
+            document.getElementById('var-chips-preview').innerHTML = '';
             await cargarVariantes();
         } else { toast(data.error, true); }
     } catch(e) { toast('Error de conexión', true); }

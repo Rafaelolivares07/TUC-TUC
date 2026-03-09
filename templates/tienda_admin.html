@@ -1262,7 +1262,7 @@ async function agregarDias(slug) {
         <label for="inp-foto-extra" class="block w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-rose-400 hover:text-rose-500 transition font-semibold text-center cursor-pointer">
             + Agregar foto
         </label>
-        <input type="file" id="inp-foto-extra" accept="image/*" class="hidden" onchange="subirFotoExtra(this)">
+        <input type="file" id="inp-foto-extra" accept="image/*" multiple class="hidden" onchange="subirFotoExtra(this)">
     </div>
 </div>
 
@@ -1350,20 +1350,29 @@ async function subirFotoPrincipal(input) {
 }
 
 async function subirFotoExtra(input) {
-    const file = input.files[0];
-    if (!file || !fotosProductoId) return;
-    procesarImagen(file, 800, 0.8, async base64 => {
-        try {
-            const r = await fetch(`${BASE}/producto/${fotosProductoId}/imagen-extra`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({imagen: base64})
+    const files = Array.from(input.files);
+    if (!files.length || !fotosProductoId) return;
+    let subidas = 0, errores = 0;
+    for (const file of files) {
+        await new Promise(resolve => {
+            procesarImagen(file, 800, 0.8, async base64 => {
+                try {
+                    const r = await fetch(`${BASE}/producto/${fotosProductoId}/imagen-extra`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({imagen: base64})
+                    });
+                    const data = await r.json();
+                    if (data.ok) subidas++;
+                    else errores++;
+                } catch(e) { errores++; }
+                resolve();
             });
-            const data = await r.json();
-            if (data.ok) { toast('Foto agregada'); await cargarFotosExtra(); }
-            else toast(data.error || 'Error', true);
-        } catch(e) { toast('Error de conexion', true); }
-        input.value = '';
-    });
+        });
+    }
+    input.value = '';
+    await cargarFotosExtra();
+    if (errores === 0) toast(subidas === 1 ? 'Foto agregada' : `${subidas} fotos agregadas`);
+    else toast(`${subidas} subidas, ${errores} fallaron`, errores > 0);
 }
 
 async function eliminarFotoExtra(imagenId) {

@@ -258,7 +258,7 @@
                 <div id="tipo-fotos-grid" class="grid grid-cols-3 gap-2 mb-2"></div>
                 <label class="block w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition font-semibold text-center cursor-pointer">
                     + Agregar foto
-                    <input type="file" accept="image/*" class="hidden" onchange="subirFotoTipo(this)">
+                    <input type="file" accept="image/*" multiple class="hidden" onchange="subirFotoTipo(this)">
                 </label>
             </div>
             <div id="modal-tipo-err" class="hidden text-sm text-red-600 bg-red-50 rounded px-3 py-2"></div>
@@ -695,31 +695,36 @@ function agregarMiniatura(grid, fotoId, url, tipoId) {
     grid.appendChild(wrap);
 }
 
-function subirFotoTipo(input) {
+async function subirFotoTipo(input) {
     const tipoId = parseInt(document.getElementById('tipo-id').value);
     if (!tipoId) return;
-    const file = input.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { toast('Imagen muy pesada (máx 5MB)', false); return; }
-    const reader = new FileReader();
-    reader.onload = async e => {
-        const base64 = e.target.result;
-        try {
-            const r = await fetch(`/api/mi-hospedaje/${SLUG}/tipo/${tipoId}/fotos`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({imagen: base64})
-            });
-            const d = await r.json();
-            if (d.ok) {
-                const grid = document.getElementById('tipo-fotos-grid');
-                agregarMiniatura(grid, d.id, base64, tipoId);
-                toast('Foto agregada');
-            } else toast(d.error || 'Error', false);
-        } catch(e) { toast('Error de conexión', false); }
-        input.value = '';
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(input.files).filter(f => f.size <= 5 * 1024 * 1024);
+    if (!files.length) { toast('Sin fotos válidas (máx 5MB c/u)', false); return; }
+    let subidas = 0, errores = 0;
+    const grid = document.getElementById('tipo-fotos-grid');
+    for (const file of files) {
+        await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = async e => {
+                const base64 = e.target.result;
+                try {
+                    const r = await fetch(`/api/mi-hospedaje/${SLUG}/tipo/${tipoId}/fotos`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({imagen: base64})
+                    });
+                    const d = await r.json();
+                    if (d.ok) { agregarMiniatura(grid, d.id, base64, tipoId); subidas++; }
+                    else errores++;
+                } catch(e) { errores++; }
+                resolve();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+    input.value = '';
+    if (errores === 0) toast(subidas === 1 ? 'Foto agregada' : `${subidas} fotos agregadas`);
+    else toast(`${subidas} subidas, ${errores} fallaron`, errores > 0);
 }
 
 async function eliminarFotoTipo(fotoId, tipoId) {

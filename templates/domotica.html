@@ -397,7 +397,6 @@ async function cargarDispositivos(silencioso = false) {
   if (pid) localStorage.setItem('dom_pid', pid);
   const cont = document.getElementById('lista-dispositivos');
   if (!pid) { cont.innerHTML = ''; return; }
-  const scrollGuardado = window.scrollY;
   if (!silencioso) cont.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando...</div>';
   try {
     const r = await fetch(`/api/domotica/propiedad/${pid}/dispositivos`);
@@ -407,10 +406,41 @@ async function cargarDispositivos(silencioso = false) {
       cont.innerHTML = '<div class="text-center py-10 text-gray-400"><div class="text-4xl mb-2">📦</div><p>Sin dispositivos. Agrega uno.</p></div>';
       return;
     }
-    cont.innerHTML = d.dispositivos.map(dev => renderDispositivo(dev)).join('');
-    animarBarras();
-    if (silencioso) requestAnimationFrame(() => window.scrollTo(0, scrollGuardado));
+    if (silencioso && cont.querySelector('[id^="dev-"]')) {
+      // Actualización quirúrgica: solo datos dinámicos, sin tocar el DOM
+      d.dispositivos.forEach(dev => _actualizarDatosDev(dev));
+    } else {
+      cont.innerHTML = d.dispositivos.map(dev => renderDispositivo(dev)).join('');
+      animarBarras();
+    }
   } catch(e) { if (!silencioso) toast('Error cargando dispositivos', 'err'); }
+}
+
+function _actualizarDatosDev(dev) {
+  const card = document.getElementById(`dev-${dev.id}`);
+  if (!card) return;
+  // Batería
+  const bat = dev.ultimo_bat_pct;
+  const esLaptop = (dev.tipo === 'laptop' || dev.tipo === 'computador');
+  if (esLaptop && bat !== null) {
+    const pill = card.querySelector('.bat-pill');
+    if (pill) { pill.textContent = `🔋 ${bat}%${dev.bat_cargando ? ' ⚡' : ''}`; pill.className = `bat-pill ${batClass(bat)}`; }
+    const bar = document.getElementById(`bat-bar-${dev.id}`);
+    if (bar) { bar.dataset.target = bat; bar.style.width = bat + '%'; bar.className = `bat-bar ${barClass(bat)}`; }
+    const barWrap = card.querySelector('.bat-bar-wrap');
+    if (barWrap) { const span = barWrap.previousElementSibling?.querySelector('.font-semibold'); if (span) span.textContent = `${bat}%${dev.bat_cargando ? ' ⚡ cargando' : ''}`; }
+  }
+  // Estado switches
+  dev.switches.forEach(sw => {
+    const swCard = card.querySelector(`#sw-${sw.id}`);
+    if (!swCard) return;
+    const btn = swCard.querySelector('.toggle-btn');
+    if (btn) {
+      btn.classList.toggle('on', !!sw.estado_actual);
+      btn.setAttribute('onclick', `toggleSwitch(${sw.id}, ${!sw.estado_actual})`);
+      btn.setAttribute('title', sw.estado_actual ? 'Apagar' : 'Encender');
+    }
+  });
 }
 
 function barClass(pct) {

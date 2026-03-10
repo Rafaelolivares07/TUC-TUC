@@ -392,12 +392,13 @@ async function cargarPropiedades() {
 }
 
 // ─── CARGAR DISPOSITIVOS ───
-async function cargarDispositivos() {
+async function cargarDispositivos(silencioso = false) {
   const pid = document.getElementById('sel-propiedad').value;
   if (pid) localStorage.setItem('dom_pid', pid);
   const cont = document.getElementById('lista-dispositivos');
   if (!pid) { cont.innerHTML = ''; return; }
-  cont.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando...</div>';
+  const scrollGuardado = window.scrollY;
+  if (!silencioso) cont.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando...</div>';
   try {
     const r = await fetch(`/api/domotica/propiedad/${pid}/dispositivos`);
     const d = await r.json();
@@ -408,7 +409,8 @@ async function cargarDispositivos() {
     }
     cont.innerHTML = d.dispositivos.map(dev => renderDispositivo(dev)).join('');
     animarBarras();
-  } catch(e) { toast('Error cargando dispositivos', 'err'); }
+    if (silencioso) requestAnimationFrame(() => window.scrollTo(0, scrollGuardado));
+  } catch(e) { if (!silencioso) toast('Error cargando dispositivos', 'err'); }
 }
 
 function barClass(pct) {
@@ -889,7 +891,7 @@ cargarPropiedades();
 setInterval(async () => {
   const pid = document.getElementById('sel-propiedad').value;
   if (!pid) return;
-  await cargarDispositivos();
+  await cargarDispositivos(true);
   animarBarras();
   // Refrescar logs de paneles abiertos
   document.querySelectorAll('details[open]').forEach(det => {

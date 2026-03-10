@@ -540,7 +540,8 @@ if (clienteData && clienteData.nombre) {
         <div id="var-cli-galeria" class="hidden mb-4">
             <div class="relative">
                 <img id="var-cli-foto-grande" src="" alt=""
-                    class="w-full h-52 object-cover rounded-xl cursor-pointer"
+                    class="w-full rounded-xl cursor-pointer"
+                    style="max-height:260px; object-fit:contain; background:#f3f4f6;"
                     onclick="zoomImagen(this.src)">
             </div>
             <div id="var-cli-miniaturas" class="flex gap-2 mt-2 overflow-x-auto pb-1"></div>

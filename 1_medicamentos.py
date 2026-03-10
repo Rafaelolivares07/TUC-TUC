@@ -22294,32 +22294,77 @@ def api_admin_git_commit_push():
 STARTUP_BAT  = r'C:\Users\RAFAEL OLIVARES\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\tuctuc_bridge.bat'
 STARTUP_DIS  = STARTUP_BAT + '.disabled'
 
+def _bridge_get_flag(conn):
+    """Lee bridge_chat_habilitado de parametros_sistema. Default True si no existe."""
+    row = conn.execute(
+        "SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'bridge_chat_habilitado'"
+    ).fetchone()
+    return row['valor_booleano'] if row else True
+
+def _bridge_set_flag(conn, valor):
+    """Escribe bridge_chat_habilitado en parametros_sistema."""
+    existe = conn.execute(
+        "SELECT id FROM parametros_sistema WHERE nombre = 'bridge_chat_habilitado'"
+    ).fetchone()
+    if existe:
+        conn.execute(
+            "UPDATE parametros_sistema SET valor_booleano = %s, fecha_actualizacion = NOW() WHERE nombre = 'bridge_chat_habilitado'",
+            (valor,)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO parametros_sistema (nombre, descripcion, tipo, valor_booleano) VALUES ('bridge_chat_habilitado', 'Habilita/deshabilita el chat bridge de Claude Code', 'booleano', %s)",
+            (valor,)
+        )
+    conn.commit()
+
 @app.route('/api/admin/bridge/status', methods=['GET'])
 def api_admin_bridge_status():
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo admin'}), 403
     import os
-    if os.getenv('RENDER'):
-        return jsonify({'ok': False, 'error': 'Solo disponible en PC local'})
-    activo = os.path.exists(STARTUP_BAT)
-    return jsonify({'ok': True, 'activo': activo})
+    try:
+        conn = get_db_connection()
+        activo_bd = _bridge_get_flag(conn)
+        conn.close()
+        if os.getenv('RENDER'):
+            # En Render: solo mostramos el estado del flag en BD
+            return jsonify({'ok': True, 'activo': activo_bd})
+        # En PC local: el estado real es el .bat + sincronizamos BD si difiere
+        activo_bat = os.path.exists(STARTUP_BAT)
+        if activo_bat != activo_bd:
+            conn = get_db_connection()
+            _bridge_set_flag(conn, activo_bat)
+            conn.close()
+        return jsonify({'ok': True, 'activo': activo_bat})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/api/admin/bridge/toggle', methods=['POST'])
 def api_admin_bridge_toggle():
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo admin'}), 403
     import os
-    if os.getenv('RENDER'):
-        return jsonify({'ok': False, 'error': 'Solo disponible en PC local'}), 400
     try:
-        if os.path.exists(STARTUP_BAT):
-            os.rename(STARTUP_BAT, STARTUP_DIS)
-            return jsonify({'ok': True, 'activo': False, 'msg': 'Bridge deshabilitado — no arrancará con Windows'})
-        elif os.path.exists(STARTUP_DIS):
-            os.rename(STARTUP_DIS, STARTUP_BAT)
-            return jsonify({'ok': True, 'activo': True, 'msg': 'Bridge habilitado — arrancará con Windows'})
+        conn = get_db_connection()
+        activo_actual = _bridge_get_flag(conn)
+        nuevo = not activo_actual
+        _bridge_set_flag(conn, nuevo)
+        conn.close()
+        if os.getenv('RENDER'):
+            # En Render: solo cambia el flag en BD, chat_bridge.py lo respeta al arrancar
+            msg = 'Bridge habilitado — correrá al iniciar Windows' if nuevo else 'Bridge deshabilitado — no consumirá tokens al iniciar'
+            return jsonify({'ok': True, 'activo': nuevo, 'msg': msg})
+        # En PC local: también mueve el .bat físico
+        if nuevo:
+            if os.path.exists(STARTUP_DIS):
+                os.rename(STARTUP_DIS, STARTUP_BAT)
+            msg = 'Bridge habilitado — arrancará con Windows'
         else:
-            return jsonify({'ok': False, 'error': 'Archivo .bat no encontrado en Startup'}), 404
+            if os.path.exists(STARTUP_BAT):
+                os.rename(STARTUP_BAT, STARTUP_DIS)
+            msg = 'Bridge deshabilitado — no arrancará con Windows'
+        return jsonify({'ok': True, 'activo': nuevo, 'msg': msg})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

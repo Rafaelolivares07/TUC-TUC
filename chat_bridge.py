@@ -64,6 +64,22 @@ def get_conn():
     )
 
 
+def verificar_habilitado():
+    """Consulta BD: si bridge_chat_habilitado = false, salir inmediatamente."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'bridge_chat_habilitado'")
+        row = cur.fetchone()
+        conn.close()
+        if row and row['valor_booleano'] is False:
+            print("⛔ Bridge deshabilitado desde el panel (parametros_sistema). Saliendo sin consumir tokens.")
+            sys.exit(0)
+    except Exception as e:
+        # Si no se puede consultar BD, continúa (evita bloquear si hay error de conexión temporal)
+        print(f"  ⚠️  No se pudo verificar flag en BD: {e} — continuando de todas formas")
+
+
 def recuperar_procesando():
     """Al arrancar, cualquier mensaje 'procesando' quedó atascado por crash previo → resetear."""
     try:
@@ -327,6 +343,7 @@ def main():
     print(f"  BD:      {DB_URL[:40]}...")
     print(f"  Memoria: {MEMORIA_DIR}")
     print()
+    verificar_habilitado()
     recuperar_procesando()
     print(f"[{ts()}] Listo. Esperando mensajes...\n")
 

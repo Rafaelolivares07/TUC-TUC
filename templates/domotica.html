@@ -623,7 +623,7 @@ async function guardarDispositivo() {
     if (d.ok) {
       toast(editId ? 'Dispositivo actualizado' : 'Dispositivo creado');
       cerrarModal('modal-dispositivo');
-      await cargarDispositivos();
+      await cargarDispositivos(true);
     } else { toast(d.error || 'Error', 'err'); }
   } catch(e) { toast('Error de conexión', 'err'); }
 }
@@ -643,7 +643,7 @@ async function regenerarToken(devId) {
       toast('Token regenerado');
       const btn = document.querySelector(`[onclick="copiarToken(${devId})"]`);
       if (btn) { btn.dataset.token = d.device_token; }
-      await cargarDispositivos();
+      await cargarDispositivos(true);
     } else { toast(d.error || 'Error', 'err'); }
   } catch(e) { toast('Error de conexión', 'err'); }
 }
@@ -687,7 +687,7 @@ async function guardarSwitch() {
     if (d.ok) {
       toast(editId ? 'Switch actualizado' : 'Switch creado');
       cerrarModal('modal-switch');
-      await cargarDispositivos();
+      await cargarDispositivos(true);
     } else { toast(d.error || 'Error', 'err'); }
   } catch(e) { toast('Error de conexión', 'err'); }
 }
@@ -701,7 +701,7 @@ async function toggleSwitch(sid, nuevoEstado) {
     const d = await r.json();
     if (d.ok) {
       toast(nuevoEstado ? 'Switch encendido ⚡' : 'Switch apagado');
-      await cargarDispositivos();
+      await cargarDispositivos(true);
     } else { toast(d.error || 'Error controlando switch', 'err'); }
   } catch(e) { toast('Error de conexión', 'err'); }
 }
@@ -752,7 +752,7 @@ async function guardarAutomatizacion() {
     if (d.ok) {
       toast(editId ? 'Regla actualizada' : 'Regla creada');
       cerrarModal('modal-auto');
-      await cargarDispositivos();
+      await cargarDispositivos(true);
     } else { toast(d.error || 'Error', 'err'); }
   } catch(e) { toast('Error de conexión', 'err'); }
 }
@@ -762,7 +762,7 @@ async function eliminarAuto(aid) {
   try {
     const r = await fetch(`/api/domotica/automatizacion/${aid}/eliminar`, { method:'POST' });
     const d = await r.json();
-    if (d.ok) { toast('Regla eliminada'); await cargarDispositivos(); }
+    if (d.ok) { toast('Regla eliminada'); await cargarDispositivos(true); }
     else toast(d.error || 'Error', 'err');
   } catch(e) { toast('Error de conexión', 'err'); }
 }

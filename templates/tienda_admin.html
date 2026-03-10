@@ -870,13 +870,11 @@ async function subirHeader(input) {
         const img = new Image();
         img.onload = async () => {
             const canvas = document.createElement('canvas');
-            const TW = 1200, TH = 400;
-            const srcRatio = img.width / img.height, tgtRatio = TW / TH;
-            let sx, sy, sw, sh;
-            if (srcRatio > tgtRatio) { sh = img.height; sw = sh * tgtRatio; sy = 0; sx = (img.width - sw) / 2; }
-            else { sw = img.width; sh = sw / tgtRatio; sx = 0; sy = (img.height - sh) / 2; }
-            canvas.width = TW; canvas.height = TH;
-            canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
+            const MAX_W = 1200;
+            const w = Math.min(img.width, MAX_W);
+            const h = Math.round(img.height * (w / img.width));
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
             const base64 = canvas.toDataURL('image/jpeg', 0.75);
             try {
                 const r = await fetch(BASE + '/imagen-header', {

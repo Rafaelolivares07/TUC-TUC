@@ -317,8 +317,21 @@
         <!-- Tab Git -->
         <div id="tab-git" class="tab-content hidden">
             <div class="bg-white rounded-lg shadow-sm p-6 max-w-2xl">
-                <h3 class="text-lg font-bold mb-1">Git — Control de versiones</h3>
-                <p class="text-sm text-gray-500 mb-6">Commit y push directo al repositorio, o abre el chat con Claude.</p>
+                <h3 class="text-lg font-bold mb-1">Desarrollo — Git & Claude</h3>
+                <p class="text-sm text-gray-500 mb-6">Control de versiones, chat con el asistente y configuración del bridge.</p>
+
+                <!-- Toggle bridge -->
+                <div class="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-xl mb-4">
+                    <div>
+                        <p class="font-semibold text-gray-800 text-sm">Bridge de chat (arranque de Windows)</p>
+                        <p id="bridge-desc" class="text-xs text-gray-500 mt-0.5">Cargando...</p>
+                    </div>
+                    <button id="btn-bridge-toggle" onclick="toggleBridge()"
+                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+                        style="background:#d1d5db">
+                        <span id="bridge-knob" class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform translate-x-1"></span>
+                    </button>
+                </div>
 
                 <!-- Acceso al chat -->
                 <a href="/admin/chat" class="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition mb-6">
@@ -901,6 +914,49 @@
             }
             if (tab === 'git') {
                 cargarGitStatus();
+                cargarEstadoBridge();
+            }
+        }
+
+        function _setBridgeUI(activo) {
+            const btn  = document.getElementById('btn-bridge-toggle');
+            const knob = document.getElementById('bridge-knob');
+            const desc = document.getElementById('bridge-desc');
+            if (activo) {
+                btn.style.background  = '#10b981';
+                knob.style.transform  = 'translateX(1.25rem)';
+                desc.textContent      = 'Habilitado — arranca automáticamente con Windows';
+            } else {
+                btn.style.background  = '#d1d5db';
+                knob.style.transform  = 'translateX(0.25rem)';
+                desc.textContent      = 'Deshabilitado — no arranca con Windows';
+            }
+        }
+
+        async function cargarEstadoBridge() {
+            try {
+                const r = await fetch('/api/admin/bridge/status');
+                const d = await r.json();
+                if (d.ok) _setBridgeUI(d.activo);
+            } catch(e) {
+                document.getElementById('bridge-desc').textContent = 'No disponible (solo PC local)';
+            }
+        }
+
+        async function toggleBridge() {
+            document.getElementById('btn-bridge-toggle').disabled = true;
+            try {
+                const r = await fetch('/api/admin/bridge/toggle', {method:'POST'});
+                const d = await r.json();
+                if (d.ok) {
+                    _setBridgeUI(d.activo);
+                } else {
+                    alert('Error: ' + d.error);
+                }
+            } catch(e) {
+                alert('Error de red: ' + e.message);
+            } finally {
+                document.getElementById('btn-bridge-toggle').disabled = false;
             }
         }
 

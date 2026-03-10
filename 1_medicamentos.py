@@ -22291,6 +22291,34 @@ def api_admin_git_commit_push():
         return jsonify({'ok': False, 'pasos': pasos, 'error': str(e)}), 500
 
 
+STARTUP_BAT  = r'C:\Users\RAFAEL OLIVARES\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\tuctuc_bridge.bat'
+STARTUP_DIS  = STARTUP_BAT + '.disabled'
+
+@app.route('/api/admin/bridge/status', methods=['GET'])
+def api_admin_bridge_status():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo admin'}), 403
+    import os
+    activo = os.path.exists(STARTUP_BAT)
+    return jsonify({'ok': True, 'activo': activo})
+
+@app.route('/api/admin/bridge/toggle', methods=['POST'])
+def api_admin_bridge_toggle():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo admin'}), 403
+    import os
+    try:
+        if os.path.exists(STARTUP_BAT):
+            os.rename(STARTUP_BAT, STARTUP_DIS)
+            return jsonify({'ok': True, 'activo': False, 'msg': 'Bridge deshabilitado — no arrancará con Windows'})
+        elif os.path.exists(STARTUP_DIS):
+            os.rename(STARTUP_DIS, STARTUP_BAT)
+            return jsonify({'ok': True, 'activo': True, 'msg': 'Bridge habilitado — arrancará con Windows'})
+        else:
+            return jsonify({'ok': False, 'error': 'Archivo .bat no encontrado en Startup'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @app.route('/api/admin/git/tarea/<int:tarea_id>', methods=['GET'])
 def api_admin_git_tarea(tarea_id):
     """Consulta el estado/resultado de una tarea git encolada (solo Render)."""

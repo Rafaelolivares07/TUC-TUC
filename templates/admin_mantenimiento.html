@@ -938,8 +938,9 @@
                 const r = await fetch('/api/admin/bridge/status');
                 const d = await r.json();
                 if (d.ok) _setBridgeUI(d.activo);
+                else document.getElementById('bridge-desc').textContent = 'Solo configurable desde PC local';
             } catch(e) {
-                document.getElementById('bridge-desc').textContent = 'No disponible (solo PC local)';
+                document.getElementById('bridge-desc').textContent = 'Solo configurable desde PC local';
             }
         }
 

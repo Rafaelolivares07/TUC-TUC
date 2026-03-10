@@ -22299,6 +22299,8 @@ def api_admin_bridge_status():
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo admin'}), 403
     import os
+    if os.getenv('RENDER'):
+        return jsonify({'ok': False, 'error': 'Solo disponible en PC local'})
     activo = os.path.exists(STARTUP_BAT)
     return jsonify({'ok': True, 'activo': activo})
 
@@ -22307,6 +22309,8 @@ def api_admin_bridge_toggle():
     if session.get('rol') != 'Administrador':
         return jsonify({'ok': False, 'error': 'Solo admin'}), 403
     import os
+    if os.getenv('RENDER'):
+        return jsonify({'ok': False, 'error': 'Solo disponible en PC local'}), 400
     try:
         if os.path.exists(STARTUP_BAT):
             os.rename(STARTUP_BAT, STARTUP_DIS)

@@ -180,7 +180,7 @@
                 <div id="preview-header" class="w-full min-h-[120px] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden relative" onclick="document.getElementById('inp-header').click()">
                     {% if tienda.imagen_header %}
                     <img src="{{ tienda.imagen_header }}" class="img-bg-blur" aria-hidden="true">
-                    <img src="{{ tienda.imagen_header }}" class="img-principal-admin" style="height:auto;max-height:280px;">
+                    <img src="{{ tienda.imagen_header }}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">
                     {% else %}
                     <span class="text-gray-400 text-sm">Toca para subir imagen</span>
                     {% endif %}
@@ -886,7 +886,7 @@ async function subirHeader(input) {
                 });
                 const data = await r.json();
                 if (data.ok) {
-                    document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="img-bg-blur" aria-hidden="true"><img src="${base64}" class="img-principal-admin" style="height:auto;max-height:280px;">`;
+                    document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="img-bg-blur" aria-hidden="true"><img src="${base64}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">`;
                     toast('Imagen actualizada');
                 } else toast(data.error || 'Error', true);
             } catch(e) { toast('Error de conexion', true); }

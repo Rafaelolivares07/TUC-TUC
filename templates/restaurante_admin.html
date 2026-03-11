@@ -186,12 +186,31 @@
 
         <!-- ====== TAB: MESAS ====== -->
         <div id="panel-mesas" class="p-6 hidden">
-            <!-- Agregar mesa -->
+            <!-- Crear mesas en lote -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-4">
+                <h3 class="font-bold text-gray-700 mb-3">Crear mesas en lote</h3>
+                <div class="flex flex-col gap-2">
+                    <div class="flex gap-2">
+                        <input id="mesa-sector" type="text" placeholder="Sector (ej: Piscina, Comedor)" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                        <input id="mesa-prefijo" type="text" placeholder="Prefijo (ej: P, T, vacío)" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="mesa-cantidad" type="number" min="1" max="100" placeholder="Cantidad de mesas" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                        <input id="mesa-desde" type="number" min="1" value="1" placeholder="Desde" class="border rounded-lg px-3 py-2 text-sm w-24">
+                        <button onclick="crearMesasLote()" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                            Crear
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400">Ej: Sector "Piscina", Prefijo "P", Cantidad 10 → crea P1, P2... P10</p>
+                </div>
+            </div>
+            <!-- Agregar mesa individual -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                <h3 class="font-bold text-gray-700 mb-3">Agregar mesa</h3>
-                <div class="flex gap-3">
-                    <input id="mesa-numero" type="number" min="1" placeholder="Número de mesa" class="border rounded-lg px-3 py-2 text-sm flex-1">
-                    <button onclick="agregarMesa()" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg text-sm font-semibold">
+                <h3 class="font-bold text-gray-700 mb-3">Agregar mesa individual</h3>
+                <div class="flex gap-2">
+                    <input id="mesa-nombre-ind" type="text" placeholder="Nombre (ej: 5, Bar1, VIP)" class="border rounded-lg px-3 py-2 text-sm flex-1">
+                    <input id="mesa-sector-ind" type="text" placeholder="Sector (opcional)" class="border rounded-lg px-3 py-2 text-sm w-36">
+                    <button onclick="agregarMesa()" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">
                         Agregar
                     </button>
                 </div>
@@ -1052,32 +1071,48 @@ async function cargarMesas() {
             return;
         }
 
-        cont.innerHTML = data.mesas.map(m => `
-            <div class="relative bg-amber-50 border-2 border-amber-200 rounded-xl p-4 text-center group">
-                <span class="text-2xl font-bold text-amber-700">${m.numero}</span>
-                <button onclick="eliminarMesa(${m.id}, ${m.numero})"
-                    class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs font-bold opacity-0 group-hover:opacity-100 transition">
-                    X
-                </button>
-            </div>
-        `).join('');
+        // Agrupar por sector
+        const sectores = {};
+        data.mesas.forEach(m => {
+            const s = m.sector || '';
+            if (!sectores[s]) sectores[s] = [];
+            sectores[s].push(m);
+        });
+
+        let html = '';
+        for (const [sector, mesas] of Object.entries(sectores)) {
+            if (sector) html += `<div class="col-span-full text-xs font-bold text-amber-600 uppercase mt-2">${sector}</div>`;
+            html += mesas.map(m => `
+                <div class="relative bg-amber-50 border-2 border-amber-200 rounded-xl p-4 text-center group">
+                    <span class="text-xl font-bold text-amber-700">${m.nombre}</span>
+                    <button onclick="eliminarMesa(${m.id}, '${m.nombre}')"
+                        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 text-xs font-bold opacity-0 group-hover:opacity-100 transition">
+                        X
+                    </button>
+                </div>
+            `).join('');
+        }
+        cont.innerHTML = html;
     } catch(e) { console.error(e); }
 }
 
-async function agregarMesa() {
-    const num = parseInt(document.getElementById('mesa-numero').value);
-    if (!num || num < 1) return toast('Escribe un número de mesa válido', false);
+async function crearMesasLote() {
+    const sector = document.getElementById('mesa-sector').value.trim();
+    const prefijo = document.getElementById('mesa-prefijo').value.trim();
+    const cantidad = parseInt(document.getElementById('mesa-cantidad').value);
+    const desde = parseInt(document.getElementById('mesa-desde').value) || 1;
+    if (!cantidad || cantidad < 1) return toast('Escribe la cantidad de mesas', false);
 
     try {
-        const r = await fetch(`${BASE}/mesa`, {
+        const r = await fetch(`${BASE}/mesas/bulk`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({numero: num})
+            body: JSON.stringify({sector, prefijo, cantidad, desde})
         });
         const data = await r.json();
         if (data.ok) {
-            document.getElementById('mesa-numero').value = '';
-            toast(`Mesa ${num} agregada`);
+            document.getElementById('mesa-cantidad').value = '';
+            toast(`${data.creadas} mesa${data.creadas !== 1 ? 's' : ''} creada${data.creadas !== 1 ? 's' : ''}`);
             cargarMesas();
         } else {
             toast(data.error, false);
@@ -1085,13 +1120,35 @@ async function agregarMesa() {
     } catch(e) { toast('Error de conexión', false); }
 }
 
-async function eliminarMesa(id, num) {
-    if (!confirm(`¿Eliminar mesa ${num}?`)) return;
+async function agregarMesa() {
+    const nombre = document.getElementById('mesa-nombre-ind').value.trim();
+    const sector = document.getElementById('mesa-sector-ind').value.trim() || null;
+    if (!nombre) return toast('Escribe el nombre de la mesa', false);
+
+    try {
+        const r = await fetch(`${BASE}/mesa`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({nombre, sector})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('mesa-nombre-ind').value = '';
+            toast(`Mesa ${nombre} agregada`);
+            cargarMesas();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function eliminarMesa(id, nombre) {
+    if (!confirm(`¿Eliminar mesa ${nombre}?`)) return;
     try {
         const r = await fetch(`${BASE}/mesa/${id}`, {method: 'DELETE'});
         const data = await r.json();
         if (data.ok) {
-            toast(`Mesa ${num} eliminada`);
+            toast(`Mesa ${nombre} eliminada`);
             cargarMesas();
         } else {
             toast(data.error, false);
@@ -1114,11 +1171,11 @@ async function cargarCuentasAdmin() {
             cont.innerHTML = data.cuentas.map(c => `
                 <div class="bg-white border-2 border-amber-300 rounded-xl p-4">
                     <div class="flex justify-between items-center mb-1">
-                        <span class="font-bold text-lg text-gray-800">Mesa ${c.mesa_num}</span>
+                        <span class="font-bold text-lg text-gray-800">Mesa ${c.mesa_id}</span>
                         <span class="text-xs text-gray-400">${c.cantidad} pedido${c.cantidad > 1 ? 's' : ''}</span>
                     </div>
                     <div class="text-2xl font-extrabold text-amber-600 mb-2">$${Number(c.total).toLocaleString()}</div>
-                    <button onclick="cobrarMesaAdmin(${c.mesa_num}, ${c.total})"
+                    <button onclick="cobrarMesaAdmin('${c.mesa_id}', ${c.total})"
                         class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-bold text-sm">
                         Cobrar
                     </button>
@@ -1138,13 +1195,13 @@ async function cargarCuentasAdmin() {
     } catch(e) { console.error(e); }
 }
 
-async function cobrarMesaAdmin(num, total) {
-    if (!confirm(`¿Cobrar Mesa ${num}?\nTotal: $${Number(total).toLocaleString()}`)) return;
+async function cobrarMesaAdmin(mesaId, total) {
+    if (!confirm(`¿Cobrar Mesa ${mesaId}?\nTotal: $${Number(total).toLocaleString()}`)) return;
     try {
-        const r = await fetch(`${BASE}/cobrar/${num}`, {method: 'POST'});
+        const r = await fetch(`${BASE}/cobrar/${mesaId}`, {method: 'POST'});
         const data = await r.json();
         if (data.ok) {
-            toast(`Mesa ${num} cobrada - $${Number(total).toLocaleString()}`);
+            toast(`Mesa ${mesaId} cobrada - $${Number(total).toLocaleString()}`);
             cargarCuentasAdmin();
         }
     } catch(e) { toast('Error', false); }
@@ -1317,16 +1374,16 @@ async function generarQRs() {
     const cont = document.getElementById('panel-qrs');
     cont.innerHTML = data.mesas.map(m =>
         `<div class="bg-white rounded-xl p-4 text-center border">
-            <div id="qr-mesa-${m.numero}" class="flex justify-center mb-2"></div>
-            <p class="font-bold text-gray-800">Mesa ${m.numero}</p>
-            <p class="text-xs text-gray-400 break-all">/r/${SLUG}/mesa/${m.numero}</p>
+            <div id="qr-mesa-${m.nombre}" class="flex justify-center mb-2"></div>
+            <p class="font-bold text-gray-800">Mesa ${m.nombre}</p>
+            <p class="text-xs text-gray-400 break-all">/r/${SLUG}/mesa/${m.nombre}</p>
         </div>`
     ).join('');
 
     // Generar QR para cada mesa
     data.mesas.forEach(m => {
-        new QRCode(document.getElementById(`qr-mesa-${m.numero}`), {
-            text: `${baseUrl}/r/${SLUG}/mesa/${m.numero}`,
+        new QRCode(document.getElementById(`qr-mesa-${m.nombre}`), {
+            text: `${baseUrl}/r/${SLUG}/mesa/${m.nombre}`,
             width: 150,
             height: 150,
             colorDark: '#1f2937',
@@ -1397,7 +1454,7 @@ async function generarPDFQRs() {
 
                 await new Promise(resolve => {
                     new QRCode(tempDiv, {
-                        text: `${baseUrl}/r/${SLUG}/mesa/${m.numero}`,
+                        text: `${baseUrl}/r/${SLUG}/mesa/${m.nombre}`,
                         width: 300,
                         height: 300,
                         colorDark: '#1f2937',
@@ -1418,13 +1475,13 @@ async function generarPDFQRs() {
                 // Texto "Mesa X"
                 doc.setFontSize(14);
                 doc.setFont('helvetica', 'bold');
-                doc.text(`Mesa ${m.numero}`, x + cardW / 2, y + qrSize + 12, { align: 'center' });
+                doc.text(`Mesa ${m.nombre}`, x + cardW / 2, y + qrSize + 12, { align: 'center' });
 
                 // URL chica
                 doc.setFontSize(7);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(130);
-                doc.text(`/r/${SLUG}/mesa/${m.numero}`, x + cardW / 2, y + qrSize + 18, { align: 'center' });
+                doc.text(`/r/${SLUG}/mesa/${m.nombre}`, x + cardW / 2, y + qrSize + 18, { align: 'center' });
                 doc.setTextColor(0);
 
                 idx++;
@@ -1549,7 +1606,7 @@ function renderReporteDetalle() {
     const body = document.getElementById('rpt-detalle-body');
     body.innerHTML = datosReporte.map(p => {
         const items = p.tipo === 'carta' ? `${p.cantidad > 1 ? p.cantidad + 'x ' : ''}${p.plato || ''}` : p.items.join(' + ');
-        const ubicacion = p.mesa_num > 0 ? `Mesa ${p.mesa_num}` : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger');
+        const ubicacion = p.mesa_nombre ? `Mesa ${p.mesa_nombre}` : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger');
         const estadoColor = p.estado === 'cobrado' ? 'text-green-600' : p.estado === 'listo' ? 'text-blue-600' : p.estado === 'pendiente' ? 'text-yellow-600' : 'text-gray-400';
         return `
             <tr class="border-b border-gray-100 hover:bg-gray-50">

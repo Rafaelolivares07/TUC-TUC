@@ -414,7 +414,7 @@ async function enviarPedido() {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                mesa_num: mesaSeleccionada,
+                mesa_nombre: mesaSeleccionada,
                 tipo: tipoSeleccionado,
                 sopa_id: sopaSeleccionada,
                 proteina_id: proteinaSeleccionada,
@@ -471,7 +471,7 @@ async function cargarPedidos() {
                 return `
                     <div class="flex items-center justify-between bg-green-800 rounded-lg p-3">
                         <div>
-                            <span class="font-extrabold text-xl text-white">${p.mesa_num > 0 ? 'Mesa ' + p.mesa_num : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
+                            <span class="font-extrabold text-xl text-white">${p.mesa_nombre ? 'Mesa ' + p.mesa_nombre : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
                             ${p.nombre_cliente ? `<span class="text-green-200 text-sm ml-1">- ${p.nombre_cliente}</span>` : ''}
                             ${p.mesa_num === 0 && p.telefono_cliente ? `<span class="text-green-200 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                             <span class="text-green-200 text-sm ml-2">${items}</span>
@@ -501,12 +501,12 @@ async function cargarPedidos() {
                     <div class="bg-gray-800 rounded-xl p-4 border-2 border-gray-700">
                         <div class="flex justify-between items-start">
                             <div>
-                                <span class="font-bold text-lg">${p.mesa_num > 0 ? 'Mesa ' + p.mesa_num : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
+                                <span class="font-bold text-lg">${p.mesa_nombre ? 'Mesa ' + p.mesa_nombre : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
                                 ${p.nombre_cliente ? `<span class="text-amber-300 text-xs ml-1">${p.nombre_cliente}</span>` : ''}
-                                ${p.mesa_num === 0 && p.telefono_cliente ? `<span class="text-gray-400 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
+                                ${!p.mesa_nombre && p.telefono_cliente ? `<span class="text-gray-400 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                                 <span class="ml-2 text-xs px-2 py-1 rounded-full bg-yellow-600">En cocina</span>
                                 <span class="text-gray-500 text-xs ml-2">${p.created_at}</span>
-                                ${p.mesa_num === 0 && p.direccion_cliente ? `<div class="text-gray-400 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
+                                ${!p.mesa_nombre && p.direccion_cliente ? `<div class="text-gray-400 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
                             </div>
                             <span class="font-bold text-amber-400">$${Number(p.precio).toLocaleString()}</span>
                         </div>
@@ -602,7 +602,7 @@ async function enviarPedidoCarta() {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                mesa_num: mesaSeleccionada,
+                mesa_nombre: mesaSeleccionada,
                 platos,
                 notas: document.getElementById('carta-notas').value.trim()
             })
@@ -640,11 +640,11 @@ async function cargarCuentas() {
         cont.innerHTML = data.cuentas.map(c => `
             <div class="bg-gray-800 rounded-xl p-4 border-2 border-amber-500">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="font-bold text-xl">Mesa ${c.mesa_num}</span>
+                    <span class="font-bold text-xl">Mesa ${c.mesa_id}</span>
                     <span class="text-xs text-gray-400">${c.cantidad} pedido${c.cantidad > 1 ? 's' : ''}</span>
                 </div>
                 <div class="text-2xl font-extrabold text-amber-400 mb-3">$${Number(c.total).toLocaleString()}</div>
-                <button onclick="cobrarMesa(${c.mesa_num}, ${c.total})"
+                <button onclick="cobrarMesa('${c.mesa_id}', ${c.total})"
                     class="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold transition">
                     Cobrar
                 </button>
@@ -653,13 +653,13 @@ async function cargarCuentas() {
     } catch(e) { console.error(e); }
 }
 
-async function cobrarMesa(num, total) {
-    if (!confirm(`¿Cobrar Mesa ${num}?\nTotal: $${Number(total).toLocaleString()}`)) return;
+async function cobrarMesa(mesaId, total) {
+    if (!confirm(`¿Cobrar Mesa ${mesaId}?\nTotal: $${Number(total).toLocaleString()}`)) return;
     try {
-        const r = await fetch(`${BASE}/cobrar/${num}`, {method: 'POST'});
+        const r = await fetch(`${BASE}/cobrar/${mesaId}`, {method: 'POST'});
         const data = await r.json();
         if (data.ok) {
-            toast(`Mesa ${num} cobrada - $${Number(total).toLocaleString()}`);
+            toast(`Mesa ${mesaId} cobrada - $${Number(total).toLocaleString()}`);
             cargarCuentas();
             cargarPedidos();
         }

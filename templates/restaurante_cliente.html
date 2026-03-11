@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ restaurante.nombre }}{% if mesa_num > 0 %} - Mesa {{ mesa_num }}{% endif %}</title>
+    <title>{{ restaurante.nombre }}{% if mesa_nombre %} - Mesa {{ mesa_nombre }}{% endif %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -110,8 +110,8 @@
         {% if restaurante.mostrar_nombre | default(true) %}
         <h1 class="text-2xl font-extrabold txt-primary">{{ restaurante.nombre }}</h1>
         {% endif %}
-        {% if mesa_num > 0 %}
-        <span class="inline-block bg-amber-100 text-amber-700 px-4 py-1 rounded-full font-bold text-sm mt-1">Mesa {{ mesa_num }}</span>
+        {% if mesa_nombre %}
+        <span class="inline-block bg-amber-100 text-amber-700 px-4 py-1 rounded-full font-bold text-sm mt-1">Mesa {{ mesa_nombre }}</span>
         {% else %}
         <span class="inline-block bg-green-100 text-green-700 px-4 py-1 rounded-full font-bold text-sm mt-1">Pedido Online</span>
         {% endif %}
@@ -210,7 +210,7 @@
 
 <script>
 const SLUG = '{{ restaurante.slug }}';
-const MESA = {{ mesa_num }};
+const MESA = "{{ mesa_nombre }}";
 const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const BASE = `/api/restaurante/${SLUG}`;
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
@@ -427,14 +427,14 @@ async function enviarPedido() {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                mesa_num: MESA,
+                mesa_nombre: MESA,
                 tipo: tipoSeleccionado,
                 sopa_id: sopaSeleccionada,
                 proteina_id: proteinaSeleccionada,
                 principio_id: principioSeleccionado,
                 notas: document.getElementById('cli-notas').value.trim(),
                 nombre_cliente: nombreCliente,
-                tipo_entrega: MESA === 0 ? tipoEntrega : 'mesa',
+                tipo_entrega: MESA === '' ? tipoEntrega : 'mesa',
                 telefono_cliente: telefonoCliente || null,
                 direccion_cliente: direccionCliente || null,
                 cliente_id: clienteId || null
@@ -476,8 +476,8 @@ async function cargarMisPedidos() {
 
         // Filtrar: mesa+nombre para mesas, cliente_id para remoto
         const mios = MESA > 0
-            ? data.pedidos.filter(p => p.mesa_num === MESA && p.nombre_cliente === nombreCliente)
-            : data.pedidos.filter(p => p.cliente_id === clienteId && p.mesa_num === 0);
+            ? data.pedidos.filter(p => p.mesa_nombre === MESA && p.nombre_cliente === nombreCliente)
+            : data.pedidos.filter(p => p.cliente_id === clienteId && !p.mesa_nombre);
         const cont = document.getElementById('mis-pedidos');
 
         if (mios.length === 0) {
@@ -604,11 +604,11 @@ enviarPedido = async function() {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    mesa_num: MESA,
+                    mesa_nombre: MESA,
                     platos,
                     notas: document.getElementById('cli-notas').value.trim(),
                     nombre_cliente: nombreCliente,
-                    tipo_entrega: MESA === 0 ? tipoEntrega : 'mesa',
+                    tipo_entrega: MESA === '' ? tipoEntrega : 'mesa',
                     telefono_cliente: telefonoCliente || null,
                     direccion_cliente: direccionCliente || null,
                     cliente_id: clienteId || null
@@ -762,7 +762,7 @@ if (MESA === 0) {
 setInterval(cargarMisPedidos, 10000);
 </script>
 
-{% if mesa_num == 0 %}
+{% if not mesa_nombre %}
 <!-- Modal registro para pedido remoto -->
 <div id="modal-registro" class="fixed inset-0 bg-black/60 z-50 flex items-end justify-center hidden" onclick="if(event.target===this)cerrarModal()">
     <div class="modal-card bg-white rounded-t-3xl w-full max-w-lg p-6 pb-8">

@@ -101,7 +101,7 @@
         <!-- ====== TAB: CATÁLOGO DE PRODUCTOS ====== -->
         <div id="panel-catalogo" class="p-6">
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                <h3 class="font-bold text-gray-700 mb-3">Agregar producto</h3>
+                <h3 id="form-producto-titulo" class="font-bold text-gray-700 mb-3">Agregar producto</h3>
                 <div class="flex flex-col gap-3">
                     <!-- Código de barras -->
                     <div class="flex items-center gap-2">
@@ -138,7 +138,10 @@
                         </div>
                         <input type="file" id="inp-foto-nuevo" accept="image/*" class="hidden" onchange="previsualizarNuevo(this)">
                         <span id="nombre-foto-nuevo" class="text-xs text-gray-400 flex-1">Sin foto (opcional)</span>
-                        <button onclick="guardarProducto()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                        <button id="btn-cancelar-edicion" onclick="cancelarEdicion()" class="hidden bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                            Cancelar
+                        </button>
+                        <button id="btn-guardar-producto" onclick="guardarProducto()" class="bg-rose-500 hover:bg-rose-600 text-white px-6 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
                             Agregar
                         </button>
                     </div>
@@ -327,6 +330,7 @@ const TOKEN = '{{ tienda.token_acceso }}';
 const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
 let productos = [];
 let pollingInterval = null;
+let productoEditandoId = null;
 
 // === Toast ===
 function toast(msg, error) {
@@ -523,6 +527,7 @@ function renderProductos() {
                     </button>
                 </div>
                 <div class="mt-2 flex gap-2">
+                    <button onclick="editarProducto(${p.id})" class="flex-1 text-xs text-blue-600 font-semibold py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition">Editar</button>
                     <button onclick="abrirFotos(${p.id})" class="flex-1 text-xs text-rose-500 font-semibold py-1 border border-rose-200 rounded-lg hover:bg-rose-50 transition">${p.imagen ? 'Cambiar Fotos' : 'Agregar Fotos'}</button>
                     <button onclick="abrirVariantes(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="flex-1 text-xs text-purple-600 font-semibold py-1 border border-purple-200 rounded-lg hover:bg-purple-50 transition">Variantes</button>
                     <button onclick="compartirProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="flex-1 text-xs text-emerald-600 font-semibold py-1 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition">Compartir</button>
@@ -650,6 +655,39 @@ async function procesarEscaneo(input) {
     } catch(e) { toast('Error al procesar imagen', true); }
 }
 
+function editarProducto(id) {
+    const p = productos.find(x => x.id === id);
+    if (!p) return;
+    productoEditandoId = id;
+    document.getElementById('cat-nombre').value = p.nombre;
+    document.getElementById('cat-precio').value = p.precio;
+    document.getElementById('cat-descripcion').value = p.descripcion || '';
+    document.getElementById('cat-codigo').value = p.codigo_barra || '';
+    // Seleccionar categoría
+    const sel = document.getElementById('cat-categoria-sel');
+    const opt = Array.from(sel.options).find(o => o.value === p.categoria);
+    if (opt) { sel.value = p.categoria; } else {
+        sel.value = '__nueva__';
+        document.getElementById('cat-categoria-nueva').value = p.categoria || '';
+        document.getElementById('cat-categoria-nueva').classList.remove('hidden');
+    }
+    document.getElementById('form-producto-titulo').textContent = 'Editar producto';
+    document.getElementById('btn-guardar-producto').textContent = 'Guardar cambios';
+    document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
+    document.getElementById('panel-catalogo').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function cancelarEdicion() {
+    productoEditandoId = null;
+    document.getElementById('cat-nombre').value = '';
+    document.getElementById('cat-precio').value = '';
+    document.getElementById('cat-descripcion').value = '';
+    document.getElementById('cat-codigo').value = '';
+    document.getElementById('form-producto-titulo').textContent = 'Agregar producto';
+    document.getElementById('btn-guardar-producto').textContent = 'Agregar';
+    document.getElementById('btn-cancelar-edicion').classList.add('hidden');
+}
+
 async function guardarProducto() {
     const nombre = document.getElementById('cat-nombre').value.trim();
     const categoria = getCategoriaSeleccionada();
@@ -658,31 +696,32 @@ async function guardarProducto() {
     if (!precio || parseFloat(precio) <= 0) return toast('Ingresa un precio valido', true);
 
     try {
+        const body = {
+            nombre, categoria, precio: parseFloat(precio),
+            descripcion: document.getElementById('cat-descripcion').value.trim(),
+            codigo_barra: codigoBarraActual || document.getElementById('cat-codigo').value.trim() || null,
+            catalogo_id: catalogoIdActual || null
+        };
+        if (productoEditandoId) body.id = productoEditandoId;
+
         const r = await fetch(BASE + '/producto', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                nombre, categoria, precio: parseFloat(precio),
-                descripcion: document.getElementById('cat-descripcion').value.trim(),
-                codigo_barra: codigoBarraActual || null,
-                catalogo_id: catalogoIdActual || null
-            })
+            body: JSON.stringify(body)
         });
         const data = await r.json();
         if (data.ok) {
-            // Si hay foto, subirla inmediatamente
-            if (fotoNuevaBase64 && data.id) {
-                await fetch(BASE + '/producto/' + data.id + '/imagen', {
+            const pid = productoEditandoId || data.id;
+            // Si hay foto nueva, subirla
+            if (fotoNuevaBase64 && pid) {
+                await fetch(BASE + '/producto/' + pid + '/imagen', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({imagen: fotoNuevaBase64})
                 });
             }
-            document.getElementById('cat-nombre').value = '';
-            document.getElementById('cat-precio').value = '';
-            document.getElementById('cat-descripcion').value = '';
-            document.getElementById('cat-codigo').value = '';
-            document.getElementById('cat-categoria-nueva').value = '';
+            const esEdicion = !!productoEditandoId;
+            cancelarEdicion();
             document.getElementById('cat-categoria-nueva').classList.add('hidden');
             document.getElementById('catalogo-badge').classList.add('hidden');
             catalogoIdActual = null;
@@ -691,7 +730,7 @@ async function guardarProducto() {
             document.getElementById('preview-nuevo').innerHTML = `<svg class="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`;
             document.getElementById('nombre-foto-nuevo').textContent = 'Sin foto (opcional)';
             document.getElementById('inp-foto-nuevo').value = '';
-            toast('Producto agregado');
+            toast(esEdicion ? 'Producto actualizado' : 'Producto agregado');
             cargarProductos();
         } else {
             toast(data.error || 'Error', true);

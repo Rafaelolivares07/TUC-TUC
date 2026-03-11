@@ -13,9 +13,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .tab-active { border-bottom: 3px solid #e11d48; color: #e11d48; font-weight: 700; }
-        .tab-inactive { border-bottom: 3px solid transparent; color: #6b7280; }
-        .tab-inactive:hover { color: #374151; border-color: #d1d5db; }
+        /* Nav carrusel */
+        #nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
+        #nav-tabs::-webkit-scrollbar { display: none; }
+        .tab-btn {
+            flex-shrink: 0;
+            min-width: 90px;
+            padding: 10px 16px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            border-radius: 999px;
+            transition: background 0.2s, color 0.2s;
+            white-space: nowrap;
+            color: #6b7280;
+            background: transparent;
+        }
+        .tab-btn.tab-active {
+            background: #e11d48;
+            color: #fff;
+        }
+        .tab-btn:not(.tab-active):hover { background: #f3f4f6; color: #374151; }
         .toast {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
             padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
@@ -78,24 +95,15 @@
         </div>
     </div>
 
-    <!-- Tabs -->
+    <!-- Nav carrusel -->
     <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
-        <div class="flex border-b overflow-x-auto">
-            <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="flex-1 py-4 text-center text-sm tab-active transition-all whitespace-nowrap px-2">
-                Catalogo
-            </button>
-            <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
-                Pedidos
-            </button>
-            <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
-                Personalizar
-            </button>
-            <button onclick="cambiarTab('acceso')" id="tab-acceso" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
-                Acceso
-            </button>
-            <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2">
-                Ubicación
-            </button>
+        <div id="nav-tabs" class="flex gap-2 px-3 py-3 overflow-x-auto border-b border-gray-100">
+            <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="tab-btn tab-active">📦 Catálogo</button>
+            <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">🛒 Pedidos</button>
+            <button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📊 Inventario</button>
+            <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Tienda</button>
+            <button onclick="cambiarTab('acceso')" id="tab-acceso" class="tab-btn">🔑 Acceso</button>
+            <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">📍 Ubicación</button>
         </div>
 
         <!-- ====== TAB: CATÁLOGO DE PRODUCTOS ====== -->
@@ -291,6 +299,61 @@
 
     </div>
 
+    <!-- ====== TAB: INVENTARIO ====== -->
+    <div id="panel-inventario" class="p-5 hidden bg-white rounded-2xl shadow-lg mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-700">Inventario</h2>
+            <button onclick="abrirModalEntrada()" class="bg-rose-600 text-white text-sm px-4 py-2 rounded-xl font-semibold">+ Registrar entrada</button>
+        </div>
+        <!-- Stock actual -->
+        <div id="tabla-stock" class="overflow-x-auto">
+            <p class="text-gray-400 text-sm text-center py-8">Cargando...</p>
+        </div>
+        <!-- Kardex por producto -->
+        <div id="seccion-kardex" class="hidden mt-6">
+            <div class="flex items-center gap-2 mb-3">
+                <button onclick="cerrarKardex()" class="text-gray-400 text-lg">←</button>
+                <h3 id="kardex-titulo" class="font-semibold text-gray-700 text-sm"></h3>
+            </div>
+            <div id="tabla-kardex" class="overflow-x-auto"></div>
+        </div>
+    </div>
+
+    <!-- Modal entrada de inventario -->
+    <div id="modal-entrada" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end justify-center">
+        <div class="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-10">
+            <h3 class="font-semibold text-gray-800 mb-4">Registrar entrada de inventario</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-500 font-semibold uppercase">Producto</label>
+                    <select id="entrada-producto" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1"></select>
+                </div>
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="text-xs text-gray-500 font-semibold uppercase">Cantidad</label>
+                        <input type="number" id="entrada-cantidad" min="1" value="1" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-xs text-gray-500 font-semibold uppercase">Motivo</label>
+                        <select id="entrada-motivo" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                            <option value="compra">Compra</option>
+                            <option value="devolucion">Devolución</option>
+                            <option value="ajuste">Ajuste</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-semibold uppercase">Notas (opcional)</label>
+                    <input type="text" id="entrada-notas" placeholder="Proveedor, factura, etc." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                </div>
+            </div>
+            <div class="flex gap-3 mt-5">
+                <button onclick="cerrarModalEntrada()" class="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600">Cancelar</button>
+                <button onclick="guardarEntrada()" class="flex-1 bg-rose-600 text-white rounded-xl py-3 text-sm font-semibold">Guardar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ====== TAB: UBICACIÓN (fuera del overflow-hidden para que MapLibre renderice) ====== -->
     <div id="panel-ubicacion" class="p-5 hidden bg-white rounded-2xl shadow-lg mb-6">
         <h2 class="font-semibold text-gray-700 mb-2">Ubicación de la tienda</h2>
@@ -342,15 +405,115 @@ function toast(msg, error) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','personalizar','acceso','ubicacion'].forEach(t => {
+    ['catalogo','pedidos','inventario','personalizar','acceso','ubicacion'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
-        document.getElementById('tab-' + t).className = (t === tab) ?
-            'flex-1 py-4 text-center text-sm tab-active transition-all whitespace-nowrap px-2' :
-            'flex-1 py-4 text-center text-sm tab-inactive transition-all whitespace-nowrap px-2';
+        const btn = document.getElementById('tab-' + t);
+        btn.classList.toggle('tab-active', t === tab);
     });
+    // Centrar el botón activo en el carrusel
+    const btnActivo = document.getElementById('tab-' + tab);
+    if (btnActivo) btnActivo.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     if (tab === 'pedidos') cargarPedidos();
     if (tab === 'acceso') cargarCajeros();
     if (tab === 'ubicacion') iniciarMapaUbicacion();
+    if (tab === 'inventario') cargarStock();
+}
+
+// ── UBICACIÓN (mapa propio) ───────────────────────────────────
+// ── INVENTARIO ────────────────────────────────────────────────
+const SLUG_TIENDA = '{{ tienda.slug }}';
+
+async function cargarStock() {
+    document.getElementById('seccion-kardex').classList.add('hidden');
+    const r = await fetch(`/api/tienda/${SLUG_TIENDA}/inventario/stock`);
+    const d = await r.json();
+    if (!d.ok) { document.getElementById('tabla-stock').innerHTML = '<p class="text-red-500 text-sm text-center py-4">Error cargando stock</p>'; return; }
+    if (!d.productos.length) { document.getElementById('tabla-stock').innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Sin productos</p>'; return; }
+    const filas = d.productos.map(p => `
+        <tr class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onclick="verKardex(${p.id}, '${p.nombre.replace(/'/g,"\\'")}')">
+            <td class="py-3 px-3 text-sm font-medium text-gray-800">${p.nombre}</td>
+            <td class="py-3 px-3 text-xs text-gray-400">${p.categoria || '—'}</td>
+            <td class="py-3 px-3 text-sm font-bold text-center ${p.stock <= 0 ? 'text-red-500' : p.stock <= 5 ? 'text-amber-500' : 'text-green-600'}">${p.stock}</td>
+            <td class="py-3 px-3 text-xs text-gray-400 text-right">📋</td>
+        </tr>`).join('');
+    document.getElementById('tabla-stock').innerHTML = `
+        <table class="w-full min-w-[300px]">
+            <thead><tr class="text-xs text-gray-400 uppercase border-b">
+                <th class="py-2 px-3 text-left">Producto</th>
+                <th class="py-2 px-3 text-left">Categoría</th>
+                <th class="py-2 px-3 text-center">Stock</th>
+                <th class="py-2 px-3"></th>
+            </tr></thead>
+            <tbody>${filas}</tbody>
+        </table>`;
+    // poblar select del modal
+    const sel = document.getElementById('entrada-producto');
+    sel.innerHTML = d.productos.map(p => `<option value="${p.id}">${p.nombre} (stock: ${p.stock})</option>`).join('');
+}
+
+async function verKardex(productoId, nombre) {
+    document.getElementById('kardex-titulo').textContent = nombre;
+    document.getElementById('tabla-kardex').innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Cargando...</p>';
+    document.getElementById('seccion-kardex').classList.remove('hidden');
+    document.getElementById('tabla-stock').classList.add('hidden');
+    const r = await fetch(`/api/tienda/${SLUG_TIENDA}/inventario/kardex?producto_id=${productoId}`);
+    const d = await r.json();
+    if (!d.ok || !d.movimientos.length) {
+        document.getElementById('tabla-kardex').innerHTML = '<p class="text-gray-400 text-sm text-center py-6">Sin movimientos</p>';
+        return;
+    }
+    const filas = d.movimientos.map(m => `
+        <tr class="border-b border-gray-50 text-sm">
+            <td class="py-2 px-2 text-xs text-gray-400 whitespace-nowrap">${m.fecha}</td>
+            <td class="py-2 px-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${m.tipo==='entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">${m.tipo}</span></td>
+            <td class="py-2 px-2 text-xs text-gray-500">${m.motivo}</td>
+            <td class="py-2 px-2 text-center font-bold ${m.tipo==='entrada' ? 'text-green-600' : 'text-red-500'}">${m.tipo==='entrada' ? '+' : '-'}${m.cantidad}</td>
+            <td class="py-2 px-2 text-center text-gray-700 font-semibold">${m.stock_nuevo}</td>
+            <td class="py-2 px-2 text-xs text-gray-400">${m.notas || ''}</td>
+        </tr>`).join('');
+    document.getElementById('tabla-kardex').innerHTML = `
+        <table class="w-full min-w-[400px]">
+            <thead><tr class="text-xs text-gray-400 uppercase border-b">
+                <th class="py-2 px-2 text-left">Fecha</th>
+                <th class="py-2 px-2 text-left">Tipo</th>
+                <th class="py-2 px-2 text-left">Motivo</th>
+                <th class="py-2 px-2 text-center">Cant.</th>
+                <th class="py-2 px-2 text-center">Saldo</th>
+                <th class="py-2 px-2 text-left">Notas</th>
+            </tr></thead>
+            <tbody>${filas}</tbody>
+        </table>`;
+}
+
+function cerrarKardex() {
+    document.getElementById('seccion-kardex').classList.add('hidden');
+    document.getElementById('tabla-stock').classList.remove('hidden');
+}
+
+function abrirModalEntrada(productoId) {
+    if (productoId) document.getElementById('entrada-producto').value = productoId;
+    document.getElementById('modal-entrada').classList.remove('hidden');
+}
+function cerrarModalEntrada() { document.getElementById('modal-entrada').classList.add('hidden'); }
+
+async function guardarEntrada() {
+    const producto_id = document.getElementById('entrada-producto').value;
+    const cantidad = parseInt(document.getElementById('entrada-cantidad').value);
+    const motivo = document.getElementById('entrada-motivo').value;
+    const notas = document.getElementById('entrada-notas').value;
+    if (!producto_id || cantidad < 1) { toast('Completa los campos requeridos', true); return; }
+    try {
+        const r = await fetch(`/api/tienda/${SLUG_TIENDA}/inventario/entrada`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ producto_id, cantidad, motivo, notas })
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Error');
+        cerrarModalEntrada();
+        toast('Entrada registrada');
+        cargarStock();
+    } catch(e) { toast(e.message, true); }
 }
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────

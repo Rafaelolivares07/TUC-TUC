@@ -25260,6 +25260,8 @@ def crear_tablas_tienda(conn):
         "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
+        "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
     ]
     for sql in alters:
         try:
@@ -25270,6 +25272,72 @@ def crear_tablas_tienda(conn):
                 conn.rollback()
             except:
                 pass
+
+    # Tablas maestras de inventario y contabilidad (transversales a todos los negocios)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movimientos_inventario (
+            id              SERIAL PRIMARY KEY,
+            negocio_id      INTEGER NOT NULL,
+            producto_id     INTEGER NOT NULL,
+            producto_tipo   VARCHAR(20) NOT NULL DEFAULT 'tienda',
+            nombre_producto VARCHAR(255),
+            tipo            VARCHAR(10) NOT NULL,
+            motivo          VARCHAR(20) NOT NULL,
+            cantidad        NUMERIC(10,3) NOT NULL,
+            stock_anterior  NUMERIC(10,3),
+            stock_nuevo     NUMERIC(10,3),
+            id_tercero      INTEGER,
+            registrado_por  INTEGER,
+            referencia_id   INTEGER,
+            referencia_tipo VARCHAR(30),
+            notas           TEXT,
+            created_at      TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_movinv_negocio ON movimientos_inventario(negocio_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_movinv_producto ON movimientos_inventario(producto_id, producto_tipo)")
+    conn.commit()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS movimientos_contables (
+            id              SERIAL PRIMARY KEY,
+            negocio_id      INTEGER NOT NULL,
+            tipo            VARCHAR(10) NOT NULL,
+            cuenta          VARCHAR(50) NOT NULL,
+            concepto        VARCHAR(100),
+            monto           NUMERIC(12,2) NOT NULL,
+            id_tercero      INTEGER,
+            registrado_por  INTEGER,
+            referencia_id   INTEGER,
+            referencia_tipo VARCHAR(30),
+            notas           TEXT,
+            created_at      TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_movcont_negocio ON movimientos_contables(negocio_id)")
+    conn.commit()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS documentos_saldo (
+            id              SERIAL PRIMARY KEY,
+            negocio_id      INTEGER NOT NULL,
+            tipo_doc        VARCHAR(30) NOT NULL,
+            numero_doc      VARCHAR(50),
+            id_tercero      INTEGER NOT NULL,
+            monto_original  NUMERIC(12,2) NOT NULL,
+            saldo           NUMERIC(12,2) NOT NULL,
+            fecha_vence     DATE,
+            estado          VARCHAR(20) DEFAULT 'pendiente',
+            referencia_id   INTEGER,
+            referencia_tipo VARCHAR(30),
+            notas           TEXT,
+            created_at      TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_docsaldo_negocio ON documentos_saldo(negocio_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_docsaldo_tercero ON documentos_saldo(id_tercero)")
+    conn.commit()
+
     _tienda_tablas_listas = True
 
 
@@ -27485,8 +27553,8 @@ def api_tienda_crear():
             admin_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (admin_telefono,)).fetchone()['id']
 
         conn.execute(
-            "INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso) VALUES (%s, %s, %s, %s, %s, %s)",
-            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso)
+            "INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, tercero_id) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, admin_id)
         )
         conn.commit()
         conn.close()
@@ -27716,6 +27784,125 @@ def api_tienda_producto_disponible(slug, producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/tienda/<slug>/inventario/stock')
+def api_tienda_inventario_stock(slug):
+    """Stock actual de todos los productos de la tienda"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        rows = conn.execute(
+            "SELECT id, nombre, categoria, stock FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, nombre",
+            (tienda['id'],)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'productos': [
+            {'id': r['id'], 'nombre': r['nombre'], 'categoria': r['categoria'] or '', 'stock': r['stock'] or 0}
+            for r in rows
+        ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/inventario/kardex')
+def api_tienda_inventario_kardex(slug):
+    """Kardex de movimientos por producto"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    producto_id = request.args.get('producto_id')
+    if not producto_id:
+        return jsonify({'ok': False, 'error': 'producto_id requerido'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        rows = conn.execute("""
+            SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo, notas,
+                   TO_CHAR(created_at, 'DD/MM/YY HH24:MI') as fecha
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND producto_tipo = 'tienda'
+            ORDER BY created_at DESC
+            LIMIT 200
+        """, (tienda['tercero_id'], int(producto_id))).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'movimientos': [
+            {'tipo': r['tipo'], 'motivo': r['motivo'], 'cantidad': float(r['cantidad']),
+             'stock_anterior': float(r['stock_anterior'] or 0), 'stock_nuevo': float(r['stock_nuevo'] or 0),
+             'notas': r['notas'] or '', 'fecha': r['fecha']}
+            for r in rows
+        ]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/inventario/entrada', methods=['POST'])
+def api_tienda_inventario_entrada(slug):
+    """Registrar entrada de inventario (compra, devolución, ajuste)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    producto_id = data.get('producto_id')
+    cantidad = data.get('cantidad', 0)
+    motivo = data.get('motivo', 'compra')
+    notas = data.get('notas', '')
+    if not producto_id or int(cantidad) < 1:
+        return jsonify({'ok': False, 'error': 'Datos inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT t.id, t.tercero_id FROM tiendas t WHERE t.slug = %s", (slug,)
+        ).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        producto = conn.execute(
+            "SELECT id, nombre, stock FROM productos_tienda WHERE id = %s AND tienda_id = %s",
+            (int(producto_id), tienda['id'])
+        ).fetchone()
+        if not producto:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        stock_anterior = producto['stock'] or 0
+        stock_nuevo = stock_anterior + int(cantidad)
+        conn.execute(
+            "UPDATE productos_tienda SET stock = %s WHERE id = %s",
+            (stock_nuevo, producto['id'])
+        )
+        registrado_por = conn.execute(
+            "SELECT tercero_id FROM usuarios WHERE id = %s", (session['usuario_id'],)
+        ).fetchone()
+        conn.execute("""
+            INSERT INTO movimientos_inventario
+                (negocio_id, producto_id, producto_tipo, nombre_producto, tipo, motivo,
+                 cantidad, stock_anterior, stock_nuevo, registrado_por, notas)
+            VALUES (%s, %s, 'tienda', %s, 'entrada', %s, %s, %s, %s, %s, %s)
+        """, (
+            tienda['tercero_id'], producto['id'], producto['nombre'],
+            motivo, int(cantidad), stock_anterior, stock_nuevo,
+            registrado_por['tercero_id'] if registrado_por else None,
+            notas or None
+        ))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'stock_nuevo': stock_nuevo})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/tienda/<slug>/buscar-productos')
 def api_tienda_buscar_productos(slug):
     """Buscar productos de otras tiendas para adopción"""
@@ -27942,7 +28129,7 @@ def api_tienda_pedido_crear(slug):
         conn = get_db_connection()
         crear_tablas_tienda(conn)
         tienda = conn.execute(
-            "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+            "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence, tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
         ).fetchone()
         if not tienda:
             conn.close()
@@ -27981,16 +28168,30 @@ def api_tienda_pedido_crear(slug):
         """, (tienda['id'], cliente_id, nombre_cliente or None, telefono_cliente or None, direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero))
         pedido_id = conn.execute("SELECT currval(pg_get_serial_sequence('pedidos_tienda', 'id'))").fetchone()[0]
 
-        # Insertar items y descontar stock
+        # Insertar items, descontar stock y registrar en kardex
         for it in items_validos:
             conn.execute("""
                 INSERT INTO items_pedido_tienda (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
                 VALUES (%s, %s, %s, %s, %s)
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
+            stock_row = conn.execute("SELECT stock FROM productos_tienda WHERE id = %s", (it['producto_id'],)).fetchone()
+            stock_ant = stock_row['stock'] or 0 if stock_row else 0
+            stock_nvo = max(0, stock_ant - it['cantidad'])
             conn.execute(
-                "UPDATE productos_tienda SET stock = GREATEST(0, stock - %s) WHERE id = %s",
-                (it['cantidad'], it['producto_id'])
+                "UPDATE productos_tienda SET stock = %s WHERE id = %s",
+                (stock_nvo, it['producto_id'])
             )
+            if tienda['tercero_id']:
+                conn.execute("""
+                    INSERT INTO movimientos_inventario
+                        (negocio_id, producto_id, producto_tipo, nombre_producto, tipo, motivo,
+                         cantidad, stock_anterior, stock_nuevo, id_tercero, referencia_id, referencia_tipo)
+                    VALUES (%s, %s, 'tienda', %s, 'salida', 'venta', %s, %s, %s, %s, %s, 'pedido_tienda')
+                """, (
+                    tienda['tercero_id'], it['producto_id'], it['nombre_producto'],
+                    it['cantidad'], stock_ant, stock_nvo,
+                    cliente_id, pedido_id
+                ))
 
         conn.commit()
         conn.close()

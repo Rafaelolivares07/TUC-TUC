@@ -640,12 +640,13 @@
     <!-- Botón salir (esquina sup izq) -->
     <button id="btn-salir" onclick="salir()">&#x2715;</button>
 
-    <!-- Columna derecha: sonido, vista, estilo, explorar -->
+    <!-- Columna derecha: sonido, vista, estilo, explorar, recalcular -->
     <div id="columna-derecha">
         <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
         <button id="btn-vista" onclick="toggleVista()">3/3</button>
         <button id="btn-estilo" onclick="toggleEstilo()">&#x2600;&#xFE0F;</button>
         <button id="btn-explorar" onclick="toggleModoLibre()">&#x1F5FA;</button>
+        <button id="btn-recalcular" onclick="recalcularRuta()" title="Recalcular ruta">&#x21BB;</button>
     </div>
 
     <!-- Botón volver a conducción (solo visible en modo libre) -->
@@ -2292,6 +2293,19 @@
             });
 
             document.getElementById('btn-estilo').textContent = estiloOscuro ? '\uD83C\uDF19' : '\u2600\uFE0F';
+        }
+
+        async function recalcularRuta() {
+            if (!viajeActivo) return;
+            const btn = document.getElementById('btn-recalcular');
+            btn.disabled = true;
+            btn.style.opacity = '0.4';
+            try {
+                await cargarRutaViajeActivo(true);
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '';
+            }
         }
 
         function toggleModoLibre() {

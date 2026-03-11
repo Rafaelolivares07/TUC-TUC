@@ -22035,7 +22035,17 @@ def api_viaje_ruta(viaje_id):
         dest_lat = float(viaje['destino_lat'])
         dest_lon = float(viaje['destino_lon'])
         print(f"🚗 Tramo 2: ({orig_lat},{orig_lon}) → destino ({dest_lat},{dest_lon})")
-        leg2 = obtener_ruta_con_fallback(orig_lat, orig_lon, dest_lat, dest_lon, conn)
+        if desde_actual:
+            # Recálculo por desvío o manual: Waze directo (tráfico en tiempo real)
+            waze_result = obtener_ruta_waze(orig_lat, orig_lon, dest_lat, dest_lon)
+            if waze_result and waze_result.get('geometria'):
+                print(f"✅ Ruta Waze: {waze_result['distancia_metros']}m")
+                leg2 = {'geometria': waze_result['geometria'], 'distancia_metros': round(waze_result['distancia_metros']), 'fuente': 'waze'}
+            else:
+                print("⚠️ Waze no respondió, usando fallback")
+                leg2 = obtener_ruta_con_fallback(orig_lat, orig_lon, dest_lat, dest_lon, conn)
+        else:
+            leg2 = obtener_ruta_con_fallback(orig_lat, orig_lon, dest_lat, dest_lon, conn)
         if leg2:
             resultado['leg2'] = leg2
             geometria_completa.extend(leg2['geometria'])

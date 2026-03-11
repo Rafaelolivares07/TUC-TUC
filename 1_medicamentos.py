@@ -25103,6 +25103,8 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE mesas_restaurante ADD COLUMN IF NOT EXISTS nombre VARCHAR(20)",
         "ALTER TABLE mesas_restaurante ADD COLUMN IF NOT EXISTS sector VARCHAR(100)",
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS mesa_nombre VARCHAR(20)",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
+        "UPDATE restaurantes SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
     ]
     for sql in alters:
         try:
@@ -28905,9 +28907,9 @@ def api_registro_rapido():
                 return jsonify({'ok': False, 'error': 'Ya existe un restaurante con ese nombre. Prueba con otro nombre.'}), 400
             token_acceso = uuid.uuid4().hex
             conn.execute("""
-                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
-            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, dias_gratis))
+                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s)
+            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -28926,9 +28928,9 @@ def api_registro_rapido():
             token_acceso = uuid.uuid4().hex
             fecha_vence  = date.today() + timedelta(days=dias_gratis)
             conn.execute("""
-                INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, fecha_vence, activo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, fecha_vence))
+                INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, fecha_vence, activo, tercero_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s)
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, fecha_vence, tercero_id))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -28946,9 +28948,9 @@ def api_registro_rapido():
                 return jsonify({'ok': False, 'error': 'Ya existe un taller con ese nombre. Prueba con otro nombre.'}), 400
             token_acceso = uuid.uuid4().hex
             cur = conn.execute("""
-                INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo)
-                VALUES (%s, %s, 'taller', %s, %s, %s, %s, %s, TRUE) RETURNING id
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis))
+                INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id)
+                VALUES (%s, %s, 'taller', %s, %s, %s, %s, %s, TRUE, %s) RETURNING id
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -30231,6 +30233,9 @@ def crear_tablas_taller(conn):
         "ALTER TABLE negocio_servicio ALTER COLUMN servicio_id DROP NOT NULL",
         "ALTER TABLE negocio_servicio ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'servicio'",
         "ALTER TABLE negocio_servicio ADD COLUMN IF NOT EXISTS visible_publico BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE negocios ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
+        "UPDATE negocios SET tercero_id = propietario_id WHERE tercero_id IS NULL AND propietario_id IS NOT NULL",
+        "UPDATE negocios SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
     ]
     for sql in alters:
         try:

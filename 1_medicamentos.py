@@ -30246,6 +30246,370 @@ def crear_tablas_taller(conn):
     _taller_tablas_listas = True
 
 
+# ─────────────────────────────────────────────────────────────
+# CONTABILIDAD — PUC COLOMBIANO
+# ─────────────────────────────────────────────────────────────
+_contabilidad_tablas_listas = False
+
+def crear_tablas_contabilidad(conn):
+    global _contabilidad_tablas_listas
+    if _contabilidad_tablas_listas:
+        return
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cuentas_puc (
+            id                SERIAL PRIMARY KEY,
+            codigo            VARCHAR(10) UNIQUE NOT NULL,
+            nombre            VARCHAR(255) NOT NULL,
+            nivel             SMALLINT NOT NULL,
+            codigo_padre      VARCHAR(10),
+            naturaleza        VARCHAR(10) NOT NULL DEFAULT 'debito',
+            acepta_movimiento BOOLEAN DEFAULT FALSE,
+            maneja_terceros   BOOLEAN DEFAULT FALSE,
+            maneja_documentos BOOLEAN DEFAULT FALSE,
+            activo            BOOLEAN DEFAULT TRUE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_puc_codigo ON cuentas_puc(codigo)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_puc_padre ON cuentas_puc(codigo_padre)")
+    conn.commit()
+    _seed_puc(conn)
+    _contabilidad_tablas_listas = True
+
+def _seed_puc(conn):
+    """Carga el PUC colombiano completo si la tabla está vacía"""
+    cnt = conn.execute("SELECT COUNT(*) FROM cuentas_puc").fetchone()[0]
+    if cnt > 0:
+        return
+    # (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_mov, terceros, documentos)
+    D, C = 'debito', 'credito'
+    cuentas = [
+        # ══════════════════════════════════════════════════
+        # CLASE 1 — ACTIVO
+        # ══════════════════════════════════════════════════
+        ('1','Activo',1,None,D,False,False,False),
+        ('11','Disponible',2,'1',D,False,False,False),
+        ('1105','Caja',3,'11',D,True,False,False),
+        ('1110','Depósitos en establecimientos bancarios',3,'11',D,True,False,False),
+        ('1115','Remesas en tránsito',3,'11',D,True,False,False),
+        ('1120','Cuentas de ahorro',3,'11',D,True,False,False),
+        ('1125','Fondos',3,'11',D,True,False,False),
+        ('12','Inversiones',2,'1',D,False,False,False),
+        ('1205','Acciones',3,'12',D,True,False,False),
+        ('1210','Cuotas o partes de interés social',3,'12',D,True,False,False),
+        ('1215','Bonos',3,'12',D,True,False,False),
+        ('1220','Cédulas',3,'12',D,True,False,False),
+        ('1225','Títulos',3,'12',D,True,False,False),
+        ('1235','Derechos fiduciarios',3,'12',D,True,False,False),
+        ('1285','Otras inversiones',3,'12',D,True,False,False),
+        ('1290','Provisiones',3,'12',C,True,False,False),
+        ('13','Deudores',2,'1',D,False,False,False),
+        ('1305','Clientes',3,'13',D,True,True,True),
+        ('1310','Cuentas corrientes comerciales',3,'13',D,True,True,True),
+        ('1315','Vinculados económicos',3,'13',D,True,True,False),
+        ('1320','Deudores varios',3,'13',D,True,True,False),
+        ('1325','Cuentas por cobrar a trabajadores',3,'13',D,True,True,True),
+        ('1328','Anticipos y avances',3,'13',D,True,True,False),
+        ('1330','Depósitos',3,'13',D,True,False,False),
+        ('1335','Arrendamientos',3,'13',D,True,False,False),
+        ('1345','Ingresos por cobrar',3,'13',D,True,False,False),
+        ('1350','Retención en la fuente',3,'13',D,True,False,False),
+        ('1355','Anticipo de impuestos y contribuciones',3,'13',D,True,False,False),
+        ('1360','Reclamaciones',3,'13',D,True,True,False),
+        ('1365','Cuentas por cobrar a socios y accionistas',3,'13',D,True,True,True),
+        ('1370','Deudas de difícil cobro',3,'13',D,True,True,False),
+        ('1380','Deudores varios',3,'13',D,True,True,False),
+        ('1390','Provisiones',3,'13',C,True,False,False),
+        ('14','Inventarios',2,'1',D,False,False,False),
+        ('1405','Materias primas',3,'14',D,True,False,False),
+        ('1410','Productos en proceso',3,'14',D,True,False,False),
+        ('1420','Productos terminados',3,'14',D,True,False,False),
+        ('1425','Mercancías no fabricadas por la empresa',3,'14',D,True,False,False),
+        ('1428','Materiales, repuestos y accesorios',3,'14',D,True,False,False),
+        ('1430','Envases y empaques',3,'14',D,True,False,False),
+        ('1435','Inventarios en tránsito',3,'14',D,True,False,False),
+        ('1499','Provisiones',3,'14',C,True,False,False),
+        ('15','Propiedades, planta y equipo',2,'1',D,False,False,False),
+        ('1504','Terrenos',3,'15',D,True,False,False),
+        ('1508','Construcciones y edificaciones',3,'15',D,True,False,False),
+        ('1512','Maquinaria y equipo',3,'15',D,True,False,False),
+        ('1516','Equipo de oficina',3,'15',D,True,False,False),
+        ('1520','Equipo de computación y comunicación',3,'15',D,True,False,False),
+        ('1524','Equipo médico-científico',3,'15',D,True,False,False),
+        ('1528','Equipo de hoteles y restaurantes',3,'15',D,True,False,False),
+        ('1532','Equipo de transporte',3,'15',D,True,False,False),
+        ('1572','Depreciación acumulada',3,'15',C,True,False,False),
+        ('1592','Valorizaciones',3,'15',D,True,False,False),
+        ('16','Intangibles',2,'1',D,False,False,False),
+        ('1605','Crédito mercantil',3,'16',D,True,False,False),
+        ('1610','Marcas',3,'16',D,True,False,False),
+        ('1615','Patentes',3,'16',D,True,False,False),
+        ('1620','Concesiones y franquicias',3,'16',D,True,False,False),
+        ('1625','Derechos',3,'16',D,True,False,False),
+        ('1635','Licencias',3,'16',D,True,False,False),
+        ('1660','Amortización acumulada',3,'16',C,True,False,False),
+        ('17','Diferidos',2,'1',D,False,False,False),
+        ('1705','Gastos pagados por anticipado',3,'17',D,True,False,False),
+        ('1710','Cargos diferidos',3,'17',D,True,False,False),
+        ('1740','Programas para computador (software)',3,'17',D,True,False,False),
+        ('1760','Útiles y papelería',3,'17',D,True,False,False),
+        ('1775','Impuesto al valor agregado descontable',3,'17',D,True,False,False),
+        ('1790','Amortización acumulada',3,'17',C,True,False,False),
+        ('18','Otros activos',2,'1',D,False,False,False),
+        ('1810','Mejoras a propiedades ajenas',3,'18',D,True,False,False),
+        ('1895','Otros',3,'18',D,True,False,False),
+        ('19','Valorizaciones',2,'1',D,False,False,False),
+        ('1905','Activos fijos',3,'19',D,True,False,False),
+        ('1910','Inversiones',3,'19',D,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 2 — PASIVO
+        # ══════════════════════════════════════════════════
+        ('2','Pasivo',1,None,C,False,False,False),
+        ('21','Obligaciones financieras',2,'2',C,False,False,False),
+        ('2105','Bancos nacionales',3,'21',C,True,True,True),
+        ('2110','Bancos del exterior',3,'21',C,True,True,True),
+        ('2115','Corporaciones financieras',3,'21',C,True,True,True),
+        ('2120','Compañías de financiamiento comercial',3,'21',C,True,True,True),
+        ('2135','Otras entidades financieras',3,'21',C,True,True,True),
+        ('2145','Obligaciones con entidades de leasing',3,'21',C,True,True,True),
+        ('2195','Otras obligaciones',3,'21',C,True,True,False),
+        ('22','Proveedores',2,'2',C,False,False,False),
+        ('2205','Nacionales',3,'22',C,True,True,True),
+        ('2210','Del exterior',3,'22',C,True,True,True),
+        ('23','Cuentas por pagar',2,'2',C,False,False,False),
+        ('2305','Costos y gastos por pagar',3,'23',C,True,True,False),
+        ('2315','Acreedores oficiales',3,'23',C,True,True,False),
+        ('2323','Honorarios por pagar',3,'23',C,True,True,True),
+        ('2325','Comisiones por pagar',3,'23',C,True,True,False),
+        ('2335','Arrendamientos por pagar',3,'23',C,True,True,False),
+        ('2345','Acreedores varios',3,'23',C,True,True,False),
+        ('2355','Deudas con accionistas o socios',3,'23',C,True,True,True),
+        ('2360','Dividendos o participaciones por pagar',3,'23',C,True,True,True),
+        ('2370','Retención en la fuente',3,'23',C,True,False,False),
+        ('2375','Impuesto a las ventas retenido',3,'23',C,True,False,False),
+        ('2380','Impuesto de industria y comercio retenido',3,'23',C,True,False,False),
+        ('2390','Retenciones y aportes de nómina',3,'23',C,True,False,False),
+        ('2395','Otros',3,'23',C,True,False,False),
+        ('24','Impuestos, gravámenes y tasas',2,'2',C,False,False,False),
+        ('2404','Impuesto sobre las ventas por pagar (IVA)',3,'24',C,True,False,False),
+        ('2408','Impuesto de industria y comercio',3,'24',C,True,False,False),
+        ('2412','Predial unificado',3,'24',C,True,False,False),
+        ('2416','Vehículos automotores',3,'24',C,True,False,False),
+        ('2420','Impuesto sobre la renta y complementarios',3,'24',C,True,False,False),
+        ('2424','Impuesto de timbre nacional',3,'24',C,True,False,False),
+        ('2436','Gravamen a los movimientos financieros',3,'24',C,True,False,False),
+        ('2460','Impuesto al valor agregado (IVA)',3,'24',C,True,False,False),
+        ('2495','Otros',3,'24',C,True,False,False),
+        ('25','Obligaciones laborales',2,'2',C,False,False,False),
+        ('2505','Salarios por pagar',3,'25',C,True,True,False),
+        ('2510','Cesantías consolidadas',3,'25',C,True,True,False),
+        ('2515','Intereses sobre cesantías',3,'25',C,True,False,False),
+        ('2520','Prima de servicios',3,'25',C,True,True,False),
+        ('2525','Vacaciones consolidadas',3,'25',C,True,True,False),
+        ('2530','Prestaciones extralegales',3,'25',C,True,True,False),
+        ('2535','Pensiones de jubilación',3,'25',C,True,True,False),
+        ('2550','Indemnizaciones laborales',3,'25',C,True,True,False),
+        ('2560','Aportes al sistema de seguridad social',3,'25',C,True,False,False),
+        ('2565','Aportes al ICBF, SENA y caja de compensación',3,'25',C,True,False,False),
+        ('2595','Otros',3,'25',C,True,False,False),
+        ('26','Pasivos estimados y provisiones',2,'2',C,False,False,False),
+        ('2605','Para costos y gastos',3,'26',C,True,False,False),
+        ('2610','Para obligaciones fiscales',3,'26',C,True,False,False),
+        ('2615','Para obligaciones laborales',3,'26',C,True,False,False),
+        ('2650','Para contingencias y eventualidades',3,'26',C,True,False,False),
+        ('2695','Otras provisiones',3,'26',C,True,False,False),
+        ('27','Diferidos',2,'2',C,False,False,False),
+        ('2705','Ingresos recibidos por anticipado',3,'27',C,True,False,False),
+        ('2710','Créditos diferidos',3,'27',C,True,False,False),
+        ('2795','Otros',3,'27',C,True,False,False),
+        ('28','Otros pasivos',2,'2',C,False,False,False),
+        ('2805','Anticipos y avances recibidos',3,'28',C,True,True,False),
+        ('2810','Depósitos recibidos',3,'28',C,True,True,False),
+        ('2815','Ingresos recibidos para terceros',3,'28',C,True,True,False),
+        ('2895','Otros',3,'28',C,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 3 — PATRIMONIO
+        # ══════════════════════════════════════════════════
+        ('3','Patrimonio',1,None,C,False,False,False),
+        ('31','Capital social',2,'3',C,False,False,False),
+        ('3105','Capital suscrito y pagado',3,'31',C,True,False,False),
+        ('3110','Aportes sociales',3,'31',C,True,False,False),
+        ('3115','Capital de personas naturales',3,'31',C,True,False,False),
+        ('32','Superávit de capital',2,'3',C,False,False,False),
+        ('3205','Prima en colocación de acciones',3,'32',C,True,False,False),
+        ('33','Reservas',2,'3',C,False,False,False),
+        ('3305','Reserva legal',3,'33',C,True,False,False),
+        ('3310','Reservas estatutarias',3,'33',C,True,False,False),
+        ('3315','Reservas ocasionales',3,'33',C,True,False,False),
+        ('3395','Otras reservas',3,'33',C,True,False,False),
+        ('34','Revalorización del patrimonio',2,'3',C,False,False,False),
+        ('3405','Ajuste por inflación',3,'34',C,True,False,False),
+        ('36','Resultados del ejercicio',2,'3',C,False,False,False),
+        ('3605','Utilidad del ejercicio',3,'36',C,True,False,False),
+        ('3610','Pérdida del ejercicio',3,'36',D,True,False,False),
+        ('37','Resultados de ejercicios anteriores',2,'3',C,False,False,False),
+        ('3705','Utilidades acumuladas',3,'37',C,True,False,False),
+        ('3710','Pérdidas acumuladas',3,'37',D,True,False,False),
+        ('38','Superávit por valorizaciones',2,'3',C,False,False,False),
+        ('3805','De inversiones',3,'38',C,True,False,False),
+        ('3810','De propiedades, planta y equipo',3,'38',C,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 4 — INGRESOS
+        # ══════════════════════════════════════════════════
+        ('4','Ingresos',1,None,C,False,False,False),
+        ('41','Operacionales',2,'4',C,False,False,False),
+        ('4105','Agricultura, ganadería, caza y silvicultura',3,'41',C,True,False,False),
+        ('4110','Pesca',3,'41',C,True,False,False),
+        ('4120','Industrias manufactureras',3,'41',C,True,False,False),
+        ('4125','Suministro de electricidad, gas y agua',3,'41',C,True,False,False),
+        ('4130','Construcción',3,'41',C,True,False,False),
+        ('4135','Comercio al por mayor y al por menor',3,'41',C,True,False,False),
+        ('4140','Hoteles y restaurantes',3,'41',C,True,False,False),
+        ('4145','Transporte, almacenamiento y comunicaciones',3,'41',C,True,False,False),
+        ('4155','Actividades inmobiliarias y empresariales',3,'41',C,True,False,False),
+        ('4165','Educación',3,'41',C,True,False,False),
+        ('4170','Servicios sociales y de salud',3,'41',C,True,False,False),
+        ('4175','Otras actividades de servicios',3,'41',C,True,False,False),
+        ('42','No operacionales',2,'4',C,False,False,False),
+        ('4205','Financieros',3,'42',C,True,False,False),
+        ('4210','Dividendos',3,'42',C,True,False,False),
+        ('4215','Participaciones',3,'42',C,True,False,False),
+        ('4220','Arrendamientos',3,'42',C,True,False,False),
+        ('4225','Comisiones',3,'42',C,True,False,False),
+        ('4230','Honorarios',3,'42',C,True,False,False),
+        ('4235','Servicios',3,'42',C,True,False,False),
+        ('4240','Utilidad en venta de inversiones',3,'42',C,True,False,False),
+        ('4245','Utilidad en venta de propiedades, planta y equipo',3,'42',C,True,False,False),
+        ('4265','Ingresos de ejercicios anteriores',3,'42',C,True,False,False),
+        ('4270','Ingresos por recuperación de cartera',3,'42',C,True,False,False),
+        ('4275','Diversas',3,'42',C,True,False,False),
+        ('4295','Otras',3,'42',C,True,False,False),
+        ('47','Ajustes por inflación',2,'4',C,False,False,False),
+        ('4705','Ajustes por inflación',3,'47',C,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 5 — GASTOS
+        # ══════════════════════════════════════════════════
+        ('5','Gastos',1,None,D,False,False,False),
+        ('51','Operacionales de administración',2,'5',D,False,False,False),
+        ('5105','Gastos de personal',3,'51',D,True,False,False),
+        ('5110','Honorarios',3,'51',D,True,True,False),
+        ('5115','Impuestos',3,'51',D,True,False,False),
+        ('5120','Arrendamientos',3,'51',D,True,True,False),
+        ('5125','Contribuciones y afiliaciones',3,'51',D,True,False,False),
+        ('5130','Seguros',3,'51',D,True,False,False),
+        ('5135','Servicios',3,'51',D,True,False,False),
+        ('5140','Gastos legales',3,'51',D,True,False,False),
+        ('5145','Mantenimiento y reparaciones',3,'51',D,True,False,False),
+        ('5150','Adecuación e instalación',3,'51',D,True,False,False),
+        ('5155','Gastos de viaje',3,'51',D,True,False,False),
+        ('5160','Depreciaciones',3,'51',D,True,False,False),
+        ('5165','Amortizaciones',3,'51',D,True,False,False),
+        ('5170','Provisiones',3,'51',D,True,False,False),
+        ('5175','Diversos',3,'51',D,True,False,False),
+        ('5195','Otros',3,'51',D,True,False,False),
+        ('52','Operacionales de ventas',2,'5',D,False,False,False),
+        ('5205','Gastos de personal',3,'52',D,True,False,False),
+        ('5210','Honorarios',3,'52',D,True,True,False),
+        ('5215','Impuestos',3,'52',D,True,False,False),
+        ('5220','Arrendamientos',3,'52',D,True,True,False),
+        ('5225','Contribuciones y afiliaciones',3,'52',D,True,False,False),
+        ('5230','Seguros',3,'52',D,True,False,False),
+        ('5235','Servicios',3,'52',D,True,False,False),
+        ('5245','Mantenimiento y reparaciones',3,'52',D,True,False,False),
+        ('5255','Gastos de viaje',3,'52',D,True,False,False),
+        ('5260','Depreciaciones',3,'52',D,True,False,False),
+        ('5265','Amortizaciones',3,'52',D,True,False,False),
+        ('5270','Provisiones',3,'52',D,True,False,False),
+        ('5275','Publicidad, propaganda y promoción',3,'52',D,True,False,False),
+        ('5280','Comisiones',3,'52',D,True,True,False),
+        ('5285','Gastos de representación',3,'52',D,True,False,False),
+        ('5290','Diversos',3,'52',D,True,False,False),
+        ('5295','Otros',3,'52',D,True,False,False),
+        ('53','No operacionales',2,'5',D,False,False,False),
+        ('5305','Financieros',3,'53',D,True,False,False),
+        ('5310','Pérdida en venta y retiro de bienes',3,'53',D,True,False,False),
+        ('5315','Gastos extraordinarios',3,'53',D,True,False,False),
+        ('5320','Gastos diversos',3,'53',D,True,False,False),
+        ('54','Impuesto de renta y complementarios',2,'5',D,False,False,False),
+        ('5405','Impuesto de renta y complementarios',3,'54',D,True,False,False),
+        ('59','Ganancias y pérdidas',2,'5',D,False,False,False),
+        ('5905','Ganancias y pérdidas',3,'59',D,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 6 — COSTOS DE VENTAS
+        # ══════════════════════════════════════════════════
+        ('6','Costos de ventas',1,None,D,False,False,False),
+        ('61','Costos de ventas y de prestación de servicios',2,'6',D,False,False,False),
+        ('6105','Industria manufacturera',3,'61',D,True,False,False),
+        ('6110','Empresas de servicios',3,'61',D,True,False,False),
+        ('6115','Empresas de comercio',3,'61',D,True,False,False),
+        ('6120','Empresas constructoras',3,'61',D,True,False,False),
+        ('6135','Entidades de transporte',3,'61',D,True,False,False),
+        ('6140','Entidades hoteleras',3,'61',D,True,False,False),
+        ('6145','Otras entidades',3,'61',D,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 7 — COSTOS DE PRODUCCIÓN Y OPERACIÓN
+        # ══════════════════════════════════════════════════
+        ('7','Costos de producción y operación',1,None,D,False,False,False),
+        ('71','Materia prima',2,'7',D,False,False,False),
+        ('7105','Materia prima',3,'71',D,True,False,False),
+        ('72','Mano de obra directa',2,'7',D,False,False,False),
+        ('7205','Sueldos y salarios',3,'72',D,True,False,False),
+        ('7210','Prestaciones sociales',3,'72',D,True,False,False),
+        ('7215','Aportes sobre la nómina',3,'72',D,True,False,False),
+        ('73','Costos indirectos',2,'7',D,False,False,False),
+        ('7305','Materiales indirectos',3,'73',D,True,False,False),
+        ('7310','Mano de obra indirecta',3,'73',D,True,False,False),
+        ('7315','Depreciaciones y amortizaciones',3,'73',D,True,False,False),
+        ('7320','Servicios públicos',3,'73',D,True,False,False),
+        ('7325','Seguros',3,'73',D,True,False,False),
+        ('7330','Arrendamientos',3,'73',D,True,False,False),
+        ('7335','Servicios de mantenimiento y reparaciones',3,'73',D,True,False,False),
+        ('7395','Otros',3,'73',D,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 8 — CUENTAS DE ORDEN DEUDORAS
+        # ══════════════════════════════════════════════════
+        ('8','Cuentas de orden deudoras',1,None,D,False,False,False),
+        ('81','Derechos contingentes',2,'8',D,False,False,False),
+        ('8105','Bienes y valores en poder de terceros',3,'81',D,True,False,False),
+        ('8110','Activos castigados',3,'81',D,True,False,False),
+        ('8115','Litigios y/o demandas',3,'81',D,True,False,False),
+        ('8125','Garantías otorgadas',3,'81',D,True,False,False),
+        ('8135','Activos totalmente depreciados o amortizados',3,'81',D,True,False,False),
+        ('83','Deudoras de control',2,'8',D,False,False,False),
+        ('8305','Activos en leasing',3,'83',D,True,False,False),
+        ('8315','Inventarios en consignación entregados',3,'83',D,True,False,False),
+        ('8390','Otras cuentas de orden',3,'83',D,True,False,False),
+        ('89','Cuentas de orden deudoras por contra',2,'8',C,False,False,False),
+        ('8905','Bienes y valores en poder de terceros (Cr)',3,'89',C,True,False,False),
+        ('8910','Activos castigados (Cr)',3,'89',C,True,False,False),
+        ('8990','Otras (Cr)',3,'89',C,True,False,False),
+        # ══════════════════════════════════════════════════
+        # CLASE 9 — CUENTAS DE ORDEN ACREEDORAS
+        # ══════════════════════════════════════════════════
+        ('9','Cuentas de orden acreedoras',1,None,C,False,False,False),
+        ('91','Responsabilidades contingentes',2,'9',C,False,False,False),
+        ('9105','Litigios y/o demandas recibidas',3,'91',C,True,False,False),
+        ('9110','Garantías recibidas',3,'91',C,True,False,False),
+        ('9115','Bienes recibidos en custodia',3,'91',C,True,False,False),
+        ('9120','Inventarios recibidos en consignación',3,'91',C,True,False,False),
+        ('93','Acreedoras de control',2,'9',C,False,False,False),
+        ('9305','Activos en leasing (Cr)',3,'93',C,True,False,False),
+        ('9390','Otras cuentas de orden acreedoras',3,'93',C,True,False,False),
+        ('99','Cuentas de orden acreedoras por contra',2,'9',D,False,False,False),
+        ('9905','Responsabilidades contingentes (Db)',3,'99',D,True,False,False),
+        ('9990','Otras (Db)',3,'99',D,True,False,False),
+    ]
+    for row in cuentas:
+        try:
+            conn.execute("""
+                INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (codigo) DO NOTHING
+            """, row)
+        except Exception:
+            conn.rollback()
+    conn.commit()
+
+
 @app.route('/taller/<slug>')
 def taller_home(slug):
     conn = get_db_connection()

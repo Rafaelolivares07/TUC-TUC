@@ -5,9 +5,6 @@ RemoteAssist — Servidor relay
 - El servidor solo hace de puente, no procesa nada
 """
 
-import eventlet
-eventlet.monkey_patch()
-
 import os
 from flask import Flask, render_template_string, request, abort
 from flask_socketio import SocketIO, emit, join_room, leave_room
@@ -20,7 +17,7 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     max_http_buffer_size=2 * 1024 * 1024,  # 2MB por frame
-    async_mode='eventlet',
+    async_mode='gevent',
     ping_timeout=60,
     ping_interval=25,
 )

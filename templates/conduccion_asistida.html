@@ -45,46 +45,36 @@
             gap: 10px;
         }
 
-        /* Flechas de giro (gris de fondo + amarilla encima) */
-        .flecha-giro {
-            display: none;
-            position: relative;
+        /* Indicador de giro: icono + distancia, sin parpadeo */
+        .indicador-giro {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 14px;
+            padding: 8px 10px;
+            backdrop-filter: blur(8px);
+            min-width: 54px;
+            transition: opacity 0.3s ease;
+        }
+
+        .giro-icono {
+            font-size: 38px;
+            line-height: 1;
+            color: #1f2937;
             transition: font-size 0.3s ease;
-            font-size: 36px;
         }
 
-        .flecha-giro.visible {
-            display: block;
+        body[data-dark="true"] .giro-icono {
+            color: #9ca3af;
         }
 
-        .flecha-base {
-            color: #4b5563;
-        }
-
-        .flecha-activa {
-            position: absolute;
-            top: 0;
-            left: 0;
-            color: #facc15;
-            text-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
-            opacity: 0;
-        }
-
-        .flecha-giro.parpadeo-lento .flecha-activa {
-            animation: parpadeo-flecha 1s infinite;
-        }
-
-        .flecha-giro.parpadeo-medio .flecha-activa {
-            animation: parpadeo-flecha 0.5s infinite;
-        }
-
-        .flecha-giro.parpadeo-rapido .flecha-activa {
-            animation: parpadeo-flecha 0.25s infinite;
-        }
-
-        @keyframes parpadeo-flecha {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
+        .giro-dist {
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            margin-top: 2px;
+            letter-spacing: 0.5px;
         }
 
         /* HUD unificado: cámara + velocímetro apilados */
@@ -654,9 +644,9 @@
 
     <!-- HUD unificado: cámara + asistencia + velocímetro + flechas de giro -->
     <div id="hud-wrapper">
-        <div id="flecha-izquierda" class="flecha-giro">
-            <span class="flecha-base">&#x25C0;</span>
-            <span class="flecha-activa">&#x25C0;</span>
+        <div id="indicador-giro-izq" class="indicador-giro" style="display:none;">
+            <div class="giro-icono">↰</div>
+            <div class="giro-dist"></div>
         </div>
         <div id="hud-superior">
             <div id="hud-camara">
@@ -670,9 +660,9 @@
                 <div id="velocidad-unidad">km/h</div>
             </div>
         </div>
-        <div id="flecha-derecha" class="flecha-giro">
-            <span class="flecha-base">&#x25B6;</span>
-            <span class="flecha-activa">&#x25B6;</span>
+        <div id="indicador-giro-der" class="indicador-giro" style="display:none;">
+            <div class="giro-icono">↱</div>
+            <div class="giro-dist"></div>
         </div>
     </div>
 
@@ -964,7 +954,7 @@
             marcadorConductor.setLngLat([lon, lat]);
             // En modo libre no seguir al conductor
             if (!modoLibre) {
-                mapa.easeTo({ center: [lon, lat], offset: [0, 120], duration: 300 });
+                mapa.easeTo({ center: [lon, lat], offset: [0, 220], duration: 300 });
             }
         }
 
@@ -1001,12 +991,12 @@
         }
 
         function obtenerLimiteCercano() {
-            const todas = [...camarasEnRuta, ...camarasCercanas];
-            if (todas.length === 0) return null;
+            // Solo cámaras EN la ruta, no las cercanas en otras vías
+            if (camarasEnRuta.length === 0) return null;
 
             let masCercana = null;
             let distMin = Infinity;
-            todas.forEach(cam => {
+            camarasEnRuta.forEach(cam => {
                 if (ubicacionActual) {
                     const dist = calcularDistancia(ubicacionActual.lat, ubicacionActual.lon, cam.lat, cam.lon);
                     if (dist < distMin) {
@@ -1016,7 +1006,9 @@
                 }
             });
 
-            return masCercana ? (masCercana.velocidad_maxima || 60) : null;
+            // Solo aplicar límite si la cámara está a 200m o menos
+            if (!masCercana || distMin > 200) return null;
+            return masCercana.velocidad_maxima || 60;
         }
 
         function actualizarEstadoGPS(accuracy) {
@@ -1717,21 +1709,25 @@
 
             const exceso = velocidadActualKmh - velocidadObjetivo;
 
+            // Exceso mínimo de 10 km/h para evitar avisos innecesarios en diferencias pequeñas
+            if (exceso < 10) return null;
+
+            // Radio dinámico: solo procesar si la distancia es relevante para la velocidad actual
+            const radioMaximo = velocidadActualKmh * 4;
+            if (distancia > radioMaximo) return null;
+
             const velocidadMs = velocidadActualKmh / 3.6;
             const tiempoDisponible = velocidadMs > 0 ? distancia / velocidadMs : 999;
 
             const tiempoCosteo = exceso / ASISTENCIA.DESACELERACION_COSTEO;
-
             const tiempoFrenado = exceso / ASISTENCIA.DESACELERACION_FRENO;
 
             if (tiempoCosteo <= tiempoDisponible * 0.85) {
-                return { nivel: 'suelta', texto: 'Suelta' };
-            } else if (tiempoCosteo <= tiempoDisponible) {
-                return { nivel: 'reduce', texto: 'Reduce' };
+                return { nivel: 'suelta', texto: 'SUELTA EL ACELERADOR' };
             } else if (tiempoFrenado <= tiempoDisponible) {
-                return { nivel: 'reduce', texto: 'Reduce' };
+                return { nivel: 'reduce', texto: 'FRENA SUAVEMENTE' };
             } else {
-                return { nivel: 'frena', texto: 'Frena' };
+                return { nivel: 'frena', texto: 'FRENA YA' };
             }
         }
 
@@ -1834,13 +1830,13 @@
 
                     let velocidadSugerida;
                     if (anguloAbs > 90) {
-                        velocidadSugerida = 15;
+                        velocidadSugerida = 10;
                     } else if (anguloAbs > 60) {
-                        velocidadSugerida = 25;
+                        velocidadSugerida = 20;
                     } else if (anguloAbs > 40) {
-                        velocidadSugerida = 35;
+                        velocidadSugerida = 30;
                     } else {
-                        velocidadSugerida = 40;
+                        velocidadSugerida = 35;
                     }
 
                     girosDetectados.push({
@@ -1858,12 +1854,18 @@
         }
 
         function actualizarFlechasGiro() {
-            // DESHABILITADO temporalmente — pendiente de afinar lógica de giros
-            const flechaIzq = document.getElementById('flecha-izquierda');
-            const flechaDer = document.getElementById('flecha-derecha');
-            flechaIzq.className = 'flecha-giro';
-            flechaDer.className = 'flecha-giro';
-            return;
+            const indIzq = document.getElementById('indicador-giro-izq');
+            const indDer = document.getElementById('indicador-giro-der');
+
+            function ocultarGiros() {
+                indIzq.style.display = 'none';
+                indDer.style.display = 'none';
+            }
+
+            if (!ubicacionActual || girosDetectados.length === 0) {
+                ocultarGiros();
+                return;
+            }
 
             if (!ubicacionActual || girosDetectados.length === 0) {
                 flechaIzq.className = 'flecha-giro';
@@ -1871,46 +1873,48 @@
                 return;
             }
 
-            let giroCercano = null;
-            let distGiro = Infinity;
+            // Ordenar giros por distancia
+            const girosConDist = girosDetectados.map(g => ({
+                ...g,
+                dist: calcularDistancia(ubicacionActual.lat, ubicacionActual.lon, g.lat, g.lon)
+            })).filter(g => g.dist < 300).sort((a, b) => a.dist - b.dist);
 
-            girosDetectados.forEach(giro => {
-                const dist = calcularDistancia(
-                    ubicacionActual.lat, ubicacionActual.lon,
-                    giro.lat, giro.lon
-                );
-                if (dist < distGiro && dist < 160) {
-                    distGiro = dist;
-                    giroCercano = giro;
-                }
-            });
-
-            if (!giroCercano) {
-                flechaIzq.className = 'flecha-giro';
-                flechaDer.className = 'flecha-giro';
+            if (girosConDist.length === 0) {
+                ocultarGiros();
                 return;
             }
 
-            const flechaActiva = giroCercano.direccion === 'izquierda' ? flechaIzq : flechaDer;
-            const flechaInactiva = giroCercano.direccion === 'izquierda' ? flechaDer : flechaIzq;
-
-            flechaInactiva.className = 'flecha-giro';
-
-            const DIST_MAX_GIRO = 160;
-            const factor = Math.max(0, Math.min(1, 1 - (distGiro / DIST_MAX_GIRO)));
-            const tamano = 36 + (factor * 24);
-            flechaActiva.style.fontSize = tamano + 'px';
-
-            let claseParpadeo = '';
-            if (distGiro < 40) {
-                claseParpadeo = 'parpadeo-rapido';
-            } else if (distGiro < 80) {
-                claseParpadeo = 'parpadeo-medio';
-            } else if (distGiro < 120) {
-                claseParpadeo = 'parpadeo-lento';
+            // Si el más cercano ya está a ≤10m, mostramos el siguiente
+            let giroActivo = girosConDist[0];
+            if (giroActivo.dist <= 10 && girosConDist.length > 1) {
+                giroActivo = girosConDist[1];
+            } else if (giroActivo.dist <= 10) {
+                ocultarGiros();
+                return;
             }
 
-            flechaActiva.className = 'flecha-giro visible ' + claseParpadeo;
+            // Tamaño crece a medida que se acerca (entre 38px y 56px)
+            const DIST_MAX = 300;
+            const factor = Math.max(0, Math.min(1, 1 - (giroActivo.dist / DIST_MAX)));
+            const tamano = 38 + (factor * 18);
+
+            // Texto de distancia
+            const distTexto = giroActivo.dist < 1000
+                ? Math.round(giroActivo.dist) + 'm'
+                : (giroActivo.dist / 1000).toFixed(1) + 'km';
+
+            // Mostrar el indicador correcto
+            if (giroActivo.direccion === 'izquierda') {
+                indDer.style.display = 'none';
+                indIzq.style.display = 'flex';
+                indIzq.querySelector('.giro-icono').style.fontSize = tamano + 'px';
+                indIzq.querySelector('.giro-dist').textContent = distTexto;
+            } else {
+                indIzq.style.display = 'none';
+                indDer.style.display = 'flex';
+                indDer.querySelector('.giro-icono').style.fontSize = tamano + 'px';
+                indDer.querySelector('.giro-dist').textContent = distTexto;
+            }
         }
 
         // ==========================================
@@ -2265,6 +2269,7 @@
 
         function toggleEstilo() {
             estiloOscuro = !estiloOscuro;
+            document.body.setAttribute('data-dark', estiloOscuro ? 'true' : 'false');
             const flavor = estiloOscuro ? 'dark' : 'light';
 
             // Guardar estado actual

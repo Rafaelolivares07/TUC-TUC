@@ -1,4 +1,4 @@
-mss==9.0.2
-pyautogui==0.9.54
-Pillow==10.3.0
-python-socketio[client]==5.11.3
+mss
+pyautogui
+Pillow
+python-socketio[client]

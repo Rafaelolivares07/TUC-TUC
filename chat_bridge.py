@@ -75,9 +75,13 @@ def verificar_habilitado():
         if row and row['valor_booleano'] is False:
             print("⛔ Bridge deshabilitado desde el panel (parametros_sistema). Saliendo sin consumir tokens.")
             sys.exit(0)
+    except psycopg2.OperationalError as e:
+        # Sin BD el bridge es inútil — salir limpio (código 1 → .bat reiniciará cuando haya red)
+        print(f"  ✗ No se puede conectar a BD: {e}")
+        print("  ⛔ Bridge no puede operar sin BD. Saliendo.")
+        sys.exit(1)
     except Exception as e:
-        # Si no se puede consultar BD, continúa (evita bloquear si hay error de conexión temporal)
-        print(f"  ⚠️  No se pudo verificar flag en BD: {e} — continuando de todas formas")
+        print(f"  ⚠️  Error inesperado verificando flag: {e} — continuando de todas formas")
 
 
 def recuperar_procesando():

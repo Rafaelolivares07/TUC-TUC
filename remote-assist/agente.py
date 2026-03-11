@@ -144,7 +144,7 @@ def disconnect():
 # ─── Loop principal ───────────────────────────────────────────────────────────
 
 def main():
-    global screen_w, screen_h
+    global screen_w, screen_h, QUALITY, SCALE
 
     parser = argparse.ArgumentParser(description='RemoteAssist Agente')
     parser.add_argument('--server',  default=DEFAULT_SERVER)
@@ -154,8 +154,6 @@ def main():
     parser.add_argument('--quality', type=int, default=QUALITY)
     parser.add_argument('--scale',   type=float, default=SCALE)
     args = parser.parse_args()
-
-    global QUALITY, SCALE
     QUALITY = args.quality
     SCALE   = args.scale
     interval = 1.0 / args.fps

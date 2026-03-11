@@ -30,9 +30,9 @@ pyautogui.PAUSE    = 0
 SERVER   = "https://tuc-tuc-remote.onrender.com"
 TOKEN    = "tuctuc-remote-2026"
 SESSION  = "default"
-FPS      = 10
-QUALITY  = 40
-SCALE    = 0.6
+FPS      = 8
+QUALITY  = 70
+SCALE    = 0.85
 # ─────────────────────────────────────────────────────────────────────────────
 
 sio      = sio_lib.Client(reconnection=True, reconnection_delay=3, reconnection_attempts=0)

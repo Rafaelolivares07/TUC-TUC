@@ -43,9 +43,9 @@ from PIL import Image
 DEFAULT_SERVER  = "https://tuc-tuc-remote.onrender.com"
 DEFAULT_TOKEN   = "tuctuc-remote-2026"
 DEFAULT_SESSION = "default"
-FPS_TARGET      = 10       # frames por segundo
-QUALITY         = 40       # calidad JPEG (1-95) — menor = más rápido pero peor imagen
-SCALE           = 0.6      # escalar pantalla antes de enviar (reduce ancho de banda)
+FPS_TARGET      = 8        # frames por segundo
+QUALITY         = 70       # calidad JPEG (1-95) — menor = más rápido pero peor imagen
+SCALE           = 0.85     # escalar pantalla antes de enviar (reduce ancho de banda)
 # ─────────────────────────────────────────────────────────────────────────────
 
 sio = sio_lib.Client(reconnection=True, reconnection_delay=3, reconnection_attempts=0)

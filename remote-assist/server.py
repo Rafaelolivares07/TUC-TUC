@@ -12,11 +12,11 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'cambiar-en-produccion')
 
-# max_http_buffer_size: frames JPEG pueden pesar ~50-80KB
+# max_http_buffer_size: frames JPEG pueden pesar hasta ~300KB con SCALE=0.85/QUALITY=70
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    max_http_buffer_size=2 * 1024 * 1024,  # 2MB por frame
+    max_http_buffer_size=8 * 1024 * 1024,  # 8MB por frame
     async_mode='gevent',
     ping_timeout=60,
     ping_interval=25,
@@ -41,8 +41,8 @@ VIEWER_HTML = """<!DOCTYPE html>
   .dot.green { background: #22c55e; }
   .dot.yellow { background: #eab308; }
   .dot.red { background: #ef4444; }
-  #screen-wrap { width: 100%; height: calc(100vh - 44px); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  #screen { max-width: 100%; max-height: 100%; cursor: crosshair; display: block; }
+  #screen-wrap { width: 100%; height: calc(100vh - 44px); overflow: auto; background: #000; }
+  #screen { width: 100%; height: 100%; object-fit: contain; cursor: crosshair; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
   #overlay input { padding: 10px 16px; font-size: 16px; border-radius: 6px; border: 1px solid #555; background: #222; color: #eee; width: 280px; }
   #overlay button { padding: 10px 32px; font-size: 16px; border-radius: 6px; border: none; background: #2563eb; color: white; cursor: pointer; }

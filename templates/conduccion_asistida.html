@@ -1642,6 +1642,10 @@
 
             actualizarFlechasGiro();
 
+            // DESHABILITADO temporalmente — asistencia de velocidad sugerida pendiente de afinar
+            ocultarAsistencia();
+            return;
+
             const eventos = obtenerEventosAdelante();
 
             if (eventos.length === 0) {
@@ -1854,8 +1858,12 @@
         }
 
         function actualizarFlechasGiro() {
+            // DESHABILITADO temporalmente — pendiente de afinar lógica de giros
             const flechaIzq = document.getElementById('flecha-izquierda');
             const flechaDer = document.getElementById('flecha-derecha');
+            flechaIzq.className = 'flecha-giro';
+            flechaDer.className = 'flecha-giro';
+            return;
 
             if (!ubicacionActual || girosDetectados.length === 0) {
                 flechaIzq.className = 'flecha-giro';

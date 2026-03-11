@@ -319,22 +319,37 @@
         </div>
     </div>
 
-    <!-- Modal entrada de inventario -->
+    <!-- Modal entrada de inventario (multi-línea) -->
     <div id="modal-entrada" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end justify-center">
-        <div class="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-10">
-            <h3 class="font-semibold text-gray-800 mb-4">Registrar entrada de inventario</h3>
-            <div class="space-y-3">
-                <div>
-                    <label class="text-xs text-gray-500 font-semibold uppercase">Producto</label>
-                    <select id="entrada-producto" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1"></select>
+        <div class="bg-white rounded-t-2xl w-full max-w-lg flex flex-col" style="max-height:92vh;">
+            <!-- Cabecera fija -->
+            <div class="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-gray-800">Entrada de inventario</h3>
+                    <button onclick="cerrarModalEntrada()" class="text-gray-400 text-xl leading-none">&times;</button>
                 </div>
-                <div class="flex gap-3">
-                    <div class="flex-1">
-                        <label class="text-xs text-gray-500 font-semibold uppercase">Cantidad</label>
-                        <input type="number" id="entrada-cantidad" min="1" value="1" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                <!-- Encabezado del documento -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-400 font-semibold uppercase">Tipo doc.</label>
+                        <select id="entrada-tipo-doc" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                            <option value="factura">Factura</option>
+                            <option value="remision">Remisión</option>
+                            <option value="ajuste">Ajuste</option>
+                            <option value="devolucion">Devolución</option>
+                            <option value="otro">Otro</option>
+                        </select>
                     </div>
-                    <div class="flex-1">
-                        <label class="text-xs text-gray-500 font-semibold uppercase">Motivo</label>
+                    <div>
+                        <label class="text-xs text-gray-400 font-semibold uppercase">N° Documento</label>
+                        <input type="text" id="entrada-num-doc" placeholder="FAC-0234" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 font-semibold uppercase">Fecha</label>
+                        <input type="date" id="entrada-fecha" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 font-semibold uppercase">Motivo</label>
                         <select id="entrada-motivo" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
                             <option value="compra">Compra</option>
                             <option value="devolucion">Devolución</option>
@@ -342,14 +357,39 @@
                         </select>
                     </div>
                 </div>
-                <div>
-                    <label class="text-xs text-gray-500 font-semibold uppercase">Notas (opcional)</label>
-                    <input type="text" id="entrada-notas" placeholder="Proveedor, factura, etc." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
+                <div class="mt-2">
+                    <label class="text-xs text-gray-400 font-semibold uppercase">Notas (opcional)</label>
+                    <input type="text" id="entrada-notas" placeholder="Proveedor, observaciones..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mt-1">
                 </div>
             </div>
-            <div class="flex gap-3 mt-5">
-                <button onclick="cerrarModalEntrada()" class="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600">Cancelar</button>
-                <button onclick="guardarEntrada()" class="flex-1 bg-rose-600 text-white rounded-xl py-3 text-sm font-semibold">Guardar</button>
+            <!-- Líneas de productos (scrollable) -->
+            <div class="flex-1 overflow-y-auto px-5 py-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-gray-500 font-semibold uppercase">Productos</span>
+                    <button onclick="agregarLineaEntrada()" class="text-xs bg-rose-50 text-rose-600 font-semibold px-3 py-1.5 rounded-lg">+ Línea</button>
+                </div>
+                <div id="entrada-lineas" class="space-y-2"></div>
+            </div>
+            <!-- Totales + botones (fijos abajo) -->
+            <div class="px-5 pb-8 pt-3 border-t border-gray-100 shrink-0">
+                <div class="flex justify-between text-sm text-gray-500 mb-1">
+                    <span>Subtotal</span>
+                    <span id="entrada-subtotal">$0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm text-gray-500 mb-2">
+                    <span>IVA</span>
+                    <input type="number" id="entrada-iva" value="0" min="0" placeholder="0"
+                        oninput="recalcularTotales()"
+                        class="w-28 text-right border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                </div>
+                <div class="flex justify-between text-base font-bold text-gray-800 mb-4">
+                    <span>Total</span>
+                    <span id="entrada-total">$0</span>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="cerrarModalEntrada()" class="flex-1 border border-gray-200 rounded-xl py-3 text-sm font-semibold text-gray-600">Cancelar</button>
+                    <button onclick="guardarEntrada()" class="flex-1 bg-rose-600 text-white rounded-xl py-3 text-sm font-semibold">Guardar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -423,12 +463,15 @@ function cambiarTab(tab) {
 // ── INVENTARIO ────────────────────────────────────────────────
 const SLUG_TIENDA = '{{ tienda.slug }}';
 
+let _productosStock = [];  // cache para los selects de líneas
+
 async function cargarStock() {
     document.getElementById('seccion-kardex').classList.add('hidden');
     const r = await fetch(`/api/tienda/${SLUG_TIENDA}/inventario/stock`);
     const d = await r.json();
     if (!d.ok) { document.getElementById('tabla-stock').innerHTML = '<p class="text-red-500 text-sm text-center py-4">Error cargando stock</p>'; return; }
-    if (!d.productos.length) { document.getElementById('tabla-stock').innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Sin productos</p>'; return; }
+    if (!d.productos.length) { document.getElementById('tabla-stock').innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Sin productos en catálogo</p>'; return; }
+    _productosStock = d.productos;
     const filas = d.productos.map(p => `
         <tr class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onclick="verKardex(${p.id}, '${p.nombre.replace(/'/g,"\\'")}')">
             <td class="py-3 px-3 text-sm font-medium text-gray-800">${p.nombre}</td>
@@ -446,9 +489,6 @@ async function cargarStock() {
             </tr></thead>
             <tbody>${filas}</tbody>
         </table>`;
-    // poblar select del modal
-    const sel = document.getElementById('entrada-producto');
-    sel.innerHTML = d.productos.map(p => `<option value="${p.id}">${p.nombre} (stock: ${p.stock})</option>`).join('');
 }
 
 async function verKardex(productoId, nombre) {
@@ -459,27 +499,30 @@ async function verKardex(productoId, nombre) {
     const r = await fetch(`/api/tienda/${SLUG_TIENDA}/inventario/kardex?producto_id=${productoId}`);
     const d = await r.json();
     if (!d.ok || !d.movimientos.length) {
-        document.getElementById('tabla-kardex').innerHTML = '<p class="text-gray-400 text-sm text-center py-6">Sin movimientos</p>';
+        document.getElementById('tabla-kardex').innerHTML = '<p class="text-gray-400 text-sm text-center py-6">Sin movimientos registrados</p>';
         return;
     }
+    const fmt = v => v != null ? '$' + Number(v).toLocaleString('es-CO') : '—';
     const filas = d.movimientos.map(m => `
         <tr class="border-b border-gray-50 text-sm">
             <td class="py-2 px-2 text-xs text-gray-400 whitespace-nowrap">${m.fecha}</td>
             <td class="py-2 px-2"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${m.tipo==='entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">${m.tipo}</span></td>
             <td class="py-2 px-2 text-xs text-gray-500">${m.motivo}</td>
+            <td class="py-2 px-2 text-xs text-gray-400">${m.num_doc || '—'}</td>
             <td class="py-2 px-2 text-center font-bold ${m.tipo==='entrada' ? 'text-green-600' : 'text-red-500'}">${m.tipo==='entrada' ? '+' : '-'}${m.cantidad}</td>
             <td class="py-2 px-2 text-center text-gray-700 font-semibold">${m.stock_nuevo}</td>
-            <td class="py-2 px-2 text-xs text-gray-400">${m.notas || ''}</td>
+            <td class="py-2 px-2 text-xs text-right text-gray-500">${fmt(m.valor_unitario)}</td>
         </tr>`).join('');
     document.getElementById('tabla-kardex').innerHTML = `
-        <table class="w-full min-w-[400px]">
+        <table class="w-full min-w-[480px]">
             <thead><tr class="text-xs text-gray-400 uppercase border-b">
                 <th class="py-2 px-2 text-left">Fecha</th>
                 <th class="py-2 px-2 text-left">Tipo</th>
                 <th class="py-2 px-2 text-left">Motivo</th>
+                <th class="py-2 px-2 text-left">Doc.</th>
                 <th class="py-2 px-2 text-center">Cant.</th>
                 <th class="py-2 px-2 text-center">Saldo</th>
-                <th class="py-2 px-2 text-left">Notas</th>
+                <th class="py-2 px-2 text-right">V. Unit.</th>
             </tr></thead>
             <tbody>${filas}</tbody>
         </table>`;
@@ -490,28 +533,94 @@ function cerrarKardex() {
     document.getElementById('tabla-stock').classList.remove('hidden');
 }
 
+// ── MODAL ENTRADA MULTI-LÍNEA ──────────────────────────────────
 function abrirModalEntrada(productoId) {
-    if (productoId) document.getElementById('entrada-producto').value = productoId;
+    // Resetear encabezado
+    document.getElementById('entrada-tipo-doc').value = 'factura';
+    document.getElementById('entrada-num-doc').value = '';
+    document.getElementById('entrada-fecha').value = new Date().toISOString().slice(0,10);
+    document.getElementById('entrada-motivo').value = 'compra';
+    document.getElementById('entrada-notas').value = '';
+    document.getElementById('entrada-iva').value = '0';
+    document.getElementById('entrada-subtotal').textContent = '$0';
+    document.getElementById('entrada-total').textContent = '$0';
+    // Líneas: empezar con una línea (el producto clickeado si lo hay)
+    document.getElementById('entrada-lineas').innerHTML = '';
+    agregarLineaEntrada(productoId || null);
     document.getElementById('modal-entrada').classList.remove('hidden');
 }
+
 function cerrarModalEntrada() { document.getElementById('modal-entrada').classList.add('hidden'); }
 
+function _opcionesProductos(seleccionado) {
+    return _productosStock.map(p =>
+        `<option value="${p.id}" ${p.id == seleccionado ? 'selected' : ''}>${p.nombre}</option>`
+    ).join('');
+}
+
+function agregarLineaEntrada(productoId) {
+    const cont = document.getElementById('entrada-lineas');
+    const idx = cont.children.length;
+    const div = document.createElement('div');
+    div.className = 'flex gap-2 items-center bg-gray-50 rounded-xl p-2';
+    div.dataset.linea = idx;
+    div.innerHTML = `
+        <select class="linea-prod flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm" onchange="recalcularTotales()">
+            ${_opcionesProductos(productoId)}
+        </select>
+        <input type="number" class="linea-cant w-16 border border-gray-200 rounded-lg px-2 py-2 text-sm text-center" min="1" value="1" placeholder="Cant." oninput="recalcularTotales()">
+        <input type="number" class="linea-vu w-24 border border-gray-200 rounded-lg px-2 py-2 text-sm text-right" min="0" value="0" placeholder="$ V.Unit" oninput="recalcularTotales()">
+        <span class="linea-vt text-sm font-semibold text-gray-700 w-20 text-right shrink-0">$0</span>
+        <button onclick="this.closest('[data-linea]').remove(); recalcularTotales();" class="text-gray-300 hover:text-red-400 text-lg leading-none shrink-0">&times;</button>`;
+    cont.appendChild(div);
+    recalcularTotales();
+}
+
+function recalcularTotales() {
+    let subtotal = 0;
+    document.querySelectorAll('#entrada-lineas [data-linea]').forEach(div => {
+        const cant = parseFloat(div.querySelector('.linea-cant').value) || 0;
+        const vu = parseFloat(div.querySelector('.linea-vu').value) || 0;
+        const vt = cant * vu;
+        div.querySelector('.linea-vt').textContent = '$' + vt.toLocaleString('es-CO');
+        subtotal += vt;
+    });
+    const iva = parseFloat(document.getElementById('entrada-iva').value) || 0;
+    const total = subtotal + iva;
+    document.getElementById('entrada-subtotal').textContent = '$' + subtotal.toLocaleString('es-CO');
+    document.getElementById('entrada-total').textContent = '$' + total.toLocaleString('es-CO');
+}
+
 async function guardarEntrada() {
-    const producto_id = document.getElementById('entrada-producto').value;
-    const cantidad = parseInt(document.getElementById('entrada-cantidad').value);
-    const motivo = document.getElementById('entrada-motivo').value;
-    const notas = document.getElementById('entrada-notas').value;
-    if (!producto_id || cantidad < 1) { toast('Completa los campos requeridos', true); return; }
+    const lineasDivs = document.querySelectorAll('#entrada-lineas [data-linea]');
+    if (!lineasDivs.length) { toast('Agrega al menos un producto', true); return; }
+    const lineas = [];
+    for (const div of lineasDivs) {
+        const producto_id = div.querySelector('.linea-prod').value;
+        const cantidad = parseInt(div.querySelector('.linea-cant').value);
+        const valor_unitario = parseFloat(div.querySelector('.linea-vu').value) || 0;
+        if (!producto_id || cantidad < 1) { toast('Verifica cantidad en todas las líneas', true); return; }
+        lineas.push({ producto_id, cantidad, valor_unitario });
+    }
+    const payload = {
+        tipo_documento: document.getElementById('entrada-tipo-doc').value,
+        numero_documento: document.getElementById('entrada-num-doc').value.trim(),
+        fecha_documento: document.getElementById('entrada-fecha').value,
+        motivo: document.getElementById('entrada-motivo').value,
+        notas: document.getElementById('entrada-notas').value.trim(),
+        iva: parseFloat(document.getElementById('entrada-iva').value) || 0,
+        lineas
+    };
     try {
-        const r = await fetch(`/api/tienda/${SLUG_TIENDA}/inventario/entrada`, {
+        const r = await fetch(`${BASE}/inventario/entrada`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ producto_id, cantidad, motivo, notas })
+            body: JSON.stringify(payload)
         });
         const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Error');
+        if (!d.ok) throw new Error(d.error || 'Error al guardar');
         cerrarModalEntrada();
-        toast('Entrada registrada');
+        toast(`Entrada registrada (${d.lineas} producto${d.lineas !== 1 ? 's' : ''})`);
         cargarStock();
     } catch(e) { toast(e.message, true); }
 }

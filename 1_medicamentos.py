@@ -27829,18 +27829,22 @@ def api_tienda_inventario_kardex(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         rows = conn.execute("""
-            SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo, notas,
-                   TO_CHAR(created_at, 'DD/MM/YY HH24:MI') as fecha
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_id = %s AND producto_tipo = 'tienda'
-            ORDER BY created_at DESC
+            SELECT m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
+                   m.notas, m.valor_unitario, m.valor_total,
+                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') as fecha,
+                   di.numero_documento as num_doc
+            FROM movimientos_inventario m
+            LEFT JOIN documentos_inventario di ON di.id = m.documento_id
+            WHERE m.negocio_id = %s AND m.producto_id = %s AND m.producto_tipo = 'tienda'
+            ORDER BY m.created_at DESC
             LIMIT 200
         """, (tienda['tercero_id'], int(producto_id))).fetchall()
         conn.close()
         return jsonify({'ok': True, 'movimientos': [
             {'tipo': r['tipo'], 'motivo': r['motivo'], 'cantidad': float(r['cantidad']),
              'stock_anterior': float(r['stock_anterior'] or 0), 'stock_nuevo': float(r['stock_nuevo'] or 0),
-             'notas': r['notas'] or '', 'fecha': r['fecha']}
+             'notas': r['notas'] or '', 'fecha': r['fecha'],
+             'num_doc': r['num_doc'], 'valor_unitario': float(r['valor_unitario']) if r['valor_unitario'] else None}
             for r in rows
         ]})
     except Exception as e:
@@ -27849,54 +27853,87 @@ def api_tienda_inventario_kardex(slug):
 
 @app.route('/api/tienda/<slug>/inventario/entrada', methods=['POST'])
 def api_tienda_inventario_entrada(slug):
-    """Registrar entrada de inventario (compra, devolución, ajuste)"""
+    """Registrar entrada de inventario: encabezado de documento + N líneas de productos"""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     data = request.get_json()
-    producto_id = data.get('producto_id')
-    cantidad = data.get('cantidad', 0)
+    lineas = data.get('lineas', [])
     motivo = data.get('motivo', 'compra')
-    notas = data.get('notas', '')
-    if not producto_id or int(cantidad) < 1:
-        return jsonify({'ok': False, 'error': 'Datos inválidos'}), 400
+    numero_documento = data.get('numero_documento', '').strip()
+    tipo_documento = data.get('tipo_documento', 'factura')
+    fecha_documento = data.get('fecha_documento') or None
+    id_tercero_prov = data.get('id_tercero') or None
+    notas = data.get('notas', '') or None
+    iva = float(data.get('iva', 0) or 0)
+    if not lineas:
+        return jsonify({'ok': False, 'error': 'Debe agregar al menos una línea'}), 400
+    for ln in lineas:
+        if not ln.get('producto_id') or int(ln.get('cantidad', 0)) < 1:
+            return jsonify({'ok': False, 'error': 'Cada línea debe tener producto y cantidad'}), 400
     try:
         conn = get_db_connection()
         tienda = conn.execute(
-            "SELECT t.id, t.tercero_id FROM tiendas t WHERE t.slug = %s", (slug,)
+            "SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)
         ).fetchone()
         if not tienda:
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        producto = conn.execute(
-            "SELECT id, nombre, stock FROM productos_tienda WHERE id = %s AND tienda_id = %s",
-            (int(producto_id), tienda['id'])
-        ).fetchone()
-        if not producto:
-            conn.close()
-            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
-        stock_anterior = producto['stock'] or 0
-        stock_nuevo = stock_anterior + int(cantidad)
-        conn.execute(
-            "UPDATE productos_tienda SET stock = %s WHERE id = %s",
-            (stock_nuevo, producto['id'])
+        negocio_id = tienda['tercero_id']
+        registrado_por = session['usuario_id']
+        # Calcular subtotal desde las líneas
+        subtotal = sum(
+            float(ln.get('valor_unitario', 0) or 0) * int(ln.get('cantidad', 0))
+            for ln in lineas
         )
-        registrado_por = conn.execute(
-            "SELECT tercero_id FROM usuarios WHERE id = %s", (session['usuario_id'],)
-        ).fetchone()
-        conn.execute("""
-            INSERT INTO movimientos_inventario
-                (negocio_id, producto_id, producto_tipo, nombre_producto, tipo, motivo,
-                 cantidad, stock_anterior, stock_nuevo, registrado_por, notas)
-            VALUES (%s, %s, 'tienda', %s, 'entrada', %s, %s, %s, %s, %s, %s)
+        total = subtotal + iva
+        # Crear encabezado del documento
+        doc = conn.execute("""
+            INSERT INTO documentos_inventario
+                (negocio_id, tipo_negocio, numero_documento, tipo_documento,
+                 fecha_documento, id_tercero, subtotal, descuento, iva, total,
+                 registrado_por, notas)
+            VALUES (%s, 'tienda', %s, %s, %s, %s, %s, 0, %s, %s, %s, %s)
+            RETURNING id
         """, (
-            tienda['tercero_id'], producto['id'], producto['nombre'],
-            motivo, int(cantidad), stock_anterior, stock_nuevo,
-            registrado_por['tercero_id'] if registrado_por else None,
-            notas or None
-        ))
+            negocio_id, numero_documento or None, tipo_documento,
+            fecha_documento, id_tercero_prov,
+            subtotal, iva, total, registrado_por, notas
+        )).fetchone()
+        documento_id = doc[0]
+        # Procesar cada línea
+        for ln in lineas:
+            prod_id = int(ln['producto_id'])
+            cantidad = int(ln['cantidad'])
+            valor_unitario = float(ln.get('valor_unitario', 0) or 0)
+            valor_total = valor_unitario * cantidad
+            producto = conn.execute(
+                "SELECT id, nombre, stock FROM productos_tienda WHERE id = %s AND tienda_id = %s",
+                (prod_id, tienda['id'])
+            ).fetchone()
+            if not producto:
+                conn.rollback()
+                conn.close()
+                return jsonify({'ok': False, 'error': f'Producto {prod_id} no encontrado en esta tienda'}), 404
+            stock_anterior = producto['stock'] or 0
+            stock_nuevo = stock_anterior + cantidad
+            conn.execute(
+                "UPDATE productos_tienda SET stock = %s WHERE id = %s",
+                (stock_nuevo, prod_id)
+            )
+            conn.execute("""
+                INSERT INTO movimientos_inventario
+                    (negocio_id, producto_id, producto_tipo, nombre_producto, tipo, motivo,
+                     cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
+                     documento_id, valor_unitario, valor_total)
+                VALUES (%s, %s, 'tienda', %s, 'entrada', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                negocio_id, prod_id, producto['nombre'],
+                motivo, cantidad, stock_anterior, stock_nuevo,
+                registrado_por, notas, documento_id, valor_unitario, valor_total
+            ))
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'stock_nuevo': stock_nuevo})
+        return jsonify({'ok': True, 'documento_id': documento_id, 'lineas': len(lineas)})
     except Exception as e:
         try:
             conn.rollback()
@@ -30272,6 +30309,64 @@ def crear_tablas_contabilidad(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_puc_codigo ON cuentas_puc(codigo)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_puc_padre ON cuentas_puc(codigo_padre)")
     conn.commit()
+
+    # Encabezados de documentos de inventario (facturas, remisiones, etc.)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS documentos_inventario (
+            id               SERIAL PRIMARY KEY,
+            negocio_id       INTEGER NOT NULL,
+            tipo_negocio     VARCHAR(20) DEFAULT 'tienda',
+            numero_documento VARCHAR(50),
+            tipo_documento   VARCHAR(30) NOT NULL,
+            fecha_documento  DATE NOT NULL DEFAULT CURRENT_DATE,
+            id_tercero       INTEGER,
+            subtotal         NUMERIC(12,2) DEFAULT 0,
+            descuento        NUMERIC(12,2) DEFAULT 0,
+            iva              NUMERIC(12,2) DEFAULT 0,
+            total            NUMERIC(12,2) DEFAULT 0,
+            registrado_por   INTEGER,
+            notas            TEXT,
+            created_at       TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_docinv_negocio ON documentos_inventario(negocio_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_docinv_tercero ON documentos_inventario(id_tercero)")
+    conn.commit()
+
+    # Encabezados de comprobantes contables
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comprobantes_contables (
+            id                 SERIAL PRIMARY KEY,
+            negocio_id         INTEGER NOT NULL,
+            numero_comprobante VARCHAR(50),
+            tipo               VARCHAR(30),
+            fecha              DATE NOT NULL DEFAULT CURRENT_DATE,
+            descripcion        VARCHAR(255),
+            total_debitos      NUMERIC(12,2) DEFAULT 0,
+            total_creditos     NUMERIC(12,2) DEFAULT 0,
+            registrado_por     INTEGER,
+            notas              TEXT,
+            created_at         TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_compcontable_negocio ON comprobantes_contables(negocio_id)")
+    conn.commit()
+
+    # ALTERs: agregar campos a tablas existentes
+    alters_cont = [
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_id INTEGER REFERENCES documentos_inventario(id)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(12,2)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS valor_total NUMERIC(12,2)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS comprobante_id INTEGER REFERENCES comprobantes_contables(id)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS cuenta_id INTEGER REFERENCES cuentas_puc(id)",
+    ]
+    for sql in alters_cont:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
     _seed_puc(conn)
     _seed_puc_subcuentas(conn)
     _contabilidad_tablas_listas = True

@@ -109,6 +109,16 @@
   </div>
   {% endif %}
 
+  <!-- Botón Cómo llegar -->
+  {% if taller.lat and taller.lon %}
+  <div class="px-4 pt-4 pb-1">
+    <button onclick="abrirComoLlegar()"
+        class="w-full flex items-center justify-center gap-2 border border-amber-300 text-amber-700 font-semibold py-2.5 rounded-xl text-sm bg-amber-50">
+        📍 Cómo llegar
+    </button>
+  </div>
+  {% endif %}
+
   <!-- SECCIÓN 1: SERVICIOS PÚBLICOS -->
   <div class="px-4 py-5">
     <h2 class="font-bold text-gray-800 text-lg mb-4">Nuestros servicios</h2>
@@ -403,6 +413,40 @@ document.addEventListener('DOMContentLoaded', () => {
     {% endif %}
     {% endif %}
 });
+
+{% if taller and taller.lat and taller.lon %}
+const _NEGOCIO_LAT = {{ taller.lat | tojson }};
+const _NEGOCIO_LON = {{ taller.lon | tojson }};
+const _NEGOCIO_NOMBRE = {{ taller.nombre | tojson }};
+
+function abrirComoLlegar() { document.getElementById('modal-como-llegar').classList.remove('hidden'); }
+function cerrarComoLlegar() { document.getElementById('modal-como-llegar').classList.add('hidden'); }
+function irEnMiCarro() {
+    window.location.href = `/conduccion-asistida?destino_lat=${_NEGOCIO_LAT}&destino_lon=${_NEGOCIO_LON}&destino_nombre=${encodeURIComponent(_NEGOCIO_NOMBRE)}`;
+}
+function pedirTucTuc() {
+    cerrarComoLlegar();
+    window.location.href = `/servicios?destino_lat=${_NEGOCIO_LAT}&destino_lon=${_NEGOCIO_LON}&destino_nombre=${encodeURIComponent(_NEGOCIO_NOMBRE)}`;
+}
+{% endif %}
 </script>
+
+{% if taller and taller.lat and taller.lon %}
+<div id="modal-como-llegar" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end justify-center" onclick="if(event.target===this)cerrarComoLlegar()">
+    <div class="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-10">
+        <p class="text-center text-gray-400 text-xs mb-5">¿Cómo quieres llegar a <strong class="text-gray-700">{{ taller.nombre }}</strong>?</p>
+        <button onclick="irEnMiCarro()" class="w-full flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 mb-3 text-left">
+            <span class="text-3xl">🚗</span>
+            <div><p class="font-bold text-gray-800 text-sm">Ir en mi carro</p><p class="text-xs text-gray-400">Navegación asistida TUC TUC</p></div>
+        </button>
+        <button onclick="pedirTucTuc()" class="w-full flex items-center gap-4 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-5 text-left">
+            <span class="text-3xl">🛺</span>
+            <div><p class="font-bold text-amber-700 text-sm">TUC TUC TE LLEVA</p><p class="text-xs text-amber-400">Solicita un conductor que te lleve</p></div>
+        </button>
+        <button onclick="cerrarComoLlegar()" class="w-full text-gray-400 text-sm font-semibold py-2">Cancelar</button>
+    </div>
+</div>
+{% endif %}
+
 </body>
 </html>

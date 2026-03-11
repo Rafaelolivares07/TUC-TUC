@@ -115,6 +115,15 @@
         {% else %}
         <span class="inline-block bg-green-100 text-green-700 px-4 py-1 rounded-full font-bold text-sm mt-1">Pedido Online</span>
         {% endif %}
+        <!-- Botón Cómo llegar -->
+        {% if restaurante.lat and restaurante.lon %}
+        <div class="mt-3">
+            <button onclick="abrirComoLlegar()"
+                class="w-full flex items-center justify-center gap-2 border border-green-200 text-green-700 font-semibold py-2.5 rounded-xl text-sm bg-green-50">
+                📍 Cómo llegar
+            </button>
+        </div>
+        {% endif %}
         <!-- Info entrega (solo remoto, visible tras registro) -->
         <div id="info-entrega" class="hidden mt-3 w-full">
             <div class="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center justify-between">
@@ -790,6 +799,37 @@ setInterval(cargarMisPedidos, 10000);
             Confirmar y Pedir
         </button>
         <button onclick="cerrarModal()" class="mt-2 text-gray-400 text-sm w-full text-center py-2">Cancelar</button>
+    </div>
+</div>
+{% endif %}
+
+{% if restaurante.lat and restaurante.lon %}
+<script>
+const _NEGOCIO_LAT = {{ restaurante.lat | tojson }};
+const _NEGOCIO_LON = {{ restaurante.lon | tojson }};
+const _NEGOCIO_NOMBRE = {{ restaurante.nombre | tojson }};
+function abrirComoLlegar() { document.getElementById('modal-como-llegar').classList.remove('hidden'); }
+function cerrarComoLlegar() { document.getElementById('modal-como-llegar').classList.add('hidden'); }
+function irEnMiCarro() {
+    window.location.href = `/conduccion-asistida?destino_lat=${_NEGOCIO_LAT}&destino_lon=${_NEGOCIO_LON}&destino_nombre=${encodeURIComponent(_NEGOCIO_NOMBRE)}`;
+}
+function pedirTucTuc() {
+    cerrarComoLlegar();
+    window.location.href = `/servicios?destino_lat=${_NEGOCIO_LAT}&destino_lon=${_NEGOCIO_LON}&destino_nombre=${encodeURIComponent(_NEGOCIO_NOMBRE)}`;
+}
+</script>
+<div id="modal-como-llegar" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end justify-center" onclick="if(event.target===this)cerrarComoLlegar()">
+    <div class="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-10">
+        <p class="text-center text-gray-400 text-xs mb-5">¿Cómo quieres llegar a <strong class="text-gray-700">{{ restaurante.nombre }}</strong>?</p>
+        <button onclick="irEnMiCarro()" class="w-full flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-2xl px-5 py-4 mb-3 text-left">
+            <span class="text-3xl">🚗</span>
+            <div><p class="font-bold text-gray-800 text-sm">Ir en mi carro</p><p class="text-xs text-gray-400">Navegación asistida TUC TUC</p></div>
+        </button>
+        <button onclick="pedirTucTuc()" class="w-full flex items-center gap-4 bg-green-50 border border-green-200 rounded-2xl px-5 py-4 mb-5 text-left">
+            <span class="text-3xl">🛺</span>
+            <div><p class="font-bold text-green-700 text-sm">TUC TUC TE LLEVA</p><p class="text-xs text-green-400">Solicita un conductor que te lleve</p></div>
+        </button>
+        <button onclick="cerrarComoLlegar()" class="w-full text-gray-400 text-sm font-semibold py-2">Cancelar</button>
     </div>
 </div>
 {% endif %}

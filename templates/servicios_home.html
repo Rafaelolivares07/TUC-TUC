@@ -602,6 +602,17 @@
                 }
             }
 
+            // Destino pre-cargado vía URL (desde portales de negocios)
+            const preDestLat = parseFloat(urlParams.get('destino_lat'));
+            const preDestLon = parseFloat(urlParams.get('destino_lon'));
+            const preDestNombre = urlParams.get('destino_nombre');
+            if (!isNaN(preDestLat) && !isNaN(preDestLon) && preDestNombre) {
+                coordenadasDestinoSeleccionado = { lat: preDestLat, lon: preDestLon };
+                document.getElementById('input-destino').value = decodeURIComponent(preDestNombre);
+                // Limpiar URL sin recargar
+                window.history.replaceState({}, document.title, '/servicios');
+            }
+
             configurarBotones();
             cargarUsuarioActual(); // Cargar nombre del usuario si está logueado (y luego carga lugares)
             cargarConteoPOIs(); // Cargar número de destinos conocidos

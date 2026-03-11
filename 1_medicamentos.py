@@ -26166,13 +26166,14 @@ def api_restaurante_ubicacion(slug):
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
         rest = conn.execute(
-            "SELECT id FROM restaurantes WHERE slug=%s AND admin_id=%s", (slug, uid)
+            "SELECT id, nombre FROM restaurantes WHERE slug=%s AND admin_id=%s", (slug, uid)
         ).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("UPDATE restaurantes SET lat=%s, lon=%s WHERE id=%s", (lat, lon, rest['id']))
         conn.commit()
+        _registrar_negocio_en_pois(conn, rest['nombre'], lat, lon, 'restaurante', uid)
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
@@ -28056,6 +28057,48 @@ def api_tienda_mostrar_nombre(slug):
 
 
 @app.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
+def _registrar_negocio_en_pois(conn, nombre, lat, lon, categoria, uid):
+    """Upsert del negocio en pois_cali y en lugares_usuario del dueño"""
+    # pois_cali — upsert por cercanía o insertar nuevo
+    try:
+        existente = conn.execute(
+            "SELECT id FROM pois_cali WHERE origen='tuctuc' AND sugerido_por=%s AND ABS(lat-%s)<0.0003 AND ABS(lon-%s)<0.0003",
+            (uid, lat, lon)
+        ).fetchone()
+        if existente:
+            conn.execute(
+                "UPDATE pois_cali SET nombre=%s, lat=%s, lon=%s, categoria=%s WHERE id=%s",
+                (nombre, lat, lon, categoria, existente['id'])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO pois_cali (nombre, lat, lon, categoria, origen, sugerido_por) VALUES (%s,%s,%s,%s,'tuctuc',%s)",
+                (nombre, lat, lon, categoria, uid)
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    # lugares_usuario del dueño
+    try:
+        lu = conn.execute(
+            "SELECT id FROM lugares_usuario WHERE usuario_id=%s AND ABS(lat-%s)<0.0003 AND ABS(lon-%s)<0.0003",
+            (uid, lat, lon)
+        ).fetchone()
+        if lu:
+            conn.execute(
+                "UPDATE lugares_usuario SET nombre=%s, lat=%s, lon=%s WHERE id=%s",
+                (nombre, lat, lon, lu['id'])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO lugares_usuario (usuario_id, nombre, lat, lon, icono, es_sugerido_publico) VALUES (%s,%s,%s,%s,'🏪',TRUE)",
+                (uid, nombre, lat, lon)
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
+
 def api_tienda_ubicacion(slug):
     """Guardar coordenadas de la tienda"""
     uid = session.get('usuario_id')
@@ -28071,13 +28114,14 @@ def api_tienda_ubicacion(slug):
         conn = get_db_connection()
         crear_tablas_tienda(conn)
         tienda = conn.execute(
-            "SELECT id FROM tiendas WHERE slug=%s AND admin_id=%s", (slug, uid)
+            "SELECT id, nombre FROM tiendas WHERE slug=%s AND admin_id=%s", (slug, uid)
         ).fetchone()
         if not tienda:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("UPDATE tiendas SET lat=%s, lon=%s WHERE id=%s", (lat, lon, tienda['id']))
         conn.commit()
+        _registrar_negocio_en_pois(conn, tienda['nombre'], lat, lon, 'tienda', uid)
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
@@ -31200,7 +31244,7 @@ def taller_home(slug):
     conn = get_db_connection()
     crear_tablas_taller(conn)
     taller = conn.execute(
-        "SELECT id, nombre, slug, imagen_header FROM negocios WHERE slug=%s AND tipo='taller'",
+        "SELECT id, nombre, slug, imagen_header, lat, lon FROM negocios WHERE slug=%s AND tipo='taller'",
         (slug,)
     ).fetchone()
     taller_data = None
@@ -32581,7 +32625,7 @@ def api_taller_ubicacion(slug):
             return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
         conn = get_db_connection()
         neg = conn.execute(
-            "SELECT id FROM negocios WHERE slug=%s AND tipo='taller' AND propietario_id=%s",
+            "SELECT id, nombre FROM negocios WHERE slug=%s AND tipo='taller' AND propietario_id=%s",
             (slug, uid)
         ).fetchone()
         if not neg:
@@ -32589,6 +32633,7 @@ def api_taller_ubicacion(slug):
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("UPDATE negocios SET lat=%s, lon=%s WHERE id=%s", (lat, lon, neg['id']))
         conn.commit()
+        _registrar_negocio_en_pois(conn, neg['nombre'], lat, lon, 'taller', uid)
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
@@ -32814,7 +32859,7 @@ def inmobiliaria_portal(slug):
         crear_tablas_inmobiliaria(conn)
         inmo = conn.execute(
             """SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono,
-                      imagen_header, tema, mostrar_nombre
+                      imagen_header, tema, mostrar_nombre, lat, lon
                FROM inmobiliarias WHERE slug=%s AND activa=TRUE""",
             (slug,)
         ).fetchone()
@@ -33890,7 +33935,7 @@ def compraventa_portal(slug):
         crear_tablas_automotriz(conn)
         neg = conn.execute(
             """SELECT id, nombre, slug, descripcion, logo_url, whatsapp, telefono,
-                      imagen_header, tema, mostrar_nombre
+                      imagen_header, tema, mostrar_nombre, lat, lon
                FROM negocios WHERE slug=%s AND tipo='compraventa' AND activo=TRUE""",
             (slug,)
         ).fetchone()

@@ -799,6 +799,28 @@
             iniciarWatchPosition();
             await verificarViajeActivo();
 
+            // Destino pre-cargado vía URL (desde portales de negocios)
+            const qp = new URLSearchParams(window.location.search);
+            const preDestLat = parseFloat(qp.get('destino_lat'));
+            const preDestLon = parseFloat(qp.get('destino_lon'));
+            const preDestNombre = qp.get('destino_nombre') || 'Destino';
+            if (!isNaN(preDestLat) && !isNaN(preDestLon) && !viajeActivo) {
+                // Esperar GPS (máx 15s) y luego trazar ruta automáticamente
+                let intentos = 0;
+                const esperarGPS = setInterval(async () => {
+                    intentos++;
+                    if (ubicacionActual) {
+                        clearInterval(esperarGPS);
+                        await seleccionarDestino(preDestLat, preDestLon, decodeURIComponent(preDestNombre));
+                    } else if (intentos >= 30) {
+                        clearInterval(esperarGPS);
+                        // GPS no disponible: mostrar panel de búsqueda con el nombre pre-cargado
+                        document.getElementById('input-destino-conductor').value = decodeURIComponent(preDestNombre);
+                        abrirPanelBusqueda();
+                    }
+                }, 500);
+            }
+
             // Intervalos
             setInterval(buscarCamarasCercanas, CONFIG.INTERVALO_BUSCAR_CAMARAS);
 

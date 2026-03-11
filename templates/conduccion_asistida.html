@@ -1642,10 +1642,6 @@
 
             actualizarFlechasGiro();
 
-            // DESHABILITADO temporalmente — asistencia de velocidad sugerida pendiente de afinar
-            ocultarAsistencia();
-            return;
-
             const eventos = obtenerEventosAdelante();
 
             if (eventos.length === 0) {
@@ -1656,7 +1652,11 @@
             const eventoUrgente = eventos[0];
             const accion = calcularAccion(eventoUrgente.velocidadObjetivo, eventoUrgente.distancia, velocidadActual);
 
-            mostrarAsistencia(accion);
+            if (accion) {
+                mostrarAsistencia(accion);
+            } else {
+                ocultarAsistencia();
+            }
         }
 
         function obtenerEventosAdelante() {
@@ -1694,7 +1694,7 @@
                     giro.lat, giro.lon
                 );
 
-                if (dist < 160) {
+                if (dist < 300) {
                     eventos.push({
                         tipo: 'giro',
                         distancia: dist,
@@ -1712,7 +1712,7 @@
 
         function calcularAccion(velocidadObjetivo, distancia, velocidadActualKmh) {
             if (velocidadActualKmh <= velocidadObjetivo) {
-                return { nivel: 'bien', texto: 'Vas bien' };
+                return null; // Va bien, no mostrar nada
             }
 
             const exceso = velocidadActualKmh - velocidadObjetivo;

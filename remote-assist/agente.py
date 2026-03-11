@@ -40,7 +40,7 @@ except ImportError:
 from PIL import Image
 
 # ─── Config por defecto ───────────────────────────────────────────────────────
-DEFAULT_SERVER  = "https://tuctuc-remote.onrender.com"
+DEFAULT_SERVER  = "https://tuc-tuc-remote.onrender.com"
 DEFAULT_TOKEN   = "tuctuc-remote-2026"
 DEFAULT_SESSION = "default"
 FPS_TARGET      = 10       # frames por segundo

@@ -27,7 +27,7 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
 # ─── Config (hardcodeado — el cliente no toca nada) ───────────────────────────
-SERVER   = "https://tuctuc-remote.onrender.com"
+SERVER   = "https://tuc-tuc-remote.onrender.com"
 TOKEN    = "tuctuc-remote-2026"
 SESSION  = "default"
 FPS      = 10

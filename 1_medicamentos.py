@@ -37291,6 +37291,129 @@ def _crear_tablas_contabilidad_negocio(conn):
     conn.commit()
 
 
+def _ejecutar_asiento_automatico(conn, negocio_id, tipo_negocio, tipo_doc_codigo, variables,
+                                  registrado_por=None, fecha=None, descripcion_override=None):
+    """
+    Genera un comprobante contable automático basado en parametros_lineas_contables.
+
+    conn               : conexión BD abierta — NO la cierra, el llamador hace commit/rollback
+    negocio_id         : INTEGER
+    tipo_negocio       : 'tienda', 'restaurante', etc.
+    tipo_doc_codigo    : código del tipo de doc, ej: 'VENTA', 'COMPRA'
+    variables          : dict {codigo_variable: valor_numerico} expuesto por el módulo
+    registrado_por     : tercero_id del usuario generador (opcional)
+    fecha              : datetime.date (opcional, default hoy)
+    descripcion_override: str (opcional, sobreescribe descripcion_asiento del parámetro)
+
+    Retorna: comprobante_id (int) si se generó, None si no había parametrización o no hay montos.
+    """
+    import re
+    from datetime import date as _date
+
+    # 1. Tipo de documento para este negocio
+    tipo_doc = conn.execute(
+        "SELECT id, nombre FROM tipos_documento_negocio WHERE negocio_id=%s AND codigo=%s",
+        (negocio_id, tipo_doc_codigo)
+    ).fetchone()
+    if not tipo_doc:
+        return None
+
+    # 2. Cabecera de parametrización activa
+    param = conn.execute(
+        "SELECT id, descripcion_asiento FROM parametros_contables_negocio WHERE negocio_id=%s AND tipo_doc_id=%s AND activo=TRUE",
+        (negocio_id, tipo_doc['id'])
+    ).fetchone()
+    if not param:
+        return None
+
+    # 3. Líneas activas ordenadas
+    lineas = conn.execute("""
+        SELECT l.cuenta_puc_id, l.tipo_mov, l.origen,
+               l.valor_fijo, l.formula, l.orden,
+               c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
+               v.codigo AS var_codigo
+        FROM parametros_lineas_contables l
+        JOIN cuentas_puc c ON c.id = l.cuenta_puc_id
+        LEFT JOIN modulo_variables_contables v ON v.id = l.variable_id
+        WHERE l.parametro_id = %s AND l.activo = TRUE
+        ORDER BY l.orden
+    """, (param['id'],)).fetchall()
+    if not lineas:
+        return None
+
+    # 4. Resolver monto de cada línea (L1=pos 1, L2=pos 2, ... por orden de aparición)
+    pos_amounts = {}   # posición 1-indexed → monto resuelto
+    mov_list = []
+
+    for idx, linea in enumerate(lineas, start=1):
+        origen = linea['origen']
+        monto = 0.0
+
+        if origen == 'F':
+            monto = float(linea['valor_fijo'] or 0)
+        elif origen == 'H':
+            monto = float(variables.get(linea['var_codigo'] or '', 0))
+        elif origen == 'C':
+            formula = linea['formula'] or '0'
+            def _repl(m, _pa=dict(pos_amounts)):
+                return str(_pa.get(int(m.group(1)), 0.0))
+            formula_eval = re.sub(r'L(\d+)', _repl, formula)
+            try:
+                monto = float(eval(formula_eval, {"__builtins__": {}}, {}))  # noqa: S307
+            except Exception:
+                monto = 0.0
+        # origen M (Manual): monto = 0, no se agrega a movimientos
+
+        pos_amounts[idx] = monto
+
+        if monto != 0 and origen != 'M':
+            mov_list.append({
+                'cuenta_puc_id': linea['cuenta_puc_id'],
+                'cuenta_codigo': linea['cuenta_codigo'],
+                'concepto':      linea['cuenta_nombre'],
+                'tipo_mov':      linea['tipo_mov'],
+                'monto':         abs(monto),
+            })
+
+    if not mov_list:
+        return None
+
+    # 5. Totales
+    total_deb  = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'D')
+    total_cred = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'C')
+    desc       = descripcion_override or param['descripcion_asiento'] or tipo_doc_codigo
+    fecha_uso  = fecha or _date.today()
+
+    # Número secuencial automático para este negocio + tipo
+    cnt = conn.execute(
+        "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo=%s",
+        (negocio_id, tipo_doc_codigo)
+    ).fetchone()['n']
+    numero = f"AUTO-{tipo_doc_codigo}-{(cnt or 0) + 1:04d}"
+
+    # 6. Insertar comprobante
+    comp_id = conn.execute("""
+        INSERT INTO comprobantes_contables
+            (negocio_id, numero_comprobante, tipo, fecha, descripcion,
+             total_debitos, total_creditos, registrado_por, notas)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        RETURNING id
+    """, (negocio_id, numero, tipo_doc_codigo, fecha_uso, desc,
+          total_deb, total_cred, registrado_por, 'Generado automáticamente')).fetchone()['id']
+
+    # 7. Insertar movimientos
+    for m in mov_list:
+        tipo_texto = 'debito' if m['tipo_mov'] == 'D' else 'credito'
+        conn.execute("""
+            INSERT INTO movimientos_contables
+                (negocio_id, tipo, cuenta, concepto, monto, registrado_por, comprobante_id, cuenta_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (negocio_id, tipo_texto, m['cuenta_codigo'], m['concepto'],
+              m['monto'], registrado_por, comp_id, m['cuenta_puc_id']))
+
+    return comp_id
+
+
 def _get_negocio_contable(conn, tipo, slug):
     """Retorna (negocio_id, nombre) para cualquier tipología. None si no existe."""
     if tipo in ('taller', 'compraventa', 'hospedaje'):
@@ -37515,13 +37638,9 @@ def api_contabilidad_parametros_get(tipo, slug):
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         rows = conn.execute("""
             SELECT p.id, p.tipo_doc_id, t.codigo AS tipo_codigo, t.nombre AS tipo_nombre,
-                   p.cuenta_debito_id,  cd.codigo AS debito_codigo,  cd.nombre AS debito_nombre,
-                   p.cuenta_credito_id, cc.codigo AS credito_codigo, cc.nombre AS credito_nombre,
                    p.descripcion_asiento, p.activo
             FROM parametros_contables_negocio p
             JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
-            LEFT JOIN cuentas_puc cd ON cd.id = p.cuenta_debito_id
-            LEFT JOIN cuentas_puc cc ON cc.id = p.cuenta_credito_id
             WHERE p.negocio_id = %s
             ORDER BY t.codigo
         """, (negocio_id,)).fetchall()
@@ -37540,8 +37659,6 @@ def api_contabilidad_parametros_post(tipo, slug):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     data = request.get_json() or {}
     tipo_doc_id = data.get('tipo_doc_id')
-    cuenta_debito_id = data.get('cuenta_debito_id')
-    cuenta_credito_id = data.get('cuenta_credito_id')
     descripcion = (data.get('descripcion_asiento') or '').strip() or None
     if not tipo_doc_id:
         return jsonify({'ok': False, 'error': 'tipo_doc_id es requerido'}), 400
@@ -37554,14 +37671,11 @@ def api_contabilidad_parametros_post(tipo, slug):
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         conn.execute("""
             INSERT INTO parametros_contables_negocio
-                (negocio_id, tipo_negocio, tipo_doc_id, cuenta_debito_id, cuenta_credito_id, descripcion_asiento)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (negocio_id, tipo_negocio, tipo_doc_id, descripcion_asiento)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT (negocio_id, tipo_doc_id)
-            DO UPDATE SET cuenta_debito_id=EXCLUDED.cuenta_debito_id,
-                          cuenta_credito_id=EXCLUDED.cuenta_credito_id,
-                          descripcion_asiento=EXCLUDED.descripcion_asiento,
-                          activo=TRUE
-        """, (negocio_id, tipo, tipo_doc_id, cuenta_debito_id, cuenta_credito_id, descripcion))
+            DO UPDATE SET descripcion_asiento=EXCLUDED.descripcion_asiento, activo=TRUE
+        """, (negocio_id, tipo, tipo_doc_id, descripcion))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -37935,6 +38049,67 @@ def api_contabilidad_parametro_linea_delete(tipo, slug, pid, lid):
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Motor contable ───────────────────────────────────────
+# Endpoint genérico para disparar _ejecutar_asiento_automatico desde cualquier módulo.
+# El módulo llama a este endpoint al guardar su transacción, pasando las variables que expone.
+#
+# POST /api/contabilidad/<tipo>/<slug>/asiento-automatico
+# Body: {
+#   "tipo_doc_codigo": "VENTA",
+#   "variables": {"total_bruto": 50000, "iva": 9500},
+#   "fecha": "2026-03-12",          (opcional, ISO)
+#   "descripcion": "Venta #123"     (opcional)
+# }
+# Respuesta: { "ok": true, "comprobante_id": 42 } o { "ok": false, "sin_parametros": true }
+
+@app.route('/api/contabilidad/<tipo>/<slug>/asiento-automatico', methods=['POST'])
+def api_contabilidad_asiento_automatico(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    tipo_doc_codigo = (data.get('tipo_doc_codigo') or '').strip().upper()
+    variables       = data.get('variables') or {}
+    descripcion     = (data.get('descripcion') or '').strip() or None
+    fecha_str       = data.get('fecha')
+
+    if not tipo_doc_codigo:
+        return jsonify({'ok': False, 'error': 'tipo_doc_codigo es requerido'}), 400
+
+    fecha = None
+    if fecha_str:
+        try:
+            from datetime import date as _date
+            fecha = _date.fromisoformat(fecha_str)
+        except Exception:
+            pass
+
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+
+        comp_id = _ejecutar_asiento_automatico(
+            conn, negocio_id, tipo, tipo_doc_codigo, variables,
+            registrado_por=uid, fecha=fecha, descripcion_override=descripcion
+        )
+
+        if comp_id is None:
+            conn.close()
+            return jsonify({'ok': True, 'sin_parametros': True,
+                            'msg': 'Sin parametrización para este tipo de documento — asiento omitido'})
+
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'comprobante_id': comp_id})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

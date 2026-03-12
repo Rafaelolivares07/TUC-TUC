@@ -731,7 +731,18 @@ function buscarCuentaLinea(lid) {
         : `/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=nombre`;
       const r = await fetch(url);
       const d = await r.json();
-      if (!d.ok || !d.cuentas.length) { sugg.classList.add('hidden'); return; }
+      if (!d.ok || !d.cuentas.length) {
+        if (sugg.parentElement !== document.body) document.body.appendChild(sugg);
+        const rect2 = inp.getBoundingClientRect();
+        sugg.style.position = 'fixed';
+        sugg.style.top  = (rect2.bottom + 4) + 'px';
+        sugg.style.left = rect2.left + 'px';
+        sugg.style.width = Math.max(rect2.width, 280) + 'px';
+        sugg.style.zIndex = '99999';
+        sugg.innerHTML = '<div class="px-3 py-2 text-gray-400 italic text-xs">Sin resultados</div>';
+        sugg.classList.remove('hidden');
+        return;
+      }
 
       // Auto-selección si hay coincidencia exacta de código
       const exacta = d.cuentas.find(c => c.codigo === q && c.acepta_movimiento);
@@ -766,7 +777,24 @@ function buscarCuentaLinea(lid) {
       sugg.style.width = Math.max(rect.width, 280) + 'px';
       sugg.style.zIndex = '99999';
       sugg.classList.remove('hidden');
-    } catch(e) { /* silencioso */ }
+    } catch(e) {
+      // Mostrar el error en el dropdown para poder diagnosticar
+      const suggErr = document.getElementById(`nl-cuenta-sugg-${lid}`);
+      if (suggErr) {
+        if (suggErr.parentElement !== document.body) document.body.appendChild(suggErr);
+        const inpErr = document.getElementById(`nl-cuenta-q-${lid}`);
+        if (inpErr) {
+          const r3 = inpErr.getBoundingClientRect();
+          suggErr.style.position = 'fixed';
+          suggErr.style.top  = (r3.bottom + 4) + 'px';
+          suggErr.style.left = r3.left + 'px';
+          suggErr.style.width = Math.max(r3.width, 280) + 'px';
+          suggErr.style.zIndex = '99999';
+        }
+        suggErr.innerHTML = `<div class="px-3 py-2 text-red-500 text-xs">Error: ${e.message}</div>`;
+        suggErr.classList.remove('hidden');
+      }
+    }
   }, 250);
 }
 

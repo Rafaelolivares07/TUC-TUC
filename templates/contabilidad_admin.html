@@ -665,13 +665,16 @@ function agregarLineaParam() {
   tr.className = 'border-b border-blue-50 bg-blue-50';
   tr.innerHTML = `
     <td class="px-3 py-2">
-      <input type="text" placeholder="Buscar cuenta PUC..." autocomplete="off"
-             class="border rounded px-2 py-1 text-xs w-full"
-             id="nl-cuenta-q-${lid}"
-             oninput="buscarCuentaLinea('${lid}')"
-             onkeydown="cuentaLineaKeydown(event, '${lid}')">
-      <div id="nl-cuenta-sugg-${lid}" class="hidden bg-white border rounded-lg shadow-xl max-h-48 overflow-y-auto text-xs"></div>
-      <input type="hidden" id="nl-cuenta-id-${lid}">
+      <div style="position:relative;">
+        <input type="text" placeholder="Buscar cuenta PUC..." autocomplete="off"
+               class="border rounded px-2 py-1 text-xs w-full"
+               id="nl-cuenta-q-${lid}"
+               oninput="buscarCuentaLinea('${lid}')"
+               onkeydown="cuentaLineaKeydown(event, '${lid}')">
+        <div id="nl-cuenta-sugg-${lid}"
+             style="display:none; position:absolute; top:100%; left:0; min-width:100%; min-width:280px; background:white; border:1px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.15); max-height:200px; overflow-y:auto; z-index:99999;"></div>
+        <input type="hidden" id="nl-cuenta-id-${lid}">
+      </div>
     </td>
     <td class="px-3 py-2 text-center">
       <select id="nl-tipomov-${lid}" class="border rounded px-1 py-1 text-xs">
@@ -715,93 +718,54 @@ function onOrigenChange(lid) {
 }
 
 function buscarCuentaLinea(lid) {
-  const inp = document.getElementById(`nl-cuenta-q-${lid}`);
-  const q = inp.value.trim();
+  const inp  = document.getElementById(`nl-cuenta-q-${lid}`);
   const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
-  // Al escribir, limpiar la selección anterior para forzar nueva elección
+  const q    = inp.value.trim();
   document.getElementById(`nl-cuenta-id-${lid}`).value = '';
-  if (!q) { sugg.classList.add('hidden'); return; }
+  if (!q) { sugg.style.display = 'none'; return; }
   clearTimeout(paramLineaTimer[lid]);
   paramLineaTimer[lid] = setTimeout(async () => {
-    try {
-      // Detectar modo: solo dígitos → búsqueda jerárquica por código; texto → por nombre
-      const esCodigo = /^\d+$/.test(q);
-      const url = esCodigo
-        ? `/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=codigo`
-        : `/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=nombre`;
-      const r = await fetch(url);
-      const d = await r.json();
-      if (!d.ok || !d.cuentas.length) {
-        if (sugg.parentElement !== document.body) document.body.appendChild(sugg);
-        const rect2 = inp.getBoundingClientRect();
-        sugg.style.position = 'fixed';
-        sugg.style.top  = (rect2.bottom + 4) + 'px';
-        sugg.style.left = rect2.left + 'px';
-        sugg.style.width = Math.max(rect2.width, 280) + 'px';
-        sugg.style.zIndex = '99999';
-        sugg.innerHTML = '<div class="px-3 py-2 text-gray-400 italic text-xs">Sin resultados</div>';
-        sugg.classList.remove('hidden');
-        return;
-      }
-
-      // Auto-selección si hay coincidencia exacta de código
-      const exacta = d.cuentas.find(c => c.codigo === q && c.acepta_movimiento);
-      if (exacta) {
-        selCuentaLinea(lid, exacta.id, exacta.codigo, exacta.nombre);
-        return;
-      }
-
-      const indent = ['', 'pl-0', 'pl-3', 'pl-6', 'pl-9'];
-      sugg.innerHTML = d.cuentas.slice(0, 30).map(c => {
-        const pad = indent[Math.min(c.nivel, 4)] || 'pl-9';
-        if (c.acepta_movimiento) {
-          return `<div class="${pad} px-3 py-1.5 cursor-pointer hover:bg-blue-50 border-b border-gray-50"
-                       onclick="selCuentaLinea('${lid}', ${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g,"\\'")}')">
-            <span class="font-mono font-bold text-blue-700 text-xs">${c.codigo}</span>
-            <span class="text-gray-700 ml-2 text-xs">${c.nombre}</span>
-          </div>`;
-        } else {
-          // Cuenta padre — visible en jerarquía, no seleccionable
-          return `<div class="${pad} px-3 py-1 border-b border-gray-50 opacity-50 cursor-default select-none">
-            <span class="font-mono text-gray-500 text-xs">${c.codigo}</span>
-            <span class="text-gray-400 ml-2 text-xs italic">${c.nombre}</span>
-          </div>`;
-        }
-      }).join('');
-      // Mover el dropdown al body para que no quede atrapado en el z-index del modal
-      if (sugg.parentElement !== document.body) document.body.appendChild(sugg);
-      const rect = inp.getBoundingClientRect();
-      sugg.style.position = 'fixed';
-      sugg.style.top  = (rect.bottom + 4) + 'px';
-      sugg.style.left = rect.left + 'px';
-      sugg.style.width = Math.max(rect.width, 280) + 'px';
-      sugg.style.zIndex = '99999';
-      sugg.classList.remove('hidden');
-    } catch(e) {
-      // Mostrar el error en el dropdown para poder diagnosticar
-      const suggErr = document.getElementById(`nl-cuenta-sugg-${lid}`);
-      if (suggErr) {
-        if (suggErr.parentElement !== document.body) document.body.appendChild(suggErr);
-        const inpErr = document.getElementById(`nl-cuenta-q-${lid}`);
-        if (inpErr) {
-          const r3 = inpErr.getBoundingClientRect();
-          suggErr.style.position = 'fixed';
-          suggErr.style.top  = (r3.bottom + 4) + 'px';
-          suggErr.style.left = r3.left + 'px';
-          suggErr.style.width = Math.max(r3.width, 280) + 'px';
-          suggErr.style.zIndex = '99999';
-        }
-        suggErr.innerHTML = `<div class="px-3 py-2 text-red-500 text-xs">Error: ${e.message}</div>`;
-        suggErr.classList.remove('hidden');
-      }
+    const esCodigo = /^\d+$/.test(q);
+    const url = esCodigo
+      ? `/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=codigo`
+      : `/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=nombre`;
+    let d;
+    try { const r = await fetch(url); d = await r.json(); }
+    catch(e) { sugg.innerHTML = `<div style="padding:8px;color:#ef4444;font-size:11px;">Error red: ${e.message}</div>`; sugg.style.display='block'; return; }
+    if (!d.ok || !d.cuentas.length) {
+      sugg.innerHTML = '<div style="padding:8px;color:#9ca3af;font-size:11px;font-style:italic;">Sin resultados</div>';
+      sugg.style.display = 'block';
+      return;
     }
-  }, 250);
+    // Auto-selección si código exacto y acepta movimiento
+    const exacta = d.cuentas.find(c => c.codigo === q && c.acepta_movimiento);
+    if (exacta) { selCuentaLinea(lid, exacta.id, exacta.codigo, exacta.nombre); return; }
+
+    const pl = ['0px','0px','12px','24px','36px'];
+    sugg.innerHTML = d.cuentas.slice(0, 30).map(c => {
+      const pad = pl[Math.min(c.nivel, 4)] || '36px';
+      if (c.acepta_movimiento) {
+        return `<div style="padding:6px 12px 6px ${pad};cursor:pointer;border-bottom:1px solid #f3f4f6;"
+                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background=''"
+                     onclick="selCuentaLinea('${lid}',${c.id},'${c.codigo}','${c.nombre.replace(/'/g,"\\'")}')">
+          <span style="font-family:monospace;font-weight:700;color:#1d4ed8;font-size:11px;">${c.codigo}</span>
+          <span style="color:#374151;margin-left:6px;font-size:11px;">${c.nombre}</span>
+        </div>`;
+      } else {
+        return `<div style="padding:4px 12px 4px ${pad};border-bottom:1px solid #f3f4f6;opacity:0.5;cursor:default;">
+          <span style="font-family:monospace;color:#6b7280;font-size:11px;">${c.codigo}</span>
+          <span style="color:#9ca3af;margin-left:6px;font-size:11px;font-style:italic;">${c.nombre}</span>
+        </div>`;
+      }
+    }).join('');
+    sugg.style.display = 'block';
+  }, 200);
 }
 
 function selCuentaLinea(lid, id, codigo, nombre) {
   document.getElementById(`nl-cuenta-q-${lid}`).value = `${codigo} — ${nombre}`;
   document.getElementById(`nl-cuenta-id-${lid}`).value = id;
-  document.getElementById(`nl-cuenta-sugg-${lid}`).classList.add('hidden');
+  document.getElementById(`nl-cuenta-sugg-${lid}`).style.display = 'none';
 }
 
 function cuentaLineaKeydown(e, lid) {

@@ -669,8 +669,8 @@ function agregarLineaParam() {
         <input type="text" placeholder="Buscar cuenta PUC..." autocomplete="off"
                class="border rounded px-2 py-1 text-xs w-full"
                id="nl-cuenta-q-${lid}"
-               oninput="buscarCuentaLinea('${lid}')"
-               onkeydown="cuentaLineaKeydown(event, '${lid}')">
+               oninput="buscarCuentaParam('${lid}')"
+               onkeydown="cuentaParamKeydown(event, '${lid}')">
         <div id="nl-cuenta-sugg-${lid}"
              style="display:none; position:absolute; top:100%; left:0; min-width:100%; min-width:280px; background:white; border:1px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.15); max-height:200px; overflow-y:auto; z-index:99999;"></div>
         <input type="hidden" id="nl-cuenta-id-${lid}">
@@ -717,7 +717,7 @@ function onOrigenChange(lid) {
   document.getElementById(`nl-variable-${lid}`).classList.toggle('hidden', origen !== 'H');
 }
 
-function buscarCuentaLinea(lid) {
+function buscarCuentaParam(lid) {
   const inp  = document.getElementById(`nl-cuenta-q-${lid}`);
   const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
   const q    = inp.value.trim();
@@ -739,7 +739,7 @@ function buscarCuentaLinea(lid) {
     }
     // Auto-selección si código exacto y acepta movimiento
     const exacta = d.cuentas.find(c => c.codigo === q && c.acepta_movimiento);
-    if (exacta) { selCuentaLinea(lid, exacta.id, exacta.codigo, exacta.nombre); return; }
+    if (exacta) { selCuentaParam(lid, exacta.id, exacta.codigo, exacta.nombre); return; }
 
     const pl = ['0px','0px','12px','24px','36px'];
     sugg.innerHTML = d.cuentas.slice(0, 30).map(c => {
@@ -747,7 +747,7 @@ function buscarCuentaLinea(lid) {
       if (c.acepta_movimiento) {
         return `<div style="padding:6px 12px 6px ${pad};cursor:pointer;border-bottom:1px solid #f3f4f6;"
                      onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background=''"
-                     onclick="selCuentaLinea('${lid}',${c.id},'${c.codigo}','${c.nombre.replace(/'/g,"\\'")}')">
+                     onclick="selCuentaParam('${lid}',${c.id},'${c.codigo}','${c.nombre.replace(/'/g,"\\'")}')">
           <span style="font-family:monospace;font-weight:700;color:#1d4ed8;font-size:11px;">${c.codigo}</span>
           <span style="color:#374151;margin-left:6px;font-size:11px;">${c.nombre}</span>
         </div>`;
@@ -762,13 +762,13 @@ function buscarCuentaLinea(lid) {
   }, 200);
 }
 
-function selCuentaLinea(lid, id, codigo, nombre) {
+function selCuentaParam(lid, id, codigo, nombre) {
   document.getElementById(`nl-cuenta-q-${lid}`).value = `${codigo} — ${nombre}`;
   document.getElementById(`nl-cuenta-id-${lid}`).value = id;
   document.getElementById(`nl-cuenta-sugg-${lid}`).style.display = 'none';
 }
 
-function cuentaLineaKeydown(e, lid) {
+function cuentaParamKeydown(e, lid) {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
@@ -778,7 +778,7 @@ function cuentaLineaKeydown(e, lid) {
     if (primero) { primero.click(); return; }
   }
   // Si el dropdown aún no apareció, forzar búsqueda y luego seleccionar
-  buscarCuentaLinea(lid);
+  buscarCuentaParam(lid);
 }
 
 async function guardarLineaNueva(lid) {

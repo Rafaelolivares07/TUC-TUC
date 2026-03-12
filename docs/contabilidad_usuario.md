@@ -2,7 +2,7 @@
 
 **Plataforma:** TUC TUC
 **Dirigido a:** Dueños de negocio, contadores, administradores
-**Última actualización:** 2026-03-12
+**Última actualización:** 2026-03-12 (rev. métodos de pago)
 
 ---
 
@@ -22,6 +22,8 @@ Desde el panel de administración de tu negocio, busca la pestaña o enlace **Co
 2. **Tipos de Documento** — los documentos contables (venta, compra, etc.)
 3. **Parametrización** — las reglas de cómo se genera cada asiento
 4. **Comprobantes** — el histórico de asientos generados
+
+Además, en el panel de tu tienda encontrarás el tab **💳 Métodos de Pago** — aquí configuras los métodos que el cajero verá al cobrar (ver sección 9).
 
 ---
 
@@ -110,10 +112,23 @@ Cuando el origen es **Heredado de fuente**, el sistema te pide que elijas qué i
 
 | Fuente | Qué representa | Variables disponibles |
 |---|---|---|
-| `ventas_pos` | Ventas registradas en caja POS | subtotal_venta, iva_venta, total_venta |
-| `ventas_domicilio` | Pedidos entregados a domicilio | subtotal_venta, iva_venta, total_venta |
+| `ventas_pos` | Ventas registradas en caja POS | subtotal_venta, iva_venta, total_venta + **métodos de pago** |
+| `ventas_domicilio` | Pedidos entregados a domicilio | subtotal_venta, iva_venta, total_venta + **métodos de pago** |
 | `compras_tienda` | Entradas de inventario | subtotal_compra, iva_compra, total_compra |
 | `ventas_restaurante` | Cobros de mesa en restaurante | subtotal_venta, iva_venta, total_venta |
+
+**Variables de métodos de pago:** cada método de pago que configures en tu tienda (ej: `efectivo`, `nequi`, `tarjeta`) aparece automáticamente como variable disponible en las fuentes `ventas_pos` y `ventas_domicilio`. Si el cajero no usó ese método en una venta, la variable vale 0 y el sistema no genera la línea de débito correspondiente.
+
+**Ejemplo:** tienes configurados Efectivo y Nequi. En la parametrización de `VENTA_POS` puedes crear:
+
+| # | Cuenta | Mov | Origen | Variable |
+|---|---|---|---|---|
+| L1 | 1105 — Caja | D | Heredado | ventas_pos → efectivo |
+| L2 | 1110 — Bancos | D | Heredado | ventas_pos → nequi |
+| L3 | 2408 — IVA por pagar | C | Heredado | ventas_pos → iva_venta |
+| L4 | 4135 — Ingresos | C | Calculado | L1+L2-L3 |
+
+Si una venta se pagó solo con efectivo, solo se generan las líneas L1, L3 y L4. La línea L2 (Nequi) no se crea porque su valor es 0.
 
 > **Regla:** dentro de una misma parametrización, todas las líneas "Heredado de fuente" deben usar la **misma fuente**. No puedes mezclar `ventas_pos` con `ventas_domicilio` en el mismo parámetro. Si intentas hacerlo, el sistema te lo impedirá con un aviso. Esto es correcto: cada parametrización responde a un solo tipo de evento.
 
@@ -212,10 +227,11 @@ Si el cliente tiene teléfono registrado, puedes enviarle el recibo por WhatsApp
 ### Canal 1 — Venta en caja POS
 
 1. El cajero agrega productos al carrito en la pantalla POS
-2. Selecciona método de pago y hace clic en **Cobrar**
-3. El sistema registra el pedido y **en ese mismo momento genera el asiento contable** (`VENTA_POS`)
-4. El cajero ve el recibo con el desglose de IVA
-5. Puede imprimir el ticket o enviarlo por WhatsApp
+2. Ingresa el monto en cada método de pago que aplique (efectivo, tarjeta, Nequi, etc.)
+3. El botón **Cobrar** se habilita cuando la suma de pagos iguala el total
+4. Al cobrar, el sistema registra el pedido y **en ese mismo momento genera el asiento contable** (`VENTA_POS`)
+5. El cajero ve el recibo con el desglose de IVA y los métodos de pago usados
+6. Puede imprimir el ticket o enviarlo por WhatsApp
 
 ### Canal 2 — Pedido desde URL pública (domicilio)
 
@@ -255,3 +271,52 @@ Sí, en la pestaña **Comprobantes** del módulo de contabilidad, con filtro por
 
 **¿Qué significa "Fuente bloqueada" cuando agrego una línea?**
 Significa que ya existe otra línea en esa parametrización que usa una fuente específica (por ejemplo `ventas_pos`). El sistema exige que todas las líneas "Heredado de fuente" usen la misma fuente. Esto garantiza que el asiento sea coherente — todos sus valores vienen del mismo evento.
+
+**¿Puedo agregar mis propios métodos de pago (Nequi, Daviplata, etc.)?**
+Sí. En el panel de tu tienda, tab **💳 Métodos de Pago**, creas los métodos que necesites con su nombre y código. El cajero los verá como inputs al cobrar. Contablemente, cada método crea una variable disponible en la parametrización — ver sección 9.
+
+---
+
+## 9. Métodos de Pago
+
+### ¿Qué son?
+
+Los métodos de pago definen cómo el cliente cancela una venta: efectivo, tarjeta, transferencia, Nequi, Daviplata, u otros. Tú decides cuáles activar para tu negocio — el sistema no impone ninguno.
+
+### Cómo configurar los métodos de pago
+
+1. En el panel de tu tienda, haz clic en el tab **💳 Métodos de Pago**
+2. Haz clic en **+ Agregar método**
+3. Ingresa:
+   - **Nombre:** lo que verá el cajero en la caja (ej: `Nequi`, `Tarjeta Débito`)
+   - **Código técnico:** identificador corto sin espacios (ej: `nequi`, `tarjeta_debito`) — el sistema lo convierte a minúsculas automáticamente
+   - **Orden:** número para controlar el orden en que aparecen en el POS (0 = primero)
+4. Guarda. El método aparecerá inmediatamente en el POS y como variable en la parametrización contable.
+
+Puedes activar o inactivar métodos en cualquier momento. Un método inactivo no aparece en el POS pero su historial se conserva.
+
+### Cómo funciona en el POS (caja)
+
+Al cobrar, el cajero ve un campo de monto por cada método activo:
+
+```
+Efectivo       [ $60.000 ]
+Nequi          [ $40.000 ]
+Tarjeta débito [   $0    ]
+─────────────────────────
+Total a cobrar:  $100.000  ✓
+```
+
+El botón **Cobrar** solo se habilita cuando la suma de los métodos usados iguala exactamente el total de la venta. Si falta o sobra, el sistema muestra cuánto.
+
+Un mismo pago puede repartirse entre varios métodos (pago mixto). Los métodos con valor $0 no se registran.
+
+### Impacto en contabilidad
+
+Cada método de pago es una variable contable. En la parametrización de `VENTA_POS`, puedes crear una línea de débito diferente por método:
+
+- Efectivo en caja → débito a **1105 Caja**
+- Transferencia → débito a **1110 Bancos**
+- Nequi → débito a **1110 Bancos** (o la cuenta que uses para billeteras digitales)
+
+Si en una venta el cliente pagó solo con efectivo, solo se genera la línea de débito a Caja. Las otras líneas no aparecen en el comprobante porque su valor es 0.

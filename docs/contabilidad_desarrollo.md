@@ -2,7 +2,7 @@
 
 **Plataforma:** TUC TUC
 **Archivo principal:** `1_medicamentos.py` (monolítico Flask + psycopg2)
-**Última actualización:** 2026-03-12
+**Última actualización:** 2026-03-12 (rev. métodos de pago)
 
 ---
 
@@ -125,14 +125,45 @@ Catálogo de variables disponibles por fuente. Pre-cargado en seed, gestionable 
 
 | Fuente (`modulo`) | Variables que expone |
 |---|---|
-| `ventas_pos` | `subtotal_venta`, `iva_venta`, `total_venta` |
-| `ventas_domicilio` | `subtotal_venta`, `iva_venta`, `total_venta` |
+| `ventas_pos` | `subtotal_venta`, `iva_venta`, `total_venta` + **variables de métodos de pago** (dinámicas) |
+| `ventas_domicilio` | `subtotal_venta`, `iva_venta`, `total_venta` + **variables de métodos de pago** (dinámicas) |
 | `compras_tienda` | `subtotal_compra`, `iva_compra`, `total_compra` |
 | `ventas_restaurante` | `subtotal_venta`, `iva_venta`, `total_venta` |
 
+**Variables de métodos de pago:** cuando un admin crea un método de pago en `metodos_pago_tienda`, la función `_upsert_var_metodo_pago(conn, codigo, nombre)` inserta automáticamente la variable en `modulo_variables_contables` bajo las fuentes `ventas_pos` y `ventas_domicilio`. Esto hace que aparezca disponible en el selector de variables de la parametrización sin acción adicional del desarrollador.
+
 **Migración automática:** `_seed_variables_contables()` hace `DELETE WHERE modulo IN ('tienda','restaurante')` antes de insertar para limpiar los nombres genéricos anteriores.
 
-### 2.7 `comprobantes_contables`
+### 2.7 `metodos_pago_tienda`
+Métodos de pago configurados por el admin de una tienda.
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | SERIAL PK | |
+| `tienda_id` | INT | FK `tiendas.id` |
+| `nombre` | VARCHAR(100) | Nombre visible al cajero (ej: `Nequi`) |
+| `codigo` | VARCHAR(50) | Código técnico snake_case (ej: `nequi`) — es el nombre de la variable contable |
+| `activo` | BOOLEAN | Solo los activos aparecen en el POS |
+| `orden` | INT | Orden visual en el POS |
+
+**UNIQUE:** `(tienda_id, codigo)`
+
+> **Relación con contabilidad:** al crear un método, `_upsert_var_metodo_pago()` inserta su `codigo` como variable en `modulo_variables_contables` (fuentes `ventas_pos` y `ventas_domicilio`). Así el admin puede crear líneas de débito por método de pago en la parametrización.
+
+### 2.8 `pedido_pagos_tienda`
+Detalle de pagos de una venta POS. Un pedido puede tener N filas (pago mixto).
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | SERIAL PK | |
+| `pedido_id` | INT | FK `pedidos_tienda.id` |
+| `metodo_codigo` | VARCHAR(50) | Código del método (ej: `efectivo`) |
+| `metodo_nombre` | VARCHAR(100) | Nombre legible |
+| `monto` | NUMERIC(12,2) | Monto parcial pagado con este método |
+
+Solo se insertan filas con `monto > 0`. El motor contable itera esta tabla para construir el dict `variables` con los montos por método.
+
+### 2.9 `comprobantes_contables`
 Cabecera de un comprobante generado (manual o automático).
 
 | Columna | Tipo | Descripción |
@@ -148,7 +179,7 @@ Cabecera de un comprobante generado (manual o automático).
 | `registrado_por` | INT | tercero_id del usuario |
 | `creado_en` | TIMESTAMP | |
 
-### 2.8 `movimientos_contables`
+### 2.10 `movimientos_contables`
 Líneas del comprobante generado.
 
 | Columna | Tipo | Descripción |
@@ -249,20 +280,28 @@ Si el negocio no tiene parametrización, el motor retorna `None` silenciosamente
 
 **Archivo:** `1_medicamentos.py` → función `api_tienda_pedido_crear`
 **Condición:** `tipo_entrega == 'caja'`
-**Momento:** Inmediatamente después del INSERT del pedido, dentro del mismo bloque de conexión.
+**Momento:** Inmediatamente después del INSERT del pedido e INSERT de `pedido_pagos_tienda`, dentro del mismo bloque de conexión.
 
 ```python
-iva_venta = sum(
-    it['precio_unitario'] * it['cantidad'] * it['iva_pct'] / (100 + it['iva_pct'])
-    for it in items_validos if it['iva_pct'] > 0
-)
-subtotal_venta = total - iva_venta
+# El POS envía pagos: [{codigo, nombre, monto}] — solo métodos con monto > 0
+pagos_validos = [p for p in pagos if float(p.get('monto') or 0) > 0]
 
+# Guardar detalle de pagos
+for p in pagos_validos:
+    conn.execute("""
+        INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+        VALUES (%s, %s, %s, %s)
+    """, (pedido_id, p['codigo'], p.get('nombre', p['codigo']), float(p['monto'])))
+
+# Motor contable con variables de pago
 if tipo_entrega == 'caja':
     try:
+        vars_motor = {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total}
+        for p in pagos_validos:
+            vars_motor[p['codigo']] = float(p['monto'])   # ej: vars_motor['efectivo'] = 60000
         _ejecutar_asiento_automatico(
             conn, tienda['id'], 'tienda', 'VENTA_POS',
-            {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total},
+            vars_motor,
             registrado_por=id_tercero_cajero or session.get('usuario_id'),
             descripcion_override=f'Venta caja #{pedido_id}'
         )
@@ -271,6 +310,8 @@ if tipo_entrega == 'caja':
 ```
 
 **IVA:** Back-calculado desde `iva_pct` de cada producto. Los precios en BD se almacenan **con IVA incluido**, por tanto: `iva = precio × iva_pct / (100 + iva_pct)`.
+
+**Pagos mixtos:** si la venta se paga con Efectivo $60.000 + Nequi $40.000, el motor recibe `{'total_venta': 100000, ..., 'efectivo': 60000, 'nequi': 40000}`. El admin puede crear una línea de débito `H → efectivo` (débito a Caja) y otra `H → nequi` (débito a Bancos). Solo se genera la línea si el monto es > 0 (regla del motor: líneas con `monto == 0` no se agregan al comprobante).
 
 ### 4.2 Tienda — Venta domicilio / URL pública
 
@@ -355,7 +396,36 @@ Pantalla principal del módulo para el usuario con acceso al negocio. Contiene 4
 - Lista de comprobantes generados (manuales y automáticos)
 - Filtro por fecha y tipo
 
-### 5.2 Variables de fuentes — `/admin/contabilidad/variables-modulos`
+### 5.2 Métodos de Pago — `/admin/tienda/<slug>/metodos-pago`
+
+Pantalla del admin para gestionar los métodos de pago de una tienda. Accesible desde el tab **"💳 Métodos de Pago"** en `tienda_admin.html`.
+
+**Campos al crear:**
+- `nombre` — texto visible al cajero (ej: `Nequi`)
+- `codigo` — código técnico snake_case (ej: `nequi`) — se convierte automáticamente a minúsculas y reemplaza espacios por `_`
+- `orden` — posición en el POS (0 = primero)
+
+**Al guardar:** `_upsert_var_metodo_pago(conn, codigo, nombre)` registra la variable en `modulo_variables_contables` para fuentes `ventas_pos` y `ventas_domicilio`.
+
+**Helper:**
+```python
+def _upsert_var_metodo_pago(conn, codigo, nombre):
+    for modulo in ('ventas_pos', 'ventas_domicilio'):
+        conn.execute("""
+            INSERT INTO modulo_variables_contables (modulo, codigo, descripcion, orden, activo)
+            VALUES (%s, %s, %s, 99, TRUE)
+            ON CONFLICT (modulo, codigo) DO UPDATE SET descripcion = EXCLUDED.descripcion
+        """, (modulo, codigo, f'Pago con {nombre}'))
+```
+
+**API:**
+- `GET /api/admin/tienda/<slug>/metodos-pago` — lista
+- `POST /api/admin/tienda/<slug>/metodos-pago` — crear
+- `PATCH /api/admin/tienda/<slug>/metodos-pago/<id>` — actualizar `activo`, `orden`, `nombre`
+- `DELETE /api/admin/tienda/<slug>/metodos-pago/<id>` — eliminar
+- `GET /api/tienda/<slug>/metodos-pago` — **público**, usa el POS al autenticar el cajero
+
+### 5.3 Variables de fuentes — `/admin/contabilidad/variables-modulos`
 
 Pantalla exclusiva del **admin TUC TUC** (no del usuario del negocio).
 
@@ -476,4 +546,4 @@ La ejecución posterior al primer arranque es `O(1)`: el flag `_contabilidad_tab
 - [ ] Libro diario: vista resumen por rango de fechas para el dueño/contador
 - [ ] Balance: activos vs pasivos calculados desde `movimientos_contables`
 - [ ] Selector IVA en `restaurante_admin.html` — items de carta (mismo patrón que tienda_admin)
-- [ ] Rutas `/docs/contabilidad` (pública) y `/admin/docs/contabilidad` (desarrollo) para servir estos manuales desde la app
+- [ ] Métodos de pago para domicilio y restaurante — hoy implementado solo en POS caja; los otros canales reciben `metodo_pago` como string simple sin desglose multi-pago

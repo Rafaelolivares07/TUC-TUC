@@ -510,6 +510,7 @@ let paramLineaTimer = {};
 let paramActualId = null;   // id del parámetro activo en el editor
 let variablesData = [];     // catálogo de variables de módulo
 let paramLineasPendientes = []; // líneas nuevas por guardar (antes del POST)
+let paramModuloLocked = null;  // módulo bloqueado para el parámetro activo (primera variable H usada)
 
 async function cargarParametros() {
   if (!tiposLoaded) await cargarTipos();
@@ -593,6 +594,7 @@ async function guardarCabeceraParametro() {
 
 async function abrirEditorLineas(pid, titulo, descripcion, tipo_doc_id) {
   paramActualId = pid;
+  paramModuloLocked = null;  // resetear al abrir otro parámetro
   document.getElementById('param-lineas-titulo').textContent = titulo;
   document.getElementById('param-tipo-doc').value = tipo_doc_id || '';
   document.getElementById('param-descripcion').value = descripcion || '';
@@ -607,6 +609,10 @@ async function abrirEditorLineas(pid, titulo, descripcion, tipo_doc_id) {
 }
 
 function renderLineasParam(lineas) {
+  // Detectar módulo bloqueado: primera línea H activa determina el módulo
+  const lineaH = lineas.find(l => l.origen === 'H' && l.variable_modulo);
+  paramModuloLocked = lineaH ? lineaH.variable_modulo : null;
+
   const tbody = document.getElementById('param-lineas-body');
   if (!lineas.length) {
     tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-4 text-sm">Sin líneas — agrega la primera</td></tr>';
@@ -637,9 +643,16 @@ function renderLineasParam(lineas) {
 function agregarLineaParam() {
   if (!paramActualId) { toast('Guarda primero la cabecera', false); return; }
   const lid = 'nueva-' + Date.now();
-  const variablesOpts = variablesData.length
-    ? variablesData.map(v => `<option value="${v.id}">[${v.modulo}] ${v.descripcion}</option>`).join('')
-    : '<option value="">Sin variables registradas</option>';
+  // Si ya hay una línea H en este parámetro, mostrar solo variables de ese módulo
+  const variablesDisp = paramModuloLocked
+    ? variablesData.filter(v => v.modulo === paramModuloLocked)
+    : variablesData;
+  const moduloLabel = paramModuloLocked
+    ? `<span class="text-xs text-amber-600 font-semibold ml-1">módulo bloqueado: ${paramModuloLocked}</span>`
+    : '';
+  const variablesOpts = variablesDisp.length
+    ? variablesDisp.map(v => `<option value="${v.id}">[${v.modulo}] ${v.descripcion}</option>`).join('')
+    : `<option value="">${paramModuloLocked ? `Sin más variables de '${paramModuloLocked}'` : 'Sin variables registradas'}</option>`;
   const tr = document.createElement('tr');
   tr.id = `linea-nueva-${lid}`;
   tr.className = 'border-b border-blue-50 bg-blue-50';
@@ -673,6 +686,7 @@ function agregarLineaParam() {
       <select id="nl-variable-${lid}" class="border rounded px-1 py-1 text-xs w-full hidden">
         ${variablesOpts}
       </select>
+      ${moduloLabel}
     </td>
     <td class="px-3 py-2 text-right">
       <button onclick="guardarLineaNueva('${lid}')" class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded hover:bg-blue-700 mr-1">Guardar</button>

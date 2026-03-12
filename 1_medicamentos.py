@@ -38097,6 +38097,30 @@ def api_contabilidad_parametro_lineas_post(tipo, slug, pid):
         if not negocio_id:
             conn.close()
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+
+        # Validar módulo único: si origen=H, verificar que no haya líneas H de otro módulo
+        if origen == 'H' and variable_id:
+            nueva_var = conn.execute(
+                "SELECT modulo FROM modulo_variables_contables WHERE id=%s", (variable_id,)
+            ).fetchone()
+            if nueva_var:
+                modulo_nuevo = nueva_var['modulo']
+                conflicto = conn.execute("""
+                    SELECT v.modulo FROM parametros_lineas_contables l
+                    JOIN modulo_variables_contables v ON v.id = l.variable_id
+                    WHERE l.parametro_id = %s AND l.origen = 'H' AND l.activo = TRUE
+                      AND v.modulo != %s
+                    LIMIT 1
+                """, (pid, modulo_nuevo)).fetchone()
+                if conflicto:
+                    conn.close()
+                    return jsonify({
+                        'ok': False,
+                        'error': f"Este parámetro ya usa variables del módulo '{conflicto['modulo']}'. "
+                                 f"No se puede mezclar con '{modulo_nuevo}'. "
+                                 f"Elimina las líneas del módulo anterior primero."
+                    }), 400
+
         nueva = conn.execute("""
             INSERT INTO parametros_lineas_contables
                 (parametro_id, cuenta_puc_id, tipo_mov, origen, valor_fijo, formula, variable_id, orden)

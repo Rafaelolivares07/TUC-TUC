@@ -30733,6 +30733,8 @@ def crear_tablas_contabilidad(conn):
         "ALTER TABLE metodos_pago_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER REFERENCES metodos_pago_catalogo(id) ON DELETE CASCADE",
         "ALTER TABLE metodos_pago_tienda DROP CONSTRAINT IF EXISTS metodos_pago_tienda_tienda_id_codigo_key",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_metpago_tienda_catalogo ON metodos_pago_tienda(tienda_id, catalogo_id)",
+        "ALTER TABLE metodos_pago_tienda ALTER COLUMN nombre DROP NOT NULL",
+        "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
     ]:
         try:
             conn.execute(sql)

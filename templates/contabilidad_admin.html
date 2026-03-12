@@ -667,7 +667,9 @@ function agregarLineaParam() {
     <td class="px-3 py-2">
       <input type="text" placeholder="Buscar cuenta PUC..." autocomplete="off"
              class="border rounded px-2 py-1 text-xs w-full"
-             id="nl-cuenta-q-${lid}" oninput="buscarCuentaLinea('${lid}')">
+             id="nl-cuenta-q-${lid}"
+             oninput="buscarCuentaLinea('${lid}')"
+             onkeydown="cuentaLineaKeydown(event, '${lid}')">
       <div id="nl-cuenta-sugg-${lid}" class="hidden fixed bg-white border rounded shadow-lg z-20 max-h-40 overflow-y-auto text-xs w-72"></div>
       <input type="hidden" id="nl-cuenta-id-${lid}">
     </td>
@@ -768,6 +770,19 @@ function selCuentaLinea(lid, id, codigo, nombre) {
   document.getElementById(`nl-cuenta-q-${lid}`).value = `${codigo} — ${nombre}`;
   document.getElementById(`nl-cuenta-id-${lid}`).value = id;
   document.getElementById(`nl-cuenta-sugg-${lid}`).classList.add('hidden');
+}
+
+function cuentaLineaKeydown(e, lid) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
+  // Buscar el primer item clickeable (tiene onclick) en el dropdown visible
+  if (!sugg.classList.contains('hidden')) {
+    const primero = sugg.querySelector('[onclick]');
+    if (primero) { primero.click(); return; }
+  }
+  // Si el dropdown aún no apareció, forzar búsqueda y luego seleccionar
+  buscarCuentaLinea(lid);
 }
 
 async function guardarLineaNueva(lid) {

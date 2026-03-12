@@ -28255,7 +28255,6 @@ def api_tienda_mostrar_nombre(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@app.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
 def _registrar_negocio_en_pois(conn, nombre, lat, lon, categoria, uid):
     """Upsert del negocio en pois_cali y en lugares_usuario del dueño"""
     # pois_cali — upsert por cercanía o insertar nuevo
@@ -28298,6 +28297,7 @@ def _registrar_negocio_en_pois(conn, nombre, lat, lon, categoria, uid):
         conn.rollback()
 
 
+@app.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
 def api_tienda_ubicacion(slug):
     """Guardar coordenadas de la tienda"""
     uid = session.get('usuario_id')
@@ -28305,7 +28305,7 @@ def api_tienda_ubicacion(slug):
         return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
     conn = None
     try:
-        data = request.get_json(force=True)
+        data = request.get_json(silent=True) or {}
         lat = data.get('lat')
         lon = data.get('lon')
         if lat is None or lon is None:
@@ -28329,27 +28329,6 @@ def api_tienda_ubicacion(slug):
             conn.close()
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-
-@app.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
-def api_tienda_admin_ubicacion(slug):
-    """Guardar coordenadas de la tienda"""
-    try:
-        if 'usuario_id' not in session:
-            return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-        data = request.get_json(silent=True) or {}
-        lat = data.get('lat')
-        lon = data.get('lon')
-        if lat is None or lon is None:
-            return jsonify({'ok': False, 'error': 'lat y lon requeridos'}), 400
-        conn = get_db_connection()
-        conn.execute("UPDATE tiendas SET lat=%s, lon=%s WHERE slug=%s", (float(lat), float(lon), slug))
-        conn.commit()
-        conn.close()
-        return jsonify({'ok': True})
-    except Exception as e:
-        try: conn.rollback()
-        except: pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/tienda/<slug>/telegram', methods=['POST'])

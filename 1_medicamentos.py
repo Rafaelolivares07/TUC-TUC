@@ -30714,6 +30714,21 @@ def crear_tablas_contabilidad(conn):
     """)
     conn.commit()
     _seed_variables_contables(conn)
+    # Asegurar que el catálogo de métodos de pago y sus variables contables existan
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS metodos_pago_catalogo (
+            id         SERIAL PRIMARY KEY,
+            nombre     VARCHAR(100) NOT NULL,
+            codigo     VARCHAR(50) NOT NULL UNIQUE,
+            icono      VARCHAR(10) DEFAULT '💳',
+            activo     BOOLEAN DEFAULT TRUE,
+            orden      INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    _seed_metodos_pago_catalogo(conn)
+    conn.commit()
     _contabilidad_tablas_listas = True
 
 def _seed_variables_contables(conn):

@@ -28329,16 +28329,17 @@ def api_tienda_pedido_crear(slug):
                     cliente_id, pedido_id
                 ))
 
-        # Motor contable — best effort: si no hay parametrización, no interrumpe
-        try:
-            _ejecutar_asiento_automatico(
-                conn, tienda['id'], 'tienda', 'VENTA',
-                {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total},
-                registrado_por=id_tercero_cajero or session.get('usuario_id'),
-                descripcion_override=f'Pedido #{pedido_id}'
-            )
-        except Exception:
-            pass
+        # Motor contable — solo para ventas POS (caja); domicilio se contabiliza al entregar
+        if tipo_entrega == 'caja':
+            try:
+                _ejecutar_asiento_automatico(
+                    conn, tienda['id'], 'tienda', 'VENTA',
+                    {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total},
+                    registrado_por=id_tercero_cajero or session.get('usuario_id'),
+                    descripcion_override=f'Venta caja #{pedido_id}'
+                )
+            except Exception:
+                pass
 
         conn.commit()
         conn.close()
@@ -28623,10 +28624,43 @@ def api_tienda_pedido_estado(slug, pedido_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         conn.execute("UPDATE pedidos_tienda SET estado = %s WHERE id = %s AND tienda_id = %s", (estado, pedido_id, tienda['id']))
+
+        # Motor contable al entregar (canal público/domicilio — caja ya lo contabilizó al crear)
+        if estado == 'entregado':
+            try:
+                pedido = conn.execute(
+                    "SELECT total, tipo_entrega FROM pedidos_tienda WHERE id=%s AND tienda_id=%s",
+                    (pedido_id, tienda['id'])
+                ).fetchone()
+                if pedido and pedido['tipo_entrega'] != 'caja':
+                    # Calcular IVA desde los items × iva_pct del producto
+                    items = conn.execute("""
+                        SELECT i.cantidad, i.precio_unitario, COALESCE(p.iva_pct, 0) AS iva_pct
+                        FROM items_pedido_tienda i
+                        LEFT JOIN productos_tienda p ON p.id = i.producto_id
+                        WHERE i.pedido_id = %s
+                    """, (pedido_id,)).fetchall()
+                    iva_ent = sum(
+                        r['precio_unitario'] * r['cantidad'] * r['iva_pct'] / (100 + r['iva_pct'])
+                        for r in items if (r['iva_pct'] or 0) > 0
+                    )
+                    total_ent = float(pedido['total'] or 0)
+                    subtotal_ent = total_ent - iva_ent
+                    _ejecutar_asiento_automatico(
+                        conn, tienda['id'], 'tienda', 'VENTA',
+                        {'subtotal_venta': subtotal_ent, 'iva_venta': iva_ent, 'total_venta': total_ent},
+                        registrado_por=session.get('usuario_id'),
+                        descripcion_override=f'Entrega pedido #{pedido_id}'
+                    )
+            except Exception:
+                pass
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

@@ -27073,6 +27073,17 @@ def api_restaurante_cobrar(slug, mesa_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
 
+        # Leer total de la mesa antes de cobrar (para el motor contable)
+        total_row = conn.execute("""
+            SELECT COALESCE(SUM(precio), 0) AS total
+            FROM pedidos_restaurante
+            WHERE restaurante_id = %s
+            AND (mesa_nombre = %s OR (COALESCE(mesa_nombre, '') = '' AND mesa_num::text = %s))
+            AND estado != 'cobrado'
+            AND created_at::date = CURRENT_DATE
+        """, (rest['id'], mesa_id, mesa_id)).fetchone()
+        total_mesa = float(total_row['total'] or 0)
+
         conn.execute("""
             UPDATE pedidos_restaurante SET estado = 'cobrado'
             WHERE restaurante_id = %s
@@ -27080,10 +27091,25 @@ def api_restaurante_cobrar(slug, mesa_id):
             AND estado != 'cobrado'
             AND created_at::date = CURRENT_DATE
         """, (rest['id'], mesa_id, mesa_id))
+
+        # Motor contable — best effort: si no hay parametrización, no interrumpe
+        if total_mesa > 0:
+            try:
+                _ejecutar_asiento_automatico(
+                    conn, rest['id'], 'restaurante', 'VENTA',
+                    {'total_venta': total_mesa},
+                    registrado_por=session.get('usuario_id'),
+                    descripcion_override=f'Cobro mesa {mesa_id}'
+                )
+            except Exception:
+                pass
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -27939,6 +27965,18 @@ def api_tienda_inventario_entrada(slug):
                 motivo, cantidad, stock_anterior, stock_nuevo,
                 registrado_por, notas, documento_id, valor_unitario, valor_total
             ))
+
+        # Motor contable — best effort: si no hay parametrización, no interrumpe
+        try:
+            _ejecutar_asiento_automatico(
+                conn, tienda['id'], 'tienda', 'COMPRA',
+                {'total_compra': total, 'subtotal_compra': subtotal, 'iva_compra': iva},
+                registrado_por=registrado_por,
+                descripcion_override=f'{tipo_documento} {numero_documento or ""}'.strip()
+            )
+        except Exception:
+            pass
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'documento_id': documento_id, 'lineas': len(lineas)})
@@ -28282,6 +28320,17 @@ def api_tienda_pedido_crear(slug):
                     it['cantidad'], stock_ant, stock_nvo,
                     cliente_id, pedido_id
                 ))
+
+        # Motor contable — best effort: si no hay parametrización, no interrumpe
+        try:
+            _ejecutar_asiento_automatico(
+                conn, tienda['id'], 'tienda', 'VENTA',
+                {'total_venta': total},
+                registrado_por=id_tercero_cajero or session.get('usuario_id'),
+                descripcion_override=f'Pedido #{pedido_id}'
+            )
+        except Exception:
+            pass
 
         conn.commit()
         conn.close()

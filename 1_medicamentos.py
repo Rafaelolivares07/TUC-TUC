@@ -25266,9 +25266,6 @@ def crear_tablas_tienda(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
-        "ALTER TABLE metodos_pago_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER REFERENCES metodos_pago_catalogo(id) ON DELETE CASCADE",
-        "ALTER TABLE metodos_pago_tienda DROP CONSTRAINT IF EXISTS metodos_pago_tienda_tienda_id_codigo_key",
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_metpago_tienda_catalogo ON metodos_pago_tienda(tienda_id, catalogo_id)",
     ]
     for sql in alters:
         try:
@@ -30731,6 +30728,18 @@ def crear_tablas_contabilidad(conn):
     conn.commit()
     _seed_metodos_pago_catalogo(conn)
     conn.commit()
+    # Adaptar metodos_pago_tienda al nuevo diseño pivot (ahora que metodos_pago_catalogo ya existe)
+    for sql in [
+        "ALTER TABLE metodos_pago_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER REFERENCES metodos_pago_catalogo(id) ON DELETE CASCADE",
+        "ALTER TABLE metodos_pago_tienda DROP CONSTRAINT IF EXISTS metodos_pago_tienda_tienda_id_codigo_key",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_metpago_tienda_catalogo ON metodos_pago_tienda(tienda_id, catalogo_id)",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except:
+            try: conn.rollback()
+            except: pass
     _contabilidad_tablas_listas = True
 
 def _seed_variables_contables(conn):

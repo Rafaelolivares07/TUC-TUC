@@ -30478,7 +30478,32 @@ def crear_tablas_contabilidad(conn):
         )
     """)
     conn.commit()
+    _seed_variables_contables(conn)
     _contabilidad_tablas_listas = True
+
+def _seed_variables_contables(conn):
+    """
+    Variables que cada módulo expone al motor contable.
+    Estos datos son definidos por el desarrollo (hardcoded aquí) y deben
+    aparecer pre-cargados en /admin/contabilidad/variables-modulos para
+    que el admin TUC TUC los gestione sin tener que inventarlos.
+    Idempotente: ON CONFLICT DO NOTHING.
+    """
+    variables = [
+        # módulo      código               descripción
+        ('tienda',      'total_venta',      'Total del pedido de venta',          1),
+        ('tienda',      'subtotal_compra',  'Subtotal de la compra (sin IVA)',     2),
+        ('tienda',      'iva_compra',       'IVA de la compra',                   3),
+        ('tienda',      'total_compra',     'Total de la compra (con IVA)',        4),
+        ('restaurante', 'total_venta',      'Total cobrado en mesa',               1),
+    ]
+    for modulo, codigo, descripcion, orden in variables:
+        conn.execute("""
+            INSERT INTO modulo_variables_contables (modulo, codigo, descripcion, orden, activo)
+            VALUES (%s, %s, %s, %s, TRUE)
+            ON CONFLICT (modulo, codigo) DO NOTHING
+        """, (modulo, codigo, descripcion, orden))
+    conn.commit()
 
 def _seed_puc(conn):
     """Carga el PUC colombiano completo si la tabla está vacía"""

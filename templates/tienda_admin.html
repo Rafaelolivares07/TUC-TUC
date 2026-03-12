@@ -138,11 +138,14 @@
                         <input id="cat-categoria-nueva" type="text" placeholder="Nombre de la nueva categoria" class="border rounded-lg px-3 py-2 text-sm w-48 hidden">
                         <input id="cat-nombre" type="text" placeholder="Nombre del producto" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
                         <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
-                        <select id="cat-iva" class="border rounded-lg px-3 py-2 text-sm w-24">
+                        <select id="cat-iva" class="border rounded-lg px-3 py-2 text-sm w-28" onchange="toggleIvaCustom(this)">
                           <option value="0">IVA 0%</option>
                           <option value="5">IVA 5%</option>
                           <option value="19" selected>IVA 19%</option>
+                          <option value="otro">Otro %</option>
                         </select>
+                        <input id="cat-iva-custom" type="number" min="0" max="100" step="0.01"
+                               placeholder="%" class="hidden border rounded-lg px-2 py-2 text-sm w-20">
                     </div>
                     <textarea id="cat-descripcion" placeholder="Descripción opcional (materiales, tallas disponibles, colores...)" rows="2"
                         class="border rounded-lg px-3 py-2 text-sm w-full resize-none text-gray-600" maxlength="300"></textarea>
@@ -949,6 +952,18 @@ function editarProducto(id) {
         document.getElementById('cat-categoria-nueva').value = p.categoria || '';
         document.getElementById('cat-categoria-nueva').classList.remove('hidden');
     }
+    // Restaurar IVA
+    const ivaVal = p.iva_pct ?? 0;
+    const ivaSelect = document.getElementById('cat-iva');
+    const ivaCustom = document.getElementById('cat-iva-custom');
+    const knownRates = ['0','5','19'];
+    if (knownRates.includes(String(ivaVal))) {
+        ivaSelect.value = String(ivaVal);
+        ivaCustom.classList.add('hidden'); ivaCustom.value = '';
+    } else {
+        ivaSelect.value = 'otro';
+        ivaCustom.classList.remove('hidden'); ivaCustom.value = ivaVal;
+    }
     document.getElementById('form-producto-titulo').textContent = 'Editar producto';
     document.getElementById('btn-guardar-producto').textContent = 'Guardar cambios';
     document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
@@ -964,6 +979,22 @@ function cancelarEdicion() {
     document.getElementById('form-producto-titulo').textContent = 'Agregar producto';
     document.getElementById('btn-guardar-producto').textContent = 'Agregar';
     document.getElementById('btn-cancelar-edicion').classList.add('hidden');
+    document.getElementById('cat-iva').value = '19';
+    document.getElementById('cat-iva-custom').classList.add('hidden');
+    document.getElementById('cat-iva-custom').value = '';
+}
+
+function toggleIvaCustom(sel) {
+    const custom = document.getElementById('cat-iva-custom');
+    if (sel.value === 'otro') { custom.classList.remove('hidden'); custom.focus(); }
+    else { custom.classList.add('hidden'); custom.value = ''; }
+}
+function getIvaPct() {
+    const sel = document.getElementById('cat-iva');
+    if (sel.value === 'otro') {
+        return parseFloat(document.getElementById('cat-iva-custom').value || '0');
+    }
+    return parseFloat(sel.value);
 }
 
 async function guardarProducto() {
@@ -976,7 +1007,7 @@ async function guardarProducto() {
     try {
         const body = {
             nombre, categoria, precio: parseFloat(precio),
-            iva_pct: parseFloat(document.getElementById('cat-iva').value),
+            iva_pct: getIvaPct(),
             descripcion: document.getElementById('cat-descripcion').value.trim(),
             codigo_barra: codigoBarraActual || document.getElementById('cat-codigo').value.trim() || null,
             catalogo_id: catalogoIdActual || null

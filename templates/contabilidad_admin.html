@@ -672,7 +672,7 @@ function agregarLineaParam() {
                oninput="buscarCuentaParam('${lid}')"
                onkeydown="cuentaParamKeydown(event, '${lid}')">
         <div id="nl-cuenta-sugg-${lid}"
-             style="display:none; position:absolute; top:100%; left:0; min-width:100%; min-width:280px; background:white; border:1px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.15); max-height:200px; overflow-y:auto; z-index:99999;"></div>
+             style="display:none; position:fixed; min-width:320px; background:white; border:1px solid #d1d5db; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.18); max-height:220px; overflow-y:auto; z-index:99999;"></div>
         <input type="hidden" id="nl-cuenta-id-${lid}">
       </div>
     </td>
@@ -717,6 +717,15 @@ function onOrigenChange(lid) {
   document.getElementById(`nl-variable-${lid}`).classList.toggle('hidden', origen !== 'H');
 }
 
+function _posicionarSugg(lid) {
+  const inp  = document.getElementById(`nl-cuenta-q-${lid}`);
+  const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
+  const r = inp.getBoundingClientRect();
+  sugg.style.top   = r.bottom + 'px';
+  sugg.style.left  = r.left + 'px';
+  sugg.style.width = Math.max(r.width, 320) + 'px';
+}
+
 function buscarCuentaParam(lid) {
   const inp  = document.getElementById(`nl-cuenta-q-${lid}`);
   const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
@@ -731,9 +740,10 @@ function buscarCuentaParam(lid) {
       : `/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=nombre`;
     let d;
     try { const r = await fetch(url); d = await r.json(); }
-    catch(e) { sugg.innerHTML = `<div style="padding:8px;color:#ef4444;font-size:11px;">Error red: ${e.message}</div>`; sugg.style.display='block'; return; }
+    catch(e) { sugg.innerHTML = `<div style="padding:8px;color:#ef4444;font-size:11px;">Error red: ${e.message}</div>`; _posicionarSugg(lid); sugg.style.display='block'; return; }
     if (!d.ok || !d.cuentas.length) {
       sugg.innerHTML = '<div style="padding:8px;color:#9ca3af;font-size:11px;font-style:italic;">Sin resultados</div>';
+      _posicionarSugg(lid);
       sugg.style.display = 'block';
       return;
     }
@@ -761,6 +771,7 @@ function buscarCuentaParam(lid) {
         </div>`;
       }
     }).join('');
+    _posicionarSugg(lid);
     sugg.style.display = 'block';
   }, 200);
 }

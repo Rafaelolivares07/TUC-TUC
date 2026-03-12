@@ -6616,6 +6616,54 @@ def crear_requerimiento():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/admin/captura')
+def admin_captura():
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    return render_template('admin_captura.html')
+
+
+@app.route('/api/requerimientos/captura', methods=['POST'])
+def api_requerimiento_captura():
+    """Captura rápida — solo descripción, sin modulo/prioridad obligatorios."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        data = request.get_json()
+        descripcion = (data.get('descripcion') or '').strip()
+        if not descripcion:
+            return jsonify({'ok': False, 'error': 'Escribe algo primero'}), 400
+        conn = get_db_connection()
+        row = conn.execute("""
+            INSERT INTO requerimientos (descripcion, modulo, prioridad, estado)
+            VALUES (%s, %s, %s, %s) RETURNING id, fecha_creacion
+        """, (descripcion, data.get('modulo') or 'general', data.get('prioridad') or 'media', 'Pendiente')).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id'], 'fecha': str(row['fecha_creacion'])})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/requerimientos/recientes')
+def api_requerimientos_recientes():
+    """Últimos 20 requerimientos para la página de captura."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT id, descripcion, modulo, prioridad, estado, fecha_creacion
+            FROM requerimientos ORDER BY id DESC LIMIT 20
+        """).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'items': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/requerimientos/<int:requerimiento_id>', methods=['PUT'])
 @admin_required
 def actualizar_requerimiento(requerimiento_id):

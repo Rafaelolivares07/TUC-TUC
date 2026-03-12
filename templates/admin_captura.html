@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es" id="html-root">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Captura de Ideas</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+
+  body { font-size: 18px; transition: background 0.2s, color 0.2s; }
+
+  /* MODO CLARO */
+  body.claro {
+    background: #f0f4f8;
+    color: #1a202c;
+  }
+  body.claro .card  { background: #ffffff; border: 1px solid #e2e8f0; }
+  body.claro .input-area { background: #f7fafc; border: 2px solid #cbd5e0; color: #1a202c; }
+  body.claro .item-req  { background: #fff; border: 1px solid #e2e8f0; }
+  body.claro .texto-suave { color: #4a5568; }
+
+  /* MODO OSCURO */
+  body.oscuro {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+  body.oscuro .card  { background: #1e293b; border: 1px solid #334155; }
+  body.oscuro .input-area { background: #0f172a; border: 2px solid #475569; color: #e2e8f0; }
+  body.oscuro .item-req  { background: #1e293b; border: 1px solid #334155; }
+  body.oscuro .texto-suave { color: #94a3b8; }
+
+  .input-area {
+    width: 100%;
+    min-height: 140px;
+    border-radius: 16px;
+    padding: 16px;
+    font-size: 1.15rem;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    font-family: inherit;
+  }
+  .input-area:focus { border-color: #6366f1; }
+
+  .btn-grande {
+    min-height: 64px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    border-radius: 16px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.15s;
+    padding: 0 24px;
+  }
+  .btn-guardar  { background: #6366f1; color: white; }
+  .btn-guardar:hover  { background: #4f46e5; }
+  .btn-guardar:active { transform: scale(0.97); }
+
+  .btn-mic      { background: #10b981; color: white; min-width: 80px; }
+  .btn-mic:hover      { background: #059669; }
+  .btn-mic.grabando   {
+    background: #ef4444 !important;
+    animation: pulso 0.8s infinite;
+    box-shadow: 0 0 0 6px rgba(239,68,68,0.25);
+  }
+  @keyframes pulso {
+    0%,100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+
+  .btn-modo {
+    min-height: 48px;
+    font-size: 1.3rem;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    padding: 0 16px;
+    background: transparent;
+  }
+  body.claro  .btn-modo { color: #4a5568; }
+  body.oscuro .btn-modo { color: #94a3b8; }
+
+  .item-req {
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .item-req .desc { font-size: 1rem; line-height: 1.5; }
+  .item-req .meta { font-size: 0.78rem; margin-top: 6px; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-right: 6px;
+  }
+  .tag-modulo  { background: #e0e7ff; color: #3730a3; }
+  .tag-estado  { background: #dcfce7; color: #166534; }
+  body.oscuro .tag-modulo { background: #312e81; color: #c7d2fe; }
+  body.oscuro .tag-estado { background: #14532d; color: #86efac; }
+
+  .toast-cap {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    padding: 14px 28px; border-radius: 12px; color: white; font-weight: 700;
+    font-size: 1rem; z-index: 9999; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast-cap.show { opacity: 1; }
+  .toast-cap.ok  { background: #059669; }
+  .toast-cap.err { background: #dc2626; }
+</style>
+</head>
+<body class="oscuro">
+<div id="toast-cap" class="toast-cap ok"></div>
+
+<div class="max-w-2xl mx-auto px-4 py-6">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 style="font-size:1.6rem; font-weight:900; letter-spacing:-0.5px;">💡 Captura de Ideas</h1>
+      <p class="texto-suave" style="font-size:0.85rem; margin-top:2px;">Hablá o escribí — guardás cuando quieras</p>
+    </div>
+    <button class="btn-modo" onclick="toggleModo()" id="btn-modo" title="Cambiar modo">🌙</button>
+  </div>
+
+  <!-- Área de captura -->
+  <div class="card" style="border-radius:20px; padding:20px; margin-bottom:20px;">
+    <textarea id="input-idea" class="input-area"
+      placeholder="¿Qué tenés en mente? Hablá o escribí..."></textarea>
+
+    <!-- Fila de botones -->
+    <div style="display:flex; gap:12px; margin-top:14px; flex-wrap:wrap;">
+      <button id="btn-mic" class="btn-grande btn-mic hidden" onclick="toggleMic()">
+        <span id="mic-icon" style="font-size:1.6rem;">🎤</span>
+        <span id="mic-label">Dictar</span>
+      </button>
+      <button class="btn-grande btn-guardar" onclick="guardarIdea()" style="flex:1;">
+        <span style="font-size:1.4rem;">💾</span>
+        <span>Guardar</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Lista de recientes -->
+  <div>
+    <p class="texto-suave" style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">Guardadas recientemente</p>
+    <div id="lista-ideas">
+      <p class="texto-suave" style="text-align:center; padding:24px 0;">Cargando...</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Modo claro/oscuro ──────────────────────────────────────────
+const html = document.getElementById('html-root');
+let modoActual = localStorage.getItem('captura-modo') || 'oscuro';
+
+function aplicarModo(m) {
+  document.body.className = m;
+  document.getElementById('btn-modo').textContent = m === 'oscuro' ? '☀️' : '🌙';
+  localStorage.setItem('captura-modo', m);
+  modoActual = m;
+}
+aplicarModo(modoActual);
+
+function toggleModo() {
+  aplicarModo(modoActual === 'oscuro' ? 'claro' : 'oscuro');
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+function toast(msg, tipo='ok') {
+  const t = document.getElementById('toast-cap');
+  t.textContent = msg;
+  t.className = `toast-cap show ${tipo}`;
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── Guardar ────────────────────────────────────────────────────
+async function guardarIdea() {
+  const txt = document.getElementById('input-idea').value.trim();
+  if (!txt) { toast('Escribí o dictá algo primero', 'err'); return; }
+  try {
+    const r = await fetch('/api/requerimientos/captura', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({descripcion: txt})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, 'err'); return; }
+    document.getElementById('input-idea').value = '';
+    toast('¡Guardado!');
+    cargarRecientes();
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ── Cargar recientes ───────────────────────────────────────────
+async function cargarRecientes() {
+  try {
+    const r = await fetch('/api/requerimientos/recientes');
+    const d = await r.json();
+    if (!d.ok) { document.getElementById('lista-ideas').innerHTML = '<p class="texto-suave" style="text-align:center">Error cargando</p>'; return; }
+    if (!d.items.length) {
+      document.getElementById('lista-ideas').innerHTML = '<p class="texto-suave" style="text-align:center;padding:24px 0;">Aún no hay nada guardado</p>';
+      return;
+    }
+    document.getElementById('lista-ideas').innerHTML = d.items.map(i => {
+      const fecha = new Date(i.fecha_creacion).toLocaleString('es-CO', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="item-req">
+        <div class="desc">${i.descripcion}</div>
+        <div class="meta texto-suave">
+          <span class="tag tag-modulo">${i.modulo}</span>
+          <span class="tag tag-estado">${i.estado}</span>
+          <span>${fecha}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { document.getElementById('lista-ideas').innerHTML = '<p class="texto-suave" style="text-align:center">Error de red</p>'; }
+}
+
+// ── Micrófono (igual que chat-claude) ─────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconocedor = null;
+let grabando = false;
+
+(function iniciarMic() {
+  if (!SpeechRecognition) return;
+  document.getElementById('btn-mic').classList.remove('hidden');
+  reconocedor = new SpeechRecognition();
+  reconocedor.lang = 'es';
+  reconocedor.continuous = true;
+  reconocedor.interimResults = false;
+  reconocedor.onresult = function(e) {
+    let nuevo = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) nuevo += e.results[i][0].transcript + ' ';
+    }
+    if (!nuevo) return;
+    const inp = document.getElementById('input-idea');
+    const sep = inp.value.trim() ? ' ' : '';
+    inp.value = inp.value.trim() + sep + nuevo.trim();
+    inp.focus();
+  };
+  reconocedor.onend = function() {
+    grabando = false;
+    document.getElementById('btn-mic').classList.remove('grabando');
+    document.getElementById('mic-icon').textContent = '🎤';
+    document.getElementById('mic-label').textContent = 'Dictar';
+  };
+  reconocedor.onerror = function(e) {
+    grabando = false;
+    document.getElementById('btn-mic').classList.remove('grabando');
+    document.getElementById('mic-icon').textContent = '🎤';
+    document.getElementById('mic-label').textContent = 'Dictar';
+    if (e.error === 'network') toast('Bloqueado por el navegador. Probá Chrome.', 'err');
+    else if (e.error !== 'no-speech') console.warn('Speech error:', e.error);
+  };
+})();
+
+function toggleMic() {
+  if (!reconocedor) return;
+  if (grabando) {
+    reconocedor.stop();
+    grabando = false;
+    document.getElementById('btn-mic').classList.remove('grabando');
+    document.getElementById('mic-icon').textContent = '🎤';
+    document.getElementById('mic-label').textContent = 'Dictar';
+  } else {
+    reconocedor.start();
+    grabando = true;
+    document.getElementById('btn-mic').classList.add('grabando');
+    document.getElementById('mic-icon').textContent = '⏹️';
+    document.getElementById('mic-label').textContent = 'Parar';
+  }
+}
+
+// Guardar con Enter (Ctrl+Enter o Cmd+Enter)
+document.getElementById('input-idea').addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') guardarIdea();
+});
+
+cargarRecientes();
+</script>
+</body>
+</html>

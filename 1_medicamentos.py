@@ -28312,9 +28312,11 @@ def api_tienda_ubicacion(slug):
             return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
         conn = get_db_connection()
         crear_tablas_tienda(conn)
-        tienda = conn.execute(
-            "SELECT id, nombre FROM tiendas WHERE slug=%s AND admin_id=%s", (slug, uid)
-        ).fetchone()
+        es_admin_sistema = session.get('rol') == 'Administrador'
+        if es_admin_sistema:
+            tienda = conn.execute("SELECT id, nombre FROM tiendas WHERE slug=%s", (slug,)).fetchone()
+        else:
+            tienda = conn.execute("SELECT id, nombre FROM tiendas WHERE slug=%s AND admin_id=%s", (slug, uid)).fetchone()
         if not tienda:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403

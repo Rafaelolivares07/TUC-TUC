@@ -28330,6 +28330,28 @@ def api_tienda_ubicacion(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
+def api_tienda_admin_ubicacion(slug):
+    """Guardar coordenadas de la tienda"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    lat = data.get('lat')
+    lon = data.get('lon')
+    if lat is None or lon is None:
+        return jsonify({'ok': False, 'error': 'lat y lon requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET lat=%s, lon=%s WHERE slug=%s", (lat, lon, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/tienda/<slug>/telegram', methods=['POST'])
 def api_tienda_telegram(slug):
     """Guardar chat_id de Telegram del dueño"""

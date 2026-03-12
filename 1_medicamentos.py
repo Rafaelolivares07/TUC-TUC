@@ -27097,7 +27097,7 @@ def api_restaurante_cobrar(slug, mesa_id):
             try:
                 _ejecutar_asiento_automatico(
                     conn, rest['id'], 'restaurante', 'VENTA',
-                    {'total_venta': total_mesa},
+                    {'subtotal_venta': total_mesa, 'iva_venta': 0, 'total_venta': total_mesa},
                     registrado_por=session.get('usuario_id'),
                     descripcion_override=f'Cobro mesa {mesa_id}'
                 )
@@ -28275,7 +28275,7 @@ def api_tienda_pedido_crear(slug):
         items_validos = []
         for item in items:
             producto = conn.execute(
-                "SELECT id, nombre, precio, disponible FROM productos_tienda WHERE id = %s AND tienda_id = %s",
+                "SELECT id, nombre, precio, disponible, iva_pct FROM productos_tienda WHERE id = %s AND tienda_id = %s",
                 (item.get('producto_id'), tienda['id'])
             ).fetchone()
             if not producto or not producto['disponible']:
@@ -28283,7 +28283,15 @@ def api_tienda_pedido_crear(slug):
             cantidad = max(1, int(item.get('cantidad', 1)))
             precio_u = float(producto['precio'])
             total += precio_u * cantidad
-            items_validos.append({'producto_id': producto['id'], 'nombre_producto': producto['nombre'], 'cantidad': cantidad, 'precio_unitario': precio_u})
+            items_validos.append({'producto_id': producto['id'], 'nombre_producto': producto['nombre'], 'cantidad': cantidad, 'precio_unitario': precio_u, 'iva_pct': float(producto['iva_pct'] or 0)})
+
+        # Calcular desglose IVA para motor contable
+        # El precio almacenado incluye IVA — se extrae por back-cálculo
+        iva_venta = sum(
+            it['precio_unitario'] * it['cantidad'] * it['iva_pct'] / (100 + it['iva_pct'])
+            for it in items_validos if it['iva_pct'] > 0
+        )
+        subtotal_venta = total - iva_venta
 
         if not items_validos:
             conn.close()
@@ -28325,7 +28333,7 @@ def api_tienda_pedido_crear(slug):
         try:
             _ejecutar_asiento_automatico(
                 conn, tienda['id'], 'tienda', 'VENTA',
-                {'total_venta': total},
+                {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total},
                 registrado_por=id_tercero_cajero or session.get('usuario_id'),
                 descripcion_override=f'Pedido #{pedido_id}'
             )
@@ -30490,12 +30498,19 @@ def _seed_variables_contables(conn):
     Idempotente: ON CONFLICT DO NOTHING.
     """
     variables = [
-        # módulo      código               descripción
-        ('tienda',      'total_venta',      'Total del pedido de venta',          1),
-        ('tienda',      'subtotal_compra',  'Subtotal de la compra (sin IVA)',     2),
-        ('tienda',      'iva_compra',       'IVA de la compra',                   3),
-        ('tienda',      'total_compra',     'Total de la compra (con IVA)',        4),
-        ('restaurante', 'total_venta',      'Total cobrado en mesa',               1),
+        # módulo        código                descripción                                 orden
+        # tienda — VENTA
+        ('tienda',      'subtotal_venta',    'Subtotal de la venta (sin IVA)',            1),
+        ('tienda',      'iva_venta',         'IVA de la venta',                           2),
+        ('tienda',      'total_venta',       'Total de la venta (con IVA)',               3),
+        # tienda — COMPRA
+        ('tienda',      'subtotal_compra',   'Subtotal de la compra (sin IVA)',            4),
+        ('tienda',      'iva_compra',        'IVA de la compra',                           5),
+        ('tienda',      'total_compra',      'Total de la compra (con IVA)',               6),
+        # restaurante — VENTA
+        ('restaurante', 'subtotal_venta',    'Subtotal cobrado en mesa (sin IVA)',          1),
+        ('restaurante', 'iva_venta',         'IVA cobrado en mesa',                        2),
+        ('restaurante', 'total_venta',       'Total cobrado en mesa (con IVA)',             3),
     ]
     for modulo, codigo, descripcion, orden in variables:
         conn.execute("""

@@ -70,6 +70,7 @@
             <table class="w-full text-sm">
               <thead>
                 <tr class="text-xs text-gray-400 font-semibold uppercase">
+                  <th class="text-left px-2 py-1">Módulo</th>
                   <th class="text-left px-2 py-1">Código</th>
                   <th class="text-left px-2 py-1">Descripción</th>
                   <th class="text-center px-2 py-1">Estado</th>
@@ -79,6 +80,9 @@
               <tbody>
                 {% for v in variables if v.modulo == mod %}
                 <tr class="border-b border-gray-50 hover:bg-gray-50" id="var-row-{{ v.id }}">
+                  <td class="px-2 py-2">
+                    <span class="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ v.modulo }}</span>
+                  </td>
                   <td class="px-2 py-2 font-mono text-blue-700 font-bold">{{ v.codigo }}</td>
                   <td class="px-2 py-2 text-gray-700" id="var-desc-{{ v.id }}">{{ v.descripcion }}</td>
                   <td class="px-2 py-2 text-center">

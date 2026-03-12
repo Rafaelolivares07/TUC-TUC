@@ -127,6 +127,7 @@
 
                 <!-- Total -->
                 <div class="border-t pt-3 mb-3">
+                    <p id="iva-display" class="text-xs text-gray-400 text-right mb-1 hidden"></p>
                     <div class="flex justify-between items-center text-lg font-bold">
                         <span>Total</span>
                         <span id="total-display" class="text-blue-700">$0</span>
@@ -339,7 +340,7 @@ function agregarAlCarrito(productoId) {
     if (existente) {
         existente.cantidad++;
     } else {
-        carrito.push({producto_id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1});
+        carrito.push({producto_id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1, iva_pct: prod.iva_pct || 0});
     }
     renderCarrito();
     toast(`${prod.nombre} agregado`);
@@ -366,6 +367,8 @@ function renderCarrito() {
     if (!carrito.length) {
         cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Carrito vacío</p>';
         document.getElementById('total-display').textContent = '$0';
+        const ivaElEmpty = document.getElementById('iva-display');
+        if (ivaElEmpty) ivaElEmpty.classList.add('hidden');
         document.getElementById('btn-cobrar').disabled = true;
         return;
     }
@@ -387,7 +390,20 @@ function renderCarrito() {
     `).join('');
 
     const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+    const ivaTotal = carrito.reduce((s, i) => {
+        if (!i.iva_pct) return s;
+        return s + (i.precio * i.cantidad * i.iva_pct / (100 + i.iva_pct));
+    }, 0);
     document.getElementById('total-display').textContent = `$${total.toLocaleString('es-CO')}`;
+    const ivaEl = document.getElementById('iva-display');
+    if (ivaEl) {
+        if (ivaTotal > 0) {
+            ivaEl.textContent = `IVA incluido: $${Math.round(ivaTotal).toLocaleString('es-CO')}`;
+            ivaEl.classList.remove('hidden');
+        } else {
+            ivaEl.classList.add('hidden');
+        }
+    }
     document.getElementById('btn-cobrar').disabled = false;
 }
 
@@ -433,8 +449,14 @@ async function cobrar() {
         const d = await r.json();
         if (d.ok) {
             const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+            const iva = carrito.reduce((s, i) => {
+                if (!i.iva_pct) return s;
+                return s + (i.precio * i.cantidad * i.iva_pct / (100 + i.iva_pct));
+            }, 0);
             ultimoRecibo = {
                 total,
+                iva: Math.round(iva),
+                subtotal: Math.round(total - iva),
                 metodo: metodoPago,
                 cliente: nombre,
                 telefono,
@@ -463,13 +485,24 @@ function mostrarRecibo() {
 
     // Detalle de items
     const itemsEl = document.getElementById('recibo-items');
+    const ivaLines = r.iva > 0 ? `
+        <div class="flex justify-between text-gray-500 text-sm">
+            <span>Subtotal</span>
+            <span>$${r.subtotal.toLocaleString('es-CO')}</span>
+        </div>
+        <div class="flex justify-between text-gray-500 text-sm">
+            <span>IVA incluido</span>
+            <span>$${r.iva.toLocaleString('es-CO')}</span>
+        </div>` : '';
     itemsEl.innerHTML = r.items.map(i => `
         <div class="flex justify-between text-gray-700">
-            <span>${i.cantidad}x ${i.nombre}</span>
+            <span>${i.cantidad}x ${i.nombre}${i.iva_pct > 0 ? ` <span class="text-xs text-gray-400">(+IVA ${i.iva_pct}%)</span>` : ''}</span>
             <span class="font-semibold">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
         </div>
     `).join('') + `
-        <div class="border-t mt-2 pt-2 flex justify-between font-bold text-gray-900">
+        <div class="border-t mt-2 pt-2"></div>
+        ${ivaLines}
+        <div class="flex justify-between font-bold text-gray-900">
             <span>Total</span>
             <span>$${r.total.toLocaleString('es-CO')}</span>
         </div>`;
@@ -504,6 +537,8 @@ function imprimirTicket() {
         <div class="sep"></div>
         ${lineasItems}
         <div class="sep"></div>
+        ${r.iva > 0 ? `<div class="linea" style="font-size:11px;"><span>Subtotal</span><span>$${r.subtotal.toLocaleString('es-CO')}</span></div>
+        <div class="linea" style="font-size:11px;"><span>IVA incluido</span><span>$${r.iva.toLocaleString('es-CO')}</span></div>` : ''}
         <div class="linea total-line"><span>TOTAL</span><span>$${r.total.toLocaleString('es-CO')}</span></div>
         <div style="font-size:11px;">Pago: ${metodos[r.metodo] || r.metodo}</div>
         <div class="sep"></div>
@@ -519,7 +554,10 @@ function compartirWhatsApp() {
     if (!r || !r.telefono) return;
     const metodos = {efectivo: 'Efectivo', qr: 'QR', tarjeta: 'Tarjeta', transferencia: 'Transferencia'};
     const lineas = r.items.map(i => `  ${i.cantidad}x ${i.nombre} — $${(i.precio * i.cantidad).toLocaleString('es-CO')}`).join('\n');
-    const texto = `*${TIENDA_NOMBRE}* — Recibo de compra\n\n${lineas}\n\n*Total: $${r.total.toLocaleString('es-CO')}*\nPago: ${metodos[r.metodo] || r.metodo}\n\n¡Gracias por su compra!`;
+    const resumenIva = r.iva > 0
+        ? `Subtotal: $${r.subtotal.toLocaleString('es-CO')}\nIVA incluido: $${r.iva.toLocaleString('es-CO')}\n`
+        : '';
+    const texto = `*${TIENDA_NOMBRE}* — Recibo de compra\n\n${lineas}\n\n${resumenIva}*Total: $${r.total.toLocaleString('es-CO')}*\nPago: ${metodos[r.metodo] || r.metodo}\n\n¡Gracias por su compra!`;
     // Limpiar teléfono: solo dígitos
     const tel = r.telefono.replace(/\D/g, '');
     window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');

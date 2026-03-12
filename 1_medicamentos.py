@@ -27638,7 +27638,7 @@ def api_tienda_productos(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
+            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
             (tienda['id'],)
         ).fetchall()
         resultado = []
@@ -27653,6 +27653,7 @@ def api_tienda_productos(slug):
                 'descripcion': p['descripcion'] or '',
                 'codigo_barra': p['codigo_barra'] or '',
                 'catalogo_id': p['catalogo_id'],
+                'iva_pct': float(p['iva_pct'] or 0),
                 'tiene_variantes': nv > 0
             })
         conn.close()

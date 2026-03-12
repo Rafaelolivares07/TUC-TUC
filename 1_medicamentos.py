@@ -37609,24 +37609,51 @@ def contabilidad_negocio(tipo, slug):
 
 @app.route('/api/contabilidad/puc')
 def api_contabilidad_puc():
-    """Busca cuentas PUC. q=texto, nivel=1..4, solo_movimiento=1"""
-    q = request.args.get('q', '').strip()
-    nivel = request.args.get('nivel', '')
+    """
+    Busca cuentas PUC.
+    - modo=codigo : q empieza con los dígitos dados, devuelve jerarquía completa (padres + hojas),
+                    sin filtro acepta_movimiento, ordenado por código.
+    - modo=nombre : q buscado ILIKE '%q%' solo en cuentas que aceptan movimiento.
+    - (sin modo)  : comportamiento anterior — ILIKE en código y nombre, filtra solo_movimiento=1 opcional.
+    """
+    q       = request.args.get('q', '').strip()
+    modo    = request.args.get('modo', '')
+    nivel   = request.args.get('nivel', '')
     solo_mov = request.args.get('solo_movimiento', '')
     try:
         conn = get_db_connection()
         crear_tablas_contabilidad(conn)
-        where = ["activo = TRUE"]
+        where  = ["activo = TRUE"]
         params = []
-        if q:
-            where.append("(codigo ILIKE %s OR nombre ILIKE %s)")
-            params += [f'%{q}%', f'%{q}%']
+
+        if modo == 'codigo' and q:
+            # Todos los que empiezan con el prefijo (incluye padres), sin filtro de movimiento
+            where.append("codigo LIKE %s")
+            params.append(f'{q}%')
+        elif modo == 'nombre' and q:
+            # Búsqueda libre en nombre, solo cuentas que aceptan movimiento
+            where.append("nombre ILIKE %s")
+            where.append("acepta_movimiento = TRUE")
+            params.append(f'%{q}%')
+        else:
+            if q:
+                where.append("(codigo ILIKE %s OR nombre ILIKE %s)")
+                params += [f'%{q}%', f'%{q}%']
+            if solo_mov == '1':
+                where.append("acepta_movimiento = TRUE")
+
         if nivel:
             where.append("nivel = %s")
             params.append(int(nivel))
-        if solo_mov == '1':
-            where.append("acepta_movimiento = TRUE")
-        sql = f"SELECT id, codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, creada_por_negocio_id, revisada FROM cuentas_puc WHERE {' AND '.join(where)} ORDER BY codigo LIMIT 200"
+
+        sql = f"""
+            SELECT id, codigo, nombre, nivel, codigo_padre, naturaleza,
+                   acepta_movimiento, creada_por_negocio_id, revisada
+            FROM cuentas_puc
+            WHERE {' AND '.join(where)}
+            ORDER BY codigo
+            LIMIT 200
+        """
         rows = conn.execute(sql, params).fetchall()
         conn.close()
         return jsonify({'ok': True, 'cuentas': [dict(r) for r in rows]})

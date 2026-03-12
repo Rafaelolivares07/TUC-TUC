@@ -25267,6 +25267,8 @@ def crear_tablas_tienda(conn):
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE metodos_pago_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER REFERENCES metodos_pago_catalogo(id) ON DELETE CASCADE",
+        "ALTER TABLE metodos_pago_tienda DROP CONSTRAINT IF EXISTS metodos_pago_tienda_tienda_id_codigo_key",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_metpago_tienda_catalogo ON metodos_pago_tienda(tienda_id, catalogo_id)",
     ]
     for sql in alters:
         try:

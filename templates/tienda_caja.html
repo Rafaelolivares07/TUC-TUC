@@ -134,19 +134,11 @@
                     </div>
                 </div>
 
-                <!-- Método de pago -->
+                <!-- Métodos de pago -->
                 <div class="mb-3">
-                    <p class="text-xs text-gray-500 font-semibold mb-1">Método de pago</p>
-                    <div class="grid grid-cols-2 gap-1.5 text-sm">
-                        <button onclick="setMetodo('efectivo')" id="btn-efectivo"
-                                class="metodo-btn border-2 border-blue-500 bg-blue-50 text-blue-700 font-semibold rounded-lg py-1.5">💵 Efectivo</button>
-                        <button onclick="setMetodo('qr')" id="btn-qr"
-                                class="metodo-btn border border-gray-200 text-gray-600 rounded-lg py-1.5 hover:border-blue-300">📲 QR</button>
-                        <button onclick="setMetodo('tarjeta')" id="btn-tarjeta"
-                                class="metodo-btn border border-gray-200 text-gray-600 rounded-lg py-1.5 hover:border-blue-300">💳 Tarjeta</button>
-                        <button onclick="setMetodo('transferencia')" id="btn-transferencia"
-                                class="metodo-btn border border-gray-200 text-gray-600 rounded-lg py-1.5 hover:border-blue-300">🏦 Transf.</button>
-                    </div>
+                    <p class="text-xs text-gray-500 font-semibold mb-1">Métodos de pago</p>
+                    <div id="metodos-pago-inputs" class="space-y-1.5"></div>
+                    <p id="pago-alerta" class="hidden text-xs text-red-500 font-semibold mt-1"></p>
                 </div>
 
                 <!-- Cobrar -->
@@ -205,7 +197,7 @@ const TIENDA_NOMBRE = '{{ tienda.nombre }}';
 let productos = [];
 let carrito = [];
 let categoriaActiva = '';
-let metodoPago = 'efectivo';
+let metodosDisponibles = [];  // [{id, nombre, codigo}]
 let autenticado = false;
 let cajeroId = null;
 let cajeroNombre = '';
@@ -236,6 +228,7 @@ async function verificarPin() {
             badge.classList.remove('hidden');
             document.getElementById('pantalla-pin').classList.add('hidden');
             document.getElementById('pantalla-caja').classList.remove('hidden');
+            cargarMetodosPago();
             cargarProductos();
         } else {
             document.getElementById('pin-error').textContent = d.error;
@@ -404,18 +397,79 @@ function renderCarrito() {
             ivaEl.classList.add('hidden');
         }
     }
-    document.getElementById('btn-cobrar').disabled = false;
+    validarPagos();  // delegar al validador de pagos
 }
 
-// ── Método de pago ───────────────────────────────────────────────────────────
+// ── Métodos de pago ───────────────────────────────────────────────────────────
 
-function setMetodo(m) {
-    metodoPago = m;
-    document.querySelectorAll('.metodo-btn').forEach(b => {
-        b.className = 'metodo-btn border border-gray-200 text-gray-600 rounded-lg py-1.5 hover:border-blue-300 text-sm';
+async function cargarMetodosPago() {
+    try {
+        const r = await fetch(`/api/tienda/${SLUG}/metodos-pago`);
+        const d = await r.json();
+        if (d.ok && d.metodos.length) {
+            metodosDisponibles = d.metodos;
+        } else {
+            // Fallback si no hay métodos configurados
+            metodosDisponibles = [
+                {id: 0, nombre: 'Efectivo', codigo: 'efectivo'},
+                {id: 0, nombre: 'Tarjeta',  codigo: 'tarjeta'},
+            ];
+        }
+        renderMetodosPago();
+    } catch(e) {
+        metodosDisponibles = [{id: 0, nombre: 'Efectivo', codigo: 'efectivo'}];
+        renderMetodosPago();
+    }
+}
+
+function renderMetodosPago() {
+    const cont = document.getElementById('metodos-pago-inputs');
+    cont.innerHTML = metodosDisponibles.map(m => `
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-600 w-28 flex-shrink-0">${m.nombre}</span>
+            <input type="number" min="0" step="100" value="0" placeholder="$0"
+                   id="mp-${m.codigo}"
+                   class="border rounded-lg px-2 py-1 text-sm w-full text-right"
+                   oninput="validarPagos()">
+        </div>
+    `).join('');
+}
+
+function getPagos() {
+    return metodosDisponibles
+        .map(m => ({codigo: m.codigo, nombre: m.nombre, monto: parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)}))
+        .filter(p => p.monto > 0);
+}
+
+function validarPagos() {
+    const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+    const sumPagos = metodosDisponibles.reduce((s, m) => {
+        return s + (parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0));
+    }, 0);
+    const alerta = document.getElementById('pago-alerta');
+    const btn = document.getElementById('btn-cobrar');
+    if (total === 0) { alerta.classList.add('hidden'); btn.disabled = true; return; }
+    if (sumPagos === 0) {
+        alerta.textContent = 'Ingresa el monto pagado';
+        alerta.classList.remove('hidden');
+        btn.disabled = true;
+    } else if (Math.round(sumPagos) !== Math.round(total)) {
+        const diff = Math.round(total - sumPagos);
+        alerta.textContent = diff > 0 ? `Faltan $${Math.abs(diff).toLocaleString('es-CO')}` : `Sobran $${Math.abs(diff).toLocaleString('es-CO')}`;
+        alerta.classList.remove('hidden');
+        btn.disabled = true;
+    } else {
+        alerta.classList.add('hidden');
+        btn.disabled = false;
+    }
+}
+
+function limpiarPagos() {
+    metodosDisponibles.forEach(m => {
+        const inp = document.getElementById(`mp-${m.codigo}`);
+        if (inp) inp.value = '0';
     });
-    const activo = document.getElementById(`btn-${m}`);
-    activo.className = 'metodo-btn border-2 border-blue-500 bg-blue-50 text-blue-700 font-semibold rounded-lg py-1.5 text-sm';
+    document.getElementById('pago-alerta').classList.add('hidden');
 }
 
 // ── Cobrar ───────────────────────────────────────────────────────────────────
@@ -429,10 +483,12 @@ async function cobrar() {
     const nombre = document.getElementById('nombre-cliente').value.trim();
     const telefono = document.getElementById('tel-cliente').value.trim();
 
+    const pagos = getPagos();
     const payload = {
         items: carrito.map(i => ({producto_id: i.producto_id, cantidad: i.cantidad})),
         tipo_entrega: 'caja',
-        metodo_pago: metodoPago,
+        pagos,
+        metodo_pago: pagos.length ? pagos[0].codigo : 'efectivo',
         nombre_cliente: nombre || 'Venta en caja',
         telefono_cliente: telefono || '',
         id_cajero: cajeroId,
@@ -457,7 +513,8 @@ async function cobrar() {
                 total,
                 iva: Math.round(iva),
                 subtotal: Math.round(total - iva),
-                metodo: metodoPago,
+                pagos,
+                metodo: pagos.length ? pagos.map(p => p.nombre).join(' + ') : 'Efectivo',
                 cliente: nombre,
                 telefono,
                 cajero: cajeroNombre,
@@ -478,9 +535,11 @@ async function cobrar() {
 
 function mostrarRecibo() {
     const r = ultimoRecibo;
-    const metodos = {efectivo: '💵 Efectivo', qr: '📲 QR', tarjeta: '💳 Tarjeta', transferencia: '🏦 Transferencia'};
     document.getElementById('recibo-total').textContent = `$${r.total.toLocaleString('es-CO')}`;
-    document.getElementById('recibo-metodo').textContent = metodos[r.metodo] || r.metodo;
+    const metodoTexto = r.pagos && r.pagos.length > 1
+        ? r.pagos.map(p => `${p.nombre} $${p.monto.toLocaleString('es-CO')}`).join(' · ')
+        : r.metodo;
+    document.getElementById('recibo-metodo').textContent = metodoTexto;
     document.getElementById('recibo-cajero').textContent = r.cajero ? `Cajero: ${r.cajero}` : '';
 
     // Detalle de items
@@ -518,7 +577,6 @@ function mostrarRecibo() {
 function imprimirTicket() {
     const r = ultimoRecibo;
     if (!r) return;
-    const metodos = {efectivo: 'Efectivo', qr: 'QR', tarjeta: 'Tarjeta', transferencia: 'Transferencia'};
     const ahora = new Date().toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
 
     let lineasItems = r.items.map(i => {
@@ -540,7 +598,7 @@ function imprimirTicket() {
         ${r.iva > 0 ? `<div class="linea" style="font-size:11px;"><span>Subtotal</span><span>$${r.subtotal.toLocaleString('es-CO')}</span></div>
         <div class="linea" style="font-size:11px;"><span>IVA incluido</span><span>$${r.iva.toLocaleString('es-CO')}</span></div>` : ''}
         <div class="linea total-line"><span>TOTAL</span><span>$${r.total.toLocaleString('es-CO')}</span></div>
-        <div style="font-size:11px;">Pago: ${metodos[r.metodo] || r.metodo}</div>
+        <div style="font-size:11px;">${r.pagos && r.pagos.length > 1 ? r.pagos.map(p=>`${p.nombre}: $${p.monto.toLocaleString('es-CO')}`).join(' | ') : `Pago: ${r.metodo}`}</div>
         <div class="sep"></div>
         <div class="centro" style="font-size:11px; margin-top:8px;">¡Gracias por su compra!</div>
     `;
@@ -552,12 +610,14 @@ function imprimirTicket() {
 function compartirWhatsApp() {
     const r = ultimoRecibo;
     if (!r || !r.telefono) return;
-    const metodos = {efectivo: 'Efectivo', qr: 'QR', tarjeta: 'Tarjeta', transferencia: 'Transferencia'};
     const lineas = r.items.map(i => `  ${i.cantidad}x ${i.nombre} — $${(i.precio * i.cantidad).toLocaleString('es-CO')}`).join('\n');
     const resumenIva = r.iva > 0
         ? `Subtotal: $${r.subtotal.toLocaleString('es-CO')}\nIVA incluido: $${r.iva.toLocaleString('es-CO')}\n`
         : '';
-    const texto = `*${TIENDA_NOMBRE}* — Recibo de compra\n\n${lineas}\n\n${resumenIva}*Total: $${r.total.toLocaleString('es-CO')}*\nPago: ${metodos[r.metodo] || r.metodo}\n\n¡Gracias por su compra!`;
+    const pagosTexto = r.pagos && r.pagos.length > 1
+        ? r.pagos.map(p => `${p.nombre}: $${p.monto.toLocaleString('es-CO')}`).join(' + ')
+        : r.metodo;
+    const texto = `*${TIENDA_NOMBRE}* — Recibo de compra\n\n${lineas}\n\n${resumenIva}*Total: $${r.total.toLocaleString('es-CO')}*\nPago: ${pagosTexto}\n\n¡Gracias por su compra!`;
     // Limpiar teléfono: solo dígitos
     const tel = r.telefono.replace(/\D/g, '');
     window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
@@ -570,7 +630,7 @@ function nuevaVenta() {
     document.getElementById('nombre-cliente').value = '';
     document.getElementById('tel-cliente').value = '';
     renderCarrito();
-    setMetodo('efectivo');
+    limpiarPagos();
     document.getElementById('btn-cobrar').textContent = 'Cobrar';
     cargarProductos(); // recargar stock actualizado
 }

@@ -25342,6 +25342,32 @@ def crear_tablas_tienda(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_docsaldo_tercero ON documentos_saldo(id_tercero)")
     conn.commit()
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS metodos_pago_tienda (
+            id         SERIAL PRIMARY KEY,
+            tienda_id  INTEGER NOT NULL,
+            nombre     VARCHAR(100) NOT NULL,
+            codigo     VARCHAR(50) NOT NULL,
+            activo     BOOLEAN DEFAULT TRUE,
+            orden      INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (tienda_id, codigo)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_metpago_tienda ON metodos_pago_tienda(tienda_id)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pedido_pagos_tienda (
+            id            SERIAL PRIMARY KEY,
+            pedido_id     INTEGER NOT NULL,
+            metodo_codigo VARCHAR(50) NOT NULL,
+            metodo_nombre VARCHAR(100),
+            monto         NUMERIC(12,2) NOT NULL,
+            created_at    TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pedpagos_pedido ON pedido_pagos_tienda(pedido_id)")
+    conn.commit()
+
     _tienda_tablas_listas = True
 
 
@@ -27252,6 +27278,133 @@ def admin_tienda_detalle(slug):
         return f"Error: {e}", 500
 
 
+def _upsert_var_metodo_pago(conn, codigo, nombre):
+    """Registra la variable de método de pago en modulo_variables_contables (ventas_pos y ventas_domicilio)"""
+    for modulo in ('ventas_pos', 'ventas_domicilio'):
+        conn.execute("""
+            INSERT INTO modulo_variables_contables (modulo, codigo, descripcion, orden, activo)
+            VALUES (%s, %s, %s, 99, TRUE)
+            ON CONFLICT (modulo, codigo) DO UPDATE SET descripcion = EXCLUDED.descripcion
+        """, (modulo, codigo, f'Pago con {nombre}'))
+
+
+@app.route('/admin/tienda/<slug>/metodos-pago')
+def admin_tienda_metodos_pago(slug):
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id, nombre, slug FROM tiendas WHERE slug=%s AND activo=TRUE", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return redirect('/admin/tienda')
+        metodos = conn.execute("SELECT * FROM metodos_pago_tienda WHERE tienda_id=%s ORDER BY orden, id", (tienda['id'],)).fetchall()
+        conn.close()
+        return render_template('tienda_metodos_pago.html', tienda=tienda, metodos=metodos)
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/admin/tienda/<slug>/metodos-pago', methods=['GET', 'POST'])
+def api_admin_metodos_pago(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug=%s AND activo=TRUE", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        if request.method == 'GET':
+            metodos = conn.execute(
+                "SELECT * FROM metodos_pago_tienda WHERE tienda_id=%s ORDER BY orden, id", (tienda['id'],)
+            ).fetchall()
+            conn.close()
+            return jsonify({'ok': True, 'metodos': [dict(m) for m in metodos]})
+
+        # POST — crear
+        data = request.get_json()
+        nombre = (data.get('nombre') or '').strip()
+        codigo = (data.get('codigo') or '').strip().lower().replace(' ', '_')
+        orden  = int(data.get('orden') or 0)
+        if not nombre or not codigo:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'nombre y codigo requeridos'}), 400
+        mid = conn.execute("""
+            INSERT INTO metodos_pago_tienda (tienda_id, nombre, codigo, orden)
+            VALUES (%s, %s, %s, %s) RETURNING id
+        """, (tienda['id'], nombre, codigo, orden)).fetchone()['id']
+        _upsert_var_metodo_pago(conn, codigo, nombre)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': mid})
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/tienda/<slug>/metodos-pago/<int:mid>', methods=['PATCH', 'DELETE'])
+def api_admin_metodo_pago_item(slug, mid):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug=%s AND activo=TRUE", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        if request.method == 'DELETE':
+            conn.execute("DELETE FROM metodos_pago_tienda WHERE id=%s AND tienda_id=%s", (mid, tienda['id']))
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True})
+
+        # PATCH
+        data = request.get_json()
+        if 'activo' in data:
+            conn.execute("UPDATE metodos_pago_tienda SET activo=%s WHERE id=%s AND tienda_id=%s",
+                         (bool(data['activo']), mid, tienda['id']))
+        if 'orden' in data:
+            conn.execute("UPDATE metodos_pago_tienda SET orden=%s WHERE id=%s AND tienda_id=%s",
+                         (int(data['orden']), mid, tienda['id']))
+        if 'nombre' in data:
+            conn.execute("UPDATE metodos_pago_tienda SET nombre=%s WHERE id=%s AND tienda_id=%s",
+                         (data['nombre'].strip(), mid, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/metodos-pago')
+def api_tienda_metodos_pago_publico(slug):
+    """Endpoint público — POS lo usa para cargar los métodos activos"""
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug=%s AND activo=TRUE", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        metodos = conn.execute("""
+            SELECT id, nombre, codigo FROM metodos_pago_tienda
+            WHERE tienda_id=%s AND activo=TRUE ORDER BY orden, id
+        """, (tienda['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'metodos': [dict(m) for m in metodos]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/mi-tienda/<slug>')
 def mi_tienda(slug):
     """Panel del dueño de la tienda (fuera de /admin)"""
@@ -28244,6 +28397,7 @@ def api_tienda_pedido_crear(slug):
     notas = data.get('notas', '').strip()
     cliente_id = data.get('cliente_id')
     metodo_pago = data.get('metodo_pago', 'efectivo')
+    pagos = data.get('pagos', [])   # [{codigo, nombre, monto}] — nuevo formato multi-pago
     items = data.get('items', [])
     id_cajero = data.get('id_cajero')
     nombre_cajero = data.get('nombre_cajero', '').strip() or None
@@ -28330,12 +28484,33 @@ def api_tienda_pedido_crear(slug):
                     cliente_id, pedido_id
                 ))
 
+        # Guardar pagos por método (nuevo formato) o compat legado
+        pagos_validos = [p for p in pagos if float(p.get('monto') or 0) > 0]
+        if pagos_validos:
+            for p in pagos_validos:
+                conn.execute("""
+                    INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+                    VALUES (%s, %s, %s, %s)
+                """, (pedido_id, p['codigo'], p.get('nombre', p['codigo']), float(p['monto'])))
+        else:
+            # Legado: un solo metodo_pago por el total
+            conn.execute("""
+                INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+                VALUES (%s, %s, %s, %s)
+            """, (pedido_id, metodo_pago, metodo_pago, total))
+
         # Motor contable — solo para ventas POS (caja); domicilio se contabiliza al entregar
         if tipo_entrega == 'caja':
             try:
+                # Construir variables con desglose de pagos para la parametrización
+                vars_motor = {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total}
+                for p in pagos_validos:
+                    vars_motor[p['codigo']] = float(p['monto'])
+                if not pagos_validos:
+                    vars_motor[metodo_pago] = total
                 _ejecutar_asiento_automatico(
                     conn, tienda['id'], 'tienda', 'VENTA_POS',
-                    {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total},
+                    vars_motor,
                     registrado_por=id_tercero_cajero or session.get('usuario_id'),
                     descripcion_override=f'Venta caja #{pedido_id}'
                 )

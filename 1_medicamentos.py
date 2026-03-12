@@ -37189,6 +37189,498 @@ def api_almuerzo_confirmar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ─────────────────────────────────────────────────────────────
+# CONTABILIDAD POR NEGOCIO — Rutas y APIs
+# ─────────────────────────────────────────────────────────────
+
+def _crear_tablas_contabilidad_negocio(conn):
+    """Crea tablas adicionales de contabilidad por negocio. Idempotente."""
+    alters = [
+        "ALTER TABLE cuentas_puc ADD COLUMN IF NOT EXISTS creada_por_negocio_id INTEGER",
+        "ALTER TABLE cuentas_puc ADD COLUMN IF NOT EXISTS revisada BOOLEAN DEFAULT FALSE",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tipos_documento_negocio (
+            id           SERIAL PRIMARY KEY,
+            negocio_id   INTEGER NOT NULL,
+            tipo_negocio VARCHAR(20) NOT NULL,
+            codigo       VARCHAR(10) NOT NULL,
+            nombre       VARCHAR(100) NOT NULL,
+            activo       BOOLEAN DEFAULT TRUE,
+            created_at   TIMESTAMP DEFAULT NOW(),
+            UNIQUE(negocio_id, codigo)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tipodoc_negocio ON tipos_documento_negocio(negocio_id)")
+    conn.commit()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS parametros_contables_negocio (
+            id                 SERIAL PRIMARY KEY,
+            negocio_id         INTEGER NOT NULL,
+            tipo_negocio       VARCHAR(20) NOT NULL,
+            tipo_doc_id        INTEGER NOT NULL REFERENCES tipos_documento_negocio(id) ON DELETE CASCADE,
+            cuenta_debito_id   INTEGER REFERENCES cuentas_puc(id),
+            cuenta_credito_id  INTEGER REFERENCES cuentas_puc(id),
+            descripcion_asiento VARCHAR(255),
+            activo             BOOLEAN DEFAULT TRUE,
+            UNIQUE(negocio_id, tipo_doc_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_paramcont_negocio ON parametros_contables_negocio(negocio_id)")
+    conn.commit()
+
+
+def _get_negocio_contable(conn, tipo, slug):
+    """Retorna (negocio_id, nombre) para cualquier tipología. None si no existe."""
+    if tipo in ('taller', 'compraventa', 'hospedaje'):
+        r = conn.execute(
+            "SELECT id, nombre FROM negocios WHERE slug=%s AND tipo=%s AND activo=TRUE",
+            (slug, tipo)
+        ).fetchone()
+    elif tipo == 'inmobiliaria':
+        r = conn.execute(
+            "SELECT id, nombre FROM inmobiliarias WHERE slug=%s AND activa=TRUE", (slug,)
+        ).fetchone()
+    elif tipo == 'tienda':
+        r = conn.execute(
+            "SELECT id, nombre FROM tiendas WHERE slug=%s AND activo=TRUE", (slug,)
+        ).fetchone()
+    elif tipo == 'restaurante':
+        r = conn.execute(
+            "SELECT id, nombre FROM restaurantes WHERE slug=%s AND activo=TRUE", (slug,)
+        ).fetchone()
+    else:
+        return None, None
+    if not r:
+        return None, None
+    return r['id'], r['nombre']
+
+
+# ── Página principal ──────────────────────────────────────────
+
+@app.route('/contabilidad/<tipo>/<slug>')
+def contabilidad_negocio(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tablas_contabilidad(conn)
+        _crear_tablas_contabilidad_negocio(conn)
+        negocio_id, negocio_nombre = _get_negocio_contable(conn, tipo, slug)
+        conn.close()
+        if not negocio_id:
+            return "Negocio no encontrado", 404
+        return render_template('contabilidad_admin.html',
+                               tipo=tipo, slug=slug,
+                               negocio_id=negocio_id,
+                               negocio_nombre=negocio_nombre)
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
+# ── API: PUC ──────────────────────────────────────────────────
+
+@app.route('/api/contabilidad/puc')
+def api_contabilidad_puc():
+    """Busca cuentas PUC. q=texto, nivel=1..4, solo_movimiento=1"""
+    q = request.args.get('q', '').strip()
+    nivel = request.args.get('nivel', '')
+    solo_mov = request.args.get('solo_movimiento', '')
+    try:
+        conn = get_db_connection()
+        crear_tablas_contabilidad(conn)
+        where = ["activo = TRUE"]
+        params = []
+        if q:
+            where.append("(codigo ILIKE %s OR nombre ILIKE %s)")
+            params += [f'%{q}%', f'%{q}%']
+        if nivel:
+            where.append("nivel = %s")
+            params.append(int(nivel))
+        if solo_mov == '1':
+            where.append("acepta_movimiento = TRUE")
+        sql = f"SELECT id, codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, creada_por_negocio_id, revisada FROM cuentas_puc WHERE {' AND '.join(where)} ORDER BY codigo LIMIT 200"
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'cuentas': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/puc/nueva', methods=['POST'])
+def api_contabilidad_puc_nueva():
+    """Crea una nueva cuenta en el PUC. Cualquier negocio admin puede hacerlo."""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    codigo = (data.get('codigo') or '').strip()
+    nombre = (data.get('nombre') or '').strip()
+    nivel = data.get('nivel')
+    codigo_padre = (data.get('codigo_padre') or '').strip() or None
+    naturaleza = data.get('naturaleza', 'debito')
+    negocio_id = data.get('negocio_id')
+    if not codigo or not nombre or not nivel:
+        return jsonify({'ok': False, 'error': 'Código, nombre y nivel son requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_contabilidad(conn)
+        _crear_tablas_contabilidad_negocio(conn)
+        nueva = conn.execute("""
+            INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
+                                     maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada)
+            VALUES (%s, %s, %s, %s, %s, TRUE, FALSE, FALSE, %s, FALSE)
+            ON CONFLICT (codigo) DO NOTHING
+            RETURNING id, codigo, nombre
+        """, (codigo, nombre, int(nivel), codigo_padre, naturaleza, negocio_id)).fetchone()
+        conn.commit()
+        conn.close()
+        if not nueva:
+            return jsonify({'ok': False, 'error': f'El código {codigo} ya existe en el PUC'}), 409
+        return jsonify({'ok': True, 'cuenta': dict(nueva)})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Tipos de documento ───────────────────────────────────
+
+@app.route('/api/contabilidad/<tipo>/<slug>/tipos-doc', methods=['GET'])
+def api_contabilidad_tipos_doc_get(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        rows = conn.execute(
+            "SELECT id, codigo, nombre, activo FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY codigo",
+            (negocio_id,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'tipos': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/tipos-doc', methods=['POST'])
+def api_contabilidad_tipos_doc_post(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    codigo = (data.get('codigo') or '').strip().upper()
+    nombre = (data.get('nombre') or '').strip()
+    if not codigo or not nombre:
+        return jsonify({'ok': False, 'error': 'Código y nombre son requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        _crear_tablas_contabilidad_negocio(conn)
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        nuevo = conn.execute("""
+            INSERT INTO tipos_documento_negocio (negocio_id, tipo_negocio, codigo, nombre)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (negocio_id, codigo) DO NOTHING
+            RETURNING id, codigo, nombre, activo
+        """, (negocio_id, tipo, codigo, nombre)).fetchone()
+        conn.commit()
+        conn.close()
+        if not nuevo:
+            return jsonify({'ok': False, 'error': f'El código {codigo} ya existe'}), 409
+        return jsonify({'ok': True, 'tipo': dict(nuevo)})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/tipos-doc/<int:tid>', methods=['PATCH'])
+def api_contabilidad_tipos_doc_patch(tipo, slug, tid):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        if 'activo' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET activo=%s WHERE id=%s AND negocio_id=%s",
+                (bool(data['activo']), tid, negocio_id)
+            )
+        if 'nombre' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET nombre=%s WHERE id=%s AND negocio_id=%s",
+                (data['nombre'].strip(), tid, negocio_id)
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Parametrización contable ────────────────────────────
+
+@app.route('/api/contabilidad/<tipo>/<slug>/parametros', methods=['GET'])
+def api_contabilidad_parametros_get(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        rows = conn.execute("""
+            SELECT p.id, p.tipo_doc_id, t.codigo AS tipo_codigo, t.nombre AS tipo_nombre,
+                   p.cuenta_debito_id,  cd.codigo AS debito_codigo,  cd.nombre AS debito_nombre,
+                   p.cuenta_credito_id, cc.codigo AS credito_codigo, cc.nombre AS credito_nombre,
+                   p.descripcion_asiento, p.activo
+            FROM parametros_contables_negocio p
+            JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            LEFT JOIN cuentas_puc cd ON cd.id = p.cuenta_debito_id
+            LEFT JOIN cuentas_puc cc ON cc.id = p.cuenta_credito_id
+            WHERE p.negocio_id = %s
+            ORDER BY t.codigo
+        """, (negocio_id,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'parametros': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/parametros', methods=['POST'])
+def api_contabilidad_parametros_post(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    tipo_doc_id = data.get('tipo_doc_id')
+    cuenta_debito_id = data.get('cuenta_debito_id')
+    cuenta_credito_id = data.get('cuenta_credito_id')
+    descripcion = (data.get('descripcion_asiento') or '').strip() or None
+    if not tipo_doc_id:
+        return jsonify({'ok': False, 'error': 'tipo_doc_id es requerido'}), 400
+    try:
+        conn = get_db_connection()
+        _crear_tablas_contabilidad_negocio(conn)
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        conn.execute("""
+            INSERT INTO parametros_contables_negocio
+                (negocio_id, tipo_negocio, tipo_doc_id, cuenta_debito_id, cuenta_credito_id, descripcion_asiento)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (negocio_id, tipo_doc_id)
+            DO UPDATE SET cuenta_debito_id=EXCLUDED.cuenta_debito_id,
+                          cuenta_credito_id=EXCLUDED.cuenta_credito_id,
+                          descripcion_asiento=EXCLUDED.descripcion_asiento,
+                          activo=TRUE
+        """, (negocio_id, tipo, tipo_doc_id, cuenta_debito_id, cuenta_credito_id, descripcion))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Comprobantes ─────────────────────────────────────────
+
+@app.route('/api/contabilidad/<tipo>/<slug>/comprobantes', methods=['GET'])
+def api_contabilidad_comprobantes_get(tipo, slug):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        rows = conn.execute("""
+            SELECT c.id, c.numero_comprobante, c.tipo, c.fecha,
+                   c.descripcion, c.total_debitos, c.total_creditos, c.notas,
+                   c.created_at,
+                   (SELECT COUNT(*) FROM movimientos_contables m WHERE m.comprobante_id = c.id) AS num_lineas
+            FROM comprobantes_contables c
+            WHERE c.negocio_id = %s
+            ORDER BY c.fecha DESC, c.id DESC
+            LIMIT 100
+        """, (negocio_id,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'comprobantes': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/comprobante', methods=['POST'])
+def api_contabilidad_comprobante_post(tipo, slug):
+    """Crea un comprobante manual con sus líneas de movimiento."""
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    numero = (data.get('numero_comprobante') or '').strip() or None
+    tipo_comp = (data.get('tipo') or '').strip()
+    fecha = data.get('fecha') or None
+    descripcion = (data.get('descripcion') or '').strip() or None
+    notas = (data.get('notas') or '').strip() or None
+    lineas = data.get('lineas', [])
+    if not tipo_comp:
+        return jsonify({'ok': False, 'error': 'Tipo de comprobante requerido'}), 400
+    if not lineas:
+        return jsonify({'ok': False, 'error': 'Debe agregar al menos una línea'}), 400
+    # Validar que débitos == créditos
+    total_deb = sum(float(l.get('debito') or 0) for l in lineas)
+    total_cred = sum(float(l.get('credito') or 0) for l in lineas)
+    if abs(total_deb - total_cred) > 0.01:
+        return jsonify({'ok': False, 'error': f'Débitos ({total_deb:,.2f}) ≠ Créditos ({total_cred:,.2f}). El comprobante debe cuadrar.'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_contabilidad(conn)
+        _crear_tablas_contabilidad_negocio(conn)
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        comp = conn.execute("""
+            INSERT INTO comprobantes_contables
+                (negocio_id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, registrado_por, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (negocio_id, numero, tipo_comp, fecha, descripcion, total_deb, total_cred, uid, notas)).fetchone()
+        comp_id = comp['id']
+        for l in lineas:
+            cuenta_id = l.get('cuenta_id')
+            debito = float(l.get('debito') or 0)
+            credito = float(l.get('credito') or 0)
+            concepto = (l.get('concepto') or '').strip() or None
+            monto = debito if debito > 0 else credito
+            tipo_mov = 'debito' if debito > 0 else 'credito'
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, tipo, cuenta, concepto, monto, registrado_por, comprobante_id, cuenta_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (negocio_id, tipo_mov,
+                  l.get('cuenta_codigo', ''), concepto, monto, uid, comp_id, cuenta_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'comprobante_id': comp_id})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/comprobante/<int:comp_id>/lineas', methods=['GET'])
+def api_contabilidad_comprobante_lineas(tipo, slug, comp_id):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        lineas = conn.execute("""
+            SELECT m.id, m.tipo, m.cuenta, m.concepto, m.monto, m.cuenta_id,
+                   p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre
+            FROM movimientos_contables m
+            LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
+            WHERE m.comprobante_id = %s AND m.negocio_id = %s
+            ORDER BY m.id
+        """, (comp_id, negocio_id)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'lineas': [dict(l) for l in lineas]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Admin TUC TUC: revisar cuentas PUC propuestas ────────────
+
+@app.route('/admin/contabilidad/cuentas-puc')
+def admin_contabilidad_cuentas_puc():
+    """Lista cuentas PUC creadas por negocios pendientes de revisión."""
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    try:
+        conn = get_db_connection()
+        crear_tablas_contabilidad(conn)
+        _crear_tablas_contabilidad_negocio(conn)
+        pendientes = conn.execute("""
+            SELECT c.id, c.codigo, c.nombre, c.nivel, c.codigo_padre, c.naturaleza,
+                   c.creada_por_negocio_id, c.revisada
+            FROM cuentas_puc c
+            WHERE c.creada_por_negocio_id IS NOT NULL
+            ORDER BY c.revisada ASC, c.codigo
+        """).fetchall()
+        conn.close()
+        return render_template('admin_cuentas_puc.html', pendientes=[dict(p) for p in pendientes])
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
+@app.route('/api/admin/contabilidad/cuenta-puc/<int:cid>', methods=['PATCH'])
+def api_admin_cuenta_puc_patch(cid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        if 'nombre' in data:
+            conn.execute("UPDATE cuentas_puc SET nombre=%s WHERE id=%s", (data['nombre'].strip(), cid))
+        if 'revisada' in data:
+            conn.execute("UPDATE cuentas_puc SET revisada=%s WHERE id=%s", (bool(data['revisada']), cid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

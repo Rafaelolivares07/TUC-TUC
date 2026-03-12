@@ -93,6 +93,10 @@
             <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
                 Ubicación
             </button>
+            <a href="/contabilidad/restaurante/{{ restaurante.slug if restaurante else '' }}"
+               class="flex-1 py-4 text-center text-sm tab-inactive transition-all">
+                📒 Contabilidad
+            </a>
         </div>
 
         <!-- ====== TAB: CATÁLOGO DE OPCIONES ====== -->

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cuentas PUC — Admin TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 24px; border-radius:8px; color:white; font-weight:600; z-index:9999; opacity:0; transition:opacity .3s; }
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+</style>
+</head>
+<body class="p-4 sm:p-8">
+<div id="toast" class="toast"></div>
+<div class="max-w-4xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-indigo-600">
+    <div class="flex items-center gap-3">
+      <a href="/admin" class="text-gray-400 hover:text-gray-700">←</a>
+      <div>
+        <h1 class="text-2xl font-extrabold text-gray-800">Cuentas PUC — Revisión</h1>
+        <p class="text-sm text-gray-500">Cuentas creadas por negocios pendientes de normalización</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+          <th class="px-4 py-3 text-left">Código</th>
+          <th class="px-4 py-3 text-left">Nombre (editable)</th>
+          <th class="px-4 py-3 text-center">Nivel</th>
+          <th class="px-4 py-3 text-center">Padre</th>
+          <th class="px-4 py-3 text-center">Estado</th>
+          <th class="px-4 py-3 text-center">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pendientes %}
+        <tr class="border-b border-gray-50 {{ 'bg-amber-50' if not p.revisada else '' }}" id="row-{{ p.id }}">
+          <td class="px-4 py-3 font-mono font-bold text-blue-700">{{ p.codigo }}</td>
+          <td class="px-4 py-3">
+            <input type="text" id="nombre-{{ p.id }}" value="{{ p.nombre }}"
+                   class="border rounded px-2 py-1 text-sm w-full">
+          </td>
+          <td class="px-4 py-3 text-center text-gray-500">{{ p.nivel }}</td>
+          <td class="px-4 py-3 text-center font-mono text-gray-400">{{ p.codigo_padre or '—' }}</td>
+          <td class="px-4 py-3 text-center">
+            {% if p.revisada %}
+              <span class="text-xs bg-green-100 text-green-700 font-bold px-2 py-1 rounded-full">Revisada</span>
+            {% else %}
+              <span class="text-xs bg-amber-100 text-amber-700 font-bold px-2 py-1 rounded-full">Pendiente</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <button onclick="aprobar({{ p.id }})"
+                    class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded-lg transition">
+              Aprobar nombre
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-gray-400 py-8">No hay cuentas pendientes de revisión</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+function toast(msg, ok=true) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast ${ok ? 'toast-ok' : 'toast-err'} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+async function aprobar(id) {
+  const nombre = document.getElementById(`nombre-${id}`).value.trim();
+  if (!nombre) { toast('El nombre no puede estar vacío', false); return; }
+  try {
+    const r = await fetch(`/api/admin/contabilidad/cuenta-puc/${id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({nombre, revisada: true})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Cuenta aprobada');
+    const row = document.getElementById(`row-${id}`);
+    row.classList.remove('bg-amber-50');
+    row.querySelector('td:nth-child(5)').innerHTML = '<span class="text-xs bg-green-100 text-green-700 font-bold px-2 py-1 rounded-full">Revisada</span>';
+  } catch(e) { toast('Error de red', false); }
+}
+</script>
+</body>
+</html>

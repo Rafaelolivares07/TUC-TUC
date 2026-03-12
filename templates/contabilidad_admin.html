@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contabilidad — {{ negocio_nombre }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+  #nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
+  #nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex-shrink: 0; min-width: 90px; padding: 10px 16px;
+    font-size: 0.82rem; font-weight: 600; border-radius: 999px;
+    transition: background 0.2s, color 0.2s; white-space: nowrap;
+    color: #6b7280; background: transparent;
+  }
+  .tab-btn.tab-active { background: #2563eb; color: #fff; }
+  .tab-btn:not(.tab-active):hover { background: #f3f4f6; color: #374151; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+    z-index: 9999; opacity: 0; transition: opacity 0.3s;
+  }
+  .toast.show { opacity: 1; }
+  .toast-ok { background: #059669; }
+  .toast-err { background: #dc2626; }
+  .cuenta-row:hover { background: #eff6ff; }
+  input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+</style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+<div id="toast" class="toast"></div>
+
+<div class="max-w-5xl mx-auto">
+
+  <!-- Header -->
+  <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-blue-600">
+    <div class="flex items-center gap-4">
+      <a href="javascript:history.back()" class="text-gray-400 hover:text-gray-700 transition">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </a>
+      <div>
+        <h1 class="text-2xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+        <p class="text-sm text-gray-500">Contabilidad · <span class="capitalize">{{ tipo }}</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nav tabs -->
+  <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-5">
+    <div id="nav-tabs" class="flex gap-2 px-3 py-3 overflow-x-auto border-b border-gray-100">
+      <button onclick="cambiarTab('puc')"          id="tab-puc"          class="tab-btn tab-active">📋 PUC</button>
+      <button onclick="cambiarTab('tipos')"        id="tab-tipos"        class="tab-btn">📄 Tipos de Doc</button>
+      <button onclick="cambiarTab('parametros')"   id="tab-parametros"   class="tab-btn">⚙️ Parametrización</button>
+      <button onclick="cambiarTab('contabilizar')" id="tab-contabilizar" class="tab-btn">✏️ Contabilizar</button>
+      <button onclick="cambiarTab('comprobantes')" id="tab-comprobantes" class="tab-btn">📚 Comprobantes</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: PUC                                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="panel-puc" class="p-5">
+      <div class="flex flex-col sm:flex-row gap-3 mb-4">
+        <input id="puc-q" type="text" placeholder="Buscar por código o nombre..."
+               class="border rounded-lg px-3 py-2 text-sm flex-1"
+               oninput="buscarPUC()">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" id="puc-solo-mov" onchange="buscarPUC()">
+          Solo cuentas con movimiento
+        </label>
+        <button onclick="abrirModalNuevaCuenta()"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-4 py-2 rounded-lg transition">
+          + Nueva cuenta
+        </button>
+      </div>
+      <div id="puc-tabla" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+              <th class="px-3 py-2 text-left">Código</th>
+              <th class="px-3 py-2 text-left">Nombre</th>
+              <th class="px-3 py-2 text-center">Nivel</th>
+              <th class="px-3 py-2 text-center">Naturaleza</th>
+              <th class="px-3 py-2 text-center">Mov.</th>
+            </tr>
+          </thead>
+          <tbody id="puc-body"></tbody>
+        </table>
+        <p id="puc-hint" class="text-center text-gray-400 py-6 text-sm">Escribe para buscar cuentas del PUC</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: TIPOS DE DOCUMENTO                                -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="panel-tipos" class="p-5 hidden">
+      <div class="bg-gray-50 rounded-xl p-4 mb-5">
+        <h3 class="font-bold text-gray-700 mb-3">Crear tipo de documento</h3>
+        <div class="flex gap-3 flex-wrap">
+          <input id="tipo-codigo" type="text" placeholder="Código (ej: FV)" maxlength="10"
+                 class="border rounded-lg px-3 py-2 text-sm w-28 uppercase"
+                 style="text-transform:uppercase">
+          <input id="tipo-nombre" type="text" placeholder="Nombre (ej: Factura de Venta)"
+                 class="border rounded-lg px-3 py-2 text-sm flex-1 min-w-48">
+          <button onclick="crearTipoDoc()"
+                  class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-5 py-2 rounded-lg transition">
+            Guardar
+          </button>
+        </div>
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <th class="px-3 py-2 text-left">Código</th>
+            <th class="px-3 py-2 text-left">Nombre</th>
+            <th class="px-3 py-2 text-center">Activo</th>
+          </tr>
+        </thead>
+        <tbody id="tipos-body">
+          <tr><td colspan="3" class="text-center text-gray-400 py-6">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: PARAMETRIZACIÓN                                   -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="panel-parametros" class="p-5 hidden">
+      <div class="bg-gray-50 rounded-xl p-4 mb-5">
+        <h3 class="font-bold text-gray-700 mb-3">Asignar cuentas a tipo de documento</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Tipo de documento</label>
+            <select id="param-tipo-doc" class="border rounded-lg px-3 py-2 text-sm w-full bg-white">
+              <option value="">Seleccionar...</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Descripción del asiento (opcional)</label>
+            <input id="param-descripcion" type="text" placeholder="Ej: Compra mercancía a proveedor"
+                   class="border rounded-lg px-3 py-2 text-sm w-full">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Cuenta Débito</label>
+            <input id="param-deb-q" type="text" placeholder="Buscar cuenta PUC..."
+                   class="border rounded-lg px-3 py-2 text-sm w-full"
+                   oninput="buscarCuentaParam('deb')" autocomplete="off">
+            <div id="param-deb-sugg" class="hidden absolute bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto text-sm w-72"></div>
+            <input type="hidden" id="param-deb-id">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Cuenta Crédito</label>
+            <input id="param-cred-q" type="text" placeholder="Buscar cuenta PUC..."
+                   class="border rounded-lg px-3 py-2 text-sm w-full"
+                   oninput="buscarCuentaParam('cred')" autocomplete="off">
+            <div id="param-cred-sugg" class="hidden absolute bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto text-sm w-72"></div>
+            <input type="hidden" id="param-cred-id">
+          </div>
+        </div>
+        <button onclick="guardarParametro()"
+                class="mt-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-6 py-2 rounded-lg transition">
+          Guardar parametrización
+        </button>
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <th class="px-3 py-2 text-left">Tipo Doc</th>
+            <th class="px-3 py-2 text-left">Débito</th>
+            <th class="px-3 py-2 text-left">Crédito</th>
+            <th class="px-3 py-2 text-left">Descripción asiento</th>
+          </tr>
+        </thead>
+        <tbody id="parametros-body">
+          <tr><td colspan="4" class="text-center text-gray-400 py-6">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: CONTABILIZAR (Comprobante manual)                 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="panel-contabilizar" class="p-5 hidden">
+      <!-- Encabezado del comprobante -->
+      <div class="bg-gray-50 rounded-xl p-4 mb-4">
+        <h3 class="font-bold text-gray-700 mb-3">Encabezado del comprobante</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Tipo</label>
+            <select id="comp-tipo" class="border rounded-lg px-3 py-2 text-sm w-full bg-white">
+              <option value="">Seleccionar tipo doc...</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">N° Comprobante</label>
+            <input id="comp-numero" type="text" placeholder="Ej: 001"
+                   class="border rounded-lg px-3 py-2 text-sm w-full">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Fecha</label>
+            <input id="comp-fecha" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 font-semibold mb-1 block">Descripción</label>
+            <input id="comp-descripcion" type="text" placeholder="Concepto general"
+                   class="border rounded-lg px-3 py-2 text-sm w-full">
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="text-xs text-gray-500 font-semibold mb-1 block">Notas</label>
+          <input id="comp-notas" type="text" placeholder="Notas opcionales"
+                 class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+      </div>
+
+      <!-- Líneas del comprobante -->
+      <div class="bg-white rounded-xl border mb-4 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+              <th class="px-3 py-2 text-left w-48">Cuenta PUC</th>
+              <th class="px-3 py-2 text-left">Concepto</th>
+              <th class="px-3 py-2 text-right w-32">Débito</th>
+              <th class="px-3 py-2 text-right w-32">Crédito</th>
+              <th class="px-3 py-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="comp-lineas"></tbody>
+          <tfoot>
+            <tr class="bg-gray-50 font-bold text-sm">
+              <td colspan="2" class="px-3 py-2 text-right text-gray-600">TOTALES</td>
+              <td class="px-3 py-2 text-right text-blue-700" id="comp-total-deb">$ 0</td>
+              <td class="px-3 py-2 text-right text-green-700" id="comp-total-cred">$ 0</td>
+              <td></td>
+            </tr>
+            <tr id="comp-diff-row" class="hidden">
+              <td colspan="5" class="px-3 py-2 text-right text-red-600 text-xs font-bold" id="comp-diff-msg"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="agregarLineaComp()"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold px-4 py-2 rounded-lg transition">
+          + Agregar línea
+        </button>
+        <button onclick="guardarComprobante()"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-6 py-2 rounded-lg transition">
+          Guardar comprobante
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: COMPROBANTES (Histórico)                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="panel-comprobantes" class="p-5 hidden">
+      <div id="comp-lista">
+        <p class="text-center text-gray-400 py-6">Cargando...</p>
+      </div>
+    </div>
+
+  </div><!-- fin nav card -->
+</div><!-- fin max-w -->
+
+<!-- Modal nueva cuenta PUC -->
+<div id="modal-cuenta" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
+    <h3 class="text-lg font-bold text-gray-800 mb-4">Nueva cuenta PUC</h3>
+    <div class="flex flex-col gap-3">
+      <div class="flex gap-3">
+        <div class="flex-1">
+          <label class="text-xs text-gray-500 font-semibold mb-1 block">Código</label>
+          <input id="nc-codigo" type="text" placeholder="Ej: 140510"
+                 class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 font-semibold mb-1 block">Nivel</label>
+          <select id="nc-nivel" class="border rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="1">1 — Clase</option>
+            <option value="2">2 — Grupo</option>
+            <option value="3">3 — Cuenta</option>
+            <option value="4" selected>4 — Subcuenta</option>
+            <option value="5">5 — Auxiliar</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 font-semibold mb-1 block">Nombre</label>
+        <input id="nc-nombre" type="text" placeholder="Nombre de la cuenta"
+               class="border rounded-lg px-3 py-2 text-sm w-full">
+      </div>
+      <div class="flex gap-3">
+        <div class="flex-1">
+          <label class="text-xs text-gray-500 font-semibold mb-1 block">Código padre</label>
+          <input id="nc-padre" type="text" placeholder="Ej: 1405"
+                 class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 font-semibold mb-1 block">Naturaleza</label>
+          <select id="nc-naturaleza" class="border rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+          </select>
+        </div>
+      </div>
+      <p class="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+        Esta cuenta quedará visible para todos los negocios. Los administradores de TUC TUC pueden ajustar el nombre.
+      </p>
+    </div>
+    <div class="flex gap-3 mt-4">
+      <button onclick="cerrarModalCuenta()" class="flex-1 border rounded-lg py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">Cancelar</button>
+      <button onclick="guardarNuevaCuenta()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-bold transition">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle comprobante -->
+<div id="modal-comp-detalle" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-lg font-bold text-gray-800" id="modal-comp-titulo">Comprobante</h3>
+      <button onclick="cerrarModalCompDetalle()" class="text-gray-400 hover:text-gray-700 text-xl font-bold">✕</button>
+    </div>
+    <div id="modal-comp-body"></div>
+  </div>
+</div>
+
+<script>
+const TIPO  = '{{ tipo }}';
+const SLUG  = '{{ slug }}';
+const NID   = {{ negocio_id }};
+const BASE  = `/api/contabilidad/${TIPO}/${SLUG}`;
+
+// ─── Toast ────────────────────────────────────────────────────
+function toast(msg, ok=true) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${ok ? 'toast-ok' : 'toast-err'} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────
+const TABS = ['puc','tipos','parametros','contabilizar','comprobantes'];
+function cambiarTab(t) {
+  TABS.forEach(id => {
+    document.getElementById(`panel-${id}`).classList.toggle('hidden', id !== t);
+    document.getElementById(`tab-${id}`).classList.toggle('tab-active', id === t);
+  });
+  if (t === 'tipos' && !tiposLoaded)       cargarTipos();
+  if (t === 'parametros' && !paramLoaded)  cargarParametros();
+  if (t === 'comprobantes' && !compLoaded) cargarComprobantes();
+  if (t === 'contabilizar')                prepararContabilizar();
+}
+
+// ─── PUC ──────────────────────────────────────────────────────
+let pucTimer;
+function buscarPUC() {
+  clearTimeout(pucTimer);
+  pucTimer = setTimeout(_buscarPUC, 300);
+}
+async function _buscarPUC() {
+  const q = document.getElementById('puc-q').value.trim();
+  const soloMov = document.getElementById('puc-solo-mov').checked ? '1' : '';
+  if (!q && !soloMov) {
+    document.getElementById('puc-body').innerHTML = '';
+    document.getElementById('puc-hint').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('puc-hint').classList.add('hidden');
+  const r = await fetch(`/api/contabilidad/puc?q=${encodeURIComponent(q)}&solo_movimiento=${soloMov}`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+  const tbody = document.getElementById('puc-body');
+  if (!d.cuentas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-4">Sin resultados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = d.cuentas.map(c => `
+    <tr class="cuenta-row border-b border-gray-50 cursor-default" title="${c.codigo_padre ? 'Padre: '+c.codigo_padre : ''}">
+      <td class="px-3 py-2 font-mono font-bold text-blue-700">${c.codigo}</td>
+      <td class="px-3 py-2 text-gray-800">${c.nombre}${c.creada_por_negocio_id ? ' <span class="text-xs bg-amber-100 text-amber-700 px-1 rounded">propuesta</span>' : ''}</td>
+      <td class="px-3 py-2 text-center text-gray-400">${c.nivel}</td>
+      <td class="px-3 py-2 text-center"><span class="${c.naturaleza==='debito'?'text-blue-600':'text-green-600'} font-semibold capitalize">${c.naturaleza}</span></td>
+      <td class="px-3 py-2 text-center">${c.acepta_movimiento ? '✓' : ''}</td>
+    </tr>`).join('');
+}
+
+function abrirModalNuevaCuenta() {
+  document.getElementById('nc-codigo').value = '';
+  document.getElementById('nc-nombre').value = '';
+  document.getElementById('nc-padre').value  = '';
+  document.getElementById('modal-cuenta').classList.remove('hidden');
+  document.getElementById('nc-codigo').focus();
+}
+function cerrarModalCuenta() {
+  document.getElementById('modal-cuenta').classList.add('hidden');
+}
+async function guardarNuevaCuenta() {
+  const codigo = document.getElementById('nc-codigo').value.trim();
+  const nombre = document.getElementById('nc-nombre').value.trim();
+  const nivel  = parseInt(document.getElementById('nc-nivel').value);
+  const padre  = document.getElementById('nc-padre').value.trim() || null;
+  const nat    = document.getElementById('nc-naturaleza').value;
+  if (!codigo || !nombre) { toast('Código y nombre son requeridos', false); return; }
+  try {
+    const r = await fetch('/api/contabilidad/puc/nueva', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({codigo, nombre, nivel, codigo_padre: padre, naturaleza: nat, negocio_id: NID})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Cuenta creada — ya disponible en el PUC');
+    cerrarModalCuenta();
+    _buscarPUC();
+  } catch(e) { toast('Error de red', false); }
+}
+
+// ─── Tipos de documento ───────────────────────────────────────
+let tiposLoaded = false;
+let tiposData = [];
+
+async function cargarTipos() {
+  try {
+    const r = await fetch(`${BASE}/tipos-doc`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    tiposData = d.tipos;
+    renderTipos();
+    tiposLoaded = true;
+  } catch(e) { toast('Error de red', false); }
+}
+
+function renderTipos() {
+  const tbody = document.getElementById('tipos-body');
+  if (!tiposData.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-6">Sin tipos de documento — crea el primero</td></tr>';
+    return;
+  }
+  tbody.innerHTML = tiposData.map(t => `
+    <tr class="border-b border-gray-50">
+      <td class="px-3 py-2 font-mono font-bold text-gray-800">${t.codigo}</td>
+      <td class="px-3 py-2 text-gray-700">${t.nombre}</td>
+      <td class="px-3 py-2 text-center">
+        <button onclick="toggleTipoDoc(${t.id}, ${!t.activo})"
+                class="${t.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'} text-xs font-bold px-3 py-1 rounded-full transition">
+          ${t.activo ? 'Activo' : 'Inactivo'}
+        </button>
+      </td>
+    </tr>`).join('');
+}
+
+async function crearTipoDoc() {
+  const codigo = document.getElementById('tipo-codigo').value.trim().toUpperCase();
+  const nombre = document.getElementById('tipo-nombre').value.trim();
+  if (!codigo || !nombre) { toast('Código y nombre son requeridos', false); return; }
+  try {
+    const r = await fetch(`${BASE}/tipos-doc`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({codigo, nombre})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Tipo de documento creado');
+    document.getElementById('tipo-codigo').value = '';
+    document.getElementById('tipo-nombre').value = '';
+    tiposLoaded = false;
+    cargarTipos();
+  } catch(e) { toast('Error de red', false); }
+}
+
+async function toggleTipoDoc(id, activo) {
+  try {
+    const r = await fetch(`${BASE}/tipos-doc/${id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({activo})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    tiposLoaded = false;
+    cargarTipos();
+  } catch(e) { toast('Error de red', false); }
+}
+
+// ─── Parametrización ──────────────────────────────────────────
+let paramLoaded = false;
+let paramTimer = {};
+
+async function cargarParametros() {
+  // Cargar tipos en el select
+  if (!tiposLoaded) await cargarTipos();
+  const sel = document.getElementById('param-tipo-doc');
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    tiposData.filter(t => t.activo).map(t => `<option value="${t.id}">${t.codigo} — ${t.nombre}</option>`).join('');
+
+  try {
+    const r = await fetch(`${BASE}/parametros`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    renderParametros(d.parametros);
+    paramLoaded = true;
+  } catch(e) { toast('Error de red', false); }
+}
+
+function renderParametros(rows) {
+  const tbody = document.getElementById('parametros-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-400 py-6">Sin parametrizaciones — configura la primera</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(p => `
+    <tr class="border-b border-gray-50">
+      <td class="px-3 py-2 font-bold text-gray-800">${p.tipo_codigo} <span class="text-gray-400 font-normal">— ${p.tipo_nombre}</span></td>
+      <td class="px-3 py-2 font-mono text-blue-700">${p.debito_codigo || '—'} <span class="text-gray-500 text-xs">${p.debito_nombre || ''}</span></td>
+      <td class="px-3 py-2 font-mono text-green-700">${p.credito_codigo || '—'} <span class="text-gray-500 text-xs">${p.credito_nombre || ''}</span></td>
+      <td class="px-3 py-2 text-gray-500 text-xs">${p.descripcion_asiento || ''}</td>
+    </tr>`).join('');
+}
+
+async function buscarCuentaParam(side) {
+  const q = document.getElementById(`param-${side}-q`).value.trim();
+  const sugg = document.getElementById(`param-${side}-sugg`);
+  if (!q) { sugg.classList.add('hidden'); return; }
+  clearTimeout(paramTimer[side]);
+  paramTimer[side] = setTimeout(async () => {
+    const r = await fetch(`/api/contabilidad/puc?q=${encodeURIComponent(q)}&solo_movimiento=1`);
+    const d = await r.json();
+    if (!d.ok || !d.cuentas.length) { sugg.classList.add('hidden'); return; }
+    sugg.innerHTML = d.cuentas.slice(0,10).map(c =>
+      `<div class="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b border-gray-50"
+            onclick="selCuentaParam('${side}', ${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g,"\\'")}')">
+        <span class="font-mono font-bold text-blue-700">${c.codigo}</span>
+        <span class="text-gray-600 text-xs ml-2">${c.nombre}</span>
+      </div>`).join('');
+    sugg.classList.remove('hidden');
+    // posicionar relativo al input
+    const inp = document.getElementById(`param-${side}-q`);
+    const rect = inp.getBoundingClientRect();
+    sugg.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    sugg.style.left = (rect.left + window.scrollX) + 'px';
+    sugg.style.position = 'fixed';
+  }, 250);
+}
+
+function selCuentaParam(side, id, codigo, nombre) {
+  document.getElementById(`param-${side}-q`).value = `${codigo} — ${nombre}`;
+  document.getElementById(`param-${side}-id`).value = id;
+  document.getElementById(`param-${side}-sugg`).classList.add('hidden');
+}
+
+async function guardarParametro() {
+  const tipo_doc_id = document.getElementById('param-tipo-doc').value;
+  const cuenta_debito_id  = document.getElementById('param-deb-id').value || null;
+  const cuenta_credito_id = document.getElementById('param-cred-id').value || null;
+  const descripcion = document.getElementById('param-descripcion').value.trim();
+  if (!tipo_doc_id) { toast('Selecciona un tipo de documento', false); return; }
+  try {
+    const r = await fetch(`${BASE}/parametros`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({tipo_doc_id: parseInt(tipo_doc_id), cuenta_debito_id: cuenta_debito_id ? parseInt(cuenta_debito_id) : null,
+                            cuenta_credito_id: cuenta_credito_id ? parseInt(cuenta_credito_id) : null, descripcion_asiento: descripcion})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Parametrización guardada');
+    paramLoaded = false;
+    cargarParametros();
+  } catch(e) { toast('Error de red', false); }
+}
+
+// ─── Contabilizar (comprobante manual) ───────────────────────
+let compLineas = [];
+let compLineaId = 0;
+let compBusqTimer = {};
+
+function prepararContabilizar() {
+  if (!tiposLoaded) { cargarTipos().then(() => llenarSelectCompTipo()); return; }
+  llenarSelectCompTipo();
+  if (!compLineas.length) agregarLineaComp();
+  // Fecha de hoy por defecto
+  const hoy = new Date().toISOString().split('T')[0];
+  if (!document.getElementById('comp-fecha').value) document.getElementById('comp-fecha').value = hoy;
+}
+
+function llenarSelectCompTipo() {
+  const sel = document.getElementById('comp-tipo');
+  sel.innerHTML = '<option value="">Seleccionar tipo doc...</option>' +
+    tiposData.filter(t => t.activo).map(t => `<option value="${t.codigo}">${t.codigo} — ${t.nombre}</option>`).join('');
+}
+
+function agregarLineaComp() {
+  const id = ++compLineaId;
+  compLineas.push(id);
+  const tbody = document.getElementById('comp-lineas');
+  const tr = document.createElement('tr');
+  tr.id = `linea-comp-${id}`;
+  tr.className = 'border-b border-gray-50';
+  tr.innerHTML = `
+    <td class="px-2 py-1">
+      <input type="text" id="lc-cuenta-q-${id}" placeholder="Buscar cuenta..."
+             class="border rounded px-2 py-1 text-xs w-full"
+             oninput="buscarCuentaLinea(${id})" autocomplete="off">
+      <div id="lc-cuenta-sugg-${id}" class="hidden fixed bg-white border rounded-lg shadow-lg z-20 max-h-40 overflow-y-auto text-xs w-64"></div>
+      <input type="hidden" id="lc-cuenta-id-${id}">
+      <input type="hidden" id="lc-cuenta-cod-${id}">
+    </td>
+    <td class="px-2 py-1">
+      <input type="text" id="lc-concepto-${id}" placeholder="Concepto de la línea"
+             class="border rounded px-2 py-1 text-xs w-full">
+    </td>
+    <td class="px-2 py-1">
+      <input type="number" id="lc-debito-${id}" min="0" step="1" placeholder="0"
+             class="border rounded px-2 py-1 text-xs w-full text-right"
+             oninput="recalcComp(); limpiarCredito(${id})">
+    </td>
+    <td class="px-2 py-1">
+      <input type="number" id="lc-credito-${id}" min="0" step="1" placeholder="0"
+             class="border rounded px-2 py-1 text-xs w-full text-right"
+             oninput="recalcComp(); limpiarDebito(${id})">
+    </td>
+    <td class="px-2 py-1 text-center">
+      <button onclick="eliminarLineaComp(${id})" class="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+    </td>`;
+  tbody.appendChild(tr);
+}
+
+function limpiarCredito(id) {
+  if (parseFloat(document.getElementById(`lc-debito-${id}`).value||0) > 0)
+    document.getElementById(`lc-credito-${id}`).value = '';
+}
+function limpiarDebito(id) {
+  if (parseFloat(document.getElementById(`lc-credito-${id}`).value||0) > 0)
+    document.getElementById(`lc-debito-${id}`).value = '';
+}
+
+function eliminarLineaComp(id) {
+  compLineas = compLineas.filter(x => x !== id);
+  const tr = document.getElementById(`linea-comp-${id}`);
+  if (tr) tr.remove();
+  recalcComp();
+}
+
+function recalcComp() {
+  let deb = 0, cred = 0;
+  compLineas.forEach(id => {
+    deb  += parseFloat(document.getElementById(`lc-debito-${id}`)?.value  || 0);
+    cred += parseFloat(document.getElementById(`lc-credito-${id}`)?.value || 0);
+  });
+  document.getElementById('comp-total-deb').textContent  = '$ ' + deb.toLocaleString('es-CO');
+  document.getElementById('comp-total-cred').textContent = '$ ' + cred.toLocaleString('es-CO');
+  const diffRow = document.getElementById('comp-diff-row');
+  const diff = Math.abs(deb - cred);
+  if (diff > 0.01) {
+    document.getElementById('comp-diff-msg').textContent = `⚠ Diferencia: $ ${diff.toLocaleString('es-CO')} — el comprobante debe cuadrar`;
+    diffRow.classList.remove('hidden');
+  } else {
+    diffRow.classList.add('hidden');
+  }
+}
+
+async function buscarCuentaLinea(id) {
+  const q = document.getElementById(`lc-cuenta-q-${id}`).value.trim();
+  const sugg = document.getElementById(`lc-cuenta-sugg-${id}`);
+  if (!q) { sugg.classList.add('hidden'); return; }
+  clearTimeout(compBusqTimer[id]);
+  compBusqTimer[id] = setTimeout(async () => {
+    const r = await fetch(`/api/contabilidad/puc?q=${encodeURIComponent(q)}&solo_movimiento=1`);
+    const d = await r.json();
+    if (!d.ok || !d.cuentas.length) { sugg.classList.add('hidden'); return; }
+    sugg.innerHTML = d.cuentas.slice(0,8).map(c =>
+      `<div class="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b"
+            onclick="selCuentaLinea(${id}, ${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g,"\\'")}')">
+        <span class="font-mono font-bold text-blue-700">${c.codigo}</span>
+        <span class="text-gray-600 ml-1">${c.nombre}</span>
+      </div>`).join('');
+    sugg.classList.remove('hidden');
+    const inp = document.getElementById(`lc-cuenta-q-${id}`);
+    const rect = inp.getBoundingClientRect();
+    sugg.style.top  = (rect.bottom + 4) + 'px';
+    sugg.style.left = rect.left + 'px';
+  }, 250);
+}
+
+function selCuentaLinea(id, cuentaId, codigo, nombre) {
+  document.getElementById(`lc-cuenta-q-${id}`).value  = `${codigo} — ${nombre}`;
+  document.getElementById(`lc-cuenta-id-${id}`).value = cuentaId;
+  document.getElementById(`lc-cuenta-cod-${id}`).value = codigo;
+  document.getElementById(`lc-cuenta-sugg-${id}`).classList.add('hidden');
+}
+
+async function guardarComprobante() {
+  const tipo       = document.getElementById('comp-tipo').value;
+  const numero     = document.getElementById('comp-numero').value.trim() || null;
+  const fecha      = document.getElementById('comp-fecha').value || null;
+  const descripcion= document.getElementById('comp-descripcion').value.trim() || null;
+  const notas      = document.getElementById('comp-notas').value.trim() || null;
+  if (!tipo)  { toast('Selecciona el tipo de comprobante', false); return; }
+  if (!fecha) { toast('Ingresa la fecha', false); return; }
+
+  const lineas = compLineas.map(id => ({
+    cuenta_id:    parseInt(document.getElementById(`lc-cuenta-id-${id}`)?.value || 0) || null,
+    cuenta_codigo:document.getElementById(`lc-cuenta-cod-${id}`)?.value || '',
+    concepto:     document.getElementById(`lc-concepto-${id}`)?.value.trim() || '',
+    debito:       parseFloat(document.getElementById(`lc-debito-${id}`)?.value || 0),
+    credito:      parseFloat(document.getElementById(`lc-credito-${id}`)?.value || 0),
+  })).filter(l => l.debito > 0 || l.credito > 0);
+
+  if (!lineas.length) { toast('Agrega al menos una línea con valor', false); return; }
+
+  try {
+    const r = await fetch(`${BASE}/comprobante`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({tipo, numero_comprobante: numero, fecha, descripcion, notas, lineas})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Comprobante guardado');
+    // Limpiar formulario
+    document.getElementById('comp-tipo').value = '';
+    document.getElementById('comp-numero').value = '';
+    document.getElementById('comp-descripcion').value = '';
+    document.getElementById('comp-notas').value = '';
+    document.getElementById('comp-lineas').innerHTML = '';
+    compLineas = []; compLineaId = 0;
+    agregarLineaComp();
+    recalcComp();
+    compLoaded = false;
+  } catch(e) { toast('Error de red', false); }
+}
+
+// ─── Comprobantes histórico ───────────────────────────────────
+let compLoaded = false;
+
+async function cargarComprobantes() {
+  try {
+    const r = await fetch(`${BASE}/comprobantes`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    const cont = document.getElementById('comp-lista');
+    if (!d.comprobantes.length) {
+      cont.innerHTML = '<p class="text-center text-gray-400 py-8">Sin comprobantes registrados</p>';
+      compLoaded = true; return;
+    }
+    cont.innerHTML = `
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <th class="px-3 py-2 text-left">Fecha</th>
+            <th class="px-3 py-2 text-left">Tipo</th>
+            <th class="px-3 py-2 text-left">N°</th>
+            <th class="px-3 py-2 text-left">Descripción</th>
+            <th class="px-3 py-2 text-right">Débitos</th>
+            <th class="px-3 py-2 text-right">Créditos</th>
+            <th class="px-3 py-2 text-center">Líneas</th>
+            <th class="px-3 py-2 w-8"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${d.comprobantes.map(c => `
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="px-3 py-2 text-gray-500 whitespace-nowrap">${c.fecha}</td>
+            <td class="px-3 py-2 font-bold text-gray-800">${c.tipo}</td>
+            <td class="px-3 py-2 font-mono text-gray-600">${c.numero_comprobante || '—'}</td>
+            <td class="px-3 py-2 text-gray-600">${c.descripcion || ''}</td>
+            <td class="px-3 py-2 text-right font-mono text-blue-700">$ ${parseFloat(c.total_debitos).toLocaleString('es-CO')}</td>
+            <td class="px-3 py-2 text-right font-mono text-green-700">$ ${parseFloat(c.total_creditos).toLocaleString('es-CO')}</td>
+            <td class="px-3 py-2 text-center text-gray-500">${c.num_lineas}</td>
+            <td class="px-3 py-2 text-center">
+              <button onclick="verComprobante(${c.id}, '${c.tipo} ${c.numero_comprobante||''}')"
+                      class="text-blue-500 hover:text-blue-700 text-xs font-bold">Ver</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    compLoaded = true;
+  } catch(e) { toast('Error de red', false); }
+}
+
+async function verComprobante(id, titulo) {
+  document.getElementById('modal-comp-titulo').textContent = titulo;
+  document.getElementById('modal-comp-body').innerHTML = '<p class="text-center text-gray-400 py-4">Cargando...</p>';
+  document.getElementById('modal-comp-detalle').classList.remove('hidden');
+  try {
+    const r = await fetch(`${BASE}/comprobante/${id}/lineas`);
+    const d = await r.json();
+    if (!d.ok) { document.getElementById('modal-comp-body').innerHTML = `<p class="text-red-500">${d.error}</p>`; return; }
+    document.getElementById('modal-comp-body').innerHTML = `
+      <table class="w-full text-sm">
+        <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
+          <th class="px-3 py-2 text-left">Cuenta</th>
+          <th class="px-3 py-2 text-left">Concepto</th>
+          <th class="px-3 py-2 text-right">Débito</th>
+          <th class="px-3 py-2 text-right">Crédito</th>
+        </tr></thead>
+        <tbody>
+          ${d.lineas.map(l => `
+          <tr class="border-b border-gray-50">
+            <td class="px-3 py-2 font-mono text-blue-700">${l.cuenta_codigo || l.cuenta} <span class="text-gray-400 text-xs">${l.cuenta_nombre||''}</span></td>
+            <td class="px-3 py-2 text-gray-600">${l.concepto||''}</td>
+            <td class="px-3 py-2 text-right font-mono text-blue-700">${l.tipo==='debito'  ? '$ '+parseFloat(l.monto).toLocaleString('es-CO') : ''}</td>
+            <td class="px-3 py-2 text-right font-mono text-green-700">${l.tipo==='credito' ? '$ '+parseFloat(l.monto).toLocaleString('es-CO') : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) { document.getElementById('modal-comp-body').innerHTML = '<p class="text-red-500">Error de red</p>'; }
+}
+function cerrarModalCompDetalle() {
+  document.getElementById('modal-comp-detalle').classList.add('hidden');
+}
+
+// Cerrar sugerencias al hacer clic fuera
+document.addEventListener('click', e => {
+  document.querySelectorAll('[id$="-sugg"]').forEach(el => {
+    if (!el.contains(e.target)) el.classList.add('hidden');
+  });
+});
+</script>
+</body>
+</html>

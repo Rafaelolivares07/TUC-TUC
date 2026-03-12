@@ -745,9 +745,12 @@ function buscarCuentaParam(lid) {
     sugg.innerHTML = d.cuentas.slice(0, 30).map(c => {
       const pad = pl[Math.min(c.nivel, 4)] || '36px';
       if (c.acepta_movimiento) {
-        return `<div style="padding:6px 12px 6px ${pad};cursor:pointer;border-bottom:1px solid #f3f4f6;"
-                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background=''"
-                     onclick="selCuentaParam('${lid}',${c.id},'${c.codigo}','${c.nombre.replace(/'/g,"\\'")}')">
+        return `<div tabindex="0"
+                     style="padding:6px 12px 6px ${pad};cursor:pointer;border-bottom:1px solid #f3f4f6;outline:none;"
+                     onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background=this===document.activeElement?'#dbeafe':''"
+                     onclick="selCuentaParam('${lid}',${c.id},'${c.codigo}','${c.nombre.replace(/'/g,"\\'")}');document.getElementById('nl-cuenta-q-${lid}').focus()"
+                     onfocus="this.style.background='#dbeafe'" onblur="this.style.background=''"
+                     onkeydown="paramItemKeydown(event,'${lid}',${c.id},'${c.codigo}','${c.nombre.replace(/'/g,"\\'")}')">
           <span style="font-family:monospace;font-weight:700;color:#1d4ed8;font-size:11px;">${c.codigo}</span>
           <span style="color:#374151;margin-left:6px;font-size:11px;">${c.nombre}</span>
         </div>`;
@@ -769,16 +772,50 @@ function selCuentaParam(lid, id, codigo, nombre) {
 }
 
 function cuentaParamKeydown(e, lid) {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
   const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
-  // Buscar el primer item clickeable (tiene onclick) en el dropdown visible
-  if (!sugg.classList.contains('hidden')) {
-    const primero = sugg.querySelector('[onclick]');
-    if (primero) { primero.click(); return; }
+  const inp  = document.getElementById(`nl-cuenta-q-${lid}`);
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const primero = sugg.querySelector('[tabindex="0"]');
+    if (primero) primero.focus();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    inp.value = '';
+    document.getElementById(`nl-cuenta-id-${lid}`).value = '';
+    sugg.style.display = 'none';
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (sugg.style.display !== 'none') {
+      const primero = sugg.querySelector('[tabindex="0"]');
+      if (primero) { primero.click(); return; }
+    }
+    buscarCuentaParam(lid);
   }
-  // Si el dropdown aún no apareció, forzar búsqueda y luego seleccionar
-  buscarCuentaParam(lid);
+}
+
+function paramItemKeydown(e, lid, id, codigo, nombre) {
+  const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
+  const inp  = document.getElementById(`nl-cuenta-q-${lid}`);
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    selCuentaParam(lid, id, codigo, nombre);
+    inp.focus();
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const sig = e.currentTarget.nextElementSibling;
+    if (sig && sig.getAttribute('tabindex') === '0') sig.focus();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const ant = e.currentTarget.previousElementSibling;
+    if (ant && ant.getAttribute('tabindex') === '0') ant.focus();
+    else inp.focus();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    inp.value = '';
+    document.getElementById(`nl-cuenta-id-${lid}`).value = '';
+    sugg.style.display = 'none';
+    inp.focus();
+  }
 }
 
 async function guardarLineaNueva(lid) {

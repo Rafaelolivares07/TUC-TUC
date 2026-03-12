@@ -283,6 +283,7 @@
         let timeoutAutocompleteOrigen = null;
         let ubicacionGPSActual = null; // Guardar ubicación GPS para búsquedas por proximidad
         let cardUbicacionSeleccionado = false; // Estado del card de ubicación detectada
+        let destinoPreCargado = false; // Destino llegó desde URL params (portal de negocio)
         let ubicacionDetectadaDireccion = ''; // Dirección detectada
         // MODO DE SELECCIÓN EN MAPA: 'ninguno' | 'destino' | 'origen' | 'lugar'
         let modoSeleccionMapa = 'ninguno';
@@ -609,8 +610,11 @@
             if (!isNaN(preDestLat) && !isNaN(preDestLon) && preDestNombre) {
                 coordenadasDestinoSeleccionado = { lat: preDestLat, lon: preDestLon };
                 document.getElementById('input-destino').value = decodeURIComponent(preDestNombre);
+                destinoPreCargado = true;
                 // Limpiar URL sin recargar
                 window.history.replaceState({}, document.title, '/servicios');
+                // Si el origen ya estuviese listo (caso edge), calcular de una
+                verificarYCalcularAutomaticamente();
             }
 
             configurarBotones();
@@ -628,8 +632,10 @@
                     splash.style.opacity = '0';
                     setTimeout(() => {
                         splash.style.display = 'none';
-                        // Focus automático en el campo de destino
-                        document.getElementById('input-destino').focus();
+                        // Focus en destino solo si no viene pre-cargado desde URL
+                        if (!destinoPreCargado) {
+                            document.getElementById('input-destino').focus();
+                        }
                     }, 1000); // Esperar a que termine la animación de fade
                 }
             }
@@ -1778,6 +1784,9 @@
                     if (callback) callback();
                 }, function(error) {
                     document.getElementById('texto-ubicacion-detectada').textContent = 'No se pudo detectar tu ubicación. Verifica los permisos del navegador.';
+                    if (destinoPreCargado) {
+                        mostrarToast('Activa el GPS o ingresa tu punto de partida para calcular la ruta', true);
+                    }
                     // Llamar callback aunque falle (para que el splash desaparezca)
                     if (callback) callback();
                 });

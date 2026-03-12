@@ -1555,7 +1555,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/', '/docs/']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -38008,6 +38008,46 @@ def admin_variables_modulos():
         try: conn.close()
         except Exception: pass
         return f"Error: {e}", 500
+
+
+# ── Manuales contabilidad ─────────────────────────────────────
+
+@app.route('/docs/contabilidad')
+def docs_contabilidad_usuario():
+    """Manual de usuario del módulo contabilidad — acceso libre."""
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'contabilidad_usuario.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Usuario — Contabilidad',
+        tipo_badge='Manual de Usuario',
+        contenido_md=contenido,
+        fecha='2026-03-12',
+        back_url='/admin')
+
+
+@app.route('/admin/docs/contabilidad')
+def docs_contabilidad_desarrollo():
+    """Manual de desarrollo del módulo contabilidad — solo admin TUC TUC."""
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'contabilidad_desarrollo.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Desarrollo — Contabilidad',
+        tipo_badge='Manual de Desarrollo',
+        contenido_md=contenido,
+        fecha='2026-03-12',
+        back_url='/admin')
 
 
 @app.route('/api/admin/contabilidad/variables-modulos', methods=['GET'])

@@ -129,8 +129,9 @@
     <!-- TAB: PARAMETRIZACIÓN                                   -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div id="panel-parametros" class="p-5 hidden">
+      <!-- Cabecera: crear/seleccionar parámetro -->
       <div class="bg-gray-50 rounded-xl p-4 mb-5">
-        <h3 class="font-bold text-gray-700 mb-3">Asignar cuentas a tipo de documento</h3>
+        <h3 class="font-bold text-gray-700 mb-3">Cabecera del parámetro</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="text-xs text-gray-500 font-semibold mb-1 block">Tipo de documento</label>
@@ -140,38 +141,52 @@
           </div>
           <div>
             <label class="text-xs text-gray-500 font-semibold mb-1 block">Descripción del asiento (opcional)</label>
-            <input id="param-descripcion" type="text" placeholder="Ej: Compra mercancía a proveedor"
+            <input id="param-descripcion" type="text" placeholder="Ej: Venta de mercancía al cliente"
                    class="border rounded-lg px-3 py-2 text-sm w-full">
           </div>
-          <div>
-            <label class="text-xs text-gray-500 font-semibold mb-1 block">Cuenta Débito</label>
-            <input id="param-deb-q" type="text" placeholder="Buscar cuenta PUC..."
-                   class="border rounded-lg px-3 py-2 text-sm w-full"
-                   oninput="buscarCuentaParam('deb')" autocomplete="off">
-            <div id="param-deb-sugg" class="hidden absolute bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto text-sm w-72"></div>
-            <input type="hidden" id="param-deb-id">
-          </div>
-          <div>
-            <label class="text-xs text-gray-500 font-semibold mb-1 block">Cuenta Crédito</label>
-            <input id="param-cred-q" type="text" placeholder="Buscar cuenta PUC..."
-                   class="border rounded-lg px-3 py-2 text-sm w-full"
-                   oninput="buscarCuentaParam('cred')" autocomplete="off">
-            <div id="param-cred-sugg" class="hidden absolute bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto text-sm w-72"></div>
-            <input type="hidden" id="param-cred-id">
-          </div>
         </div>
-        <button onclick="guardarParametro()"
+        <button onclick="guardarCabeceraParametro()"
                 class="mt-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-6 py-2 rounded-lg transition">
-          Guardar parametrización
+          Guardar cabecera y editar líneas
         </button>
       </div>
+
+      <!-- Editor de líneas (visible cuando hay un parámetro seleccionado) -->
+      <div id="param-lineas-editor" class="hidden bg-white rounded-xl border mb-5 overflow-x-auto">
+        <div class="flex items-center justify-between px-4 py-3 bg-blue-50 border-b">
+          <div>
+            <span class="font-bold text-blue-800 text-sm" id="param-lineas-titulo">Líneas</span>
+            <span class="text-xs text-gray-500 ml-2">origen: M=Manual, F=Fijo, C=Calculado, H=Heredado de módulo</span>
+          </div>
+          <button onclick="agregarLineaParam()"
+                  class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition">
+            + Agregar línea
+          </button>
+        </div>
+        <table class="w-full text-sm min-w-[700px]">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
+              <th class="px-3 py-2 text-left w-56">Cuenta PUC</th>
+              <th class="px-3 py-2 text-center w-16">D / C</th>
+              <th class="px-3 py-2 text-left w-32">Origen</th>
+              <th class="px-3 py-2 text-left">Valor / Fórmula / Variable</th>
+              <th class="px-3 py-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="param-lineas-body">
+            <tr><td colspan="5" class="text-center text-gray-400 py-4">Sin líneas — agrega la primera</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Lista de parámetros guardados -->
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
             <th class="px-3 py-2 text-left">Tipo Doc</th>
-            <th class="px-3 py-2 text-left">Débito</th>
-            <th class="px-3 py-2 text-left">Crédito</th>
             <th class="px-3 py-2 text-left">Descripción asiento</th>
+            <th class="px-3 py-2 text-center">Líneas</th>
+            <th class="px-3 py-2"></th>
           </tr>
         </thead>
         <tbody id="parametros-body">
@@ -488,16 +503,26 @@ async function toggleTipoDoc(id, activo) {
   } catch(e) { toast('Error de red', false); }
 }
 
-// ─── Parametrización ──────────────────────────────────────────
+// ─── Parametrización (N líneas) ───────────────────────────────
 let paramLoaded = false;
 let paramTimer = {};
+let paramLineaTimer = {};
+let paramActualId = null;   // id del parámetro activo en el editor
+let variablesData = [];     // catálogo de variables de módulo
+let paramLineasPendientes = []; // líneas nuevas por guardar (antes del POST)
 
 async function cargarParametros() {
-  // Cargar tipos en el select
   if (!tiposLoaded) await cargarTipos();
   const sel = document.getElementById('param-tipo-doc');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     tiposData.filter(t => t.activo).map(t => `<option value="${t.id}">${t.codigo} — ${t.nombre}</option>`).join('');
+
+  // Cargar variables de módulo para el editor de líneas
+  try {
+    const rv = await fetch('/api/admin/contabilidad/variables-modulos');
+    const dv = await rv.json();
+    if (dv.ok) variablesData = dv.variables;
+  } catch(e) { variablesData = []; }
 
   try {
     const r = await fetch(`${BASE}/parametros`);
@@ -515,63 +540,229 @@ function renderParametros(rows) {
     return;
   }
   tbody.innerHTML = rows.map(p => `
-    <tr class="border-b border-gray-50">
+    <tr class="border-b border-gray-50 hover:bg-gray-50">
       <td class="px-3 py-2 font-bold text-gray-800">${p.tipo_codigo} <span class="text-gray-400 font-normal">— ${p.tipo_nombre}</span></td>
-      <td class="px-3 py-2 font-mono text-blue-700">${p.debito_codigo || '—'} <span class="text-gray-500 text-xs">${p.debito_nombre || ''}</span></td>
-      <td class="px-3 py-2 font-mono text-green-700">${p.credito_codigo || '—'} <span class="text-gray-500 text-xs">${p.credito_nombre || ''}</span></td>
       <td class="px-3 py-2 text-gray-500 text-xs">${p.descripcion_asiento || ''}</td>
+      <td class="px-3 py-2 text-center">
+        <span class="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full" id="param-cnt-${p.id}">—</span>
+      </td>
+      <td class="px-3 py-2 text-right">
+        <button onclick="abrirEditorLineas(${p.id}, '${(p.tipo_codigo+' — '+p.tipo_nombre).replace(/'/g,"\\'")}', '${(p.descripcion_asiento||'').replace(/'/g,"\\'")}', ${p.tipo_doc_id})"
+                class="text-blue-600 hover:text-blue-800 text-xs font-bold">Ver líneas</button>
+      </td>
     </tr>`).join('');
+  // Cargar conteo de líneas por parámetro
+  rows.forEach(p => cargarConteoLineas(p.id));
 }
 
-async function buscarCuentaParam(side) {
-  const q = document.getElementById(`param-${side}-q`).value.trim();
-  const sugg = document.getElementById(`param-${side}-sugg`);
-  if (!q) { sugg.classList.add('hidden'); return; }
-  clearTimeout(paramTimer[side]);
-  paramTimer[side] = setTimeout(async () => {
-    const r = await fetch(`/api/contabilidad/puc?q=${encodeURIComponent(q)}&solo_movimiento=1`);
+async function cargarConteoLineas(pid) {
+  try {
+    const r = await fetch(`${BASE}/parametros/${pid}/lineas`);
     const d = await r.json();
-    if (!d.ok || !d.cuentas.length) { sugg.classList.add('hidden'); return; }
-    sugg.innerHTML = d.cuentas.slice(0,10).map(c =>
-      `<div class="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b border-gray-50"
-            onclick="selCuentaParam('${side}', ${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g,"\\'")}')">
-        <span class="font-mono font-bold text-blue-700">${c.codigo}</span>
-        <span class="text-gray-600 text-xs ml-2">${c.nombre}</span>
-      </div>`).join('');
-    sugg.classList.remove('hidden');
-    // posicionar relativo al input
-    const inp = document.getElementById(`param-${side}-q`);
-    const rect = inp.getBoundingClientRect();
-    sugg.style.top = (rect.bottom + window.scrollY + 4) + 'px';
-    sugg.style.left = (rect.left + window.scrollX) + 'px';
-    sugg.style.position = 'fixed';
-  }, 250);
+    if (d.ok) {
+      const el = document.getElementById(`param-cnt-${pid}`);
+      if (el) el.textContent = d.lineas.length + ' línea' + (d.lineas.length !== 1 ? 's' : '');
+    }
+  } catch(e) { /* silencioso */ }
 }
 
-function selCuentaParam(side, id, codigo, nombre) {
-  document.getElementById(`param-${side}-q`).value = `${codigo} — ${nombre}`;
-  document.getElementById(`param-${side}-id`).value = id;
-  document.getElementById(`param-${side}-sugg`).classList.add('hidden');
-}
-
-async function guardarParametro() {
+async function guardarCabeceraParametro() {
   const tipo_doc_id = document.getElementById('param-tipo-doc').value;
-  const cuenta_debito_id  = document.getElementById('param-deb-id').value || null;
-  const cuenta_credito_id = document.getElementById('param-cred-id').value || null;
   const descripcion = document.getElementById('param-descripcion').value.trim();
   if (!tipo_doc_id) { toast('Selecciona un tipo de documento', false); return; }
   try {
     const r = await fetch(`${BASE}/parametros`, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({tipo_doc_id: parseInt(tipo_doc_id), cuenta_debito_id: cuenta_debito_id ? parseInt(cuenta_debito_id) : null,
-                            cuenta_credito_id: cuenta_credito_id ? parseInt(cuenta_credito_id) : null, descripcion_asiento: descripcion})
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tipo_doc_id: parseInt(tipo_doc_id), descripcion_asiento: descripcion})
     });
     const d = await r.json();
     if (!d.ok) { toast(d.error, false); return; }
-    toast('Parametrización guardada');
+    toast('Cabecera guardada');
     paramLoaded = false;
-    cargarParametros();
+    await cargarParametros();
+    // Abrir editor de líneas para el parámetro recién creado/actualizado
+    const r2 = await fetch(`${BASE}/parametros`);
+    const d2 = await r2.json();
+    if (d2.ok) {
+      const param = d2.parametros.find(p => p.tipo_doc_id === parseInt(tipo_doc_id));
+      if (param) abrirEditorLineas(param.id, param.tipo_codigo + ' — ' + param.tipo_nombre, descripcion, param.tipo_doc_id);
+    }
+  } catch(e) { toast('Error de red', false); }
+}
+
+async function abrirEditorLineas(pid, titulo, descripcion, tipo_doc_id) {
+  paramActualId = pid;
+  document.getElementById('param-lineas-titulo').textContent = titulo;
+  document.getElementById('param-tipo-doc').value = tipo_doc_id || '';
+  document.getElementById('param-descripcion').value = descripcion || '';
+  document.getElementById('param-lineas-editor').classList.remove('hidden');
+  document.getElementById('param-lineas-editor').scrollIntoView({behavior: 'smooth'});
+  try {
+    const r = await fetch(`${BASE}/parametros/${pid}/lineas`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    renderLineasParam(d.lineas);
+  } catch(e) { toast('Error de red', false); }
+}
+
+function renderLineasParam(lineas) {
+  const tbody = document.getElementById('param-lineas-body');
+  if (!lineas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-4 text-sm">Sin líneas — agrega la primera</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lineas.map(l => {
+    const origenLabel = {M:'Manual',F:'Fijo',C:'Calculado',H:'Heredado'}[l.origen] || l.origen;
+    let valorInfo = '';
+    if (l.origen === 'F') valorInfo = `<span class="font-mono text-gray-700">$${l.valor_fijo}</span>`;
+    else if (l.origen === 'C') valorInfo = `<span class="font-mono text-blue-600 text-xs">${l.formula || ''}</span>`;
+    else if (l.origen === 'H' && l.variable_desc) valorInfo = `<span class="text-indigo-600 text-xs">${l.variable_modulo} › ${l.variable_desc}</span>`;
+    else valorInfo = '<span class="text-gray-400 text-xs">—</span>';
+    return `
+    <tr class="border-b border-gray-50 hover:bg-gray-50">
+      <td class="px-3 py-2 font-mono text-blue-700 text-xs font-bold">${l.cuenta_codigo} <span class="text-gray-500 font-normal">${l.cuenta_nombre}</span></td>
+      <td class="px-3 py-2 text-center">
+        <span class="${l.tipo_mov==='D'?'bg-red-100 text-red-700':'bg-green-100 text-green-700'} text-xs font-bold px-2 py-0.5 rounded">${l.tipo_mov==='D'?'Déb':'Cré'}</span>
+      </td>
+      <td class="px-3 py-2 text-xs text-gray-600">${origenLabel}</td>
+      <td class="px-3 py-2">${valorInfo}</td>
+      <td class="px-3 py-2 text-right">
+        <button onclick="eliminarLineaParam(${l.id})" class="text-red-400 hover:text-red-600 text-xs font-bold">Eliminar</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function agregarLineaParam() {
+  if (!paramActualId) { toast('Guarda primero la cabecera', false); return; }
+  const lid = 'nueva-' + Date.now();
+  const variablesOpts = variablesData.length
+    ? variablesData.map(v => `<option value="${v.id}">[${v.modulo}] ${v.descripcion}</option>`).join('')
+    : '<option value="">Sin variables registradas</option>';
+  const tr = document.createElement('tr');
+  tr.id = `linea-nueva-${lid}`;
+  tr.className = 'border-b border-blue-50 bg-blue-50';
+  tr.innerHTML = `
+    <td class="px-3 py-2">
+      <input type="text" placeholder="Buscar cuenta PUC..." autocomplete="off"
+             class="border rounded px-2 py-1 text-xs w-full"
+             id="nl-cuenta-q-${lid}" oninput="buscarCuentaLinea('${lid}')">
+      <div id="nl-cuenta-sugg-${lid}" class="hidden fixed bg-white border rounded shadow-lg z-20 max-h-40 overflow-y-auto text-xs w-72"></div>
+      <input type="hidden" id="nl-cuenta-id-${lid}">
+    </td>
+    <td class="px-3 py-2 text-center">
+      <select id="nl-tipomov-${lid}" class="border rounded px-1 py-1 text-xs">
+        <option value="D">D</option>
+        <option value="C">C</option>
+      </select>
+    </td>
+    <td class="px-3 py-2">
+      <select id="nl-origen-${lid}" class="border rounded px-1 py-1 text-xs w-full" onchange="onOrigenChange('${lid}')">
+        <option value="M">Manual</option>
+        <option value="F">Fijo</option>
+        <option value="C">Calculado</option>
+        <option value="H">Heredado</option>
+      </select>
+    </td>
+    <td class="px-3 py-2">
+      <input type="number" id="nl-valor-${lid}" placeholder="Valor fijo" step="0.01"
+             class="border rounded px-2 py-1 text-xs w-28 hidden">
+      <input type="text" id="nl-formula-${lid}" placeholder="Ej: total_bruto * 0.19"
+             class="border rounded px-2 py-1 text-xs w-48 hidden" autocomplete="off">
+      <select id="nl-variable-${lid}" class="border rounded px-1 py-1 text-xs w-full hidden">
+        ${variablesOpts}
+      </select>
+    </td>
+    <td class="px-3 py-2 text-right">
+      <button onclick="guardarLineaNueva('${lid}')" class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded hover:bg-blue-700 mr-1">Guardar</button>
+      <button onclick="document.getElementById('linea-nueva-${lid}').remove()" class="text-gray-400 text-xs font-bold">X</button>
+    </td>`;
+  const tbody = document.getElementById('param-lineas-body');
+  // Quitar placeholder si existe
+  if (tbody.querySelector('td[colspan="5"]')) tbody.innerHTML = '';
+  tbody.appendChild(tr);
+}
+
+function onOrigenChange(lid) {
+  const origen = document.getElementById(`nl-origen-${lid}`).value;
+  document.getElementById(`nl-valor-${lid}`).classList.toggle('hidden', origen !== 'F');
+  document.getElementById(`nl-formula-${lid}`).classList.toggle('hidden', origen !== 'C');
+  document.getElementById(`nl-variable-${lid}`).classList.toggle('hidden', origen !== 'H');
+}
+
+function buscarCuentaLinea(lid) {
+  const q = document.getElementById(`nl-cuenta-q-${lid}`).value.trim();
+  const sugg = document.getElementById(`nl-cuenta-sugg-${lid}`);
+  if (!q) { sugg.classList.add('hidden'); return; }
+  clearTimeout(paramLineaTimer[lid]);
+  paramLineaTimer[lid] = setTimeout(async () => {
+    try {
+      const r = await fetch(`/api/contabilidad/puc?q=${encodeURIComponent(q)}&solo_movimiento=1`);
+      const d = await r.json();
+      if (!d.ok || !d.cuentas.length) { sugg.classList.add('hidden'); return; }
+      sugg.innerHTML = d.cuentas.slice(0, 10).map(c =>
+        `<div class="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b border-gray-50"
+              onclick="selCuentaLinea('${lid}', ${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g,"\\'")}')">
+          <span class="font-mono font-bold text-blue-700">${c.codigo}</span>
+          <span class="text-gray-600 ml-2">${c.nombre}</span>
+        </div>`).join('');
+      sugg.classList.remove('hidden');
+      const inp = document.getElementById(`nl-cuenta-q-${lid}`);
+      const rect = inp.getBoundingClientRect();
+      sugg.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+      sugg.style.left = (rect.left + window.scrollX) + 'px';
+      sugg.style.position = 'fixed';
+    } catch(e) { /* silencioso */ }
+  }, 250);
+}
+
+function selCuentaLinea(lid, id, codigo, nombre) {
+  document.getElementById(`nl-cuenta-q-${lid}`).value = `${codigo} — ${nombre}`;
+  document.getElementById(`nl-cuenta-id-${lid}`).value = id;
+  document.getElementById(`nl-cuenta-sugg-${lid}`).classList.add('hidden');
+}
+
+async function guardarLineaNueva(lid) {
+  const cuenta_puc_id = document.getElementById(`nl-cuenta-id-${lid}`).value;
+  const tipo_mov = document.getElementById(`nl-tipomov-${lid}`).value;
+  const origen = document.getElementById(`nl-origen-${lid}`).value;
+  if (!cuenta_puc_id) { toast('Selecciona una cuenta PUC', false); return; }
+  const body = { cuenta_puc_id: parseInt(cuenta_puc_id), tipo_mov, origen };
+  if (origen === 'F') body.valor_fijo = parseFloat(document.getElementById(`nl-valor-${lid}`).value) || null;
+  if (origen === 'C') body.formula = document.getElementById(`nl-formula-${lid}`).value.trim() || null;
+  if (origen === 'H') {
+    const vid = document.getElementById(`nl-variable-${lid}`).value;
+    body.variable_id = vid ? parseInt(vid) : null;
+  }
+  try {
+    const r = await fetch(`${BASE}/parametros/${paramActualId}/lineas`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Línea guardada');
+    // Recargar líneas
+    const r2 = await fetch(`${BASE}/parametros/${paramActualId}/lineas`);
+    const d2 = await r2.json();
+    if (d2.ok) renderLineasParam(d2.lineas);
+    cargarConteoLineas(paramActualId);
+  } catch(e) { toast('Error de red', false); }
+}
+
+async function eliminarLineaParam(lid) {
+  if (!confirm('¿Eliminar esta línea?')) return;
+  try {
+    const r = await fetch(`${BASE}/parametros/${paramActualId}/lineas/${lid}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    toast('Línea eliminada');
+    const r2 = await fetch(`${BASE}/parametros/${paramActualId}/lineas`);
+    const d2 = await r2.json();
+    if (d2.ok) renderLineasParam(d2.lineas);
+    cargarConteoLineas(paramActualId);
   } catch(e) { toast('Error de red', false); }
 }
 

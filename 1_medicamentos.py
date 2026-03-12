@@ -25105,6 +25105,7 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS mesa_nombre VARCHAR(20)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "UPDATE restaurantes SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
+        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
     ]
     for sql in alters:
         try:
@@ -25264,6 +25265,7 @@ def crear_tablas_tienda(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
+        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
     ]
     for sql in alters:
         try:
@@ -27650,6 +27652,7 @@ def api_tienda_producto_crear(slug):
         descripcion = (data.get('descripcion') or '').strip()
         codigo_barra = (data.get('codigo_barra') or '').strip() or None
         catalogo_id = data.get('catalogo_id') or None
+        iva_pct = data.get('iva_pct', 0)
 
         if not nombre:
             return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
@@ -27657,6 +27660,10 @@ def api_tienda_producto_crear(slug):
             precio = float(precio)
         except:
             return jsonify({'ok': False, 'error': 'Precio invalido'}), 400
+        try:
+            iva_pct = float(iva_pct)
+        except:
+            iva_pct = 0
 
         conn = get_db_connection()
         tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
@@ -27681,14 +27688,14 @@ def api_tienda_producto_crear(slug):
 
         if producto_id:
             conn.execute(
-                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s, descripcion = %s, catalogo_id = %s, codigo_barra = %s WHERE id = %s AND tienda_id = %s",
-                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, producto_id, tienda['id'])
+                "UPDATE productos_tienda SET nombre = %s, categoria = %s, precio = %s, descripcion = %s, catalogo_id = %s, codigo_barra = %s, iva_pct = %s WHERE id = %s AND tienda_id = %s",
+                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, producto_id, tienda['id'])
             )
             nuevo_id = producto_id
         else:
             row = conn.execute(
-                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                (tienda['id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra)
+                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra, iva_pct) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (tienda['id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct)
             ).fetchone()
             nuevo_id = row['id']
         conn.commit()
@@ -30413,6 +30420,15 @@ def crear_tablas_contabilidad(conn):
 
     _seed_puc(conn)
     _seed_puc_subcuentas(conn)
+    # Corregir acepta_movimiento: toda cuenta que tenga hijos NO puede ser de movimiento
+    conn.execute("""
+        UPDATE cuentas_puc
+        SET acepta_movimiento = FALSE
+        WHERE codigo IN (
+            SELECT DISTINCT codigo_padre FROM cuentas_puc WHERE codigo_padre IS NOT NULL
+        )
+    """)
+    conn.commit()
     _contabilidad_tablas_listas = True
 
 def _seed_puc(conn):
@@ -32786,6 +32802,7 @@ def crear_tablas_inmobiliaria(conn):
         "ALTER TABLE propiedades ALTER COLUMN parqueadero TYPE SMALLINT USING parqueadero::integer::smallint",
         "ALTER TABLE propiedades ALTER COLUMN parqueadero SET DEFAULT 0",
         "ALTER TABLE propiedades ADD COLUMN IF NOT EXISTS estrato INTEGER",
+        "ALTER TABLE inmobiliarias ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
     ]
     for sql in alters:
         try:
@@ -37198,6 +37215,9 @@ def _crear_tablas_contabilidad_negocio(conn):
     alters = [
         "ALTER TABLE cuentas_puc ADD COLUMN IF NOT EXISTS creada_por_negocio_id INTEGER",
         "ALTER TABLE cuentas_puc ADD COLUMN IF NOT EXISTS revisada BOOLEAN DEFAULT FALSE",
+        # DROP columnas obsoletas de parametros_contables_negocio (no hay datos, tabla vacía)
+        "ALTER TABLE parametros_contables_negocio DROP COLUMN IF EXISTS cuenta_debito_id",
+        "ALTER TABLE parametros_contables_negocio DROP COLUMN IF EXISTS cuenta_credito_id",
     ]
     for sql in alters:
         try:
@@ -37235,6 +37255,39 @@ def _crear_tablas_contabilidad_negocio(conn):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_paramcont_negocio ON parametros_contables_negocio(negocio_id)")
+    conn.commit()
+
+    # Tabla: variables que cada módulo expone al motor contable
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS modulo_variables_contables (
+            id          SERIAL PRIMARY KEY,
+            modulo      VARCHAR(50) NOT NULL,
+            codigo      VARCHAR(50) NOT NULL,
+            descripcion VARCHAR(150) NOT NULL,
+            activo      BOOLEAN DEFAULT TRUE,
+            orden       INTEGER DEFAULT 0,
+            UNIQUE(modulo, codigo)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_modvar_modulo ON modulo_variables_contables(modulo)")
+    conn.commit()
+
+    # Tabla: líneas de parametrización (reemplaza cuenta_debito_id/cuenta_credito_id)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS parametros_lineas_contables (
+            id             SERIAL PRIMARY KEY,
+            parametro_id   INTEGER NOT NULL REFERENCES parametros_contables_negocio(id) ON DELETE CASCADE,
+            cuenta_puc_id  INTEGER NOT NULL REFERENCES cuentas_puc(id),
+            tipo_mov       CHAR(1) NOT NULL CHECK (tipo_mov IN ('D','C')),
+            origen         CHAR(1) NOT NULL DEFAULT 'M' CHECK (origen IN ('M','F','C','H')),
+            valor_fijo     NUMERIC(14,2),
+            formula        VARCHAR(100),
+            variable_id    INTEGER REFERENCES modulo_variables_contables(id),
+            orden          INTEGER DEFAULT 0,
+            activo         BOOLEAN DEFAULT TRUE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_paramlinea_param ON parametros_lineas_contables(parametro_id)")
     conn.commit()
 
 
@@ -37672,6 +37725,213 @@ def api_admin_cuenta_puc_patch(cid):
             conn.execute("UPDATE cuentas_puc SET nombre=%s WHERE id=%s", (data['nombre'].strip(), cid))
         if 'revisada' in data:
             conn.execute("UPDATE cuentas_puc SET revisada=%s WHERE id=%s", (bool(data['revisada']), cid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Admin TUC TUC: variables de módulos contables ─────────────
+
+@app.route('/admin/contabilidad/variables-modulos')
+def admin_variables_modulos():
+    uid = session.get('usuario_id')
+    if not uid:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tablas_contabilidad(conn)
+        _crear_tablas_contabilidad_negocio(conn)
+        vars_ = conn.execute(
+            "SELECT * FROM modulo_variables_contables ORDER BY modulo, orden, id"
+        ).fetchall()
+        conn.close()
+        return render_template('admin_variables_modulos.html', variables=[dict(v) for v in vars_])
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
+@app.route('/api/admin/contabilidad/variables-modulos', methods=['GET'])
+def api_admin_variables_modulos_get():
+    try:
+        conn = get_db_connection()
+        _crear_tablas_contabilidad_negocio(conn)
+        rows = conn.execute(
+            "SELECT * FROM modulo_variables_contables ORDER BY modulo, orden, id"
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'variables': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/contabilidad/variables-modulos', methods=['POST'])
+def api_admin_variables_modulos_post():
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    modulo = (data.get('modulo') or '').strip()
+    codigo = (data.get('codigo') or '').strip()
+    descripcion = (data.get('descripcion') or '').strip()
+    orden = int(data.get('orden') or 0)
+    if not modulo or not codigo or not descripcion:
+        return jsonify({'ok': False, 'error': 'modulo, codigo y descripcion son requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        _crear_tablas_contabilidad_negocio(conn)
+        nueva = conn.execute(
+            "INSERT INTO modulo_variables_contables (modulo, codigo, descripcion, orden) VALUES (%s,%s,%s,%s) RETURNING id",
+            (modulo, codigo, descripcion, orden)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': nueva[0]})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/contabilidad/variables-modulos/<int:vid>', methods=['PATCH'])
+def api_admin_variables_modulos_patch(vid):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    try:
+        conn = get_db_connection()
+        if 'descripcion' in data:
+            conn.execute("UPDATE modulo_variables_contables SET descripcion=%s WHERE id=%s",
+                         (data['descripcion'].strip(), vid))
+        if 'modulo' in data:
+            conn.execute("UPDATE modulo_variables_contables SET modulo=%s WHERE id=%s",
+                         (data['modulo'].strip(), vid))
+        if 'activo' in data:
+            conn.execute("UPDATE modulo_variables_contables SET activo=%s WHERE id=%s",
+                         (bool(data['activo']), vid))
+        if 'orden' in data:
+            conn.execute("UPDATE modulo_variables_contables SET orden=%s WHERE id=%s",
+                         (int(data['orden']), vid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/contabilidad/variables-modulos/<int:vid>', methods=['DELETE'])
+def api_admin_variables_modulos_delete(vid):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM modulo_variables_contables WHERE id=%s", (vid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Líneas de parametrización ────────────────────────────
+
+@app.route('/api/contabilidad/<tipo>/<slug>/parametros/<int:pid>/lineas', methods=['GET'])
+def api_contabilidad_parametro_lineas_get(tipo, slug, pid):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        # Verificar que el parametro pertenece a este negocio
+        param = conn.execute(
+            "SELECT id FROM parametros_contables_negocio WHERE id=%s AND negocio_id=%s",
+            (pid, negocio_id)
+        ).fetchone()
+        if not param:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Parámetro no encontrado'}), 404
+        lineas = conn.execute("""
+            SELECT l.id, l.cuenta_puc_id, c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
+                   l.tipo_mov, l.origen, l.valor_fijo, l.formula,
+                   l.variable_id, v.descripcion AS variable_desc, v.modulo AS variable_modulo,
+                   l.orden, l.activo
+            FROM parametros_lineas_contables l
+            JOIN cuentas_puc c ON c.id = l.cuenta_puc_id
+            LEFT JOIN modulo_variables_contables v ON v.id = l.variable_id
+            WHERE l.parametro_id = %s
+            ORDER BY l.orden, l.id
+        """, (pid,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'lineas': [dict(l) for l in lineas]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/parametros/<int:pid>/lineas', methods=['POST'])
+def api_contabilidad_parametro_lineas_post(tipo, slug, pid):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    cuenta_puc_id = data.get('cuenta_puc_id')
+    tipo_mov = (data.get('tipo_mov') or '').upper()
+    origen = (data.get('origen') or 'M').upper()
+    valor_fijo = data.get('valor_fijo')
+    formula = (data.get('formula') or '').strip() or None
+    variable_id = data.get('variable_id')
+    orden = int(data.get('orden') or 0)
+    if not cuenta_puc_id or tipo_mov not in ('D', 'C'):
+        return jsonify({'ok': False, 'error': 'cuenta_puc_id y tipo_mov (D/C) son requeridos'}), 400
+    if origen not in ('M', 'F', 'C', 'H'):
+        return jsonify({'ok': False, 'error': 'origen debe ser M, F, C o H'}), 400
+    try:
+        conn = get_db_connection()
+        negocio_id, _ = _get_negocio_contable(conn, tipo, slug)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        nueva = conn.execute("""
+            INSERT INTO parametros_lineas_contables
+                (parametro_id, cuenta_puc_id, tipo_mov, origen, valor_fijo, formula, variable_id, orden)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (pid, cuenta_puc_id, tipo_mov, origen, valor_fijo, formula, variable_id, orden)).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': nueva[0]})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/contabilidad/<tipo>/<slug>/parametros/<int:pid>/lineas/<int:lid>', methods=['DELETE'])
+def api_contabilidad_parametro_linea_delete(tipo, slug, pid, lid):
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM parametros_lineas_contables WHERE id=%s AND parametro_id=%s", (lid, pid))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

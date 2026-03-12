@@ -516,6 +516,7 @@ let paramTimer = {};
 let paramLineaTimer = {};
 let paramActualId = null;   // id del parámetro activo en el editor
 let variablesData = [];     // catálogo de variables de módulo
+let metodosHabilitados = {}; // {codigo: {catalogo_id, activo}} — solo tienda
 let paramLineasPendientes = []; // líneas nuevas por guardar (antes del POST)
 let paramModuloLocked = null;  // módulo bloqueado para el parámetro activo (primera variable H usada)
 
@@ -531,6 +532,15 @@ async function cargarParametros() {
     const dv = await rv.json();
     if (dv.ok) variablesData = dv.variables;
   } catch(e) { variablesData = []; }
+
+  // Cargar métodos de pago habilitados (solo tienda)
+  if (TIPO === 'tienda') {
+    try {
+      const rm = await fetch(`/api/admin/tienda/${SLUG}/metodos-pago`);
+      const dm = await rm.json();
+      if (dm.ok) dm.metodos.forEach(m => { metodosHabilitados[m.codigo] = {catalogo_id: m.id, activo: m.activo}; });
+    } catch(e) { /* silencioso */ }
+  }
 
   try {
     const r = await fetch(`${BASE}/parametros`);
@@ -695,9 +705,11 @@ function agregarLineaParam() {
              class="border rounded px-2 py-1 text-xs w-28 hidden">
       <input type="text" id="nl-formula-${lid}" placeholder="Ej: total_bruto * 0.19"
              class="border rounded px-2 py-1 text-xs w-48 hidden" autocomplete="off">
-      <select id="nl-variable-${lid}" class="border rounded px-1 py-1 text-xs w-full hidden">
+      <select id="nl-variable-${lid}" class="border rounded px-1 py-1 text-xs w-full hidden" onchange="onVariableChange('${lid}')">
+        <option value="">— seleccionar —</option>
         ${variablesOpts}
       </select>
+      <span id="nl-var-badge-${lid}" class="mt-1 block text-xs"></span>
       ${moduloLabel}
     </td>
     <td class="px-3 py-2 text-right">
@@ -715,6 +727,39 @@ function onOrigenChange(lid) {
   document.getElementById(`nl-valor-${lid}`).classList.toggle('hidden', origen !== 'F');
   document.getElementById(`nl-formula-${lid}`).classList.toggle('hidden', origen !== 'C');
   document.getElementById(`nl-variable-${lid}`).classList.toggle('hidden', origen !== 'H');
+  if (origen !== 'H') document.getElementById(`nl-var-badge-${lid}`).innerHTML = '';
+}
+
+function onVariableChange(lid) {
+  const sel = document.getElementById(`nl-variable-${lid}`);
+  const badge = document.getElementById(`nl-var-badge-${lid}`);
+  if (!sel || !badge) return;
+  const vid = parseInt(sel.value);
+  const v = variablesData.find(x => x.id === vid);
+  if (!v || TIPO !== 'tienda') { badge.innerHTML = ''; return; }
+  const m = metodosHabilitados[v.codigo];
+  if (!m) { badge.innerHTML = ''; return; } // no es método de pago
+  if (m.activo) {
+    badge.innerHTML = '<span class="text-green-600 font-semibold">✅ Habilitado en POS</span>';
+  } else {
+    badge.innerHTML = `<span class="text-amber-600 font-semibold">⚠️ No habilitado en POS — </span><button onclick="habilitarMetodoPago('${lid}', ${m.catalogo_id}, '${v.codigo}')" class="text-amber-700 underline font-bold text-xs hover:text-amber-900">Habilitar</button>`;
+  }
+}
+
+async function habilitarMetodoPago(lid, catalogoId, codigo) {
+  try {
+    const r = await fetch(`/api/admin/tienda/${SLUG}/metodos-pago/${catalogoId}/toggle`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({activo: true})
+    });
+    const d = await r.json();
+    if (!d.ok) { toast('Error al habilitar: ' + d.error, false); return; }
+    metodosHabilitados[codigo].activo = true;
+    const badge = document.getElementById(`nl-var-badge-${lid}`);
+    if (badge) badge.innerHTML = '<span class="text-green-600 font-semibold">✅ Habilitado en POS</span>';
+    toast('Método habilitado en POS');
+  } catch(e) { toast('Error de red', false); }
 }
 
 function _posicionarSugg(lid) {

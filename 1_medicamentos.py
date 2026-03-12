@@ -28334,7 +28334,7 @@ def api_tienda_pedido_crear(slug):
         if tipo_entrega == 'caja':
             try:
                 _ejecutar_asiento_automatico(
-                    conn, tienda['id'], 'tienda', 'VENTA',
+                    conn, tienda['id'], 'tienda', 'VENTA_POS',
                     {'subtotal_venta': subtotal_venta, 'iva_venta': iva_venta, 'total_venta': total},
                     registrado_por=id_tercero_cajero or session.get('usuario_id'),
                     descripcion_override=f'Venta caja #{pedido_id}'
@@ -28648,7 +28648,7 @@ def api_tienda_pedido_estado(slug, pedido_id):
                     total_ent = float(pedido['total'] or 0)
                     subtotal_ent = total_ent - iva_ent
                     _ejecutar_asiento_automatico(
-                        conn, tienda['id'], 'tienda', 'VENTA',
+                        conn, tienda['id'], 'tienda', 'VENTA_DOM',
                         {'subtotal_venta': subtotal_ent, 'iva_venta': iva_ent, 'total_venta': total_ent},
                         registrado_por=session.get('usuario_id'),
                         descripcion_override=f'Entrega pedido #{pedido_id}'
@@ -30526,32 +30526,48 @@ def crear_tablas_contabilidad(conn):
 
 def _seed_variables_contables(conn):
     """
-    Variables que cada módulo expone al motor contable.
-    Estos datos son definidos por el desarrollo (hardcoded aquí) y deben
-    aparecer pre-cargados en /admin/contabilidad/variables-modulos para
-    que el admin TUC TUC los gestione sin tener que inventarlos.
-    Idempotente: ON CONFLICT DO NOTHING.
+    Variables que cada fuente/módulo expone al motor contable.
+    Fuentes:
+      ventas_pos        → tienda, ventas por caja POS (tipo_doc VENTA_POS)
+      ventas_domicilio  → tienda, pedidos entregados URL pública (tipo_doc VENTA_DOM)
+      compras_tienda    → tienda, entradas de inventario (tipo_doc COMPRA)
+      ventas_restaurante→ restaurante, cobro de mesa (tipo_doc VENTA)
+    Idempotente: ON CONFLICT (modulo, codigo) DO UPDATE mantiene descripciones vigentes.
+    Migración: elimina entradas genéricas antiguas ('tienda', 'restaurante') que fueron
+    reemplazadas por los nombres de fuente específicos.
     """
+    # Migración: limpiar nombres genéricos obsoletos
+    conn.execute("""
+        DELETE FROM modulo_variables_contables
+        WHERE modulo IN ('tienda', 'restaurante')
+    """)
+
     variables = [
-        # módulo        código                descripción                                 orden
-        # tienda — VENTA
-        ('tienda',      'subtotal_venta',    'Subtotal de la venta (sin IVA)',            1),
-        ('tienda',      'iva_venta',         'IVA de la venta',                           2),
-        ('tienda',      'total_venta',       'Total de la venta (con IVA)',               3),
-        # tienda — COMPRA
-        ('tienda',      'subtotal_compra',   'Subtotal de la compra (sin IVA)',            4),
-        ('tienda',      'iva_compra',        'IVA de la compra',                           5),
-        ('tienda',      'total_compra',      'Total de la compra (con IVA)',               6),
-        # restaurante — VENTA
-        ('restaurante', 'subtotal_venta',    'Subtotal cobrado en mesa (sin IVA)',          1),
-        ('restaurante', 'iva_venta',         'IVA cobrado en mesa',                        2),
-        ('restaurante', 'total_venta',       'Total cobrado en mesa (con IVA)',             3),
+        # fuente               código               descripción                                  orden
+        # Ventas POS — tipo_doc VENTA_POS
+        ('ventas_pos',        'subtotal_venta',    'Subtotal venta POS (sin IVA)',               1),
+        ('ventas_pos',        'iva_venta',         'IVA venta POS',                             2),
+        ('ventas_pos',        'total_venta',       'Total venta POS (con IVA)',                  3),
+        # Ventas domicilio/URL pública — tipo_doc VENTA_DOM
+        ('ventas_domicilio',  'subtotal_venta',    'Subtotal venta domicilio (sin IVA)',          1),
+        ('ventas_domicilio',  'iva_venta',         'IVA venta domicilio',                        2),
+        ('ventas_domicilio',  'total_venta',       'Total venta domicilio (con IVA)',             3),
+        # Compras / entrada inventario tienda — tipo_doc COMPRA
+        ('compras_tienda',    'subtotal_compra',   'Subtotal compra / entrada inventario (sin IVA)', 1),
+        ('compras_tienda',    'iva_compra',        'IVA compra / entrada inventario',            2),
+        ('compras_tienda',    'total_compra',      'Total compra / entrada inventario (con IVA)', 3),
+        # Ventas restaurante — cobro de mesa — tipo_doc VENTA
+        ('ventas_restaurante','subtotal_venta',    'Subtotal cobrado en mesa (sin IVA)',          1),
+        ('ventas_restaurante','iva_venta',         'IVA cobrado en mesa',                        2),
+        ('ventas_restaurante','total_venta',       'Total cobrado en mesa (con IVA)',             3),
     ]
     for modulo, codigo, descripcion, orden in variables:
         conn.execute("""
             INSERT INTO modulo_variables_contables (modulo, codigo, descripcion, orden, activo)
             VALUES (%s, %s, %s, %s, TRUE)
-            ON CONFLICT (modulo, codigo) DO NOTHING
+            ON CONFLICT (modulo, codigo) DO UPDATE
+                SET descripcion = EXCLUDED.descripcion,
+                    orden       = EXCLUDED.orden
         """, (modulo, codigo, descripcion, orden))
     conn.commit()
 

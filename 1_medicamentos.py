@@ -1344,24 +1344,87 @@ def verificar_y_enviar_recordatorios():
 
 def verificar_domotica_scheduler():
     """
-    Scheduler: controla switches Tuya por horario cuando el laptop está offline.
-    Si un dispositivo no ha reportado en los últimos 15 min → aplica lógica de hora:
-      - Dentro del horario pico → encender
-      - Fuera del horario pico  → apagar
-    Si reportó recientemente, se omite (el script local lo maneja con la batería real).
+    Scheduler: corre cada 5 min. Maneja tres casos:
+    1. Temporizadores: apaga switches cuyo apagar_en ya llegó
+    2. Programaciones: ejecuta encender/apagar según hora+dia configurados
+    3. Automatizaciones por batería (horario solar): solo cuando laptop está offline
     """
     from datetime import datetime, timedelta
     try:
         conn = get_db_connection()
-        hora = datetime.now().hour
+        crear_tablas_domotica(conn)
+        ahora = datetime.now()
+        hora = ahora.hour
+        minuto = ahora.minute
+        dia_semana = ahora.weekday()  # 0=Lun, 6=Dom
+        acciones_total = 0
+
+        # ── 1. TEMPORIZADORES ──────────────────────────────────────────
+        vencidos = conn.execute(
+            "SELECT ss.*, sd.id as dev_id, sd.nombre as dev_nombre "
+            "FROM smart_switches ss JOIN smart_dispositivos sd ON sd.id=ss.id_dispositivo "
+            "WHERE ss.apagar_en IS NOT NULL AND ss.apagar_en <= NOW() AND ss.activo=TRUE"
+        ).fetchall()
+        for sw in vencidos:
+            ok = _dom_controlar_tuya(sw['tuya_device_id'], False)
+            conn.execute(
+                "UPDATE smart_switches SET estado_actual=FALSE, apagar_en=NULL, ultima_accion=NOW() WHERE id=%s",
+                (sw['id'],)
+            )
+            conn.execute(
+                "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon) VALUES (%s,%s,'scheduler','apagado','temporizador vencido')",
+                (sw['dev_id'], sw['id'])
+            )
+            conn.commit()
+            acciones_total += 1
+            print(f"[TIMER] {sw['dev_nombre']}/{sw['nombre']}: apagado por temporizador")
+
+        # ── 2. PROGRAMACIONES ──────────────────────────────────────────
+        # Ventana: la programación coincide si su hora:minuto cayó dentro de los últimos 5 min
+        progs = conn.execute(
+            "SELECT sp.*, ss.tuya_device_id, ss.nombre as sw_nombre, ss.estado_actual, "
+            "       sd.id as dev_id, sd.nombre as dev_nombre "
+            "FROM smart_programaciones sp "
+            "JOIN smart_switches ss ON ss.id=sp.id_switch "
+            "JOIN smart_dispositivos sd ON sd.id=ss.id_dispositivo "
+            "WHERE sp.activa=TRUE AND ss.activo=TRUE AND sp.hora=%s "
+            "  AND sp.minuto <= %s AND sp.minuto > %s "
+            "  AND (sp.ultima_ejecucion IS NULL OR sp.ultima_ejecucion < NOW() - INTERVAL '4 minutes')",
+            (hora, minuto, minuto - 5)
+        ).fetchall()
+        for p in progs:
+            # Verificar que hoy es uno de los días configurados
+            dias_config = [int(x) for x in (p['dias'] or '0,1,2,3,4,5,6').split(',') if x.strip()]
+            if dia_semana not in dias_config:
+                continue
+            desired = (p['accion'] == 'encender')
+            if desired == p['estado_actual']:
+                # Ya está en el estado correcto, solo actualizar ultima_ejecucion
+                conn.execute("UPDATE smart_programaciones SET ultima_ejecucion=NOW() WHERE id=%s", (p['id'],))
+                conn.commit()
+                continue
+            ok = _dom_controlar_tuya(p['tuya_device_id'], desired)
+            if ok:
+                conn.execute(
+                    "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
+                    (desired, p['id_switch'])
+                )
+                conn.execute(
+                    "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon) VALUES (%s,%s,'scheduler',%s,%s)",
+                    (p['dev_id'], p['id_switch'], p['accion'], f'programación {hora:02d}:{p["minuto"]:02d}')
+                )
+            conn.execute("UPDATE smart_programaciones SET ultima_ejecucion=NOW() WHERE id=%s", (p['id'],))
+            conn.commit()
+            acciones_total += 1
+            print(f"[PROG] {p['dev_nombre']}/{p['sw_nombre']}: {p['accion']} a las {hora:02d}:{p['minuto']:02d}")
+
+        # ── 3. AUTOMATIZACIONES BATERÍA (solo laptop offline) ──────────
         devs = conn.execute(
             "SELECT * FROM smart_dispositivos WHERE activo=TRUE"
         ).fetchall()
-        acciones_total = 0
         for dev in devs:
-            # Saltar si tiene lectura reciente (< 15 min) — el script local lo maneja
             if dev['ultima_lectura']:
-                diff = datetime.now() - dev['ultima_lectura']
+                diff = ahora - dev['ultima_lectura']
                 if diff.total_seconds() < 900:
                     continue
             switches = conn.execute(
@@ -1376,7 +1439,7 @@ def verificar_domotica_scheduler():
                 if not auto:
                     continue
                 en_pico = auto['hora_inicio'] <= hora < auto['hora_fin']
-                desired = en_pico  # sin batería: encender en pico, apagar fuera
+                desired = en_pico
                 if desired == sw['estado_actual']:
                     continue
                 ok = _dom_controlar_tuya(sw['tuya_device_id'], desired)
@@ -1392,10 +1455,11 @@ def verificar_domotica_scheduler():
                     )
                     conn.commit()
                     acciones_total += 1
-                    print(f"[DOMOTICA-SCHEDULER] {dev['nombre']}/{sw['nombre']}: {'ON' if desired else 'OFF'} ({razon})")
+                    print(f"[BAT-SCHEDULER] {dev['nombre']}/{sw['nombre']}: {'ON' if desired else 'OFF'} ({razon})")
+
         conn.close()
         if acciones_total == 0:
-            print(f"[DOMOTICA-SCHEDULER] hora {hora}h — sin cambios")
+            print(f"[DOMOTICA-SCHEDULER] {hora:02d}:{minuto:02d} — sin cambios")
     except Exception as e:
         try:
             conn.rollback()
@@ -36373,6 +36437,18 @@ def crear_tablas_domotica(conn):
         )""",
         "ALTER TABLE smart_dispositivos ADD COLUMN IF NOT EXISTS script_version VARCHAR(20)",
         "ALTER TABLE smart_switches ADD COLUMN IF NOT EXISTS imagen TEXT",
+        "ALTER TABLE smart_switches ADD COLUMN IF NOT EXISTS apagar_en TIMESTAMP",
+        """CREATE TABLE IF NOT EXISTS smart_programaciones (
+            id SERIAL PRIMARY KEY,
+            id_switch INTEGER NOT NULL,
+            hora INTEGER NOT NULL,
+            minuto INTEGER NOT NULL DEFAULT 0,
+            dias VARCHAR(20) NOT NULL DEFAULT '0,1,2,3,4,5,6',
+            accion VARCHAR(10) NOT NULL DEFAULT 'encender',
+            activa BOOLEAN DEFAULT TRUE,
+            ultima_ejecucion TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
     for sql in sqls:
         try:
@@ -36501,6 +36577,10 @@ def api_domotica_dispositivos(pid):
                     "SELECT * FROM smart_automatizaciones WHERE id_switch=%s ORDER BY id", (sw['id'],)
                 ).fetchall()
                 sw['automatizaciones'] = [dict(a) for a in autos]
+                progs = conn.execute(
+                    "SELECT * FROM smart_programaciones WHERE id_switch=%s ORDER BY hora, minuto", (sw['id'],)
+                ).fetchall()
+                sw['programaciones'] = [dict(p) for p in progs]
                 sw_list.append(sw)
             d['switches'] = sw_list
             result.append(d)
@@ -36735,6 +36815,128 @@ def api_domotica_automatizacion_eliminar(aid):
     try:
         conn = get_db_connection()
         conn.execute("DELETE FROM smart_automatizaciones WHERE id=%s", (aid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── TEMPORIZADOR ───────────
+
+@app.route('/api/domotica/switch/<int:sid>/temporizador', methods=['POST'])
+def api_domotica_switch_temporizador(sid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    minutos = int(data.get('minutos', 0))
+    if minutos <= 0:
+        return jsonify({'ok': False, 'error': 'Minutos inválidos'})
+    try:
+        conn = get_db_connection()
+        sw = conn.execute("SELECT * FROM smart_switches WHERE id=%s", (sid,)).fetchone()
+        if not sw:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Switch no encontrado'})
+        ok = _dom_controlar_tuya(sw['tuya_device_id'], True)
+        conn.execute(
+            "UPDATE smart_switches SET estado_actual=TRUE, apagar_en=NOW() + INTERVAL '%s minutes', ultima_accion=NOW() WHERE id=%s",
+            (minutos, sid)
+        )
+        conn.commit()
+        # Leer apagar_en para devolver al frontend
+        row = conn.execute("SELECT apagar_en FROM smart_switches WHERE id=%s", (sid,)).fetchone()
+        conn.close()
+        return jsonify({'ok': True, 'apagar_en': str(row['apagar_en']) if row['apagar_en'] else None})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/switch/<int:sid>/temporizador/cancelar', methods=['POST'])
+def api_domotica_switch_temporizador_cancelar(sid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE smart_switches SET apagar_en=NULL WHERE id=%s", (sid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ─────────── PROGRAMACIONES ───────────
+
+@app.route('/api/domotica/programacion/crear', methods=['POST'])
+def api_domotica_programacion_crear():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    id_switch = data.get('id_switch')
+    hora = data.get('hora')
+    minuto = int(data.get('minuto', 0))
+    dias = (data.get('dias') or '0,1,2,3,4,5,6').strip()
+    accion = data.get('accion', 'encender')
+    if id_switch is None or hora is None:
+        return jsonify({'ok': False, 'error': 'id_switch y hora son requeridos'})
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        row = conn.execute(
+            "INSERT INTO smart_programaciones (id_switch, hora, minuto, dias, accion) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (id_switch, int(hora), minuto, dias, accion)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/programacion/<int:pid>/editar', methods=['POST'])
+def api_domotica_programacion_editar(pid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json()
+    campos = {}
+    for f in ('hora', 'minuto', 'dias', 'accion', 'activa'):
+        if f in data:
+            campos[f] = data[f]
+    if not campos:
+        return jsonify({'ok': False, 'error': 'Nada que actualizar'})
+    sets = ', '.join(f'{k}=%s' for k in campos)
+    vals = list(campos.values()) + [pid]
+    try:
+        conn = get_db_connection()
+        conn.execute(f"UPDATE smart_programaciones SET {sets} WHERE id=%s", vals)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/programacion/<int:pid>/eliminar', methods=['POST'])
+def api_domotica_programacion_eliminar(pid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM smart_programaciones WHERE id=%s", (pid,))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

@@ -1033,8 +1033,9 @@ function copiarPromptSwitch(modo) {
     ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo blanco o transparente, colores vibrantes, para panel de control domótico en web. Solo el ícono, sin texto ni sombras.`
     : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo transparente, formas y líneas en colores claros pensados para fondo oscuro #1e293b, para panel de control domótico en web. Solo el ícono, sin texto ni sombras.`;
   navigator.clipboard.writeText(prompt).then(() => {
-    toast('Prompt copiado — pégalo en ChatGPT con Ctrl+V');
+    toast('Prompt copiado — abriendo ChatGPT...');
     document.getElementById('sw-prompt-menu').classList.add('hidden');
+    window.open('https://chatgpt.com', '_blank');
   });
 }
 

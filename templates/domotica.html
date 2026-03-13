@@ -161,6 +161,38 @@
     </div>
   </div>
 
+  <!-- AUTOMATIZACIONES -->
+  <div class="card p-4 space-y-3">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="font-bold text-gray-800 text-sm">Automatizaciones</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Reglas contextuales · presencia + temperatura + hora</p>
+      </div>
+      <button type="button" id="btn-master-reglas" onclick="toggleMasterReglas()"
+              class="toggle-btn on"></button>
+    </div>
+
+    <!-- Contexto actual -->
+    <div id="ctx-automatizaciones" class="bg-gray-50 rounded-xl p-3 space-y-1.5 text-xs">
+      <div class="flex items-center justify-between">
+        <span class="text-gray-500">💻 Laptop / Presencia oficina</span>
+        <span id="ctx-laptop" class="font-semibold text-gray-400">—</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-gray-500">🌡️ Temperatura Cali</span>
+        <span id="ctx-temp" class="font-semibold text-gray-400">—</span>
+      </div>
+    </div>
+
+    <!-- Lista de reglas -->
+    <div id="lista-reglas" class="space-y-2"></div>
+
+    <!-- Botón agregar regla -->
+    <button onclick="abrirModalRegla()" class="w-full text-xs text-indigo-600 font-semibold py-2 border border-dashed border-indigo-300 rounded-xl hover:bg-indigo-50 transition">
+      + Nueva regla
+    </button>
+  </div>
+
   <!-- LISTA DISPOSITIVOS -->
   <div id="lista-dispositivos" class="space-y-4"></div>
 
@@ -351,6 +383,84 @@
   </div>
 </div>
 
+
+<!-- ═══════ MODAL: REGLA DE AUTOMATIZACIÓN ═══════ -->
+<div id="modal-regla" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4">
+    <h3 id="modal-regla-titulo" class="font-bold text-gray-800">Nueva regla</h3>
+
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs text-gray-500 font-semibold block mb-1">Nombre</label>
+        <input id="regla-nombre" type="text" placeholder="Ej: Ventilador oficina por calor"
+               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      </div>
+
+      <div class="bg-indigo-50 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-indigo-700">Condición 1 (requerida)</p>
+        <div class="flex gap-2">
+          <select id="regla-cond1-tipo" onchange="actualizarPlaceholderCond(1)"
+                  class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+            <option value="presencia">Presencia</option>
+            <option value="temperatura">Temperatura</option>
+            <option value="hora">Hora</option>
+          </select>
+          <select id="regla-cond1-op" class="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+            <option value="=">=</option>
+            <option value=">">&gt;</option>
+            <option value=">=">&gt;=</option>
+            <option value="<">&lt;</option>
+            <option value="<=">&lt;=</option>
+          </select>
+          <input id="regla-cond1-val" type="text" placeholder="oficina"
+                 class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+        </div>
+      </div>
+
+      <div class="bg-gray-50 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-gray-500">Condición 2 (opcional)</p>
+        <div class="flex gap-2">
+          <select id="regla-cond2-tipo" onchange="actualizarPlaceholderCond(2)"
+                  class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+            <option value="">— ninguna —</option>
+            <option value="presencia">Presencia</option>
+            <option value="temperatura">Temperatura</option>
+            <option value="hora">Hora</option>
+          </select>
+          <select id="regla-cond2-op" class="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+            <option value="=">=</option>
+            <option value=">">&gt;</option>
+            <option value=">=">&gt;=</option>
+            <option value="<">&lt;</option>
+            <option value="<=">&lt;=</option>
+          </select>
+          <input id="regla-cond2-val" type="text" placeholder=""
+                 class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+        </div>
+      </div>
+
+      <div class="bg-green-50 rounded-xl p-3 space-y-2">
+        <p class="text-xs font-semibold text-green-700">Acción</p>
+        <div class="flex gap-2 items-center">
+          <select id="regla-switch" class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+            <option value="">Seleccionar switch...</option>
+          </select>
+          <select id="regla-accion" class="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+            <option value="true">Encender</option>
+            <option value="false">Apagar</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-2 pt-1">
+      <button onclick="cerrarModal('modal-regla')"
+              class="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-600 font-semibold">Cancelar</button>
+      <button onclick="guardarRegla()"
+              class="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">Guardar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════ MODAL: NUEVO / EDITAR SWITCH ═══════ -->
 <div id="modal-switch" class="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center hidden">
@@ -1536,6 +1646,192 @@ setInterval(async () => {
 
 // Animar barras tras carga inicial
 document.addEventListener('DOMContentLoaded', () => setTimeout(animarBarras, 200));
+
+// ─── AUTOMATIZACIONES ──────────────────────────────────────────────
+let _reglaEditandoId = null;
+let _switchesCache = [];
+
+async function cargarContextoReglas() {
+  try {
+    const r = await fetch('/api/domotica/reglas/contexto');
+    const d = await r.json();
+    if (!d.ok) return;
+
+    // Master switch
+    const btn = document.getElementById('btn-master-reglas');
+    if (btn) btn.className = 'toggle-btn ' + (d.reglas_activas ? 'on' : 'off');
+
+    // Laptop presencia
+    const ctxL = document.getElementById('ctx-laptop');
+    if (ctxL) {
+      if (d.laptop_activa) {
+        ctxL.textContent = `✅ Activo (hace ${d.laptop_hace_min} min)`;
+        ctxL.className = 'font-semibold text-green-600';
+      } else if (d.laptop_last_seen) {
+        ctxL.textContent = `⚫ Ausente (hace ${d.laptop_hace_min} min)`;
+        ctxL.className = 'font-semibold text-gray-400';
+      } else {
+        ctxL.textContent = '⚫ Sin señal aún';
+        ctxL.className = 'font-semibold text-gray-400';
+      }
+    }
+
+    // Temperatura
+    const ctxT = document.getElementById('ctx-temp');
+    if (ctxT) {
+      ctxT.textContent = d.temperatura !== null ? `${d.temperatura}°C` : '—';
+      ctxT.className = 'font-semibold ' + (d.temperatura !== null ? 'text-orange-500' : 'text-gray-400');
+    }
+
+  } catch(e) {}
+}
+
+async function cargarReglas() {
+  try {
+    const r = await fetch('/api/domotica/reglas');
+    const d = await r.json();
+    if (!d.ok) return;
+    const cont = document.getElementById('lista-reglas');
+    if (!cont) return;
+    if (!d.reglas.length) {
+      cont.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin reglas configuradas</p>';
+      return;
+    }
+    const TIPO_LABEL = { presencia: '👤 Presencia', temperatura: '🌡️ Temp', hora: '🕐 Hora' };
+    cont.innerHTML = d.reglas.map(reg => `
+      <div class="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-semibold text-gray-800 truncate">${reg.nombre}</p>
+          <p class="text-xs text-gray-400 truncate">
+            ${TIPO_LABEL[reg.cond1_tipo]||reg.cond1_tipo} ${reg.cond1_operador} ${reg.cond1_valor}
+            ${reg.cond2_tipo ? ` · ${TIPO_LABEL[reg.cond2_tipo]||reg.cond2_tipo} ${reg.cond2_operador} ${reg.cond2_valor}` : ''}
+            → ${reg.switch_nombre||'?'} ${reg.accion_estado ? 'ON' : 'OFF'}
+          </p>
+          ${reg.ultima_ejecucion ? `<p class="text-xs text-indigo-400">Ejecutada: ${new Date(reg.ultima_ejecucion).toLocaleString('es-CO')}</p>` : ''}
+        </div>
+        <button onclick="toggleRegla(${reg.id}, ${!reg.habilitada})"
+                class="toggle-btn ${reg.habilitada ? 'on' : 'off'} shrink-0"></button>
+        <button onclick="abrirModalRegla(${reg.id})"
+                class="text-gray-400 hover:text-indigo-600 shrink-0 text-sm">✏️</button>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function toggleMasterReglas() {
+  try {
+    const r = await fetch('/api/domotica/reglas/master', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    const d = await r.json();
+    if (d.ok) {
+      const btn = document.getElementById('btn-master-reglas');
+      if (btn) btn.className = 'toggle-btn ' + (d.reglas_activas ? 'on' : 'off');
+      toast(d.reglas_activas ? 'Automatizaciones activadas' : 'Automatizaciones pausadas');
+    }
+  } catch(e) {}
+}
+
+async function toggleRegla(id, nuevoEstado) {
+  try {
+    await fetch(`/api/domotica/reglas/${id}/toggle`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    cargarReglas();
+  } catch(e) {}
+}
+
+async function abrirModalRegla(id) {
+  _reglaEditandoId = id || null;
+  document.getElementById('modal-regla-titulo').textContent = id ? 'Editar regla' : 'Nueva regla';
+
+  // Cargar switches disponibles en el select
+  const selSw = document.getElementById('regla-switch');
+  if (_switchesCache.length === 0) {
+    try {
+      const r = await fetch('/api/domotica/reglas/contexto');
+      // Fallback: buscar switches de la lista de dispositivos cacheada
+    } catch(e) {}
+  }
+  // Poblar switches desde cache de dispositivos
+  selSw.innerHTML = '<option value="">Seleccionar switch...</option>';
+  for (const dev of _panelDispositivosCache) {
+    for (const sw of (dev.dispositivos||[])) {
+      for (const s of (sw.switches||[])) {
+        selSw.innerHTML += `<option value="${s.id}">${s.nombre}</option>`;
+      }
+    }
+  }
+
+  if (id) {
+    try {
+      const r = await fetch('/api/domotica/reglas');
+      const d = await r.json();
+      const reg = d.reglas.find(x => x.id === id);
+      if (reg) {
+        document.getElementById('regla-nombre').value = reg.nombre;
+        document.getElementById('regla-cond1-tipo').value = reg.cond1_tipo;
+        document.getElementById('regla-cond1-op').value = reg.cond1_operador;
+        document.getElementById('regla-cond1-val').value = reg.cond1_valor;
+        document.getElementById('regla-cond2-tipo').value = reg.cond2_tipo || '';
+        document.getElementById('regla-cond2-op').value = reg.cond2_operador || '=';
+        document.getElementById('regla-cond2-val').value = reg.cond2_valor || '';
+        document.getElementById('regla-switch').value = reg.accion_switch_id;
+        document.getElementById('regla-accion').value = reg.accion_estado ? 'true' : 'false';
+      }
+    } catch(e) {}
+  } else {
+    document.getElementById('regla-nombre').value = '';
+    document.getElementById('regla-cond1-tipo').value = 'presencia';
+    document.getElementById('regla-cond1-op').value = '=';
+    document.getElementById('regla-cond1-val').value = 'oficina';
+    document.getElementById('regla-cond2-tipo').value = 'temperatura';
+    document.getElementById('regla-cond2-op').value = '>';
+    document.getElementById('regla-cond2-val').value = '21';
+    document.getElementById('regla-switch').value = '';
+    document.getElementById('regla-accion').value = 'true';
+  }
+
+  document.getElementById('modal-regla').classList.remove('hidden');
+}
+
+function actualizarPlaceholderCond(n) {
+  const tipo = document.getElementById(`regla-cond${n}-tipo`).value;
+  const valInput = document.getElementById(`regla-cond${n}-val`);
+  const placeholders = { presencia: 'oficina', temperatura: '21', hora: '22:00' };
+  valInput.placeholder = placeholders[tipo] || '';
+}
+
+async function guardarRegla() {
+  const nombre = document.getElementById('regla-nombre').value.trim();
+  if (!nombre) { toast('Falta el nombre', 'err'); return; }
+  const cond2tipo = document.getElementById('regla-cond2-tipo').value;
+  const body = {
+    nombre,
+    cond1_tipo: document.getElementById('regla-cond1-tipo').value,
+    cond1_operador: document.getElementById('regla-cond1-op').value,
+    cond1_valor: document.getElementById('regla-cond1-val').value.trim(),
+    cond2_tipo: cond2tipo || null,
+    cond2_operador: cond2tipo ? document.getElementById('regla-cond2-op').value : null,
+    cond2_valor: cond2tipo ? document.getElementById('regla-cond2-val').value.trim() : null,
+    accion_switch_id: parseInt(document.getElementById('regla-switch').value),
+    accion_estado: document.getElementById('regla-accion').value === 'true'
+  };
+  if (!body.accion_switch_id) { toast('Seleccioná un switch', 'err'); return; }
+  try {
+    const url = _reglaEditandoId ? `/api/domotica/reglas/${_reglaEditandoId}/editar` : '/api/domotica/reglas/crear';
+    const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) {
+      cerrarModal('modal-regla');
+      cargarReglas();
+      toast('Regla guardada ✓');
+    } else {
+      toast(d.error || 'Error al guardar', 'err');
+    }
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// Cargar al iniciar
+cargarContextoReglas();
+cargarReglas();
+// Refrescar contexto cada 2 min
+setInterval(cargarContextoReglas, 120000);
 </script>
 </body>
 </html>

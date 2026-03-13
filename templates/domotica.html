@@ -112,7 +112,7 @@
     </a>
     <div class="flex-1">
       <h1 class="font-extrabold text-gray-800 text-lg leading-tight">Domótica</h1>
-      <p class="text-xs text-gray-400">Dispositivos inteligentes TUC TUC</p>
+      <p class="text-xs text-gray-400">Dispositivos inteligentes · <span id="clima-cali">—</span></p>
     </div>
     <button onclick="toggleDarkMode()" id="btn-dark" title="Modo oscuro/claro"
             class="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 transition text-lg leading-none">☀️</button>
@@ -569,6 +569,20 @@ function toggleDarkMode() {
   const dark = document.documentElement.classList.contains('dark');
   const btn = document.getElementById('btn-dark');
   if (btn) btn.textContent = dark ? '🌙' : '☀️';
+})();
+
+// ─── CLIMA CALI ───
+(async function() {
+  const WMO = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',71:'🌨️',73:'🌨️',75:'🌨️',80:'🌦️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=3.4516&longitude=-76.5320&current=temperature_2m,weathercode,relativehumidity_2m&timezone=America%2FBogota&forecast_days=1');
+    const d = await r.json();
+    const c = d.current;
+    const emoji = WMO[c.weathercode] || '🌡️';
+    const temp = Math.round(c.temperature_2m);
+    const hum = c.relativehumidity_2m;
+    document.getElementById('clima-cali').textContent = `${emoji} Cali ${temp}°C · 💧${hum}%`;
+  } catch(e) { /* silencioso si falla */ }
 })();
 
 // ─── PANEL DE CONTROL ───

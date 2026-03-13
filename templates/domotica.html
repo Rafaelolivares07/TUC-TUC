@@ -1108,6 +1108,17 @@ function limpiarImagenSwitch() {
   document.getElementById('sw-imagen-preview').classList.add('hidden');
 }
 
+function _abrirChatGPT() {
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) {
+    // Intent URL: abre la app si está instalada, si no cae al navegador
+    window.location.href = 'intent://chatgpt.com/#Intent;scheme=https;package=com.openai.chatgpt;S.browser_fallback_url=https%3A%2F%2Fchatgpt.com;end';
+  } else {
+    // iOS universal link (abre la app si está) o navegador desktop
+    window.open('https://chatgpt.com', '_blank');
+  }
+}
+
 function copiarPromptSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim() || 'electrodoméstico';
   const oscuro = document.documentElement.classList.contains('dark');
@@ -1120,7 +1131,7 @@ function copiarPromptSwitch() {
     : `Genera un ícono PNG de ${nombre}, 512x512px, fondo transparente. El ícono debe llenar el canvas completo sin márgenes ni bordes en blanco — ocupar el 100% del área disponible. Estilo flat minimalista. Colores oscuros y saturados (azul marino, índigo, grafito, verde oscuro — sin pasteles ni colores pálidos), alto contraste. Sin sombras${textoExtra}.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
-    window.open('https://chatgpt.com', '_blank');
+    _abrirChatGPT();
   });
 }
 

@@ -38709,6 +38709,26 @@ def api_contabilidad_asiento_automatico(tipo, slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# Fix de startup: requerimientos.id sin secuencia en producción
+# Corre siempre que Gunicorn importa el módulo
+try:
+    with app.app_context():
+        _conn = get_db_connection()
+        for _sql in [
+            "CREATE SEQUENCE IF NOT EXISTS requerimientos_id_seq",
+            "ALTER TABLE requerimientos ALTER COLUMN id SET DEFAULT nextval('requerimientos_id_seq')",
+            "SELECT setval('requerimientos_id_seq', COALESCE((SELECT MAX(id) FROM requerimientos), 0) + 1, false)",
+        ]:
+            try:
+                _conn.execute(_sql)
+                _conn.commit()
+            except Exception:
+                _conn.rollback()
+        _conn.close()
+except Exception:
+    pass
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

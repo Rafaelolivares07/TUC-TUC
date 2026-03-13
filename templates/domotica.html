@@ -59,21 +59,21 @@
   .dia-btn:hover { border-color:#6366f1; }
   .dia-btn.sel { border-color:#6366f1; background:#6366f1; color:white; }
   /* Panel de control */
-  .ctrl-card { display:flex; flex-direction:row; align-items:center; gap:16px;
-               padding:14px 18px; background:white; border-radius:20px;
-               box-shadow:0 2px 8px rgba(0,0,0,.08); cursor:pointer; transition:all .15s;
-               border-left:6px solid #e2e8f0; user-select:none; -webkit-user-select:none; }
-  .ctrl-card:active { transform:scale(.97); }
-  .ctrl-card.on  { border-left-color:#059669; background:#f0fdf4; }
-  .ctrl-card.off { border-left-color:#e2e8f0; }
-  .ctrl-card .ctrl-icon { width:72px; height:72px; flex-shrink:0; display:flex;
-                          align-items:center; justify-content:center; font-size:3rem;
-                          border-radius:16px; overflow:hidden; }
+  .ctrl-card { display:flex; flex-direction:column; align-items:center; justify-content:center;
+               gap:10px; padding:20px 16px; background:white; border-radius:24px;
+               box-shadow:0 2px 10px rgba(0,0,0,.09); cursor:pointer; transition:all .15s;
+               border:3px solid transparent; user-select:none; -webkit-user-select:none; }
+  .ctrl-card:active { transform:scale(.95); }
+  .ctrl-card.on  { border-color:#00ff88; background:#f0fdf4; box-shadow:0 0 14px rgba(0,255,136,.35); }
+  .ctrl-card.off { border-color:#e2e8f0; }
+  .ctrl-card .ctrl-icon { width:100px; height:100px; display:flex; align-items:center;
+                          justify-content:center; font-size:5rem; border-radius:22px;
+                          overflow:hidden; }
   .ctrl-card.on  .ctrl-icon { background:#dcfce7; }
   .ctrl-card.off .ctrl-icon { background:#f1f5f9; }
   .ctrl-card .ctrl-icon img { width:100%; height:100%; object-fit:contain; }
-  .ctrl-card .ctrl-nombre { font-size:1.5rem; font-weight:800; color:#1e293b;
-                             line-height:1.2; flex:1; }
+  .ctrl-card .ctrl-nombre { font-size:1.4rem; font-weight:800; color:#1e293b;
+                             line-height:1.2; text-align:center; }
 
   /* ── DARK MODE ─────────────────────────────────────────── */
   .dark body { background:#0f172a; color:#f1f5f9; }
@@ -96,8 +96,8 @@
   .dark .log-row { border-color:#1e293b; }
   /* Panel dark */
   .dark .ctrl-card { background:#1e293b; }
-  .dark .ctrl-card.on { background:#064e3b; border-left-color:#059669; }
-  .dark .ctrl-card.off { border-left-color:#334155; }
+  .dark .ctrl-card.on { background:#064e3b; border-color:#00ff88; box-shadow:0 0 16px rgba(0,255,136,.4); }
+  .dark .ctrl-card.off { border-color:#334155; }
   .dark .ctrl-card .ctrl-nombre { color:#f1f5f9; }
   .dark .ctrl-card.on  .ctrl-icon { background:#065f46; }
   .dark .ctrl-card.off .ctrl-icon { background:#0f172a; }
@@ -622,15 +622,12 @@ function renderPanelGrid(dispositivos) {
     const countdown = sw.apagar_en ? fmtCountdown(sw.apagar_en) : null;
     const timerTag = countdown ? `<span style="font-size:.75rem;color:#f97316;font-weight:700">⏱ ${countdown}</span>` : '';
     const nombreTag = (sw.mostrar_nombre !== false)
-      ? `<span class="ctrl-nombre">${sw.nombre}${timerTag ? ' ' + timerTag : ''}</span>` : '';
-    const estadoTag = `<span style="font-size:.75rem;font-weight:600;color:${on?'#059669':'#94a3b8'}">${on?'Encendido':'Apagado'}</span>`;
+      ? `<span class="ctrl-nombre">${sw.nombre}</span>` : '';
     return `
     <div class="ctrl-card ${on ? 'on' : 'off'}" onclick="toggleDesdePanel(${sw.id}, ${!on})">
       <div class="ctrl-icon">${iconHtml}</div>
-      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
-        ${nombreTag}
-        ${estadoTag}
-      </div>
+      ${nombreTag}
+      ${timerTag}
     </div>`;
   }).join('');
 }

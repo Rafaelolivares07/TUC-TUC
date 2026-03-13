@@ -172,39 +172,25 @@
               class="toggle-btn on"></button>
     </div>
 
-    <!-- Contexto actual -->
-    <div id="ctx-automatizaciones" class="grid grid-cols-2 gap-2">
-      <div class="bg-gray-50 rounded-xl p-2">
-        <p class="text-xs text-gray-400">👤 Presencia</p>
-        <p id="ctx-laptop" class="text-xs font-semibold text-gray-400 mt-0.5 truncate">—</p>
-      </div>
-      <div class="bg-gray-50 rounded-xl p-2">
-        <p class="text-xs text-gray-400">🌡️ Temperatura</p>
-        <p id="ctx-temp" class="text-xs font-semibold text-gray-400 mt-0.5">—</p>
-      </div>
-    </div>
-
-    <!-- Config presencia (colapsable) -->
-    <div>
-      <button type="button" onclick="toggleConfigPresencia()"
-              class="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition">
-        <span id="cfg-presencia-chevron">▸</span> Configurar tiempos de presencia
-      </button>
-      <div id="cfg-presencia-panel" class="hidden mt-2 bg-gray-50 rounded-xl p-2 space-y-2">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="text-xs text-gray-400 block mb-1">Inactividad máx. (min)</label>
-            <input id="cfg-inactividad" type="number" min="1" max="60" value="5"
-                   class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-center bg-white">
-          </div>
-          <div>
-            <label class="text-xs text-gray-400 block mb-1">Ventana servidor (min)</label>
-            <input id="cfg-ventana" type="number" min="1" max="60" value="6"
-                   class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-center bg-white">
-          </div>
+    <!-- Contexto actual + config ausencia -->
+    <div class="bg-gray-50 rounded-xl p-2 space-y-2">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <p class="text-xs text-gray-400">👤 Presencia</p>
+          <p id="ctx-laptop" class="text-xs font-semibold text-gray-400 mt-0.5 truncate">—</p>
         </div>
+        <div>
+          <p class="text-xs text-gray-400">🌡️ Temperatura</p>
+          <p id="ctx-temp" class="text-xs font-semibold text-gray-400 mt-0.5">—</p>
+        </div>
+      </div>
+      <div class="border-t border-gray-200 pt-2 flex items-center gap-2">
+        <p class="text-xs text-gray-400 shrink-0">⏱️ Ausente tras</p>
+        <input id="cfg-ventana" type="number" min="1" max="60" value="6"
+               class="w-12 border border-gray-200 rounded-lg px-1 py-1 text-xs text-center bg-white">
+        <p class="text-xs text-gray-400 shrink-0">min sin actividad</p>
         <button onclick="guardarConfigPresencia()"
-                class="w-full text-xs bg-indigo-600 text-white py-1.5 rounded-lg hover:bg-indigo-700 transition font-semibold">
+                class="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition font-semibold shrink-0">
           Guardar
         </button>
       </div>
@@ -1903,28 +1889,17 @@ async function guardarRegla() {
   } catch(e) { toast('Error de red', 'err'); }
 }
 
-function toggleConfigPresencia() {
-  const panel = document.getElementById('cfg-presencia-panel');
-  const chev = document.getElementById('cfg-presencia-chevron');
-  const oculto = panel.classList.toggle('hidden');
-  chev.textContent = oculto ? '▸' : '▾';
-}
-
 async function guardarConfigPresencia() {
-  const inactividad = parseInt(document.getElementById('cfg-inactividad').value) || 5;
   const ventana = parseInt(document.getElementById('cfg-ventana').value) || 6;
   try {
     const r = await fetch('/api/domotica/config/presencia', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ inactividad_min: inactividad, ventana_min: ventana })
+      body: JSON.stringify({ inactividad_min: ventana, ventana_min: ventana })
     });
     const d = await r.json();
-    if (d.ok) {
-      toast('Tiempos guardados');
-      document.getElementById('cfg-presencia-panel').classList.add('hidden');
-      document.getElementById('cfg-presencia-chevron').textContent = '▸';
-    } else { toast('Error al guardar', 'error'); }
+    if (d.ok) toast('Tiempo guardado');
+    else toast('Error al guardar', 'error');
   } catch(e) { toast('Error al guardar', 'error'); }
 }
 

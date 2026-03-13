@@ -36438,6 +36438,7 @@ def crear_tablas_domotica(conn):
         "ALTER TABLE smart_dispositivos ADD COLUMN IF NOT EXISTS script_version VARCHAR(20)",
         "ALTER TABLE smart_switches ADD COLUMN IF NOT EXISTS imagen TEXT",
         "ALTER TABLE smart_switches ADD COLUMN IF NOT EXISTS apagar_en TIMESTAMP",
+        "ALTER TABLE smart_switches ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
         """CREATE TABLE IF NOT EXISTS smart_programaciones (
             id SERIAL PRIMARY KEY,
             id_switch INTEGER NOT NULL,
@@ -36673,14 +36674,15 @@ def api_domotica_switch_crear():
     id_dispositivo = data.get('id_dispositivo')
     tuya_device_id = (data.get('tuya_device_id') or '').strip()
     imagen = data.get('imagen') or None
+    mostrar_nombre = data.get('mostrar_nombre', True)
     if not nombre or not id_dispositivo:
         return jsonify({'ok': False, 'error': 'Nombre y dispositivo requeridos'})
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
         row = conn.execute(
-            "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id, imagen) VALUES (%s,%s,%s,%s) RETURNING id",
-            (id_dispositivo, nombre, tuya_device_id or None, imagen)
+            "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id, imagen, mostrar_nombre) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (id_dispositivo, nombre, tuya_device_id or None, imagen, bool(mostrar_nombre))
         ).fetchone()
         conn.commit()
         conn.close()
@@ -36702,6 +36704,8 @@ def api_domotica_switch_editar(sid):
             campos[f] = (data[f] or '').strip() or None
     if 'imagen' in data:
         campos['imagen'] = data['imagen'] or None
+    if 'mostrar_nombre' in data:
+        campos['mostrar_nombre'] = bool(data['mostrar_nombre'])
     if not campos:
         return jsonify({'ok': False, 'error': 'Nada que actualizar'})
     sets = ', '.join(f'{k}=%s' for k in campos)

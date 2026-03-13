@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Domótica — TUC TUC</title>
+<script>if(localStorage.getItem('dom_dark')==='1')document.documentElement.classList.add('dark');</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   body { font-family: system-ui, sans-serif; background: #f1f5f9; }
@@ -59,18 +60,43 @@
   .dia-btn.sel { border-color:#6366f1; background:#6366f1; color:white; }
   /* Panel de control */
   .ctrl-card { display:flex; flex-direction:column; align-items:center; justify-content:center;
-               gap:10px; padding:18px 12px; background:white; border-radius:20px;
+               gap:6px; padding:12px 8px; background:white; border-radius:20px;
                box-shadow:0 2px 8px rgba(0,0,0,.08); cursor:pointer; transition:all .15s;
-               border:2px solid transparent; }
-  .ctrl-card:active { transform:scale(.96); }
-  .ctrl-card.on { border-color:#059669; background:#f0fdf4; }
+               border:3px solid transparent; user-select:none; -webkit-user-select:none; }
+  .ctrl-card:active { transform:scale(.93); }
+  .ctrl-card.on  { border-color:#059669; background:#f0fdf4; }
   .ctrl-card.off { border-color:#e2e8f0; }
-  .ctrl-toggle { width:52px; height:28px; background:#d1d5db; border-radius:14px;
-                 position:relative; transition:background .2s; }
-  .ctrl-toggle.on { background:#059669; }
-  .ctrl-toggle::after { content:''; position:absolute; top:4px; left:4px; width:20px; height:20px;
-                        background:white; border-radius:50%; transition:left .2s; }
-  .ctrl-toggle.on::after { left:28px; }
+  .ctrl-card .ctrl-icon { width:100%; aspect-ratio:1; display:flex; align-items:center;
+                          justify-content:center; font-size:3.5rem; }
+  .ctrl-card .ctrl-icon img { width:100%; height:100%; object-fit:contain; }
+
+  /* ── DARK MODE ─────────────────────────────────────────── */
+  .dark body { background:#0f172a; color:#f1f5f9; }
+  .dark .card { background:#1e293b; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+  .dark .sub-card { background:#0f172a; border-color:#334155; }
+  .dark .bg-white { background:#1e293b !important; }
+  .dark .bg-gray-100 { background:#334155 !important; }
+  .dark .bg-gray-50 { background:#1e293b !important; }
+  .dark .text-gray-800 { color:#f1f5f9 !important; }
+  .dark .text-gray-700 { color:#e2e8f0 !important; }
+  .dark .text-gray-600 { color:#cbd5e1 !important; }
+  .dark .text-gray-500 { color:#94a3b8 !important; }
+  .dark .text-gray-400 { color:#64748b !important; }
+  .dark .border-gray-300 { border-color:#475569 !important; }
+  .dark .border-gray-200 { border-color:#334155 !important; }
+  .dark .border-e2e8f0 { border-color:#334155 !important; }
+  .dark .shadow-sm { box-shadow:0 1px 3px rgba(0,0,0,.5) !important; }
+  .dark select, .dark input[type=text], .dark input[type=number] {
+    background:#0f172a; color:#f1f5f9; border-color:#475569; }
+  .dark .log-row { border-color:#1e293b; }
+  /* Panel dark */
+  .dark .ctrl-card { background:#1e293b; }
+  .dark .ctrl-card.on { background:#064e3b; border-color:#059669; }
+  .dark .ctrl-card.off { border-color:#334155; }
+  .dark .ctrl-card .text-gray-700 { color:#e2e8f0 !important; }
+  /* Modal panel dark */
+  .dark #modal-panel > div { background:#0f172a; }
+  .dark #modal-panel .bg-white { background:#1e293b !important; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -88,6 +114,8 @@
       <h1 class="font-extrabold text-gray-800 text-lg leading-tight">Domótica</h1>
       <p class="text-xs text-gray-400">Dispositivos inteligentes TUC TUC</p>
     </div>
+    <button onclick="toggleDarkMode()" id="btn-dark" title="Modo oscuro/claro"
+            class="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 transition text-lg leading-none">☀️</button>
     <button onclick="abrirPanelControl()" title="Panel de control"
             class="p-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition">
       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -124,25 +152,31 @@
 
 
 <!-- ═══════ MODAL: PANEL DE CONTROL ═══════ -->
-<div id="modal-panel" class="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center hidden">
-  <div class="bg-gray-100 rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-5 max-h-[92vh] flex flex-col">
+<div id="modal-panel" class="fixed inset-0 z-50 flex flex-col">
+  <div class="flex-1 flex flex-col bg-gray-100 sm:m-auto sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] sm:w-full overflow-hidden">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4 shrink-0">
+    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
       <div>
-        <h2 class="font-extrabold text-gray-800 text-lg">Panel de control</h2>
-        <p id="panel-propiedad-label" class="text-xs text-gray-400"></p>
+        <h2 class="font-extrabold text-gray-800 text-xl">Panel de control</h2>
+        <p id="panel-propiedad-label" class="text-xs text-gray-400 mt-0.5"></p>
       </div>
       <button onclick="cerrarModal('modal-panel')"
-              class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow text-lg">✕</button>
+              class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-xl">✕</button>
     </div>
     <!-- Grid switches -->
-    <div id="panel-grid" class="grid grid-cols-3 gap-3 overflow-y-auto pb-2">
-      <div class="col-span-3 text-center text-gray-400 py-8">Cargando...</div>
+    <div id="panel-grid" class="grid grid-cols-3 gap-3 overflow-y-auto px-5 pb-3 flex-1">
+      <div class="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+        <svg class="w-8 h-8 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+        </svg>
+        <span class="text-sm">Cargando dispositivos...</span>
+      </div>
     </div>
     <!-- Footer -->
-    <div class="mt-4 shrink-0">
+    <div class="px-5 pb-5 pt-2 shrink-0">
       <button onclick="cerrarModal('modal-panel')"
-              class="w-full bg-white text-gray-600 rounded-2xl py-3 text-sm font-semibold shadow hover:bg-gray-50 transition">
+              class="w-full bg-white text-gray-600 rounded-2xl py-3.5 text-sm font-semibold shadow hover:bg-gray-50 transition">
         Ver configuración completa
       </button>
     </div>
@@ -334,18 +368,18 @@
           <span class="inline-flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-medium transition">📁 Subir archivo</span>
           <input type="file" accept="image/*" class="hidden" onchange="subirImagenSwitch(this)">
         </label>
-        <div class="relative" id="sw-prompt-wrap">
-          <button type="button" onclick="togglePromptMenu()"
-                  class="inline-flex items-center gap-1 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg font-medium transition">
-            🤖 Prompt ChatGPT
-          </button>
-          <div id="sw-prompt-menu" class="hidden absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 p-2 min-w-[150px]">
-            <p class="text-xs text-gray-400 px-2 pb-1">Elige el estilo:</p>
-            <button type="button" onclick="copiarPromptSwitch('claro')" class="w-full text-left text-sm px-3 py-2 hover:bg-gray-50 rounded-lg">☀️ Claro</button>
-            <button type="button" onclick="copiarPromptSwitch('oscuro')" class="w-full text-left text-sm px-3 py-2 hover:bg-gray-50 rounded-lg">🌙 Oscuro</button>
-          </div>
-        </div>
+        <button type="button" onclick="copiarPromptSwitch()"
+                class="inline-flex items-center gap-1 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg font-medium transition">
+          🤖 Prompt ChatGPT
+        </button>
       </div>
+    </div>
+    <!-- MOSTRAR NOMBRE EN PANEL -->
+    <div class="flex items-center justify-between py-1">
+      <span class="text-xs font-semibold text-gray-500">Mostrar nombre en el panel</span>
+      <button type="button" id="sw-mostrar-nombre-btn" onclick="toggleMostrarNombre()"
+              class="toggle-btn on" title="Mostrar/ocultar nombre"></button>
+      <input type="hidden" id="sw-mostrar-nombre" value="true">
     </div>
     <div class="flex gap-3 pt-2">
       <button onclick="cerrarModal('modal-switch')"
@@ -524,6 +558,19 @@ function iconoTipo(tipo) {
   return m[tipo] || '🔌';
 }
 
+// ─── DARK MODE ───
+function toggleDarkMode() {
+  const dark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('dom_dark', dark ? '1' : '0');
+  document.getElementById('btn-dark').textContent = dark ? '🌙' : '☀️';
+}
+// Aplicar icono correcto al cargar
+(function() {
+  const dark = document.documentElement.classList.contains('dark');
+  const btn = document.getElementById('btn-dark');
+  if (btn) btn.textContent = dark ? '🌙' : '☀️';
+})();
+
 // ─── PANEL DE CONTROL ───
 let _panelDispositivosCache = [];
 
@@ -548,16 +595,18 @@ function renderPanelGrid(dispositivos) {
   grid.innerHTML = switches.map(sw => {
     const on = sw.estado_actual;
     const iconHtml = sw.imagen
-      ? `<img src="${sw.imagen}" class="w-16 h-16 object-contain" onerror="this.replaceWith(document.createTextNode(iconoTipo('${sw.dev_tipo}')))">`
+      ? `<img src="${sw.imagen}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        + `<span style="display:none" class="text-5xl">${iconoTipo(sw.dev_tipo)}</span>`
       : `<span class="text-5xl">${iconoTipo(sw.dev_tipo)}</span>`;
     const countdown = sw.apagar_en ? fmtCountdown(sw.apagar_en) : null;
-    const timerTag = countdown ? `<span class="text-xs text-orange-500 font-semibold">⏱ ${countdown}</span>` : '';
+    const timerTag = countdown ? `<span class="text-xs text-orange-500 font-bold">⏱ ${countdown}</span>` : '';
+    const nombreTag = (sw.mostrar_nombre !== false)
+      ? `<span class="text-xs font-bold text-gray-700 text-center leading-tight px-1">${sw.nombre}</span>` : '';
     return `
     <div class="ctrl-card ${on ? 'on' : 'off'}" onclick="toggleDesdePanel(${sw.id}, ${!on})">
-      ${iconHtml}
-      <span class="text-xs font-bold text-gray-700 text-center leading-tight">${sw.nombre}</span>
+      <div class="ctrl-icon">${iconHtml}</div>
+      ${nombreTag}
       ${timerTag}
-      <div class="ctrl-toggle ${on ? 'on' : ''}"></div>
     </div>`;
   }).join('');
 }
@@ -1023,27 +1072,27 @@ function limpiarImagenSwitch() {
   document.getElementById('sw-imagen-preview').classList.add('hidden');
 }
 
-function togglePromptMenu() {
-  document.getElementById('sw-prompt-menu').classList.toggle('hidden');
-}
-
-function copiarPromptSwitch(modo) {
+function copiarPromptSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim() || 'electrodoméstico';
-  const prompt = modo === 'claro'
-    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo blanco o transparente, colores vibrantes, para panel de control domótico en web. Solo el ícono, sin texto ni sombras.`
-    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo transparente, formas y líneas en colores claros pensados para fondo oscuro #1e293b, para panel de control domótico en web. Solo el ícono, sin texto ni sombras.`;
+  const oscuro = document.documentElement.classList.contains('dark');
+  const mostrarNombre = document.getElementById('sw-mostrar-nombre').value === 'true';
+  const textoExtra = mostrarNombre ? ', incluye el nombre del dispositivo como texto debajo del ícono en fuente pequeña' : ', sin texto';
+  const prompt = oscuro
+    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo transparente, formas y líneas en colores claros pensados para fondo oscuro #1e293b, para panel de control domótico en web. Solo el ícono, sin sombras${textoExtra}.`
+    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo blanco o transparente, colores vibrantes, para panel de control domótico en web. Solo el ícono, sin sombras${textoExtra}.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
-    document.getElementById('sw-prompt-menu').classList.add('hidden');
     window.open('https://chatgpt.com', '_blank');
   });
 }
 
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('#sw-prompt-wrap')) {
-    document.getElementById('sw-prompt-menu')?.classList.add('hidden');
-  }
-});
+function toggleMostrarNombre() {
+  const input = document.getElementById('sw-mostrar-nombre');
+  const btn = document.getElementById('sw-mostrar-nombre-btn');
+  const val = input.value === 'true';
+  input.value = (!val).toString();
+  btn.className = 'toggle-btn ' + (!val ? 'on' : 'off');
+}
 
 // ─── SWITCH ───
 function abrirModalSwitch(devId) {
@@ -1052,6 +1101,8 @@ function abrirModalSwitch(devId) {
   document.getElementById('sw-dispositivo-id').value = devId;
   document.getElementById('sw-nombre').value = '';
   document.getElementById('sw-tuya-id').value = '';
+  document.getElementById('sw-mostrar-nombre').value = 'true';
+  document.getElementById('sw-mostrar-nombre-btn').className = 'toggle-btn on';
   limpiarImagenSwitch();
   document.getElementById('modal-switch').classList.remove('hidden');
 }
@@ -1062,6 +1113,9 @@ function abrirModalEditarSwitch(sw) {
   document.getElementById('sw-dispositivo-id').value = sw.id_dispositivo;
   document.getElementById('sw-nombre').value = sw.nombre;
   document.getElementById('sw-tuya-id').value = sw.tuya_device_id || '';
+  const mn = sw.mostrar_nombre !== false;
+  document.getElementById('sw-mostrar-nombre').value = mn.toString();
+  document.getElementById('sw-mostrar-nombre-btn').className = 'toggle-btn ' + (mn ? 'on' : 'off');
   if (sw.imagen) {
     document.getElementById('sw-imagen-url').value = sw.imagen;
     previewImagenSwitchUrl(sw.imagen);
@@ -1077,15 +1131,16 @@ async function guardarSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim();
   const tuya_device_id = document.getElementById('sw-tuya-id').value.trim();
   const imagen = document.getElementById('sw-imagen-url').value.trim() || null;
+  const mostrar_nombre = document.getElementById('sw-mostrar-nombre').value === 'true';
   if (!nombre) { toast('El nombre es requerido', 'err'); return; }
   try {
     let url, body;
     if (editId) {
       url = `/api/domotica/switch/${editId}/editar`;
-      body = { nombre, tuya_device_id, imagen };
+      body = { nombre, tuya_device_id, imagen, mostrar_nombre };
     } else {
       url = '/api/domotica/switch/crear';
-      body = { nombre, tuya_device_id, imagen, id_dispositivo: parseInt(devId) };
+      body = { nombre, tuya_device_id, imagen, mostrar_nombre, id_dispositivo: parseInt(devId) };
     }
     const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
     const d = await r.json();

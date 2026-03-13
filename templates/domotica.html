@@ -57,6 +57,20 @@
              font-weight:700; cursor:pointer; transition:all .15s; background:white; color:#6b7280; }
   .dia-btn:hover { border-color:#6366f1; }
   .dia-btn.sel { border-color:#6366f1; background:#6366f1; color:white; }
+  /* Panel de control */
+  .ctrl-card { display:flex; flex-direction:column; align-items:center; justify-content:center;
+               gap:10px; padding:18px 12px; background:white; border-radius:20px;
+               box-shadow:0 2px 8px rgba(0,0,0,.08); cursor:pointer; transition:all .15s;
+               border:2px solid transparent; }
+  .ctrl-card:active { transform:scale(.96); }
+  .ctrl-card.on { border-color:#059669; background:#f0fdf4; }
+  .ctrl-card.off { border-color:#e2e8f0; }
+  .ctrl-toggle { width:52px; height:28px; background:#d1d5db; border-radius:14px;
+                 position:relative; transition:background .2s; }
+  .ctrl-toggle.on { background:#059669; }
+  .ctrl-toggle::after { content:''; position:absolute; top:4px; left:4px; width:20px; height:20px;
+                        background:white; border-radius:50%; transition:left .2s; }
+  .ctrl-toggle.on::after { left:28px; }
 </style>
 </head>
 <body class="min-h-screen">
@@ -74,6 +88,12 @@
       <h1 class="font-extrabold text-gray-800 text-lg leading-tight">Domótica</h1>
       <p class="text-xs text-gray-400">Dispositivos inteligentes TUC TUC</p>
     </div>
+    <button onclick="abrirPanelControl()" title="Panel de control"
+            class="p-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+    </button>
   </div>
 </div>
 
@@ -100,6 +120,33 @@
   <!-- LISTA DISPOSITIVOS -->
   <div id="lista-dispositivos" class="space-y-4"></div>
 
+</div>
+
+
+<!-- ═══════ MODAL: PANEL DE CONTROL ═══════ -->
+<div id="modal-panel" class="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center hidden">
+  <div class="bg-gray-100 rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-5 max-h-[92vh] flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4 shrink-0">
+      <div>
+        <h2 class="font-extrabold text-gray-800 text-lg">Panel de control</h2>
+        <p id="panel-propiedad-label" class="text-xs text-gray-400"></p>
+      </div>
+      <button onclick="cerrarModal('modal-panel')"
+              class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-8 h-8 flex items-center justify-center shadow text-lg">✕</button>
+    </div>
+    <!-- Grid switches -->
+    <div id="panel-grid" class="grid grid-cols-3 gap-3 overflow-y-auto pb-2">
+      <div class="col-span-3 text-center text-gray-400 py-8">Cargando...</div>
+    </div>
+    <!-- Footer -->
+    <div class="mt-4 shrink-0">
+      <button onclick="cerrarModal('modal-panel')"
+              class="w-full bg-white text-gray-600 rounded-2xl py-3 text-sm font-semibold shadow hover:bg-gray-50 transition">
+        Ver configuración completa
+      </button>
+    </div>
+  </div>
 </div>
 
 
@@ -477,6 +524,83 @@ function iconoTipo(tipo) {
   return m[tipo] || '🔌';
 }
 
+// ─── PANEL DE CONTROL ───
+let _panelDispositivosCache = [];
+
+function abrirPanelControl() {
+  document.getElementById('modal-panel').classList.remove('hidden');
+  renderPanelGrid(_panelDispositivosCache);
+}
+
+function renderPanelGrid(dispositivos) {
+  const grid = document.getElementById('panel-grid');
+  // Recoger todos los switches de todos los dispositivos
+  const switches = [];
+  for (const dev of dispositivos) {
+    for (const sw of (dev.switches || [])) {
+      switches.push({ ...sw, dev_tipo: dev.tipo });
+    }
+  }
+  if (!switches.length) {
+    grid.innerHTML = '<div class="col-span-3 text-center text-gray-400 py-10"><p class="text-3xl mb-2">🔌</p><p class="text-sm">Sin switches configurados</p></div>';
+    return;
+  }
+  grid.innerHTML = switches.map(sw => {
+    const on = sw.estado_actual;
+    const iconHtml = sw.imagen
+      ? `<img src="${sw.imagen}" class="w-16 h-16 object-contain" onerror="this.replaceWith(document.createTextNode(iconoTipo('${sw.dev_tipo}')))">`
+      : `<span class="text-5xl">${iconoTipo(sw.dev_tipo)}</span>`;
+    const countdown = sw.apagar_en ? fmtCountdown(sw.apagar_en) : null;
+    const timerTag = countdown ? `<span class="text-xs text-orange-500 font-semibold">⏱ ${countdown}</span>` : '';
+    return `
+    <div class="ctrl-card ${on ? 'on' : 'off'}" onclick="toggleDesdePanel(${sw.id}, ${!on})">
+      ${iconHtml}
+      <span class="text-xs font-bold text-gray-700 text-center leading-tight">${sw.nombre}</span>
+      ${timerTag}
+      <div class="ctrl-toggle ${on ? 'on' : ''}"></div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleDesdePanel(sid, nuevoEstado) {
+  // Feedback visual inmediato
+  const card = document.querySelector(`#panel-grid [onclick*="toggleDesdePanel(${sid},"]`);
+  if (card) {
+    card.classList.toggle('on', nuevoEstado);
+    card.classList.toggle('off', !nuevoEstado);
+    const toggle = card.querySelector('.ctrl-toggle');
+    if (toggle) toggle.classList.toggle('on', nuevoEstado);
+  }
+  try {
+    const r = await fetch(`/api/domotica/switch/${sid}/toggle`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ estado: nuevoEstado })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(nuevoEstado ? '⚡ Encendido' : '💤 Apagado');
+      // Actualizar cache y re-render
+      await _refrescarPanelCache();
+    } else {
+      toast(d.error || 'Error', 'err');
+      await _refrescarPanelCache();
+    }
+  } catch(e) { toast('Error de conexión', 'err'); }
+}
+
+async function _refrescarPanelCache() {
+  const pid = document.getElementById('sel-propiedad').value;
+  if (!pid) return;
+  try {
+    const r = await fetch(`/api/domotica/propiedad/${pid}/dispositivos`);
+    const d = await r.json();
+    if (d.ok) {
+      _panelDispositivosCache = d.dispositivos;
+      renderPanelGrid(_panelDispositivosCache);
+    }
+  } catch(e) {}
+}
+
 // ─── CARGAR PROPIEDADES ───
 async function cargarPropiedades() {
   try {
@@ -504,6 +628,8 @@ async function cargarPropiedades() {
 }
 
 // ─── CARGAR DISPOSITIVOS ───
+let _primeraCarga = true;
+
 async function cargarDispositivos(silencioso = false) {
   const pid = document.getElementById('sel-propiedad').value;
   if (pid) localStorage.setItem('dom_pid', pid);
@@ -514,16 +640,30 @@ async function cargarDispositivos(silencioso = false) {
     const r = await fetch(`/api/domotica/propiedad/${pid}/dispositivos`);
     const d = await r.json();
     if (!d.ok) { toast(d.error, 'err'); return; }
+    // Guardar cache para el panel
+    _panelDispositivosCache = d.dispositivos;
+    // Etiqueta de propiedad en el panel
+    const selOpt = document.querySelector(`#sel-propiedad option[value="${pid}"]`);
+    if (selOpt) document.getElementById('panel-propiedad-label').textContent = selOpt.textContent;
     if (!d.dispositivos.length) {
       cont.innerHTML = '<div class="text-center py-10 text-gray-400"><div class="text-4xl mb-2">📦</div><p>Sin dispositivos. Agrega uno.</p></div>';
       return;
     }
     if (silencioso && cont.querySelector('[id^="dev-"]')) {
-      // Actualización quirúrgica: solo datos dinámicos, sin tocar el DOM
       d.dispositivos.forEach(dev => _actualizarDatosDev(dev));
+      // Refrescar panel si está abierto
+      if (!document.getElementById('modal-panel').classList.contains('hidden')) {
+        renderPanelGrid(_panelDispositivosCache);
+      }
     } else {
       cont.innerHTML = d.dispositivos.map(dev => renderDispositivo(dev)).join('');
       animarBarras();
+      // Abrir panel automáticamente en la primera carga
+      if (_primeraCarga) {
+        _primeraCarga = false;
+        document.getElementById('modal-panel').classList.remove('hidden');
+        renderPanelGrid(_panelDispositivosCache);
+      }
     }
   } catch(e) { if (!silencioso) toast('Error cargando dispositivos', 'err'); }
 }

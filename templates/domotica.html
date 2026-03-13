@@ -1269,8 +1269,8 @@ function copiarPromptSwitch() {
     ? `. Reserva el 25% inferior del canvas para el nombre "${nombre}": fuente sans-serif bold, centrado, color ${oscuro ? 'blanco' : '#1e293b'}. El ícono ocupa el 75% superior`
     : '. Sin texto';
   const prompt = oscuro
-    ? `Genera un ícono PNG de ${nombre}, 512x512px, fondo transparente. El ícono debe llenar el canvas completo sin márgenes ni espacio vacío — ocupar el 100% del área. Estilo flat minimalista. Usa únicamente blanco y gris muy claro, sin ningún otro color. Sin sombras${textoExtra}.`
-    : `Genera un ícono PNG de ${nombre}, 512x512px, fondo transparente. El ícono debe llenar el canvas completo sin márgenes ni espacio vacío — ocupar el 100% del área. Estilo flat minimalista. Usa únicamente negro y gris oscuro, sin ningún otro color. Sin sombras${textoExtra}.`;
+    ? `Genera un ícono PNG gráfico de ${nombre}, 512x512px, fondo transparente. El gráfico debe llenar el canvas completo sin márgenes ni espacio vacío — ocupar el 100% del área. Estilo flat minimalista. Usa únicamente blanco y gris muy claro, sin ningún otro color. Sin sombras. Sin letras, sin texto, sin abreviaturas — solo el dibujo del objeto${textoExtra}.`
+    : `Genera un ícono PNG gráfico de ${nombre}, 512x512px, fondo transparente. El gráfico debe llenar el canvas completo sin márgenes ni espacio vacío — ocupar el 100% del área. Estilo flat minimalista. Usa únicamente negro y gris oscuro, sin ningún otro color. Sin sombras. Sin letras, sin texto, sin abreviaturas — solo el dibujo del objeto${textoExtra}.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     _abrirChatGPT();

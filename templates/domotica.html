@@ -59,16 +59,21 @@
   .dia-btn:hover { border-color:#6366f1; }
   .dia-btn.sel { border-color:#6366f1; background:#6366f1; color:white; }
   /* Panel de control */
-  .ctrl-card { display:flex; flex-direction:column; align-items:center; justify-content:center;
-               gap:6px; padding:12px 8px; background:white; border-radius:20px;
+  .ctrl-card { display:flex; flex-direction:row; align-items:center; gap:16px;
+               padding:14px 18px; background:white; border-radius:20px;
                box-shadow:0 2px 8px rgba(0,0,0,.08); cursor:pointer; transition:all .15s;
-               border:3px solid transparent; user-select:none; -webkit-user-select:none; }
-  .ctrl-card:active { transform:scale(.93); }
-  .ctrl-card.on  { border-color:#059669; background:#f0fdf4; }
-  .ctrl-card.off { border-color:#e2e8f0; }
-  .ctrl-card .ctrl-icon { width:100%; aspect-ratio:1; display:flex; align-items:center;
-                          justify-content:center; font-size:3.5rem; }
+               border-left:6px solid #e2e8f0; user-select:none; -webkit-user-select:none; }
+  .ctrl-card:active { transform:scale(.97); }
+  .ctrl-card.on  { border-left-color:#059669; background:#f0fdf4; }
+  .ctrl-card.off { border-left-color:#e2e8f0; }
+  .ctrl-card .ctrl-icon { width:72px; height:72px; flex-shrink:0; display:flex;
+                          align-items:center; justify-content:center; font-size:3rem;
+                          border-radius:16px; overflow:hidden; }
+  .ctrl-card.on  .ctrl-icon { background:#dcfce7; }
+  .ctrl-card.off .ctrl-icon { background:#f1f5f9; }
   .ctrl-card .ctrl-icon img { width:100%; height:100%; object-fit:contain; }
+  .ctrl-card .ctrl-nombre { font-size:1.5rem; font-weight:800; color:#1e293b;
+                             line-height:1.2; flex:1; }
 
   /* ── DARK MODE ─────────────────────────────────────────── */
   .dark body { background:#0f172a; color:#f1f5f9; }
@@ -91,9 +96,11 @@
   .dark .log-row { border-color:#1e293b; }
   /* Panel dark */
   .dark .ctrl-card { background:#1e293b; }
-  .dark .ctrl-card.on { background:#064e3b; border-color:#059669; }
-  .dark .ctrl-card.off { border-color:#334155; }
-  .dark .ctrl-card .text-gray-700 { color:#e2e8f0 !important; }
+  .dark .ctrl-card.on { background:#064e3b; border-left-color:#059669; }
+  .dark .ctrl-card.off { border-left-color:#334155; }
+  .dark .ctrl-card .ctrl-nombre { color:#f1f5f9; }
+  .dark .ctrl-card.on  .ctrl-icon { background:#065f46; }
+  .dark .ctrl-card.off .ctrl-icon { background:#0f172a; }
   /* Modal panel dark */
   .dark #modal-panel > div { background:#0f172a; }
   .dark #modal-panel .bg-white { background:#1e293b !important; }
@@ -163,9 +170,9 @@
       <button onclick="cerrarModal('modal-panel')"
               class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-xl">✕</button>
     </div>
-    <!-- Grid switches -->
-    <div id="panel-grid" class="grid grid-cols-3 gap-3 overflow-y-auto px-5 pb-3 flex-1">
-      <div class="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+    <!-- Lista switches -->
+    <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto px-5 pb-3 flex-1">
+      <div class="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
         <svg class="w-8 h-8 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -603,24 +610,27 @@ function renderPanelGrid(dispositivos) {
     }
   }
   if (!switches.length) {
-    grid.innerHTML = '<div class="col-span-3 text-center text-gray-400 py-10"><p class="text-3xl mb-2">🔌</p><p class="text-sm">Sin switches configurados</p></div>';
+    grid.innerHTML = '<div class="text-center text-gray-400 py-10"><p class="text-3xl mb-2">🔌</p><p class="text-sm">Sin switches configurados</p></div>';
     return;
   }
   grid.innerHTML = switches.map(sw => {
     const on = sw.estado_actual;
     const iconHtml = sw.imagen
       ? `<img src="${sw.imagen}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-        + `<span style="display:none" class="text-5xl">${iconoTipo(sw.dev_tipo)}</span>`
-      : `<span class="text-5xl">${iconoTipo(sw.dev_tipo)}</span>`;
+        + `<span style="display:none;font-size:2.5rem">${iconoTipo(sw.dev_tipo)}</span>`
+      : `<span style="font-size:2.5rem">${iconoTipo(sw.dev_tipo)}</span>`;
     const countdown = sw.apagar_en ? fmtCountdown(sw.apagar_en) : null;
-    const timerTag = countdown ? `<span class="text-xs text-orange-500 font-bold">⏱ ${countdown}</span>` : '';
+    const timerTag = countdown ? `<span style="font-size:.75rem;color:#f97316;font-weight:700">⏱ ${countdown}</span>` : '';
     const nombreTag = (sw.mostrar_nombre !== false)
-      ? `<span class="text-xs font-bold text-gray-700 text-center leading-tight px-1">${sw.nombre}</span>` : '';
+      ? `<span class="ctrl-nombre">${sw.nombre}${timerTag ? ' ' + timerTag : ''}</span>` : '';
+    const estadoTag = `<span style="font-size:.75rem;font-weight:600;color:${on?'#059669':'#94a3b8'}">${on?'Encendido':'Apagado'}</span>`;
     return `
     <div class="ctrl-card ${on ? 'on' : 'off'}" onclick="toggleDesdePanel(${sw.id}, ${!on})">
       <div class="ctrl-icon">${iconHtml}</div>
-      ${nombreTag}
-      ${timerTag}
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        ${nombreTag}
+        ${estadoTag}
+      </div>
     </div>`;
   }).join('');
 }
@@ -631,8 +641,8 @@ async function toggleDesdePanel(sid, nuevoEstado) {
   if (card) {
     card.classList.toggle('on', nuevoEstado);
     card.classList.toggle('off', !nuevoEstado);
-    const toggle = card.querySelector('.ctrl-toggle');
-    if (toggle) toggle.classList.toggle('on', nuevoEstado);
+    const estado = card.querySelector('span:last-child');
+    if (estado) { estado.textContent = nuevoEstado ? 'Encendido' : 'Apagado'; estado.style.color = nuevoEstado ? '#059669' : '#94a3b8'; }
   }
   try {
     const r = await fetch(`/api/domotica/switch/${sid}/toggle`, {

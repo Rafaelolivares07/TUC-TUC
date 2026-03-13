@@ -812,7 +812,7 @@ function renderProductos() {
                     <button onclick="editarProducto(${p.id})" class="flex-1 text-xs text-blue-600 font-semibold py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition">Editar</button>
                     <button onclick="abrirFotos(${p.id})" class="flex-1 text-xs text-rose-500 font-semibold py-1 border border-rose-200 rounded-lg hover:bg-rose-50 transition">${p.imagen ? 'Cambiar Fotos' : 'Agregar Fotos'}</button>
                     <button onclick="abrirVariantes(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="flex-1 text-xs text-purple-600 font-semibold py-1 border border-purple-200 rounded-lg hover:bg-purple-50 transition">Variantes</button>
-                    <button onclick="compartirProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', '${(p.imagen||'').replace(/'/g, "\\'")}')" class="flex-1 text-xs text-emerald-600 font-semibold py-1 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition">Compartir</button>
+                    <button onclick="compartirProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', '${(p.imagen||'').replace(/'/g, "\\'")}', ${p.precio}, '${(p.descripcion||'').replace(/'/g, "\\'").replace(/\n/g, ' ')}')" class="flex-1 text-xs text-emerald-600 font-semibold py-1 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition">Compartir</button>
                 </div>
             </div>`;
         }
@@ -1896,10 +1896,14 @@ async function editarVariante(varianteId, cambios) {
 let _compartirId = '';
 let _compartirNombre = '';
 let _compartirImagen = '';
-function compartirProducto(id, nombre, imagen) {
+let _compartirPrecio = 0;
+let _compartirDesc = '';
+function compartirProducto(id, nombre, imagen, precio, desc) {
     _compartirId = id;
     _compartirNombre = nombre;
     _compartirImagen = imagen || '';
+    _compartirPrecio = precio || 0;
+    _compartirDesc = desc || '';
     document.getElementById('compartir-nombre').textContent = nombre;
     const prev = document.getElementById('compartir-preview');
     if (_compartirImagen) {
@@ -1909,6 +1913,10 @@ function compartirProducto(id, nombre, imagen) {
         prev.src = '';
         prev.classList.add('hidden');
     }
+    // Kit Marketplace
+    document.getElementById('kit-titulo-val').textContent = nombre;
+    document.getElementById('kit-precio-val').textContent = precio ? '$' + Number(precio).toLocaleString('es-CO') : '—';
+    document.getElementById('kit-desc-val').textContent = desc || '(sin descripción)';
     document.getElementById('compartir-txt').value = '';
     document.getElementById('compartir-leyenda').value = '';
     document.getElementById('compartir-foto').checked = true;
@@ -1943,6 +1951,22 @@ function copiarEnlaceProducto() {
     document.getElementById('modal-compartir').classList.add('hidden');
 }
 
+function _copiarKit(campo) {
+    const vals = {
+        titulo: _compartirNombre,
+        precio: _compartirPrecio ? String(_compartirPrecio) : '',
+        desc: _compartirDesc
+    };
+    const txt = vals[campo];
+    if (!txt) { toast('Sin datos para copiar', 'err'); return; }
+    navigator.clipboard.writeText(txt).then(() => {
+        const btn = document.getElementById('kit-btn-' + campo);
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copiado';
+        btn.classList.add('bg-emerald-600');
+        setTimeout(() => { btn.textContent = orig; btn.classList.remove('bg-emerald-600'); }, 1800);
+    });
+}
 function _abrirMarketplace() {
     navigator.clipboard.writeText(_buildCompartirUrl());
     if (_compartirImagen) {
@@ -2006,6 +2030,34 @@ function _abrirMarketplace() {
                         <input id="compartir-desc" type="checkbox" checked onchange="_actualizarLinks()" class="w-4 h-4 accent-emerald-600">
                         <span class="text-sm text-gray-700">Descripción</span>
                     </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kit Marketplace -->
+        <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
+            <p class="text-xs font-bold text-blue-700 uppercase tracking-wide mb-3">📋 Kit Marketplace — copiá campo a campo</p>
+            <div class="space-y-2">
+                <div class="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-blue-100">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-gray-400 font-semibold uppercase">Título</p>
+                        <p id="kit-titulo-val" class="text-sm font-semibold text-gray-800 truncate"></p>
+                    </div>
+                    <button id="kit-btn-titulo" onclick="_copiarKit('titulo')" class="flex-shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition min-w-[80px]">Copiar</button>
+                </div>
+                <div class="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-blue-100">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-gray-400 font-semibold uppercase">Precio</p>
+                        <p id="kit-precio-val" class="text-sm font-semibold text-gray-800"></p>
+                    </div>
+                    <button id="kit-btn-precio" onclick="_copiarKit('precio')" class="flex-shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition min-w-[80px]">Copiar</button>
+                </div>
+                <div class="flex items-start gap-3 bg-white rounded-lg px-3 py-2 border border-blue-100">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-gray-400 font-semibold uppercase">Descripción</p>
+                        <p id="kit-desc-val" class="text-sm text-gray-700 line-clamp-2"></p>
+                    </div>
+                    <button id="kit-btn-desc" onclick="_copiarKit('desc')" class="flex-shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition min-w-[80px]">Copiar</button>
                 </div>
             </div>
         </div>

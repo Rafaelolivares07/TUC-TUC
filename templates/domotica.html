@@ -1251,12 +1251,12 @@ function copiarPromptSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim() || 'electrodoméstico';
   const oscuro = document.documentElement.classList.contains('dark');
   const conTexto = _panelMostrarNombres;
-  const textoExtra = conTexto
-    ? `. Reserva el 25% inferior del canvas para el nombre "${nombre}": fuente sans-serif bold, centrado, color ${oscuro ? 'blanco' : '#1e293b'}. El ícono ocupa el 75% superior`
-    : '. Sin texto';
-  const prompt = oscuro
-    ? `Dibuja la silueta o ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo transparente. La ilustración del objeto debe llenar el canvas completo sin márgenes ni espacio vacío — ocupar el 100% del área. Estilo flat minimalista. Usa únicamente blanco y gris muy claro, sin ningún otro color. Sin sombras. Sin letras, sin texto, sin abreviaturas${textoExtra}.`
-    : `Dibuja la silueta o ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo transparente. La ilustración del objeto debe llenar el canvas completo sin márgenes ni espacio vacío — ocupar el 100% del área. Estilo flat minimalista. Usa únicamente negro y gris oscuro, sin ningún otro color. Sin sombras. Sin letras, sin texto, sin abreviaturas${textoExtra}.`;
+  const colorPaleta = oscuro ? 'blanco y gris muy claro' : 'negro y gris oscuro';
+  const colorTexto  = oscuro ? 'blanco' : '#1e293b';
+  const parteTexto  = conTexto
+    ? ` El 75% superior contiene solo la ilustración del objeto. El 25% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color ${colorTexto} — sin ningún otro texto.`
+    : ' Sin ningún texto, letra ni abreviatura — solo la ilustración.';
+  const prompt = `Dibuja la ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo transparente. Estilo flat minimalista. Usa únicamente ${colorPaleta}, sin ningún otro color. Sin sombras.${parteTexto} La ilustración debe llenar su área sin márgenes ni espacio vacío.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     _abrirChatGPT();

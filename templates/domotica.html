@@ -1742,19 +1742,22 @@ async function abrirModalRegla(id) {
 
   // Cargar switches disponibles en el select
   const selSw = document.getElementById('regla-switch');
-  if (_switchesCache.length === 0) {
+  // Si el cache de dispositivos está vacío, hacer fetch ahora
+  if (_panelDispositivosCache.length === 0) {
     try {
-      const r = await fetch('/api/domotica/reglas/contexto');
-      // Fallback: buscar switches de la lista de dispositivos cacheada
+      const pid = document.getElementById('sel-propiedad').value;
+      if (pid) {
+        const r = await fetch(`/api/domotica/propiedad/${pid}/dispositivos`);
+        const d = await r.json();
+        if (d.ok) _panelDispositivosCache = d.dispositivos;
+      }
     } catch(e) {}
   }
   // Poblar switches desde cache de dispositivos
   selSw.innerHTML = '<option value="">Seleccionar switch...</option>';
   for (const dev of _panelDispositivosCache) {
-    for (const sw of (dev.dispositivos||[])) {
-      for (const s of (sw.switches||[])) {
-        selSw.innerHTML += `<option value="${s.id}">${s.nombre}</option>`;
-      }
+    for (const sw of (dev.switches||[])) {
+      selSw.innerHTML += `<option value="${sw.id}">${sw.nombre}</option>`;
     }
   }
 

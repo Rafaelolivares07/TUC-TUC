@@ -63,7 +63,7 @@
                padding:4px; background:white; border-radius:20px;
                box-shadow:0 2px 10px rgba(0,0,0,.09); cursor:pointer; transition:all .15s;
                border:3px solid transparent; user-select:none; -webkit-user-select:none;
-               overflow:hidden; }
+               overflow:hidden; width:100%; box-sizing:border-box; min-width:0; }
   .ctrl-card:active { transform:scale(.96); }
   .ctrl-card.on  { border-color:#00ff88; background:#f0fdf4; box-shadow:0 0 16px rgba(0,255,136,.4); }
   .ctrl-card.off { border-color:#e2e8f0; }
@@ -176,7 +176,7 @@
       </div>
     </div>
     <!-- Lista switches 1 columna -->
-    <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto px-4 pb-4 flex-1">
+    <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto overflow-x-hidden px-4 pb-4 flex-1">
       <div class="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
         <svg class="w-8 h-8 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>

@@ -171,9 +171,9 @@
       <button onclick="cerrarModal('modal-panel')"
               class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-xl">✕</button>
     </div>
-    <!-- Grid switches 2 columnas -->
-    <div id="panel-grid" class="grid grid-cols-2 gap-3 overflow-y-auto px-4 pb-4 flex-1 content-start">
-      <div class="col-span-2 flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+    <!-- Lista switches 1 columna -->
+    <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto px-4 pb-4 flex-1">
+      <div class="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
         <svg class="w-8 h-8 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -611,7 +611,7 @@ function renderPanelGrid(dispositivos) {
     }
   }
   if (!switches.length) {
-    grid.innerHTML = '<div class="col-span-2 text-center text-gray-400 py-10"><p class="text-3xl mb-2">🔌</p><p class="text-sm">Sin switches configurados</p></div>';
+    grid.innerHTML = '<div class="text-center text-gray-400 py-10"><p class="text-3xl mb-2">🔌</p><p class="text-sm">Sin switches configurados</p></div>';
     return;
   }
   grid.innerHTML = switches.map(sw => {

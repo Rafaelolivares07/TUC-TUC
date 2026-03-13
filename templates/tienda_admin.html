@@ -1970,13 +1970,29 @@ function _copiarKit(campo) {
 function _abrirMarketplace() {
     navigator.clipboard.writeText(_buildCompartirUrl());
     if (_compartirImagen) {
-        const a = document.createElement('a');
-        a.href = _compartirImagen;
-        a.download = _compartirNombre.replace(/[^a-zA-Z0-9]/g, '_') + '.jpg';
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const nombre = _compartirNombre.replace(/[^a-zA-Z0-9]/g, '_') + '.jpg';
+        fetch(_compartirImagen)
+            .then(r => r.blob())
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = nombre;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            })
+            .catch(() => {
+                // fallback: abrir directo si el fetch falla
+                const a = document.createElement('a');
+                a.href = _compartirImagen;
+                a.download = nombre;
+                a.target = '_blank';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            });
         toast('Foto descargada y enlace copiado — abriendo Marketplace…');
     } else {
         toast('Enlace copiado — abriendo Marketplace…');

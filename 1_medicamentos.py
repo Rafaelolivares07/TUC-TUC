@@ -6638,7 +6638,7 @@ def api_requerimiento_captura():
         row = conn.execute("""
             INSERT INTO requerimientos (descripcion, modulo, prioridad, estado)
             VALUES (%s, %s, %s, %s) RETURNING id, fecha_creacion
-        """, (descripcion, data.get('modulo') or 'general', data.get('prioridad') or 'media', 'Pendiente')).fetchone()
+        """, (descripcion, data.get('modulo') or 'general', data.get('prioridad') or 'Media', 'Pendiente')).fetchone()
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'id': row['id'], 'fecha': str(row['fecha_creacion'])})
@@ -25521,7 +25521,12 @@ def crear_tablas_garaje(conn):
         )
     """)
     conn.commit()
-    alters = []
+    alters = [
+        # Fix: requerimientos.id sin secuencia en producción (fue migrado sin SERIAL)
+        "CREATE SEQUENCE IF NOT EXISTS requerimientos_id_seq",
+        "ALTER TABLE requerimientos ALTER COLUMN id SET DEFAULT nextval('requerimientos_id_seq')",
+        "SELECT setval('requerimientos_id_seq', COALESCE((SELECT MAX(id) FROM requerimientos), 0) + 1, false)",
+    ]
     for sql in alters:
         try:
             conn.execute(sql)

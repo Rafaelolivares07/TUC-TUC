@@ -168,8 +168,12 @@
         <h2 class="font-extrabold text-gray-800 text-xl">Panel de control</h2>
         <p id="panel-propiedad-label" class="text-xs text-gray-400 mt-0.5"></p>
       </div>
-      <button onclick="cerrarModal('modal-panel')"
-              class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-xl">✕</button>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleNombresPanel()" id="btn-nombres-panel" title="Mostrar/ocultar nombres"
+                class="bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-sm font-bold text-gray-500 hover:text-gray-800 transition">T</button>
+        <button onclick="cerrarModal('modal-panel')"
+                class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-xl">✕</button>
+      </div>
     </div>
     <!-- Lista switches 1 columna -->
     <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto px-4 pb-4 flex-1">
@@ -183,6 +187,7 @@
     </div>
     <!-- Footer -->
     <div class="px-5 pb-5 pt-2 shrink-0">
+      <p class="text-center text-gray-300 text-xs mb-2">v2026-03-13.21:30</p>
       <button onclick="cerrarModal('modal-panel')"
               class="w-full bg-white text-gray-600 rounded-2xl py-3.5 text-sm font-semibold shadow hover:bg-gray-50 transition">
         Ver configuración completa
@@ -595,6 +600,20 @@ function toggleDarkMode() {
 
 // ─── PANEL DE CONTROL ───
 let _panelDispositivosCache = [];
+let _panelMostrarNombres = localStorage.getItem('dom_nombres') !== '0';
+
+function toggleNombresPanel() {
+  _panelMostrarNombres = !_panelMostrarNombres;
+  localStorage.setItem('dom_nombres', _panelMostrarNombres ? '1' : '0');
+  const btn = document.getElementById('btn-nombres-panel');
+  btn.style.color = _panelMostrarNombres ? '#6366f1' : '#9ca3af';
+  renderPanelGrid(_panelDispositivosCache);
+}
+// Aplicar estado del botón al cargar
+(function() {
+  const btn = document.getElementById('btn-nombres-panel');
+  if (btn) btn.style.color = _panelMostrarNombres ? '#6366f1' : '#9ca3af';
+})();
 
 function abrirPanelControl() {
   document.getElementById('modal-panel').classList.remove('hidden');
@@ -622,7 +641,7 @@ function renderPanelGrid(dispositivos) {
       : `<span style="font-size:2.5rem">${iconoTipo(sw.dev_tipo)}</span>`;
     const countdown = sw.apagar_en ? fmtCountdown(sw.apagar_en) : null;
     const timerTag = countdown ? `<span style="font-size:.75rem;color:#f97316;font-weight:700">⏱ ${countdown}</span>` : '';
-    const nombreTag = (sw.mostrar_nombre !== false)
+    const nombreTag = _panelMostrarNombres
       ? `<span class="ctrl-nombre">${sw.nombre}</span>` : '';
     return `
     <div class="ctrl-card ${on ? 'on' : 'off'}" onclick="toggleDesdePanel(${sw.id}, ${!on})">
@@ -1097,11 +1116,13 @@ function limpiarImagenSwitch() {
 function copiarPromptSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim() || 'electrodoméstico';
   const oscuro = document.documentElement.classList.contains('dark');
-  const mostrarNombre = document.getElementById('sw-mostrar-nombre').value === 'true';
-  const textoExtra = mostrarNombre ? ', incluye el nombre del dispositivo como texto debajo del ícono en fuente pequeña' : ', sin texto';
+  const conTexto = _panelMostrarNombres;
+  const textoExtra = conTexto
+    ? `. Incluye el nombre "${nombre}" como texto en la imagen: ocupa el 25% inferior de la imagen, fuente sans-serif bold, tamaño visualmente 3 veces más grande de lo que normalmente pondrías, centrado horizontalmente, color ${oscuro ? 'blanco' : '#1e293b'}`
+    : '. Sin texto, solo el ícono';
   const prompt = oscuro
-    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo transparente, formas y líneas en colores claros pensados para fondo oscuro #1e293b, para panel de control domótico en web. Solo el ícono, sin sombras${textoExtra}.`
-    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 128x128px, fondo blanco o transparente, colores vibrantes, para panel de control domótico en web. Solo el ícono, sin sombras${textoExtra}.`;
+    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo transparente, formas y líneas en colores claros pensados para fondo oscuro #1e293b, para panel de control domótico en web. Sin sombras${textoExtra}.`
+    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo blanco o transparente, colores vibrantes, para panel de control domótico en web. Sin sombras${textoExtra}.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     window.open('https://chatgpt.com', '_blank');

@@ -37418,28 +37418,32 @@ def api_domotica_heartbeat():
     if token != expected:
         return jsonify({'ok': False}), 401
     try:
-        from datetime import datetime
+        from datetime import datetime, timedelta
         import threading
         idle_seg = int(request.args.get('idle', '0'))
-        usuario_activo = idle_seg < 300
+        ahora = datetime.now()
+        # Tiempo REAL de última actividad del usuario (no hora del heartbeat)
+        ultima_actividad = ahora - timedelta(seconds=idle_seg)
         conn = get_db_connection()
         crear_tablas_domotica(conn)
-        presencia_cambio = False
-        if usuario_activo:
-            conn.execute("UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen=NOW() WHERE id=1")
-            conn.commit()
-        else:
-            # Chequear si la presencia acaba de volverse inactiva (para disparar reglas ahora)
-            cfg = conn.execute(
-                "SELECT laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1"
-            ).fetchone()
-            ls = cfg['laptop_last_seen'] if cfg else None
-            if ls and (datetime.now() - ls).total_seconds() >= 360:
-                presencia_cambio = True  # presencia inactiva — evaluar reglas ya
+        # Guardar el mayor valor (no retroceder si heartbeats llegan desordenados)
+        conn.execute(
+            "UPDATE CONFIGURACION_SISTEMA "
+            "SET laptop_last_seen = GREATEST(COALESCE(laptop_last_seen, %s), %s) "
+            "WHERE id=1",
+            (ultima_actividad, ultima_actividad)
+        )
+        conn.commit()
+        # Leer el valor actualizado para decidir si disparar reglas
+        cfg = conn.execute("SELECT laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1").fetchone()
+        ls = cfg['laptop_last_seen'] if cfg else None
+        elapsed = (ahora - ls).total_seconds() if ls else 9999
+        usuario_activo = elapsed < 360
         conn.close()
-        if presencia_cambio:
+        if elapsed >= 360:
+            # Presencia inactiva → evaluar reglas ahora sin esperar el scheduler
             threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
-        return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'ts': datetime.now().isoformat()})
+        return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

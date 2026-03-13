@@ -401,19 +401,19 @@
         <div class="flex gap-2">
           <select id="regla-cond1-tipo" onchange="actualizarPlaceholderCond(1)"
                   class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
-            <option value="presencia">Presencia</option>
-            <option value="temperatura">Temperatura</option>
-            <option value="hora">Hora</option>
+            <option value="presencia">👤 Presencia</option>
+            <option value="temperatura">🌡️ Temperatura</option>
+            <option value="hora">🕐 Hora</option>
           </select>
           <select id="regla-cond1-op" class="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
             <option value="=">=</option>
-            <option value=">">&gt;</option>
-            <option value=">=">&gt;=</option>
-            <option value="<">&lt;</option>
-            <option value="<=">&lt;=</option>
           </select>
-          <input id="regla-cond1-val" type="text" placeholder="oficina"
-                 class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+          <div id="regla-cond1-val-wrap" class="flex-1">
+            <select id="regla-cond1-val" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+              <option value="oficina">✅ Presente (oficina)</option>
+              <option value="ausente">🚶 Ausente</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -423,19 +423,21 @@
           <select id="regla-cond2-tipo" onchange="actualizarPlaceholderCond(2)"
                   class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
             <option value="">— ninguna —</option>
-            <option value="presencia">Presencia</option>
-            <option value="temperatura">Temperatura</option>
-            <option value="hora">Hora</option>
+            <option value="presencia">👤 Presencia</option>
+            <option value="temperatura">🌡️ Temperatura</option>
+            <option value="hora">🕐 Hora</option>
           </select>
           <select id="regla-cond2-op" class="w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
-            <option value="=">=</option>
             <option value=">">&gt;</option>
             <option value=">=">&gt;=</option>
             <option value="<">&lt;</option>
             <option value="<=">&lt;=</option>
+            <option value="=">=</option>
           </select>
-          <input id="regla-cond2-val" type="text" placeholder=""
-                 class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+          <div id="regla-cond2-val-wrap" class="flex-1">
+            <input id="regla-cond2-val" type="text" placeholder=""
+                   class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+          </div>
         </div>
       </div>
 
@@ -1769,11 +1771,9 @@ async function abrirModalRegla(id) {
       if (reg) {
         document.getElementById('regla-nombre').value = reg.nombre;
         document.getElementById('regla-cond1-tipo').value = reg.cond1_tipo;
-        document.getElementById('regla-cond1-op').value = reg.cond1_operador;
-        document.getElementById('regla-cond1-val').value = reg.cond1_valor;
+        actualizarPlaceholderCond(1, { op: reg.cond1_operador, val: reg.cond1_valor });
         document.getElementById('regla-cond2-tipo').value = reg.cond2_tipo || '';
-        document.getElementById('regla-cond2-op').value = reg.cond2_operador || '=';
-        document.getElementById('regla-cond2-val').value = reg.cond2_valor || '';
+        actualizarPlaceholderCond(2, { op: reg.cond2_operador || '=', val: reg.cond2_valor || '' });
         document.getElementById('regla-switch').value = reg.accion_switch_id;
         document.getElementById('regla-accion').value = reg.accion_estado ? 'true' : 'false';
       }
@@ -1781,11 +1781,9 @@ async function abrirModalRegla(id) {
   } else {
     document.getElementById('regla-nombre').value = '';
     document.getElementById('regla-cond1-tipo').value = 'presencia';
-    document.getElementById('regla-cond1-op').value = '=';
-    document.getElementById('regla-cond1-val').value = 'oficina';
+    actualizarPlaceholderCond(1, { op: '=', val: 'oficina' });
     document.getElementById('regla-cond2-tipo').value = 'temperatura';
-    document.getElementById('regla-cond2-op').value = '>';
-    document.getElementById('regla-cond2-val').value = '21';
+    actualizarPlaceholderCond(2, { op: '>', val: '21' });
     document.getElementById('regla-switch').value = '';
     document.getElementById('regla-accion').value = 'true';
   }
@@ -1793,11 +1791,54 @@ async function abrirModalRegla(id) {
   document.getElementById('modal-regla').classList.remove('hidden');
 }
 
-function actualizarPlaceholderCond(n) {
+function actualizarPlaceholderCond(n, valorActual) {
   const tipo = document.getElementById(`regla-cond${n}-tipo`).value;
-  const valInput = document.getElementById(`regla-cond${n}-val`);
-  const placeholders = { presencia: 'oficina', temperatura: '21', hora: '22:00' };
-  valInput.placeholder = placeholders[tipo] || '';
+  const opSel = document.getElementById(`regla-cond${n}-op`);
+  const valWrap = document.getElementById(`regla-cond${n}-val-wrap`);
+
+  // Operadores disponibles según tipo
+  if (tipo === 'presencia') {
+    opSel.innerHTML = '<option value="=">=</option>';
+    opSel.disabled = true;
+  } else {
+    opSel.disabled = false;
+    opSel.innerHTML = `
+      <option value=">">&gt;</option>
+      <option value=">=">&gt;=</option>
+      <option value="<">&lt;</option>
+      <option value="<=">&lt;=</option>
+      <option value="=">=</option>`;
+  }
+  if (valorActual) {
+    // restaurar operador al editar
+    const opt = opSel.querySelector(`option[value="${valorActual.op}"]`);
+    if (opt) opt.selected = true;
+  }
+
+  // Control de valor según tipo
+  if (tipo === 'presencia') {
+    const v = (valorActual && valorActual.val) || 'oficina';
+    valWrap.innerHTML = `
+      <select id="regla-cond${n}-val" class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">
+        <option value="oficina" ${v==='oficina'?'selected':''}>✅ Presente (oficina)</option>
+        <option value="ausente" ${v==='ausente'?'selected':''}>🚶 Ausente</option>
+      </select>`;
+  } else if (tipo === 'temperatura') {
+    const v = (valorActual && valorActual.val) || '';
+    valWrap.innerHTML = `
+      <input id="regla-cond${n}-val" type="number" step="0.5" placeholder="°C ej: 21"
+             value="${v}"
+             class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">`;
+  } else if (tipo === 'hora') {
+    const v = (valorActual && valorActual.val) || '';
+    valWrap.innerHTML = `
+      <input id="regla-cond${n}-val" type="time" value="${v}"
+             class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">`;
+  } else {
+    valWrap.innerHTML = `
+      <input id="regla-cond${n}-val" type="text" placeholder=""
+             class="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none">`;
+  }
 }
 
 async function guardarRegla() {

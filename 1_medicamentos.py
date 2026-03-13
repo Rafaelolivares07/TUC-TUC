@@ -1396,9 +1396,9 @@ def evaluar_reglas_domotica():
 
         ahora = datetime.now()
 
-        # 2. Presencia laptop (heartbeat < 5 min)
+        # 2. Presencia laptop (heartbeat < 15 min — margen para cuando Render duerme)
         ls = config['laptop_last_seen']
-        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 300)
+        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 900)
 
         # 3. Temperatura Cali (Open-Meteo, sin API key)
         temperatura = None
@@ -37442,7 +37442,7 @@ def api_domotica_reglas_contexto():
         ).fetchone()
         ahora = datetime.now()
         ls = config['laptop_last_seen'] if config else None
-        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 300)
+        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 900)
         laptop_hace = int((ahora - ls).total_seconds() / 60) if ls else None
 
         temperatura = None

@@ -108,7 +108,7 @@
   .dark #modal-panel .bg-white { background:#1e293b !important; }
 </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen overflow-x-hidden">
 <div id="toast" class="toast"></div>
 
 <!-- HEADER -->
@@ -542,6 +542,7 @@ function toast(msg, tipo='ok') {
 
 function cerrarModal(id) {
   document.getElementById(id).classList.add('hidden');
+  document.body.style.overflow = '';
 }
 
 function copiar(texto) {
@@ -613,6 +614,7 @@ function toggleNombresPanel() {
 
 function abrirPanelControl() {
   document.getElementById('modal-panel').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
   renderPanelGrid(_panelDispositivosCache);
 }
 

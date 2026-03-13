@@ -63,18 +63,19 @@
                padding:4px; background:white; border-radius:20px;
                box-shadow:0 2px 10px rgba(0,0,0,.09); cursor:pointer; transition:all .15s;
                border:3px solid transparent; user-select:none; -webkit-user-select:none;
-               overflow:hidden; width:100%; box-sizing:border-box; align-self:stretch; }
+               overflow:hidden; box-sizing:border-box; min-width:0; max-width:100%; }
   .ctrl-card:active { transform:scale(.96); }
   .ctrl-card.on  { border-color:#00ff88; background:#f0fdf4; box-shadow:0 0 16px rgba(0,255,136,.4); }
   .ctrl-card.off { border-color:#e2e8f0; }
   .ctrl-card .ctrl-icon { width:100%; aspect-ratio:1; display:flex; align-items:center;
-                          justify-content:center; font-size:min(22vw,5rem);
-                          border-radius:16px; overflow:hidden; }
+                          justify-content:center; font-size:min(18vw,4.5rem);
+                          border-radius:16px; overflow:hidden; min-width:0; }
   .ctrl-card.on  .ctrl-icon { background:#dcfce7; }
   .ctrl-card.off .ctrl-icon { background:#f1f5f9; }
   .ctrl-card .ctrl-icon img { width:100%; height:100%; object-fit:contain; }
-  .ctrl-card .ctrl-nombre { font-size:.85rem; font-weight:700; color:#1e293b;
-                             text-align:center; padding:4px 6px 6px; line-height:1.2; }
+  .ctrl-card .ctrl-nombre { font-size:min(5.5vw,1.4rem); font-weight:800; color:#1e293b;
+                             text-align:center; padding:6px 8px 10px; line-height:1.2;
+                             letter-spacing:.01em; }
 
   /* ── DARK MODE ─────────────────────────────────────────── */
   .dark body { background:#0f172a; color:#f1f5f9; }
@@ -99,7 +100,7 @@
   .dark .ctrl-card { background:#1e293b; }
   .dark .ctrl-card.on { background:#064e3b; border-color:#00ff88; box-shadow:0 0 16px rgba(0,255,136,.4); }
   .dark .ctrl-card.off { border-color:#334155; }
-  .dark .ctrl-card .ctrl-nombre { color:#f1f5f9; }
+  .dark .ctrl-card .ctrl-nombre { color:#e2e8f0; }
   .dark .ctrl-card.on  .ctrl-icon { background:#065f46; }
   .dark .ctrl-card.off .ctrl-icon { background:#0f172a; }
   /* Modal panel dark */
@@ -178,7 +179,7 @@
               class="text-gray-400 hover:text-gray-600 bg-white rounded-full w-9 h-9 flex items-center justify-center shadow text-xl">✕</button>
     </div>
     <!-- Lista switches 1 columna -->
-    <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto overflow-x-hidden px-4 pb-4 flex-1">
+    <div id="panel-grid" class="flex flex-col gap-3 overflow-y-auto overflow-x-hidden pb-4 flex-1">
       <div class="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
         <svg class="w-8 h-8 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>

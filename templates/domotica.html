@@ -213,8 +213,8 @@
 
 
 <!-- ═══════ MODAL: PANEL DE CONTROL ═══════ -->
-<div id="modal-panel" class="fixed inset-0 z-50 flex flex-col overflow-hidden">
-  <div class="flex-1 flex flex-col w-full bg-gray-100 sm:m-auto sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] overflow-hidden">
+<div id="modal-panel" class="fixed inset-0 z-50 flex flex-col overflow-hidden max-w-full">
+  <div class="flex-1 flex flex-col w-full max-w-full bg-gray-100 sm:m-auto sm:rounded-3xl sm:max-w-lg sm:max-h-[90vh] overflow-hidden">
     <!-- Header -->
     <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
       <div>
@@ -1255,7 +1255,7 @@ function copiarPromptSwitch() {
   const colorPaleta = oscuro ? 'blanco y gris muy claro' : 'negro y gris oscuro';
   const colorTexto  = oscuro ? 'blanco' : '#1e293b';
   const parteTexto  = conTexto
-    ? ` El 75% superior contiene solo la ilustración del objeto. El 25% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color ${colorTexto} — sin ningún otro texto.`
+    ? ` El 65% superior contiene solo la ilustración del objeto. El 35% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color ${colorTexto} — sin ningún otro texto.`
     : ' Sin ningún texto, letra ni abreviatura — solo la ilustración.';
   const prompt = `Dibuja la ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo transparente. Estilo flat minimalista. Usa únicamente ${colorPaleta}, sin ningún otro color. Sin sombras.${parteTexto} La ilustración debe llenar su área sin márgenes ni espacio vacío.`;
   navigator.clipboard.writeText(prompt).then(() => {

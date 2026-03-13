@@ -25,13 +25,17 @@ MAX_MSGS = 20   # últimos mensajes a inyectar
 MAX_CHARS = 600  # máximo de chars por mensaje (para no saturar el contexto)
 
 
+def get_db():
+    import psycopg2
+    import psycopg2.extras
+    conn = psycopg2.connect(DB_URL, connect_timeout=5)
+    return conn, conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+
 def get_historial():
     try:
-        import psycopg2
-        import psycopg2.extras
-        conn = psycopg2.connect(DB_URL, connect_timeout=5)
+        conn, cur = get_db()
         try:
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("""
                 SELECT rol, contenido FROM (
                     SELECT id, rol, contenido
@@ -48,6 +52,24 @@ def get_historial():
         return []
 
 
+def get_requerimientos():
+    try:
+        conn, cur = get_db()
+        try:
+            cur.execute("""
+                SELECT id, descripcion, modulo, prioridad, estado, fecha_creacion
+                FROM requerimientos
+                WHERE estado NOT IN ('Completado', 'Descartado')
+                ORDER BY id DESC
+                LIMIT 30
+            """)
+            return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
 def main():
     # Leer payload (no lo necesitamos, pero hay que consumir stdin)
     try:
@@ -56,19 +78,32 @@ def main():
         pass
 
     historial = get_historial()
-    if not historial:
+    requerimientos = get_requerimientos()
+
+    salida = []
+
+    if historial:
+        salida.append("━━━ HISTORIAL RECIENTE DEL CHAT (BD PostgreSQL) ━━━")
+        for m in historial:
+            nombre   = "Rafael" if m['rol'] == 'user' else "Claude"
+            contenido = m['contenido']
+            if len(contenido) > MAX_CHARS:
+                contenido = contenido[:MAX_CHARS] + "…"
+            salida.append(f"{nombre}: {contenido}")
+        salida.append("━━━ FIN HISTORIAL ━━━")
+
+    if requerimientos:
+        salida.append("━━━ IDEAS / REQUERIMIENTOS PENDIENTES ━━━")
+        for r in requerimientos:
+            fecha = str(r['fecha_creacion'])[:10] if r['fecha_creacion'] else '?'
+            modulo = f" [{r['modulo']}]" if r.get('modulo') else ''
+            salida.append(f"#{r['id']} [{r['estado']}][{r['prioridad']}]{modulo} {fecha}: {r['descripcion']}")
+        salida.append("━━━ FIN IDEAS ━━━")
+
+    if not salida:
         sys.exit(0)
 
-    lineas = ["━━━ HISTORIAL RECIENTE DEL CHAT (BD PostgreSQL) ━━━"]
-    for m in historial:
-        nombre   = "Rafael" if m['rol'] == 'user' else "Claude"
-        contenido = m['contenido']
-        if len(contenido) > MAX_CHARS:
-            contenido = contenido[:MAX_CHARS] + "…"
-        lineas.append(f"{nombre}: {contenido}")
-    lineas.append("━━━ FIN HISTORIAL ━━━")
-
-    print('\n'.join(lineas))
+    print('\n'.join(salida))
     sys.exit(0)
 
 

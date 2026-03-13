@@ -184,6 +184,32 @@
       </div>
     </div>
 
+    <!-- Config presencia (colapsable) -->
+    <div>
+      <button type="button" onclick="toggleConfigPresencia()"
+              class="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition">
+        <span id="cfg-presencia-chevron">▸</span> Configurar tiempos de presencia
+      </button>
+      <div id="cfg-presencia-panel" class="hidden mt-2 bg-white border border-gray-100 rounded-xl p-3 space-y-2">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-500 w-40 shrink-0">Inactividad máxima (min)</label>
+          <input id="cfg-inactividad" type="number" min="1" max="60" value="5"
+                 class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-16 text-center">
+          <span class="text-xs text-gray-400">Sin tocar el PC</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-500 w-40 shrink-0">Ventana del servidor (min)</label>
+          <input id="cfg-ventana" type="number" min="1" max="60" value="6"
+                 class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-16 text-center">
+          <span class="text-xs text-gray-400">Margen para marcar ausente</span>
+        </div>
+        <button onclick="guardarConfigPresencia()"
+                class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition">
+          Guardar
+        </button>
+      </div>
+    </div>
+
     <!-- Lista de reglas -->
     <div id="lista-reglas" class="space-y-2"></div>
 
@@ -1663,6 +1689,12 @@ async function cargarContextoReglas() {
     const btn = document.getElementById('btn-master-reglas');
     if (btn) btn.className = 'toggle-btn ' + (d.reglas_activas ? 'on' : 'off');
 
+    // Inputs de config presencia (solo si no está abierto el panel para no pisar edición)
+    if (document.getElementById('cfg-presencia-panel').classList.contains('hidden')) {
+      if (d.presencia_inactividad_min) document.getElementById('cfg-inactividad').value = d.presencia_inactividad_min;
+      if (d.presencia_ventana_min) document.getElementById('cfg-ventana').value = d.presencia_ventana_min;
+    }
+
     // Laptop presencia
     const ctxL = document.getElementById('ctx-laptop');
     if (ctxL) {
@@ -1869,6 +1901,31 @@ async function guardarRegla() {
       toast(d.error || 'Error al guardar', 'err');
     }
   } catch(e) { toast('Error de red', 'err'); }
+}
+
+function toggleConfigPresencia() {
+  const panel = document.getElementById('cfg-presencia-panel');
+  const chev = document.getElementById('cfg-presencia-chevron');
+  const oculto = panel.classList.toggle('hidden');
+  chev.textContent = oculto ? '▸' : '▾';
+}
+
+async function guardarConfigPresencia() {
+  const inactividad = parseInt(document.getElementById('cfg-inactividad').value) || 5;
+  const ventana = parseInt(document.getElementById('cfg-ventana').value) || 6;
+  try {
+    const r = await fetch('/api/domotica/config/presencia', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ inactividad_min: inactividad, ventana_min: ventana })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Tiempos guardados');
+      document.getElementById('cfg-presencia-panel').classList.add('hidden');
+      document.getElementById('cfg-presencia-chevron').textContent = '▸';
+    } else { toast('Error al guardar', 'error'); }
+  } catch(e) { toast('Error al guardar', 'error'); }
 }
 
 // Cargar al iniciar

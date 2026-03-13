@@ -1388,7 +1388,7 @@ def evaluar_reglas_domotica():
 
         # 1. Master switch
         config = conn.execute(
-            "SELECT reglas_activas, laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1"
+            "SELECT reglas_activas, laptop_last_seen, presencia_ventana_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
         if not config or not config['reglas_activas']:
             conn.close()
@@ -1396,9 +1396,10 @@ def evaluar_reglas_domotica():
 
         ahora = datetime.now()
 
-        # 2. Presencia laptop (heartbeat < 6 min — el .bat reintenta, margen mínimo sobre 2 min)
+        # 2. Presencia laptop (configurable: presencia_ventana_seg, default 360 s)
         ls = config['laptop_last_seen']
-        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 360)
+        ventana = int(config['presencia_ventana_seg'] or 360)
+        laptop_activa = bool(ls and (ahora - ls).total_seconds() < ventana)
 
         # 3. Temperatura Cali (Open-Meteo, sin API key)
         temperatura = None
@@ -36611,6 +36612,8 @@ def crear_tablas_domotica(conn):
         )""",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS laptop_last_seen TIMESTAMP",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS reglas_activas BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_inactividad_seg INTEGER DEFAULT 300",
+        "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_ventana_seg INTEGER DEFAULT 360",
     ]
     for sql in sqls:
         try:
@@ -37434,14 +37437,16 @@ def api_domotica_heartbeat():
             (ultima_actividad, ultima_actividad)
         )
         conn.commit()
-        # Leer el valor actualizado para decidir si disparar reglas
-        cfg = conn.execute("SELECT laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1").fetchone()
+        # Leer config y valor actualizado para decidir si disparar reglas
+        cfg = conn.execute(
+            "SELECT laptop_last_seen, presencia_ventana_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
+        ).fetchone()
         ls = cfg['laptop_last_seen'] if cfg else None
+        ventana = int(cfg['presencia_ventana_seg'] or 360) if cfg else 360
         elapsed = (ahora - ls).total_seconds() if ls else 9999
-        usuario_activo = elapsed < 360
+        usuario_activo = elapsed < ventana
         conn.close()
-        if elapsed >= 360:
-            # Presencia inactiva → evaluar reglas ahora sin esperar el scheduler
+        if elapsed >= ventana:
             threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
         return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()})
     except Exception as e:
@@ -37460,11 +37465,13 @@ def api_domotica_reglas_contexto():
         conn = get_db_connection()
         crear_tablas_domotica(conn)
         config = conn.execute(
-            "SELECT reglas_activas, laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1"
+            "SELECT reglas_activas, laptop_last_seen, presencia_inactividad_seg, presencia_ventana_seg "
+            "FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
         ahora = datetime.now()
         ls = config['laptop_last_seen'] if config else None
-        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 360)
+        ventana = int(config['presencia_ventana_seg'] or 360) if config else 360
+        laptop_activa = bool(ls and (ahora - ls).total_seconds() < ventana)
         laptop_hace = int((ahora - ls).total_seconds() / 60) if ls else None
 
         temperatura = None
@@ -37484,7 +37491,9 @@ def api_domotica_reglas_contexto():
             'laptop_activa': laptop_activa,
             'laptop_last_seen': ls.isoformat() if ls else None,
             'laptop_hace_min': laptop_hace,
-            'temperatura': temperatura
+            'temperatura': temperatura,
+            'presencia_inactividad_min': int((config['presencia_inactividad_seg'] or 300) / 60) if config else 5,
+            'presencia_ventana_min': int((config['presencia_ventana_seg'] or 360) / 60) if config else 6,
         })
     except Exception as e:
         try: conn.rollback(); conn.close()
@@ -37509,6 +37518,31 @@ def api_domotica_reglas_master():
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'reglas_activas': valor})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/config/presencia', methods=['POST'])
+@admin_required
+def api_domotica_config_presencia():
+    """Guarda tiempos de presencia: inactividad_min y ventana_min."""
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        data = request.get_json() or {}
+        inactividad_min = int(data.get('inactividad_min', 5))
+        ventana_min = int(data.get('ventana_min', 6))
+        inactividad_seg = max(60, inactividad_min * 60)
+        ventana_seg = max(inactividad_seg + 60, ventana_min * 60)  # ventana >= inactividad + 1 min
+        conn.execute(
+            "UPDATE CONFIGURACION_SISTEMA SET presencia_inactividad_seg=%s, presencia_ventana_seg=%s WHERE id=1",
+            (inactividad_seg, ventana_seg)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'inactividad_min': inactividad_min, 'ventana_min': ventana_min})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

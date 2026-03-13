@@ -6635,6 +6635,14 @@ def api_requerimiento_captura():
         if not descripcion:
             return jsonify({'ok': False, 'error': 'Escribe algo primero'}), 400
         conn = get_db_connection()
+        # Self-healing: crear secuencia si no existe (producción sin SERIAL en id)
+        for _fix in [
+            "CREATE SEQUENCE IF NOT EXISTS requerimientos_id_seq",
+            "ALTER TABLE requerimientos ALTER COLUMN id SET DEFAULT nextval('requerimientos_id_seq')",
+            "SELECT setval('requerimientos_id_seq', COALESCE((SELECT MAX(id) FROM requerimientos), 0) + 1, false)",
+        ]:
+            try: conn.execute(_fix); conn.commit()
+            except Exception: conn.rollback()
         row = conn.execute("""
             INSERT INTO requerimientos (descripcion, modulo, prioridad, estado)
             VALUES (%s, %s, %s, %s) RETURNING id, fecha_creacion
@@ -38707,26 +38715,6 @@ def api_contabilidad_asiento_automatico(tipo, slug):
         try: conn.rollback(); conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-# Fix de startup: requerimientos.id sin secuencia en producción
-# Corre siempre que Gunicorn importa el módulo
-try:
-    with app.app_context():
-        _conn = get_db_connection()
-        for _sql in [
-            "CREATE SEQUENCE IF NOT EXISTS requerimientos_id_seq",
-            "ALTER TABLE requerimientos ALTER COLUMN id SET DEFAULT nextval('requerimientos_id_seq')",
-            "SELECT setval('requerimientos_id_seq', COALESCE((SELECT MAX(id) FROM requerimientos), 0) + 1, false)",
-        ]:
-            try:
-                _conn.execute(_sql)
-                _conn.commit()
-            except Exception:
-                _conn.rollback()
-        _conn.close()
-except Exception:
-    pass
 
 
 if __name__ == '__main__':

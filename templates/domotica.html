@@ -1121,8 +1121,8 @@ function copiarPromptSwitch() {
     ? `. Incluye el nombre "${nombre}" como texto en la imagen: ocupa el 25% inferior de la imagen, fuente sans-serif bold, tamaño visualmente 3 veces más grande de lo que normalmente pondrías, centrado horizontalmente, color ${oscuro ? 'blanco' : '#1e293b'}`
     : '. Sin texto, solo el ícono';
   const prompt = oscuro
-    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo transparente, formas y líneas en colores claros pensados para fondo oscuro #1e293b, para panel de control domótico en web. Sin sombras${textoExtra}.`
-    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo blanco o transparente, colores vibrantes, para panel de control domótico en web. Sin sombras${textoExtra}.`;
+    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo transparente. Usa colores neón saturados y brillantes (cian, verde eléctrico, amarillo, magenta — evita grises y blancos apagados) que resalten con fuerza sobre un fondo oscuro #1e293b. Para panel de control domótico. Sin sombras${textoExtra}.`
+    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo transparente o blanco. Usa colores oscuros y saturados (azul marino, verde oscuro, rojo oscuro, índigo, negro grafito — evita pasteles y colores pálidos) con alto contraste, para panel de control domótico. Sin sombras${textoExtra}.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     window.open('https://chatgpt.com', '_blank');

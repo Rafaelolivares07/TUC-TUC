@@ -37409,19 +37409,37 @@ def api_domotica_logs(did):
 
 @app.route('/api/domotica/heartbeat', methods=['GET', 'POST'])
 def api_domotica_heartbeat():
-    """Recibe ping del .bat del laptop. Sin login, con token."""
+    """Recibe ping del laptop. Sin login, con token.
+    Siempre responde OK (mantiene Render despierto).
+    Solo actualiza laptop_last_seen si idle < 300 s (usuario activo).
+    """
     token = request.args.get('token', '')
     expected = os.getenv('HEARTBEAT_TOKEN', 'tuctuc-hb-2026')
     if token != expected:
         return jsonify({'ok': False}), 401
     try:
+        from datetime import datetime
+        import threading
+        idle_seg = int(request.args.get('idle', '0'))
+        usuario_activo = idle_seg < 300
         conn = get_db_connection()
         crear_tablas_domotica(conn)
-        conn.execute("UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen=NOW() WHERE id=1")
-        conn.commit()
+        presencia_cambio = False
+        if usuario_activo:
+            conn.execute("UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen=NOW() WHERE id=1")
+            conn.commit()
+        else:
+            # Chequear si la presencia acaba de volverse inactiva (para disparar reglas ahora)
+            cfg = conn.execute(
+                "SELECT laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1"
+            ).fetchone()
+            ls = cfg['laptop_last_seen'] if cfg else None
+            if ls and (datetime.now() - ls).total_seconds() >= 360:
+                presencia_cambio = True  # presencia inactiva — evaluar reglas ya
         conn.close()
-        from datetime import datetime
-        return jsonify({'ok': True, 'ts': datetime.now().isoformat()})
+        if presencia_cambio:
+            threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
+        return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'ts': datetime.now().isoformat()})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

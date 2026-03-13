@@ -1253,11 +1253,11 @@ function copiarPromptSwitch() {
   const oscuro = document.documentElement.classList.contains('dark');
   const conTexto = _panelMostrarNombres;
   const colorPaleta = oscuro ? 'blanco y gris muy claro' : 'negro y gris oscuro';
-  const colorTexto  = oscuro ? 'blanco' : '#1e293b';
+  const colorTexto  = oscuro ? 'blanco puro' : 'negro puro (#000000)';
   const parteTexto  = conTexto
-    ? ` El 65% superior contiene solo la ilustración del objeto. El 35% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color ${colorTexto} — sin ningún otro texto.`
+    ? ` El 65% superior contiene solo la ilustración del objeto. El 35% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color ${colorTexto}, SIN ningún fondo ni banda de color detrás del texto — el fondo debe ser completamente transparente también en esa zona.`
     : ' Sin ningún texto, letra ni abreviatura — solo la ilustración.';
-  const prompt = `Dibuja la ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo transparente. Estilo flat minimalista. Usa únicamente ${colorPaleta}, sin ningún otro color. Sin sombras.${parteTexto} La ilustración debe llenar su área sin márgenes ni espacio vacío.`;
+  const prompt = `Dibuja la ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo 100% transparente en todo el canvas. Estilo flat minimalista. Usa únicamente ${colorPaleta}, sin ningún otro color. Sin sombras.${parteTexto} La ilustración debe llenar su área sin márgenes ni espacio vacío.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     _abrirChatGPT();

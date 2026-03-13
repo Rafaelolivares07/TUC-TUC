@@ -957,13 +957,14 @@ class PostgreSQLConnectionWrapper:
             'usuarios', 'medicamentos', 'sintomas', 'fabricantes', 'precios',
             'diagnosticos', 'recetas', 'configuracion_precios', 'configuracion_sistema',
             'medicamento_sintoma', 'diagnostico_sintoma', 'diagnostico_medicamento',
-            'navegacion_menu', 'requerimientos', 'notificaciones',
-            'requerimiento_referencias', 'usuario_dispositivo',
+            'navegacion_menu', 'notificaciones',
+            'usuario_dispositivo',
             'pedidos_productos', 'usuarios_direcciones', 'usuarios_favoritos'
         ]
 
         # Tablas que estn en minsculas en PostgreSQL (excepciones)
         tablas_minusculas = [
+            'requerimientos', 'requerimiento_referencias',
             'precios_competencia', 'precios_competencia_new',
             'existencias', 'terceros', 'terceros_competidores', 'terceros_direcciones', 'alertas_admin', 'archivos',
             'componentes_activos_sugerencias', 'indicaciones_rechazadas',

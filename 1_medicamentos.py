@@ -1342,6 +1342,141 @@ def verificar_y_enviar_recordatorios():
         traceback.print_exc()
 
 
+def _evaluar_condicion_regla(tipo, operador, valor, laptop_activa, temperatura, hora_str, conn):
+    """Evalúa una condición individual de una regla de automatización."""
+    try:
+        if tipo == 'presencia':
+            if operador == '=' and valor == 'oficina':
+                return laptop_activa
+            if operador == '=' and valor == 'ausente':
+                return not laptop_activa
+        elif tipo == 'temperatura':
+            if temperatura is None:
+                return False
+            val = float(valor)
+            if operador == '>':  return temperatura > val
+            if operador == '<':  return temperatura < val
+            if operador == '>=': return temperatura >= val
+            if operador == '<=': return temperatura <= val
+            if operador == '=':  return abs(temperatura - val) < 0.5
+        elif tipo == 'hora':
+            if operador == '>=': return hora_str >= valor
+            if operador == '<=': return hora_str <= valor
+            if operador == '>':  return hora_str > valor
+            if operador == '<':  return hora_str < valor
+            if operador == '=':  return hora_str[:5] == valor[:5]
+        elif tipo == 'switch_estado':
+            # valor formato "switch_id:on" o "switch_id:off"
+            partes = valor.split(':')
+            sw_id = int(partes[0])
+            estado_deseado = partes[1] == 'on' if len(partes) > 1 else True
+            sw = conn.execute("SELECT estado_actual FROM smart_switches WHERE id=%s", (sw_id,)).fetchone()
+            if sw and operador == '=':
+                return bool(sw['estado_actual']) == estado_deseado
+    except Exception as e:
+        print(f'[reglas] Error condición {tipo}/{operador}/{valor}: {e}')
+    return False
+
+
+def evaluar_reglas_domotica():
+    """Scheduler: evalúa reglas contextuales (presencia+temp+hora) cada 5 min."""
+    from datetime import datetime
+    import urllib.request, json as _json
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+
+        # 1. Master switch
+        config = conn.execute(
+            "SELECT reglas_activas, laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1"
+        ).fetchone()
+        if not config or not config['reglas_activas']:
+            conn.close()
+            return
+
+        ahora = datetime.now()
+
+        # 2. Presencia laptop (heartbeat < 5 min)
+        ls = config['laptop_last_seen']
+        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 300)
+
+        # 3. Temperatura Cali (Open-Meteo, sin API key)
+        temperatura = None
+        try:
+            url = ('https://api.open-meteo.com/v1/forecast'
+                   '?latitude=3.4516&longitude=-76.5320'
+                   '&current=temperature_2m&timezone=America%2FBogota&forecast_days=1')
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                data = _json.loads(resp.read())
+                temperatura = data['current']['temperature_2m']
+        except Exception as te:
+            print(f'[reglas] Open-Meteo error: {te}')
+
+        hora_str = ahora.strftime('%H:%M')
+
+        # 4. Evaluar reglas activas
+        reglas = conn.execute(
+            "SELECT * FROM smart_reglas WHERE habilitada=TRUE ORDER BY id"
+        ).fetchall()
+
+        for regla in reglas:
+            try:
+                ok1 = _evaluar_condicion_regla(
+                    regla['cond1_tipo'], regla['cond1_operador'], regla['cond1_valor'],
+                    laptop_activa, temperatura, hora_str, conn
+                )
+                ok2 = True
+                if regla['cond2_tipo']:
+                    ok2 = _evaluar_condicion_regla(
+                        regla['cond2_tipo'], regla['cond2_operador'], regla['cond2_valor'],
+                        laptop_activa, temperatura, hora_str, conn
+                    )
+
+                if ok1 and ok2:
+                    sw = conn.execute(
+                        "SELECT ss.id, ss.tuya_device_id, ss.estado_actual, sd.id as dev_id "
+                        "FROM smart_switches ss "
+                        "JOIN smart_dispositivos sd ON sd.id=ss.id_dispositivo "
+                        "WHERE ss.id=%s AND ss.activo=TRUE",
+                        (regla['accion_switch_id'],)
+                    ).fetchone()
+                    if sw and sw['tuya_device_id']:
+                        desired = bool(regla['accion_estado'])
+                        if bool(sw['estado_actual']) != desired:
+                            ok = _dom_controlar_tuya(sw['tuya_device_id'], desired)
+                            if ok:
+                                conn.execute(
+                                    "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
+                                    (desired, sw['id'])
+                                )
+                                conn.execute(
+                                    "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon) "
+                                    "VALUES (%s,%s,'regla',%s,%s)",
+                                    (sw['dev_id'], sw['id'],
+                                     'encendido' if desired else 'apagado',
+                                     f"Regla: {regla['nombre']}")
+                                )
+                                print(f"[REGLA] '{regla['nombre']}': {'ON' if desired else 'OFF'}")
+
+                conn.execute(
+                    "UPDATE smart_reglas SET ultima_ejecucion=NOW() WHERE id=%s", (regla['id'],)
+                )
+                conn.commit()
+            except Exception as re:
+                print(f'[reglas] Error regla {regla["id"]}: {re}')
+                try: conn.rollback()
+                except Exception: pass
+
+        conn.close()
+    except Exception as e:
+        print(f'[reglas] Error general: {e}')
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+
+
 def verificar_domotica_scheduler():
     """
     Scheduler: corre cada 5 min. Maneja tres casos:
@@ -1487,6 +1622,15 @@ scheduler.add_job(
     trigger=IntervalTrigger(minutes=5),
     id='verificar_domotica',
     name='Domótica: control switches por horario',
+    replace_existing=True
+)
+
+# Domótica: reglas contextuales (presencia + temperatura + hora)
+scheduler.add_job(
+    func=evaluar_reglas_domotica,
+    trigger=IntervalTrigger(minutes=5),
+    id='evaluar_reglas',
+    name='Domótica: reglas contextuales',
     replace_existing=True
 )
 
@@ -36450,6 +36594,23 @@ def crear_tablas_domotica(conn):
             ultima_ejecucion TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS smart_reglas (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(200) NOT NULL,
+            habilitada BOOLEAN DEFAULT TRUE,
+            cond1_tipo VARCHAR(30) NOT NULL,
+            cond1_operador VARCHAR(5) NOT NULL,
+            cond1_valor VARCHAR(50) NOT NULL,
+            cond2_tipo VARCHAR(30),
+            cond2_operador VARCHAR(5),
+            cond2_valor VARCHAR(50),
+            accion_switch_id INTEGER NOT NULL,
+            accion_estado BOOLEAN NOT NULL DEFAULT TRUE,
+            ultima_ejecucion TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS laptop_last_seen TIMESTAMP",
+        "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS reglas_activas BOOLEAN DEFAULT TRUE",
     ]
     for sql in sqls:
         try:
@@ -37241,6 +37402,211 @@ def api_domotica_logs(did):
             conn.close()
         except Exception:
             pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ===== DOMÓTICA: HEARTBEAT + REGLAS =====
+
+@app.route('/api/domotica/heartbeat', methods=['GET', 'POST'])
+def api_domotica_heartbeat():
+    """Recibe ping del .bat del laptop. Sin login, con token."""
+    token = request.args.get('token', '')
+    expected = os.getenv('HEARTBEAT_TOKEN', 'tuctuc-hb-2026')
+    if token != expected:
+        return jsonify({'ok': False}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        conn.execute("UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen=NOW() WHERE id=1")
+        conn.commit()
+        conn.close()
+        from datetime import datetime
+        return jsonify({'ok': True, 'ts': datetime.now().isoformat()})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas/contexto')
+@admin_required
+def api_domotica_reglas_contexto():
+    """Contexto actual: presencia, temperatura, master switch."""
+    from datetime import datetime
+    import urllib.request, json as _json
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        config = conn.execute(
+            "SELECT reglas_activas, laptop_last_seen FROM CONFIGURACION_SISTEMA WHERE id=1"
+        ).fetchone()
+        ahora = datetime.now()
+        ls = config['laptop_last_seen'] if config else None
+        laptop_activa = bool(ls and (ahora - ls).total_seconds() < 300)
+        laptop_hace = int((ahora - ls).total_seconds() / 60) if ls else None
+
+        temperatura = None
+        try:
+            url = ('https://api.open-meteo.com/v1/forecast'
+                   '?latitude=3.4516&longitude=-76.5320'
+                   '&current=temperature_2m&timezone=America%2FBogota&forecast_days=1')
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                data = _json.loads(resp.read())
+                temperatura = data['current']['temperature_2m']
+        except Exception: pass
+
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'reglas_activas': bool(config['reglas_activas']) if config else True,
+            'laptop_activa': laptop_activa,
+            'laptop_last_seen': ls.isoformat() if ls else None,
+            'laptop_hace_min': laptop_hace,
+            'temperatura': temperatura
+        })
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas/master', methods=['POST'])
+@admin_required
+def api_domotica_reglas_master():
+    """Toggle master switch de reglas de automatización."""
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        data = request.get_json() or {}
+        valor = data.get('activas')
+        if valor is None:
+            # Toggle
+            config = conn.execute("SELECT reglas_activas FROM CONFIGURACION_SISTEMA WHERE id=1").fetchone()
+            valor = not bool(config['reglas_activas']) if config else True
+        conn.execute("UPDATE CONFIGURACION_SISTEMA SET reglas_activas=%s WHERE id=1", (valor,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'reglas_activas': valor})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas')
+@admin_required
+def api_domotica_reglas_lista():
+    """Lista todas las reglas con estado actual de condiciones."""
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        reglas = conn.execute(
+            "SELECT sr.*, ss.nombre as switch_nombre "
+            "FROM smart_reglas sr "
+            "LEFT JOIN smart_switches ss ON ss.id=sr.accion_switch_id "
+            "ORDER BY sr.id"
+        ).fetchall()
+        result = []
+        for r in reglas:
+            result.append({
+                'id': r['id'], 'nombre': r['nombre'], 'habilitada': r['habilitada'],
+                'cond1_tipo': r['cond1_tipo'], 'cond1_operador': r['cond1_operador'], 'cond1_valor': r['cond1_valor'],
+                'cond2_tipo': r['cond2_tipo'], 'cond2_operador': r['cond2_operador'], 'cond2_valor': r['cond2_valor'],
+                'accion_switch_id': r['accion_switch_id'], 'accion_estado': r['accion_estado'],
+                'switch_nombre': r['switch_nombre'],
+                'ultima_ejecucion': r['ultima_ejecucion'].isoformat() if r['ultima_ejecucion'] else None,
+            })
+        conn.close()
+        return jsonify({'ok': True, 'reglas': result})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas/crear', methods=['POST'])
+@admin_required
+def api_domotica_regla_crear():
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        d = request.get_json() or {}
+        row = conn.execute(
+            """INSERT INTO smart_reglas
+               (nombre, habilitada, cond1_tipo, cond1_operador, cond1_valor,
+                cond2_tipo, cond2_operador, cond2_valor, accion_switch_id, accion_estado)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (d['nombre'], d.get('habilitada', True),
+             d['cond1_tipo'], d['cond1_operador'], d['cond1_valor'],
+             d.get('cond2_tipo'), d.get('cond2_operador'), d.get('cond2_valor'),
+             d['accion_switch_id'], d.get('accion_estado', True))
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas/<int:rid>/editar', methods=['POST'])
+@admin_required
+def api_domotica_regla_editar(rid):
+    try:
+        conn = get_db_connection()
+        d = request.get_json() or {}
+        conn.execute(
+            """UPDATE smart_reglas SET nombre=%s, habilitada=%s,
+               cond1_tipo=%s, cond1_operador=%s, cond1_valor=%s,
+               cond2_tipo=%s, cond2_operador=%s, cond2_valor=%s,
+               accion_switch_id=%s, accion_estado=%s WHERE id=%s""",
+            (d['nombre'], d.get('habilitada', True),
+             d['cond1_tipo'], d['cond1_operador'], d['cond1_valor'],
+             d.get('cond2_tipo'), d.get('cond2_operador'), d.get('cond2_valor'),
+             d['accion_switch_id'], d.get('accion_estado', True), rid)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas/<int:rid>/toggle', methods=['POST'])
+@admin_required
+def api_domotica_regla_toggle(rid):
+    try:
+        conn = get_db_connection()
+        r = conn.execute("SELECT habilitada FROM smart_reglas WHERE id=%s", (rid,)).fetchone()
+        if not r:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrada'}), 404
+        nuevo = not r['habilitada']
+        conn.execute("UPDATE smart_reglas SET habilitada=%s WHERE id=%s", (nuevo, rid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'habilitada': nuevo})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/reglas/<int:rid>/eliminar', methods=['POST'])
+@admin_required
+def api_domotica_regla_eliminar(rid):
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM smart_reglas WHERE id=%s", (rid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

@@ -1114,11 +1114,11 @@ function copiarPromptSwitch() {
   const oscuro = document.documentElement.classList.contains('dark');
   const conTexto = _panelMostrarNombres;
   const textoExtra = conTexto
-    ? `. Incluye el nombre "${nombre}" como texto en la imagen: ocupa el 25% inferior de la imagen, fuente sans-serif bold, tamaño visualmente 3 veces más grande de lo que normalmente pondrías, centrado horizontalmente, color ${oscuro ? 'blanco' : '#1e293b'}`
-    : '. Sin texto, solo el ícono';
+    ? `. Reserva el 25% inferior del canvas para el nombre "${nombre}": fuente sans-serif bold, centrado, color ${oscuro ? 'blanco' : '#1e293b'}. El ícono ocupa el 75% superior`
+    : '. Sin texto';
   const prompt = oscuro
-    ? `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo transparente. Usa colores neón saturados y brillantes (cian, verde eléctrico, amarillo, magenta — evita grises y blancos apagados) que resalten con fuerza sobre un fondo oscuro #1e293b. Para panel de control domótico. Sin sombras${textoExtra}.`
-    : `Genera un ícono PNG de ${nombre}, estilo flat minimalista, 512x512px, fondo transparente o blanco. Usa colores oscuros y saturados (azul marino, verde oscuro, rojo oscuro, índigo, negro grafito — evita pasteles y colores pálidos) con alto contraste, para panel de control domótico. Sin sombras${textoExtra}.`;
+    ? `Genera un ícono PNG de ${nombre}, 512x512px, fondo transparente. El ícono debe llenar el canvas completo sin márgenes ni bordes en blanco — ocupar el 100% del área disponible. Estilo flat minimalista. Colores neón saturados y brillantes (cian, verde eléctrico, amarillo, magenta — sin grises ni blancos apagados) que resalten sobre fondo oscuro #1e293b. Sin sombras${textoExtra}.`
+    : `Genera un ícono PNG de ${nombre}, 512x512px, fondo transparente. El ícono debe llenar el canvas completo sin márgenes ni bordes en blanco — ocupar el 100% del área disponible. Estilo flat minimalista. Colores oscuros y saturados (azul marino, índigo, grafito, verde oscuro — sin pasteles ni colores pálidos), alto contraste. Sin sombras${textoExtra}.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     window.open('https://chatgpt.com', '_blank');

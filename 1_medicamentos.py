@@ -37454,21 +37454,24 @@ def api_domotica_heartbeat():
         ahora = datetime.now()
         conn = get_db_connection()
         crear_tablas_domotica(conn)
-        # Leer config para saber umbral de inactividad
+        # Leer config para saber umbral de inactividad (presencia_ventana_seg = lo que guarda la UI)
         cfg = conn.execute(
-            "SELECT laptop_last_seen, presencia_ventana_seg, presencia_inactividad_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
+            "SELECT laptop_last_seen, presencia_ventana_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
-        inactividad_seg = int(cfg['presencia_inactividad_seg'] or 300) if cfg else 300
         ventana = int(cfg['presencia_ventana_seg'] or 360) if cfg else 360
-        # Solo actualizar laptop_last_seen si el usuario NO está inactivo
-        # Si idle_seg >= umbral, dejar que laptop_last_seen envejezca → reglas lo marcan como ausente
-        usuario_activo = idle_seg < inactividad_seg
+        # Si idle >= ventana: forzar NULL → scheduler detecta ausente en la misma evaluación
+        # Si idle < ventana: marcar activo con timestamp actual
+        usuario_activo = idle_seg < ventana
         if usuario_activo:
             conn.execute(
                 "UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = %s WHERE id=1",
                 (ahora,)
             )
-            conn.commit()
+        else:
+            conn.execute(
+                "UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = NULL WHERE id=1"
+            )
+        conn.commit()
         elapsed = 0
         conn.close()
         threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()

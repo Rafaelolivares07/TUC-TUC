@@ -2007,18 +2007,17 @@ async function _enviarWaContacto(tel, nombre) {
         _compartirParaNombre = nombre;
         _compartirParaId = data.id;
 
+        // Actualizar el href del botón WhatsApp existente con URL personalizada
         const url = _buildCompartirUrl();
         const txt = document.getElementById('compartir-txt').value.trim();
         const primerNombre = nombre ? nombre.split(' ')[0] : '';
         const saludo = primerNombre ? `¡Hola ${primerNombre}! ` : '';
         const textoWa = txt ? txt + '\n' + url : saludo + _compartirNombre + '\n' + url;
-        const waUrl = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
+        const waLink = document.getElementById('compartir-wa');
+        waLink.href = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
+        waLink.innerHTML = waLink.innerHTML.replace(/WhatsApp.*$/, 'WhatsApp → ' + (nombre || tel));
 
-        document.getElementById('modal-compartir').classList.add('hidden');
-
-        // Usar location.href para disparar intent de app en Android
-        // (window.open en nuevo tab no dispara el intent del sistema)
-        window.location.href = waUrl;
+        toast('Contacto listo — toca WhatsApp para enviar');
     } catch(e) {
         toast('Error de conexión', true);
     }

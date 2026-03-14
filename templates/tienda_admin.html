@@ -1953,11 +1953,6 @@ function compartirProducto(id, nombre, imagen, precio, desc) {
     document.getElementById('compartir-foto').checked = true;
     document.getElementById('compartir-precio').checked = true;
     document.getElementById('compartir-desc').checked = true;
-    // Ocultar botón de envío personalizado al abrir el modal
-    const btnEnviar = document.getElementById('btn-enviar-contacto');
-    btnEnviar.classList.add('hidden');
-    btnEnviar.href = '#';
-
     // Contact Picker: mostrar botón o fallback manual según soporte
     const btnWaContacto = document.getElementById('btn-wa-contacto');
     const fallbackManual = document.getElementById('wa-contacto-manual');
@@ -1983,50 +1978,43 @@ async function _seleccionarContacto() {
         const nombre = (c.name && c.name[0] || '').trim();
         if (!tel) { toast('El contacto no tiene número', true); return; }
         if (tel.startsWith('57') && tel.length > 10) tel = tel.substring(2);
-        await _enviarWaContacto(tel, nombre);
+        _enviarWaContacto(tel, nombre); // sin await — abre WhatsApp en contexto de gesture
     } catch(e) {
         toast('No se pudo acceder a los contactos', true);
     }
 }
 
-async function _enviarWaManual() {
+function _enviarWaManual() {
     let tel = document.getElementById('wa-manual-tel').value.replace(/\D/g, '');
     const nombre = document.getElementById('wa-manual-nombre').value.trim();
     if (!tel || tel.length < 10) { toast('Ingresa un celular válido', true); return; }
     if (tel.startsWith('57') && tel.length > 10) tel = tel.substring(2);
-    await _enviarWaContacto(tel, nombre);
+    _enviarWaContacto(tel, nombre);
 }
 
-async function _enviarWaContacto(tel, nombre) {
+function _enviarWaContacto(tel, nombre) {
     const num = tel.length === 10 ? '57' + tel : tel;
-    try {
-        const r = await fetch('/api/tienda/' + SLUG + '/promo-invitar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nombre, telefono: tel})
-        });
-        const data = await r.json();
-        if (!data.ok) { toast('Error al registrar contacto', true); return; }
 
-        _compartirParaTel = tel;
-        _compartirParaNombre = nombre;
-        _compartirParaId = data.id;
+    // URL con ?tel para identificar al receptor al llegar
+    const baseUrl = _buildCompartirUrl();
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    const promoUrl = baseUrl + sep + 'tel=' + encodeURIComponent(tel);
 
-        const url = _buildCompartirUrl();
-        const txt = document.getElementById('compartir-txt').value.trim();
-        const primerNombre = nombre ? nombre.split(' ')[0] : '';
-        const saludo = primerNombre ? `¡Hola ${primerNombre}! ` : '';
-        const textoWa = txt ? txt + '\n' + url : saludo + _compartirNombre + '\n' + url;
-        const waUrl = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
+    const txt = document.getElementById('compartir-txt').value.trim();
+    const primerNombre = nombre ? nombre.split(' ')[0] : '';
+    const saludo = primerNombre ? `¡Hola ${primerNombre}! ` : '';
+    const textoWa = txt ? txt + '\n' + promoUrl : saludo + _compartirNombre + '\n' + promoUrl;
+    const waUrl = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
 
-        // Mostrar botón de envío directo — <a> nativo que el usuario toca
-        const btnEnviar = document.getElementById('btn-enviar-contacto');
-        btnEnviar.href = waUrl;
-        btnEnviar.textContent = '📲 Enviar a ' + (nombre || tel) + ' por WhatsApp';
-        btnEnviar.classList.remove('hidden');
-    } catch(e) {
-        toast('Error de conexión', true);
-    }
+    // Abrir WhatsApp AHORA — todavía en contexto de user gesture
+    window.location.href = waUrl;
+
+    // Registrar en BD en background
+    fetch('/api/tienda/' + SLUG + '/promo-invitar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({nombre, telefono: tel})
+    }).catch(() => {});
 }
 
 function _buildCompartirUrl() {
@@ -2198,11 +2186,6 @@ function _abrirMarketplace() {
                 </div>
             </div>
         </div>
-
-        <!-- Botón de envío personalizado (aparece tras Contact Picker) -->
-        <a id="btn-enviar-contacto" href="#" target="_blank"
-            class="hidden flex items-center justify-center gap-2 w-full bg-green-600 text-white font-bold py-4 rounded-2xl text-base mb-3 animate-pulse">
-        </a>
 
         <!-- Botones de compartir -->
         <div class="space-y-3">

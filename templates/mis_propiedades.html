@@ -250,7 +250,7 @@ async function cargarPropiedades() {
           <button onclick="editarProp(${p.id})" class="text-xs border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600">Editar</button>
           <button onclick="abrirFotos(${p.id})" class="text-xs border border-blue-300 rounded-lg px-3 py-1.5 text-blue-700">Fotos</button>
           <a href="/propiedades/p/${p.slug}" target="_blank" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-gray-500 text-center">Ver</a>
-          <a href="/domotica" target="_blank" class="text-xs border border-violet-300 rounded-lg px-3 py-1.5 text-violet-600 text-center font-medium">💡 Domótica</a>
+          <a href="/domotica?pid=${p.id}" target="_blank" class="text-xs border border-violet-300 rounded-lg px-3 py-1.5 text-violet-600 text-center font-medium">💡 Domótica</a>
           <button onclick="eliminarProp(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')" class="text-xs border border-orange-200 rounded-lg px-3 py-1.5 text-orange-500">Pausar</button>
           <button onclick="eliminarPropPermanente(${p.id}, '${p.titulo.replace(/'/g, "\\'")}')" class="text-xs border border-red-400 rounded-lg px-3 py-1.5 text-red-600 font-semibold">Eliminar</button>
         </div>

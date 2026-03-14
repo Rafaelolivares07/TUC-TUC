@@ -832,10 +832,12 @@ async function cargarPropiedades() {
       opt.textContent = p.titulo + (p.ciudad ? ` — ${p.ciudad}` : '');
       sel.appendChild(opt);
     });
-    // Auto-seleccionar: si solo hay una propiedad, elegirla automáticamente.
-    // Si hay varias, recuperar la última selección guardada.
+    // Auto-seleccionar: URL param ?pid= tiene prioridad, luego localStorage, luego si solo hay una.
+    const urlPid = new URLSearchParams(window.location.search).get('pid');
     const saved = localStorage.getItem('dom_pid');
-    if (d.propiedades.length === 1) {
+    if (urlPid && sel.querySelector(`option[value="${urlPid}"]`)) {
+      sel.value = urlPid;
+    } else if (d.propiedades.length === 1) {
       sel.value = d.propiedades[0].id;
     } else if (saved && sel.querySelector(`option[value="${saved}"]`)) {
       sel.value = saved;

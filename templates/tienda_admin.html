@@ -662,8 +662,8 @@ async function guardarEntrada() {
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────
 let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ tienda.lat | tojson }};
-let _lonUbic = {{ tienda.lon | tojson }};
+let _latUbic = {{ (tienda.lat if tienda else none) | tojson }};
+let _lonUbic = {{ (tienda.lon if tienda else none) | tojson }};
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }

@@ -27786,20 +27786,61 @@ def tienda_publica(slug):
 
 @app.route('/api/tienda/<slug>/cliente-info')
 def api_tienda_cliente_info(slug):
-    """Busca un cliente por teléfono para pre-llenar el formulario de promo"""
+    """Busca un cliente por ID o teléfono para el flujo promo"""
+    tercero_id = request.args.get('id', '').strip()
     tel = request.args.get('tel', '').strip()
-    if not tel:
+    if not tercero_id and not tel:
         return jsonify({'ok': False}), 400
     try:
         conn = get_db_connection()
-        row = conn.execute(
-            "SELECT nombre, telefono, direccion FROM terceros WHERE telefono = %s LIMIT 1", (tel,)
-        ).fetchone()
+        if tercero_id:
+            row = conn.execute(
+                "SELECT id, nombre, telefono, direccion FROM terceros WHERE id = %s LIMIT 1", (tercero_id,)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id, nombre, telefono, direccion FROM terceros WHERE telefono = %s LIMIT 1", (tel,)
+            ).fetchone()
         conn.close()
         if row:
-            return jsonify({'ok': True, 'nombre': row['nombre'], 'telefono': row['telefono'], 'direccion': row['direccion'] or ''})
+            return jsonify({'ok': True, 'id': row['id'], 'nombre': row['nombre'], 'telefono': row['telefono'], 'direccion': row['direccion'] or ''})
         return jsonify({'ok': False})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/promo-invitar', methods=['POST'])
+def api_tienda_promo_invitar(slug):
+    """Crea o actualiza tercero al compartir promo — devuelve ID para URL personalizada"""
+    data = request.get_json()
+    nombre = (data.get('nombre') or '').strip()
+    telefono = (data.get('telefono') or '').replace(' ', '').replace('-', '')
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+    try:
+        conn = get_db_connection()
+        existing = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if existing:
+            if nombre:
+                conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, existing['id']))
+                conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'id': existing['id']})
+        row = conn.execute(
+            "INSERT INTO terceros (nombre, telefono, tipo) VALUES (%s, %s, 'cliente') RETURNING id",
+            (nombre or telefono, telefono)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

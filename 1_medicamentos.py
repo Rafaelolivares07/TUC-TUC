@@ -27784,6 +27784,25 @@ def tienda_publica(slug):
         return f"Error: {e}", 500
 
 
+@app.route('/api/tienda/<slug>/cliente-info')
+def api_tienda_cliente_info(slug):
+    """Busca un cliente por teléfono para pre-llenar el formulario de promo"""
+    tel = request.args.get('tel', '').strip()
+    if not tel:
+        return jsonify({'ok': False}), 400
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT nombre, telefono, direccion FROM terceros WHERE telefono = %s LIMIT 1", (tel,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return jsonify({'ok': True, 'nombre': row['nombre'], 'telefono': row['telefono'], 'direccion': row['direccion'] or ''})
+        return jsonify({'ok': False})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/promo/tienda/<slug>/<int:producto_id>/imagen')
 def promo_tienda_imagen(slug, producto_id):
     """Devuelve imagen 1200x630 con fondo blur para og:image de Facebook"""

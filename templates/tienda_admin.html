@@ -1923,12 +1923,17 @@ let _compartirNombre = '';
 let _compartirImagen = '';
 let _compartirPrecio = 0;
 let _compartirDesc = '';
+let _compartirParaTel = '';
+let _compartirParaNombre = '';
+
 function compartirProducto(id, nombre, imagen, precio, desc) {
     _compartirId = id;
     _compartirNombre = nombre;
     _compartirImagen = imagen || '';
     _compartirPrecio = precio || 0;
     _compartirDesc = desc || '';
+    _compartirParaTel = '';
+    _compartirParaNombre = '';
     document.getElementById('compartir-nombre').textContent = nombre;
     const prev = document.getElementById('compartir-preview');
     if (_compartirImagen) {
@@ -1947,9 +1952,42 @@ function compartirProducto(id, nombre, imagen, precio, desc) {
     document.getElementById('compartir-foto').checked = true;
     document.getElementById('compartir-precio').checked = true;
     document.getElementById('compartir-desc').checked = true;
+    // Resetear Contact Picker
+    document.getElementById('compartir-contacto-nombre').textContent = '';
+    document.getElementById('compartir-contacto-nombre').classList.add('hidden');
+    document.getElementById('btn-contact-picker').textContent = '';
+    document.getElementById('btn-contact-picker').innerHTML = '<svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg> Seleccionar de mis contactos';
+    // Ocultar si no soportado
+    const pickerBox = document.getElementById('compartir-contacto-box');
+    if (!('contacts' in navigator && 'ContactsManager' in window)) {
+        pickerBox.classList.add('hidden');
+    } else {
+        pickerBox.classList.remove('hidden');
+    }
     _actualizarLinks();
     document.getElementById('modal-compartir').classList.remove('hidden');
 }
+
+async function _seleccionarContacto() {
+    try {
+        const contacts = await navigator.contacts.select(['name', 'tel'], {multiple: false});
+        if (!contacts || contacts.length === 0) return;
+        const c = contacts[0];
+        const tel = (c.tel && c.tel[0] || '').replace(/\D/g, '');
+        const nombre = (c.name && c.name[0] || '').trim();
+        if (!tel) { toast('El contacto no tiene número', true); return; }
+        _compartirParaTel = tel;
+        _compartirParaNombre = nombre;
+        const box = document.getElementById('compartir-contacto-nombre');
+        box.textContent = nombre ? nombre + ' · ' + tel : tel;
+        box.classList.remove('hidden');
+        document.getElementById('btn-contact-picker').innerHTML = '<svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Cambiar contacto';
+        _actualizarLinks();
+    } catch(e) {
+        toast('No se pudo acceder a los contactos', true);
+    }
+}
+
 function _buildCompartirUrl() {
     const base = location.origin + '/promo/tienda/' + SLUG + '/' + _compartirId;
     const params = new URLSearchParams();
@@ -1960,16 +1998,25 @@ function _buildCompartirUrl() {
     if (txt) params.set('txt', txt);
     const leyenda = document.getElementById('compartir-leyenda').value.trim();
     if (leyenda) params.set('leyenda', leyenda);
+    if (_compartirParaTel) params.set('para', _compartirParaTel);
     const qs = params.toString();
     return qs ? base + '?' + qs : base;
 }
+
 function _actualizarLinks() {
     const url = _buildCompartirUrl();
     const txt = document.getElementById('compartir-txt').value.trim();
-    const textoWa = txt ? txt + ' ' + url : _compartirNombre + ' — ' + url;
-    document.getElementById('compartir-wa').href = 'https://wa.me/?text=' + encodeURIComponent(textoWa);
+    const textoWa = txt ? txt + '\n' + url : _compartirNombre + '\n' + url;
+    // Si hay contacto seleccionado → WhatsApp directo a ese número
+    if (_compartirParaTel) {
+        const num = _compartirParaTel.startsWith('57') ? _compartirParaTel : '57' + _compartirParaTel;
+        document.getElementById('compartir-wa').href = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
+    } else {
+        document.getElementById('compartir-wa').href = 'https://wa.me/?text=' + encodeURIComponent(textoWa);
+    }
     document.getElementById('compartir-fb').href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(url);
 }
+
 function copiarEnlaceProducto() {
     navigator.clipboard.writeText(_buildCompartirUrl());
     toast('Enlace copiado');
@@ -2109,6 +2156,17 @@ function _abrirMarketplace() {
                     <button id="kit-btn-desc" onclick="_copiarKit('desc')" class="flex-shrink-0 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-4 py-2 rounded-lg transition min-w-[80px]">Copiar</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Compartir personalizado con Contact Picker -->
+        <div id="compartir-contacto-box" class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
+            <p class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2">Enviar a un contacto específico</p>
+            <p id="compartir-contacto-nombre" class="text-sm text-gray-500 mb-3 hidden"></p>
+            <button onclick="_seleccionarContacto()" id="btn-contact-picker" class="flex items-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl transition text-sm">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                Seleccionar de mis contactos
+            </button>
+            <p class="text-xs text-gray-400 mt-2">El link llegará pre-llenado con el nombre y celular del destinatario.</p>
         </div>
 
         <!-- Botones de compartir -->

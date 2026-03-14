@@ -134,6 +134,31 @@ function toast(msg, err) {
     setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// Lee ?para= y pre-llena el formulario
+(async function init() {
+    const params = new URLSearchParams(location.search);
+    const para = params.get('para');
+    if (!para) return;
+
+    // Guardar en cookie para próximas visitas desde este dispositivo
+    document.cookie = 'tuctuc_tel=' + encodeURIComponent(para) + '; path=/; max-age=' + (60*60*24*365);
+
+    try {
+        const r = await fetch('/api/tienda/' + SLUG + '/cliente-info?tel=' + encodeURIComponent(para));
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('campo-nombre').value = data.nombre || '';
+            document.getElementById('campo-telefono').value = data.telefono || para;
+            document.getElementById('campo-direccion').value = data.direccion || '';
+        } else {
+            // Número nuevo — pre-llenamos solo el celular
+            document.getElementById('campo-telefono').value = para;
+        }
+    } catch(e) {
+        document.getElementById('campo-telefono').value = para;
+    }
+})();
+
 async function hacerPedido() {
     const nombre = document.getElementById('campo-nombre').value.trim();
     const telefono = document.getElementById('campo-telefono').value.trim();
@@ -157,6 +182,8 @@ async function hacerPedido() {
         });
         const data = await r.json();
         if (data.ok) {
+            // Actualizar cookie con el celular confirmado
+            document.cookie = 'tuctuc_tel=' + encodeURIComponent(telefono) + '; path=/; max-age=' + (60*60*24*365);
             document.getElementById('pantalla-pedido').classList.add('hidden');
             document.getElementById('pantalla-confirmacion').classList.remove('hidden');
             document.getElementById('pantalla-confirmacion').classList.add('flex');

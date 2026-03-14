@@ -27829,7 +27829,7 @@ def api_tienda_promo_invitar(slug):
             conn.close()
             return jsonify({'ok': True, 'id': existing['id']})
         row = conn.execute(
-            "INSERT INTO terceros (nombre, telefono, tipo) VALUES (%s, %s, 'cliente') RETURNING id",
+            "INSERT INTO terceros (nombre, telefono, fecha_creacion) VALUES (%s, %s, NOW()) RETURNING id",
             (nombre or telefono, telefono)
         ).fetchone()
         conn.commit()

@@ -1993,10 +1993,7 @@ async function _enviarWaManual() {
 }
 
 async function _enviarWaContacto(tel, nombre) {
-    // Abrir ventana ANTES del await para evitar bloqueo de popup en móvil
     const num = tel.length === 10 ? '57' + tel : tel;
-    const waWin = window.open('', '_blank');
-
     try {
         const r = await fetch('/api/tienda/' + SLUG + '/promo-invitar', {
             method: 'POST',
@@ -2004,7 +2001,7 @@ async function _enviarWaContacto(tel, nombre) {
             body: JSON.stringify({nombre, telefono: tel})
         });
         const data = await r.json();
-        if (!data.ok) { waWin.close(); toast('Error al registrar contacto', true); return; }
+        if (!data.ok) { toast('Error al registrar contacto', true); return; }
 
         _compartirParaTel = tel;
         _compartirParaNombre = nombre;
@@ -2015,10 +2012,14 @@ async function _enviarWaContacto(tel, nombre) {
         const primerNombre = nombre ? nombre.split(' ')[0] : '';
         const saludo = primerNombre ? `¡Hola ${primerNombre}! ` : '';
         const textoWa = txt ? txt + '\n' + url : saludo + _compartirNombre + '\n' + url;
-        waWin.location.href = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
+        const waUrl = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
+
         document.getElementById('modal-compartir').classList.add('hidden');
+
+        // Usar location.href para disparar intent de app en Android
+        // (window.open en nuevo tab no dispara el intent del sistema)
+        window.location.href = waUrl;
     } catch(e) {
-        waWin.close();
         toast('Error de conexión', true);
     }
 }

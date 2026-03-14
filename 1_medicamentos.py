@@ -37441,7 +37441,7 @@ def api_domotica_logs(did):
 def api_domotica_heartbeat():
     """Recibe ping del laptop. Sin login, con token.
     Siempre responde OK (mantiene Render despierto).
-    Solo actualiza laptop_last_seen si idle < 300 s (usuario activo).
+    Presencia = laptop en red (heartbeat recibido), no si el usuario está tecleando.
     """
     token = request.args.get('token', '')
     expected = os.getenv('HEARTBEAT_TOKEN', 'tuctuc-hb-2026')
@@ -37452,26 +37452,21 @@ def api_domotica_heartbeat():
         import threading
         idle_seg = int(request.args.get('idle', '0'))
         ahora = datetime.now()
-        # Tiempo REAL de última actividad del usuario (no hora del heartbeat)
-        ultima_actividad = ahora - timedelta(seconds=idle_seg)
         conn = get_db_connection()
         crear_tablas_domotica(conn)
-        # Guardar el mayor valor (no retroceder si heartbeats llegan desordenados)
+        # laptop_last_seen = ahora siempre — presencia = "laptop en red", no "tecleando"
         conn.execute(
-            "UPDATE CONFIGURACION_SISTEMA "
-            "SET laptop_last_seen = GREATEST(COALESCE(laptop_last_seen, %s), %s) "
-            "WHERE id=1",
-            (ultima_actividad, ultima_actividad)
+            "UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = %s WHERE id=1",
+            (ahora,)
         )
         conn.commit()
-        # Leer config y valor actualizado para decidir si disparar reglas
+        # Leer config para respuesta
         cfg = conn.execute(
             "SELECT laptop_last_seen, presencia_ventana_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
-        ls = cfg['laptop_last_seen'] if cfg else None
         ventana = int(cfg['presencia_ventana_seg'] or 360) if cfg else 360
-        elapsed = (ahora - ls).total_seconds() if ls else 9999
-        usuario_activo = elapsed < ventana
+        usuario_activo = True  # si llegó heartbeat, está presente
+        elapsed = 0
         conn.close()
         threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
         return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()})
@@ -37565,17 +37560,15 @@ def api_domotica_config_presencia():
         conn = get_db_connection()
         crear_tablas_domotica(conn)
         data = request.get_json() or {}
-        inactividad_min = int(data.get('inactividad_min', 5))
-        ventana_min = int(data.get('ventana_min', 6))
-        inactividad_seg = max(60, inactividad_min * 60)
-        ventana_seg = max(inactividad_seg + 60, ventana_min * 60)  # ventana >= inactividad + 1 min
+        ventana_min = int(data.get('ventana_min', data.get('inactividad_min', 6)))
+        ventana_seg = max(60, ventana_min * 60)
         conn.execute(
-            "UPDATE CONFIGURACION_SISTEMA SET presencia_inactividad_seg=%s, presencia_ventana_seg=%s WHERE id=1",
-            (inactividad_seg, ventana_seg)
+            "UPDATE CONFIGURACION_SISTEMA SET presencia_ventana_seg=%s WHERE id=1",
+            (ventana_seg,)
         )
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'inactividad_min': inactividad_min, 'ventana_min': ventana_min})
+        return jsonify({'ok': True, 'ventana_min': ventana_min})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

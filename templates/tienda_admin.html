@@ -2220,7 +2220,7 @@ async function guardarDescripcion() {
 // Generar header con ChatGPT
 let _chatgptAbierto = false;
 function generarHeaderChatGPT() {
-    const nombre = {{ tienda.nombre | tojson }};
+    const nombre = {{ (tienda.nombre if tienda else none) | tojson }};
     const mostrarNombre = document.getElementById('chk-mostrar-nombre').checked;
     const desc = document.getElementById('txt-descripcion').value.trim();
     const parteDesc = desc

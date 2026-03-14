@@ -1676,10 +1676,10 @@ async function cargarContextoReglas() {
     const btn = document.getElementById('btn-master-reglas');
     if (btn) btn.className = 'toggle-btn ' + (d.reglas_activas ? 'on' : 'off');
 
-    // Inputs de config presencia (solo si no está abierto el panel para no pisar edición)
-    if (document.getElementById('cfg-presencia-panel').classList.contains('hidden')) {
-      if (d.presencia_inactividad_min) document.getElementById('cfg-inactividad').value = d.presencia_inactividad_min;
-      if (d.presencia_ventana_min) document.getElementById('cfg-ventana').value = d.presencia_ventana_min;
+    // Inputs de config presencia
+    if (d.presencia_ventana_min) {
+      const el = document.getElementById('cfg-ventana');
+      if (el && document.activeElement !== el) el.value = d.presencia_ventana_min;
     }
 
     // Laptop presencia

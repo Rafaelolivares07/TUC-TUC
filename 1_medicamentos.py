@@ -1771,7 +1771,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/', '/docs/']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/', '/docs/', '/docs']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -39297,7 +39297,218 @@ def docs_contabilidad_desarrollo():
         tipo_badge='Manual de Desarrollo',
         contenido_md=contenido,
         fecha='2026-03-12',
-        back_url='/admin')
+        back_url='/admin/docs')
+
+
+# ── Hub manuales usuario (público) ────────────────────────────
+
+@app.route('/docs')
+def docs_hub_usuario():
+    """Hub general de manuales de usuario — acceso libre."""
+    from flask import render_template_string
+    html = """<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guía TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head><body class="bg-gray-100 min-h-screen p-4 sm:p-8">
+<div class="max-w-3xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-t-4 border-indigo-600">
+    <h1 class="text-2xl font-extrabold text-gray-800">📖 Guía de Usuario — TUC TUC</h1>
+    <p class="text-sm text-gray-500 mt-1">Todo lo que necesitas saber para aprovechar la plataforma</p>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <a href="/docs/tienda" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🛍️</div>
+      <h2 class="font-bold text-gray-800">Tienda</h2>
+      <p class="text-xs text-gray-500 mt-1">Catálogo, pedidos, variantes, fotos, carrito y modo oscuro</p>
+    </a>
+    <a href="/docs/asistencia-remota" class="block bg-white rounded-xl shadow p-5 border border-violet-100 hover:border-violet-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🖥️</div>
+      <h2 class="font-bold text-gray-800">Asistencia Remota</h2>
+      <p class="text-xs text-gray-500 mt-1">Soporte técnico: descargar agente, código de sesión, control remoto</p>
+    </a>
+    <a href="/docs/domotica" class="block bg-white rounded-xl shadow p-5 border border-amber-100 hover:border-amber-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">💡</div>
+      <h2 class="font-bold text-gray-800">Domótica</h2>
+      <p class="text-xs text-gray-500 mt-1">Control de dispositivos inteligentes, programaciones y automatizaciones</p>
+    </a>
+    <a href="/docs/contabilidad" class="block bg-white rounded-xl shadow p-5 border border-emerald-100 hover:border-emerald-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">📒</div>
+      <h2 class="font-bold text-gray-800">Contabilidad</h2>
+      <p class="text-xs text-gray-500 mt-1">PUC, tipos de documento, parametrización y comprobantes</p>
+    </a>
+  </div>
+  <p class="text-center text-xs text-gray-400 mt-8">TUC TUC · Guía de Usuario · 2026</p>
+</div></body></html>"""
+    return render_template_string(html)
+
+
+# ── Hub manuales desarrollo (solo admin) ──────────────────────
+
+@app.route('/admin/docs')
+def docs_hub_desarrollo():
+    """Hub de manuales de desarrollo — solo admin."""
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    from flask import render_template_string
+    html = """<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manuales de Desarrollo — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head><body class="bg-gray-100 min-h-screen p-4 sm:p-8">
+<div class="max-w-3xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-t-4 border-gray-800">
+    <div class="flex items-center gap-3">
+      <a href="/area_admin" class="text-gray-400 hover:text-gray-700">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </a>
+      <div>
+        <h1 class="text-2xl font-extrabold text-gray-800">🔧 Manuales de Desarrollo</h1>
+        <p class="text-sm text-gray-500 mt-1">Arquitectura, APIs, tablas y decisiones de diseño por módulo</p>
+      </div>
+    </div>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <a href="/admin/docs/tienda" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🛍️</div>
+      <h2 class="font-bold text-gray-800">Tienda</h2>
+      <p class="text-xs text-gray-500 mt-1">APIs, tabla producto_imagenes, badge n_fotos, dark mode modal</p>
+    </a>
+    <a href="/admin/docs/asistencia-remota" class="block bg-white rounded-xl shadow p-5 border border-violet-100 hover:border-violet-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🖥️</div>
+      <h2 class="font-bold text-gray-800">Asistencia Remota</h2>
+      <p class="text-xs text-gray-500 mt-1">Arquitectura relay, agente.py, server.py, build .exe, GitHub Releases</p>
+    </a>
+    <a href="/admin/docs/domotica" class="block bg-white rounded-xl shadow p-5 border border-amber-100 hover:border-amber-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">💡</div>
+      <h2 class="font-bold text-gray-800">Domótica</h2>
+      <p class="text-xs text-gray-500 mt-1">Tuya IoT, helpers de acceso, endpoints, presencia/ausencia, scheduler</p>
+    </a>
+    <a href="/admin/docs/contabilidad" class="block bg-white rounded-xl shadow p-5 border border-emerald-100 hover:border-emerald-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">📒</div>
+      <h2 class="font-bold text-gray-800">Contabilidad</h2>
+      <p class="text-xs text-gray-500 mt-1">Modelo PUC colaborativo, rutas genéricas, tablas y parametrización</p>
+    </a>
+  </div>
+  <p class="text-center text-xs text-gray-400 mt-8">TUC TUC · Manuales de Desarrollo · Admin only</p>
+</div></body></html>"""
+    return render_template_string(html)
+
+
+# ── Manuales individuales — usuario ───────────────────────────
+
+@app.route('/docs/tienda')
+def docs_tienda_usuario():
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'tienda_usuario.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Usuario — Tienda',
+        tipo_badge='Manual de Usuario',
+        contenido_md=contenido,
+        fecha='2026-03-14',
+        back_url='/docs')
+
+
+@app.route('/docs/asistencia-remota')
+def docs_asistencia_usuario():
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'asistencia_remota_usuario.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Usuario — Asistencia Remota',
+        tipo_badge='Manual de Usuario',
+        contenido_md=contenido,
+        fecha='2026-03-14',
+        back_url='/docs')
+
+
+@app.route('/docs/domotica')
+def docs_domotica_usuario():
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'domotica_usuario.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Usuario — Domótica',
+        tipo_badge='Manual de Usuario',
+        contenido_md=contenido,
+        fecha='2026-03-14',
+        back_url='/docs')
+
+
+# ── Manuales individuales — desarrollo ────────────────────────
+
+@app.route('/admin/docs/tienda')
+def docs_tienda_desarrollo():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'tienda_desarrollo.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Desarrollo — Tienda',
+        tipo_badge='Manual de Desarrollo',
+        contenido_md=contenido,
+        fecha='2026-03-14',
+        back_url='/admin/docs')
+
+
+@app.route('/admin/docs/asistencia-remota')
+def docs_asistencia_desarrollo():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'asistencia_remota_desarrollo.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Desarrollo — Asistencia Remota',
+        tipo_badge='Manual de Desarrollo',
+        contenido_md=contenido,
+        fecha='2026-03-14',
+        back_url='/admin/docs')
+
+
+@app.route('/admin/docs/domotica')
+def docs_domotica_desarrollo():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'domotica_desarrollo.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Desarrollo — Domótica',
+        tipo_badge='Manual de Desarrollo',
+        contenido_md=contenido,
+        fecha='2026-03-14',
+        back_url='/admin/docs')
 
 
 @app.route('/api/admin/contabilidad/variables-modulos', methods=['GET'])

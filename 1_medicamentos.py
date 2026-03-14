@@ -36779,11 +36779,78 @@ def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando, fuente='lapto
     return acciones
 
 
+# ─── Helpers de autorización domótica ─────────────────────────────────────────
+
+def _dom_es_admin():
+    return session.get('rol') == 'Administrador'
+
+def _dom_check_pid(conn, pid):
+    """True si el usuario actual tiene acceso a esta propiedad."""
+    if _dom_es_admin(): return True
+    uid = session.get('usuario_id')
+    if not uid: return False
+    row = conn.execute(
+        "SELECT id_tercero_propietario FROM propiedades WHERE id=%s", (pid,)
+    ).fetchone()
+    return bool(row and row['id_tercero_propietario'] == uid)
+
+def _dom_check_did(conn, did):
+    """True si el usuario actual es dueño de la propiedad del dispositivo."""
+    if _dom_es_admin(): return True
+    uid = session.get('usuario_id')
+    if not uid: return False
+    row = conn.execute(
+        """SELECT p.id_tercero_propietario FROM smart_dispositivos sd
+           JOIN propiedades p ON p.id=sd.id_propiedad WHERE sd.id=%s""", (did,)
+    ).fetchone()
+    return bool(row and row['id_tercero_propietario'] == uid)
+
+def _dom_check_sid(conn, sid):
+    """True si el usuario actual es dueño de la propiedad del switch."""
+    if _dom_es_admin(): return True
+    uid = session.get('usuario_id')
+    if not uid: return False
+    row = conn.execute(
+        """SELECT p.id_tercero_propietario FROM smart_switches ss
+           JOIN smart_dispositivos sd ON sd.id=ss.id_dispositivo
+           JOIN propiedades p ON p.id=sd.id_propiedad WHERE ss.id=%s""", (sid,)
+    ).fetchone()
+    return bool(row and row['id_tercero_propietario'] == uid)
+
+def _dom_check_aid(conn, aid):
+    """True si el usuario actual es dueño de la propiedad de la automatización."""
+    if _dom_es_admin(): return True
+    uid = session.get('usuario_id')
+    if not uid: return False
+    row = conn.execute(
+        """SELECT p.id_tercero_propietario FROM smart_automatizaciones sa
+           JOIN smart_switches ss ON ss.id=sa.id_switch
+           JOIN smart_dispositivos sd ON sd.id=ss.id_dispositivo
+           JOIN propiedades p ON p.id=sd.id_propiedad WHERE sa.id=%s""", (aid,)
+    ).fetchone()
+    return bool(row and row['id_tercero_propietario'] == uid)
+
+def _dom_check_sched(conn, sched_id):
+    """True si el usuario actual es dueño de la propiedad de la programación."""
+    if _dom_es_admin(): return True
+    uid = session.get('usuario_id')
+    if not uid: return False
+    row = conn.execute(
+        """SELECT p.id_tercero_propietario FROM smart_programaciones sp
+           JOIN smart_switches ss ON ss.id=sp.id_switch
+           JOIN smart_dispositivos sd ON sd.id=ss.id_dispositivo
+           JOIN propiedades p ON p.id=sd.id_propiedad WHERE sp.id=%s""", (sched_id,)
+    ).fetchone()
+    return bool(row and row['id_tercero_propietario'] == uid)
+
+# ──────────────────────────────────────────────────────────────────────────────
+
 # ─────────── RUTA DE PÁGINA ───────────
 
 @app.route('/domotica')
-@admin_required
 def domotica_panel():
+    if session.get('rol') != 'Administrador' and not session.get('usuario_id'):
+        return redirect('/mis-propiedades')
     return render_template('domotica.html')
 
 
@@ -36791,19 +36858,32 @@ def domotica_panel():
 
 @app.route('/api/domotica/propiedades')
 def api_domotica_propiedades():
-    if session.get('rol') != 'Administrador':
+    is_admin = _dom_es_admin()
+    uid = session.get('usuario_id')
+    if not is_admin and not uid:
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
-        props = conn.execute("""
-            SELECT p.id, p.titulo, p.ciudad,
-                   COUNT(DISTINCT sd.id) AS total_dispositivos
-            FROM propiedades p
-            LEFT JOIN smart_dispositivos sd ON sd.id_propiedad = p.id
-            GROUP BY p.id, p.titulo, p.ciudad
-            ORDER BY p.id DESC
-        """).fetchall()
+        if is_admin:
+            props = conn.execute("""
+                SELECT p.id, p.titulo, p.ciudad,
+                       COUNT(DISTINCT sd.id) AS total_dispositivos
+                FROM propiedades p
+                LEFT JOIN smart_dispositivos sd ON sd.id_propiedad = p.id
+                GROUP BY p.id, p.titulo, p.ciudad
+                ORDER BY p.id DESC
+            """).fetchall()
+        else:
+            props = conn.execute("""
+                SELECT p.id, p.titulo, p.ciudad,
+                       COUNT(DISTINCT sd.id) AS total_dispositivos
+                FROM propiedades p
+                LEFT JOIN smart_dispositivos sd ON sd.id_propiedad = p.id
+                WHERE p.id_tercero_propietario=%s
+                GROUP BY p.id, p.titulo, p.ciudad
+                ORDER BY p.id DESC
+            """, (uid,)).fetchall()
         conn.close()
         return jsonify({'ok': True, 'propiedades': [dict(p) for p in props]})
     except Exception as e:
@@ -36812,11 +36892,14 @@ def api_domotica_propiedades():
 
 @app.route('/api/domotica/propiedad/<int:pid>/dispositivos')
 def api_domotica_dispositivos(pid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
+        if not _dom_check_pid(conn, pid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         devs = conn.execute(
             "SELECT * FROM smart_dispositivos WHERE id_propiedad=%s ORDER BY id", (pid,)
         ).fetchall()
@@ -36848,7 +36931,7 @@ def api_domotica_dispositivos(pid):
 
 @app.route('/api/domotica/dispositivo/crear', methods=['POST'])
 def api_domotica_dispositivo_crear():
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     nombre = (data.get('nombre') or '').strip()
@@ -36863,6 +36946,9 @@ def api_domotica_dispositivo_crear():
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
+        if not _dom_check_pid(conn, id_propiedad):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         row = conn.execute(
             "INSERT INTO smart_dispositivos (id_propiedad, nombre, tipo, descripcion, mac_address, device_token) "
             "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
@@ -36879,7 +36965,7 @@ def api_domotica_dispositivo_crear():
 
 @app.route('/api/domotica/dispositivo/<int:did>/editar', methods=['POST'])
 def api_domotica_dispositivo_editar(did):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     campos = {}
@@ -36892,6 +36978,9 @@ def api_domotica_dispositivo_editar(did):
     vals = list(campos.values()) + [did]
     try:
         conn = get_db_connection()
+        if not _dom_check_did(conn, did):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute(f"UPDATE smart_dispositivos SET {sets} WHERE id=%s", vals)
         conn.commit()
         conn.close()
@@ -36904,12 +36993,15 @@ def api_domotica_dispositivo_editar(did):
 
 @app.route('/api/domotica/dispositivo/<int:did>/token/regenerar', methods=['POST'])
 def api_domotica_token_regenerar(did):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     import secrets as _sec
     token = _sec.token_hex(24)
     try:
         conn = get_db_connection()
+        if not _dom_check_did(conn, did):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("UPDATE smart_dispositivos SET device_token=%s WHERE id=%s", (token, did))
         conn.commit()
         conn.close()
@@ -36922,7 +37014,7 @@ def api_domotica_token_regenerar(did):
 
 @app.route('/api/domotica/switch/crear', methods=['POST'])
 def api_domotica_switch_crear():
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     nombre = (data.get('nombre') or '').strip()
@@ -36935,6 +37027,9 @@ def api_domotica_switch_crear():
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
+        if not _dom_check_did(conn, id_dispositivo):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         row = conn.execute(
             "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id, imagen, mostrar_nombre) VALUES (%s,%s,%s,%s,%s) RETURNING id",
             (id_dispositivo, nombre, tuya_device_id or None, imagen, bool(mostrar_nombre))
@@ -36950,7 +37045,7 @@ def api_domotica_switch_crear():
 
 @app.route('/api/domotica/switch/<int:sid>/editar', methods=['POST'])
 def api_domotica_switch_editar(sid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     campos = {}
@@ -36967,6 +37062,9 @@ def api_domotica_switch_editar(sid):
     vals = list(campos.values()) + [sid]
     try:
         conn = get_db_connection()
+        if not _dom_check_sid(conn, sid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute(f"UPDATE smart_switches SET {sets} WHERE id=%s", vals)
         conn.commit()
         conn.close()
@@ -36979,12 +37077,15 @@ def api_domotica_switch_editar(sid):
 
 @app.route('/api/domotica/switch/<int:sid>/toggle', methods=['POST'])
 def api_domotica_switch_toggle(sid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     estado = bool(data.get('estado'))
     try:
         conn = get_db_connection()
+        if not _dom_check_sid(conn, sid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         sw = conn.execute("SELECT * FROM smart_switches WHERE id=%s", (sid,)).fetchone()
         if not sw:
             conn.close()
@@ -37009,7 +37110,7 @@ def api_domotica_switch_toggle(sid):
 
 @app.route('/api/domotica/automatizacion/crear', methods=['POST'])
 def api_domotica_automatizacion_crear():
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     id_switch = data.get('id_switch')
@@ -37024,6 +37125,9 @@ def api_domotica_automatizacion_crear():
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
+        if not _dom_check_sid(conn, id_switch):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         row = conn.execute(
             """INSERT INTO smart_automatizaciones
                (id_switch, descripcion, hora_inicio, hora_fin, bat_minimo_pico, bat_minimo_fuera_pico, bat_objetivo)
@@ -37042,7 +37146,7 @@ def api_domotica_automatizacion_crear():
 
 @app.route('/api/domotica/automatizacion/<int:aid>/editar', methods=['POST'])
 def api_domotica_automatizacion_editar(aid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     campos = {}
@@ -37057,6 +37161,9 @@ def api_domotica_automatizacion_editar(aid):
     vals = list(campos.values()) + [aid]
     try:
         conn = get_db_connection()
+        if not _dom_check_aid(conn, aid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute(f"UPDATE smart_automatizaciones SET {sets} WHERE id=%s", vals)
         conn.commit()
         conn.close()
@@ -37069,10 +37176,13 @@ def api_domotica_automatizacion_editar(aid):
 
 @app.route('/api/domotica/automatizacion/<int:aid>/eliminar', methods=['POST'])
 def api_domotica_automatizacion_eliminar(aid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     try:
         conn = get_db_connection()
+        if not _dom_check_aid(conn, aid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("DELETE FROM smart_automatizaciones WHERE id=%s", (aid,))
         conn.commit()
         conn.close()
@@ -37087,7 +37197,7 @@ def api_domotica_automatizacion_eliminar(aid):
 
 @app.route('/api/domotica/switch/<int:sid>/temporizador', methods=['POST'])
 def api_domotica_switch_temporizador(sid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     minutos = int(data.get('minutos', 0))
@@ -37095,6 +37205,9 @@ def api_domotica_switch_temporizador(sid):
         return jsonify({'ok': False, 'error': 'Minutos inválidos'})
     try:
         conn = get_db_connection()
+        if not _dom_check_sid(conn, sid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         sw = conn.execute("SELECT * FROM smart_switches WHERE id=%s", (sid,)).fetchone()
         if not sw:
             conn.close()
@@ -37120,10 +37233,13 @@ def api_domotica_switch_temporizador(sid):
 
 @app.route('/api/domotica/switch/<int:sid>/temporizador/cancelar', methods=['POST'])
 def api_domotica_switch_temporizador_cancelar(sid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     try:
         conn = get_db_connection()
+        if not _dom_check_sid(conn, sid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("UPDATE smart_switches SET apagar_en=NULL WHERE id=%s", (sid,))
         conn.commit()
         conn.close()
@@ -37138,7 +37254,7 @@ def api_domotica_switch_temporizador_cancelar(sid):
 
 @app.route('/api/domotica/programacion/crear', methods=['POST'])
 def api_domotica_programacion_crear():
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     id_switch = data.get('id_switch')
@@ -37151,6 +37267,9 @@ def api_domotica_programacion_crear():
     try:
         conn = get_db_connection()
         crear_tablas_domotica(conn)
+        if not _dom_check_sid(conn, id_switch):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         row = conn.execute(
             "INSERT INTO smart_programaciones (id_switch, hora, minuto, dias, accion) VALUES (%s,%s,%s,%s,%s) RETURNING id",
             (id_switch, int(hora), minuto, dias, accion)
@@ -37166,7 +37285,7 @@ def api_domotica_programacion_crear():
 
 @app.route('/api/domotica/programacion/<int:pid>/editar', methods=['POST'])
 def api_domotica_programacion_editar(pid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     data = request.get_json()
     campos = {}
@@ -37179,6 +37298,9 @@ def api_domotica_programacion_editar(pid):
     vals = list(campos.values()) + [pid]
     try:
         conn = get_db_connection()
+        if not _dom_check_sched(conn, pid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute(f"UPDATE smart_programaciones SET {sets} WHERE id=%s", vals)
         conn.commit()
         conn.close()
@@ -37191,10 +37313,13 @@ def api_domotica_programacion_editar(pid):
 
 @app.route('/api/domotica/programacion/<int:pid>/eliminar', methods=['POST'])
 def api_domotica_programacion_eliminar(pid):
-    if session.get('rol') != 'Administrador':
+    if not _dom_es_admin() and not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
     try:
         conn = get_db_connection()
+        if not _dom_check_sched(conn, pid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         conn.execute("DELETE FROM smart_programaciones WHERE id=%s", (pid,))
         conn.commit()
         conn.close()

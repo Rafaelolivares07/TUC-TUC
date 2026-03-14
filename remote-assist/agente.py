@@ -15,6 +15,9 @@ import base64
 import io
 import time
 import sys
+import random
+import threading
+import tkinter as tk
 
 try:
     import mss
@@ -38,6 +41,33 @@ except ImportError:
     sys.exit(1)
 
 from PIL import Image
+
+
+def generar_codigo():
+    digits = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    return digits[:3] + '-' + digits[3:]
+
+
+def mostrar_ventana(codigo):
+    root = tk.Tk()
+    root.title("TUC TUC Remote")
+    root.geometry("300x200")
+    root.resizable(False, False)
+    root.configure(bg='#111827')
+    try:
+        root.attributes('-topmost', True)
+    except Exception:
+        pass
+    tk.Label(root, text="TUC TUC Remote", bg='#111827', fg='#f3f4f6',
+             font=('Arial', 13, 'bold')).pack(pady=(18, 2))
+    tk.Label(root, text="Tu código de sesión:", bg='#111827', fg='#9ca3af',
+             font=('Arial', 10)).pack()
+    tk.Label(root, text=codigo, bg='#111827', fg='#22c55e',
+             font=('Courier New', 38, 'bold')).pack(pady=6)
+    tk.Label(root, text="Comparte este código con el técnico",
+             bg='#111827', fg='#4b5563', font=('Arial', 9)).pack(pady=(2, 0))
+    root.mainloop()
+
 
 # ─── Config por defecto ───────────────────────────────────────────────────────
 DEFAULT_SERVER  = "https://tuc-tuc-remote.onrender.com"
@@ -149,7 +179,6 @@ def main():
     parser = argparse.ArgumentParser(description='RemoteAssist Agente')
     parser.add_argument('--server',  default=DEFAULT_SERVER)
     parser.add_argument('--token',   default=DEFAULT_TOKEN)
-    parser.add_argument('--session', default=DEFAULT_SESSION)
     parser.add_argument('--fps',     type=int, default=FPS_TARGET)
     parser.add_argument('--quality', type=int, default=QUALITY)
     parser.add_argument('--scale',   type=float, default=SCALE)
@@ -158,46 +187,50 @@ def main():
     SCALE   = args.scale
     interval = 1.0 / args.fps
 
-    print('=' * 50)
-    print('  RemoteAssist — Agente')
-    print(f'  Servidor : {args.server}')
-    print(f'  Sesión   : {args.session}')
-    print(f'  FPS      : {args.fps} | Calidad: {QUALITY} | Escala: {SCALE}')
-    print('=' * 50)
-
     # Detectar resolución de pantalla real
     with mss.mss() as sc:
         m = sc.monitors[1]
         screen_w = m['width']
         screen_h = m['height']
-    print(f'  Pantalla : {screen_w}x{screen_h}')
-    print()
 
-    while True:
-        try:
-            sio.connect(args.server, transports=['websocket'])
-            sio.emit('agent_join', {'token': args.token, 'session_id': args.session})
+    codigo = generar_codigo()
+    session_id = codigo.replace('-', '')  # "847293" sin guion
 
-            while sio.connected:
-                t0 = time.time()
-                try:
-                    img_b64, _, _ = capturar_frame()
-                    sio.emit('frame', {'session_id': args.session, 'img': img_b64})
-                except Exception as e:
-                    print(f'  ✗ Frame: {e}')
+    print('=' * 50)
+    print('  RemoteAssist — Agente')
+    print(f'  Servidor : {args.server}')
+    print(f'  Código   : {codigo}')
+    print(f'  Sesión   : {session_id}')
+    print('=' * 50)
 
-                elapsed = time.time() - t0
-                sleep = max(0, interval - elapsed)
-                time.sleep(sleep)
+    # Socket loop en thread daemon
+    def socket_loop():
+        while True:
+            try:
+                sio.connect(args.server, transports=['websocket'])
+                sio.emit('agent_join', {'token': args.token, 'session_id': session_id})
+                while sio.connected:
+                    t0 = time.time()
+                    try:
+                        img_b64, _, _ = capturar_frame()
+                        sio.emit('frame', {'session_id': session_id, 'img': img_b64})
+                    except Exception as e:
+                        print(f'  ✗ Frame: {e}')
+                    elapsed = time.time() - t0
+                    sleep_time = max(0, interval - elapsed)
+                    time.sleep(sleep_time)
+                sio.wait()
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                print(f'  ✗ Conexión: {e} — reintentando en 5s...')
+                time.sleep(5)
 
-            sio.wait()
+    t = threading.Thread(target=socket_loop, daemon=True)
+    t.start()
 
-        except KeyboardInterrupt:
-            print('\nAgente detenido.')
-            break
-        except Exception as e:
-            print(f'  ✗ Conexión: {e} — reintentando en 5s...')
-            time.sleep(5)
+    # Ventana tkinter en main thread
+    mostrar_ventana(codigo)
 
 
 if __name__ == '__main__':

@@ -106,6 +106,7 @@
             <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">📍 Ubicación</button>
             <a href="/contabilidad/tienda/{{ tienda.slug }}" class="tab-btn flex items-center gap-1">📒 Contabilidad</a>
             <a href="/admin/tienda/{{ tienda.slug }}/metodos-pago" class="tab-btn flex items-center gap-1">💳 Métodos de Pago</a>
+            <button onclick="cambiarTab('soporte')" id="tab-soporte" class="tab-btn">🖥️ Soporte</button>
         </div>
 
         <!-- ====== TAB: CATÁLOGO DE PRODUCTOS ====== -->
@@ -429,6 +430,56 @@
         </div>
     </div>
 
+    <!-- ====== TAB: SOPORTE ====== -->
+    <div id="panel-soporte" class="p-6 hidden bg-white rounded-2xl shadow-lg mb-6">
+        <h2 class="font-bold text-gray-800 text-lg mb-1">Asistencia Remota</h2>
+        <p class="text-sm text-gray-500 mb-6">Permite que el equipo de soporte TUC TUC tome control de tu pantalla para ayudarte en tiempo real, sin salir de tu dispositivo.</p>
+
+        <!-- Paso 1: Descargar agente -->
+        <div class="flex items-start gap-4 bg-violet-50 border border-violet-200 rounded-2xl p-5 mb-4">
+            <div class="text-3xl flex-shrink-0">⬇️</div>
+            <div class="flex-1">
+                <h3 class="font-bold text-violet-800 mb-1">Paso 1 — Descarga el agente</h3>
+                <p class="text-sm text-gray-600 mb-3">Solo necesitas descargarlo una vez. El archivo es pequeño y no requiere instalación.</p>
+                <a href="https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
+                   class="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition">
+                    Descargar AsistenciaTucTuc.exe
+                </a>
+                <p class="text-xs text-gray-400 mt-2">Solo disponible para Windows.</p>
+            </div>
+        </div>
+
+        <!-- Paso 2: Ejecutar y compartir código -->
+        <div class="flex items-start gap-4 bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-4">
+            <div class="text-3xl flex-shrink-0">▶️</div>
+            <div class="flex-1">
+                <h3 class="font-bold text-gray-700 mb-1">Paso 2 — Ejecuta y comparte tu código</h3>
+                <p class="text-sm text-gray-600">Al abrir el programa, verás un código de 6 dígitos (ej: <code class="bg-gray-200 px-1 rounded font-mono text-sm">482-315</code>). Comparte ese código con el técnico de soporte.</p>
+            </div>
+        </div>
+
+        <!-- Paso 3: El técnico se conecta -->
+        <div class="flex items-start gap-4 bg-gray-50 border border-gray-200 rounded-2xl p-5 mb-6">
+            <div class="text-3xl flex-shrink-0">🔗</div>
+            <div class="flex-1">
+                <h3 class="font-bold text-gray-700 mb-1">Paso 3 — El técnico se conecta</h3>
+                <p class="text-sm text-gray-600">El equipo de soporte ingresa tu código en el visor y comienza la sesión. Tú puedes ver todo lo que hace en tu pantalla.</p>
+            </div>
+        </div>
+
+        <!-- Acceso al visor (solo admin sistema) -->
+        {% if not es_dueno | default(false) %}
+        <div class="border-t border-gray-100 pt-5">
+            <h3 class="font-bold text-gray-700 mb-2">Panel del técnico</h3>
+            <p class="text-sm text-gray-500 mb-3">Accede al visor para conectarte a una sesión activa.</p>
+            <a href="https://tuc-tuc-remote.onrender.com" target="_blank"
+               class="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition">
+                🖥️ Abrir visor de soporte
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- ====== TAB: UBICACIÓN (fuera del overflow-hidden para que MapLibre renderice) ====== -->
     <div id="panel-ubicacion" class="p-5 hidden bg-white rounded-2xl shadow-lg mb-6">
         <h2 class="font-semibold text-gray-700 mb-2">Ubicación de la tienda</h2>
@@ -480,7 +531,7 @@ function toast(msg, error) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','inventario','personalizar','acceso','ubicacion'].forEach(t => {
+    ['catalogo','pedidos','inventario','personalizar','acceso','ubicacion','soporte'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
         const btn = document.getElementById('tab-' + t);
         btn.classList.toggle('tab-active', t === tab);

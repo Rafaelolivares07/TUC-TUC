@@ -28152,6 +28152,9 @@ def api_tienda_productos(slug):
             nv = conn.execute(
                 "SELECT COUNT(*) FROM producto_variantes WHERE producto_id = %s", (p['id'],)
             ).fetchone()[0]
+            nf = conn.execute(
+                "SELECT COUNT(*) FROM producto_imagenes WHERE producto_id = %s", (p['id'],)
+            ).fetchone()[0]
             resultado.append({
                 'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
                 'precio': float(p['precio']), 'imagen': p['imagen'] or '',
@@ -28160,7 +28163,8 @@ def api_tienda_productos(slug):
                 'codigo_barra': p['codigo_barra'] or '',
                 'catalogo_id': p['catalogo_id'],
                 'iva_pct': float(p['iva_pct'] or 0),
-                'tiene_variantes': nv > 0
+                'tiene_variantes': nv > 0,
+                'n_fotos': nf
             })
         conn.close()
         return jsonify({'ok': True, 'productos': resultado})

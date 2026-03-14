@@ -207,6 +207,31 @@
                     {% endif %}
                 </div>
                 <input id="inp-header" type="file" accept="image/*" class="hidden" onchange="subirHeader(this)">
+                <input id="inp-header-chatgpt" type="file" accept="image/*" class="hidden" onchange="subirHeader(this)">
+                <div class="flex gap-2 mt-2">
+                    <button onclick="generarHeaderChatGPT()" class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-semibold text-sm bg-rose-50 hover:bg-rose-100 transition">
+                        ✨ Generar con ChatGPT
+                    </button>
+                </div>
+                <!-- Banner "¿Ya tenés la imagen?" — aparece al volver de ChatGPT -->
+                <div id="banner-asignar-header" class="hidden mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                    <span class="text-sm text-green-700 flex-1">¿Ya descargaste tu imagen? Asignala como portada</span>
+                    <button onclick="document.getElementById('inp-header-chatgpt').click()" class="text-sm font-bold text-white bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-lg transition">Asignar</button>
+                    <button onclick="document.getElementById('banner-asignar-header').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+                </div>
+            </div>
+
+            <!-- Descripción del negocio -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-1">Descripción del negocio</h3>
+                <p class="text-xs text-gray-400 mb-3">Contale a tus clientes qué vendés, tu estilo y lo que te hace especial. Aparecerá en tu página pública.</p>
+                <textarea id="txt-descripcion" rows="3" maxlength="300"
+                    placeholder="Ej: Tienda de ropa casual para jóvenes. Marcas nacionales e importadas, precios accesibles y nuevas colecciones cada semana."
+                    class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:border-rose-400 transition">{{ tienda.descripcion or '' }}</textarea>
+                <div class="flex justify-between items-center mt-1">
+                    <span id="desc-chars" class="text-xs text-gray-400">0/300</span>
+                    <button onclick="guardarDescripcion()" class="text-sm font-semibold text-rose-600 hover:underline">Guardar</button>
+                </div>
             </div>
 
             <!-- Tema -->
@@ -2108,5 +2133,55 @@ function _abrirMarketplace() {
     </div>
 </div>
 
+<script>
+// Contador caracteres descripción
+(function() {
+    const txt = document.getElementById('txt-descripcion');
+    const cnt = document.getElementById('desc-chars');
+    if (!txt || !cnt) return;
+    const update = () => cnt.textContent = txt.value.length + '/300';
+    txt.addEventListener('input', update);
+    update();
+})();
+
+// Guardar descripción
+async function guardarDescripcion() {
+    const desc = document.getElementById('txt-descripcion').value.trim();
+    try {
+        const r = await fetch(BASE + '/descripcion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({descripcion: desc})
+        });
+        const data = await r.json();
+        if (data.ok) toast('Descripción guardada');
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+// Generar header con ChatGPT
+let _chatgptAbierto = false;
+function generarHeaderChatGPT() {
+    const nombre = {{ tienda.nombre | tojson }};
+    const desc = document.getElementById('txt-descripcion').value.trim();
+    const parteDesc = desc
+        ? ` El negocio se describe así: "${desc}".`
+        : '';
+    const prompt = `Imagen de portada para una tienda llamada "${nombre}".${parteDesc} Estilo fotorrealista y atractivo, formato banner horizontal panorámico (relación 3:1). Sin texto ni letras en la imagen. Colores vibrantes, iluminación cálida, composición profesional que transmita la esencia del negocio.`;
+    navigator.clipboard.writeText(prompt).then(() => {
+        toast('Prompt copiado — abriendo ChatGPT...');
+        window.open('https://chatgpt.com', '_blank');
+        _chatgptAbierto = true;
+    });
+}
+
+// Detectar regreso de ChatGPT
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && _chatgptAbierto) {
+        _chatgptAbierto = false;
+        document.getElementById('banner-asignar-header').classList.remove('hidden');
+    }
+});
+</script>
 </body>
 </html>

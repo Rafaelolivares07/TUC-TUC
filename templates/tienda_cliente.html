@@ -92,12 +92,24 @@
         {% if tienda.mostrar_nombre | default(true) %}
         <div class="p-4 pb-2">
             <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
+            {% if tienda.descripcion %}
+            <p class="text-sm txt-secondary mt-1">{{ tienda.descripcion }}</p>
+            {% endif %}
         </div>
+        {% else %}
+        {% if tienda.descripcion %}
+        <div class="px-4 pb-2">
+            <p class="text-sm txt-secondary">{{ tienda.descripcion }}</p>
+        </div>
+        {% endif %}
         {% endif %}
     </div>
     {% else %}
     <div class="p-6 pb-2">
         <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
+        {% if tienda.descripcion %}
+        <p class="text-sm txt-secondary mt-1">{{ tienda.descripcion }}</p>
+        {% endif %}
     </div>
     {% endif %}
 

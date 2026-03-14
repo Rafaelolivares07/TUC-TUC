@@ -1388,7 +1388,7 @@ def evaluar_reglas_domotica():
 
         # 1. Master switch
         config = conn.execute(
-            "SELECT reglas_activas, laptop_last_seen, presencia_ventana_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
+            "SELECT reglas_activas, laptop_last_seen, presencia_ventana_seg, ultima_temperatura FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
         if not config or not config['reglas_activas']:
             conn.close()
@@ -1401,7 +1401,7 @@ def evaluar_reglas_domotica():
         ventana = int(config['presencia_ventana_seg'] or 360)
         laptop_activa = bool(ls and (ahora - ls).total_seconds() < ventana)
 
-        # 3. Temperatura Cali (Open-Meteo, sin API key)
+        # 3. Temperatura Cali (Open-Meteo, sin API key — con fallback a último valor cacheado)
         temperatura = None
         try:
             url = ('https://api.open-meteo.com/v1/forecast'
@@ -1410,8 +1410,14 @@ def evaluar_reglas_domotica():
             with urllib.request.urlopen(url, timeout=8) as resp:
                 data = _json.loads(resp.read())
                 temperatura = data['current']['temperature_2m']
+            # Cachear en BD
+            conn.execute("UPDATE CONFIGURACION_SISTEMA SET ultima_temperatura=%s WHERE id=1", (temperatura,))
+            conn.commit()
         except Exception as te:
             print(f'[reglas] Open-Meteo error: {te}')
+            temperatura = float(config['ultima_temperatura']) if config['ultima_temperatura'] is not None else None
+            if temperatura is not None:
+                print(f'[reglas] Usando temperatura cacheada: {temperatura}°C')
 
         hora_str = ahora.strftime('%H:%M')
 
@@ -25527,6 +25533,7 @@ def crear_tablas_tienda(conn):
         "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
         "CREATE INDEX IF NOT EXISTS idx_productos_tienda_catalogo ON productos_tienda(catalogo_id)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
@@ -28521,6 +28528,25 @@ def api_tienda_tema(slug):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/descripcion', methods=['POST'])
+def api_tienda_descripcion(slug):
+    """Guardar descripción del negocio"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    descripcion = (data.get('descripcion', '') or '').strip() or None
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE tiendas SET descripcion = %s WHERE slug = %s", (descripcion, slug))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
@@ -36614,6 +36640,7 @@ def crear_tablas_domotica(conn):
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS reglas_activas BOOLEAN DEFAULT TRUE",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_inactividad_seg INTEGER DEFAULT 300",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_ventana_seg INTEGER DEFAULT 360",
+        "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS ultima_temperatura NUMERIC(5,2)",
     ]
     for sql in sqls:
         try:
@@ -37446,8 +37473,7 @@ def api_domotica_heartbeat():
         elapsed = (ahora - ls).total_seconds() if ls else 9999
         usuario_activo = elapsed < ventana
         conn.close()
-        if elapsed >= ventana:
-            threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
+        threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
         return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()})
     except Exception as e:
         try: conn.rollback(); conn.close()
@@ -37465,7 +37491,7 @@ def api_domotica_reglas_contexto():
         conn = get_db_connection()
         crear_tablas_domotica(conn)
         config = conn.execute(
-            "SELECT reglas_activas, laptop_last_seen, presencia_inactividad_seg, presencia_ventana_seg "
+            "SELECT reglas_activas, laptop_last_seen, presencia_inactividad_seg, presencia_ventana_seg, ultima_temperatura "
             "FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
         ahora = datetime.now()
@@ -37475,6 +37501,7 @@ def api_domotica_reglas_contexto():
         laptop_hace = int((ahora - ls).total_seconds() / 60) if ls else None
 
         temperatura = None
+        temp_es_cache = False
         try:
             url = ('https://api.open-meteo.com/v1/forecast'
                    '?latitude=3.4516&longitude=-76.5320'
@@ -37482,7 +37509,12 @@ def api_domotica_reglas_contexto():
             with urllib.request.urlopen(url, timeout=8) as resp:
                 data = _json.loads(resp.read())
                 temperatura = data['current']['temperature_2m']
-        except Exception: pass
+            conn.execute("UPDATE CONFIGURACION_SISTEMA SET ultima_temperatura=%s WHERE id=1", (temperatura,))
+            conn.commit()
+        except Exception:
+            if config and config['ultima_temperatura'] is not None:
+                temperatura = float(config['ultima_temperatura'])
+                temp_es_cache = True
 
         conn.close()
         return jsonify({
@@ -37492,6 +37524,7 @@ def api_domotica_reglas_contexto():
             'laptop_last_seen': ls.isoformat() if ls else None,
             'laptop_hace_min': laptop_hace,
             'temperatura': temperatura,
+            'temp_es_cache': temp_es_cache,
             'presencia_inactividad_min': int((config['presencia_inactividad_seg'] or 300) / 60) if config else 5,
             'presencia_ventana_min': int((config['presencia_ventana_seg'] or 360) / 60) if config else 6,
         })

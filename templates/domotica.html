@@ -105,6 +105,9 @@
   .dark .ctrl-card .ctrl-icon { background:#1e293b; }
   .dark .ctrl-card.on  .ctrl-icon { background:#065f46; }
   .dark .ctrl-card.off .ctrl-icon { background:#0f172a; }
+  /* Opción C: imagen única en blanco — invertir en modo claro */
+  .sw-icono-img { filter: invert(1); }
+  .dark .sw-icono-img { filter: none; }
   /* Modal panel dark */
   .dark #modal-panel > div { background:#0f172a; }
   .dark #modal-panel .bg-white { background:#1e293b !important; }
@@ -760,7 +763,7 @@ function renderPanelGrid(dispositivos) {
   grid.innerHTML = switches.map(sw => {
     const on = sw.estado_actual;
     const iconHtml = sw.imagen
-      ? `<img src="${sw.imagen}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      ? `<img src="${sw.imagen}" class="sw-icono-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
         + `<span style="display:none;font-size:2.5rem">${iconoTipo(sw.dev_tipo)}</span>`
       : `<span style="font-size:2.5rem">${iconoTipo(sw.dev_tipo)}</span>`;
     const countdown = sw.apagar_en ? fmtCountdown(sw.apagar_en) : null;
@@ -1052,7 +1055,7 @@ function renderSwitch(sw) {
     : '<span class="text-xs text-orange-500">Sin Tuya Device ID</span>';
 
   const iconoSw = sw.imagen
-    ? `<img src="${sw.imagen}" class="w-10 h-10 object-contain rounded-lg bg-gray-50 shrink-0" onerror="this.replaceWith(document.createTextNode('⚡'))">`
+    ? `<img src="${sw.imagen}" class="sw-icono-img w-10 h-10 object-contain rounded-lg bg-gray-50 shrink-0" onerror="this.replaceWith(document.createTextNode('⚡'))">`
     : `<span class="text-lg">⚡</span>`;
 
   return `
@@ -1250,14 +1253,11 @@ function _abrirChatGPT() {
 
 function copiarPromptSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim() || 'electrodoméstico';
-  const oscuro = document.documentElement.classList.contains('dark');
   const conTexto = _panelMostrarNombres;
-  const colorPaleta = oscuro ? 'blanco y gris muy claro' : 'negro y gris oscuro';
-  const colorTexto  = oscuro ? 'blanco puro' : 'negro puro (#000000)';
   const parteTexto  = conTexto
-    ? ` El 65% superior contiene solo la ilustración del objeto. El 35% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color ${colorTexto}, SIN ningún fondo ni banda de color detrás del texto — el fondo debe ser completamente transparente también en esa zona.`
+    ? ` El 65% superior contiene solo la ilustración del objeto. El 35% inferior lleva únicamente el nombre "${nombre}" en fuente sans-serif bold, centrado, color blanco puro, SIN ningún fondo ni banda de color detrás del texto — el fondo debe ser completamente transparente también en esa zona.`
     : ' Sin ningún texto, letra ni abreviatura — solo la ilustración.';
-  const prompt = `Dibuja la ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo 100% transparente en todo el canvas. Estilo flat minimalista. Usa únicamente ${colorPaleta}, sin ningún otro color. Sin sombras.${parteTexto} La ilustración debe llenar su área sin márgenes ni espacio vacío.`;
+  const prompt = `Dibuja la ilustración del objeto físico "${nombre}" como ícono PNG, 512x512px, fondo 100% transparente en todo el canvas. Estilo flat minimalista. Usa únicamente blanco y gris muy claro, sin ningún otro color. Sin sombras.${parteTexto} La ilustración debe llenar su área sin márgenes ni espacio vacío.`;
   navigator.clipboard.writeText(prompt).then(() => {
     toast('Prompt copiado — abriendo ChatGPT...');
     _abrirChatGPT();
@@ -1700,8 +1700,9 @@ async function cargarContextoReglas() {
     // Temperatura
     const ctxT = document.getElementById('ctx-temp');
     if (ctxT) {
-      ctxT.textContent = d.temperatura !== null ? `${d.temperatura}°C` : '—';
+      ctxT.textContent = d.temperatura !== null ? `${d.temperatura}°C${d.temp_es_cache ? ' ⚠️' : ''}` : '—';
       ctxT.className = 'font-semibold ' + (d.temperatura !== null ? 'text-orange-500' : 'text-gray-400');
+      if (ctxT.title !== undefined) ctxT.title = d.temp_es_cache ? 'Valor cacheado — Open-Meteo no respondió' : '';
     }
 
   } catch(e) {}

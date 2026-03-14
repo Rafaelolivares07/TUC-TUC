@@ -1953,6 +1953,11 @@ function compartirProducto(id, nombre, imagen, precio, desc) {
     document.getElementById('compartir-foto').checked = true;
     document.getElementById('compartir-precio').checked = true;
     document.getElementById('compartir-desc').checked = true;
+    // Ocultar botón de envío personalizado al abrir el modal
+    const btnEnviar = document.getElementById('btn-enviar-contacto');
+    btnEnviar.classList.add('hidden');
+    btnEnviar.href = '#';
+
     // Contact Picker: mostrar botón o fallback manual según soporte
     const btnWaContacto = document.getElementById('btn-wa-contacto');
     const fallbackManual = document.getElementById('wa-contacto-manual');
@@ -2007,17 +2012,18 @@ async function _enviarWaContacto(tel, nombre) {
         _compartirParaNombre = nombre;
         _compartirParaId = data.id;
 
-        // Actualizar el href del botón WhatsApp existente con URL personalizada
         const url = _buildCompartirUrl();
         const txt = document.getElementById('compartir-txt').value.trim();
         const primerNombre = nombre ? nombre.split(' ')[0] : '';
         const saludo = primerNombre ? `¡Hola ${primerNombre}! ` : '';
         const textoWa = txt ? txt + '\n' + url : saludo + _compartirNombre + '\n' + url;
-        const waLink = document.getElementById('compartir-wa');
-        waLink.href = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
-        waLink.innerHTML = waLink.innerHTML.replace(/WhatsApp.*$/, 'WhatsApp → ' + (nombre || tel));
+        const waUrl = 'https://wa.me/' + num + '?text=' + encodeURIComponent(textoWa);
 
-        toast('Contacto listo — toca WhatsApp para enviar');
+        // Mostrar botón de envío directo — <a> nativo que el usuario toca
+        const btnEnviar = document.getElementById('btn-enviar-contacto');
+        btnEnviar.href = waUrl;
+        btnEnviar.textContent = '📲 Enviar a ' + (nombre || tel) + ' por WhatsApp';
+        btnEnviar.classList.remove('hidden');
     } catch(e) {
         toast('Error de conexión', true);
     }
@@ -2192,6 +2198,11 @@ function _abrirMarketplace() {
                 </div>
             </div>
         </div>
+
+        <!-- Botón de envío personalizado (aparece tras Contact Picker) -->
+        <a id="btn-enviar-contacto" href="#" target="_blank"
+            class="hidden flex items-center justify-center gap-2 w-full bg-green-600 text-white font-bold py-4 rounded-2xl text-base mb-3 animate-pulse">
+        </a>
 
         <!-- Botones de compartir -->
         <div class="space-y-3">

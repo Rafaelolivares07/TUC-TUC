@@ -61,6 +61,8 @@
             position: relative; width: 100%; height: 100%;
             object-fit: contain; z-index: 1;
         }
+        .foto-grande-bg { background: #f3f4f6; }
+        .tema-oscuro .foto-grande-bg { background: #374151; }
         .badge-fotos {
             position: absolute; bottom: 6px; right: 6px; z-index: 2;
             background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
@@ -566,14 +568,14 @@ if (clienteData && clienteData.nombre) {
 
 <!-- Modal selección de variante -->
 <div id="modal-variante-cli" class="hidden fixed inset-0 z-50 flex items-end justify-center bg-black/50">
-    <div class="bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
+    <div class="modal-card bg-white w-full max-w-lg rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
 
         <!-- Galería de fotos -->
         <div id="var-cli-galeria" class="hidden mb-4">
             <div class="relative">
                 <img id="var-cli-foto-grande" src="" alt=""
-                    class="w-full rounded-xl cursor-pointer"
-                    style="max-height:260px; object-fit:contain; background:#f3f4f6;"
+                    class="w-full rounded-xl cursor-pointer foto-grande-bg"
+                    style="max-height:260px; object-fit:contain;"
                     onclick="zoomImagen(this.src)">
             </div>
             <div id="var-cli-miniaturas" class="flex gap-2 mt-2 overflow-x-auto pb-1"></div>

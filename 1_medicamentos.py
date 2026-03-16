@@ -36863,25 +36863,30 @@ def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando, fuente='lapto
                 desired = True
             else:
                 continue
-            if desired == sw['estado_actual']:
-                continue
+            # Si desired == estado_actual, igual mandamos el comando Tuya (idempotente)
+            # para corregir drift entre la BD y el dispositivo físico.
+            # Solo omitimos el log si ya estaba en el estado correcto y el comando confirma OK.
+            ya_correcto = (desired == sw['estado_actual'])
             ok = _dom_controlar_tuya(sw['tuya_device_id'], desired)
             if ok:
                 conn.execute(
                     "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
                     (desired, sw['id'])
                 )
-                razon = f'bat {bat_pct}% {"<" if desired else ">="} umbral {umbral}% ({"pico" if en_pico else "fuera_pico"})'
-                conn.execute(
-                    "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon, bat_pct) VALUES (%s,%s,%s,%s,%s,%s)",
-                    (dispositivo_id, sw['id'], fuente, 'encendido' if desired else 'apagado', razon, bat_pct)
-                )
-                conn.commit()
-                acciones.append({
-                    'switch': sw['nombre'],
-                    'accion': 'encendido' if desired else 'apagado',
-                    'razon': razon
-                })
+                if not ya_correcto:
+                    razon = f'bat {bat_pct}% {"<" if desired else ">="} umbral {umbral}% ({"pico" if en_pico else "fuera_pico"})'
+                    conn.execute(
+                        "INSERT INTO smart_logs (id_dispositivo, id_switch, fuente, accion, razon, bat_pct) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (dispositivo_id, sw['id'], fuente, 'encendido' if desired else 'apagado', razon, bat_pct)
+                    )
+                    conn.commit()
+                    acciones.append({
+                        'switch': sw['nombre'],
+                        'accion': 'encendido' if desired else 'apagado',
+                        'razon': razon
+                    })
+                else:
+                    conn.commit()  # solo actualiza ultima_accion
     return acciones
 
 

@@ -36820,6 +36820,26 @@ def _dom_controlar_tuya(device_id, encender):
         return False
 
 
+def _dom_leer_estado_tuya(device_id):
+    """Lee el estado real de un switch Tuya. Retorna True/False o None si falla."""
+    try:
+        import tinytuya
+        c = tinytuya.Cloud(
+            apiRegion='us',
+            apiKey=os.getenv('TUYA_CLIENT_ID'),
+            apiSecret=os.getenv('TUYA_CLIENT_SECRET')
+        )
+        resp = c.cloudrequest(f'/v1.0/iot-03/devices/{device_id}/status')
+        if resp and resp.get('success') and resp.get('result'):
+            for dp in resp['result']:
+                if dp.get('code') == 'switch_1':
+                    return bool(dp['value'])
+        return None
+    except Exception as e:
+        print(f'[domotica] Error leyendo estado Tuya: {e}')
+        return None
+
+
 def _dom_evaluar_y_actuar(conn, dispositivo_id, bat_pct, cargando, fuente='laptop'):
     """Evalúa automatizaciones del dispositivo y actúa sobre sus switches si es necesario."""
     from datetime import datetime
@@ -37012,6 +37032,44 @@ def api_domotica_dispositivos(pid):
         conn.close()
         return jsonify({'ok': True, 'dispositivos': result})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/domotica/propiedad/<int:pid>/sync-estados', methods=['POST'])
+def api_domotica_sync_estados(pid):
+    """Consulta Tuya por el estado real de cada switch y actualiza BD si cambió."""
+    if not _dom_es_admin() and not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    try:
+        conn = get_db_connection()
+        if not _dom_check_pid(conn, pid):
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        switches = conn.execute(
+            "SELECT ss.id, ss.tuya_device_id, ss.estado_actual "
+            "FROM smart_switches ss "
+            "JOIN smart_dispositivos sd ON sd.id = ss.id_dispositivo "
+            "WHERE sd.id_propiedad=%s AND ss.activo=TRUE AND ss.tuya_device_id IS NOT NULL",
+            (pid,)
+        ).fetchall()
+        actualizados = []
+        for sw in switches:
+            real = _dom_leer_estado_tuya(sw['tuya_device_id'])
+            if real is None:
+                continue
+            if bool(real) != bool(sw['estado_actual']):
+                conn.execute(
+                    "UPDATE smart_switches SET estado_actual=%s, ultima_accion=NOW() WHERE id=%s",
+                    (real, sw['id'])
+                )
+                actualizados.append({'id': sw['id'], 'estado_actual': real})
+        if actualizados:
+            conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'actualizados': actualizados})
+    except Exception as e:
+        conn.rollback()
+        conn.close()
         return jsonify({'ok': False, 'error': str(e)})
 
 

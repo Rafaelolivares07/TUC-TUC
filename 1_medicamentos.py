@@ -6907,6 +6907,7 @@ def api_captura_historial():
                 SELECT id, rol, contenido, created_at
                 FROM chat_mensajes
                 WHERE archivado = FALSE AND id > %s
+                  AND (canal = 'captura' OR rol = 'assistant')
                 ORDER BY created_at ASC
             """, (since_id,)).fetchall()
         else:
@@ -6914,6 +6915,7 @@ def api_captura_historial():
                 SELECT id, rol, contenido, created_at
                 FROM chat_mensajes
                 WHERE archivado = FALSE
+                  AND (canal = 'captura' OR rol = 'assistant')
                 ORDER BY created_at ASC
                 LIMIT 60
             """).fetchall()
@@ -6935,8 +6937,8 @@ def api_captura_mensaje():
     try:
         conn = get_db_connection()
         conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido, estado) VALUES (%s, %s, %s)",
-            ('user', texto, 'enviado')
+            "INSERT INTO chat_mensajes (rol, contenido, estado, canal) VALUES (%s, %s, %s, %s)",
+            ('user', texto, 'enviado', 'captura')
         )
         conn.commit()
         conn.close()
@@ -29801,6 +29803,7 @@ def crear_tabla_chat(conn):
         "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente'",
         "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS archivado BOOLEAN DEFAULT FALSE",
         "ALTER TABLE chat_mensajes ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC'",
+        "ALTER TABLE chat_mensajes ADD COLUMN IF NOT EXISTS canal VARCHAR(20) DEFAULT 'terminal'",
     ]
     for alter in alters:
         try:

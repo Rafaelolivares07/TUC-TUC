@@ -70,6 +70,14 @@ def get_requerimientos():
         return []
 
 
+def set_window_title():
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleTitleW("Claude Code")
+    except Exception:
+        pass
+
+
 def main():
     # Leer payload (no lo necesitamos, pero hay que consumir stdin)
     try:
@@ -77,6 +85,7 @@ def main():
     except Exception:
         pass
 
+    set_window_title()
     historial = get_historial()
     requerimientos = get_requerimientos()
 

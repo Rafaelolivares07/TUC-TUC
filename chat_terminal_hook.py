@@ -102,6 +102,15 @@ def guardar_estado(session_id, last_uuid):
         log(f"Error guardando estado: {e}")
 
 
+def set_window_title():
+    """Restaura el título de la ventana de consola a 'Claude Code'."""
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleTitleW("Claude Code")
+    except Exception:
+        pass
+
+
 def insertar_en_bd(mensajes):
     """mensajes = lista de (rol, contenido). Inserta en chat_mensajes."""
     if not mensajes or not DB_URL:
@@ -113,7 +122,7 @@ def insertar_en_bd(mensajes):
             cur = conn.cursor()
             for rol, contenido in mensajes:
                 cur.execute(
-                    "INSERT INTO chat_mensajes (rol, contenido, estado) VALUES (%s, %s, NULL)",
+                    "INSERT INTO chat_mensajes (rol, contenido, estado, canal) VALUES (%s, %s, NULL, 'terminal')",
                     (rol, contenido)
                 )
             conn.commit()
@@ -200,6 +209,7 @@ def main():
         if nuevo_last_uuid:
             guardar_estado(session_id, nuevo_last_uuid)
 
+    set_window_title()
     sys.exit(0)
 
 

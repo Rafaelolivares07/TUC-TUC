@@ -35,23 +35,18 @@
     Importar archivo de contactos (.vcf)
     <input type="file" accept=".vcf,.vcard" class="hidden" onchange="importarVcf(this)">
   </label>
-  <p class="text-xs text-gray-400 text-center -mt-1">
-    En tu app de Contactos → Exportar → archivo .vcf → todos de una vez
-  </p>
+  <p id="vcf_hint" class="text-xs text-gray-400 text-center -mt-1"></p>
 
-  <!-- Opción 2: Web Contacts API (selección manual) -->
+  <!-- Opción 2: Web Contacts API (solo Android) -->
   <button id="btn_importar"
           onclick="importarContactos()"
-          class="w-full h-14 bg-white border-2 border-indigo-200 text-indigo-700 font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform">
+          class="w-full h-14 bg-white border-2 border-indigo-200 text-indigo-700 font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform hidden">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
     </svg>
     Seleccionar del celular (uno a uno)
   </button>
-  <p id="api_msg" class="text-xs text-gray-400 text-center -mt-1 hidden">
-    No disponible en este navegador.
-  </p>
 </div>
 
 <!-- Formulario manual -->
@@ -241,7 +236,19 @@ function toast(msg) {
   setTimeout(() => { t.classList.remove('opacity-100'); t.classList.add('opacity-0'); }, 3000);
 }
 
-document.addEventListener('DOMContentLoaded', cargarContactos);
+document.addEventListener('DOMContentLoaded', () => {
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const hint = document.getElementById('vcf_hint');
+  if (esIOS) {
+    hint.textContent = 'iPhone: ve a icloud.com/contacts → ⚙️ Seleccionar todo → Exportar vCard → sube el .vcf aquí';
+  } else if ('contacts' in navigator && 'ContactsManager' in window) {
+    hint.textContent = 'Android: exporta desde la app Contactos → .vcf, o usa el botón de abajo para seleccionar uno a uno';
+    document.getElementById('btn_importar').classList.remove('hidden');
+  } else {
+    hint.textContent = 'Exporta tus contactos como .vcf desde la app de Contactos y súbelo aquí';
+  }
+  cargarContactos();
+});
 </script>
 </body>
 </html>

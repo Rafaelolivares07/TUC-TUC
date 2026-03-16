@@ -188,7 +188,10 @@
       <span style="font-size:1.3rem; font-weight:900; letter-spacing:-0.5px;">🤖 Claude</span>
       <span class="texto-suave" style="font-size:0.8rem; margin-left:8px;">asistente TUC TUC</span>
     </div>
-    <button class="btn-modo" onclick="toggleModo()" id="btn-modo" title="Cambiar modo">☀️</button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="btn-autoplay" onclick="toggleAutoplay()" title="Auto-escuchar" style="font-size:1.1rem;padding:4px 10px;border-radius:10px;border:none;cursor:pointer;">🔊</button>
+      <button class="btn-modo" onclick="toggleModo()" id="btn-modo" title="Cambiar modo">☀️</button>
+    </div>
   </div>
 
   <!-- Mensajes -->
@@ -204,6 +207,27 @@
 </div>
 
 <script>
+// ── Auto-play TTS ────────────────────────────────────────────────
+let autoplay = localStorage.getItem('captura-autoplay') !== 'off';
+
+function aplicarAutoplay() {
+  const btn = document.getElementById('btn-autoplay');
+  if (autoplay) {
+    btn.textContent = '🔊';
+    btn.style.opacity = '1';
+    btn.title = 'Auto-escuchar: ON (toca para desactivar)';
+  } else {
+    btn.textContent = '🔇';
+    btn.style.opacity = '0.5';
+    btn.title = 'Auto-escuchar: OFF (toca para activar)';
+  }
+}
+function toggleAutoplay() {
+  autoplay = !autoplay;
+  localStorage.setItem('captura-autoplay', autoplay ? 'on' : 'off');
+  aplicarAutoplay();
+}
+
 // ── Modo ─────────────────────────────────────────────────────────
 let modoActual = localStorage.getItem('captura-modo') || 'oscuro';
 function aplicarModo(m) {
@@ -297,8 +321,8 @@ function agregarBurbuja(rol, contenido, reproducirAuto = false) {
     btnTts.textContent = '🔊 Escuchar';
     btnTts.onclick = () => hablar(contenido, btnTts);
     fila.appendChild(btnTts);
-    if (reproducirAuto) {
-      setTimeout(() => hablar(contenido, btnTts), 200);
+    if (reproducirAuto && autoplay) {
+      setTimeout(() => hablar(contenido, btnTts), 300);
     }
   }
 
@@ -432,6 +456,7 @@ function toggleMic() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────
+aplicarAutoplay();
 cargarHistorial();
 </script>
 </body>

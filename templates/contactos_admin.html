@@ -24,19 +24,33 @@
   </div>
 </div>
 
-<!-- Botón importar -->
-<div class="px-4 pt-4">
+<!-- Botones importar -->
+<div class="px-4 pt-4 flex flex-col gap-3">
+  <!-- Opción 1: archivo VCF (todos de una vez) -->
+  <label class="w-full h-14 bg-indigo-600 text-white font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform cursor-pointer">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+    </svg>
+    Importar archivo de contactos (.vcf)
+    <input type="file" accept=".vcf,.vcard" class="hidden" onchange="importarVcf(this)">
+  </label>
+  <p class="text-xs text-gray-400 text-center -mt-1">
+    En tu app de Contactos → Exportar → archivo .vcf → todos de una vez
+  </p>
+
+  <!-- Opción 2: Web Contacts API (selección manual) -->
   <button id="btn_importar"
           onclick="importarContactos()"
-          class="w-full h-14 bg-indigo-600 text-white font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform">
+          class="w-full h-14 bg-white border-2 border-indigo-200 text-indigo-700 font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
     </svg>
-    Importar contactos del celular
+    Seleccionar del celular (uno a uno)
   </button>
-  <p id="api_msg" class="text-xs text-gray-400 text-center mt-2 hidden">
-    Tu navegador no soporta importación directa. Agrega contactos manualmente abajo.
+  <p id="api_msg" class="text-xs text-gray-400 text-center -mt-1 hidden">
+    No disponible en este navegador.
   </p>
 </div>
 
@@ -70,6 +84,47 @@
 
 <script>
 const ADMIN_ID = {{ admin_id }};
+
+function parseVcf(texto) {
+  const contactos = [];
+  const bloques = texto.split(/BEGIN:VCARD/i).filter(b => b.trim());
+  bloques.forEach(bloque => {
+    let nombre = '', telefono = '';
+    bloque.split('\n').forEach(linea => {
+      linea = linea.trim();
+      if (/^FN[;:]/i.test(linea)) {
+        nombre = linea.replace(/^FN[^:]*:/i, '').trim();
+      } else if (/^N[;:]/i.test(linea) && !nombre) {
+        const partes = linea.replace(/^N[^:]*:/i, '').split(';');
+        nombre = [partes[1], partes[0]].filter(Boolean).join(' ').trim();
+      } else if (/^TEL[;:]/i.test(linea) && !telefono) {
+        telefono = linea.replace(/^TEL[^:]*:/i, '').replace(/\s+/g, '').trim();
+      }
+    });
+    if (nombre || telefono) contactos.push({ nombre, telefono });
+  });
+  return contactos;
+}
+
+async function importarVcf(input) {
+  const archivo = input.files[0];
+  if (!archivo) return;
+  const texto = await archivo.text();
+  const lista = parseVcf(texto);
+  if (!lista.length) { toast('No se encontraron contactos en el archivo'); return; }
+  toast(`Procesando ${lista.length} contactos...`);
+  try {
+    const r = await fetch('/api/admin/contactos/importar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: lista })
+    });
+    const d = await r.json();
+    input.value = '';
+    if (d.ok) { toast(`✓ ${d.insertados} contacto(s) importado(s)`); cargarContactos(); }
+    else toast('Error: ' + d.error);
+  } catch(e) { toast('Error de red'); }
+}
 
 async function cargarContactos() {
   try {

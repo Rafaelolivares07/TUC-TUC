@@ -6935,19 +6935,24 @@ def api_captura_mensaje():
         historial = conn.execute("""
             SELECT rol, contenido FROM chat_mensajes
             WHERE archivado = FALSE
+              AND rol IN ('user', 'assistant')
+              AND contenido IS NOT NULL
+              AND trim(contenido) != ''
             ORDER BY created_at DESC LIMIT 20
         """).fetchall()
         # Construir lista en orden cronológico y garantizar alternancia user/assistant
-        raw = [{'role': r['rol'], 'content': r['contenido']} for r in reversed(historial)]
+        raw = [{'role': r['rol'], 'content': r['contenido'].strip()} for r in reversed(historial)]
         mensajes_claude = []
         for m in raw:
             if mensajes_claude and mensajes_claude[-1]['role'] == m['role']:
                 mensajes_claude[-1]['content'] += '\n' + m['content']
             else:
                 mensajes_claude.append(m)
-        # La API exige que el primer mensaje sea user
+        # La API exige que el primer mensaje sea user y el último también sea user
         while mensajes_claude and mensajes_claude[0]['role'] != 'user':
             mensajes_claude.pop(0)
+        while mensajes_claude and mensajes_claude[-1]['role'] != 'user':
+            mensajes_claude.pop()
         if not mensajes_claude:
             mensajes_claude = [{'role': 'user', 'content': texto}]
         respuesta = anthropic_client.messages.create(

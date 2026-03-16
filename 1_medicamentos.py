@@ -6888,6 +6888,77 @@ def api_requerimientos_recientes():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/captura')
+def captura_chat():
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    return render_template('captura_chat.html')
+
+
+@app.route('/api/captura/historial')
+def api_captura_historial():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT rol, contenido, created_at
+            FROM chat_mensajes
+            WHERE archivado = FALSE
+            ORDER BY created_at ASC
+            LIMIT 60
+        """).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'mensajes': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/captura/mensaje', methods=['POST'])
+def api_captura_mensaje():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if not anthropic_client:
+        return jsonify({'ok': False, 'error': 'Claude API no configurada'}), 500
+    data = request.get_json() or {}
+    texto = (data.get('mensaje') or '').strip()
+    if not texto:
+        return jsonify({'ok': False, 'error': 'Mensaje vacío'}), 400
+    conn = None
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, estado) VALUES (%s, %s, %s)",
+            ('user', texto, 'enviado')
+        )
+        conn.commit()
+        historial = conn.execute("""
+            SELECT rol, contenido FROM chat_mensajes
+            WHERE archivado = FALSE
+            ORDER BY created_at DESC LIMIT 20
+        """).fetchall()
+        mensajes_claude = [{'role': r['rol'], 'content': r['contenido']} for r in reversed(historial)]
+        respuesta = anthropic_client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=1024,
+            system=CHAT_SYSTEM_PROMPT,
+            messages=mensajes_claude
+        )
+        texto_respuesta = respuesta.content[0].text
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, estado) VALUES (%s, %s, %s)",
+            ('assistant', texto_respuesta, 'enviado')
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'respuesta': texto_respuesta})
+    except Exception as e:
+        if conn:
+            try: conn.rollback(); conn.close()
+            except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/requerimientos/<int:requerimiento_id>', methods=['PUT'])
 @admin_required
 def actualizar_requerimiento(requerimiento_id):

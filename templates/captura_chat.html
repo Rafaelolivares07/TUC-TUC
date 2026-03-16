@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es" id="html-root">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat con Claude</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-size: 17px; transition: background 0.2s, color 0.2s; margin: 0; }
+
+  body.oscuro { background: #0f172a; color: #e2e8f0; }
+  body.claro  { background: #f0f4f8; color: #1a202c; }
+
+  body.oscuro .card   { background: #1e293b; border: 1px solid #334155; }
+  body.claro  .card   { background: #ffffff; border: 1px solid #e2e8f0; }
+
+  body.oscuro .input-area { background: #0f172a; border: 2px solid #475569; color: #e2e8f0; }
+  body.claro  .input-area { background: #f7fafc; border: 2px solid #cbd5e0; color: #1a202c; }
+  .input-area:focus { border-color: #6366f1; }
+
+  body.oscuro .texto-suave { color: #94a3b8; }
+  body.claro  .texto-suave { color: #4a5568; }
+
+  /* Burbujas */
+  .burbuja {
+    max-width: 82%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    line-height: 1.55;
+    font-size: 0.97rem;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .burbuja-user {
+    background: #6366f1;
+    color: white;
+    border-bottom-right-radius: 4px;
+    margin-left: auto;
+  }
+  .burbuja-assistant {
+    border-bottom-left-radius: 4px;
+  }
+  body.oscuro .burbuja-assistant { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
+  body.claro  .burbuja-assistant { background: #fff; color: #1a202c; border: 1px solid #e2e8f0; }
+
+  .fila-msg { display: flex; margin-bottom: 12px; }
+  .fila-user      { justify-content: flex-end; }
+  .fila-assistant { justify-content: flex-start; flex-direction: column; gap: 4px; }
+
+  .btn-tts {
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    margin-top: 2px;
+    align-self: flex-start;
+  }
+  body.oscuro .btn-tts { background: #334155; color: #94a3b8; }
+  body.claro  .btn-tts { background: #e2e8f0; color: #4a5568; }
+  .btn-tts:hover { opacity: 0.8; }
+  .btn-tts.leyendo { background: #6366f1 !important; color: white !important; }
+
+  /* Input row */
+  .input-area {
+    flex: 1;
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 1rem;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    min-height: 52px;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+
+  .btn-accion {
+    min-height: 52px;
+    min-width: 52px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-enviar { background: #6366f1; color: white; }
+  .btn-enviar:hover  { background: #4f46e5; }
+  .btn-enviar:active { transform: scale(0.95); }
+  .btn-enviar:disabled { background: #4b5563; opacity: 0.6; cursor: not-allowed; }
+
+  .btn-mic { background: #10b981; color: white; }
+  .btn-mic:hover  { background: #059669; }
+  .btn-mic.grabando {
+    background: #ef4444 !important;
+    animation: pulso 0.8s infinite;
+    box-shadow: 0 0 0 6px rgba(239,68,68,0.25);
+  }
+  @keyframes pulso {
+    0%,100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+
+  .btn-modo {
+    min-height: 40px; font-size: 1.2rem; border-radius: 10px;
+    border: none; cursor: pointer; padding: 0 12px; background: transparent;
+  }
+  body.oscuro .btn-modo { color: #94a3b8; }
+  body.claro  .btn-modo { color: #4a5568; }
+
+  /* Zona de mensajes */
+  #zona-mensajes {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Layout full-height */
+  html, body { height: 100%; }
+  #layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  #header {
+    padding: 14px 16px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  #barra-input {
+    padding: 10px 12px 16px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  body.oscuro #barra-input { border-top: 1px solid #334155; }
+  body.claro  #barra-input { border-top: 1px solid #e2e8f0; }
+
+  /* Typing indicator */
+  .typing {
+    display: flex; gap: 4px; align-items: center;
+    padding: 10px 14px;
+  }
+  .typing span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6366f1; animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%,80%,100% { opacity: 0.2; transform: scale(0.8); }
+    40%         { opacity: 1;   transform: scale(1); }
+  }
+
+  .toast-cap {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    padding: 12px 24px; border-radius: 12px; color: white; font-weight: 700;
+    font-size: 0.95rem; z-index: 9999; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast-cap.show { opacity: 1; }
+  .toast-cap.ok  { background: #059669; }
+  .toast-cap.err { background: #dc2626; }
+</style>
+</head>
+<body class="oscuro">
+<div id="toast-cap" class="toast-cap ok"></div>
+
+<div id="layout">
+  <!-- Header -->
+  <div id="header">
+    <div>
+      <span style="font-size:1.3rem; font-weight:900; letter-spacing:-0.5px;">🤖 Claude</span>
+      <span class="texto-suave" style="font-size:0.8rem; margin-left:8px;">asistente TUC TUC</span>
+    </div>
+    <button class="btn-modo" onclick="toggleModo()" id="btn-modo" title="Cambiar modo">☀️</button>
+  </div>
+
+  <!-- Mensajes -->
+  <div id="zona-mensajes"></div>
+
+  <!-- Input -->
+  <div id="barra-input">
+    <button id="btn-mic" class="btn-accion btn-mic hidden" onclick="toggleMic()" title="Dictar">🎤</button>
+    <textarea id="input-msg" class="input-area" placeholder="Escribí o dictá..." rows="1"
+      onkeydown="onKeyInput(event)" oninput="autoResize(this)"></textarea>
+    <button id="btn-enviar" class="btn-accion btn-enviar" onclick="enviarMensaje()" title="Enviar">➤</button>
+  </div>
+</div>
+
+<script>
+// ── Modo ─────────────────────────────────────────────────────────
+let modoActual = localStorage.getItem('captura-modo') || 'oscuro';
+function aplicarModo(m) {
+  document.body.className = m;
+  document.getElementById('btn-modo').textContent = m === 'oscuro' ? '☀️' : '🌙';
+  localStorage.setItem('captura-modo', m);
+  modoActual = m;
+}
+aplicarModo(modoActual);
+function toggleModo() { aplicarModo(modoActual === 'oscuro' ? 'claro' : 'oscuro'); }
+
+// ── Toast ────────────────────────────────────────────────────────
+function toast(msg, tipo='ok') {
+  const t = document.getElementById('toast-cap');
+  t.textContent = msg;
+  t.className = `toast-cap show ${tipo}`;
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── TTS ──────────────────────────────────────────────────────────
+let vozActiva = null;
+let btnVozActivo = null;
+
+function hablar(texto, btn) {
+  if (!window.speechSynthesis) { toast('TTS no soportado en este navegador', 'err'); return; }
+  if (vozActiva) {
+    window.speechSynthesis.cancel();
+    if (btnVozActivo) { btnVozActivo.textContent = '🔊 Escuchar'; btnVozActivo.classList.remove('leyendo'); }
+    if (btnVozActivo === btn) { vozActiva = null; btnVozActivo = null; return; }
+  }
+  const utt = new SpeechSynthesisUtterance(texto);
+  utt.lang = 'es-CO';
+  utt.rate = 1.0;
+  utt.onend = () => {
+    btn.textContent = '🔊 Escuchar';
+    btn.classList.remove('leyendo');
+    vozActiva = null; btnVozActivo = null;
+  };
+  utt.onerror = () => {
+    btn.textContent = '🔊 Escuchar';
+    btn.classList.remove('leyendo');
+    vozActiva = null; btnVozActivo = null;
+  };
+  vozActiva = utt;
+  btnVozActivo = btn;
+  btn.textContent = '⏹ Parar';
+  btn.classList.add('leyendo');
+  window.speechSynthesis.speak(utt);
+}
+
+// ── Render mensajes ──────────────────────────────────────────────
+function agregarBurbuja(rol, contenido, reproducirAuto = false) {
+  const zona = document.getElementById('zona-mensajes');
+  const fila = document.createElement('div');
+  fila.className = `fila-msg fila-${rol}`;
+
+  const burbuja = document.createElement('div');
+  burbuja.className = `burbuja burbuja-${rol}`;
+  burbuja.textContent = contenido;
+  fila.appendChild(burbuja);
+
+  if (rol === 'assistant') {
+    const btnTts = document.createElement('button');
+    btnTts.className = 'btn-tts';
+    btnTts.textContent = '🔊 Escuchar';
+    btnTts.onclick = () => hablar(contenido, btnTts);
+    fila.appendChild(btnTts);
+    if (reproducirAuto) {
+      setTimeout(() => hablar(contenido, btnTts), 200);
+    }
+  }
+
+  zona.appendChild(fila);
+  zona.scrollTop = zona.scrollHeight;
+}
+
+function agregarTyping() {
+  const zona = document.getElementById('zona-mensajes');
+  const fila = document.createElement('div');
+  fila.className = 'fila-msg fila-assistant';
+  fila.id = 'typing-indicator';
+  fila.innerHTML = `<div class="burbuja burbuja-assistant typing"><span></span><span></span><span></span></div>`;
+  zona.appendChild(fila);
+  zona.scrollTop = zona.scrollHeight;
+}
+
+function quitarTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+// ── Cargar historial ─────────────────────────────────────────────
+async function cargarHistorial() {
+  try {
+    const r = await fetch('/api/captura/historial');
+    const d = await r.json();
+    if (!d.ok) return;
+    d.mensajes.forEach(m => agregarBurbuja(m.rol, m.contenido, false));
+  } catch(e) { console.warn('Error historial:', e); }
+}
+
+// ── Enviar ───────────────────────────────────────────────────────
+let enviando = false;
+
+async function enviarMensaje() {
+  if (enviando) return;
+  const inp = document.getElementById('input-msg');
+  const txt = inp.value.trim();
+  if (!txt) return;
+
+  inp.value = '';
+  autoResize(inp);
+  agregarBurbuja('user', txt);
+  agregarTyping();
+  enviando = true;
+  document.getElementById('btn-enviar').disabled = true;
+
+  try {
+    const r = await fetch('/api/captura/mensaje', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mensaje: txt})
+    });
+    const d = await r.json();
+    quitarTyping();
+    if (!d.ok) { toast(d.error || 'Error al enviar', 'err'); }
+    else { agregarBurbuja('assistant', d.respuesta, true); }
+  } catch(e) {
+    quitarTyping();
+    toast('Error de red', 'err');
+  } finally {
+    enviando = false;
+    document.getElementById('btn-enviar').disabled = false;
+    inp.focus();
+  }
+}
+
+// ── Textarea auto-resize ─────────────────────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+function onKeyInput(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensaje(); }
+}
+
+// ── Micrófono ────────────────────────────────────────────────────
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconocedor = null;
+let grabando = false;
+
+(function iniciarMic() {
+  if (!SpeechRecognition) return;
+  document.getElementById('btn-mic').classList.remove('hidden');
+  reconocedor = new SpeechRecognition();
+  reconocedor.lang = 'es';
+  reconocedor.continuous = true;
+  reconocedor.interimResults = false;
+  reconocedor.onresult = function(e) {
+    let nuevo = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) nuevo += e.results[i][0].transcript + ' ';
+    }
+    if (!nuevo) return;
+    const inp = document.getElementById('input-msg');
+    const sep = inp.value.trim() ? ' ' : '';
+    inp.value = inp.value.trim() + sep + nuevo.trim();
+    autoResize(inp);
+  };
+  reconocedor.onend = function() {
+    grabando = false;
+    const btn = document.getElementById('btn-mic');
+    btn.classList.remove('grabando');
+    btn.textContent = '🎤';
+  };
+  reconocedor.onerror = function(e) {
+    grabando = false;
+    const btn = document.getElementById('btn-mic');
+    btn.classList.remove('grabando');
+    btn.textContent = '🎤';
+    if (e.error === 'network') toast('Mic bloqueado. Probá Chrome.', 'err');
+  };
+})();
+
+function toggleMic() {
+  if (!reconocedor) return;
+  const btn = document.getElementById('btn-mic');
+  if (grabando) {
+    reconocedor.stop();
+    grabando = false;
+    btn.classList.remove('grabando');
+    btn.textContent = '🎤';
+  } else {
+    reconocedor.start();
+    grabando = true;
+    btn.classList.add('grabando');
+    btn.textContent = '⏹';
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+cargarHistorial();
+</script>
+</body>
+</html>

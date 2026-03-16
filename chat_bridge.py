@@ -13,11 +13,15 @@ Uso:
   py chat_bridge.py
 """
 
+import io
 import os
 import sys
 import time
 import uuid
 import socket
+
+# Forzar UTF-8 en stdout (Windows usa cp1252 por defecto)
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 import subprocess
 import psycopg2
 import psycopg2.extras
@@ -366,7 +370,7 @@ def main():
                 marcar_estado(ids, 'procesando')
 
                 bloque = construir_bloque(mensajes)
-                print(f"[{ts()}] 📦 Bloque: {bloque[:120]}{'...' if len(bloque) > 120 else ''}")
+                print(f"[{ts()}] 📦 Bloque ({len(bloque)} chars): {bloque[:120]}{'...' if len(bloque) > 120 else ''}")
 
                 historial = get_historial()
                 print(f"[{ts()}] 🧠 Llamando a Claude Code ({len(historial)} msgs contexto)...")

@@ -239,20 +239,29 @@ let grabando = false;
   reconocedor = new SpeechRecognition();
   reconocedor.lang = 'es';
   reconocedor.continuous = true;
-  reconocedor.interimResults = false;
+  reconocedor.interimResults = true;
+
+  let _textoFinalizado = '';
+
   reconocedor.onresult = function(e) {
-    let nuevo = '';
+    let finalNuevo = '';
+    let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) nuevo += e.results[i][0].transcript + ' ';
+      if (e.results[i].isFinal) {
+        finalNuevo += e.results[i][0].transcript + ' ';
+      } else {
+        interim += e.results[i][0].transcript;
+      }
     }
-    if (!nuevo) return;
+    if (finalNuevo) _textoFinalizado += finalNuevo;
     const inp = document.getElementById('input-idea');
-    const sep = inp.value.trim() ? ' ' : '';
-    inp.value = inp.value.trim() + sep + nuevo.trim();
-    inp.focus();
+    inp.value = _textoFinalizado + (interim ? interim : '');
   };
   reconocedor.onend = function() {
     grabando = false;
+    const inp = document.getElementById('input-idea');
+    if (_textoFinalizado.trim()) inp.value = _textoFinalizado.trim();
+    _textoFinalizado = '';
     document.getElementById('btn-mic').classList.remove('grabando');
     document.getElementById('mic-icon').textContent = '🎤';
     document.getElementById('mic-label').textContent = 'Dictar';
@@ -276,6 +285,7 @@ function toggleMic() {
     document.getElementById('mic-icon').textContent = '🎤';
     document.getElementById('mic-label').textContent = 'Dictar';
   } else {
+    _textoFinalizado = document.getElementById('input-idea').value;
     reconocedor.start();
     grabando = true;
     document.getElementById('btn-mic').classList.add('grabando');

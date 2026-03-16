@@ -320,24 +320,34 @@ let grabando = false;
     reconocedor = new SpeechRecognition();
     reconocedor.lang = 'es';
     reconocedor.continuous = true;
-    reconocedor.interimResults = false;
+    reconocedor.interimResults = true;
+
+    let _textoFinalizado = '';  // texto confirmado (final)
 
     reconocedor.onresult = function(e) {
-        // Con continuous=true llegan múltiples resultados; acumular solo los nuevos finales
-        let nuevo = '';
+        let finalNuevo = '';
+        let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
-            if (e.results[i].isFinal) nuevo += e.results[i][0].transcript + ' ';
+            if (e.results[i].isFinal) {
+                finalNuevo += e.results[i][0].transcript + ' ';
+            } else {
+                interim += e.results[i][0].transcript;
+            }
         }
-        if (!nuevo) return;
+        if (finalNuevo) _textoFinalizado += finalNuevo;
         const input = document.getElementById('input-msg');
-        const separador = input.value.trim() ? ' ' : '';
-        input.value = input.value.trim() + separador + nuevo.trim();
+        const base = _textoFinalizado;
+        input.value = base + (interim ? interim : '');
         autoResize(input);
-        input.focus();
     };
 
     reconocedor.onend = function() {
         grabando = false;
+        // Al terminar: fijar en el input solo el texto finalizado (descartar interim)
+        const input = document.getElementById('input-msg');
+        if (_textoFinalizado.trim()) input.value = _textoFinalizado.trim();
+        _textoFinalizado = '';
+        autoResize(input);
         const btn = document.getElementById('btn-mic');
         btn.classList.remove('grabando');
         document.getElementById('mic-icon').textContent = '🎤';
@@ -368,6 +378,7 @@ function toggleMic() {
         document.getElementById('mic-label').textContent = 'Dictar';
         btn.classList.remove('grabando');
     } else {
+        _textoFinalizado = document.getElementById('input-msg').value;  // preservar texto existente
         reconocedor.start();
         grabando = true;
         document.getElementById('mic-icon').textContent = '⏹️';

@@ -39472,6 +39472,11 @@ def docs_hub_usuario():
       <h2 class="font-bold text-gray-800">Tienda</h2>
       <p class="text-xs text-gray-500 mt-1">Catálogo, pedidos, variantes, fotos, carrito y modo oscuro</p>
     </a>
+    <a href="/docs/restaurante" class="block bg-white rounded-xl shadow p-5 border border-orange-100 hover:border-orange-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🍽️</div>
+      <h2 class="font-bold text-gray-800">Restaurante</h2>
+      <p class="text-xs text-gray-500 mt-1">Menú del día, pedidos en mesa, cocina, mesero y cobro</p>
+    </a>
     <a href="/docs/asistencia-remota" class="block bg-white rounded-xl shadow p-5 border border-violet-100 hover:border-violet-400 hover:shadow-md transition">
       <div class="text-3xl mb-2">🖥️</div>
       <h2 class="font-bold text-gray-800">Asistencia Remota</h2>
@@ -39497,18 +39502,19 @@ def docs_hub_usuario():
 
 @app.route('/admin/docs')
 def docs_hub_desarrollo():
-    """Hub de manuales de desarrollo — solo admin."""
+    """Hub central de toda la documentación — solo admin."""
     if session.get('rol') != 'Administrador':
         return redirect('/admin')
     from flask import render_template_string
     html = """<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Manuales de Desarrollo — TUC TUC</title>
+<title>Documentación — TUC TUC</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head><body class="bg-gray-100 min-h-screen p-4 sm:p-8">
-<div class="max-w-3xl mx-auto">
-  <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-t-4 border-gray-800">
+<div class="max-w-4xl mx-auto">
+
+  <div class="bg-white rounded-2xl shadow-lg p-6 mb-8 border-t-4 border-gray-800">
     <div class="flex items-center gap-3">
       <a href="/area_admin" class="text-gray-400 hover:text-gray-700">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -39516,45 +39522,106 @@ def docs_hub_desarrollo():
         </svg>
       </a>
       <div>
-        <h1 class="text-2xl font-extrabold text-gray-800">🔧 Manuales de Desarrollo</h1>
-        <p class="text-sm text-gray-500 mt-1">Arquitectura, APIs, tablas y decisiones de diseño por módulo</p>
+        <h1 class="text-2xl font-extrabold text-gray-800">📚 Documentación TUC TUC</h1>
+        <p class="text-sm text-gray-500 mt-1">Manuales de usuario, desarrollo y estrategia comercial</p>
       </div>
     </div>
   </div>
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    <a href="/admin/docs/tienda" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
-      <div class="text-3xl mb-2">🛍️</div>
-      <h2 class="font-bold text-gray-800">Tienda</h2>
-      <p class="text-xs text-gray-500 mt-1">APIs, tabla producto_imagenes, badge n_fotos, dark mode modal</p>
-    </a>
-    <a href="/admin/docs/asistencia-remota" class="block bg-white rounded-xl shadow p-5 border border-violet-100 hover:border-violet-400 hover:shadow-md transition">
-      <div class="text-3xl mb-2">🖥️</div>
-      <h2 class="font-bold text-gray-800">Asistencia Remota</h2>
-      <p class="text-xs text-gray-500 mt-1">Arquitectura relay, agente.py, server.py, build .exe, GitHub Releases</p>
-    </a>
-    <a href="/admin/docs/domotica" class="block bg-white rounded-xl shadow p-5 border border-amber-100 hover:border-amber-400 hover:shadow-md transition">
-      <div class="text-3xl mb-2">💡</div>
-      <h2 class="font-bold text-gray-800">Domótica</h2>
-      <p class="text-xs text-gray-500 mt-1">Tuya IoT, helpers de acceso, endpoints, presencia/ausencia, scheduler</p>
-    </a>
-    <a href="/admin/docs/contabilidad" class="block bg-white rounded-xl shadow p-5 border border-emerald-100 hover:border-emerald-400 hover:shadow-md transition">
-      <div class="text-3xl mb-2">📒</div>
-      <h2 class="font-bold text-gray-800">Contabilidad</h2>
-      <p class="text-xs text-gray-500 mt-1">Modelo PUC colaborativo, rutas genéricas, tablas y parametrización</p>
-    </a>
-    <a href="/admin/docs/vendedor" class="block bg-white rounded-xl shadow p-5 border border-orange-100 hover:border-orange-400 hover:shadow-md transition">
-      <div class="text-3xl mb-2">🤝</div>
-      <h2 class="font-bold text-gray-800">Manual del Vendedor</h2>
-      <p class="text-xs text-gray-500 mt-1">Guión demo 10 min, manejo de objeciones, comisiones y checklist</p>
-    </a>
-    <a href="/admin/docs/tienda-funciones" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
-      <div class="text-3xl mb-2">🛍️📋</div>
-      <h2 class="font-bold text-gray-800">Inventario Funciones Tienda</h2>
-      <p class="text-xs text-gray-500 mt-1">Lista completa de funciones + fortalezas para el pitch comercial</p>
-    </a>
+
+  <!-- MANUALES DE USUARIO -->
+  <div class="mb-8">
+    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3 px-1">📖 Guías para usuarios y negocios</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <a href="/docs/tienda" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🛍️</div>
+        <h2 class="font-bold text-gray-800">Tienda</h2>
+        <p class="text-xs text-gray-500 mt-1">Catálogo, pedidos, variantes, fotos, carrito y modo oscuro</p>
+      </a>
+      <a href="/docs/restaurante" class="block bg-white rounded-xl shadow p-5 border border-orange-100 hover:border-orange-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🍽️</div>
+        <h2 class="font-bold text-gray-800">Restaurante</h2>
+        <p class="text-xs text-gray-500 mt-1">Menú del día, pedidos en mesa, cocina, mesero, cobro</p>
+      </a>
+      <a href="/docs/domotica" class="block bg-white rounded-xl shadow p-5 border border-amber-100 hover:border-amber-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">💡</div>
+        <h2 class="font-bold text-gray-800">Domótica</h2>
+        <p class="text-xs text-gray-500 mt-1">Control de dispositivos inteligentes y automatizaciones</p>
+      </a>
+      <a href="/docs/asistencia-remota" class="block bg-white rounded-xl shadow p-5 border border-violet-100 hover:border-violet-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🖥️</div>
+        <h2 class="font-bold text-gray-800">Asistencia Remota</h2>
+        <p class="text-xs text-gray-500 mt-1">Descargar agente, código de sesión, control remoto</p>
+      </a>
+      <a href="/docs/contabilidad" class="block bg-white rounded-xl shadow p-5 border border-emerald-100 hover:border-emerald-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">📒</div>
+        <h2 class="font-bold text-gray-800">Contabilidad</h2>
+        <p class="text-xs text-gray-500 mt-1">PUC, tipos de documento, parametrización y comprobantes</p>
+      </a>
+    </div>
   </div>
-  <p class="text-center text-xs text-gray-400 mt-8">TUC TUC · Manuales de Desarrollo · Admin only</p>
-</div></body></html>"""
+
+  <!-- MANUALES DE DESARROLLO -->
+  <div class="mb-8">
+    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3 px-1">🔧 Manuales de desarrollo (Rafael + Claude)</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <a href="/admin/docs/tienda" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🛍️</div>
+        <h2 class="font-bold text-gray-800">Tienda — Dev</h2>
+        <p class="text-xs text-gray-500 mt-1">APIs, tabla producto_imagenes, badge n_fotos, dark mode</p>
+      </a>
+      <a href="/admin/docs/restaurante" class="block bg-white rounded-xl shadow p-5 border border-orange-100 hover:border-orange-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🍽️</div>
+        <h2 class="font-bold text-gray-800">Restaurante — Dev</h2>
+        <p class="text-xs text-gray-500 mt-1">Arquitectura, tablas, flujo de pedido, promo sharing</p>
+      </a>
+      <a href="/admin/docs/domotica" class="block bg-white rounded-xl shadow p-5 border border-amber-100 hover:border-amber-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">💡</div>
+        <h2 class="font-bold text-gray-800">Domótica — Dev</h2>
+        <p class="text-xs text-gray-500 mt-1">Tuya IoT, presencia/ausencia, scheduler, batería</p>
+      </a>
+      <a href="/admin/docs/asistencia-remota" class="block bg-white rounded-xl shadow p-5 border border-violet-100 hover:border-violet-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🖥️</div>
+        <h2 class="font-bold text-gray-800">Asistencia Remota — Dev</h2>
+        <p class="text-xs text-gray-500 mt-1">Relay, agente.py, server.py, build .exe</p>
+      </a>
+      <a href="/admin/docs/contabilidad" class="block bg-white rounded-xl shadow p-5 border border-emerald-100 hover:border-emerald-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">📒</div>
+        <h2 class="font-bold text-gray-800">Contabilidad — Dev</h2>
+        <p class="text-xs text-gray-500 mt-1">PUC colaborativo, rutas genéricas, tablas</p>
+      </a>
+      <a href="/admin/docs/chat-bridge" class="block bg-white rounded-xl shadow p-5 border border-sky-100 hover:border-sky-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">💬</div>
+        <h2 class="font-bold text-gray-800">Chat Bridge — Dev</h2>
+        <p class="text-xs text-gray-500 mt-1">Arquitectura captura↔terminal, hooks, watcher, BD</p>
+      </a>
+    </div>
+  </div>
+
+  <!-- ESTRATEGIA COMERCIAL -->
+  <div class="mb-8">
+    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3 px-1">🤝 Estrategia comercial y ventas</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <a href="/admin/docs/vendedor" class="block bg-white rounded-xl shadow p-5 border border-orange-100 hover:border-orange-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🤝</div>
+        <h2 class="font-bold text-gray-800">Manual del Vendedor</h2>
+        <p class="text-xs text-gray-500 mt-1">Guión demo 10 min, objeciones, comisión, checklist</p>
+      </a>
+      <a href="/admin/docs/tienda-funciones" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">📋</div>
+        <h2 class="font-bold text-gray-800">Inventario Funciones Tienda</h2>
+        <p class="text-xs text-gray-500 mt-1">Lista completa + fortalezas para el pitch comercial</p>
+      </a>
+      <a href="/vendedor" class="block bg-white rounded-xl shadow p-5 border border-indigo-100 hover:border-indigo-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🚗</div>
+        <h2 class="font-bold text-gray-800">Dashboard Vendedor</h2>
+        <p class="text-xs text-gray-500 mt-1">Vista del vendedor externo — guión rápido en campo</p>
+      </a>
+    </div>
+  </div>
+
+</div>
+<p class="text-center text-xs text-gray-400 py-6">TUC TUC · Documentación Central · Admin only</p>
+</body></html>"""
     return render_template_string(html)
 
 
@@ -39702,6 +39769,61 @@ def docs_vendedor_admin():
     return render_template('docs_viewer.html',
         titulo='Manual del Vendedor',
         tipo_badge='Manual del Vendedor',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/admin/docs')
+
+
+@app.route('/docs/restaurante')
+def docs_restaurante_usuario():
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'restaurante_usuario.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Usuario — Restaurante',
+        tipo_badge='Manual de Usuario',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/docs')
+
+
+@app.route('/admin/docs/restaurante')
+def docs_restaurante_desarrollo():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'restaurante_desarrollo.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Desarrollo — Restaurante',
+        tipo_badge='Manual de Desarrollo',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/admin/docs')
+
+
+@app.route('/admin/docs/chat-bridge')
+def docs_chat_bridge():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'captura_chat_desarrollo.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual de Desarrollo — Chat Bridge',
+        tipo_badge='Manual de Desarrollo',
         contenido_md=contenido,
         fecha='2026-03-16',
         back_url='/admin/docs')

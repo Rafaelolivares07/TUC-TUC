@@ -1771,7 +1771,7 @@ def check_device_access():
         return  # Ignorar peticiones a recursos estticos
 
     # RUTAS PBLICAS: permitir acceso sin registro a la tienda
-    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/', '/docs/', '/docs']
+    rutas_publicas = ['/tienda', '/favicon.ico', '/', '/r/', '/mi-restaurante', '/empieza', '/api/restaurante', '/t/', '/mi-tienda', '/api/tienda', '/api/guardar-push-token', '/api/registro-rapido', '/api/prospecto', '/garaje', '/api/garaje', '/taller', '/api/taller', '/propiedades', '/mis-propiedades', '/inmobiliaria', '/api/inmobiliaria', '/api/bolsa', '/api/propiedad', '/api/admin', '/api/domotica', '/domotica', '/almuerzo', '/api/almuerzo', '/hospedaje', '/api/hospedaje', '/mi-hospedaje', '/api/mi-hospedaje', '/promo/', '/docs/', '/docs', '/vendedor']
     for ruta in rutas_publicas:
         if request.path.startswith(ruta) or request.path == ruta:
             # Para rutas pblicas, solo crear dispositivo_id si no existe
@@ -39537,6 +39537,11 @@ def docs_hub_desarrollo():
       <h2 class="font-bold text-gray-800">Contabilidad</h2>
       <p class="text-xs text-gray-500 mt-1">Modelo PUC colaborativo, rutas genéricas, tablas y parametrización</p>
     </a>
+    <a href="/admin/docs/vendedor" class="block bg-white rounded-xl shadow p-5 border border-orange-100 hover:border-orange-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🤝</div>
+      <h2 class="font-bold text-gray-800">Manual del Vendedor</h2>
+      <p class="text-xs text-gray-500 mt-1">Guión demo 10 min, manejo de objeciones, comisiones y checklist</p>
+    </a>
   </div>
   <p class="text-center text-xs text-gray-400 mt-8">TUC TUC · Manuales de Desarrollo · Admin only</p>
 </div></body></html>"""
@@ -39653,6 +39658,182 @@ def docs_domotica_desarrollo():
         contenido_md=contenido,
         fecha='2026-03-14',
         back_url='/admin/docs')
+
+
+@app.route('/docs/vendedor')
+def docs_vendedor():
+    """Manual del vendedor — acceso libre (vendedores externos lo usan desde celular)."""
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'vendedor_manual.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual del Vendedor',
+        tipo_badge='Manual del Vendedor',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/vendedor')
+
+
+@app.route('/admin/docs/vendedor')
+def docs_vendedor_admin():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'vendedor_manual.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Manual no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Manual del Vendedor',
+        tipo_badge='Manual del Vendedor',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/admin/docs')
+
+
+@app.route('/vendedor')
+def vendedor_dashboard():
+    """Dashboard público para vendedores externos."""
+    from flask import render_template_string
+    html = """<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vendedor TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Header -->
+<div class="bg-indigo-700 text-white px-4 py-5">
+  <div class="max-w-2xl mx-auto">
+    <div class="flex items-center gap-3">
+      <div class="text-3xl">🚗</div>
+      <div>
+        <h1 class="text-xl font-extrabold tracking-tight">TUC TUC — Vendedor</h1>
+        <p class="text-indigo-200 text-sm">Tu kit de venta completo</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-2xl mx-auto px-4 py-6 space-y-4">
+
+  <!-- Demo rápida -->
+  <div class="bg-white rounded-2xl shadow p-5 border-l-4 border-indigo-500">
+    <h2 class="font-extrabold text-gray-800 text-lg mb-1">⏱️ Demo de 10 minutos</h2>
+    <p class="text-sm text-gray-500 mb-4">Guión paso a paso — úsalo antes de cada visita</p>
+    <div class="space-y-3">
+      <div class="flex gap-3 items-start">
+        <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">1</span>
+        <div>
+          <p class="font-semibold text-gray-800 text-sm">El dolor (min 1–2)</p>
+          <p class="text-gray-500 text-xs mt-0.5">No abras el celular. Pregunta: <em>"¿Cuántas veces al día le llaman a preguntar qué hay de almuerzo?"</em> — espera la respuesta.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">2</span>
+        <div>
+          <p class="font-semibold text-gray-800 text-sm">La solución en 60 seg (min 3)</p>
+          <p class="text-gray-500 text-xs mt-0.5">Muestra la página pública del restaurante demo. <strong>Solo eso</strong> — no el panel, no el mesero.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">3</span>
+        <div>
+          <p class="font-semibold text-gray-800 text-sm">El admin en 2 min (min 4–5)</p>
+          <p class="text-gray-500 text-xs mt-0.5">Cambia un ítem del menú en vivo. Incluye a la cocinera si está presente.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">4</span>
+        <div>
+          <p class="font-semibold text-gray-800 text-sm">Prueba gratuita (min 6–7)</p>
+          <p class="text-gray-500 text-xs mt-0.5"><em>"7 días gratis, si no funciona lo borramos. ¿Le gustaría intentarlo?"</em> — espera el sí.</p>
+        </div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">5</span>
+        <div>
+          <p class="font-semibold text-gray-800 text-sm">El cierre (min 8–10)</p>
+          <p class="text-gray-500 text-xs mt-0.5">Crea la cuenta ahora. Manda el enlace por WhatsApp. Agenda seguimiento a 7 días.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Objecciones rápidas -->
+  <div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="font-extrabold text-gray-800 text-lg mb-3">🛡️ Objeciones frecuentes</h2>
+    <div class="space-y-2">
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-sm text-gray-800 font-semibold">"No tengo tiempo para aprender eso"</p>
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"Son 2 minutos al día. Se lo muestro ahora mismo."</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-sm text-gray-800 font-semibold">"Ya tengo Instagram"</p>
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"TUC TUC no reemplaza eso. Su página aparece en el mapa cuando la gente busca dónde almorzar cerca."</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-sm text-gray-800 font-semibold">"¿Cuánto vale?"</p>
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"Los primeros 7 días son gratis. Primero que lo pruebe — después hablamos."</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-sm text-gray-800 font-semibold">"Déjeme pensarlo"</p>
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"Claro. ¿Lo creamos hoy gratis y durante esos 7 días lo piensa con calma? No hay compromiso."</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Acciones -->
+  <div class="grid grid-cols-2 gap-3">
+    <a href="/docs/vendedor" class="bg-indigo-600 text-white rounded-2xl p-4 text-center shadow hover:bg-indigo-700 transition">
+      <div class="text-2xl mb-1">📖</div>
+      <p class="font-bold text-sm">Manual completo</p>
+    </a>
+    <a href="https://tuc-tuc.onrender.com/r/parrilla-argentina" target="_blank" class="bg-white border-2 border-indigo-200 text-indigo-700 rounded-2xl p-4 text-center shadow hover:border-indigo-500 transition">
+      <div class="text-2xl mb-1">🥩</div>
+      <p class="font-bold text-sm">Restaurante demo</p>
+    </a>
+  </div>
+
+  <!-- Checklist -->
+  <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+    <h2 class="font-extrabold text-amber-800 text-base mb-3">✅ Antes de entrar al local</h2>
+    <div class="space-y-2 text-sm text-amber-900" id="checklist">
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Cita agendada (NO visita espontánea en hora de servicio)</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Celular cargado, TUC TUC abierto</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Restaurante demo "Parrilla Argentina" disponible</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Nombre del dueño y encargada confirmados</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> CRM actualizado con estado anterior</label>
+    </div>
+  </div>
+
+  <!-- Comisión -->
+  <div class="bg-green-50 border border-green-200 rounded-2xl p-5">
+    <h2 class="font-extrabold text-green-800 text-base mb-2">💰 Tu comisión</h2>
+    <p class="text-sm text-green-700">Cobrás <strong>30–50% del primer mes</strong> cuando el negocio paga.</p>
+    <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real. Nada antes.</p>
+    <p class="text-xs text-gray-400 mt-3">Confirmar porcentaje exacto con Rafael antes de cotizar.</p>
+  </div>
+
+</div>
+<p class="text-center text-xs text-gray-400 py-6">TUC TUC · Kit del Vendedor · 2026</p>
+</body></html>"""
+    return render_template_string(html)
 
 
 @app.route('/api/admin/contabilidad/variables-modulos', methods=['GET'])

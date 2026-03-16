@@ -39962,13 +39962,12 @@ def admin_contactos():
     try:
         conn = get_db_connection()
         crear_tablas_contactos(conn)
-        usuario_id = session['usuario_id']
-        negocios = conn.execute(
-            "SELECT id, nombre, slug, tipo FROM negocios WHERE admin_id = %s AND activo = TRUE ORDER BY nombre",
-            (usuario_id,)
-        ).fetchall()
         conn.close()
-        return render_template('contactos_admin.html', negocios=[dict(n) for n in negocios])
+        admin_id = session['usuario_id']
+        nombre_admin = session.get('nombre', '')
+        return render_template('contactos_admin.html',
+                               admin_id=admin_id,
+                               nombre_admin=nombre_admin)
     except Exception as e:
         return f"Error: {e}", 500
 

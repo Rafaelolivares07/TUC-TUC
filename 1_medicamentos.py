@@ -6937,7 +6937,19 @@ def api_captura_mensaje():
             WHERE archivado = FALSE
             ORDER BY created_at DESC LIMIT 20
         """).fetchall()
-        mensajes_claude = [{'role': r['rol'], 'content': r['contenido']} for r in reversed(historial)]
+        # Construir lista en orden cronológico y garantizar alternancia user/assistant
+        raw = [{'role': r['rol'], 'content': r['contenido']} for r in reversed(historial)]
+        mensajes_claude = []
+        for m in raw:
+            if mensajes_claude and mensajes_claude[-1]['role'] == m['role']:
+                mensajes_claude[-1]['content'] += '\n' + m['content']
+            else:
+                mensajes_claude.append(m)
+        # La API exige que el primer mensaje sea user
+        while mensajes_claude and mensajes_claude[0]['role'] != 'user':
+            mensajes_claude.pop(0)
+        if not mensajes_claude:
+            mensajes_claude = [{'role': 'user', 'content': texto}]
         respuesta = anthropic_client.messages.create(
             model='claude-sonnet-4-6',
             max_tokens=1024,

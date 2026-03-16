@@ -39616,6 +39616,11 @@ def docs_hub_desarrollo():
         <h2 class="font-bold text-gray-800">Dashboard Vendedor</h2>
         <p class="text-xs text-gray-500 mt-1">Vista del vendedor externo — guión rápido en campo</p>
       </a>
+      <a href="/admin/docs/estrategia" class="block bg-white rounded-xl shadow p-5 border border-purple-100 hover:border-purple-400 hover:shadow-md transition">
+        <div class="text-2xl mb-2">🧭</div>
+        <h2 class="font-bold text-gray-800">Estrategia Comercial</h2>
+        <p class="text-xs text-gray-500 mt-1">Filosofía, fortalezas, comparativo, modelo de distribución</p>
+      </a>
     </div>
   </div>
 
@@ -39843,6 +39848,25 @@ def docs_tienda_funciones():
     return render_template('docs_viewer.html',
         titulo='Inventario de Funciones — Tienda',
         tipo_badge='Estrategia Comercial',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/admin/docs')
+
+
+@app.route('/admin/docs/estrategia')
+def docs_estrategia_comercial():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'estrategia_comercial.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Documento no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Estrategia Comercial TUC TUC',
+        tipo_badge='Estrategia',
         contenido_md=contenido,
         fecha='2026-03-16',
         back_url='/admin/docs')

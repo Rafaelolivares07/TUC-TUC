@@ -40005,10 +40005,19 @@ def api_admin_contactos_importar():
         conn = get_db_connection()
         crear_tablas_contactos(conn)
         insertados = 0
+        omitidos = 0
         for c in lista:
             nombre = (c.get('nombre') or '').strip()
             telefono = (c.get('telefono') or '').strip()
             if nombre or telefono:
+                if telefono:
+                    existe = conn.execute(
+                        "SELECT 1 FROM contactos WHERE negocio_id = %s AND telefono = %s",
+                        (negocio_id, telefono)
+                    ).fetchone()
+                    if existe:
+                        omitidos += 1
+                        continue
                 conn.execute(
                     "INSERT INTO contactos (negocio_id, nombre, telefono) VALUES (%s, %s, %s)",
                     (negocio_id, nombre or None, telefono or None)
@@ -40016,7 +40025,7 @@ def api_admin_contactos_importar():
                 insertados += 1
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'insertados': insertados})
+        return jsonify({'ok': True, 'insertados': insertados, 'omitidos': omitidos})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

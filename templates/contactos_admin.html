@@ -121,7 +121,7 @@ async function importarVcf(input) {
     });
     const d = await r.json();
     input.value = '';
-    if (d.ok) { toast(`✓ ${d.insertados} contacto(s) importado(s)`); cargarContactos(); }
+    if (d.ok) { const msg = d.omitidos ? `✓ ${d.insertados} nuevos, ${d.omitidos} ya existían` : `✓ ${d.insertados} contacto(s) importado(s)`; toast(msg); cargarContactos(); }
     else toast('Error: ' + d.error);
   } catch(e) { toast('Error de red'); }
 }
@@ -196,7 +196,7 @@ async function importarContactos() {
     const d = await r.json();
     btn.disabled = false;
     btn.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg> Importar contactos del celular`;
-    if (d.ok) { toast(`✓ ${d.insertados} contacto(s) importado(s)`); cargarContactos(); }
+    if (d.ok) { const msg = d.omitidos ? `✓ ${d.insertados} nuevos, ${d.omitidos} ya existían` : `✓ ${d.insertados} contacto(s) importado(s)`; toast(msg); cargarContactos(); }
     else toast('Error: ' + d.error);
   } catch(e) {
     toast('Error al acceder a contactos: ' + e.message);

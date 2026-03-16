@@ -226,6 +226,30 @@ function toast(msg, tipo='ok') {
 // ── TTS ──────────────────────────────────────────────────────────
 let vozActiva = null;
 let btnVozActivo = null;
+let mejorVoz = null;
+
+function elegirMejorVoz() {
+  const voces = window.speechSynthesis.getVoices();
+  if (!voces.length) return null;
+  // Prioridad: Google español > Microsoft español > cualquier es- > default
+  const prioridad = [
+    v => /google.*es/i.test(v.name),
+    v => /microsoft.*es/i.test(v.name),
+    v => v.lang.startsWith('es') && !v.localService === false,
+    v => v.lang.startsWith('es'),
+  ];
+  for (const fn of prioridad) {
+    const voz = voces.find(fn);
+    if (voz) return voz;
+  }
+  return null;
+}
+
+// Las voces se cargan asíncronamente en algunos navegadores
+if (window.speechSynthesis) {
+  mejorVoz = elegirMejorVoz();
+  window.speechSynthesis.onvoiceschanged = () => { mejorVoz = elegirMejorVoz(); };
+}
 
 function hablar(texto, btn) {
   if (!window.speechSynthesis) { toast('TTS no soportado en este navegador', 'err'); return; }
@@ -236,7 +260,9 @@ function hablar(texto, btn) {
   }
   const utt = new SpeechSynthesisUtterance(texto);
   utt.lang = 'es-CO';
-  utt.rate = 1.0;
+  utt.rate = 0.95;
+  utt.pitch = 1.05;
+  if (mejorVoz) utt.voice = mejorVoz;
   utt.onend = () => {
     btn.textContent = '🔊 Escuchar';
     btn.classList.remove('leyendo');

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contactos — TUC TUC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- Header -->
+<div class="bg-white border-b border-gray-200 sticky top-0 z-10">
+  <div class="flex items-center gap-3 px-4 py-3">
+    <a href="/admin" class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </a>
+    <div class="flex-1">
+      <h1 class="text-lg font-bold text-gray-900">Contactos</h1>
+      <p id="subtitulo" class="text-xs text-gray-500"></p>
+    </div>
+    <span id="contador" class="text-sm text-gray-400"></span>
+  </div>
+</div>
+
+<!-- Selector de negocio (si hay más de uno) -->
+{% if negocios|length > 1 %}
+<div class="px-4 pt-4">
+  <label class="block text-sm font-medium text-gray-700 mb-1">Negocio</label>
+  <select id="negocio_select"
+          class="w-full h-12 border border-gray-300 rounded-xl px-4 text-base bg-white"
+          onchange="cargarContactos()">
+    {% for n in negocios %}
+    <option value="{{ n.id }}">{{ n.nombre }} ({{ n.tipo }})</option>
+    {% endfor %}
+  </select>
+</div>
+{% elif negocios|length == 1 %}
+<input type="hidden" id="negocio_unico" value="{{ negocios[0].id }}" data-nombre="{{ negocios[0].nombre }}">
+{% endif %}
+
+<!-- Botón importar -->
+<div class="px-4 pt-4">
+  <button id="btn_importar"
+          onclick="importarContactos()"
+          class="w-full h-14 bg-indigo-600 text-white font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+    </svg>
+    Importar contactos del celular
+  </button>
+  <p id="api_msg" class="text-xs text-gray-400 text-center mt-2 hidden">
+    Tu navegador no soporta importación directa. Agrega contactos manualmente.
+  </p>
+</div>
+
+<!-- Formulario manual -->
+<div id="form_manual" class="px-4 pt-3 hidden">
+  <div class="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-3">
+    <p class="text-sm font-medium text-gray-700">Agregar contacto</p>
+    <input id="inp_nombre" type="text" placeholder="Nombre"
+           class="w-full h-12 border border-gray-300 rounded-xl px-4 text-base" autocomplete="off">
+    <input id="inp_tel" type="tel" placeholder="Teléfono"
+           class="w-full h-12 border border-gray-300 rounded-xl px-4 text-base" autocomplete="off">
+    <button onclick="agregarManual()"
+            class="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl text-base active:scale-95 transition-transform">
+      Agregar
+    </button>
+  </div>
+</div>
+
+<!-- Lista de contactos -->
+<div class="px-4 pt-4 pb-8">
+  <div id="loading" class="text-center py-10 text-gray-400 text-sm">Cargando...</div>
+  <div id="lista" class="flex flex-col gap-2"></div>
+  <div id="vacio" class="hidden text-center py-12">
+    <div class="text-5xl mb-3">📋</div>
+    <p class="text-gray-500 text-sm">No hay contactos todavía.<br>Importa desde el celular.</p>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg transition-all duration-300 opacity-0 pointer-events-none z-50 max-w-xs text-center"></div>
+
+<script>
+const negocios = {{ negocios | tojson }};
+let negocioId = null;
+let negocioNombre = '';
+
+function getNegocioId() {
+  const sel = document.getElementById('negocio_select');
+  if (sel) return parseInt(sel.value);
+  const uni = document.getElementById('negocio_unico');
+  if (uni) return parseInt(uni.value);
+  return null;
+}
+
+function getNegocioNombre() {
+  const sel = document.getElementById('negocio_select');
+  if (sel) return sel.options[sel.selectedIndex].text;
+  const uni = document.getElementById('negocio_unico');
+  if (uni) return uni.dataset.nombre || '';
+  return '';
+}
+
+async function cargarContactos() {
+  negocioId = getNegocioId();
+  negocioNombre = getNegocioNombre();
+  if (!negocioId) return;
+  document.getElementById('subtitulo').textContent = negocioNombre;
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('lista').innerHTML = '';
+  document.getElementById('vacio').classList.add('hidden');
+  try {
+    const r = await fetch(`/api/admin/contactos?negocio_id=${negocioId}`);
+    const d = await r.json();
+    document.getElementById('loading').classList.add('hidden');
+    if (d.ok) renderLista(d.contactos);
+  } catch(e) {
+    document.getElementById('loading').classList.add('hidden');
+    toast('Error cargando contactos');
+  }
+}
+
+function renderLista(contactos) {
+  const lista = document.getElementById('lista');
+  const vacio = document.getElementById('vacio');
+  const contador = document.getElementById('contador');
+  lista.innerHTML = '';
+  if (!contactos.length) { vacio.classList.remove('hidden'); contador.textContent = ''; return; }
+  contador.textContent = contactos.length + ' contacto' + (contactos.length !== 1 ? 's' : '');
+  contactos.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'bg-white rounded-2xl border border-gray-100 flex items-center gap-3 px-4 py-3';
+    div.innerHTML = `
+      <div class="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg flex-shrink-0">
+        ${(c.nombre || c.telefono || '?')[0].toUpperCase()}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-medium text-gray-900 truncate">${c.nombre || '(sin nombre)'}</p>
+        <p class="text-sm text-gray-500">${c.telefono || '(sin teléfono)'}</p>
+      </div>
+      <button onclick="eliminar(${c.id}, this)"
+              class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+      </button>`;
+    lista.appendChild(div);
+  });
+}
+
+async function importarContactos() {
+  if (!('contacts' in navigator && 'ContactsManager' in window)) {
+    document.getElementById('api_msg').classList.remove('hidden');
+    document.getElementById('form_manual').classList.remove('hidden');
+    return;
+  }
+  negocioId = getNegocioId();
+  if (!negocioId) { toast('Selecciona un negocio primero'); return; }
+  try {
+    const props = ['name', 'tel'];
+    const opts = { multiple: true };
+    const results = await navigator.contacts.select(props, opts);
+    if (!results.length) { toast('No se seleccionaron contactos'); return; }
+    const lista = [];
+    results.forEach(c => {
+      const nombre = (c.name && c.name[0]) ? c.name[0] : '';
+      if (c.tel && c.tel.length) {
+        c.tel.forEach(t => lista.push({ nombre, telefono: t.replace(/\s+/g, '') }));
+      } else {
+        lista.push({ nombre, telefono: '' });
+      }
+    });
+    const btn = document.getElementById('btn_importar');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+    const r = await fetch('/api/admin/contactos/importar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ negocio_id: negocioId, contactos: lista })
+    });
+    const d = await r.json();
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg> Importar contactos del celular`;
+    if (d.ok) { toast(`✓ ${d.insertados} contacto(s) importado(s)`); cargarContactos(); }
+    else toast('Error: ' + d.error);
+  } catch(e) {
+    toast('Error al acceder a contactos: ' + e.message);
+  }
+}
+
+async function agregarManual() {
+  negocioId = getNegocioId();
+  const nombre = document.getElementById('inp_nombre').value.trim();
+  const telefono = document.getElementById('inp_tel').value.trim();
+  if (!nombre && !telefono) { toast('Ingresa nombre o teléfono'); return; }
+  try {
+    const r = await fetch('/api/admin/contactos/importar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ negocio_id: negocioId, contactos: [{ nombre, telefono }] })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('inp_nombre').value = '';
+      document.getElementById('inp_tel').value = '';
+      toast('Contacto agregado');
+      cargarContactos();
+    } else toast('Error: ' + d.error);
+  } catch(e) { toast('Error de red'); }
+}
+
+async function eliminar(id, btn) {
+  if (!confirm('¿Eliminar este contacto?')) return;
+  try {
+    const r = await fetch(`/api/admin/contactos/${id}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { toast('Eliminado'); cargarContactos(); }
+    else toast('Error: ' + d.error);
+  } catch(e) { toast('Error de red'); }
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('opacity-0');
+  t.classList.add('opacity-100');
+  setTimeout(() => { t.classList.remove('opacity-100'); t.classList.add('opacity-0'); }, 3000);
+}
+
+// Inicializar
+document.addEventListener('DOMContentLoaded', () => {
+  if (negocios.length === 0) {
+    document.getElementById('loading').textContent = 'No tienes negocios registrados.';
+    return;
+  }
+  cargarContactos();
+});
+</script>
+</body>
+</html>

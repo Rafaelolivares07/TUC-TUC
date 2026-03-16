@@ -39925,6 +39925,122 @@ def api_contabilidad_asiento_automatico(tipo, slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── MÓDULO: CONTACTOS ───────────────────────────────────────────────────────
+
+def crear_tablas_contactos(conn):
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS contactos (
+                id          SERIAL PRIMARY KEY,
+                negocio_id  INTEGER NOT NULL,
+                nombre      TEXT,
+                telefono    TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tercero_id  INTEGER
+            )
+        """)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    alters = [
+        "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS tercero_id INTEGER",
+    ]
+    for sql in alters:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+
+@app.route('/admin/contactos')
+@admin_required
+def admin_contactos():
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    try:
+        conn = get_db_connection()
+        crear_tablas_contactos(conn)
+        usuario_id = session['usuario_id']
+        negocios = conn.execute(
+            "SELECT id, nombre, slug, tipo FROM negocios WHERE admin_id = %s AND activo = TRUE ORDER BY nombre",
+            (usuario_id,)
+        ).fetchall()
+        conn.close()
+        return render_template('contactos_admin.html', negocios=[dict(n) for n in negocios])
+    except Exception as e:
+        return f"Error: {e}", 500
+
+
+@app.route('/api/admin/contactos', methods=['GET'])
+@admin_required
+def api_admin_contactos_lista():
+    negocio_id = request.args.get('negocio_id', type=int)
+    if not negocio_id:
+        return jsonify({'ok': False, 'error': 'negocio_id requerido'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_contactos(conn)
+        rows = conn.execute(
+            "SELECT id, nombre, telefono, created_at::text FROM contactos WHERE negocio_id = %s ORDER BY nombre",
+            (negocio_id,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'contactos': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/contactos/importar', methods=['POST'])
+@admin_required
+def api_admin_contactos_importar():
+    data = request.get_json()
+    negocio_id = data.get('negocio_id')
+    lista = data.get('contactos', [])
+    if not negocio_id or not lista:
+        return jsonify({'ok': False, 'error': 'negocio_id y contactos requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_contactos(conn)
+        insertados = 0
+        for c in lista:
+            nombre = (c.get('nombre') or '').strip()
+            telefono = (c.get('telefono') or '').strip()
+            if nombre or telefono:
+                conn.execute(
+                    "INSERT INTO contactos (negocio_id, nombre, telefono) VALUES (%s, %s, %s)",
+                    (negocio_id, nombre or None, telefono or None)
+                )
+                insertados += 1
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'insertados': insertados})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/contactos/<int:cid>', methods=['DELETE'])
+@admin_required
+def api_admin_contactos_eliminar(cid):
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM contactos WHERE id = %s", (cid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ── FIN MÓDULO: CONTACTOS ────────────────────────────────────────────────────
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

@@ -6927,8 +6927,6 @@ def api_captura_historial():
 def api_captura_mensaje():
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    if not anthropic_client:
-        return jsonify({'ok': False, 'error': 'Claude API no configurada'}), 500
     data = request.get_json() or {}
     texto = (data.get('mensaje') or '').strip()
     if not texto:
@@ -6941,43 +6939,9 @@ def api_captura_mensaje():
             ('user', texto, 'enviado')
         )
         conn.commit()
-        historial = conn.execute("""
-            SELECT rol, contenido FROM chat_mensajes
-            WHERE archivado = FALSE
-              AND rol IN ('user', 'assistant')
-              AND contenido IS NOT NULL
-              AND trim(contenido) != ''
-            ORDER BY created_at DESC LIMIT 20
-        """).fetchall()
-        # Construir lista en orden cronológico y garantizar alternancia user/assistant
-        raw = [{'role': r['rol'], 'content': r['contenido'].strip()} for r in reversed(historial)]
-        mensajes_claude = []
-        for m in raw:
-            if mensajes_claude and mensajes_claude[-1]['role'] == m['role']:
-                mensajes_claude[-1]['content'] += '\n' + m['content']
-            else:
-                mensajes_claude.append(m)
-        # La API exige que el primer mensaje sea user y el último también sea user
-        while mensajes_claude and mensajes_claude[0]['role'] != 'user':
-            mensajes_claude.pop(0)
-        while mensajes_claude and mensajes_claude[-1]['role'] != 'user':
-            mensajes_claude.pop()
-        if not mensajes_claude:
-            mensajes_claude = [{'role': 'user', 'content': texto}]
-        respuesta = anthropic_client.messages.create(
-            model='claude-sonnet-4-6',
-            max_tokens=1024,
-            system=CHAT_SYSTEM_PROMPT,
-            messages=mensajes_claude
-        )
-        texto_respuesta = respuesta.content[0].text
-        conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido, estado) VALUES (%s, %s, %s)",
-            ('assistant', texto_respuesta, 'enviado')
-        )
-        conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'respuesta': texto_respuesta})
+        # La respuesta llega por terminal Claude — el frontend la recibe via polling
+        return jsonify({'ok': True})
     except Exception as e:
         if conn:
             try: conn.rollback(); conn.close()

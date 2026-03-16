@@ -400,7 +400,7 @@ async function enviarMensaje() {
     const d = await r.json();
     quitarTyping();
     if (!d.ok) { toast(d.error || 'Error al enviar', 'err'); }
-    else { agregarBurbuja('assistant', d.respuesta, true); }
+    // La respuesta llega por polling desde la terminal
   } catch(e) {
     quitarTyping();
     toast('Error de red', 'err');

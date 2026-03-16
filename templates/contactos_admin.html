@@ -37,15 +37,15 @@
   </label>
   <p id="vcf_hint" class="text-xs text-gray-400 text-center -mt-1"></p>
 
-  <!-- Opción 2: Telegram JSON -->
+  <!-- Opción 2: Telegram HTML export (contacts.html) -->
   <label class="w-full h-14 bg-sky-500 text-white font-semibold rounded-2xl flex items-center justify-center gap-2 text-base active:scale-95 transition-transform cursor-pointer">
     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 7.3l-1.68 7.92c-.12.56-.45.7-.91.43l-2.52-1.86-1.22 1.17c-.13.13-.25.25-.51.25l.18-2.57 4.65-4.2c.2-.18-.04-.28-.31-.1L8.31 14.9l-2.47-.77c-.54-.17-.55-.54.11-.8l9.63-3.71c.45-.17.84.1.71.78z"/>
     </svg>
-    Importar desde Telegram (.json)
-    <input type="file" accept=".json" class="hidden" onchange="importarTelegram(this)">
+    Importar desde Telegram (.html o .json)
+    <input type="file" accept=".html,.json" class="hidden" onchange="importarTelegramAuto(this)">
   </label>
-  <p class="text-xs text-gray-400 text-center -mt-1">Telegram → Ajustes → Privacidad → Exportar datos → solo Contactos</p>
+  <p class="text-xs text-gray-400 text-center -mt-1">Telegram Desktop → Ajustes → Avanzado → Exportar datos → solo Contactos → sube contacts.html</p>
 
   <!-- Opción 3: Web Contacts API (solo Android) -->
   <button id="btn_importar"
@@ -128,6 +128,47 @@ function parseTelegramJson(texto) {
   } catch(e) {
     return null;
   }
+}
+
+function parseTelegramHtml(texto) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(texto, 'text/html');
+  const contactos = [];
+  doc.querySelectorAll('.entry.clearfix').forEach(entry => {
+    const nombre = (entry.querySelector('.name.bold')?.textContent || '').trim();
+    const telefono = (entry.querySelector('.details_entry.details')?.textContent || '').replace(/\s+/g, '').trim();
+    if (nombre || telefono) contactos.push({ nombre, telefono });
+  });
+  return contactos;
+}
+
+async function importarTelegramAuto(input) {
+  const archivo = input.files[0];
+  if (!archivo) return;
+  const texto = await archivo.text();
+  let lista;
+  if (archivo.name.endsWith('.html') || archivo.name.endsWith('.htm')) {
+    lista = parseTelegramHtml(texto);
+  } else {
+    const parsed = parseTelegramJson(texto);
+    if (parsed === null) { toast('Archivo inválido'); input.value = ''; return; }
+    lista = parsed.map(c => ({ nombre: [c.first_name||'', c.last_name||''].join(' ').trim(), telefono: c.phone_number||'' }));
+  }
+  if (!lista.length) { toast('No se encontraron contactos'); input.value = ''; return; }
+  toast(`Procesando ${lista.length} contactos de Telegram...`);
+  try {
+    const r = await fetch('/api/admin/contactos/importar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: lista })
+    });
+    const d = await r.json();
+    input.value = '';
+    if (d.ok) {
+      const msg = d.omitidos ? `✓ ${d.insertados} nuevos de Telegram, ${d.omitidos} ya existían` : `✓ ${d.insertados} contacto(s) de Telegram importado(s)`;
+      toast(msg); cargarContactos();
+    } else toast('Error: ' + d.error);
+  } catch(e) { toast('Error de red'); }
 }
 
 async function importarTelegram(input) {

@@ -400,6 +400,7 @@ async function enviarMensaje() {
     const d = await r.json();
     quitarTyping();
     if (!d.ok) { toast(d.error || 'Error al enviar', 'err'); }
+    else if (d.id && d.id > ultimoId) { ultimoId = d.id; }
     // La respuesta llega por polling desde la terminal
   } catch(e) {
     quitarTyping();

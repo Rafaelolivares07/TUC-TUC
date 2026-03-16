@@ -6936,14 +6936,14 @@ def api_captura_mensaje():
     conn = None
     try:
         conn = get_db_connection()
-        conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido, estado, canal) VALUES (%s, %s, %s, %s)",
+        row = conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, estado, canal) VALUES (%s, %s, %s, %s) RETURNING id",
             ('user', texto, 'enviado', 'captura')
-        )
+        ).fetchone()
         conn.commit()
         conn.close()
         # La respuesta llega por terminal Claude — el frontend la recibe via polling
-        return jsonify({'ok': True})
+        return jsonify({'ok': True, 'id': row['id']})
     except Exception as e:
         if conn:
             try: conn.rollback(); conn.close()

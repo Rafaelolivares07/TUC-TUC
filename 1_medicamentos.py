@@ -40009,6 +40009,9 @@ def api_admin_contactos_importar():
         for c in lista:
             nombre = (c.get('nombre') or '').strip()
             telefono = (c.get('telefono') or '').strip()
+            # Normalizar prefijo 00XX → +XX (ej: 005731... → +5731...)
+            if telefono.startswith('00'):
+                telefono = '+' + telefono[2:]
             if nombre or telefono:
                 if telefono:
                     existe = conn.execute(

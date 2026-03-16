@@ -39547,6 +39547,11 @@ def docs_hub_desarrollo():
       <h2 class="font-bold text-gray-800">Manual del Vendedor</h2>
       <p class="text-xs text-gray-500 mt-1">Guión demo 10 min, manejo de objeciones, comisiones y checklist</p>
     </a>
+    <a href="/admin/docs/tienda-funciones" class="block bg-white rounded-xl shadow p-5 border border-red-100 hover:border-red-400 hover:shadow-md transition">
+      <div class="text-3xl mb-2">🛍️📋</div>
+      <h2 class="font-bold text-gray-800">Inventario Funciones Tienda</h2>
+      <p class="text-xs text-gray-500 mt-1">Lista completa de funciones + fortalezas para el pitch comercial</p>
+    </a>
   </div>
   <p class="text-center text-xs text-gray-400 mt-8">TUC TUC · Manuales de Desarrollo · Admin only</p>
 </div></body></html>"""
@@ -39697,6 +39702,25 @@ def docs_vendedor_admin():
     return render_template('docs_viewer.html',
         titulo='Manual del Vendedor',
         tipo_badge='Manual del Vendedor',
+        contenido_md=contenido,
+        fecha='2026-03-16',
+        back_url='/admin/docs')
+
+
+@app.route('/admin/docs/tienda-funciones')
+def docs_tienda_funciones():
+    if session.get('rol') != 'Administrador':
+        return redirect('/admin')
+    import os
+    ruta = os.path.join(os.path.dirname(__file__), 'docs', 'tienda_funciones.md')
+    try:
+        with open(ruta, encoding='utf-8') as f:
+            contenido = f.read()
+    except FileNotFoundError:
+        return "Documento no encontrado", 404
+    return render_template('docs_viewer.html',
+        titulo='Inventario de Funciones — Tienda',
+        tipo_badge='Estrategia Comercial',
         contenido_md=contenido,
         fecha='2026-03-16',
         back_url='/admin/docs')

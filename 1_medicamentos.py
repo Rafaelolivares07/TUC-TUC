@@ -6900,14 +6900,23 @@ def api_captura_historial():
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
+        since_id = request.args.get('since_id', type=int, default=0)
         conn = get_db_connection()
-        rows = conn.execute("""
-            SELECT rol, contenido, created_at
-            FROM chat_mensajes
-            WHERE archivado = FALSE
-            ORDER BY created_at ASC
-            LIMIT 60
-        """).fetchall()
+        if since_id:
+            rows = conn.execute("""
+                SELECT id, rol, contenido, created_at
+                FROM chat_mensajes
+                WHERE archivado = FALSE AND id > %s
+                ORDER BY created_at ASC
+            """, (since_id,)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, rol, contenido, created_at
+                FROM chat_mensajes
+                WHERE archivado = FALSE
+                ORDER BY created_at ASC
+                LIMIT 60
+            """).fetchall()
         conn.close()
         return jsonify({'ok': True, 'mensajes': [dict(r) for r in rows]})
     except Exception as e:
@@ -6974,6 +6983,28 @@ def api_captura_mensaje():
             try: conn.rollback(); conn.close()
             except: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/captura/test')
+def api_captura_test():
+    """Diagnóstico: verifica API key de Anthropic"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    key = os.getenv('ANTHROPIC_API_KEY')
+    if not key:
+        return jsonify({'ok': False, 'status': 'KEY_AUSENTE', 'detalle': 'ANTHROPIC_API_KEY no está configurada en el servidor'})
+    key_preview = key[:20] + '...' + key[-6:]
+    if not anthropic_client:
+        return jsonify({'ok': False, 'status': 'CLIENT_NULL', 'key': key_preview})
+    try:
+        resp = anthropic_client.messages.create(
+            model='claude-sonnet-4-6',
+            max_tokens=10,
+            messages=[{'role': 'user', 'content': 'di hola'}]
+        )
+        return jsonify({'ok': True, 'status': 'OK', 'key': key_preview, 'respuesta': resp.content[0].text})
+    except Exception as e:
+        return jsonify({'ok': False, 'status': 'API_ERROR', 'key': key_preview, 'error': str(e)})
 
 
 @app.route('/api/requerimientos/<int:requerimiento_id>', methods=['PUT'])

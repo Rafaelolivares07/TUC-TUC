@@ -346,14 +346,34 @@ function quitarTyping() {
 }
 
 // ── Cargar historial ─────────────────────────────────────────────
+let ultimoId = 0;
+
 async function cargarHistorial() {
   try {
     const r = await fetch('/api/captura/historial');
     const d = await r.json();
     if (!d.ok) return;
-    d.mensajes.forEach(m => agregarBurbuja(m.rol, m.contenido, false));
+    d.mensajes.forEach(m => {
+      agregarBurbuja(m.rol, m.contenido, false);
+      if (m.id > ultimoId) ultimoId = m.id;
+    });
   } catch(e) { console.warn('Error historial:', e); }
 }
+
+async function pollNuevos() {
+  if (enviando) return; // no interferir mientras se espera respuesta de la API
+  try {
+    const r = await fetch('/api/captura/historial?since_id=' + ultimoId);
+    const d = await r.json();
+    if (!d.ok || !d.mensajes.length) return;
+    d.mensajes.forEach(m => {
+      agregarBurbuja(m.rol, m.contenido, m.rol === 'assistant');
+      if (m.id > ultimoId) ultimoId = m.id;
+    });
+  } catch(e) { /* silencioso */ }
+}
+
+setInterval(pollNuevos, 4000);
 
 // ── Enviar ───────────────────────────────────────────────────────
 let enviando = false;

@@ -2,7 +2,7 @@
 
 **Módulo:** Domótica
 **Versión:** 1.1
-**Última actualización:** 2026-03-14
+**Última actualización:** 2026-03-17
 **Audiencia:** Desarrolladores que mantienen o extienden el módulo
 
 ---
@@ -103,24 +103,43 @@ Credenciales en variables de entorno de Render:
 
 ## Sistema de presencia/ausencia
 
-### Heartbeat (`POST /api/domotica/heartbeat`)
+### Heartbeat (`GET /api/domotica/heartbeat`)
 
-El script `heartbeat.ps1` en la laptop envía cada 60 segundos:
-```json
-{"token": "...", "device_id": 1, "bat": 73, "charging": false, "idle": 245}
+**Emisor único**: `captura_watcher.ps1` — envía cada 60s con idle protegido contra contaminación.
+
+```
+GET /api/domotica/heartbeat?token=tuctuc-hb-2026&idle=<segundos>
 ```
 
-Lógica del servidor al recibir heartbeat:
+Lógica del servidor:
 ```python
-ventana = config['presencia_ventana_seg']  # de CONFIGURACION_SISTEMA
+ventana = config['presencia_ventana_seg']  # de CONFIGURACION_SISTEMA (default 360s)
 
 if idle_seg < ventana:
     laptop_last_seen = NOW()   # activo
 else:
     laptop_last_seen = NULL    # ausente
+
+threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
 ```
 
-El scheduler evalúa `laptop_last_seen IS NULL` para determinar ausencia y activar reglas correspondientes.
+El scheduler evalúa `laptop_last_seen IS NULL` para determinar ausencia.
+El heartbeat también dispara la evaluación inmediatamente en un thread.
+
+### Problema crítico resuelto: contaminación del idle por SendKeys (2026-03-17)
+
+`captura_watcher.ps1` usa `SendKeys(".")` para activar la terminal de Claude Code cuando llega
+un mensaje del chat web. Esto reseteaba el idle de Windows. El watcher, 10s después, leía
+`windowsIdle < 30s` y actualizaba `$lastRealInput`, haciendo que `$realIdleSec` cayera a ~0,
+por lo que el heartbeat siempre reportaba presencia aunque el usuario estuviera ausente.
+
+**Fix**: variable `$lastSendKeys` + `$SENDKEYS_COOLDOWN = 90s`. El watcher no actualiza
+`$lastRealInput` si `SendKeys` disparó hace menos de 90s.
+
+### Comportamiento al apagar el PC
+- Heartbeat deja de llegar → `laptop_last_seen` queda congelado
+- Scheduler detecta vencimiento en el próximo ciclo (~5 min) cuando `laptop_last_seen` tiene > 6 min
+- Ventilador se apaga en máximo **~11 minutos** tras apagar el PC
 
 ### Evaluación de reglas (`evaluar_reglas_domotica`)
 

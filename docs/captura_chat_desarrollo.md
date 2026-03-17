@@ -102,11 +102,13 @@ Sin `since_id`: devuelve los últimos 60 mensajes (carga inicial).
 
 ### Variables clave
 ```powershell
-$DB_URL       = "postgresql://..."    # conexión directa a Render
-$CLAUDE_WINDOW = "Claude Code"        # título de ventana a activar
-$COOLDOWN_SEC  = 45                   # mínimo entre disparos
-$POLL_SEC      = 10                   # intervalo de polling
-$PID_FILE      = "C:\Users\RAFAEL OLIVARES\claude_pid.txt"
+$DB_URL            = "postgresql://..."    # conexión directa a Render
+$CLAUDE_WINDOW     = "Claude Code"        # título de ventana a activar
+$COOLDOWN_SEC      = 45                   # mínimo entre disparos
+$POLL_SEC          = 10                   # intervalo de polling
+$HB_CADA           = 60                   # heartbeat de presencia cada N segundos
+$SENDKEYS_COOLDOWN = 90                   # segundos a ignorar windowsIdle después de SendKeys
+$PID_FILE          = "C:\Users\RAFAEL OLIVARES\claude_pid.txt"
 ```
 
 ### Query de detección (Python embebido)
@@ -334,6 +336,8 @@ const SILENCIO_MS = 1800;  // ms de silencio antes de auto-enviar
 | Mensajes terminal visibles en /captura | Hook guardaba todo con canal='terminal' | Filtro: canal='captura' OR rol='assistant' |
 | Python unterminated string | DB_URL interpolada en here-string PS1 | Pasar como $env:CW_DB_URL |
 | Int32 overflow en elapsed | [int] no cabe 63B segundos | Usar [long] y chequear $null |
+| Heartbeat reporta presencia con usuario ausente | SendKeys resetea idle de Windows → watcher leía windowsIdle<30 y actualizaba lastRealInput | $lastSendKeys + $SENDKEYS_COOLDOWN=90s — no actualizar lastRealInput por 90s después de SendKeys |
+| Dos emisores de heartbeat en paralelo | presencia_heartbeat.ps1 + captura_watcher.ps1 corrían a la vez | Eliminar presencia_heartbeat.ps1 del startup; único emisor = captura_watcher.ps1 |
 
 ---
 
@@ -359,27 +363,19 @@ powershell.exe -NoProfile -WindowStyle Hidden -File "C:\Users\RAFAEL OLIVARES\in
 **Contenido de `iniciar_tuctuc.ps1`:**
 ```powershell
 # 1. Watcher del chat en segundo plano (sin ventana)
+#    — también envía heartbeat de presencia domótica cada 60s
 Start-Process powershell `
     -ArgumentList "-NoProfile -WindowStyle Hidden -File `"...\captura_watcher.ps1`"" `
     -WindowStyle Hidden
 
-# 2. Heartbeat de presencia domótica (sin ventana)
-Start-Process powershell `
-    -ArgumentList "-NoProfile -WindowStyle Hidden -File `"...\presencia_heartbeat.ps1`"" `
-    -WindowStyle Hidden
-
-# 3. Claude Code en Windows Terminal (minimizado)
+# 2. Claude Code en Windows Terminal (minimizado)
 Start-Process wt `
     -ArgumentList "-w 0 nt --title `"✨ Claude Code`" -d `"...\MiAppMedicamentos`" powershell -NoExit -Command claude" `
     -WindowStyle Minimized
 ```
 
-**`presencia_heartbeat.ps1`** — archivo en `MiAppMedicamentos/`:
-- Mide inactividad real de teclado/mouse via Win32 `GetLastInputInfo`
-- Llama `GET /api/domotica/heartbeat?token=tuctuc-hb-2026&idle=<segundos>` cada 2 minutos
-- Si `idle >= 360s`: servidor marca ausencia → ventiladores se apagan
-- Si `idle < 360s`: servidor marca presencia → reglas deciden según temperatura
-- Doble función: mantiene Render despierto + controla domótica
+**Nota**: `presencia_heartbeat.ps1` (que existía antes) fue eliminado del startup.
+El heartbeat de presencia ahora lo gestiona exclusivamente `captura_watcher.ps1` (ver sección 4).
 
 **Política de ejecución:** `RemoteSigned` en `CurrentUser` — scripts locales corren sin aviso, sin necesidad de intervención.
 
@@ -446,4 +442,4 @@ En el markdown, un link normal:
 3. Clic en el 🔗 que aparece
 4. La URL completa (incluyendo `#anchor`) queda en el portapapeles
 
-*Creado: 2026-03-16 | Última actualización: 2026-03-17 (auto-start Windows)*
+*Creado: 2026-03-16 | Última actualización: 2026-03-17 (fix heartbeat contaminado por SendKeys)*

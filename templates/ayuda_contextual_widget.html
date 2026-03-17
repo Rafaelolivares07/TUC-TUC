@@ -1,0 +1,387 @@
+{# ayuda_contextual_widget.html
+   Incluir antes de </body> en cualquier template que soporte ayuda contextual.
+   Muestra iconos 📖 a todos los usuarios.
+   Muestra botón 🛠️ y modo inspector solo al Administrador TUC TUC.
+#}
+
+<style>
+/* ── Iconos de ayuda ── */
+.ayuda-icono {
+  display: inline-block;
+  font-size: 0.65rem;
+  opacity: 0.45;
+  text-decoration: none;
+  vertical-align: super;
+  margin-left: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  line-height: 1;
+}
+.ayuda-icono:hover { opacity: 1 !important; }
+
+/* ── Banner modo inspector ── */
+#ayuda-inspector-banner {
+  display: none;
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 9500;
+  background: #4f46e5; color: white;
+  padding: 10px 16px;
+  font-size: 0.875rem; font-weight: 600;
+  align-items: center; justify-content: space-between;
+  gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+#ayuda-inspector-banner.activo { display: flex; }
+#ayuda-banner-salir {
+  background: rgba(255,255,255,0.2);
+  border: none; color: white; padding: 5px 14px;
+  border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+}
+#ayuda-banner-salir:hover { background: rgba(255,255,255,0.35); }
+
+/* ── Inspector: highlight hover ── */
+body.ayuda-inspector-activo { padding-top: 46px; }
+body.ayuda-inspector-activo input:hover,
+body.ayuda-inspector-activo textarea:hover,
+body.ayuda-inspector-activo select:hover,
+body.ayuda-inspector-activo button:not(#ayuda-banner-salir):not(#btn-ayuda-inspector):hover,
+body.ayuda-inspector-activo label:hover,
+body.ayuda-inspector-activo a:not(.ayuda-icono):hover,
+body.ayuda-inspector-activo [data-ayuda]:hover {
+  outline: 2px dashed #6366f1 !important;
+  outline-offset: 2px;
+  cursor: crosshair !important;
+}
+
+/* ── Botón flotante ── */
+#btn-ayuda-inspector {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 9400;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: #4f46e5; color: white;
+  border: none; font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(79,70,229,0.45);
+  transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+#btn-ayuda-inspector:hover { background: #4338ca; transform: scale(1.06); }
+#btn-ayuda-inspector.activo { background: #dc2626; box-shadow: 0 4px 14px rgba(220,38,38,0.4); }
+
+/* ── Overlay + popup ── */
+#ayuda-popup-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9600;
+  align-items: center; justify-content: center;
+  padding: 16px;
+}
+#ayuda-popup-overlay.activo { display: flex; }
+#ayuda-popup-card {
+  background: white; border-radius: 16px;
+  padding: 20px; width: 100%; max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: 90vh; overflow-y: auto;
+}
+#ayuda-popup-titulo {
+  font-size: 1rem; font-weight: 700; color: #1e1b4b;
+  border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; margin: 0;
+}
+#ayuda-selector-info {
+  font-size: 0.8rem;
+  background: #f9fafb; border-radius: 8px; padding: 8px 10px;
+}
+#ayuda-selector-info code {
+  background: #e0e7ff; color: #3730a3;
+  padding: 1px 5px; border-radius: 4px; font-size: 0.78rem;
+}
+#ayuda-search-input, #ayuda-tooltip-input {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid #d1d5db; border-radius: 8px;
+  font-size: 0.9rem; outline: none; box-sizing: border-box;
+}
+#ayuda-search-input:focus, #ayuda-tooltip-input:focus { border-color: #6366f1; }
+#ayuda-search-results {
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  max-height: 180px; overflow-y: auto; display: none;
+}
+#ayuda-search-results:not(:empty) { display: block; }
+.ayuda-result { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6; }
+.ayuda-result:hover { background: #f5f3ff; }
+.ayuda-result-manual { font-size: 0.72rem; color: #6b7280; }
+.ayuda-result-texto { font-size: 0.9rem; color: #111827; font-weight: 500; }
+#ayuda-heading-sel {
+  font-size: 0.85rem; background: #f0fdf4;
+  border: 1px solid #bbf7d0; border-radius: 8px;
+  padding: 8px 10px; color: #166534; display: none;
+}
+#ayuda-heading-sel a { color: #166534; font-size: 0.75rem; word-break: break-all; }
+#ayuda-popup-buttons { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.ayuda-btn {
+  border: none; padding: 9px 16px; border-radius: 8px;
+  font-size: 0.875rem; font-weight: 600; cursor: pointer;
+}
+.ayuda-btn-guardar { background: #4f46e5; color: white; }
+.ayuda-btn-guardar:hover { background: #4338ca; }
+.ayuda-btn-cancelar { background: #f3f4f6; color: #374151; }
+.ayuda-btn-cancelar:hover { background: #e5e7eb; }
+.ayuda-btn-eliminar { background: #fee2e2; color: #dc2626; display: none; }
+.ayuda-btn-eliminar:hover { background: #fecaca; }
+
+/* ── Toast ── */
+#ayuda-toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  padding: 10px 20px; border-radius: 10px; color: white; font-weight: 600;
+  font-size: 0.875rem; z-index: 9999; opacity: 0; transition: opacity 0.25s;
+  pointer-events: none; white-space: nowrap;
+}
+#ayuda-toast.show { opacity: 1; }
+#ayuda-toast.ok  { background: #059669; }
+#ayuda-toast.err { background: #dc2626; }
+</style>
+
+<!-- Banner modo inspector -->
+<div id="ayuda-inspector-banner">
+  <span>🛠️ Modo configuración — clic sobre cualquier elemento para vincular al manual</span>
+  <button id="ayuda-banner-salir" onclick="ayudaToggleInspector()">✕ Salir</button>
+</div>
+
+{% if session.get('rol') == 'Administrador' %}
+<!-- Botón flotante (solo admin) -->
+<button id="btn-ayuda-inspector" onclick="ayudaToggleInspector()" title="Configurar ayuda contextual">🛠️</button>
+{% endif %}
+
+<!-- Popup -->
+<div id="ayuda-popup-overlay">
+  <div id="ayuda-popup-card">
+    <p id="ayuda-popup-titulo">🛠️ Configurar ayuda para este elemento</p>
+    <div id="ayuda-selector-info"></div>
+    <input id="ayuda-search-input" type="text" placeholder="Buscar sección en manuales..." oninput="ayudaBuscar(this.value)" autocomplete="off">
+    <div id="ayuda-search-results"></div>
+    <div id="ayuda-heading-sel"></div>
+    <input id="ayuda-tooltip-input" type="text" placeholder="Texto del tooltip (opcional)">
+    <div id="ayuda-popup-buttons">
+      <button class="ayuda-btn ayuda-btn-eliminar" id="ayuda-btn-eliminar" onclick="ayudaEliminar()">🗑️ Eliminar</button>
+      <button class="ayuda-btn ayuda-btn-cancelar" onclick="ayudaCerrarPopup()">Cancelar</button>
+      <button class="ayuda-btn ayuda-btn-guardar" onclick="ayudaGuardar()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="ayuda-toast"></div>
+
+<script>
+(function() {
+  const AYUDA_PAGINA = location.pathname;
+  const AYUDA_ES_ADMIN = {{ (session.get('rol') == 'Administrador') | tojson }};
+
+  let ayudaInspectorActivo = false;
+  let ayudaElActual = null;
+  let ayudaEntradaActual = null;
+  let ayudaHeadingSel = null;
+  let ayudaBuscarTimer = null;
+
+  // ── Cargar e inyectar iconos al cargar la página ──────────────
+  async function ayudaCargarIconos() {
+    try {
+      const r = await fetch('/api/ayuda-contextual?pagina=' + encodeURIComponent(AYUDA_PAGINA));
+      const d = await r.json();
+      if (!d.ok) return;
+      d.entradas.forEach(e => ayudaInyectarIcono(e));
+    } catch(err) {}
+  }
+
+  function ayudaInyectarIcono(entrada) {
+    try {
+      const el = document.querySelector(entrada.selector);
+      if (!el) return;
+      if (el.parentNode.querySelector(`.ayuda-icono[data-ayuda-id="${entrada.id}"]`)) return;
+      const a = document.createElement('a');
+      a.href = entrada.url_manual;
+      a.target = '_blank';
+      a.title = entrada.texto || 'Ver en el manual';
+      a.className = 'ayuda-icono';
+      a.setAttribute('data-ayuda-id', entrada.id);
+      a.textContent = '📖';
+      a.addEventListener('click', e => e.stopPropagation());
+      el.insertAdjacentElement('afterend', a);
+    } catch(err) {}
+  }
+
+  // ── Toggle inspector ──────────────────────────────────────────
+  window.ayudaToggleInspector = function() {
+    ayudaInspectorActivo = !ayudaInspectorActivo;
+    document.body.classList.toggle('ayuda-inspector-activo', ayudaInspectorActivo);
+    document.getElementById('ayuda-inspector-banner').classList.toggle('activo', ayudaInspectorActivo);
+    const btn = document.getElementById('btn-ayuda-inspector');
+    if (btn) btn.classList.toggle('activo', ayudaInspectorActivo);
+    if (ayudaInspectorActivo) {
+      document.addEventListener('click', ayudaOnClick, true);
+    } else {
+      document.removeEventListener('click', ayudaOnClick, true);
+      ayudaCerrarPopup();
+    }
+  };
+
+  function ayudaOnClick(e) {
+    const ignorar = ['ayuda-popup-overlay','ayuda-inspector-banner','btn-ayuda-inspector'];
+    if (ignorar.some(id => e.target.closest('#' + id))) return;
+    if (e.target.classList.contains('ayuda-icono')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    ayudaElActual = e.target;
+    ayudaMostrarPopup();
+  }
+
+  // ── Selector estable del elemento ────────────────────────────
+  function ayudaGetSelector(el) {
+    if (!el) return null;
+    if (el.id) return '#' + el.id;
+    if (el.name) return `[name="${el.name}"]`;
+    let p = el.parentElement;
+    while (p && p !== document.body) {
+      if (p.id) return `#${p.id} ${el.tagName.toLowerCase()}`;
+      p = p.parentElement;
+    }
+    return null;
+  }
+
+  // ── Mostrar popup ─────────────────────────────────────────────
+  async function ayudaMostrarPopup() {
+    const selector = ayudaGetSelector(ayudaElActual);
+    const infoDiv = document.getElementById('ayuda-selector-info');
+    if (selector) {
+      infoDiv.innerHTML = `<span style="color:#059669;font-weight:600;">✓ Selector: <code>${selector}</code></span>`;
+    } else {
+      infoDiv.innerHTML = `<span style="color:#dc2626;font-weight:600;">⚠ Sin id ni name — el enlace puede ser inestable si cambia el HTML.</span>`;
+    }
+
+    // Resetear
+    document.getElementById('ayuda-search-input').value = '';
+    document.getElementById('ayuda-search-results').innerHTML = '';
+    document.getElementById('ayuda-tooltip-input').value = '';
+    const headingSel = document.getElementById('ayuda-heading-sel');
+    headingSel.style.display = 'none';
+    document.getElementById('ayuda-btn-eliminar').style.display = 'none';
+    ayudaHeadingSel = null;
+    ayudaEntradaActual = null;
+
+    // ¿Ya existe una entrada para este selector?
+    if (selector) {
+      try {
+        const r = await fetch('/api/ayuda-contextual?pagina=' + encodeURIComponent(AYUDA_PAGINA));
+        const d = await r.json();
+        if (d.ok) {
+          const existente = d.entradas.find(e => e.selector === selector);
+          if (existente) {
+            ayudaEntradaActual = existente;
+            document.getElementById('ayuda-tooltip-input').value = existente.texto || '';
+            document.getElementById('ayuda-btn-eliminar').style.display = 'inline-block';
+            headingSel.style.display = 'block';
+            headingSel.innerHTML = `✓ URL actual: <a href="${existente.url_manual}" target="_blank">${existente.url_manual}</a>`;
+            ayudaHeadingSel = { url: existente.url_manual };
+          }
+        }
+      } catch(err) {}
+    }
+
+    document.getElementById('ayuda-popup-overlay').classList.add('activo');
+    document.getElementById('ayuda-search-input').focus();
+  }
+
+  window.ayudaCerrarPopup = function() {
+    document.getElementById('ayuda-popup-overlay').classList.remove('activo');
+    ayudaElActual = null;
+    ayudaHeadingSel = null;
+    ayudaEntradaActual = null;
+  };
+
+  // ── Buscar headings ───────────────────────────────────────────
+  window.ayudaBuscar = function(q) {
+    clearTimeout(ayudaBuscarTimer);
+    const resultsDiv = document.getElementById('ayuda-search-results');
+    if (!q.trim()) { resultsDiv.innerHTML = ''; return; }
+    ayudaBuscarTimer = setTimeout(async () => {
+      try {
+        const r = await fetch('/api/admin/manuales/headings?q=' + encodeURIComponent(q));
+        const d = await r.json();
+        if (!d.ok) return;
+        if (!d.headings.length) {
+          resultsDiv.innerHTML = '<div style="padding:10px;color:#9ca3af;font-size:0.85rem;">Sin resultados</div>';
+          return;
+        }
+        resultsDiv.innerHTML = d.headings.map(h => `
+          <div class="ayuda-result" onclick="ayudaSeleccionar(this)"
+               data-url="${h.url}" data-texto="${h.texto}" data-manual="${h.manual}" data-nivel="${h.nivel}">
+            <div class="ayuda-result-manual">${h.manual}</div>
+            <div class="ayuda-result-texto" style="padding-left:${(h.nivel-1)*12}px">${h.texto}</div>
+          </div>
+        `).join('');
+      } catch(err) {}
+    }, 280);
+  };
+
+  window.ayudaSeleccionar = function(el) {
+    ayudaHeadingSel = { url: el.dataset.url, texto: el.dataset.texto, manual: el.dataset.manual };
+    const div = document.getElementById('ayuda-heading-sel');
+    div.style.display = 'block';
+    div.innerHTML = `<span style="color:#059669;font-weight:600;">✓</span> ${el.dataset.manual} › <strong>${el.dataset.texto}</strong>`;
+    document.getElementById('ayuda-search-results').innerHTML = '';
+    document.getElementById('ayuda-search-input').value = '';
+  };
+
+  // ── Guardar ───────────────────────────────────────────────────
+  window.ayudaGuardar = async function() {
+    const selector = ayudaGetSelector(ayudaElActual);
+    if (!selector) { ayudaToast('Sin selector estable — agregá un id al elemento', 'err'); return; }
+    if (!ayudaHeadingSel) { ayudaToast('Seleccioná una sección del manual', 'err'); return; }
+    const tooltip = document.getElementById('ayuda-tooltip-input').value.trim();
+    try {
+      const r = await fetch('/api/admin/ayuda-contextual', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ pagina: AYUDA_PAGINA, selector, url_manual: ayudaHeadingSel.url, texto: tooltip })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        ayudaToast('Ayuda guardada ✓', 'ok');
+        ayudaCerrarPopup();
+        setTimeout(() => ayudaCargarIconos(), 300);
+      } else {
+        ayudaToast(d.error || 'Error al guardar', 'err');
+      }
+    } catch(e) { ayudaToast('Error de red', 'err'); }
+  };
+
+  // ── Eliminar ──────────────────────────────────────────────────
+  window.ayudaEliminar = async function() {
+    if (!ayudaEntradaActual) return;
+    try {
+      const r = await fetch('/api/admin/ayuda-contextual/' + ayudaEntradaActual.id, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.ok) {
+        ayudaToast('Entrada eliminada', 'ok');
+        const id = ayudaEntradaActual.id;
+        ayudaCerrarPopup();
+        document.querySelectorAll(`.ayuda-icono[data-ayuda-id="${id}"]`).forEach(e => e.remove());
+      } else {
+        ayudaToast(d.error || 'Error', 'err');
+      }
+    } catch(e) { ayudaToast('Error de red', 'err'); }
+  };
+
+  // ── Toast ─────────────────────────────────────────────────────
+  function ayudaToast(msg, tipo) {
+    const t = document.getElementById('ayuda-toast');
+    t.textContent = msg;
+    t.className = 'ayuda-toast show ' + tipo;
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────
+  ayudaCargarIconos();
+})();
+</script>

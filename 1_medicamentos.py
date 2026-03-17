@@ -39872,6 +39872,172 @@ def docs_estrategia_comercial():
         back_url='/admin/docs')
 
 
+# ── Ayuda Contextual — sistema de links manuales desde la app ──────
+
+import unicodedata as _unicodedata
+import re as _re_ayuda
+
+_ayuda_tablas_listas = False
+
+def _crear_tabla_ayuda_contextual(conn):
+    global _ayuda_tablas_listas
+    if _ayuda_tablas_listas:
+        return
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ayuda_contextual (
+            id         SERIAL PRIMARY KEY,
+            pagina     VARCHAR(300) NOT NULL,
+            selector   VARCHAR(500) NOT NULL,
+            url_manual TEXT NOT NULL,
+            texto      VARCHAR(400),
+            activo     BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(pagina, selector)
+        )
+    """)
+    conn.commit()
+    _ayuda_tablas_listas = True
+
+
+_MANUAL_ROUTES_AYUDA = {
+    'tienda_usuario.md':               ('/docs/tienda',               'Tienda — Usuario'),
+    'tienda_desarrollo.md':            ('/admin/docs/tienda',         'Tienda — Desarrollo'),
+    'contabilidad_usuario.md':         ('/docs/contabilidad',         'Contabilidad — Usuario'),
+    'contabilidad_desarrollo.md':      ('/admin/docs/contabilidad',   'Contabilidad — Desarrollo'),
+    'domotica_usuario.md':             ('/docs/domotica',             'Domótica — Usuario'),
+    'domotica_desarrollo.md':          ('/admin/docs/domotica',       'Domótica — Desarrollo'),
+    'asistencia_remota_usuario.md':    ('/docs/asistencia-remota',    'Asistencia Remota — Usuario'),
+    'asistencia_remota_desarrollo.md': ('/admin/docs/asistencia-remota', 'Asistencia Remota — Desarrollo'),
+    'captura_chat_desarrollo.md':      ('/admin/docs/captura-chat',   'Chat Captura — Desarrollo'),
+    'restaurante_usuario.md':          ('/docs/restaurante',          'Restaurante — Usuario'),
+    'restaurante_desarrollo.md':       ('/admin/docs/restaurante',    'Restaurante — Desarrollo'),
+    'estrategia_comercial.md':         ('/admin/docs/estrategia',     'Estrategia Comercial'),
+}
+
+
+def _slugify_ayuda(text):
+    text = _unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if _unicodedata.category(c) != 'Mn')
+    text = _re_ayuda.sub(r'[^\w\s-]', '', text.lower())
+    text = _re_ayuda.sub(r'[\s_-]+', '-', text)
+    return text.strip('-')
+
+
+@app.route('/api/admin/manuales/headings')
+def api_manuales_headings():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    q = (request.args.get('q') or '').lower().strip()
+    import os as _os_ayuda
+    docs_dir = _os_ayuda.path.join(_os_ayuda.path.dirname(__file__), 'docs')
+    resultados = []
+    for filename, (ruta, nombre_manual) in _MANUAL_ROUTES_AYUDA.items():
+        filepath = _os_ayuda.path.join(docs_dir, filename)
+        if not _os_ayuda.path.exists(filepath):
+            continue
+        with open(filepath, encoding='utf-8') as f:
+            for line in f:
+                m = _re_ayuda.match(r'^(#{1,3})\s+(.+)', line.strip())
+                if not m:
+                    continue
+                texto = m.group(2).strip()
+                if q and q not in texto.lower():
+                    continue
+                anchor = _slugify_ayuda(texto)
+                resultados.append({
+                    'manual': nombre_manual,
+                    'texto': texto,
+                    'url': f'{ruta}#{anchor}',
+                    'nivel': len(m.group(1))
+                })
+    return jsonify({'ok': True, 'headings': resultados[:60]})
+
+
+@app.route('/api/ayuda-contextual')
+def api_ayuda_contextual_get():
+    pagina = (request.args.get('pagina') or '').strip()
+    if not pagina:
+        return jsonify({'ok': True, 'entradas': []})
+    conn = None
+    try:
+        conn = get_db_connection()
+        _crear_tabla_ayuda_contextual(conn)
+        rows = conn.execute("""
+            SELECT id, selector, url_manual, texto
+            FROM ayuda_contextual
+            WHERE pagina = %s AND activo = TRUE
+            ORDER BY id
+        """, (pagina,)).fetchall()
+        return jsonify({'ok': True, 'entradas': [dict(r) for r in rows]})
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except: pass
+        return jsonify({'ok': False, 'error': str(e)})
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
+
+
+@app.route('/api/admin/ayuda-contextual', methods=['POST'])
+def api_ayuda_contextual_guardar():
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    data = request.get_json() or {}
+    pagina     = (data.get('pagina') or '').strip()
+    selector   = (data.get('selector') or '').strip()
+    url_manual = (data.get('url_manual') or '').strip()
+    texto      = (data.get('texto') or '').strip()
+    if not pagina or not selector or not url_manual:
+        return jsonify({'ok': False, 'error': 'Faltan campos requeridos'}), 400
+    conn = None
+    try:
+        conn = get_db_connection()
+        _crear_tabla_ayuda_contextual(conn)
+        row = conn.execute("""
+            INSERT INTO ayuda_contextual (pagina, selector, url_manual, texto, activo)
+            VALUES (%s, %s, %s, %s, TRUE)
+            ON CONFLICT (pagina, selector) DO UPDATE
+              SET url_manual = EXCLUDED.url_manual,
+                  texto = EXCLUDED.texto,
+                  activo = TRUE
+            RETURNING id
+        """, (pagina, selector, url_manual, texto or None)).fetchone()
+        conn.commit()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except: pass
+        return jsonify({'ok': False, 'error': str(e)})
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
+
+
+@app.route('/api/admin/ayuda-contextual/<int:entrada_id>', methods=['DELETE'])
+def api_ayuda_contextual_eliminar(entrada_id):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+    conn = None
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM ayuda_contextual WHERE id = %s", (entrada_id,))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        if conn:
+            try: conn.rollback()
+            except: pass
+        return jsonify({'ok': False, 'error': str(e)})
+    finally:
+        if conn:
+            try: conn.close()
+            except: pass
+
+
 @app.route('/vendedor')
 def vendedor_dashboard():
     """Dashboard público para vendedores externos."""

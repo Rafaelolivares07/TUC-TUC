@@ -358,16 +358,28 @@ powershell.exe -NoProfile -WindowStyle Hidden -File "C:\Users\RAFAEL OLIVARES\in
 
 **Contenido de `iniciar_tuctuc.ps1`:**
 ```powershell
-# 1. Watcher en segundo plano (sin ventana)
+# 1. Watcher del chat en segundo plano (sin ventana)
 Start-Process powershell `
     -ArgumentList "-NoProfile -WindowStyle Hidden -File `"...\captura_watcher.ps1`"" `
     -WindowStyle Hidden
 
-# 2. Claude Code en Windows Terminal (minimizado)
+# 2. Heartbeat de presencia domótica (sin ventana)
+Start-Process powershell `
+    -ArgumentList "-NoProfile -WindowStyle Hidden -File `"...\presencia_heartbeat.ps1`"" `
+    -WindowStyle Hidden
+
+# 3. Claude Code en Windows Terminal (minimizado)
 Start-Process wt `
     -ArgumentList "-w 0 nt --title `"✨ Claude Code`" -d `"...\MiAppMedicamentos`" powershell -NoExit -Command claude" `
     -WindowStyle Minimized
 ```
+
+**`presencia_heartbeat.ps1`** — archivo en `MiAppMedicamentos/`:
+- Mide inactividad real de teclado/mouse via Win32 `GetLastInputInfo`
+- Llama `GET /api/domotica/heartbeat?token=tuctuc-hb-2026&idle=<segundos>` cada 2 minutos
+- Si `idle >= 360s`: servidor marca ausencia → ventiladores se apagan
+- Si `idle < 360s`: servidor marca presencia → reglas deciden según temperatura
+- Doble función: mantiene Render despierto + controla domótica
 
 **Política de ejecución:** `RemoteSigned` en `CurrentUser` — scripts locales corren sin aviso, sin necesidad de intervención.
 

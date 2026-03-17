@@ -114,6 +114,27 @@
   body.oscuro .btn-modo { color: #94a3b8; }
   body.claro  .btn-modo { color: #4a5568; }
 
+  /* Modo conversación */
+  #btn-convo {
+    font-size: 1.1rem; padding: 4px 10px; border-radius: 10px;
+    border: 1px solid transparent; cursor: pointer; transition: all 0.2s;
+  }
+  body.oscuro #btn-convo { background: #1e293b; color: #94a3b8; border-color: #334155; }
+  body.claro  #btn-convo { background: #e2e8f0; color: #4a5568; border-color: #cbd5e0; }
+  #btn-convo.activo {
+    background: #10b981 !important; color: white !important;
+    border-color: #059669 !important; animation: pulso-convo 1.8s infinite;
+  }
+  @keyframes pulso-convo {
+    0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  }
+  /* Indicador de silencio countdown */
+  #silencio-bar {
+    height: 3px; background: #6366f1; width: 0%; transition: width linear;
+    border-radius: 2px; margin-bottom: 4px; display: none;
+  }
+
   /* Zona de mensajes */
   #zona-mensajes {
     flex: 1;
@@ -189,6 +210,7 @@
       <span class="texto-suave" style="font-size:0.8rem; margin-left:8px;">asistente TUC TUC</span>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
+      <button id="btn-convo" onclick="toggleModoConversacion()" title="Modo conversación manos libres">🗣️</button>
       <button id="btn-autoplay" onclick="toggleAutoplay()" title="Auto-escuchar" style="font-size:1.1rem;padding:4px 10px;border-radius:10px;border:none;cursor:pointer;">🔊</button>
       <button class="btn-modo" onclick="toggleModo()" id="btn-modo" title="Cambiar modo">☀️</button>
     </div>
@@ -199,10 +221,15 @@
 
   <!-- Input -->
   <div id="barra-input">
-    <button id="btn-mic" class="btn-accion btn-mic hidden" onclick="toggleMic()" title="Dictar">🎤</button>
-    <textarea id="input-msg" class="input-area" placeholder="Escribí o dictá..." rows="1"
-      onkeydown="onKeyInput(event)" oninput="autoResize(this)"></textarea>
-    <button id="btn-enviar" class="btn-accion btn-enviar" onclick="enviarMensaje()" title="Enviar">➤</button>
+    <div style="flex:1; display:flex; flex-direction:column; gap:0;">
+      <div id="silencio-bar"></div>
+      <div style="display:flex; gap:8px; align-items:flex-end;">
+        <button id="btn-mic" class="btn-accion btn-mic hidden" onclick="toggleMic()" title="Dictar">🎤</button>
+        <textarea id="input-msg" class="input-area" placeholder="Escribí o dictá..." rows="1"
+          onkeydown="onKeyInput(event)" oninput="autoResize(this)" style="flex:1;"></textarea>
+        <button id="btn-enviar" class="btn-accion btn-enviar" onclick="enviarMensaje()" title="Enviar">➤</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -280,25 +307,37 @@ function hablar(texto, btn) {
   if (vozActiva) {
     window.speechSynthesis.cancel();
     if (btnVozActivo) { btnVozActivo.textContent = '🔊 Escuchar'; btnVozActivo.classList.remove('leyendo'); }
-    if (btnVozActivo === btn) { vozActiva = null; btnVozActivo = null; return; }
+    if (btnVozActivo === btn) {
+      vozActiva = null; btnVozActivo = null;
+      ttsHablando = false;
+      return;
+    }
   }
   const utt = new SpeechSynthesisUtterance(texto);
   utt.lang = 'es-CO';
   utt.rate = 0.95;
   utt.pitch = 1.05;
   if (mejorVoz) utt.voice = mejorVoz;
-  utt.onend = () => {
+
+  function alTerminarTTS() {
     btn.textContent = '🔊 Escuchar';
     btn.classList.remove('leyendo');
     vozActiva = null; btnVozActivo = null;
-  };
-  utt.onerror = () => {
-    btn.textContent = '🔊 Escuchar';
-    btn.classList.remove('leyendo');
-    vozActiva = null; btnVozActivo = null;
-  };
+    ttsHablando = false;
+    // Modo conversación: reactivar mic cuando termina de hablar
+    if (modoConversacion && !enviando) {
+      setTimeout(() => iniciarMicAuto(), 400);
+    }
+  }
+
+  utt.onend = alTerminarTTS;
+  utt.onerror = alTerminarTTS;
+
   vozActiva = utt;
   btnVozActivo = btn;
+  ttsHablando = true;
+  // En modo conversación, pausar mic mientras habla Claude
+  if (modoConversacion && grabando) reconocedor.stop();
   btn.textContent = '⏹ Parar';
   btn.classList.add('leyendo');
   window.speechSynthesis.speak(utt);
@@ -322,7 +361,11 @@ function agregarBurbuja(rol, contenido, reproducirAuto = false) {
     btnTts.onclick = () => hablar(contenido, btnTts);
     fila.appendChild(btnTts);
     if (reproducirAuto && autoplay) {
+      // TTS automático → al terminar, hablar() reactiva el mic si modo conversación
       setTimeout(() => hablar(contenido, btnTts), 300);
+    } else if (reproducirAuto && modoConversacion) {
+      // Sin TTS pero modo conversación activo → reactivar mic directamente
+      setTimeout(() => iniciarMicAuto(), 500);
     }
   }
 
@@ -427,13 +470,75 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let reconocedor = null;
 let grabando = false;
 
+// ── Modo Conversación ─────────────────────────────────────────────
+let modoConversacion = localStorage.getItem('captura-convo') === 'on';
+let ttsHablando = false;       // true mientras el TTS está reproduciendo
+let silencioTimer = null;      // timer auto-envío por silencio
+const SILENCIO_MS = 1800;      // ms de silencio antes de auto-enviar
+
+function aplicarModoConversacion() {
+  const btn = document.getElementById('btn-convo');
+  if (modoConversacion) {
+    btn.classList.add('activo');
+    btn.title = 'Modo conversación: ON (tocá para desactivar)';
+  } else {
+    btn.classList.remove('activo');
+    btn.title = 'Modo conversación manos libres (tocá para activar)';
+    ocultarBarraSilencio();
+  }
+}
+
+function toggleModoConversacion() {
+  modoConversacion = !modoConversacion;
+  localStorage.setItem('captura-convo', modoConversacion ? 'on' : 'off');
+  aplicarModoConversacion();
+  if (modoConversacion) {
+    iniciarMicAuto();
+  } else {
+    clearTimeout(silencioTimer);
+    if (grabando) reconocedor.stop();
+  }
+}
+
+function iniciarMicAuto() {
+  if (!reconocedor || grabando || enviando || ttsHablando) return;
+  try {
+    reconocedor.start();
+  } catch(e) { /* ya estaba iniciado */ }
+}
+
+function mostrarBarraSilencio() {
+  const bar = document.getElementById('silencio-bar');
+  bar.style.display = 'block';
+  bar.style.transition = 'none';
+  bar.style.width = '100%';
+  // forzar reflow
+  bar.offsetWidth;
+  bar.style.transition = `width ${SILENCIO_MS}ms linear`;
+  bar.style.width = '0%';
+}
+
+function ocultarBarraSilencio() {
+  const bar = document.getElementById('silencio-bar');
+  bar.style.display = 'none';
+  bar.style.width = '0%';
+}
+
 (function iniciarMic() {
   if (!SpeechRecognition) return;
   document.getElementById('btn-mic').classList.remove('hidden');
   reconocedor = new SpeechRecognition();
-  reconocedor.lang = 'es';
+  reconocedor.lang = 'es-CO';
   reconocedor.continuous = true;
   reconocedor.interimResults = false;
+
+  reconocedor.onstart = function() {
+    grabando = true;
+    const btn = document.getElementById('btn-mic');
+    btn.classList.add('grabando');
+    btn.textContent = '⏹';
+  };
+
   reconocedor.onresult = function(e) {
     let nuevo = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -444,41 +549,109 @@ let grabando = false;
     const sep = inp.value.trim() ? ' ' : '';
     inp.value = inp.value.trim() + sep + nuevo.trim();
     autoResize(inp);
+
+    // Modo conversación: timer de silencio → auto-envío
+    if (modoConversacion) {
+      clearTimeout(silencioTimer);
+      mostrarBarraSilencio();
+      silencioTimer = setTimeout(() => {
+        ocultarBarraSilencio();
+        if (document.getElementById('input-msg').value.trim()) {
+          enviarMensajeConvo();
+        }
+      }, SILENCIO_MS);
+    }
   };
+
   reconocedor.onend = function() {
     grabando = false;
     const btn = document.getElementById('btn-mic');
     btn.classList.remove('grabando');
     btn.textContent = '🎤';
+    // Modo conversación: reiniciar automáticamente si no está procesando ni hablando
+    if (modoConversacion && !enviando && !ttsHablando) {
+      setTimeout(() => iniciarMicAuto(), 300);
+    }
   };
+
   reconocedor.onerror = function(e) {
     grabando = false;
     const btn = document.getElementById('btn-mic');
     btn.classList.remove('grabando');
     btn.textContent = '🎤';
-    if (e.error === 'network') toast('Mic bloqueado. Probá Chrome.', 'err');
+    if (e.error === 'not-allowed') {
+      toast('Permiso de micrófono denegado', 'err');
+      modoConversacion = false;
+      aplicarModoConversacion();
+    } else if (e.error === 'network') {
+      toast('Mic bloqueado. Probá Chrome.', 'err');
+    }
+    // En modo conversación, reintentar en errores no críticos
+    if (modoConversacion && e.error !== 'not-allowed' && !enviando && !ttsHablando) {
+      setTimeout(() => iniciarMicAuto(), 800);
+    }
   };
 })();
 
 function toggleMic() {
   if (!reconocedor) return;
-  const btn = document.getElementById('btn-mic');
   if (grabando) {
+    clearTimeout(silencioTimer);
+    ocultarBarraSilencio();
     reconocedor.stop();
-    grabando = false;
-    btn.classList.remove('grabando');
-    btn.textContent = '🎤';
   } else {
-    reconocedor.start();
-    grabando = true;
-    btn.classList.add('grabando');
-    btn.textContent = '⏹';
+    iniciarMicAuto();
+  }
+}
+
+// Auto-envío en modo conversación (sin focus al input al terminar)
+async function enviarMensajeConvo() {
+  if (enviando) return;
+  const inp = document.getElementById('input-msg');
+  const txt = inp.value.trim();
+  if (!txt) return;
+
+  // Detener mic mientras Claude procesa
+  clearTimeout(silencioTimer);
+  ocultarBarraSilencio();
+  if (grabando) reconocedor.stop();
+
+  inp.value = '';
+  autoResize(inp);
+  agregarBurbuja('user', txt);
+  agregarTyping();
+  enviando = true;
+  document.getElementById('btn-enviar').disabled = true;
+
+  try {
+    const r = await fetch('/api/captura/mensaje', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mensaje: txt})
+    });
+    const d = await r.json();
+    quitarTyping();
+    if (!d.ok) { toast(d.error || 'Error al enviar', 'err'); }
+    else if (d.id && d.id > ultimoId) { ultimoId = d.id; }
+  } catch(e) {
+    quitarTyping();
+    toast('Error de red', 'err');
+  } finally {
+    enviando = false;
+    document.getElementById('btn-enviar').disabled = false;
+    // No hacer inp.focus() — el mic se reactiva cuando llegue la respuesta y el TTS termine
   }
 }
 
 // ── Init ─────────────────────────────────────────────────────────
 aplicarAutoplay();
+aplicarModoConversacion();
 cargarHistorial();
+// Si el modo estaba activo al recargar, arrancar mic automáticamente
+if (modoConversacion) {
+  // Pequeño delay para que el DOM esté listo y el usuario haya interactuado con la página
+  setTimeout(() => iniciarMicAuto(), 1000);
+}
 </script>
 </body>
 </html>

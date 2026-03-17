@@ -359,4 +359,45 @@ Cada vez que se abre una sesión nueva de Claude Code:
 
 ---
 
+---
+
+## 9. Deep linking — enlazar secciones del manual desde la app
+
+El visor `docs_viewer.html` genera automáticamente un `id` en cada `h1`, `h2` y `h3` usando un renderer custom de `marked.js`. El `id` es la versión slugificada del texto del heading (minúsculas, sin tildes, espacios → guiones).
+
+### Cómo construir un anchor
+
+| Heading en el markdown | `id` generado |
+|---|---|
+| `## 1. Arquitectura general` | `1-arquitectura-general` |
+| `## Modo Conversación 🗣️` | `modo-conversacion` |
+| `### set_window_title()` | `set_window_title` |
+
+### Enlace desde la app → sección del manual
+
+```html
+<!-- Desde cualquier input, label o tooltip en la UI -->
+<a href="/admin/docs/captura-chat#modo-conversacion" target="_blank">📖 Ver manual</a>
+```
+
+Al abrir ese link:
+- El navegador hace scroll automático a la sección
+- El heading se resalta con fondo índigo durante ~2 segundos
+- El ícono 🔗 aparece al hover sobre cualquier heading; clic copia la URL completa con anchor
+
+### Enlace desde el manual → página de la app
+
+En el markdown, un link normal:
+```markdown
+[Ir a /captura](/captura)
+[Ver panel admin](/admin)
+```
+
+### Cómo copiar un anchor sin saber el id
+
+1. Abrir el manual en el navegador
+2. Hacer hover sobre el heading destino
+3. Clic en el 🔗 que aparece
+4. La URL completa (incluyendo `#anchor`) queda en el portapapeles
+
 *Creado: 2026-03-16 | Última actualización: 2026-03-17*

@@ -8,9 +8,42 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+
+  /* Headings con anchor */
+  #contenido h1,
+  #contenido h2,
+  #contenido h3 { position: relative; scroll-margin-top: 80px; }
+
   #contenido h1 { font-size: 1.875rem; font-weight: 800; color: #1e1b4b; margin: 2rem 0 1rem; border-bottom: 3px solid #4f46e5; padding-bottom: 0.5rem; }
   #contenido h2 { font-size: 1.375rem; font-weight: 700; color: #312e81; margin: 2rem 0 0.75rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.25rem; }
   #contenido h3 { font-size: 1.125rem; font-weight: 700; color: #4338ca; margin: 1.5rem 0 0.5rem; }
+
+  /* Ícono de enlace que aparece al hacer hover sobre el heading */
+  #contenido h1 .anchor-link,
+  #contenido h2 .anchor-link,
+  #contenido h3 .anchor-link {
+    opacity: 0;
+    margin-left: 0.5rem;
+    font-size: 0.8em;
+    color: #a5b4fc;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    font-weight: 400;
+    user-select: none;
+  }
+  #contenido h1:hover .anchor-link,
+  #contenido h2:hover .anchor-link,
+  #contenido h3:hover .anchor-link { opacity: 1; }
+  .anchor-link:hover { color: #4f46e5 !important; }
+
+  /* Highlight momentáneo cuando se navega a una sección */
+  .heading-highlight {
+    background: #eef2ff;
+    border-radius: 6px;
+    transition: background 1.2s ease;
+  }
+
   #contenido p { color: #374151; line-height: 1.75; margin-bottom: 0.75rem; }
   #contenido ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; color: #374151; line-height: 1.75; }
   #contenido ol { list-style: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; color: #374151; line-height: 1.75; }
@@ -25,9 +58,20 @@
   #contenido blockquote { border-left: 4px solid #4f46e5; background: #eef2ff; padding: 0.75rem 1.25rem; border-radius: 0 8px 8px 0; margin: 1rem 0; color: #3730a3; }
   #contenido strong { color: #1e1b4b; }
   #contenido hr { border: none; border-top: 1px dashed #d1d5db; margin: 2rem 0; }
+
+  /* Toast copia de enlace */
+  #toast-anchor {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #312e81; color: white; padding: 10px 22px;
+    border-radius: 10px; font-size: 0.875rem; font-weight: 600;
+    opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 9999;
+  }
+  #toast-anchor.show { opacity: 1; }
 </style>
 </head>
 <body class="min-h-screen p-4 sm:p-6">
+
+<div id="toast-anchor">🔗 Enlace copiado</div>
 
 <div class="max-w-4xl mx-auto">
   <!-- Header -->
@@ -54,8 +98,64 @@
 </div>
 
 <script>
-  const markdown = {{ contenido_md | tojson }};
-  document.getElementById('contenido').innerHTML = marked.parse(markdown);
+// ── Slug: convierte texto de heading a id URL-friendly ─────────────
+function slugify(text) {
+  return text
+    .replace(/<[^>]*>/g, '')          // quitar HTML tags
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // quitar tildes/diacríticos
+    .replace(/[^\w\s-]/g, '')         // quitar caracteres especiales
+    .replace(/\s+/g, '-')             // espacios → guiones
+    .replace(/-+/g, '-')              // guiones múltiples → uno
+    .trim();
+}
+
+// ── Renderer custom: agrega id + ícono de anchor a h1/h2/h3 ───────
+const renderer = new marked.Renderer();
+renderer.heading = function(text, level) {
+  if (level > 3) return `<h${level}>${text}</h${level}>`;
+  const id = slugify(typeof text === 'object' ? text.text || '' : text);
+  const label = typeof text === 'object' ? text.text || text : text;
+  return `<h${level} id="${id}">${label}<a class="anchor-link" data-anchor="${id}" title="Copiar enlace a esta sección">🔗</a></h${level}>`;
+};
+
+marked.use({ renderer });
+
+// ── Renderizar markdown ────────────────────────────────────────────
+const markdown = {{ contenido_md | tojson }};
+document.getElementById('contenido').innerHTML = marked.parse(markdown);
+
+// ── Copiar enlace al hacer clic en el anchor ───────────────────────
+document.getElementById('contenido').addEventListener('click', function(e) {
+  const a = e.target.closest('.anchor-link');
+  if (!a) return;
+  e.preventDefault();
+  const id = a.dataset.anchor;
+  const url = location.origin + location.pathname + '#' + id;
+  navigator.clipboard.writeText(url).then(() => {
+    const toast = document.getElementById('toast-anchor');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  });
+});
+
+// ── Navegar al anchor del hash al cargar ───────────────────────────
+function scrollToHash(hash) {
+  if (!hash) return;
+  const id = hash.replace('#', '');
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.classList.add('heading-highlight');
+  setTimeout(() => el.classList.remove('heading-highlight'), 2000);
+}
+
+// Esperar a que el DOM esté listo (marked es síncrono, pero por si acaso)
+if (location.hash) scrollToHash(location.hash);
+
+// Soporte para cuando el hash cambia sin recargar (navegación interna)
+window.addEventListener('hashchange', () => scrollToHash(location.hash));
 </script>
 </body>
 </html>

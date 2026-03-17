@@ -99,25 +99,25 @@
             <img src="{{ tienda.imagen_header }}" class="img-principal" alt="{{ tienda.nombre }}">
         </div>
         {% if tienda.mostrar_nombre | default(true) %}
-        <div class="p-4 pb-2">
-            <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
+        <div class="px-4 pt-4 pb-3 text-center">
+            <h1 class="text-2xl font-extrabold txt-primary tracking-tight leading-snug drop-shadow-sm">{{ tienda.nombre }}</h1>
             {% if tienda.descripcion %}
-            <p class="text-sm txt-secondary mt-1">{{ tienda.descripcion }}</p>
+            <p class="text-sm txt-secondary mt-2 leading-relaxed max-w-sm mx-auto opacity-90">{{ tienda.descripcion }}</p>
             {% endif %}
         </div>
         {% else %}
         {% if tienda.descripcion %}
-        <div class="px-4 pb-2">
-            <p class="text-sm txt-secondary">{{ tienda.descripcion }}</p>
+        <div class="px-4 pt-3 pb-2 text-center">
+            <p class="text-sm txt-secondary leading-relaxed max-w-sm mx-auto opacity-90">{{ tienda.descripcion }}</p>
         </div>
         {% endif %}
         {% endif %}
     </div>
     {% else %}
-    <div class="p-6 pb-2">
-        <h1 class="text-2xl font-extrabold txt-primary">{{ tienda.nombre }}</h1>
+    <div class="px-6 pt-6 pb-3 text-center">
+        <h1 class="text-2xl font-extrabold txt-primary tracking-tight leading-snug drop-shadow-sm">{{ tienda.nombre }}</h1>
         {% if tienda.descripcion %}
-        <p class="text-sm txt-secondary mt-1">{{ tienda.descripcion }}</p>
+        <p class="text-sm txt-secondary mt-2 leading-relaxed max-w-sm mx-auto opacity-90">{{ tienda.descripcion }}</p>
         {% endif %}
     </div>
     {% endif %}

@@ -339,18 +339,52 @@ const SILENCIO_MS = 1800;  // ms de silencio antes de auto-enviar
 
 ## 8. Iniciar el sistema
 
-Cada vez que se abre una sesión nueva de Claude Code:
+### Modo automático (configuración actual — recomendado)
 
-1. El watcher debe estar corriendo en otra terminal PowerShell:
+Al iniciar sesión en Windows, el script `iniciar_tuctuc.ps1` arranca todo de forma automática:
+
+1. `captura_watcher.ps1` corre en segundo plano, sin ninguna ventana visible.
+2. Windows Terminal se abre **minimizado** en la barra de tareas con Claude Code listo.
+3. Rafael puede abrir `/captura` en el celular inmediatamente.
+
+**Acceso directo configurado en Startup de Windows:**
+```
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\TUC TUC Arranque.lnk
+```
+Apunta a:
+```powershell
+powershell.exe -NoProfile -WindowStyle Hidden -File "C:\Users\RAFAEL OLIVARES\iniciar_tuctuc.ps1"
+```
+
+**Contenido de `iniciar_tuctuc.ps1`:**
+```powershell
+# 1. Watcher en segundo plano (sin ventana)
+Start-Process powershell `
+    -ArgumentList "-NoProfile -WindowStyle Hidden -File `"...\captura_watcher.ps1`"" `
+    -WindowStyle Hidden
+
+# 2. Claude Code en Windows Terminal (minimizado)
+Start-Process wt `
+    -ArgumentList "-w 0 nt --title `"✨ Claude Code`" -d `"...\MiAppMedicamentos`" powershell -NoExit -Command claude" `
+    -WindowStyle Minimized
+```
+
+**Política de ejecución:** `RemoteSigned` en `CurrentUser` — scripts locales corren sin aviso, sin necesidad de intervención.
+
+---
+
+### Modo manual (si algo falla o se reinicia el watcher)
+
+Abrir una terminal PowerShell y ejecutar:
 ```powershell
 & "C:\Users\RAFAEL OLIVARES\captura_watcher.ps1"
 ```
 
-2. Al recibir el primer mensaje en esta terminal, el hook `UserPromptSubmit` guarda automáticamente el PID de Windows Terminal en `claude_pid.txt`.
+Al recibir el primer mensaje en la terminal de Claude Code, el hook `UserPromptSubmit` guarda automáticamente el PID de Windows Terminal en `claude_pid.txt`.
 
-3. El sistema es autosuficiente desde ese punto — no requiere intervención manual.
+---
 
-**Logs del watcher**:
+**Logs del watcher:**
 ```
 [HH:mm:ss] Check: pendientes=1 elapsed=99999s
 [HH:mm:ss] Mensaje pendiente - activando Claude...
@@ -400,4 +434,4 @@ En el markdown, un link normal:
 3. Clic en el 🔗 que aparece
 4. La URL completa (incluyendo `#anchor`) queda en el portapapeles
 
-*Creado: 2026-03-16 | Última actualización: 2026-03-17*
+*Creado: 2026-03-16 | Última actualización: 2026-03-17 (auto-start Windows)*

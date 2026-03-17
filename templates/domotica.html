@@ -994,10 +994,14 @@ function renderDispositivo(dev) {
     ${tokenHtml}
     ${batBarHtml}
     ${(dev.tipo === 'laptop' || dev.tipo === 'computador') ? `
-    <div class="mt-3 flex items-center gap-2">
+    <div class="mt-3 flex flex-wrap items-center gap-2">
       <button onclick="descargarScript(${dev.id})"
               class="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition">
         📥 Instalar monitoreo en esta PC
+      </button>
+      <button onclick="apagarPC(this)"
+              class="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-xl transition">
+        🔴 Apagar PC
       </button>
       <span class="text-xs text-gray-400">Doble clic en el .bat descargado — listo</span>
     </div>` : ''}
@@ -1411,6 +1415,27 @@ async function eliminarAuto(aid) {
 // ─── DESCARGAR SCRIPT CONFIGURADO ───
 function descargarScript(devId, token) {
   window.location.href = `/api/domotica/dispositivo/${devId}/setup-bat`;
+}
+
+async function apagarPC(btn) {
+  if (!confirm('¿Apagar el PC? Se ejecutará shutdown en ~60 segundos (próximo heartbeat).')) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+  try {
+    const r = await fetch('/api/domotica/pc/apagar', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = '✓ Comando enviado';
+      btn.classList.replace('bg-red-600', 'bg-gray-400');
+    } else {
+      btn.textContent = '🔴 Apagar PC';
+      btn.disabled = false;
+      alert('Error: ' + (d.error || 'desconocido'));
+    }
+  } catch(e) {
+    btn.textContent = '🔴 Apagar PC';
+    btn.disabled = false;
+  }
 }
 
 // ─── WIZARD ───

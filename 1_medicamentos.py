@@ -36791,6 +36791,7 @@ def crear_tablas_domotica(conn):
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_inactividad_seg INTEGER DEFAULT 300",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_ventana_seg INTEGER DEFAULT 360",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS ultima_temperatura NUMERIC(5,2)",
+        "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS pc_comando VARCHAR(20)",
     ]
     for sql in sqls:
         try:
@@ -37811,9 +37812,35 @@ def api_domotica_heartbeat():
             )
         conn.commit()
         elapsed = 0
+        # Verificar si hay comando pendiente para el PC
+        cfg2 = conn.execute("SELECT pc_comando FROM CONFIGURACION_SISTEMA WHERE id=1").fetchone()
+        pc_cmd = cfg2['pc_comando'] if cfg2 else None
+        if pc_cmd:
+            conn.execute("UPDATE CONFIGURACION_SISTEMA SET pc_comando = NULL WHERE id=1")
+            conn.commit()
         conn.close()
         threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
-        return jsonify({'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()})
+        resp = {'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()}
+        if pc_cmd:
+            resp['comando'] = pc_cmd
+        return jsonify(resp)
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/pc/apagar', methods=['POST'])
+@admin_required
+def api_domotica_pc_apagar():
+    """Encola comando de apagado — el watcher local lo ejecuta en el próximo heartbeat."""
+    try:
+        conn = get_db_connection()
+        crear_tablas_domotica(conn)
+        conn.execute("UPDATE CONFIGURACION_SISTEMA SET pc_comando = 'shutdown' WHERE id=1")
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

@@ -32,6 +32,16 @@ public class IdleTimer {
 
 Write-Host "[heartbeat] Iniciado. Reportando cada $INTERVALO_SEG segundos a $SERVER"
 
+# Al apagar/cerrar sesion: mandar idle=99999 para que servidor marque ausente de inmediato
+Register-EngineEvent PowerShell.Exiting -Action {
+    try {
+        Invoke-RestMethod -Uri "https://tuc-tuc.onrender.com/api/domotica/heartbeat?token=tuctuc-hb-2026&idle=99999" -Method Get -TimeoutSec 8 -ErrorAction Stop
+        Write-Host "[heartbeat] Presencia limpiada al salir"
+    } catch {
+        Write-Host "[heartbeat] No se pudo limpiar presencia al salir: $_"
+    }
+}
+
 while ($true) {
     try {
         $idle = [IdleTimer]::GetIdleSeconds()

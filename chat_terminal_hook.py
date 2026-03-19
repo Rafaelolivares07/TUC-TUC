@@ -103,12 +103,33 @@ def guardar_estado(session_id, last_uuid):
 
 
 def set_window_title():
-    """Restaura el título de la ventana de consola a 'Claude Code'."""
+    """Guarda el PID de Windows Terminal para que el watcher pueda activarlo."""
     try:
-        import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleW("Claude Code")
+        import subprocess
+        r = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             'Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Id'],
+            capture_output=True, text=True, timeout=5
+        )
+        pid_str = r.stdout.strip()
+        if pid_str.isdigit():
+            Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt").write_text(pid_str)
     except Exception:
         pass
+
+
+def hay_mensaje_voz_reciente(cur):
+    """True si hay un mensaje de canal='voz' en los últimos 5 minutos."""
+    try:
+        cur.execute("""
+            SELECT 1 FROM chat_mensajes
+            WHERE canal = 'voz' AND rol = 'user'
+              AND created_at >= NOW() - INTERVAL '30 minutes'
+            LIMIT 1
+        """)
+        return cur.fetchone() is not None
+    except Exception:
+        return False
 
 
 def insertar_en_bd(mensajes):
@@ -120,9 +141,11 @@ def insertar_en_bd(mensajes):
         conn = psycopg2.connect(DB_URL, connect_timeout=10)
         try:
             cur = conn.cursor()
+            es_voz = hay_mensaje_voz_reciente(cur)
+            canal = 'voz' if es_voz else 'terminal'
             for rol, contenido in mensajes:
                 cur.execute(
-                    "INSERT INTO chat_mensajes (rol, contenido, estado, canal) VALUES (%s, %s, NULL, 'terminal')",
+                    f"INSERT INTO chat_mensajes (rol, contenido, estado, canal) VALUES (%s, %s, NULL, '{canal}')",
                     (rol, contenido)
                 )
             conn.commit()

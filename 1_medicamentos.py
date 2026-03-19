@@ -40120,9 +40120,202 @@ def api_ayuda_contextual_eliminar(entrada_id):
             except: pass
 
 
+def _crear_tabla_citas_vendedor(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS citas_vendedor (
+            id            SERIAL PRIMARY KEY,
+            vendedor_cod  VARCHAR(50),
+            tipo_negocio  VARCHAR(20),
+            subtipo       VARCHAR(20) DEFAULT 'menu_dia',
+            negocio_slug  VARCHAR(100),
+            nombre_negocio VARCHAR(200),
+            nombre_dueno  VARCHAR(200),
+            telefono      VARCHAR(20),
+            fecha_hora    TIMESTAMP,
+            estado        VARCHAR(20) DEFAULT 'pendiente',
+            notas         TEXT,
+            created_at    TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
+
+@app.route('/api/vendedor/citas', methods=['GET'])
+def api_vendedor_citas_get():
+    """Lista citas del vendedor (por cod en query param)."""
+    cod = request.args.get('cod', '').strip()
+    if not cod:
+        return jsonify({'ok': False, 'error': 'cod requerido'}), 400
+    try:
+        conn = get_db_connection()
+        _crear_tabla_citas_vendedor(conn)
+        rows = conn.execute("""
+            SELECT id, tipo_negocio, subtipo, negocio_slug, nombre_negocio,
+                   nombre_dueno, telefono, fecha_hora, estado, notas
+            FROM citas_vendedor
+            WHERE vendedor_cod = %s AND fecha_hora >= NOW() - INTERVAL '2 hours'
+            ORDER BY fecha_hora ASC
+            LIMIT 30
+        """, (cod,)).fetchall()
+        conn.close()
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d['fecha_hora']:
+                d['fecha_hora'] = d['fecha_hora'].strftime('%Y-%m-%dT%H:%M')
+            result.append(d)
+        return jsonify({'ok': True, 'citas': result})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/cita', methods=['POST'])
+def api_vendedor_cita_post():
+    """Crea cita + pre-crea el negocio en la plataforma."""
+    import uuid
+    from datetime import datetime, timedelta
+    data = request.get_json()
+    vendedor_cod   = data.get('vendedor_cod', '').strip()
+    tipo           = data.get('tipo', '').strip()
+    subtipo        = data.get('subtipo', 'menu_dia').strip()
+    nombre_neg     = data.get('nombre_negocio', '').strip()
+    nombre_due     = data.get('nombre_dueno', '').strip()
+    telefono       = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    fecha_hora_str = data.get('fecha_hora', '').strip()
+
+    if not vendedor_cod:
+        return jsonify({'ok': False, 'error': 'Código de vendedor requerido'}), 400
+    if tipo not in ('restaurante', 'tienda', 'taller'):
+        return jsonify({'ok': False, 'error': 'Tipo de negocio inválido'}), 400
+    if not nombre_neg or not nombre_due:
+        return jsonify({'ok': False, 'error': 'Nombre del negocio y del dueño requeridos'}), 400
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+    if not fecha_hora_str:
+        return jsonify({'ok': False, 'error': 'Fecha y hora requeridas'}), 400
+
+    try:
+        fecha_hora = datetime.fromisoformat(fecha_hora_str)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Formato de fecha inválido'}), 400
+
+    slug = generar_slug(nombre_neg)
+
+    try:
+        conn = get_db_connection()
+        _crear_tabla_citas_vendedor(conn)
+
+        # Validar choque de horario (franja 1.5 horas)
+        franja_ini = fecha_hora - timedelta(minutes=90)
+        franja_fin = fecha_hora + timedelta(minutes=90)
+        choque = conn.execute("""
+            SELECT nombre_negocio, fecha_hora FROM citas_vendedor
+            WHERE vendedor_cod = %s
+              AND estado NOT IN ('descartada', 'cerrada')
+              AND fecha_hora BETWEEN %s AND %s
+        """, (vendedor_cod, franja_ini, franja_fin)).fetchone()
+        if choque:
+            hora_ocup = choque['fecha_hora'].strftime('%H:%M')
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': f'Horario ocupado: tienes cita con {choque["nombre_negocio"]} a las {hora_ocup}. Deja al menos 1h 30min entre citas.'
+            }), 400
+
+        # Pre-crear el negocio (sin sesión, sin días pagados — es una demo)
+        token_acceso = uuid.uuid4().hex
+        tercero = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if tercero:
+            tercero_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre_due, tercero_id))
+        else:
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                (nombre_due, telefono)
+            )
+            tercero_id = cur.fetchone()[0]
+        conn.commit()
+
+        if tipo == 'restaurante':
+            crear_tablas_restaurante(conn)
+            existente = conn.execute("SELECT slug FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+            if existente:
+                slug = slug + '-' + uuid.uuid4().hex[:4]
+            conn.execute("""
+                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre,
+                    admin_telefono, token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 0, TRUE, %s, %s)
+            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, tercero_id, vendedor_cod))
+        elif tipo == 'tienda':
+            crear_tablas_tienda(conn)
+            existente = conn.execute("SELECT slug FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+            if existente:
+                slug = slug + '-' + uuid.uuid4().hex[:4]
+            from datetime import date
+            conn.execute("""
+                INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono,
+                    token_acceso, dias_pagados, fecha_vence, activo, tercero_id, ref_vendedor)
+                VALUES (%s, %s, %s, %s, %s, %s, 0, %s, TRUE, %s, %s)
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, date.today(), tercero_id, vendedor_cod))
+        else:  # taller
+            crear_tablas_taller(conn)
+            existente = conn.execute("SELECT slug FROM negocios WHERE slug = %s AND tipo='taller'", (slug,)).fetchone()
+            if existente:
+                slug = slug + '-' + uuid.uuid4().hex[:4]
+            conn.execute("""
+                INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono,
+                    token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
+                VALUES (%s, %s, 'taller', %s, %s, %s, %s, 0, TRUE, %s, %s)
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, tercero_id, vendedor_cod))
+        conn.commit()
+
+        # Guardar cita
+        conn.execute("""
+            INSERT INTO citas_vendedor (vendedor_cod, tipo_negocio, subtipo, negocio_slug,
+                nombre_negocio, nombre_dueno, telefono, fecha_hora)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (vendedor_cod, tipo, subtipo, slug, nombre_neg, nombre_due, telefono, fecha_hora))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'slug': slug, 'tipo': tipo})
+
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/cita/<int:cita_id>/estado', methods=['POST'])
+def api_vendedor_cita_estado(cita_id):
+    """Actualiza estado de una cita."""
+    data   = request.get_json()
+    estado = data.get('estado', '').strip()
+    notas  = data.get('notas', '').strip()
+    if estado not in ('pendiente', 'hecha', 'cerrada', 'descartada'):
+        return jsonify({'ok': False, 'error': 'Estado inválido'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE citas_vendedor SET estado=%s, notas=%s WHERE id=%s",
+            (estado, notas or None, cita_id)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/vendedor')
 def vendedor_dashboard():
-    """Dashboard público para vendedores externos."""
+    """Dashboard público para vendedores externos — agenda + demo launcher."""
     from flask import render_template_string
     html = """<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8">
@@ -40130,7 +40323,7 @@ def vendedor_dashboard():
 <title>Vendedor TUC TUC</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 min-h-screen" x-data>
+<body class="bg-gray-50 min-h-screen">
 
 <!-- Header -->
 <div class="bg-indigo-700 text-white px-4 py-4">
@@ -40139,34 +40332,42 @@ def vendedor_dashboard():
       <div class="text-2xl">🚗</div>
       <div>
         <h1 class="text-lg font-extrabold tracking-tight">TUC TUC — Vendedor</h1>
-        <p class="text-indigo-200 text-xs">Kit de demo en campo</p>
+        <p class="text-indigo-200 text-xs" id="txt-vendedor-nombre">Cargando...</p>
       </div>
     </div>
-    <a href="/docs/vendedor" class="text-indigo-200 text-xs underline">Manual</a>
+    <button onclick="cambiarCodigo()" class="text-indigo-200 text-xs underline">Cambiar código</button>
   </div>
 </div>
 
 <div class="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
-  <!-- Restaurante activo -->
-  <div class="bg-white rounded-2xl shadow p-4" id="card-restaurante">
-    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Restaurante a demostrar</p>
-    <div class="flex gap-2">
-      <input id="inp-slug" type="text" placeholder="slug del restaurante (ej: parrilla-argentina)"
-             class="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
-             oninput="guardarSlug(this.value)">
-      <button onclick="abrirRestaurante()"
-              class="bg-indigo-600 text-white rounded-xl px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition">
-        Ver
+  <!-- ════ AGENDA ════ -->
+  <div>
+    <div class="flex items-center justify-between mb-2 px-1">
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis citas</p>
+      <button onclick="abrirModalCita()"
+              class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow hover:bg-indigo-700 transition active:scale-95">
+        + Nueva cita
       </button>
     </div>
-    <p class="text-xs text-gray-400 mt-1" id="txt-slug-estado">Sin restaurante cargado</p>
+    <div id="lista-citas" class="space-y-2">
+      <p class="text-xs text-gray-400 text-center py-4" id="txt-citas-vacio">Cargando agenda...</p>
+    </div>
   </div>
 
-  <!-- Situaciones -->
-  <div>
+  <!-- ════ DEMO EN CURSO ════ -->
+  <div id="sec-demo" class="hidden">
+    <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 mb-2 flex items-center justify-between">
+      <div>
+        <p class="text-xs text-indigo-500 font-bold uppercase">Demo en curso</p>
+        <p class="font-bold text-indigo-800 text-sm" id="txt-demo-nombre">—</p>
+      </div>
+      <button onclick="verNegocio()" class="text-xs text-indigo-600 underline">Ver página →</button>
+    </div>
+
+    <!-- Situaciones -->
     <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">¿Cuál es la situación del negocio?</p>
-    <div class="space-y-2" id="lista-situaciones">
+    <div class="space-y-2">
 
       <!-- Situación 1 -->
       <div class="bg-white rounded-2xl shadow border border-transparent transition-all" id="sit-1">
@@ -40178,11 +40379,7 @@ def vendedor_dashboard():
           </div>
           <span class="text-gray-300 text-lg" id="arr-1">›</span>
         </button>
-
-        <!-- Panel expandible Sit-1 -->
         <div id="panel-1" class="hidden px-4 pb-4 border-t border-gray-100">
-
-          <!-- Guión -->
           <div class="pt-3 pb-2 space-y-2">
             <div class="flex gap-2 items-start">
               <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">1</span>
@@ -40194,15 +40391,13 @@ def vendedor_dashboard():
             </div>
             <div class="flex gap-2 items-start">
               <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">3</span>
-              <p class="text-xs text-gray-600">Tocá el botón del rol que eligió → se abre WhatsApp con el link listo → el cliente lo abre en su celular.</p>
+              <p class="text-xs text-gray-600">Tocá el botón del rol → WhatsApp se abre con el link listo → el cliente lo abre en su celular.</p>
             </div>
             <div class="flex gap-2 items-start">
               <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">4</span>
               <p class="text-xs text-gray-600">Vos tomás el rol contrario. Hacés un pedido. <strong>El cliente lo ve llegar en su celular.</strong> Silencio.</p>
             </div>
           </div>
-
-          <!-- Selector de rol -->
           <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mt-3 mb-2">¿Quiere jugar de...?</p>
           <div class="grid grid-cols-2 gap-3">
             <button onclick="enviarRol('mesero')"
@@ -40240,23 +40435,23 @@ def vendedor_dashboard():
             </div>
             <div class="flex gap-2 items-start">
               <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">2</span>
-              <p class="text-xs text-gray-600">Mostrá la página pública del restaurante en tu celular. El cliente navega la carta y hace su pedido. Sin un solo mensaje.</p>
+              <p class="text-xs text-gray-600">Mostrá la página pública en tu celular. El cliente navega la carta y hace su pedido. Sin un solo mensaje.</p>
             </div>
             <div class="flex gap-2 items-start">
               <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">3</span>
               <p class="text-xs text-gray-600">Silencio.</p>
             </div>
           </div>
-          <button onclick="abrirPaginaPublica()"
+          <button onclick="verNegocio()"
                   class="mt-3 w-full bg-indigo-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-indigo-700 transition active:scale-95">
             Abrir página del restaurante →
           </button>
         </div>
       </div>
 
-      <!-- Situación 3 -->
-      <div class="bg-white rounded-2xl shadow border border-transparent" id="sit-3">
-        <button class="w-full text-left p-4 flex items-center gap-3 opacity-50" disabled>
+      <!-- Situaciones próximas -->
+      <div class="bg-white rounded-2xl shadow border border-transparent">
+        <button class="w-full text-left p-4 flex items-center gap-3 opacity-40" disabled>
           <span class="text-2xl">📋</span>
           <div class="flex-1">
             <p class="font-bold text-gray-800 text-sm">Los clientes no saben qué tengo</p>
@@ -40264,9 +40459,8 @@ def vendedor_dashboard():
           </div>
         </button>
       </div>
-
-      <div class="bg-white rounded-2xl shadow border border-transparent" id="sit-4">
-        <button class="w-full text-left p-4 flex items-center gap-3 opacity-50" disabled>
+      <div class="bg-white rounded-2xl shadow border border-transparent">
+        <button class="w-full text-left p-4 flex items-center gap-3 opacity-40" disabled>
           <span class="text-2xl">💸</span>
           <div class="flex-1">
             <p class="font-bold text-gray-800 text-sm">No sé cuánto vendí hoy</p>
@@ -40274,11 +40468,10 @@ def vendedor_dashboard():
           </div>
         </button>
       </div>
-
     </div>
   </div>
 
-  <!-- Objecciones -->
+  <!-- ════ COLAPSABLES ════ -->
   <details class="bg-white rounded-2xl shadow">
     <summary class="p-4 font-extrabold text-gray-800 text-sm cursor-pointer select-none">🛡️ Objeciones frecuentes</summary>
     <div class="px-4 pb-4 space-y-2 border-t border-gray-100 pt-3">
@@ -40309,19 +40502,16 @@ def vendedor_dashboard():
     </div>
   </details>
 
-  <!-- Checklist pre-visita -->
   <details class="bg-amber-50 border border-amber-200 rounded-2xl">
     <summary class="p-4 font-extrabold text-amber-800 text-sm cursor-pointer select-none">✅ Antes de entrar al local</summary>
     <div class="px-4 pb-4 space-y-2 text-sm text-amber-900 border-t border-amber-100 pt-3">
       <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Cita agendada (no en hora de servicio)</label>
       <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Celular cargado y con datos</label>
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Restaurante montado con nombre y platos reales</label>
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Slug cargado arriba en este dashboard</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Negocio creado con nombre y al menos 1 producto real</label>
       <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Nombre del dueño confirmado</label>
     </div>
   </details>
 
-  <!-- Comisión -->
   <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
     <p class="font-extrabold text-green-800 text-sm mb-1">💰 Tu comisión</p>
     <p class="text-sm text-green-700"><strong>20%</strong> de cada pago del cliente — recurrente mientras siga activo.</p>
@@ -40329,96 +40519,286 @@ def vendedor_dashboard():
   </div>
 
 </div>
-<p class="text-center text-xs text-gray-400 py-6">TUC TUC · Kit del Vendedor · 2026</p>
+<p class="text-center text-xs text-gray-400 py-4">TUC TUC · Kit del Vendedor · 2026</p>
+
+<!-- ════ MODAL NUEVA CITA ════ -->
+<div id="modal-cita" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end justify-center">
+  <div class="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h2 class="font-extrabold text-gray-800 text-base">Nueva cita</h2>
+      <button onclick="cerrarModalCita()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+
+    <!-- Tipo de negocio -->
+    <div>
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Tipo de negocio</p>
+      <div class="grid grid-cols-3 gap-2" id="sel-tipo">
+        <button onclick="selTipo('restaurante','menu_dia')" data-t="restaurante-menu_dia"
+                class="tipo-btn border-2 border-gray-200 rounded-xl p-3 text-center transition">
+          <div class="text-xl mb-1">🍽️</div>
+          <p class="text-xs font-bold text-gray-700">Restaurante</p>
+          <p class="text-xs text-gray-400">Menú del día</p>
+        </button>
+        <button onclick="selTipo('restaurante','carta')" data-t="restaurante-carta"
+                class="tipo-btn border-2 border-gray-200 rounded-xl p-3 text-center transition">
+          <div class="text-xl mb-1">📄</div>
+          <p class="text-xs font-bold text-gray-700">Restaurante</p>
+          <p class="text-xs text-gray-400">Carta</p>
+        </button>
+        <button onclick="selTipo('tienda','')" data-t="tienda-"
+                class="tipo-btn border-2 border-gray-200 rounded-xl p-3 text-center transition">
+          <div class="text-xl mb-1">🛒</div>
+          <p class="text-xs font-bold text-gray-700">Tienda</p>
+          <p class="text-xs text-gray-400">Minimercado</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- Datos del negocio -->
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nombre del negocio</label>
+        <input id="cita-nombre-neg" type="text" placeholder="Restaurante El Fogón"
+               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nombre del dueño</label>
+        <input id="cita-nombre-due" type="text" placeholder="Don Carlos"
+               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Teléfono</label>
+        <input id="cita-telefono" type="tel" placeholder="3001234567"
+               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Fecha</label>
+          <input id="cita-fecha" type="date"
+                 class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Hora</label>
+          <input id="cita-hora" type="time"
+                 class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+        </div>
+      </div>
+    </div>
+
+    <p id="txt-cita-error" class="text-xs text-red-500 hidden"></p>
+
+    <button onclick="guardarCita()"
+            class="w-full bg-indigo-600 text-white rounded-xl py-3 font-bold text-sm hover:bg-indigo-700 transition active:scale-95">
+      Agendar cita y crear negocio
+    </button>
+  </div>
+</div>
+
+<!-- ════ MODAL CÓDIGO VENDEDOR ════ -->
+<div id="modal-codigo" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+  <div class="bg-white rounded-3xl w-80 p-6 space-y-4 shadow-2xl">
+    <h2 class="font-extrabold text-gray-800 text-base text-center">Identificate</h2>
+    <p class="text-xs text-gray-500 text-center">Ingresá tu código o nombre de vendedor. Se guarda en este celular.</p>
+    <input id="inp-codigo" type="text" placeholder="ej: carlos-v"
+           class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 text-center"
+           onkeydown="if(event.key==='Enter') confirmarCodigo()">
+    <button onclick="confirmarCodigo()"
+            class="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-bold text-sm hover:bg-indigo-700 transition">
+      Entrar
+    </button>
+  </div>
+</div>
 
 <script>
 const BASE = 'https://tuc-tuc.onrender.com';
+let _slug    = '';
+let _tipo    = 'restaurante';
+let _subtipo = 'menu_dia';
+let _demoCita = null;
 
-// ── Slug del restaurante ──────────────────────────────────────────────────
-function slugActual() {
-  return localStorage.getItem('vd_slug') || '';
+// ── Código vendedor ────────────────────────────────────────────────────────
+function codVendedor() { return localStorage.getItem('vd_cod') || ''; }
+
+function confirmarCodigo() {
+  const v = document.getElementById('inp-codigo').value.trim().toLowerCase().replace(/\\s+/g,'-');
+  if (!v) return;
+  localStorage.setItem('vd_cod', v);
+  document.getElementById('modal-codigo').classList.add('hidden');
+  document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + v;
+  cargarCitas();
 }
 
-function guardarSlug(v) {
-  v = v.trim().toLowerCase();
-  localStorage.setItem('vd_slug', v);
-  actualizarEstadoSlug(v);
+function cambiarCodigo() {
+  document.getElementById('inp-codigo').value = codVendedor();
+  document.getElementById('modal-codigo').classList.remove('hidden');
 }
 
-function actualizarEstadoSlug(v) {
-  const el = document.getElementById('txt-slug-estado');
-  if (v) {
-    el.textContent = '✓ ' + BASE + '/r/' + v;
-    el.className = 'text-xs text-green-600 mt-1 break-all';
-  } else {
-    el.textContent = 'Sin restaurante cargado';
-    el.className = 'text-xs text-gray-400 mt-1';
+// ── Citas ──────────────────────────────────────────────────────────────────
+async function cargarCitas() {
+  const cod = codVendedor();
+  if (!cod) return;
+  try {
+    const r = await fetch('/api/vendedor/citas?cod=' + encodeURIComponent(cod));
+    const d = await r.json();
+    renderCitas(d.citas || []);
+  } catch(e) {
+    document.getElementById('txt-citas-vacio').textContent = 'Error cargando citas.';
   }
 }
 
-function abrirRestaurante() {
-  const s = slugActual();
-  if (!s) { alert('Ingresá el slug del restaurante primero.'); return; }
-  window.open(BASE + '/r/' + s, '_blank');
-}
-
-function abrirPaginaPublica() {
-  const s = slugActual();
-  if (!s) { alert('Primero cargá el slug del restaurante arriba.'); return; }
-  window.open(BASE + '/r/' + s, '_blank');
-}
-
-// ── Situaciones ───────────────────────────────────────────────────────────
-let sitActiva = null;
-
-function abrirSituacion(n) {
-  // cerrar la anterior
-  if (sitActiva && sitActiva !== n) {
-    document.getElementById('panel-' + sitActiva).classList.add('hidden');
-    document.getElementById('arr-' + sitActiva).textContent = '›';
-    document.getElementById('sit-' + sitActiva).classList.remove('border-indigo-300', 'shadow-md');
-  }
-  const panel = document.getElementById('panel-' + n);
-  const arr   = document.getElementById('arr-' + n);
-  const card  = document.getElementById('sit-' + n);
-  if (panel.classList.contains('hidden')) {
-    panel.classList.remove('hidden');
-    arr.textContent = '⌄';
-    card.classList.add('border-indigo-300', 'shadow-md');
-    sitActiva = n;
-  } else {
-    panel.classList.add('hidden');
-    arr.textContent = '›';
-    card.classList.remove('border-indigo-300', 'shadow-md');
-    sitActiva = null;
-  }
-}
-
-// ── WhatsApp — enviar rol ─────────────────────────────────────────────────
-function enviarRol(rol) {
-  const s = slugActual();
-  if (!s) {
-    alert('Primero cargá el slug del restaurante en la parte de arriba.');
+function renderCitas(citas) {
+  const c = document.getElementById('lista-citas');
+  const v = document.getElementById('txt-citas-vacio');
+  if (!citas.length) {
+    v.textContent = 'Sin citas próximas — tocá + Nueva cita para agendar.';
+    v.classList.remove('hidden');
+    c.innerHTML = '';
+    c.appendChild(v);
     return;
   }
-  const url  = BASE + '/r/' + s + '/' + rol;
-  const txt  = encodeURIComponent('Abrí este link — te llegará en tu restaurante 🍽️\n' + url);
-  window.open('https://wa.me/?text=' + txt, '_blank');
-  document.getElementById('txt-rol-aviso').textContent = '✓ WhatsApp abierto — link enviado para ' + rol;
+  v.classList.add('hidden');
+  c.innerHTML = '';
+  citas.forEach(ct => {
+    const dt   = new Date(ct.fecha_hora);
+    const hoy  = new Date();
+    const esHoy = dt.toDateString() === hoy.toDateString();
+    const hora  = dt.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+    const fecha = esHoy ? 'Hoy ' + hora : dt.toLocaleDateString('es-CO',{weekday:'short',day:'numeric',month:'short'}) + ' ' + hora;
+    const badge = {pendiente:'bg-amber-100 text-amber-700', hecha:'bg-green-100 text-green-700',
+                   cerrada:'bg-indigo-100 text-indigo-700', descartada:'bg-gray-100 text-gray-500'}[ct.estado] || '';
+    const div = document.createElement('div');
+    div.className = 'bg-white rounded-2xl shadow p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition';
+    div.innerHTML = \`
+      <div class="flex-1" onclick="iniciarDemo(\${JSON.stringify(ct).replace(/"/g,'&quot;')})">
+        <div class="flex items-center gap-2 mb-0.5">
+          <p class="font-bold text-gray-800 text-sm">\${ct.nombre_negocio}</p>
+          <span class="text-xs px-2 py-0.5 rounded-full font-semibold \${badge}">\${ct.estado}</span>
+        </div>
+        <p class="text-xs text-gray-500">\${ct.nombre_dueno} · \${ct.telefono}</p>
+        <p class="text-xs text-indigo-600 font-semibold mt-0.5">\${fecha}</p>
+      </div>
+      <button onclick="marcarHecha(\${ct.id},event)" class="text-green-500 text-xl shrink-0 hover:scale-110 transition" title="Marcar hecha">✓</button>
+    \`;
+    c.appendChild(div);
+  });
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  // Leer slug de localStorage o del param ?r=
-  const params = new URLSearchParams(location.search);
-  const slugParam = params.get('r') || '';
-  const slugLocal = localStorage.getItem('vd_slug') || '';
-  const slug = slugParam || slugLocal;
-  if (slug) {
-    localStorage.setItem('vd_slug', slug);
-    document.getElementById('inp-slug').value = slug;
-    actualizarEstadoSlug(slug);
+async function marcarHecha(id, e) {
+  e.stopPropagation();
+  await fetch('/api/vendedor/cita/' + id + '/estado', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({estado:'hecha'})
+  });
+  cargarCitas();
+}
+
+function iniciarDemo(ct) {
+  _slug     = ct.negocio_slug;
+  _demoCita = ct;
+  document.getElementById('txt-demo-nombre').textContent = ct.nombre_negocio + ' — ' + ct.nombre_dueno;
+  document.getElementById('sec-demo').classList.remove('hidden');
+  document.getElementById('sec-demo').scrollIntoView({behavior:'smooth'});
+}
+
+// ── Modal nueva cita ───────────────────────────────────────────────────────
+function abrirModalCita() {
+  // Fecha/hora sugerida: mañana 9am
+  const m = new Date(); m.setDate(m.getDate()+1); m.setHours(9,0,0,0);
+  document.getElementById('cita-fecha').value = m.toISOString().slice(0,10);
+  document.getElementById('cita-hora').value  = '09:00';
+  document.getElementById('txt-cita-error').classList.add('hidden');
+  selTipo('restaurante','menu_dia');
+  document.getElementById('modal-cita').classList.remove('hidden');
+}
+
+function cerrarModalCita() {
+  document.getElementById('modal-cita').classList.add('hidden');
+}
+
+function selTipo(tipo, subtipo) {
+  _tipo    = tipo;
+  _subtipo = subtipo;
+  document.querySelectorAll('.tipo-btn').forEach(b => {
+    b.classList.remove('border-indigo-500','bg-indigo-50');
+    b.classList.add('border-gray-200');
+  });
+  const sel = document.querySelector('[data-t="' + tipo + '-' + subtipo + '"]');
+  if (sel) { sel.classList.remove('border-gray-200'); sel.classList.add('border-indigo-500','bg-indigo-50'); }
+}
+
+async function guardarCita() {
+  const err = document.getElementById('txt-cita-error');
+  const payload = {
+    vendedor_cod: codVendedor(),
+    tipo:         _tipo,
+    subtipo:      _subtipo,
+    nombre_negocio: document.getElementById('cita-nombre-neg').value.trim(),
+    nombre_dueno:   document.getElementById('cita-nombre-due').value.trim(),
+    telefono:       document.getElementById('cita-telefono').value.trim(),
+    fecha_hora: document.getElementById('cita-fecha').value + 'T' + document.getElementById('cita-hora').value
+  };
+  if (!payload.nombre_negocio || !payload.nombre_dueno || !payload.telefono) {
+    err.textContent = 'Completá todos los campos.'; err.classList.remove('hidden'); return;
   }
+  const btn = document.querySelector('#modal-cita button:last-child');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    const r = await fetch('/api/vendedor/cita', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (!d.ok) { err.textContent = d.error; err.classList.remove('hidden'); btn.disabled=false; btn.textContent='Agendar cita y crear negocio'; return; }
+    cerrarModalCita();
+    cargarCitas();
+  } catch(e) {
+    err.textContent = 'Error de red.'; err.classList.remove('hidden');
+    btn.disabled=false; btn.textContent='Agendar cita y crear negocio';
+  }
+}
+
+// ── Situaciones ────────────────────────────────────────────────────────────
+let sitActiva = null;
+function abrirSituacion(n) {
+  if (sitActiva && sitActiva !== n) {
+    document.getElementById('panel-'+sitActiva).classList.add('hidden');
+    document.getElementById('arr-'+sitActiva).textContent = '›';
+    document.getElementById('sit-'+sitActiva).classList.remove('border-indigo-300','shadow-md');
+  }
+  const panel = document.getElementById('panel-'+n);
+  const arr   = document.getElementById('arr-'+n);
+  const card  = document.getElementById('sit-'+n);
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden'); arr.textContent='⌄';
+    card.classList.add('border-indigo-300','shadow-md'); sitActiva=n;
+  } else {
+    panel.classList.add('hidden'); arr.textContent='›';
+    card.classList.remove('border-indigo-300','shadow-md'); sitActiva=null;
+  }
+}
+
+function verNegocio() {
+  if (!_slug) return;
+  window.open(BASE+'/r/'+_slug,'_blank');
+}
+
+function enviarRol(rol) {
+  if (!_slug) { alert('Seleccioná una cita primero.'); return; }
+  const url = BASE+'/r/'+_slug+'/'+rol;
+  const txt = encodeURIComponent('Abrí este link en tu restaurante 🍽️\\n'+url);
+  window.open('https://wa.me/?text='+txt,'_blank');
+  document.getElementById('txt-rol-aviso').textContent = '✓ Link de '+rol+' enviado por WhatsApp';
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const cod = codVendedor();
+  if (cod) {
+    document.getElementById('modal-codigo').classList.add('hidden');
+    document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + cod;
+    cargarCitas();
+  }
+  // Fecha mínima del picker = hoy
+  document.getElementById('cita-fecha') && (document.getElementById('cita-fecha').min = new Date().toISOString().slice(0,10));
 });
 </script>
 

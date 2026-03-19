@@ -519,6 +519,15 @@
         </button>
       </div>
     </div>
+    <!-- COMANDOS DE VOZ -->
+    <div>
+      <label class="text-xs font-semibold text-gray-500 block mb-1">
+        Comandos de voz <span class="font-normal text-gray-400">(uno por línea)</span>
+      </label>
+      <textarea id="sw-comandos-voz" rows="3"
+                placeholder="prende la luz&#10;enciende la sala&#10;luz sala"
+                class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"></textarea>
+    </div>
     <div class="flex gap-3 pt-2">
       <button onclick="cerrarModal('modal-switch')"
               class="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-medium">Cancelar</button>
@@ -1292,6 +1301,7 @@ function abrirModalSwitch(devId) {
   document.getElementById('sw-dispositivo-id').value = devId;
   document.getElementById('sw-nombre').value = '';
   document.getElementById('sw-tuya-id').value = '';
+  document.getElementById('sw-comandos-voz').value = '';
   limpiarImagenSwitch();
   document.getElementById('modal-switch').classList.remove('hidden');
 }
@@ -1302,6 +1312,7 @@ function abrirModalEditarSwitch(sw) {
   document.getElementById('sw-dispositivo-id').value = sw.id_dispositivo;
   document.getElementById('sw-nombre').value = sw.nombre;
   document.getElementById('sw-tuya-id').value = sw.tuya_device_id || '';
+  document.getElementById('sw-comandos-voz').value = (sw.comandos_voz || []).join('\n');
   if (sw.imagen) {
     document.getElementById('sw-imagen-url').value = sw.imagen;
     previewImagenSwitchUrl(sw.imagen);
@@ -1317,15 +1328,17 @@ async function guardarSwitch() {
   const nombre = document.getElementById('sw-nombre').value.trim();
   const tuya_device_id = document.getElementById('sw-tuya-id').value.trim();
   const imagen = document.getElementById('sw-imagen-url').value.trim() || null;
+  const comandos_voz = document.getElementById('sw-comandos-voz').value
+    .split('\n').map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!nombre) { toast('El nombre es requerido', 'err'); return; }
   try {
     let url, body;
     if (editId) {
       url = `/api/domotica/switch/${editId}/editar`;
-      body = { nombre, tuya_device_id, imagen };
+      body = { nombre, tuya_device_id, imagen, comandos_voz };
     } else {
       url = '/api/domotica/switch/crear';
-      body = { nombre, tuya_device_id, imagen, id_dispositivo: parseInt(devId) };
+      body = { nombre, tuya_device_id, imagen, comandos_voz, id_dispositivo: parseInt(devId) };
     }
     const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
     const d = await r.json();
@@ -1951,7 +1964,66 @@ cargarContextoReglas();
 cargarReglas();
 // Refrescar contexto cada 2 min
 setInterval(cargarContextoReglas, 120000);
+
+// ─── VOZ ───
+function buscarComandoVoz(texto) {
+  const VERBOS_ON  = ['prende', 'prender', 'enciende', 'encender', 'activa', 'activar', 'abre', 'abrir', 'on'];
+  const VERBOS_OFF = ['apaga', 'apagar', 'desactiva', 'desactivar', 'cierra', 'cerrar', 'off'];
+  let accion = null;
+  for (const v of VERBOS_ON)  if (texto.includes(v)) { accion = true;  break; }
+  if (accion === null)
+    for (const v of VERBOS_OFF) if (texto.includes(v)) { accion = false; break; }
+  if (!_panelDispositivosCache) return null;
+  for (const dev of _panelDispositivosCache) {
+    for (const sw of (dev.switches || [])) {
+      for (const cmd of (sw.comandos_voz || [])) {
+        if (texto.includes(cmd) || cmd.includes(texto.replace(/^(prende|apaga|enciende|desactiva|activa|abre|cierra)\s+/, ''))) {
+          return { id: sw.id, nombre: sw.nombre, accion: accion !== null ? accion : !sw.estado_actual };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function activarVoz() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('Tu navegador no soporta reconocimiento de voz', 'err'); return; }
+  const recog = new SR();
+  recog.lang = 'es-CO';
+  recog.interimResults = false;
+  recog.maxAlternatives = 3;
+  const btn = document.getElementById('btn-voz');
+  btn.textContent = '🔴';
+  btn.classList.add('animate-pulse');
+  recog.onresult = (e) => {
+    btn.textContent = '🎤';
+    btn.classList.remove('animate-pulse');
+    let match = null;
+    for (let i = 0; i < e.results[0].length && !match; i++) {
+      match = buscarComandoVoz(e.results[0][i].transcript.toLowerCase().trim());
+    }
+    if (match) {
+      toast(`${match.accion ? 'Encendiendo' : 'Apagando'} ${match.nombre}...`);
+      toggleSwitch(match.id, match.accion);
+    } else {
+      toast('Comando no reconocido', 'err');
+    }
+  };
+  recog.onerror = recog.onend = () => {
+    btn.textContent = '🎤';
+    btn.classList.remove('animate-pulse');
+  };
+  recog.start();
+}
 </script>
+
+<!-- Botón flotante de voz -->
+<button id="btn-voz" onclick="activarVoz()" title="Comando de voz"
+        class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl flex items-center justify-center text-2xl z-40 transition">
+  🎤
+</button>
+
 {%- include 'ayuda_contextual_widget.html' %}
 </body>
 </html>

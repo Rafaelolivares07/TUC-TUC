@@ -36805,6 +36805,7 @@ def crear_tablas_domotica(conn):
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS presencia_ventana_seg INTEGER DEFAULT 360",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS ultima_temperatura NUMERIC(5,2)",
         "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS pc_comando VARCHAR(20)",
+        "ALTER TABLE smart_switches ADD COLUMN IF NOT EXISTS comandos_voz TEXT[] DEFAULT '{}'",
     ]
     for sql in sqls:
         try:
@@ -37185,6 +37186,8 @@ def api_domotica_switch_crear():
     tuya_device_id = (data.get('tuya_device_id') or '').strip()
     imagen = data.get('imagen') or None
     mostrar_nombre = data.get('mostrar_nombre', True)
+    cmds = data.get('comandos_voz', [])
+    comandos_voz = [c.strip().lower() for c in cmds if c.strip()] if isinstance(cmds, list) else []
     if not nombre or not id_dispositivo:
         return jsonify({'ok': False, 'error': 'Nombre y dispositivo requeridos'})
     try:
@@ -37194,8 +37197,8 @@ def api_domotica_switch_crear():
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
         row = conn.execute(
-            "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id, imagen, mostrar_nombre) VALUES (%s,%s,%s,%s,%s) RETURNING id",
-            (id_dispositivo, nombre, tuya_device_id or None, imagen, bool(mostrar_nombre))
+            "INSERT INTO smart_switches (id_dispositivo, nombre, tuya_device_id, imagen, mostrar_nombre, comandos_voz) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+            (id_dispositivo, nombre, tuya_device_id or None, imagen, bool(mostrar_nombre), comandos_voz)
         ).fetchone()
         conn.commit()
         conn.close()
@@ -37219,6 +37222,9 @@ def api_domotica_switch_editar(sid):
         campos['imagen'] = data['imagen'] or None
     if 'mostrar_nombre' in data:
         campos['mostrar_nombre'] = bool(data['mostrar_nombre'])
+    if 'comandos_voz' in data:
+        cmds = data['comandos_voz']
+        campos['comandos_voz'] = [c.strip().lower() for c in cmds if c.strip()] if isinstance(cmds, list) else []
     if not campos:
         return jsonify({'ok': False, 'error': 'Nada que actualizar'})
     sets = ', '.join(f'{k}=%s' for k in campos)

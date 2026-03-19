@@ -254,6 +254,104 @@ La llamada de día 1 **no vende el producto — vende los 10 minutos**. Nunca ex
 4. **El silencio después de la pregunta del dolor es oro** — dejar que el dueño exprese el problema con sus propias palabras
 5. **Si hay una encargada/cocinera presente, incluirla** — si ella no quiere la herramienta, no hay venta
 
+### El dashboard del vendedor — la herramienta para hacer la demo
+
+El vendedor no imprime folletos, no lleva laptop, no muestra capturas de pantalla. Su única herramienta es su celular con el dashboard de TUC TUC abierto. Todo lo que necesita para demostrar, convencer y cerrar está en ese celular — y en el del cliente.
+
+#### Requisitos mínimos del vendedor (no negociables)
+- **Celular con buena pantalla** — lo va a poner frente al cliente. Un celular roto o sucio comunica mal.
+- **Datos de navegación disponibles** — toda la demo es en vivo, en producción. Sin datos, no hay demo. Sin demo, no hay venta.
+- **Batería cargada** — no hay excusas para quedarse sin batería en mitad de la demo.
+
+Estos tres requisitos no son detalles logísticos — son parte del perfil. Un vendedor que llega sin datos o con el celular al 10% ya comunicó algo al dueño del negocio antes de abrir la boca.
+
+#### El menú de dolores — entrada al dashboard
+
+Cuando el vendedor abre su dashboard, ve un **menú de dolores**, no un menú de funcionalidades. Cada opción es el nombre del problema, no el nombre de la solución:
+
+- 🧍 El mesero viaja a cocina (restaurante)
+- 📱 Me preguntan por WhatsApp todo el día (restaurante / tienda)
+- 📋 Los clientes no saben qué tengo (tienda / restaurante con carta)
+- 💸 No sé cuánto vendí hoy (cualquier negocio)
+- *(más dolores se agregan conforme se mapean)*
+
+El vendedor escucha al cliente, identifica el dolor, y toca ese botón. Lo que sigue es la demo para ese dolor específico — sin improvisar.
+
+---
+
+#### Demo Dolor #1 — "El mesero viaja a cocina"
+
+##### Por qué este es el dolor #1
+
+Es el más universal en restaurantes con meseros. Es visible, medible y cotidiano. El dueño lo ve pasar decenas de veces al día. No requiere explicación — él ya conoce el problema y lo ha normalizado porque no sabía que había solución. Cuando ve la solución, la conexión es inmediata.
+
+##### Protocolo de dos celulares
+
+La demo de este dolor requiere **dos celulares en simultáneo** — uno jugando de mesero, otro de cocina — para que el dueño vea el pedido llegar en tiempo real.
+
+**Escenario ideal:** el vendedor lleva su propio celular de respaldo (segundo teléfono o tablet).
+
+**Escenario real (sin segundo celular):** el vendedor le pide un celular prestado al cliente. Antes de llegar, o en el momento, envía el enlace correcto por WhatsApp.
+
+El protocolo es:
+
+1. El vendedor pregunta: *"¿Quiere jugar de mesero o de cocinero?"*
+2. El cliente elige.
+3. El vendedor toca el botón del rol correspondiente en su dashboard.
+4. Se abre WhatsApp con un mensaje ya redactado y el enlace parametrizado para ese rol (mesero o cocina del restaurante del cliente).
+5. El cliente abre ese enlace en su celular. Ve la pantalla de su propio negocio — con su nombre, su carta real.
+6. El vendedor toma el rol opuesto en su celular.
+
+Los URLs ya son parametrizables en la plataforma. El dashboard del vendedor solo necesita saber: negocio + rol → link correcto.
+
+##### El momento WOW — y el silencio que sigue
+
+Con los dos celulares listos:
+
+1. El vendedor (en rol de mesero) hace un pedido desde su celular
+2. El cliente (en rol de cocina) ve llegar el pedido a su pantalla — sin que nadie se lo llevara físicamente
+3. El vendedor guarda silencio
+
+El silencio es intencional. El dueño está procesando. Ya entendió. No hay que explicar más. No hay que agregar características. No hay que hablar.
+
+Si hay silencio, la demo funcionó. Si el dueño pregunta *"¿y también puede...?"* — perfecto. Si el dueño llama a alguien para que lo vea — ganado.
+
+##### Guión para el Dolor #1
+
+**Al llegar (antes de abrir el celular):**
+> *"Don [Nombre], antes de mostrarle algo — ¿cuántas veces al día calcula que su mesero va a cocina solo a dejar la comanda?"*
+
+Dejar que responda. Escuchar. Si dice 30, 40, 50 — asentir y no decir nada todavía.
+
+> *"¿Y cuánto tiempo se lleva cada viaje, entre que sale de la mesa, llega, espera y vuelve?"*
+
+Dejar que calcule. El dueño está haciendo la matemática solo. Eso es exactamente lo que se quiere.
+
+**Pasando al celular:**
+> *"Listo, le muestro cómo funciona — en su propio restaurante, con su carta. ¿Tiene el celular a la mano un segundo? Le voy a mandar un link por WhatsApp."*
+
+**Después del WOW:**
+> *(silencio — dejar que el dueño hable primero)*
+
+Si pregunta precio:
+> *"Son $5.000 por día que tenga pedidos — si no hay pedidos, no cobra nada."*
+
+Si pregunta cuándo empieza:
+> *"Hoy si quiere — el restaurante ya está en la plataforma. ¿Arrancamos?"*
+
+---
+
+#### ¿Qué hace el dashboard del vendedor exactamente?
+
+| Acción | Lo que pasa |
+|---|---|
+| Toca un dolor | Muestra la secuencia de demo para ese dolor |
+| Selecciona rol (mesero / cocina) | Prepara el enlace parametrizado con el restaurante del cliente y el rol elegido |
+| Toca "Enviar por WhatsApp" | Abre WhatsApp con mensaje + link listo — el vendedor solo toca enviar |
+| El cliente abre el link | Entra directo al restaurante de su propiedad en el rol correspondiente |
+
+**El vendedor no escribe URLs, no explica nada técnico, no improvisa.** El dashboard hace el trabajo logístico. El vendedor solo habla con el dueño.
+
 ---
 
 ## 8. Modelo de precios oficial

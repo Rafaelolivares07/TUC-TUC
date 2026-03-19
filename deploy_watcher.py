@@ -33,17 +33,12 @@ MAX_MIN    = 30   # minutos máximo de espera
 
 
 def notificar_windows(titulo, texto):
-    """Balloon tip en la bandeja del sistema — sin abrir ventana."""
+    """MessageBox persistente — el usuario debe cerrarla manualmente."""
     ps = (
         f'Add-Type -AssemblyName System.Windows.Forms;'
-        f'$n=New-Object System.Windows.Forms.NotifyIcon;'
-        f'$n.Icon=[System.Drawing.SystemIcons]::Information;'
-        f'$n.BalloonTipTitle="{titulo}";'
-        f'$n.BalloonTipText="{texto}";'
-        f'$n.Visible=$true;'
-        f'$n.ShowBalloonTip(6000);'
-        f'Start-Sleep 7;'
-        f'$n.Dispose()'
+        f'[System.Windows.Forms.MessageBox]::Show("{texto}", "{titulo}", '
+        f'[System.Windows.Forms.MessageBoxButtons]::OK, '
+        f'[System.Windows.Forms.MessageBoxIcon]::Information)'
     )
     subprocess.Popen(
         ['powershell', '-WindowStyle', 'Hidden', '-NonInteractive', '-Command', ps],

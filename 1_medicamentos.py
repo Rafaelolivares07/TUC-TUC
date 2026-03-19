@@ -40130,131 +40130,298 @@ def vendedor_dashboard():
 <title>Vendedor TUC TUC</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen" x-data>
 
 <!-- Header -->
-<div class="bg-indigo-700 text-white px-4 py-5">
-  <div class="max-w-2xl mx-auto">
+<div class="bg-indigo-700 text-white px-4 py-4">
+  <div class="max-w-2xl mx-auto flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <div class="text-3xl">🚗</div>
+      <div class="text-2xl">🚗</div>
       <div>
-        <h1 class="text-xl font-extrabold tracking-tight">TUC TUC — Vendedor</h1>
-        <p class="text-indigo-200 text-sm">Tu kit de venta completo</p>
+        <h1 class="text-lg font-extrabold tracking-tight">TUC TUC — Vendedor</h1>
+        <p class="text-indigo-200 text-xs">Kit de demo en campo</p>
       </div>
     </div>
+    <a href="/docs/vendedor" class="text-indigo-200 text-xs underline">Manual</a>
   </div>
 </div>
 
-<div class="max-w-2xl mx-auto px-4 py-6 space-y-4">
+<div class="max-w-2xl mx-auto px-4 py-4 space-y-4">
 
-  <!-- Demo rápida -->
-  <div class="bg-white rounded-2xl shadow p-5 border-l-4 border-indigo-500">
-    <h2 class="font-extrabold text-gray-800 text-lg mb-1">⏱️ Demo de 10 minutos</h2>
-    <p class="text-sm text-gray-500 mb-4">Guión paso a paso — úsalo antes de cada visita</p>
-    <div class="space-y-3">
-      <div class="flex gap-3 items-start">
-        <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">1</span>
-        <div>
-          <p class="font-semibold text-gray-800 text-sm">El dolor (min 1–2)</p>
-          <p class="text-gray-500 text-xs mt-0.5">No abras el celular. Pregunta: <em>"¿Cuántas veces al día le llaman a preguntar qué hay de almuerzo?"</em> — espera la respuesta.</p>
+  <!-- Restaurante activo -->
+  <div class="bg-white rounded-2xl shadow p-4" id="card-restaurante">
+    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Restaurante a demostrar</p>
+    <div class="flex gap-2">
+      <input id="inp-slug" type="text" placeholder="slug del restaurante (ej: parrilla-argentina)"
+             class="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+             oninput="guardarSlug(this.value)">
+      <button onclick="abrirRestaurante()"
+              class="bg-indigo-600 text-white rounded-xl px-4 py-2 text-sm font-bold hover:bg-indigo-700 transition">
+        Ver
+      </button>
+    </div>
+    <p class="text-xs text-gray-400 mt-1" id="txt-slug-estado">Sin restaurante cargado</p>
+  </div>
+
+  <!-- Situaciones -->
+  <div>
+    <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 px-1">¿Cuál es la situación del negocio?</p>
+    <div class="space-y-2" id="lista-situaciones">
+
+      <!-- Situación 1 -->
+      <div class="bg-white rounded-2xl shadow border border-transparent transition-all" id="sit-1">
+        <button class="w-full text-left p-4 flex items-center gap-3" onclick="abrirSituacion(1)">
+          <span class="text-2xl">🧍</span>
+          <div class="flex-1">
+            <p class="font-bold text-gray-800 text-sm">El mesero viaja a cocina</p>
+            <p class="text-xs text-gray-400">El pedido llega solo — el mesero no tiene que ir a entregarlo</p>
+          </div>
+          <span class="text-gray-300 text-lg" id="arr-1">›</span>
+        </button>
+
+        <!-- Panel expandible Sit-1 -->
+        <div id="panel-1" class="hidden px-4 pb-4 border-t border-gray-100">
+
+          <!-- Guión -->
+          <div class="pt-3 pb-2 space-y-2">
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">1</span>
+              <p class="text-xs text-gray-600"><strong>No abras el celular.</strong> Pregunta: <em>"¿Cuántas veces al día va un mesero a cocina solo a dejar la comanda?"</em> — espera. Deja que calcule.</p>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">2</span>
+              <p class="text-xs text-gray-600">Pregunta: <em>"¿Quiere jugar de mesero o de cocinero?"</em></p>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">3</span>
+              <p class="text-xs text-gray-600">Tocá el botón del rol que eligió → se abre WhatsApp con el link listo → el cliente lo abre en su celular.</p>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">4</span>
+              <p class="text-xs text-gray-600">Vos tomás el rol contrario. Hacés un pedido. <strong>El cliente lo ve llegar en su celular.</strong> Silencio.</p>
+            </div>
+          </div>
+
+          <!-- Selector de rol -->
+          <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mt-3 mb-2">¿Quiere jugar de...?</p>
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="enviarRol('mesero')"
+                    class="bg-blue-50 border-2 border-blue-200 hover:border-blue-500 rounded-xl p-3 text-center transition active:scale-95">
+              <div class="text-2xl mb-1">🙋</div>
+              <p class="font-bold text-blue-800 text-sm">Mesero</p>
+              <p class="text-xs text-blue-500">Toma la orden</p>
+            </button>
+            <button onclick="enviarRol('cocina')"
+                    class="bg-orange-50 border-2 border-orange-200 hover:border-orange-500 rounded-xl p-3 text-center transition active:scale-95">
+              <div class="text-2xl mb-1">👨‍🍳</div>
+              <p class="font-bold text-orange-800 text-sm">Cocinero</p>
+              <p class="text-xs text-orange-500">Ve llegar el pedido</p>
+            </button>
+          </div>
+          <p class="text-xs text-center text-gray-400 mt-2" id="txt-rol-aviso">El link se envía por WhatsApp al celular del cliente</p>
         </div>
       </div>
-      <div class="flex gap-3 items-start">
-        <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">2</span>
-        <div>
-          <p class="font-semibold text-gray-800 text-sm">La solución en 60 seg (min 3)</p>
-          <p class="text-gray-500 text-xs mt-0.5">Muestra la página pública del restaurante demo. <strong>Solo eso</strong> — no el panel, no el mesero.</p>
+
+      <!-- Situación 2 -->
+      <div class="bg-white rounded-2xl shadow border border-transparent" id="sit-2">
+        <button class="w-full text-left p-4 flex items-center gap-3" onclick="abrirSituacion(2)">
+          <span class="text-2xl">📱</span>
+          <div class="flex-1">
+            <p class="font-bold text-gray-800 text-sm">Me preguntan por WhatsApp todo el día</p>
+            <p class="text-xs text-gray-400">El cliente ve el menú y pide solo — sin mensajes manuales</p>
+          </div>
+          <span class="text-gray-300 text-lg" id="arr-2">›</span>
+        </button>
+        <div id="panel-2" class="hidden px-4 pb-4 border-t border-gray-100">
+          <div class="pt-3 space-y-2">
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">1</span>
+              <p class="text-xs text-gray-600">Pregunta: <em>"¿Cuántos mensajes de WhatsApp responde al día preguntando qué hay, si hay, o cuánto vale?"</em></p>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">2</span>
+              <p class="text-xs text-gray-600">Mostrá la página pública del restaurante en tu celular. El cliente navega la carta y hace su pedido. Sin un solo mensaje.</p>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-0.5">3</span>
+              <p class="text-xs text-gray-600">Silencio.</p>
+            </div>
+          </div>
+          <button onclick="abrirPaginaPublica()"
+                  class="mt-3 w-full bg-indigo-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-indigo-700 transition active:scale-95">
+            Abrir página del restaurante →
+          </button>
         </div>
       </div>
-      <div class="flex gap-3 items-start">
-        <span class="bg-indigo-100 text-indigo-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">3</span>
-        <div>
-          <p class="font-semibold text-gray-800 text-sm">El admin en 2 min (min 4–5)</p>
-          <p class="text-gray-500 text-xs mt-0.5">Cambia un ítem del menú en vivo. Incluye a la cocinera si está presente.</p>
-        </div>
+
+      <!-- Situación 3 -->
+      <div class="bg-white rounded-2xl shadow border border-transparent" id="sit-3">
+        <button class="w-full text-left p-4 flex items-center gap-3 opacity-50" disabled>
+          <span class="text-2xl">📋</span>
+          <div class="flex-1">
+            <p class="font-bold text-gray-800 text-sm">Los clientes no saben qué tengo</p>
+            <p class="text-xs text-gray-400">Próximamente</p>
+          </div>
+        </button>
       </div>
-      <div class="flex gap-3 items-start">
-        <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">4</span>
-        <div>
-          <p class="font-semibold text-gray-800 text-sm">Prueba gratuita (min 6–7)</p>
-          <p class="text-gray-500 text-xs mt-0.5"><em>"7 días gratis, si no funciona lo borramos. ¿Le gustaría intentarlo?"</em> — espera el sí.</p>
-        </div>
+
+      <div class="bg-white rounded-2xl shadow border border-transparent" id="sit-4">
+        <button class="w-full text-left p-4 flex items-center gap-3 opacity-50" disabled>
+          <span class="text-2xl">💸</span>
+          <div class="flex-1">
+            <p class="font-bold text-gray-800 text-sm">No sé cuánto vendí hoy</p>
+            <p class="text-xs text-gray-400">Próximamente</p>
+          </div>
+        </button>
       </div>
-      <div class="flex gap-3 items-start">
-        <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full w-7 h-7 flex items-center justify-center shrink-0 mt-0.5">5</span>
-        <div>
-          <p class="font-semibold text-gray-800 text-sm">El cierre (min 8–10)</p>
-          <p class="text-gray-500 text-xs mt-0.5">Crea la cuenta ahora. Manda el enlace por WhatsApp. Agenda seguimiento a 7 días.</p>
-        </div>
-      </div>
+
     </div>
   </div>
 
-  <!-- Objecciones rápidas -->
-  <div class="bg-white rounded-2xl shadow p-5">
-    <h2 class="font-extrabold text-gray-800 text-lg mb-3">🛡️ Objeciones frecuentes</h2>
-    <div class="space-y-2">
+  <!-- Objecciones -->
+  <details class="bg-white rounded-2xl shadow">
+    <summary class="p-4 font-extrabold text-gray-800 text-sm cursor-pointer select-none">🛡️ Objeciones frecuentes</summary>
+    <div class="px-4 pb-4 space-y-2 border-t border-gray-100 pt-3">
       <div class="bg-gray-50 rounded-xl p-3">
-        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-xs text-gray-500 font-bold uppercase">Dice</p>
         <p class="text-sm text-gray-800 font-semibold">"No tengo tiempo para aprender eso"</p>
-        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
+        <p class="text-xs text-indigo-600 font-bold uppercase mt-1">Respondés</p>
         <p class="text-sm text-gray-600">"Son 2 minutos al día. Se lo muestro ahora mismo."</p>
       </div>
       <div class="bg-gray-50 rounded-xl p-3">
-        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-xs text-gray-500 font-bold uppercase">Dice</p>
         <p class="text-sm text-gray-800 font-semibold">"Ya tengo Instagram"</p>
-        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
-        <p class="text-sm text-gray-600">"TUC TUC no reemplaza eso. Su página aparece en el mapa cuando la gente busca dónde almorzar cerca."</p>
+        <p class="text-xs text-indigo-600 font-bold uppercase mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"Instagram no recibe pedidos. Aquí el cliente pide directo desde su celular."</p>
       </div>
       <div class="bg-gray-50 rounded-xl p-3">
-        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-xs text-gray-500 font-bold uppercase">Dice</p>
         <p class="text-sm text-gray-800 font-semibold">"¿Cuánto vale?"</p>
-        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
-        <p class="text-sm text-gray-600">"Los primeros 7 días son gratis. Primero que lo pruebe — después hablamos."</p>
+        <p class="text-xs text-indigo-600 font-bold uppercase mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"Primero que lo pruebe — si no funciona no paga nada. ¿Arrancamos?"</p>
       </div>
       <div class="bg-gray-50 rounded-xl p-3">
-        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Dice</p>
+        <p class="text-xs text-gray-500 font-bold uppercase">Dice</p>
         <p class="text-sm text-gray-800 font-semibold">"Déjeme pensarlo"</p>
-        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wide mt-1">Respondés</p>
-        <p class="text-sm text-gray-600">"Claro. ¿Lo creamos hoy gratis y durante esos 7 días lo piensa con calma? No hay compromiso."</p>
+        <p class="text-xs text-indigo-600 font-bold uppercase mt-1">Respondés</p>
+        <p class="text-sm text-gray-600">"Claro. ¿Lo dejamos activo gratis mientras lo piensa? No hay compromiso."</p>
       </div>
     </div>
-  </div>
+  </details>
 
-  <!-- Acciones -->
-  <div class="grid grid-cols-2 gap-3">
-    <a href="/docs/vendedor" class="bg-indigo-600 text-white rounded-2xl p-4 text-center shadow hover:bg-indigo-700 transition">
-      <div class="text-2xl mb-1">📖</div>
-      <p class="font-bold text-sm">Manual completo</p>
-    </a>
-    <a href="https://tuc-tuc.onrender.com/r/parrilla-argentina" target="_blank" class="bg-white border-2 border-indigo-200 text-indigo-700 rounded-2xl p-4 text-center shadow hover:border-indigo-500 transition">
-      <div class="text-2xl mb-1">🥩</div>
-      <p class="font-bold text-sm">Restaurante demo</p>
-    </a>
-  </div>
-
-  <!-- Checklist -->
-  <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-    <h2 class="font-extrabold text-amber-800 text-base mb-3">✅ Antes de entrar al local</h2>
-    <div class="space-y-2 text-sm text-amber-900" id="checklist">
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Cita agendada (NO visita espontánea en hora de servicio)</label>
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Celular cargado, TUC TUC abierto</label>
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Restaurante demo "Parrilla Argentina" disponible</label>
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Nombre del dueño y encargada confirmados</label>
-      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> CRM actualizado con estado anterior</label>
+  <!-- Checklist pre-visita -->
+  <details class="bg-amber-50 border border-amber-200 rounded-2xl">
+    <summary class="p-4 font-extrabold text-amber-800 text-sm cursor-pointer select-none">✅ Antes de entrar al local</summary>
+    <div class="px-4 pb-4 space-y-2 text-sm text-amber-900 border-t border-amber-100 pt-3">
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Cita agendada (no en hora de servicio)</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Celular cargado y con datos</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Restaurante montado con nombre y platos reales</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Slug cargado arriba en este dashboard</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Nombre del dueño confirmado</label>
     </div>
-  </div>
+  </details>
 
   <!-- Comisión -->
-  <div class="bg-green-50 border border-green-200 rounded-2xl p-5">
-    <h2 class="font-extrabold text-green-800 text-base mb-2">💰 Tu comisión</h2>
-    <p class="text-sm text-green-700">Cobrás <strong>30–50% del primer mes</strong> cuando el negocio paga.</p>
-    <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real. Nada antes.</p>
-    <p class="text-xs text-gray-400 mt-3">Confirmar porcentaje exacto con Rafael antes de cotizar.</p>
+  <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
+    <p class="font-extrabold text-green-800 text-sm mb-1">💰 Tu comisión</p>
+    <p class="text-sm text-green-700"><strong>20%</strong> de cada pago del cliente — recurrente mientras siga activo.</p>
+    <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real.</p>
   </div>
 
 </div>
 <p class="text-center text-xs text-gray-400 py-6">TUC TUC · Kit del Vendedor · 2026</p>
+
+<script>
+const BASE = 'https://tuc-tuc.onrender.com';
+
+// ── Slug del restaurante ──────────────────────────────────────────────────
+function slugActual() {
+  return localStorage.getItem('vd_slug') || '';
+}
+
+function guardarSlug(v) {
+  v = v.trim().toLowerCase();
+  localStorage.setItem('vd_slug', v);
+  actualizarEstadoSlug(v);
+}
+
+function actualizarEstadoSlug(v) {
+  const el = document.getElementById('txt-slug-estado');
+  if (v) {
+    el.textContent = '✓ ' + BASE + '/r/' + v;
+    el.className = 'text-xs text-green-600 mt-1 break-all';
+  } else {
+    el.textContent = 'Sin restaurante cargado';
+    el.className = 'text-xs text-gray-400 mt-1';
+  }
+}
+
+function abrirRestaurante() {
+  const s = slugActual();
+  if (!s) { alert('Ingresá el slug del restaurante primero.'); return; }
+  window.open(BASE + '/r/' + s, '_blank');
+}
+
+function abrirPaginaPublica() {
+  const s = slugActual();
+  if (!s) { alert('Primero cargá el slug del restaurante arriba.'); return; }
+  window.open(BASE + '/r/' + s, '_blank');
+}
+
+// ── Situaciones ───────────────────────────────────────────────────────────
+let sitActiva = null;
+
+function abrirSituacion(n) {
+  // cerrar la anterior
+  if (sitActiva && sitActiva !== n) {
+    document.getElementById('panel-' + sitActiva).classList.add('hidden');
+    document.getElementById('arr-' + sitActiva).textContent = '›';
+    document.getElementById('sit-' + sitActiva).classList.remove('border-indigo-300', 'shadow-md');
+  }
+  const panel = document.getElementById('panel-' + n);
+  const arr   = document.getElementById('arr-' + n);
+  const card  = document.getElementById('sit-' + n);
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    arr.textContent = '⌄';
+    card.classList.add('border-indigo-300', 'shadow-md');
+    sitActiva = n;
+  } else {
+    panel.classList.add('hidden');
+    arr.textContent = '›';
+    card.classList.remove('border-indigo-300', 'shadow-md');
+    sitActiva = null;
+  }
+}
+
+// ── WhatsApp — enviar rol ─────────────────────────────────────────────────
+function enviarRol(rol) {
+  const s = slugActual();
+  if (!s) {
+    alert('Primero cargá el slug del restaurante en la parte de arriba.');
+    return;
+  }
+  const url  = BASE + '/r/' + s + '/' + rol;
+  const txt  = encodeURIComponent('Abrí este link — te llegará en tu restaurante 🍽️\n' + url);
+  window.open('https://wa.me/?text=' + txt, '_blank');
+  document.getElementById('txt-rol-aviso').textContent = '✓ WhatsApp abierto — link enviado para ' + rol;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Leer slug de localStorage o del param ?r=
+  const params = new URLSearchParams(location.search);
+  const slugParam = params.get('r') || '';
+  const slugLocal = localStorage.getItem('vd_slug') || '';
+  const slug = slugParam || slugLocal;
+  if (slug) {
+    localStorage.setItem('vd_slug', slug);
+    document.getElementById('inp-slug').value = slug;
+    actualizarEstadoSlug(slug);
+  }
+});
+</script>
+
 </body></html>"""
     return render_template_string(html)
 

@@ -221,6 +221,7 @@
 const SLUG = '{{ restaurante.slug }}';
 const MESA = "{{ mesa_nombre }}";
 const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
+const SOLO_CARTA = {{ solo_carta | tojson }};
 const BASE = `/api/restaurante/${SLUG}`;
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
 const CLIENTE_DATA = {{ cliente_data | tojson | safe if cliente_data else 'null' }};
@@ -561,11 +562,12 @@ async function cargarCartaCliente() {
                                     <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
                                 ` : ''}
                                 <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                                ${!SOLO_CARTA ? `
                                 <div class="flex items-center justify-center gap-3 mt-2">
                                     <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
                                     <span id="cli-cant-${p.id}" class="font-bold txt-primary w-6 text-center text-lg">0</span>
                                     <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-9 h-9 rounded-full font-bold text-lg">+</button>
-                                </div>
+                                </div>` : ''}
                             </div>
                         </div>
                     `).join('')}
@@ -573,9 +575,11 @@ async function cargarCartaCliente() {
             </div>
         `).join('');
 
-        // Mostrar notas y botón pedir
-        document.getElementById('sec-notas').classList.remove('hidden');
-        document.getElementById('sec-pedir').classList.remove('hidden');
+        // Mostrar notas y botón pedir (solo si no es solo_carta)
+        if (!SOLO_CARTA) {
+            document.getElementById('sec-notas').classList.remove('hidden');
+            document.getElementById('sec-pedir').classList.remove('hidden');
+        }
         cartaClienteTotal();
     } catch(e) { console.error(e); }
 }

@@ -286,6 +286,16 @@
                                onchange="togglePin('cocina', this.checked)">
                         <div class="relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-indigo-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0"></div>
                     </label>
+                    <label class="flex items-center justify-between bg-white border rounded-lg px-4 py-3 cursor-pointer select-none sm:col-span-2">
+                        <div>
+                            <span class="text-sm font-medium text-gray-700">Solo carta en QR de mesas</span>
+                            <p class="text-xs text-gray-400 mt-0.5">El cliente ve el menú pero no puede pedir. El mesero toma la orden.</p>
+                        </div>
+                        <input type="checkbox" id="toggle-solo-carta" class="sr-only peer"
+                               {{ 'checked' if restaurante.solo_carta }}
+                               onchange="toggleSoloCarta(this.checked)">
+                        <div class="relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0"></div>
+                    </label>
                 </div>
             </div>
         </div>
@@ -1307,6 +1317,19 @@ async function togglePin(rol, valor) {
         });
         const data = await r.json();
         if (!data.ok) toast(data.error || 'Error', false);
+    } catch(e) { toast('Error de conexión', false); }
+}
+
+async function toggleSoloCarta(valor) {
+    try {
+        const r = await fetch(`${BASE}/toggle-solo-carta`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({valor})
+        });
+        const data = await r.json();
+        if (data.ok) toast(valor ? 'QR de mesas: solo carta' : 'QR de mesas: puede pedir');
+        else toast(data.error || 'Error', false);
     } catch(e) { toast('Error de conexión', false); }
 }
 

@@ -25463,6 +25463,8 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "UPDATE restaurantes SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS solo_carta BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
     ]
     for sql in alters:
         try:
@@ -27135,7 +27137,8 @@ def restaurante_cliente(slug, mesa_nombre):
         conn.close()
         if not mesa:
             return "Mesa no encontrada", 404
-        return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre=mesa_nombre, cliente_data=None)
+        solo_carta = bool(rest.get('solo_carta'))
+        return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre=mesa_nombre, cliente_data=None, solo_carta=solo_carta)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -38100,6 +38103,42 @@ def api_restaurante_toggle_pin(slug):
             return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
         campo = 'requerir_pin_mesero' if rol == 'mesero' else 'requerir_pin_cocina'
         conn.execute(f"UPDATE restaurantes SET {campo} = %s WHERE id = %s", (bool(valor), rest['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/toggle-solo-carta', methods=['POST'])
+def api_restaurante_toggle_solo_carta(slug):
+    """Activar/desactivar modo solo carta para QR de mesas"""
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    valor = data.get('valor')
+    if valor is None:
+        return jsonify({'ok': False, 'error': 'Parámetros inválidos'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        es_admin = session.get('rol') == 'Administrador'
+        if not es_admin and usuario_id != rest['admin_id']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin permisos'}), 403
+        conn.execute("UPDATE restaurantes SET solo_carta = %s WHERE id = %s", (bool(valor), rest['id']))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

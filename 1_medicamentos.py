@@ -40601,6 +40601,44 @@ def api_admin_contactos_eliminar(cid):
 # ── FIN MÓDULO: CONTACTOS ────────────────────────────────────────────────────
 
 
+# ===== DEPLOY MONITOR =====
+
+def _leer_git_commit():
+    try:
+        import subprocess as _sp
+        return _sp.check_output(['git', 'rev-parse', '--short', 'HEAD'],
+                                stderr=_sp.DEVNULL, cwd=os.path.dirname(__file__)).decode().strip()
+    except Exception:
+        return 'unknown'
+
+_GIT_COMMIT = _leer_git_commit()
+
+@app.route('/api/version')
+def api_version():
+    """Devuelve el commit actualmente desplegado en producción."""
+    return jsonify({'ok': True, 'commit': _GIT_COMMIT})
+
+@app.route('/api/webhook/render-deploy', methods=['POST'])
+def api_webhook_render_deploy():
+    """Render llama aquí cuando el deploy termina exitosamente.
+    Manda notificación Telegram al admin."""
+    try:
+        data = request.get_json(silent=True) or {}
+        commit = str(data.get('commit', {}).get('id', 'desconocido'))[:7] if isinstance(data.get('commit'), dict) else 'desconocido'
+        from datetime import datetime as _dt
+        hora = _dt.now().strftime('%H:%M:%S')
+        enviar_notificacion_telegram(
+            f"✅ <b>Deploy listo</b>\n"
+            f"Commit: <code>{commit}</code>\n"
+            f"Hora: {hora}"
+        )
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ── FIN MÓDULO: DEPLOY MONITOR ───────────────────────────────────────────────
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

@@ -85,8 +85,8 @@
         <div class="flex items-start gap-3 bg-amber-50 rounded-xl p-4 border border-amber-100">
             <span class="text-2xl shrink-0">🎁</span>
             <div>
-                <p class="font-bold text-amber-700 text-sm">Prueba gratis</p>
-                <p class="text-amber-600 text-xs mt-0.5">{%- set sep = namespace(v='') -%}{%- for t, lbl in [('restaurante','Restaurante'),('tienda','Tienda'),('taller','Taller'),('hospedaje','Hospedaje'),('inmobiliaria','Inmobiliaria'),('compraventa','Compraventa')] -%}{%- set d = cfg.get(t, {}).get('dias_gratis', 0) -%}{%- if d > 0 -%}{{ sep.v }}{{ lbl }} {{ d }} días{%- set sep.v = ' · ' -%}{%- endif -%}{%- endfor -%}. Solo pagas cuando estés listo.</p>
+                <p class="font-bold text-amber-700 text-sm">Empieza sin costo inicial</p>
+                <p class="text-amber-600 text-xs mt-0.5">Sin contratos, sin tarjeta. Solo pagas cuando estés listo.</p>
             </div>
         </div>
     </div>
@@ -102,7 +102,6 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Restaurante</span>
-                        {% set d = cfg.get('restaurante', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Menú del día o carta — pedidos en mesa, para llevar y online</p>
                 </div>
@@ -118,7 +117,6 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Tienda Online</span>
-                        {% set d = cfg.get('tienda', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Catálogo, carrito y pedidos a domicilio</p>
                 </div>
@@ -134,7 +132,6 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Taller Automotriz</span>
-                        {% set d = cfg.get('taller', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Órdenes de trabajo, historial de vehículos y más</p>
                 </div>
@@ -150,7 +147,6 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Inmobiliaria</span>
-                        {% set d = cfg.get('inmobiliaria', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-green-100 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Portal de propiedades, bolsa inmobiliaria y leads</p>
                 </div>
@@ -166,7 +162,6 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Compraventa</span>
-                        {% set d = cfg.get('compraventa', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-violet-100 text-violet-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Bolsa de vehículos usados — publica y vende con tu portal propio</p>
                 </div>
@@ -182,7 +177,6 @@
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-0.5">
                         <span class="font-extrabold text-gray-800 text-lg">Hospedaje</span>
-                        {% set d = cfg.get('hospedaje', {}).get('dias_gratis', 0) %}{% if d > 0 %}<span class="bg-amber-100 text-amber-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">{{ d }} días gratis</span>{% else %}<span class="bg-cyan-100 text-cyan-600 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">Nuevo</span>{% endif %}
                     </div>
                     <p class="text-gray-400 text-sm">Hotel, cabaña, hostal o Airbnb — reservas y calendario online</p>
                 </div>
@@ -245,7 +239,9 @@
 
 
 <script>
-const CFG = {{ cfg | tojson }};
+const CFG            = {{ cfg | tojson }};
+const REF_VENDEDOR   = {{ ref_vendedor | tojson }};
+const DIAS_NEGOCIADOS = {{ dias_negociados }};  // días prometidos por el vendedor (0 = no prometió nada)
 </script>
 
 <script>
@@ -373,7 +369,10 @@ function avNomDueno() {
 
 function mTelefono() {
     paso = 'telefono';
-    const dias = (CFG[tipo] && CFG[tipo].dias_gratis) ? CFG[tipo].dias_gratis : 0;
+    const dias = DIAS_NEGOCIADOS > 0 ? DIAS_NEGOCIADOS : ((CFG[tipo] && CFG[tipo].dias_gratis) ? CFG[tipo].dias_gratis : 0);
+    const diasHtml = dias > 0
+        ? `<p class="text-center text-xs text-gray-400 mt-3">🎁 Tienes <strong>${dias} días gratis</strong> para explorar todo — sin tarjeta</p>`
+        : '';
     render(`
         <button onclick="mNombreDueno()" class="text-amber-500 text-sm font-semibold mb-4 inline-block">← Volver</button>
         <p class="text-xs font-bold text-amber-500 uppercase tracking-widest mb-2">Último paso</p>
@@ -386,7 +385,7 @@ function mTelefono() {
             class="w-full bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-bold text-lg transition shadow-lg shadow-amber-100">
             ¡Crear mi negocio! 🚀
         </button>
-        <p class="text-center text-xs text-gray-400 mt-3">🎁 Tienes <strong>${dias} días gratis</strong> para explorar todo — sin tarjeta</p>
+        ${diasHtml}
         <p id="eTel" class="text-red-500 text-sm text-center mt-2 hidden"></p>
     `);
     focus('iTel');
@@ -484,7 +483,7 @@ async function crear() {
             const r    = await fetch('/api/registro-rapido', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ tipo, subtipo, ...datos })
+                body: JSON.stringify({ tipo, subtipo, ...datos, ref_vendedor: REF_VENDEDOR, dias_negociados: DIAS_NEGOCIADOS })
             });
             const data = await r.json();
             if (data.ok) {
@@ -581,12 +580,13 @@ async function enviarOtro() {
 // ─── Modales de éxito ──────────────────────────────────
 
 function mExito(redirect) {
-    const dias = (CFG[tipo] && CFG[tipo].dias_gratis) ? CFG[tipo].dias_gratis : 0;
+    const dias = DIAS_NEGOCIADOS > 0 ? DIAS_NEGOCIADOS : ((CFG[tipo] && CFG[tipo].dias_gratis) ? CFG[tipo].dias_gratis : 0);
+    const diasMsg = dias > 0 ? `<p class="text-gray-500 mb-1">Tienes <strong>${dias} días de prueba gratis</strong> para explorar todo.</p>` : '';
     render(`
         <div class="text-center py-4">
             <div class="text-6xl mb-4">🎉</div>
             <h3 class="text-2xl font-extrabold text-gray-800 mb-2">¡Listo! Tu negocio está creado</h3>
-            <p class="text-gray-500 mb-1">Tienes <strong>${dias} días de prueba gratis</strong> para explorar todo.</p>
+            ${diasMsg}
             <p class="text-gray-400 text-sm mb-6">Entrando a tu panel...</p>
             <div class="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>

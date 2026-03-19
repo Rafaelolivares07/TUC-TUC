@@ -25870,10 +25870,10 @@ def crear_tabla_config_tipologia(conn):
         )
     """)
     for tipo, dias, modo in [
-        ('restaurante', 2, 'uso_real'),
-        ('tienda',      4, 'calendario'),
-        ('taller',      7, 'calendario'),
-        ('hospedaje',   7, 'calendario'),
+        ('restaurante', 0, 'uso_real'),
+        ('tienda',      0, 'calendario'),
+        ('taller',      0, 'calendario'),
+        ('hospedaje',   0, 'calendario'),
         ('inmobiliaria',0, 'calendario'),
         ('compraventa', 0, 'calendario'),
     ]:
@@ -29606,8 +29606,10 @@ def api_tienda_producto_imagen_extra_eliminar(slug, producto_id, imagen_id):
 # ===== LANDING PAGE - PROSPECTOS =====
 
 @app.route('/empieza')
-def landing_empieza():
-    """Landing page para captar prospectos"""
+@app.route('/empieza/<ref_vendedor>')
+def landing_empieza(ref_vendedor=None):
+    """Landing page para captar prospectos. /empieza/<ref> lleva código del vendedor."""
+    dias_negociados = int(request.args.get('dias', 0))
     cfg = {}
     try:
         conn = get_db_connection()
@@ -29621,7 +29623,9 @@ def landing_empieza():
             conn.close()
         except Exception:
             pass
-    return render_template('empieza.html', cfg=cfg)
+    return render_template('empieza.html', cfg=cfg,
+                           ref_vendedor=ref_vendedor or '',
+                           dias_negociados=dias_negociados)
 
 
 @app.route('/api/prospecto', methods=['POST'])
@@ -29678,11 +29682,13 @@ def api_registro_rapido():
     import uuid
     from datetime import date, timedelta
     data = request.get_json()
-    tipo        = data.get('tipo', '').strip()            # 'restaurante' o 'tienda'
-    nombre_neg  = data.get('nombre_negocio', '').strip()
-    subtipo     = data.get('subtipo', 'menu_dia').strip() # solo restaurante: 'carta' o 'menu_dia'
-    nombre_due  = data.get('nombre_dueno', '').strip()
-    telefono    = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    tipo             = data.get('tipo', '').strip()            # 'restaurante' o 'tienda'
+    nombre_neg       = data.get('nombre_negocio', '').strip()
+    subtipo          = data.get('subtipo', 'menu_dia').strip() # solo restaurante: 'carta' o 'menu_dia'
+    nombre_due       = data.get('nombre_dueno', '').strip()
+    telefono         = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    ref_vendedor     = data.get('ref_vendedor', '').strip()[:50]   # código del vendedor que refirió
+    dias_negociados  = int(data.get('dias_negociados', 0))         # días prometidos en negociación
 
     if tipo not in ('restaurante', 'tienda', 'taller'):
         return jsonify({'ok': False, 'error': 'Tipo de negocio inválido'}), 400
@@ -29716,19 +29722,20 @@ def api_registro_rapido():
 
         crear_tabla_config_tipologia(conn)
         cfg_tipo = conn.execute("SELECT dias_gratis FROM config_tipologia WHERE tipo=%s", (tipo,)).fetchone()
-        dias_gratis = cfg_tipo['dias_gratis'] if cfg_tipo else 0
+        dias_gratis = dias_negociados if dias_negociados > 0 else (cfg_tipo['dias_gratis'] if cfg_tipo else 0)
 
         if tipo == 'restaurante':
             crear_tablas_restaurante(conn)
+            conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor TEXT")
             existente = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
             if existente:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Ya existe un restaurante con ese nombre. Prueba con otro nombre.'}), 400
             token_acceso = uuid.uuid4().hex
             conn.execute("""
-                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s)
-            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id))
+                INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)
+            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id, ref_vendedor or None))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -29740,6 +29747,7 @@ def api_registro_rapido():
 
         elif tipo == 'tienda':
             crear_tablas_tienda(conn)
+            conn.execute("ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS ref_vendedor TEXT")
             existente = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
             if existente:
                 conn.close()
@@ -29747,9 +29755,9 @@ def api_registro_rapido():
             token_acceso = uuid.uuid4().hex
             fecha_vence  = date.today() + timedelta(days=dias_gratis)
             conn.execute("""
-                INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, fecha_vence, activo, tercero_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s)
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, fecha_vence, tercero_id))
+                INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, fecha_vence, activo, tercero_id, ref_vendedor)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, fecha_vence, tercero_id, ref_vendedor or None))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id
@@ -29761,15 +29769,16 @@ def api_registro_rapido():
 
         else:  # taller
             crear_tablas_taller(conn)
+            conn.execute("ALTER TABLE negocios ADD COLUMN IF NOT EXISTS ref_vendedor TEXT")
             existente = conn.execute("SELECT id FROM negocios WHERE slug = %s AND tipo = 'taller'", (slug,)).fetchone()
             if existente:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Ya existe un taller con ese nombre. Prueba con otro nombre.'}), 400
             token_acceso = uuid.uuid4().hex
             cur = conn.execute("""
-                INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id)
-                VALUES (%s, %s, 'taller', %s, %s, %s, %s, %s, TRUE, %s) RETURNING id
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id))
+                INSERT INTO negocios (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
+                VALUES (%s, %s, 'taller', %s, %s, %s, %s, %s, TRUE, %s, %s) RETURNING id
+            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id, ref_vendedor or None))
             conn.commit()
             conn.close()
             session['usuario_id'] = tercero_id

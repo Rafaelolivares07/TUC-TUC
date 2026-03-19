@@ -265,33 +265,38 @@ El vendedor no imprime folletos, no lleva laptop, no muestra capturas de pantall
 
 Estos tres requisitos no son detalles logísticos — son parte del perfil. Un vendedor que llega sin datos o con el celular al 10% ya comunicó algo al dueño del negocio antes de abrir la boca.
 
-#### El menú de dolores — entrada al dashboard
+#### El menú de situaciones — entrada al dashboard
 
-Cuando el vendedor abre su dashboard, ve un **menú de dolores**, no un menú de funcionalidades. Cada opción es el nombre del problema, no el nombre de la solución:
+Cuando el vendedor abre su dashboard, ve un **menú de situaciones**, no un menú de funcionalidades. Cada opción describe la realidad del negocio, no el nombre de una solución tecnológica:
 
 - 🧍 El mesero viaja a cocina (restaurante)
 - 📱 Me preguntan por WhatsApp todo el día (restaurante / tienda)
 - 📋 Los clientes no saben qué tengo (tienda / restaurante con carta)
 - 💸 No sé cuánto vendí hoy (cualquier negocio)
-- *(más dolores se agregan conforme se mapean)*
+- *(más situaciones se agregan conforme se mapean)*
 
-El vendedor escucha al cliente, identifica el dolor, y toca ese botón. Lo que sigue es la demo para ese dolor específico — sin improvisar.
+El vendedor escucha al cliente, identifica la situación, y toca ese botón. Lo que sigue es la demo para esa situación específica — sin improvisar.
+
+**Por qué "situación" y no "dolor":** el dueño del negocio no identifica sus problemas como "dolores" — eso es lenguaje de ventas. Hablarle de su *situación* es hablarle de su realidad cotidiana, sin drama ni manipulación implícita. La empatía conecta más que el diagnóstico.
 
 ---
 
-#### Demo Dolor #1 — "El mesero viaja a cocina"
+#### Demo Situación #1 — "El mesero viaja a cocina"
 
-##### Por qué este es el dolor #1
+##### Por qué esta es la situación #1
 
-Es el más universal en restaurantes con meseros. Es visible, medible y cotidiano. El dueño lo ve pasar decenas de veces al día. No requiere explicación — él ya conoce el problema y lo ha normalizado porque no sabía que había solución. Cuando ve la solución, la conexión es inmediata.
+Es la más universal en restaurantes con meseros. Es visible, medible y cotidiana. El dueño la ve pasar decenas de veces al día. No requiere explicación — él ya conoce el problema y lo ha normalizado porque no sabía que había solución. Cuando ve la solución, la conexión es inmediata.
 
 ##### Protocolo de dos celulares
 
-La demo de este dolor requiere **dos celulares en simultáneo** — uno jugando de mesero, otro de cocina — para que el dueño vea el pedido llegar en tiempo real.
+La demo de esta situación requiere **dos celulares en simultáneo** — uno jugando de mesero, otro de cocina — para que el dueño vea el pedido llegar en tiempo real.
 
 **Escenario ideal:** el vendedor lleva su propio celular de respaldo (segundo teléfono o tablet).
 
-**Escenario real (sin segundo celular):** el vendedor le pide un celular prestado al cliente. Antes de llegar, o en el momento, envía el enlace correcto por WhatsApp.
+**Escenario real (sin segundo celular):** el vendedor invita al dueño a participar con su propio celular. Le envía el link directamente por WhatsApp — el dueño lo abre él mismo, en su propio celular, sin que el vendedor lo toque.
+
+**Principio clave — el celular siempre en sus manos:**
+El vendedor nunca le recibe el celular al cliente, nunca le pide que lo entregue, nunca lo manipula por él. Lo que hace es enviar el link por WhatsApp y decirle *"ábralo usted"*. El dueño interactúa con su propio celular, en su propia pantalla, con su propio negocio. Eso es más poderoso que cualquier demostración unilateral — él está dentro, no mirando desde afuera.
 
 El protocolo es:
 
@@ -299,7 +304,7 @@ El protocolo es:
 2. El cliente elige.
 3. El vendedor toca el botón del rol correspondiente en su dashboard.
 4. Se abre WhatsApp con un mensaje ya redactado y el enlace parametrizado para ese rol (mesero o cocina del restaurante del cliente).
-5. El cliente abre ese enlace en su celular. Ve la pantalla de su propio negocio — con su nombre, su carta real.
+5. El vendedor envía — el cliente abre el link en su propio celular. Ve la pantalla de su propio negocio — con su nombre, su carta real. Sin que el vendedor le haya tocado el celular.
 6. El vendedor toma el rol opuesto en su celular.
 
 Los URLs ya son parametrizables en la plataforma. El dashboard del vendedor solo necesita saber: negocio + rol → link correcto.
@@ -345,12 +350,12 @@ Si pregunta cuándo empieza:
 
 | Acción | Lo que pasa |
 |---|---|
-| Toca un dolor | Muestra la secuencia de demo para ese dolor |
+| Toca una situación | Muestra la secuencia de demo para esa situación |
 | Selecciona rol (mesero / cocina) | Prepara el enlace parametrizado con el restaurante del cliente y el rol elegido |
 | Toca "Enviar por WhatsApp" | Abre WhatsApp con mensaje + link listo — el vendedor solo toca enviar |
-| El cliente abre el link | Entra directo al restaurante de su propiedad en el rol correspondiente |
+| El cliente abre el link en su propio celular | Entra directo al restaurante de su propiedad en el rol correspondiente |
 
-**El vendedor no escribe URLs, no explica nada técnico, no improvisa.** El dashboard hace el trabajo logístico. El vendedor solo habla con el dueño.
+**El vendedor no escribe URLs, no explica nada técnico, no improvisa, no toca el celular del cliente.** El dashboard hace el trabajo logístico. El celular del vendedor permanece siempre en sus propias manos — el del cliente, en las del cliente. La demo es una invitación a jugar, no una presentación que alguien le hace al otro.
 
 ---
 

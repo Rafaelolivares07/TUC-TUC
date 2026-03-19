@@ -38,7 +38,9 @@ def notificar_windows(titulo, texto):
         f'Add-Type -AssemblyName System.Windows.Forms;'
         f'[System.Windows.Forms.MessageBox]::Show("{texto}", "{titulo}", '
         f'[System.Windows.Forms.MessageBoxButtons]::OK, '
-        f'[System.Windows.Forms.MessageBoxIcon]::Information)'
+        f'[System.Windows.Forms.MessageBoxIcon]::Information, '
+        f'[System.Windows.Forms.MessageBoxDefaultButton]::Button1, '
+        f'[System.Windows.Forms.MessageBoxOptions]::TopMost)'
     )
     subprocess.Popen(
         ['powershell', '-WindowStyle', 'Hidden', '-NonInteractive', '-Command', ps],

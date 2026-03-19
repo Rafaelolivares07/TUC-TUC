@@ -27112,7 +27112,8 @@ def restaurante_publico(slug):
             if tercero:
                 cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '', 'direccion': tercero['direccion'] or '', 'cliente_id': session['usuario_id']}
 
-        return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='', cliente_data=cliente_data)
+        solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
+        return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='', cliente_data=cliente_data, solo_carta=solo_carta)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -27137,7 +27138,7 @@ def restaurante_cliente(slug, mesa_nombre):
         conn.close()
         if not mesa:
             return "Mesa no encontrada", 404
-        solo_carta = bool(rest.get('solo_carta'))
+        solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
         return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre=mesa_nombre, cliente_data=None, solo_carta=solo_carta)
     except Exception as e:
         return f"Error: {e}", 500

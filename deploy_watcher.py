@@ -46,12 +46,12 @@ def notificar_windows(titulo, texto):
     )
 
 
-def notificar_telegram(commit):
+def notificar_telegram(commit, mensaje_commit):
     """Llama al endpoint del servidor para que mande el Telegram (token está en la BD)."""
     try:
         requests.post(
             f'{APP_URL}/api/webhook/render-deploy',
-            json={'commit': {'id': commit}, 'status': 'live'},
+            json={'commit': {'id': commit, 'message': mensaje_commit}, 'status': 'live'},
             timeout=10
         )
     except Exception as e:
@@ -66,8 +66,18 @@ def main():
     commit = sys.argv[1].strip()
     ahora  = datetime.now().isoformat()
 
+    # Obtener el asunto del commit para incluirlo en las notificaciones
+    try:
+        mensaje_commit = subprocess.check_output(
+            ['git', 'log', '--format=%s', '-1', commit],
+            cwd=Path(__file__).parent,
+            encoding='utf-8'
+        ).strip()
+    except Exception:
+        mensaje_commit = ''
+
     # Escribir estado inicial
-    estado = {'commit': commit, 'estado': 'pendiente', 'iniciado': ahora}
+    estado = {'commit': commit, 'estado': 'pendiente', 'iniciado': ahora, 'mensaje': mensaje_commit}
     ESTADO_FILE.write_text(json.dumps(estado, indent=2), encoding='utf-8')
     print(f'[watcher] Deploy pendiente — commit {commit} | {ahora}')
 
@@ -91,11 +101,12 @@ def main():
                     estado['live_at'] = datetime.now().isoformat()
                     ESTADO_FILE.write_text(json.dumps(estado, indent=2), encoding='utf-8')
 
+                    detalle = f'\n{mensaje_commit}' if mensaje_commit else ''
                     notificar_windows(
-                        'TUC TUC — Deploy Listo ✅',
-                        f'Commit {commit[:7]} ya está en producción.'
+                        'TUC TUC — Deploy Listo',
+                        f'Commit {commit[:7]} en produccion.{detalle}'
                     )
-                    notificar_telegram(commit)
+                    notificar_telegram(commit, mensaje_commit)
                     print(f'[watcher] Deploy confirmado en intento #{intento}. Terminando.')
                     return
             else:

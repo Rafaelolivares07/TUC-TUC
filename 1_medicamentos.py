@@ -40667,13 +40667,16 @@ def api_webhook_render_deploy():
     confirme live y dispare el Telegram via servidor (tiene el token en BD)."""
     try:
         data = request.get_json(silent=True) or {}
-        commit = str(data.get('commit', {}).get('id', 'desconocido'))[:7] \
-                 if isinstance(data.get('commit'), dict) else 'desconocido'
+        commit_data = data.get('commit', {})
+        commit = str(commit_data.get('id', 'desconocido'))[:7] \
+                 if isinstance(commit_data, dict) else 'desconocido'
+        msg_commit = str(commit_data.get('message', '')) if isinstance(commit_data, dict) else ''
         from datetime import datetime as _dt
         hora = _dt.now().strftime('%H:%M:%S')
+        detalle = f"\n<i>{msg_commit}</i>" if msg_commit else ''
         enviar_notificacion_telegram(
             f"✅ <b>Deploy confirmado (PC)</b>\n"
-            f"Commit: <code>{commit}</code>\n"
+            f"Commit: <code>{commit}</code>{detalle}\n"
             f"Hora: {hora}"
         )
         return jsonify({'ok': True})

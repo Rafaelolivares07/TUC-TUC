@@ -40635,11 +40635,21 @@ def _notificar_deploy_startup():
         conn.close()
         if ultimo == _GIT_COMMIT:
             return  # ya notificado, no repetir (evita spam en reinicios por crash)
+        # Obtener asunto del último commit
+        try:
+            import subprocess as _sp2
+            _msg_commit = _sp2.check_output(
+                ['git', 'log', '--format=%s', '-1', 'HEAD'],
+                stderr=_sp2.DEVNULL, cwd=os.path.dirname(__file__)
+            ).decode().strip()
+        except Exception:
+            _msg_commit = ''
         from datetime import datetime as _dt
         hora = _dt.now().strftime('%H:%M:%S')
+        _detalle = f"\n<i>{_msg_commit}</i>" if _msg_commit else ''
         enviar_notificacion_telegram(
             f"✅ <b>Deploy listo</b>\n"
-            f"Commit: <code>{_GIT_COMMIT}</code>\n"
+            f"Commit: <code>{_GIT_COMMIT}</code>{_detalle}\n"
             f"Hora: {hora}"
         )
         conn2 = get_db_connection()

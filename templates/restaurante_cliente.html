@@ -605,7 +605,7 @@ function cartaClienteTotal() {
 const _enviarPedidoOriginal = enviarPedido;
 enviarPedido = async function() {
     // Remoto: verificar registro y tipo de entrega antes de pedir
-    if (MESA === 0 && (!clienteId || !tipoEntrega)) {
+    if (!MESA && (!clienteId || !tipoEntrega)) {
         abrirModalRegistro();
         return;
     }
@@ -722,53 +722,43 @@ function actualizarInfoEntrega() {
 }
 
 // ===== INIT =====
-if (MESA === 0) {
-    // Modo remoto: ir directo al menú
-    // Recuperar datos guardados
-    const saved = localStorage.getItem(`remoto_${SLUG}`);
-    if (saved) {
-        try {
-            const d = JSON.parse(saved);
-            if (!nombreCliente && d.nombre) nombreCliente = d.nombre;
-            if (!telefonoCliente && d.telefono) telefonoCliente = d.telefono;
-            if (!direccionCliente && d.direccion) direccionCliente = d.direccion;
-            if (!tipoEntrega && d.tipoEntrega) tipoEntrega = d.tipoEntrega;
-            if (!clienteId && d.clienteId) clienteId = d.clienteId;
-        } catch(e) {}
-    }
-    // Datos del servidor tienen prioridad (sesión activa)
-    if (CLIENTE_DATA) {
-        nombreCliente = CLIENTE_DATA.nombre;
-        telefonoCliente = CLIENTE_DATA.telefono;
-        direccionCliente = CLIENTE_DATA.direccion;
-        clienteId = CLIENTE_DATA.cliente_id;
-    }
-
-    document.getElementById('paso-nombre').classList.add('hidden');
-    document.getElementById('seccion-menu').classList.remove('hidden');
-    const saludo = document.getElementById('saludo-menu');
-    if (nombreCliente && saludo) {
-        saludo.innerHTML = `Hola <span class="font-bold text-amber-700">${nombreCliente}</span>, ¿qué vas a pedir?`;
-    } else if (saludo) {
-        saludo.textContent = '¿Qué te gustaría pedir?';
-    }
-    actualizarInfoEntrega();
-    if (TIPO_REST === 'carta') {
-        cargarCartaCliente();
-    } else {
-        cargarMenuHoy();
-    }
-} else {
-    // Modo mesa: flujo original con nombre
+// Siempre ir directo al menú — datos se recogen al confirmar pedido
+// Recuperar datos guardados en localStorage
+const savedRemoto = localStorage.getItem(`remoto_${SLUG}`);
+if (savedRemoto) {
+    try {
+        const d = JSON.parse(savedRemoto);
+        if (!nombreCliente && d.nombre) nombreCliente = d.nombre;
+        if (!telefonoCliente && d.telefono) telefonoCliente = d.telefono;
+        if (!direccionCliente && d.direccion) direccionCliente = d.direccion;
+        if (!tipoEntrega && d.tipoEntrega) tipoEntrega = d.tipoEntrega;
+        if (!clienteId && d.clienteId) clienteId = d.clienteId;
+    } catch(e) {}
+}
+if (!nombreCliente) {
     const nombreGuardado = localStorage.getItem(STORAGE_KEY);
-    if (nombreGuardado) {
-        nombreCliente = nombreGuardado;
-        document.getElementById('input-nombre').value = nombreGuardado;
-        document.getElementById('saludo-texto').innerHTML = `¡Hola de nuevo, <strong>${nombreGuardado}</strong>!`;
-        mostrarMenu();
-    } else {
-        document.getElementById('input-nombre').focus();
-    }
+    if (nombreGuardado) nombreCliente = nombreGuardado;
+}
+// Datos del servidor tienen prioridad (sesión activa)
+if (CLIENTE_DATA) {
+    nombreCliente = CLIENTE_DATA.nombre;
+    telefonoCliente = CLIENTE_DATA.telefono;
+    direccionCliente = CLIENTE_DATA.direccion;
+    clienteId = CLIENTE_DATA.cliente_id;
+}
+document.getElementById('paso-nombre').classList.add('hidden');
+document.getElementById('seccion-menu').classList.remove('hidden');
+const saludoEl = document.getElementById('saludo-menu');
+if (nombreCliente && saludoEl) {
+    saludoEl.innerHTML = `Hola <span class="font-bold text-amber-700">${nombreCliente}</span>, ¿qué vas a pedir?`;
+} else if (saludoEl) {
+    saludoEl.textContent = '¿Qué te gustaría pedir?';
+}
+actualizarInfoEntrega();
+if (TIPO_REST === 'carta') {
+    cargarCartaCliente();
+} else {
+    cargarMenuHoy();
 }
 
 // Polling mis pedidos cada 10s

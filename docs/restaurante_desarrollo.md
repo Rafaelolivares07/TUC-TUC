@@ -103,6 +103,7 @@ POST /api/restaurante/<slug>/cobrar/<mesa_id>
 | POST | `/api/restaurante/<slug>/opcion/<id>/imagen` | Subir imagen |
 | POST | `/api/restaurante/<slug>/imagen-header` | Imagen de portada |
 | POST | `/api/restaurante/<slug>/tema` | Modo claro/oscuro |
+| POST | `/api/restaurante/<slug>/toggle-solo-carta` | Toggle solo carta en QR de mesas |
 | POST | `/api/restaurante/<slug>/pedido` | Crear pedido desde mesa |
 | GET | `/api/restaurante/<slug>/pedidos` | Listar pedidos activos |
 | POST | `/api/restaurante/<slug>/pedido/<id>/listo` | Marcar listo |
@@ -140,6 +141,7 @@ Devuelve imagen 1200×630 con la foto del plato y blur de fondo para preview soc
 - El dueño accede vía **link mágico** con token en URL (`/r/acceso/<token>`)
 - No requiere usuario/contraseña — el token autentica directamente
 - El PIN de caja es opcional, se activa/desactiva desde `/api/restaurante/<slug>/toggle-pin`
+- **Toggle solo carta:** `solo_carta BOOLEAN DEFAULT FALSE` en `restaurantes`. Cuando activo, el QR de mesa (`/r/<slug>/mesa/<nombre>`) muestra la carta sin controles de carrito — `SOLO_CARTA` JS oculta botones +/-, `#sec-pedir`, `#sec-notas`. La URL pública nunca se afecta.
 - El acceso admin general (`/admin/restaurante`) requiere `session['rol'] == 'Administrador'`
 
 ---

@@ -20,12 +20,10 @@ Allí ves el menú del día completo: plato principal, sopa, bebida, precio. No 
 
 ### Pedir desde la mesa
 
-Si el restaurante habilitó pedidos en mesa, cada mesa tiene un código QR. Al escanearlo desde el celular:
+Cada mesa tiene un código QR. Al escanearlo desde el celular ves el menú del restaurante. Dependiendo de cómo lo tenga configurado el dueño:
 
-1. Ves el menú del día de esa mesa
-2. Seleccionás lo que querés pedir
-3. Confirmás — el pedido llega directamente a la cocina
-4. Cuando esté listo, te avisan
+- **Con pedidos habilitados:** seleccionás lo que querés, confirmás, y el pedido llega directamente a la cocina.
+- **Solo carta:** ves el menú completo con fotos y precios, pero el pedido lo toma el mesero. (El dueño elige este modo si prefiere que el mesero mantenga el contacto con el cliente.)
 
 No necesitás registrarte ni instalar nada.
 
@@ -76,6 +74,15 @@ Desde la sección **Pedidos** ves todos los pedidos activos agrupados por mesa. 
 - Estado: recibido / en cocina / listo
 
 Podés marcar cada pedido como "Listo" cuando la cocina lo prepara.
+
+### Configurar modo de mesas — solo carta o con pedidos
+
+En el panel de administración, sección **Mesas**, encontrás el toggle **"Solo carta en QR de mesas"**:
+
+- **Desactivado (predeterminado):** el cliente puede pedir directamente desde el QR. El pedido llega solo a cocina — el mesero solo entrega.
+- **Activado:** el cliente ve el menú completo (fotos, precios, categorías) pero no puede hacer el pedido. El mesero toma la orden en persona.
+
+> **Este toggle solo afecta el QR de mesas.** El enlace público del restaurante (para domicilios y pedidos desde fuera) siempre permite pedir, sin importar esta configuración.
 
 ### Cobrar una mesa
 

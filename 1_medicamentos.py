@@ -40613,6 +40613,49 @@ def _leer_git_commit():
 
 _GIT_COMMIT = _leer_git_commit()
 
+def _notificar_deploy_startup():
+    """Al arrancar el app, si el commit es nuevo, manda Telegram.
+    Así cada deploy dispara la notificación sin necesitar webhook de Render."""
+    try:
+        if _GIT_COMMIT == 'unknown':
+            return
+        conn = get_db_connection()
+        # Migración: asegurar que la columna existe
+        try:
+            conn.execute(
+                "ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS ultimo_commit_notificado VARCHAR(20)"
+            )
+            conn.commit()
+        except Exception:
+            pass
+        cfg = conn.execute(
+            "SELECT ultimo_commit_notificado FROM CONFIGURACION_SISTEMA WHERE id=1"
+        ).fetchone()
+        ultimo = cfg['ultimo_commit_notificado'] if cfg else None
+        conn.close()
+        if ultimo == _GIT_COMMIT:
+            return  # ya notificado, no repetir (evita spam en reinicios por crash)
+        from datetime import datetime as _dt
+        hora = _dt.now().strftime('%H:%M:%S')
+        enviar_notificacion_telegram(
+            f"✅ <b>Deploy listo</b>\n"
+            f"Commit: <code>{_GIT_COMMIT}</code>\n"
+            f"Hora: {hora}"
+        )
+        conn2 = get_db_connection()
+        conn2.execute(
+            "UPDATE CONFIGURACION_SISTEMA SET ultimo_commit_notificado=%s WHERE id=1",
+            (_GIT_COMMIT,)
+        )
+        conn2.commit()
+        conn2.close()
+    except Exception as e:
+        print(f'[deploy-notif] Error: {e}')
+
+# Lanzar en thread para no bloquear el arranque de Flask
+import threading as _threading
+_threading.Thread(target=_notificar_deploy_startup, daemon=True).start()
+
 @app.route('/api/version')
 def api_version():
     """Devuelve el commit actualmente desplegado en producción."""
@@ -40620,15 +40663,16 @@ def api_version():
 
 @app.route('/api/webhook/render-deploy', methods=['POST'])
 def api_webhook_render_deploy():
-    """Render llama aquí cuando el deploy termina exitosamente.
-    Manda notificación Telegram al admin."""
+    """Endpoint auxiliar — permite que el deploy_watcher.py del PC
+    confirme live y dispare el Telegram via servidor (tiene el token en BD)."""
     try:
         data = request.get_json(silent=True) or {}
-        commit = str(data.get('commit', {}).get('id', 'desconocido'))[:7] if isinstance(data.get('commit'), dict) else 'desconocido'
+        commit = str(data.get('commit', {}).get('id', 'desconocido'))[:7] \
+                 if isinstance(data.get('commit'), dict) else 'desconocido'
         from datetime import datetime as _dt
         hora = _dt.now().strftime('%H:%M:%S')
         enviar_notificacion_telegram(
-            f"✅ <b>Deploy listo</b>\n"
+            f"✅ <b>Deploy confirmado (PC)</b>\n"
             f"Commit: <code>{commit}</code>\n"
             f"Hora: {hora}"
         )

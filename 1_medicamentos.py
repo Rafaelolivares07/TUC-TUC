@@ -41033,8 +41033,8 @@ function enviarRol(rol) {
 // ── Init ───────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   // Datos pre-cargados desde la sesión del servidor (si el usuario ya estaba logueado)
-  const srvNombre = "{{ vd_nombre }}";
-  const srvTel    = "{{ vd_telefono }}";
+  const srvNombre = {{ vd_nombre | tojson }};
+  const srvTel    = {{ vd_telefono | tojson }};
 
   // Si el servidor ya conoce al usuario (teléfono incluido), guardamos y saltamos el modal
   if (srvTel && srvTel.length >= 10) {

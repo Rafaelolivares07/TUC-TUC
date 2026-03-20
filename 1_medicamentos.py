@@ -40958,18 +40958,31 @@ def vendedor_dashboard():
 </div>
 
 <!-- ════ MODAL ENVIAR WA A CONTACTO ════ -->
-<div id="modal-wa-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center">
-  <div class="bg-white rounded-3xl w-80 p-5 space-y-4 shadow-2xl">
+<div id="modal-wa-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-4">
+  <div class="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl">
     <div class="flex items-center justify-between">
-      <h2 class="font-extrabold text-gray-800 text-base">Enviar por WhatsApp</h2>
+      <div>
+        <h2 class="font-extrabold text-gray-800 text-base">WhatsApp</h2>
+        <p class="text-xs text-gray-500" id="txt-wa-destinatario">—</p>
+      </div>
       <button onclick="document.getElementById('modal-wa-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
     </div>
-    <p class="text-sm text-gray-600" id="txt-wa-destinatario">—</p>
-    <textarea id="inp-wa-mensaje" rows="3" placeholder="Mensaje..."
-              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
+    <!-- Mensajes rápidos -->
+    <div class="flex flex-wrap gap-1.5">
+      <button onclick="rellenarMsgWa('Hola, te habla Rafael de TUC TUC. ¿Cuándo podemos hablar un momento?')"
+              class="text-xs bg-gray-100 hover:bg-green-100 text-gray-700 rounded-full px-2.5 py-1 transition">📅 Agendar</button>
+      <button onclick="rellenarMsgWa('Hola, quería hacer seguimiento a nuestra conversación sobre TUC TUC. ¿Cómo te fue con la prueba?')"
+              class="text-xs bg-gray-100 hover:bg-green-100 text-gray-700 rounded-full px-2.5 py-1 transition">🔄 Seguimiento</button>
+      <button onclick="rellenarMsgWa('Hola, te comparto el enlace de tu página en TUC TUC para que lo pruebes con tus clientes: ')"
+              class="text-xs bg-gray-100 hover:bg-green-100 text-gray-700 rounded-full px-2.5 py-1 transition">🔗 Compartir enlace</button>
+    </div>
+    <textarea id="inp-wa-mensaje" rows="3" placeholder="Escribe el mensaje o elige uno arriba..."
+              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-green-400"
+              onkeydown="if(event.ctrlKey&&event.key==='Enter') enviarWaContacto()"></textarea>
+    <p class="text-xs text-gray-400 text-right">Ctrl+Enter para enviar</p>
     <button onclick="enviarWaContacto()"
-            class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl hover:bg-green-700 transition">
-      Abrir WhatsApp
+            class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl hover:bg-green-700 transition active:scale-95">
+      Abrir en WhatsApp →
     </button>
   </div>
 </div>
@@ -41391,7 +41404,7 @@ function renderContactos(lista) {
         ${c.telefono ? `
         <button onclick="llamar('${c.telefono}')" title="Llamar"
                 class="w-8 h-8 rounded-full bg-gray-100 hover:bg-green-100 flex items-center justify-center text-base transition">📞</button>
-        <button onclick="abrirWa('${c.telefono}')" title="WhatsApp"
+        <button onclick="abrirWa('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono}')" title="WhatsApp"
                 class="w-8 h-8 rounded-full bg-[#25D366] hover:bg-[#1ebe5d] flex items-center justify-center transition" style="background:#25D366">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
         </button>
@@ -41421,13 +41434,19 @@ function llamar(tel) {
   window.location.href = 'tel:' + tel.replace(/\\s/g,'');
 }
 
-function abrirWa(tel) {
-  const num = tel.replace(/[^\\d+]/g,'');
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const url = isMobile
-    ? 'https://wa.me/' + num
-    : 'https://web.whatsapp.com/send?phone=' + num;
-  window.open(url, '_blank');
+function abrirWa(nombre, tel) {
+  document.getElementById('txt-wa-destinatario').textContent = nombre || tel;
+  document.getElementById('modal-wa-contacto').dataset.tel = tel;
+  document.getElementById('inp-wa-mensaje').value = '';
+  document.getElementById('modal-wa-contacto').classList.remove('hidden');
+  setTimeout(() => document.getElementById('inp-wa-mensaje').focus(), 100);
+}
+
+function rellenarMsgWa(texto) {
+  const inp = document.getElementById('inp-wa-mensaje');
+  inp.value = texto;
+  inp.focus();
+  inp.setSelectionRange(texto.length, texto.length);
 }
 
 function abrirTelegram(tel) {
@@ -41446,8 +41465,14 @@ function enviarWaContacto() {
   const tel = document.getElementById('modal-wa-contacto').dataset.tel || '';
   const msg = document.getElementById('inp-wa-mensaje').value.trim();
   const num = tel.replace(/[^\\d+]/g,'');
-  const url = 'https://wa.me/' + num + (msg ? '?text=' + encodeURIComponent(msg) : '');
-  window.open(url, '_blank');
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  let url;
+  if (isMobile) {
+    url = 'https://wa.me/' + num + (msg ? '?text=' + encodeURIComponent(msg) : '');
+  } else {
+    url = 'https://web.whatsapp.com/send?phone=' + num + (msg ? '&text=' + encodeURIComponent(msg) : '');
+  }
+  window.open(url, 'wapp_tab');  // reutiliza siempre la misma pestaña
   document.getElementById('modal-wa-contacto').classList.add('hidden');
 }
 

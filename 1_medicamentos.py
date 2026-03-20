@@ -40557,6 +40557,88 @@ def api_vendedor_contactos_eliminar(cid):
 
 # ── FIN CONTACTOS VENDEDOR ────────────────────────────────────────────────────
 
+# ── PLANTILLAS CRM DEL VENDEDOR ───────────────────────────────────────────────
+
+def _crear_tabla_plantillas_crm(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS plantillas_crm (
+            id         SERIAL PRIMARY KEY,
+            tercero_id INTEGER NOT NULL,
+            titulo     VARCHAR(80) NOT NULL,
+            cuerpo     TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
+
+@app.route('/api/vendedor/plantillas')
+def api_vendedor_plantillas_lista():
+    tel = request.args.get('tel', '').strip()
+    tid = _tercero_id_por_tel(tel) if tel else None
+    if not tid:
+        return jsonify({'ok': True, 'plantillas': []})
+    try:
+        conn = get_db_connection()
+        _crear_tabla_plantillas_crm(conn)
+        rows = conn.execute(
+            "SELECT id, titulo, cuerpo FROM plantillas_crm WHERE tercero_id = %s ORDER BY id",
+            (tid,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'plantillas': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/plantillas', methods=['POST'])
+def api_vendedor_plantillas_crear():
+    data = request.get_json() or {}
+    tel    = (data.get('tel') or '').strip()
+    titulo = (data.get('titulo') or '').strip()[:80]
+    cuerpo = (data.get('cuerpo') or '').strip()
+    if not tel or not titulo or not cuerpo:
+        return jsonify({'ok': False, 'error': 'tel, titulo y cuerpo requeridos'}), 400
+    tid = _tercero_id_por_tel(tel)
+    if not tid:
+        return jsonify({'ok': False, 'error': 'Vendedor no encontrado'}), 404
+    try:
+        conn = get_db_connection()
+        _crear_tabla_plantillas_crm(conn)
+        nueva = conn.execute(
+            "INSERT INTO plantillas_crm (tercero_id, titulo, cuerpo) VALUES (%s,%s,%s) RETURNING id",
+            (tid, titulo, cuerpo)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': nueva[0], 'titulo': titulo, 'cuerpo': cuerpo})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/plantillas/<int:pid>', methods=['DELETE'])
+def api_vendedor_plantillas_eliminar(pid):
+    tel = request.args.get('tel', '').strip()
+    tid = _tercero_id_por_tel(tel) if tel else None
+    if not tid:
+        return jsonify({'ok': False, 'error': 'tel requerido'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM plantillas_crm WHERE id = %s AND tercero_id = %s", (pid, tid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ── FIN PLANTILLAS CRM ────────────────────────────────────────────────────────
+
 
 @app.route('/vendedor')
 def vendedor_dashboard():
@@ -40967,14 +41049,20 @@ def vendedor_dashboard():
       </div>
       <button onclick="document.getElementById('modal-wa-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
     </div>
-    <!-- Mensajes rápidos -->
-    <div class="flex flex-wrap gap-1.5">
-      <button onclick="rellenarMsgWa('Hola, te habla Rafael de TUC TUC. ¿Cuándo podemos hablar un momento?')"
-              class="text-xs bg-gray-100 hover:bg-green-100 text-gray-700 rounded-full px-2.5 py-1 transition">📅 Agendar</button>
-      <button onclick="rellenarMsgWa('Hola, quería hacer seguimiento a nuestra conversación sobre TUC TUC. ¿Cómo te fue con la prueba?')"
-              class="text-xs bg-gray-100 hover:bg-green-100 text-gray-700 rounded-full px-2.5 py-1 transition">🔄 Seguimiento</button>
-      <button onclick="rellenarMsgWa('Hola, te comparto el enlace de tu página en TUC TUC para que lo pruebes con tus clientes: ')"
-              class="text-xs bg-gray-100 hover:bg-green-100 text-gray-700 rounded-full px-2.5 py-1 transition">🔗 Compartir enlace</button>
+    <!-- Mensajes rápidos del vendedor -->
+    <div id="plantillas-wa" class="flex flex-wrap gap-1.5 min-h-[28px]">
+      <span class="text-xs text-gray-400 italic">Cargando...</span>
+    </div>
+    <!-- Formulario nueva plantilla (oculto) -->
+    <div id="form-nueva-plt" class="hidden space-y-2 bg-gray-50 border border-gray-200 rounded-xl p-3">
+      <input id="inp-plt-titulo" type="text" placeholder="Nombre del mensaje (ej: Seguimiento)"
+             class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400">
+      <textarea id="inp-plt-cuerpo" rows="2" placeholder="Texto del mensaje..."
+                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
+      <div class="flex gap-2">
+        <button onclick="guardarPlantilla()" class="flex-1 bg-indigo-600 text-white text-xs font-bold py-1.5 rounded-lg hover:bg-indigo-700 transition">Guardar</button>
+        <button onclick="cancelarNuevaPlantilla()" class="text-xs text-gray-400 underline px-2">Cancelar</button>
+      </div>
     </div>
     <textarea id="inp-wa-mensaje" rows="3" placeholder="Escribe el mensaje o elige uno arriba..."
               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-green-400"
@@ -41438,7 +41526,9 @@ function abrirWa(nombre, tel) {
   document.getElementById('txt-wa-destinatario').textContent = nombre || tel;
   document.getElementById('modal-wa-contacto').dataset.tel = tel;
   document.getElementById('inp-wa-mensaje').value = '';
+  document.getElementById('form-nueva-plt').classList.add('hidden');
   document.getElementById('modal-wa-contacto').classList.remove('hidden');
+  cargarPlantillas();
   setTimeout(() => document.getElementById('inp-wa-mensaje').focus(), 100);
 }
 
@@ -41447,6 +41537,68 @@ function rellenarMsgWa(texto) {
   inp.value = texto;
   inp.focus();
   inp.setSelectionRange(texto.length, texto.length);
+}
+
+// ── PLANTILLAS CRM ─────────────────────────────────────────────────────────
+
+async function cargarPlantillas() {
+  const tel = telVendedor();
+  const zona = document.getElementById('plantillas-wa');
+  if (!tel) { renderPlantillas([], zona); return; }
+  try {
+    const r = await fetch('/api/vendedor/plantillas?tel=' + encodeURIComponent(tel));
+    const d = await r.json();
+    renderPlantillas(d.ok ? d.plantillas : [], zona);
+  } catch { renderPlantillas([], zona); }
+}
+
+function renderPlantillas(lista, zona) {
+  const chips = lista.map(p => `
+    <span class="inline-flex items-center gap-1 bg-gray-100 hover:bg-green-50 text-gray-700 rounded-full pl-2.5 pr-1 py-1 text-xs transition">
+      <button onclick="rellenarMsgWa(${JSON.stringify(p.cuerpo)})" class="hover:text-green-700 font-medium">${p.titulo}</button>
+      <button onclick="eliminarPlantilla(${p.id})" class="text-gray-300 hover:text-red-500 font-bold px-0.5">✕</button>
+    </span>
+  `).join('');
+  zona.innerHTML = chips + `
+    <button onclick="abrirNuevaPlantilla()"
+            class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded-full px-2.5 py-1 transition font-bold">
+      ＋ Nuevo
+    </button>`;
+}
+
+function abrirNuevaPlantilla() {
+  document.getElementById('inp-plt-titulo').value = '';
+  document.getElementById('inp-plt-cuerpo').value = '';
+  document.getElementById('form-nueva-plt').classList.remove('hidden');
+  document.getElementById('inp-plt-titulo').focus();
+}
+
+function cancelarNuevaPlantilla() {
+  document.getElementById('form-nueva-plt').classList.add('hidden');
+}
+
+async function guardarPlantilla() {
+  const tel    = telVendedor();
+  const titulo = document.getElementById('inp-plt-titulo').value.trim();
+  const cuerpo = document.getElementById('inp-plt-cuerpo').value.trim();
+  if (!titulo || !cuerpo) return;
+  try {
+    const r = await fetch('/api/vendedor/plantillas', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tel, titulo, cuerpo})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('form-nueva-plt').classList.add('hidden');
+      cargarPlantillas();
+    }
+  } catch {}
+}
+
+async function eliminarPlantilla(id) {
+  const tel = telVendedor();
+  await fetch('/api/vendedor/plantillas/' + id + '?tel=' + encodeURIComponent(tel), {method: 'DELETE'});
+  cargarPlantillas();
 }
 
 function abrirTelegram(tel) {

@@ -40509,6 +40509,33 @@ def api_vendedor_contactos_importar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/vendedor/contactos/reclamar', methods=['POST'])
+def api_vendedor_contactos_reclamar():
+    """Asigna tercero_id a todos los contactos que aún tienen tercero_id=NULL.
+    Útil para migrar contactos importados antes de que existiera este campo."""
+    data = request.get_json() or {}
+    tel = (data.get('tel') or '').strip()
+    if not tel:
+        return jsonify({'ok': False, 'error': 'tel requerido'}), 400
+    tid = _tercero_id_por_tel(tel)
+    if not tid:
+        return jsonify({'ok': False, 'error': 'Vendedor no encontrado'}), 404
+    try:
+        conn = get_db_connection()
+        result = conn.execute(
+            "UPDATE contactos SET tercero_id = %s WHERE tercero_id IS NULL",
+            (tid,)
+        )
+        actualizados = result.rowcount
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'actualizados': actualizados})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/vendedor/contactos/<int:cid>', methods=['DELETE'])
 def api_vendedor_contactos_eliminar(cid):
     """Elimina un contacto del vendedor (solo si le pertenece)."""
@@ -40787,6 +40814,13 @@ def vendedor_dashboard():
     </div>
     <div id="lista-contactos" class="space-y-2">
       <p class="text-xs text-gray-400 text-center py-4" id="txt-contactos-vacio">Cargando...</p>
+    </div>
+    <!-- Botón de migración: vincula contactos importados antes del nuevo sistema -->
+    <div id="sec-reclamar" class="hidden text-center pt-1">
+      <button onclick="reclamarContactos()"
+              class="text-xs text-indigo-600 underline">
+        ¿Tenés contactos importados que no aparecen? Vincularlos a tu cuenta
+      </button>
     </div>
   </div>
 
@@ -41340,8 +41374,10 @@ function renderContactos(lista) {
     el.innerHTML = '';
     vacio.textContent = 'Sin contactos todavía — importá o agregá uno.';
     vacio.classList.remove('hidden');
+    document.getElementById('sec-reclamar').classList.remove('hidden');
     return;
   }
+  document.getElementById('sec-reclamar').classList.add('hidden');
   vacio.classList.add('hidden');
   el.innerHTML = lista.map(c => `
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-center gap-3">
@@ -41464,6 +41500,26 @@ async function _subirContactos(lista) {
       return false;
     }
   } catch { return false; }
+}
+
+async function reclamarContactos() {
+  const tel = telVendedor();
+  if (!tel) return;
+  const btn = document.querySelector('#sec-reclamar button');
+  btn.textContent = 'Vinculando...'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/vendedor/contactos/reclamar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tel})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = d.actualizados + ' contacto(s) vinculados.';
+      await cargarContactos();
+    } else {
+      btn.textContent = d.error || 'Error.'; btn.disabled = false;
+    }
+  } catch { btn.textContent = 'Error de red.'; btn.disabled = false; }
 }
 
 // ── VCF ────────────────────────────────────────────────────────────────────────

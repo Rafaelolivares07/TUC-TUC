@@ -40422,6 +40422,115 @@ def api_vendedor_buscar_negocios():
     return jsonify(resultados[:10])
 
 
+# ── CONTACTOS DEL VENDEDOR ────────────────────────────────────────────────────
+
+def _tercero_id_por_tel(tel):
+    """Devuelve el id de terceros dado un teléfono, o None si no existe."""
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (tel,)
+        ).fetchone()
+        conn.close()
+        return row['id'] if row else None
+    except Exception:
+        return None
+
+
+@app.route('/api/vendedor/contactos')
+def api_vendedor_contactos_lista():
+    """Lista los contactos del vendedor identificado por su teléfono."""
+    tel = request.args.get('tel', '').strip()
+    if not tel:
+        return jsonify({'ok': False, 'error': 'tel requerido'}), 400
+    tid = _tercero_id_por_tel(tel)
+    if not tid:
+        return jsonify({'ok': True, 'contactos': []})
+    try:
+        conn = get_db_connection()
+        crear_tablas_contactos(conn)
+        rows = conn.execute(
+            """SELECT id, nombre, telefono, created_at::text
+               FROM contactos
+               WHERE tercero_id = %s
+               ORDER BY nombre NULLS LAST""",
+            (tid,)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'contactos': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/contactos/importar', methods=['POST'])
+def api_vendedor_contactos_importar():
+    """Importa lista de contactos para el vendedor identificado por su teléfono."""
+    data = request.get_json()
+    tel_vendedor = (data.get('tel') or '').strip()
+    lista = data.get('contactos', [])
+    if not tel_vendedor or not lista:
+        return jsonify({'ok': False, 'error': 'tel y contactos requeridos'}), 400
+    tid = _tercero_id_por_tel(tel_vendedor)
+    if not tid:
+        return jsonify({'ok': False, 'error': 'Vendedor no encontrado — registrate primero'}), 404
+    try:
+        conn = get_db_connection()
+        crear_tablas_contactos(conn)
+        insertados = 0
+        omitidos = 0
+        for c in lista:
+            nombre = (c.get('nombre') or '').strip()
+            telefono = (c.get('telefono') or '').strip()
+            if telefono.startswith('00'):
+                telefono = '+' + telefono[2:]
+            if not (nombre or telefono):
+                continue
+            if telefono:
+                existe = conn.execute(
+                    "SELECT 1 FROM contactos WHERE tercero_id = %s AND telefono = %s",
+                    (tid, telefono)
+                ).fetchone()
+                if existe:
+                    omitidos += 1
+                    continue
+            conn.execute(
+                "INSERT INTO contactos (negocio_id, nombre, telefono, tercero_id) VALUES (%s, %s, %s, %s)",
+                (tid, nombre or None, telefono or None, tid)
+            )
+            insertados += 1
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'insertados': insertados, 'omitidos': omitidos})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/contactos/<int:cid>', methods=['DELETE'])
+def api_vendedor_contactos_eliminar(cid):
+    """Elimina un contacto del vendedor (solo si le pertenece)."""
+    tel = request.args.get('tel', '').strip()
+    tid = _tercero_id_por_tel(tel) if tel else None
+    try:
+        conn = get_db_connection()
+        if tid:
+            conn.execute("DELETE FROM contactos WHERE id = %s AND tercero_id = %s", (cid, tid))
+        else:
+            conn.execute("DELETE FROM contactos WHERE id = %s", (cid,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ── FIN CONTACTOS VENDEDOR ────────────────────────────────────────────────────
+
+
 @app.route('/vendedor')
 def vendedor_dashboard():
     """Dashboard público para vendedores externos — agenda + demo launcher."""
@@ -40655,6 +40764,32 @@ def vendedor_dashboard():
     <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real.</p>
   </div>
 
+  <!-- ════ MIS CONTACTOS ════ -->
+  <div>
+    <div class="flex items-center justify-between mb-2 px-1">
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis contactos</p>
+      <div class="flex gap-2">
+        <button onclick="abrirImportarContactos()"
+                class="bg-gray-100 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-gray-200 transition">
+          Importar
+        </button>
+        <button onclick="abrirAgregarContacto()"
+                class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow hover:bg-indigo-700 transition active:scale-95">
+          + Agregar
+        </button>
+      </div>
+    </div>
+    <!-- Buscador rápido -->
+    <div class="relative mb-2">
+      <input id="inp-buscar-contacto" type="search" placeholder="Buscar en mis contactos..."
+             oninput="filtrarContactos(this.value)"
+             class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 bg-white">
+    </div>
+    <div id="lista-contactos" class="space-y-2">
+      <p class="text-xs text-gray-400 text-center py-4" id="txt-contactos-vacio">Cargando...</p>
+    </div>
+  </div>
+
 </div>
 <p class="text-center text-xs text-gray-400 py-4">TUC TUC · Kit del Vendedor · 2026</p>
 
@@ -40732,6 +40867,80 @@ def vendedor_dashboard():
   </div>
 </div>
 
+<!-- ════ MODAL IMPORTAR CONTACTOS ════ -->
+<div id="modal-importar-contactos" class="fixed inset-0 bg-black/60 z-50 hidden flex items-end justify-center">
+  <div class="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h2 class="font-extrabold text-gray-800 text-base">Importar contactos</h2>
+      <button onclick="document.getElementById('modal-importar-contactos').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <!-- Opciones -->
+    <div class="grid grid-cols-2 gap-3">
+      <button onclick="importarVcf()" class="flex flex-col items-center gap-1 border-2 border-gray-200 rounded-2xl p-3 hover:border-indigo-400 transition">
+        <span class="text-2xl">📇</span>
+        <span class="text-xs font-bold text-gray-700">Archivo VCF</span>
+        <span class="text-xs text-gray-400">Contactos del celular</span>
+      </button>
+      <button onclick="importarTelegram()" class="flex flex-col items-center gap-1 border-2 border-gray-200 rounded-2xl p-3 hover:border-indigo-400 transition">
+        <span class="text-2xl">✈️</span>
+        <span class="text-xs font-bold text-gray-700">Telegram</span>
+        <span class="text-xs text-gray-400">HTML o JSON export</span>
+      </button>
+      <button id="btn-contact-picker" onclick="importarContactPicker()" class="flex flex-col items-center gap-1 border-2 border-gray-200 rounded-2xl p-3 hover:border-indigo-400 transition">
+        <span class="text-2xl">📱</span>
+        <span class="text-xs font-bold text-gray-700">Seleccionar</span>
+        <span class="text-xs text-gray-400">Android Chrome</span>
+      </button>
+      <button onclick="document.getElementById('modal-importar-contactos').classList.add('hidden'); abrirAgregarContacto()" class="flex flex-col items-center gap-1 border-2 border-gray-200 rounded-2xl p-3 hover:border-indigo-400 transition">
+        <span class="text-2xl">✏️</span>
+        <span class="text-xs font-bold text-gray-700">Manual</span>
+        <span class="text-xs text-gray-400">Uno a la vez</span>
+      </button>
+    </div>
+    <!-- inputs ocultos -->
+    <input id="inp-vcf"      type="file" accept=".vcf"       class="hidden" onchange="procesarVcf(this)">
+    <input id="inp-telegram" type="file" accept=".html,.json" class="hidden" onchange="procesarTelegram(this)">
+    <!-- resultado -->
+    <div id="txt-importar-resultado" class="hidden text-xs text-center font-bold rounded-xl px-3 py-2"></div>
+  </div>
+</div>
+
+<!-- ════ MODAL AGREGAR CONTACTO ════ -->
+<div id="modal-agregar-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-end justify-center">
+  <div class="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-8 space-y-4">
+    <div class="flex items-center justify-between">
+      <h2 class="font-extrabold text-gray-800 text-base">Agregar contacto</h2>
+      <button onclick="document.getElementById('modal-agregar-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <input id="inp-ac-nombre" type="text" placeholder="Nombre completo"
+           class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+    <input id="inp-ac-tel" type="tel" placeholder="Celular (ej: 3001234567)"
+           class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+    <div id="txt-ac-error" class="hidden text-xs text-red-500 font-bold"></div>
+    <button onclick="guardarContacto()"
+            class="w-full bg-indigo-600 text-white font-bold py-3 rounded-2xl hover:bg-indigo-700 transition">
+      Guardar
+    </button>
+  </div>
+</div>
+
+<!-- ════ MODAL ENVIAR WA A CONTACTO ════ -->
+<div id="modal-wa-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center">
+  <div class="bg-white rounded-3xl w-80 p-5 space-y-4 shadow-2xl">
+    <div class="flex items-center justify-between">
+      <h2 class="font-extrabold text-gray-800 text-base">Enviar por WhatsApp</h2>
+      <button onclick="document.getElementById('modal-wa-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <p class="text-sm text-gray-600" id="txt-wa-destinatario">—</p>
+    <textarea id="inp-wa-mensaje" rows="3" placeholder="Mensaje..."
+              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
+    <button onclick="enviarWaContacto()"
+            class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl hover:bg-green-700 transition">
+      Abrir WhatsApp
+    </button>
+  </div>
+</div>
+
 <!-- ════ MODAL IDENTIFICACIÓN VENDEDOR ════ -->
 <div id="modal-codigo" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
   <div class="bg-white rounded-3xl w-80 p-6 space-y-4 shadow-2xl">
@@ -40784,7 +40993,7 @@ async function confirmarIdentidad() {
     localStorage.setItem('vd_nombre', d.nombre);
     document.getElementById('modal-codigo').classList.add('hidden');
     document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + d.nombre.split(' ')[0];
-    cargarCitas();
+    cargarCitas(); cargarContactos();
   } catch(e) {
     err.textContent = 'Error de red.'; err.classList.remove('hidden');
     btn.disabled=false; btn.textContent='Entrar';
@@ -40914,7 +41123,7 @@ async function guardarCita() {
     const d = await r.json();
     if (!d.ok) { err.textContent = d.error; err.classList.remove('hidden'); btn.disabled=false; btn.textContent='Agendar cita y crear negocio'; return; }
     cerrarModalCita();
-    cargarCitas();
+    cargarCitas(); cargarContactos();
   } catch(e) {
     err.textContent = 'Error de red.'; err.classList.remove('hidden');
     btn.disabled=false; btn.textContent='Agendar cita y crear negocio';
@@ -41050,7 +41259,7 @@ window.addEventListener('DOMContentLoaded', () => {
           localStorage.setItem('vd_nombre', data[0].nombre);
           document.getElementById('modal-codigo').classList.add('hidden');
           document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + data[0].nombre.split(' ')[0];
-          cargarCitas();
+          cargarCitas(); cargarContactos();
         } else {
           // Pre-llenar nombre en el modal para que solo tenga que escribir el teléfono
           document.getElementById('inp-nombre-v').value = srvNombre;
@@ -41064,7 +41273,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-codigo').classList.add('hidden');
     const nom = nombreVendedor();
     document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + (nom ? nom.split(' ')[0] : tel);
-    cargarCitas();
+    cargarCitas(); cargarContactos();
   }
   // Fecha mínima del picker = hoy
   document.getElementById('cita-fecha') && (document.getElementById('cita-fecha').min = new Date().toISOString().slice(0,10));
@@ -41106,6 +41315,243 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch { badge.classList.add('hidden'); }
   });
 });
+
+// ── CONTACTOS ─────────────────────────────────────────────────────────────────
+let _todosContactos = [];
+
+async function cargarContactos() {
+  const tel = telVendedor();
+  if (!tel) return;
+  const el = document.getElementById('lista-contactos');
+  const vacio = document.getElementById('txt-contactos-vacio');
+  try {
+    const r = await fetch('/api/vendedor/contactos?tel=' + encodeURIComponent(tel));
+    const d = await r.json();
+    if (!d.ok) { vacio.textContent = 'Error al cargar contactos.'; return; }
+    _todosContactos = d.contactos || [];
+    renderContactos(_todosContactos);
+  } catch { vacio.textContent = 'Error de red.'; }
+}
+
+function renderContactos(lista) {
+  const el = document.getElementById('lista-contactos');
+  const vacio = document.getElementById('txt-contactos-vacio');
+  if (!lista.length) {
+    el.innerHTML = '';
+    vacio.textContent = 'Sin contactos todavía — importá o agregá uno.';
+    vacio.classList.remove('hidden');
+    return;
+  }
+  vacio.classList.add('hidden');
+  el.innerHTML = lista.map(c => `
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-center gap-3">
+      <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-extrabold text-sm shrink-0">
+        ${(c.nombre || c.telefono || '?')[0].toUpperCase()}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-gray-800 text-sm truncate">${c.nombre || '—'}</p>
+        <p class="text-xs text-gray-400">${c.telefono || 'Sin número'}</p>
+      </div>
+      <div class="flex gap-1 shrink-0">
+        ${c.telefono ? `
+        <button onclick="llamar('${c.telefono}')" title="Llamar"
+                class="w-8 h-8 rounded-full bg-gray-100 hover:bg-green-100 flex items-center justify-center text-base transition">📞</button>
+        <button onclick="abrirWaContacto('${c.nombre||''}','${c.telefono}')" title="WhatsApp"
+                class="w-8 h-8 rounded-full bg-gray-100 hover:bg-green-100 flex items-center justify-center text-base transition">💬</button>
+        ` : ''}
+        <button onclick="agendarDesdeContacto('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono||''}')" title="Agendar cita"
+                class="w-8 h-8 rounded-full bg-gray-100 hover:bg-indigo-100 flex items-center justify-center text-base transition">📅</button>
+        <button onclick="eliminarContacto(${c.id})" title="Eliminar"
+                class="w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 flex items-center justify-center text-base transition text-gray-400 hover:text-red-500">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filtrarContactos(q) {
+  if (!q.trim()) { renderContactos(_todosContactos); return; }
+  const lo = q.toLowerCase();
+  renderContactos(_todosContactos.filter(c =>
+    (c.nombre||'').toLowerCase().includes(lo) || (c.telefono||'').includes(lo)
+  ));
+}
+
+function llamar(tel) {
+  window.location.href = 'tel:' + tel.replace(/\\s/g,'');
+}
+
+function abrirWaContacto(nombre, tel) {
+  document.getElementById('txt-wa-destinatario').textContent = nombre || tel;
+  document.getElementById('inp-wa-mensaje').value = '';
+  document.getElementById('modal-wa-contacto').classList.remove('hidden');
+  document.getElementById('modal-wa-contacto').dataset.tel = tel;
+}
+
+function enviarWaContacto() {
+  const tel = document.getElementById('modal-wa-contacto').dataset.tel || '';
+  const msg = document.getElementById('inp-wa-mensaje').value.trim();
+  const num = tel.replace(/[^\\d+]/g,'');
+  const url = 'https://wa.me/' + num + (msg ? '?text=' + encodeURIComponent(msg) : '');
+  window.open(url, '_blank');
+  document.getElementById('modal-wa-contacto').classList.add('hidden');
+}
+
+function agendarDesdeContacto(nombre, tel) {
+  abrirModalCita();
+  if (nombre) document.getElementById('cita-nombre-due').value = nombre;
+  if (tel) {
+    document.getElementById('cita-tel').value = tel;
+    document.getElementById('cita-tel').dispatchEvent(new Event('blur'));
+  }
+}
+
+function abrirImportarContactos() {
+  document.getElementById('txt-importar-resultado').classList.add('hidden');
+  // Ocultar Contact Picker si no está disponible
+  const picker = document.getElementById('btn-contact-picker');
+  if (!('contacts' in navigator && 'ContactsManager' in window)) {
+    picker.classList.add('opacity-40');
+    picker.title = 'Solo disponible en Android Chrome';
+  }
+  document.getElementById('modal-importar-contactos').classList.remove('hidden');
+}
+
+function abrirAgregarContacto() {
+  document.getElementById('inp-ac-nombre').value = '';
+  document.getElementById('inp-ac-tel').value = '';
+  document.getElementById('txt-ac-error').classList.add('hidden');
+  document.getElementById('modal-agregar-contacto').classList.remove('hidden');
+}
+
+async function guardarContacto() {
+  const nombre = document.getElementById('inp-ac-nombre').value.trim();
+  const tel    = document.getElementById('inp-ac-tel').value.trim();
+  const err    = document.getElementById('txt-ac-error');
+  if (!nombre && !tel) { err.textContent = 'Completá al menos nombre o celular.'; err.classList.remove('hidden'); return; }
+  const ok = await _subirContactos([{nombre, telefono: tel}]);
+  if (ok) {
+    document.getElementById('modal-agregar-contacto').classList.add('hidden');
+    await cargarContactos();
+  }
+}
+
+async function eliminarContacto(id) {
+  if (!confirm('¿Eliminar este contacto?')) return;
+  const tel = telVendedor();
+  await fetch('/api/vendedor/contactos/' + id + '?tel=' + encodeURIComponent(tel), {method:'DELETE'});
+  await cargarContactos();
+}
+
+async function _subirContactos(lista) {
+  const tel = telVendedor();
+  const res = document.getElementById('txt-importar-resultado');
+  try {
+    const r = await fetch('/api/vendedor/contactos/importar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tel, contactos: lista})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      res.textContent = d.insertados + ' contacto(s) importado(s)' + (d.omitidos ? ' · ' + d.omitidos + ' ya existían' : '') + '.';
+      res.className = 'text-xs text-center font-bold rounded-xl px-3 py-2 bg-green-50 text-green-700';
+      res.classList.remove('hidden');
+      await cargarContactos();
+      return true;
+    } else {
+      res.textContent = d.error || 'Error al importar.';
+      res.className = 'text-xs text-center font-bold rounded-xl px-3 py-2 bg-red-50 text-red-700';
+      res.classList.remove('hidden');
+      return false;
+    }
+  } catch { return false; }
+}
+
+// ── VCF ────────────────────────────────────────────────────────────────────────
+function importarVcf() { document.getElementById('inp-vcf').click(); }
+
+async function procesarVcf(input) {
+  const file = input.files[0]; if (!file) return;
+  const texto = await file.text();
+  const contactos = parseVcf(texto);
+  input.value = '';
+  await _subirContactos(contactos);
+}
+
+function parseVcf(texto) {
+  const resultado = [];
+  const bloques = texto.split(/BEGIN:VCARD/i).filter(b => b.trim());
+  for (const bloque of bloques) {
+    const nombreMatch = bloque.match(/FN[^:]*:(.+)/i) || bloque.match(/N[^:]*:(.+)/i);
+    const telMatch    = bloque.match(/TEL[^:]*:([\\d\\s+\\-().]+)/i);
+    const nombre = nombreMatch ? nombreMatch[1].trim().replace(/;/g,' ').replace(/\\s+/g,' ') : '';
+    const tel    = telMatch    ? telMatch[1].trim().replace(/[\\s\\-().]/g,'') : '';
+    if (nombre || tel) resultado.push({nombre, telefono: tel});
+  }
+  return resultado;
+}
+
+// ── TELEGRAM ──────────────────────────────────────────────────────────────────
+function importarTelegram() { document.getElementById('inp-telegram').click(); }
+
+async function procesarTelegram(input) {
+  const file = input.files[0]; if (!file) return;
+  const texto = await file.text();
+  input.value = '';
+  let contactos = [];
+  if (file.name.endsWith('.json')) {
+    contactos = parseTelegramJson(texto);
+  } else {
+    contactos = parseTelegramHtml(texto);
+  }
+  await _subirContactos(contactos);
+}
+
+function parseTelegramJson(texto) {
+  try {
+    const data = JSON.parse(texto);
+    const lista = data.contacts?.list || data.list || [];
+    return lista.map(c => ({ nombre: (c.first_name||'') + ' ' + (c.last_name||''), telefono: c.phone_number||'' }))
+                .filter(c => c.nombre.trim() || c.telefono);
+  } catch { return []; }
+}
+
+function parseTelegramHtml(texto) {
+  const contactos = [];
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(texto, 'text/html');
+  doc.querySelectorAll('.contact').forEach(el => {
+    const nombre = el.querySelector('.contact-name')?.textContent?.trim() || '';
+    const tel    = el.querySelector('.contact-phone')?.textContent?.trim() || '';
+    if (nombre || tel) contactos.push({nombre, telefono: tel});
+  });
+  // Fallback: buscar patrones de texto
+  if (!contactos.length) {
+    const matches = texto.matchAll(/([A-ZÁ-Ú][a-záéíóúñ]+(?:\\s+[A-ZÁ-Ú][a-záéíóúñ]+)+)[\\s\\S]{0,200}?(\\+?\\d[\\d\\s\\-]{6,}\\d)/gm);
+    for (const m of matches) {
+      contactos.push({nombre: m[1].trim(), telefono: m[2].replace(/[\\s\\-]/g,'')});
+    }
+  }
+  return contactos;
+}
+
+// ── CONTACT PICKER API (Android Chrome) ───────────────────────────────────────
+async function importarContactPicker() {
+  if (!('contacts' in navigator && 'ContactsManager' in window)) {
+    alert('Esta función solo está disponible en Chrome para Android.'); return;
+  }
+  try {
+    const props = ['name','tel'];
+    const opts  = {multiple: true};
+    const selected = await navigator.contacts.select(props, opts);
+    const lista = selected.map(c => ({
+      nombre: (c.name||[])[0] || '',
+      telefono: (c.tel||[])[0] || ''
+    })).filter(c => c.nombre || c.telefono);
+    await _subirContactos(lista);
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Error: ' + e.message);
+  }
+}
 </script>
 
 </body></html>"""

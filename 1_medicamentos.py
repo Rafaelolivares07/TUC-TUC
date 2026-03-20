@@ -40427,24 +40427,30 @@ def vendedor_dashboard():
     """Dashboard público para vendedores externos — agenda + demo launcher."""
     from flask import render_template_string
     # Si hay sesión activa, recuperar nombre y teléfono
-    # uid puede apuntar a `terceros` (login normal) o a `usuarios` (login admin)
+    # uid puede apuntar a terceros (login normal) o a usuarios legacy (login admin por código)
     uid = session.get('usuario_id')
     vendedor_pre = {'nombre': '', 'telefono': ''}
     if uid:
         try:
             conn = get_db_connection()
-            # Intento 1: buscar en terceros directamente
+            # Intento 1: buscar en terceros directamente (login normal)
             t = conn.execute("SELECT nombre, telefono FROM terceros WHERE id=%s", (uid,)).fetchone()
-            if not t:
-                # Intento 2: es login admin — buscar en usuarios y cruzar por teléfono con terceros
-                u = conn.execute("SELECT nombre, telefono FROM usuarios WHERE id=%s", (uid,)).fetchone()
-                if u and u['telefono']:
-                    t = conn.execute("SELECT nombre, telefono FROM terceros WHERE telefono=%s", (u['telefono'],)).fetchone()
-                if not t and u:
-                    # Fallback: al menos usar el nombre del usuario admin
-                    vendedor_pre = {'nombre': u['nombre'] or '', 'telefono': u.get('telefono') or ''}
             if t:
                 vendedor_pre = {'nombre': t['nombre'] or '', 'telefono': t['telefono'] or ''}
+            else:
+                # Intento 2: es login admin legacy (tabla usuarios sin telefono)
+                # Cruzar por nombre de sesión hacia terceros
+                nombre_sesion = session.get('nombre', '')
+                if nombre_sesion:
+                    t2 = conn.execute(
+                        "SELECT nombre, telefono FROM terceros WHERE nombre ILIKE %s AND telefono IS NOT NULL LIMIT 1",
+                        (nombre_sesion,)
+                    ).fetchone()
+                    if t2:
+                        vendedor_pre = {'nombre': t2['nombre'] or '', 'telefono': t2['telefono'] or ''}
+                    else:
+                        # Al menos pre-llenar el nombre para que solo tenga que ingresar el teléfono
+                        vendedor_pre = {'nombre': nombre_sesion, 'telefono': ''}
             conn.close()
         except Exception:
             pass

@@ -29,15 +29,21 @@
 
 ### 2.1 Identificador universal de negocio = `terceros.id`
 
-Todo negocio tiene dueño, y el dueño tiene `tercero_id` en la tabla `terceros`.
-No se necesita tabla `negocios` para identificar el contexto de un negocio.
+Tanto personas como negocios son `terceros` — cada entidad tiene su propio `tercero_id` independiente.
 
 ```
-/vendedor?n=tercero_id_del_negocio
+Persona "Don Carlos"          → terceros.id = 5
+Negocio "Restaurante El Rincón" → terceros.id = 42  ← entidad propia, no el dueño
 ```
 
-- TUC TUC central → `n=X` (tercero_id de Rafael u otro responsable)
-- Restaurante Don Carlos → `n=Y` (tercero_id de Don Carlos)
+El parámetro `n` en la URL apunta al `tercero_id` del **negocio como entidad**, no al de su dueño.
+
+```
+/vendedor?n=42   ← id del negocio-entidad en terceros
+```
+
+- TUC TUC central → `n=X` (tercero_id de TUC TUC como entidad)
+- Restaurante El Rincón → `n=42`
 - Tienda La Esquina → `n=Z`
 
 ### 2.2 Multi-tenancy por URL

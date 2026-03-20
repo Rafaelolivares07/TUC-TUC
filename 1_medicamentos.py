@@ -41659,14 +41659,7 @@ function abrirTelegram(tel) {
   window.open('https://t.me/+' + num, '_blank');
 }
 
-function abrirWaContacto(nombre, tel) {
-  document.getElementById('txt-wa-destinatario').textContent = nombre || tel;
-  document.getElementById('inp-wa-mensaje').value = '';
-  document.getElementById('modal-wa-contacto').classList.remove('hidden');
-  document.getElementById('modal-wa-contacto').dataset.tel = tel;
-}
-
-let _wappWin = null;  // referencia a la pestaña de WhatsApp
+let _wappWin = null;  // referencia a pestaña web de WhatsApp (fallback sin app)
 
 function enviarWaContacto() {
   const modal = document.getElementById('modal-wa-contacto');
@@ -41674,21 +41667,36 @@ function enviarWaContacto() {
   const contactoId = modal.dataset.contactoId || '';
   const msg = document.getElementById('inp-wa-mensaje').value.trim();
   const num = tel.replace(/[^\\d+]/g,'');
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  let url;
-  if (isMobile) {
-    url = 'https://wa.me/' + num + (msg ? '?text=' + encodeURIComponent(msg) : '');
+  modal.classList.add('hidden');
+
+  const txtEnc = msg ? encodeURIComponent(msg) : '';
+  const appUrl = 'whatsapp://send?phone=' + num + (msg ? '&text=' + txtEnc : '');
+  const webUrl = 'https://web.whatsapp.com/send?phone=' + num + (msg ? '&text=' + txtEnc : '');
+  const movilUrl = 'https://wa.me/' + num + (msg ? '?text=' + txtEnc : '');
+
+  // Móvil: siempre abre la app nativa vía wa.me
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    window.open(movilUrl, '_blank');
   } else {
-    url = 'https://web.whatsapp.com/send?phone=' + num + (msg ? '&text=' + encodeURIComponent(msg) : '');
+    // Desktop: intentar app nativa. Si la página permanece visible tras 1.5s → no está instalada → abrir web
+    let appDetectada = false;
+    const onHide = () => { appDetectada = true; };
+    document.addEventListener('visibilitychange', onHide, { once: true });
+    window.location.href = appUrl;
+    setTimeout(() => {
+      document.removeEventListener('visibilitychange', onHide);
+      if (!appDetectada) {
+        // App no instalada — fallback a WhatsApp Web, reutilizando pestaña
+        if (_wappWin && !_wappWin.closed) {
+          _wappWin.location.href = webUrl;
+          _wappWin.focus();
+        } else {
+          _wappWin = window.open(webUrl, '_blank');
+        }
+      }
+    }, 1500);
   }
-  if (isMobile) {
-    window.open(url, '_blank');
-  } else if (_wappWin && !_wappWin.closed) {
-    _wappWin.location.href = url;
-    _wappWin.focus();
-  } else {
-    _wappWin = window.open(url, '_blank');
-  }
+
   // Registrar envío si se usó una plantilla
   if (_plantillaSeleccionadaId && contactoId) {
     fetch('/api/vendedor/plantillas/envio', {
@@ -41702,7 +41710,6 @@ function enviarWaContacto() {
     }).catch(() => {});
   }
   _plantillaSeleccionadaId = null;
-  modal.classList.add('hidden');
 }
 
 function agendarDesdeContacto(nombre, tel) {

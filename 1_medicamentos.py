@@ -40581,9 +40581,9 @@ def api_vendedor_plantillas_lista():
     try:
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
+        # Pool compartido — todos los vendedores ven todas las plantillas
         rows = conn.execute(
-            "SELECT id, titulo, cuerpo FROM plantillas_crm WHERE tercero_id = %s ORDER BY id",
-            (tid,)
+            "SELECT id, titulo, cuerpo FROM plantillas_crm ORDER BY id"
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'plantillas': [dict(r) for r in rows]})
@@ -40599,14 +40599,20 @@ def api_vendedor_plantillas_crear():
     tel    = (data.get('tel') or '').strip()
     titulo = (data.get('titulo') or '').strip()[:80]
     cuerpo = (data.get('cuerpo') or '').strip()
-    if not tel or not titulo or not cuerpo:
-        return jsonify({'ok': False, 'error': 'tel, titulo y cuerpo requeridos'}), 400
-    tid = _tercero_id_por_tel(tel)
-    if not tid:
-        return jsonify({'ok': False, 'error': 'Vendedor no encontrado'}), 404
+    if not titulo or not cuerpo:
+        return jsonify({'ok': False, 'error': 'titulo y cuerpo requeridos'}), 400
+    tid = _tercero_id_por_tel(tel) if tel else None
     try:
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
+        # No crear duplicados — comparar cuerpo exacto (insensible a mayúsculas)
+        existe = conn.execute(
+            "SELECT id FROM plantillas_crm WHERE LOWER(TRIM(cuerpo)) = LOWER(TRIM(%s)) LIMIT 1",
+            (cuerpo,)
+        ).fetchone()
+        if existe:
+            conn.close()
+            return jsonify({'ok': True, 'id': existe['id'], 'titulo': titulo, 'cuerpo': cuerpo, 'duplicado': True})
         nueva = conn.execute(
             "INSERT INTO plantillas_crm (tercero_id, titulo, cuerpo) VALUES (%s,%s,%s) RETURNING id",
             (tid, titulo, cuerpo)
@@ -40622,13 +40628,9 @@ def api_vendedor_plantillas_crear():
 
 @app.route('/api/vendedor/plantillas/<int:pid>', methods=['DELETE'])
 def api_vendedor_plantillas_eliminar(pid):
-    tel = request.args.get('tel', '').strip()
-    tid = _tercero_id_por_tel(tel) if tel else None
-    if not tid:
-        return jsonify({'ok': False, 'error': 'tel requerido'}), 400
     try:
         conn = get_db_connection()
-        conn.execute("DELETE FROM plantillas_crm WHERE id = %s AND tercero_id = %s", (pid, tid))
+        conn.execute("DELETE FROM plantillas_crm WHERE id = %s", (pid,))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

@@ -40349,6 +40349,79 @@ def api_vendedor_cita_estado(cita_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/vendedor/buscar-tercero')
+def api_vendedor_buscar_tercero():
+    """Busca un tercero exacto por teléfono (para pre-llenar nombre)."""
+    tel = request.args.get('tel', '').strip().replace(' ', '')
+    if not tel:
+        return jsonify({'ok': False, 'encontrado': False})
+    try:
+        conn = get_db_connection()
+        t = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE REGEXP_REPLACE(telefono,'[^0-9]','','g') ILIKE %s LIMIT 1",
+            ('%' + tel[-7:] + '%',)
+        ).fetchone()
+        conn.close()
+        if t:
+            return jsonify({'ok': True, 'encontrado': True, 'id': t['id'], 'nombre': t['nombre'] or '', 'telefono': t['telefono'] or ''})
+        return jsonify({'ok': True, 'encontrado': False})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'encontrado': False, 'error': str(e)})
+
+
+@app.route('/api/vendedor/buscar-terceros')
+def api_vendedor_buscar_terceros():
+    """Autocompletar terceros por nombre — LIKE '%q%'."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE nombre ILIKE %s ORDER BY nombre LIMIT 8",
+            ('%' + q + '%',)
+        ).fetchall()
+        conn.close()
+        return jsonify([{'id': r['id'], 'nombre': r['nombre'] or '', 'telefono': r['telefono'] or ''} for r in rows])
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify([])
+
+
+@app.route('/api/vendedor/buscar-negocios')
+def api_vendedor_buscar_negocios():
+    """Autocompletar negocios (restaurantes + tiendas) por nombre — LIKE '%q%'."""
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    resultados = []
+    try:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute(
+                "SELECT id, nombre, 'restaurante' as tipo FROM restaurantes WHERE nombre ILIKE %s ORDER BY nombre LIMIT 5",
+                ('%' + q + '%',)
+            ).fetchall()
+            resultados.extend([{'id': r['id'], 'nombre': r['nombre'], 'tipo': r['tipo']} for r in rows])
+        except Exception:
+            pass
+        try:
+            rows = conn.execute(
+                "SELECT id, nombre, 'tienda' as tipo FROM tiendas WHERE nombre ILIKE %s ORDER BY nombre LIMIT 5",
+                ('%' + q + '%',)
+            ).fetchall()
+            resultados.extend([{'id': r['id'], 'nombre': r['nombre'], 'tipo': r['tipo']} for r in rows])
+        except Exception:
+            pass
+        conn.close()
+    except Exception:
+        pass
+    return jsonify(resultados[:10])
+
+
 @app.route('/vendedor')
 def vendedor_dashboard():
     """Dashboard público para vendedores externos — agenda + demo launcher."""
@@ -40604,19 +40677,20 @@ def vendedor_dashboard():
 
     <!-- Datos del negocio -->
     <div class="space-y-3">
-      <div>
-        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nombre del negocio</label>
-        <input id="cita-nombre-neg" type="text" placeholder="Restaurante El Fogón"
+      <div class="relative">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Teléfono del dueño</label>
+        <input id="cita-telefono" type="tel" placeholder="3001234567"
                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+        <div id="badge-tercero" class="hidden mt-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1.5"></div>
       </div>
-      <div>
+      <div class="relative">
         <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nombre del dueño</label>
         <input id="cita-nombre-due" type="text" placeholder="Don Carlos"
                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
       </div>
-      <div>
-        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Teléfono</label>
-        <input id="cita-telefono" type="tel" placeholder="3001234567"
+      <div class="relative">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nombre del negocio</label>
+        <input id="cita-nombre-neg" type="text" placeholder="Restaurante El Fogón"
                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
       </div>
       <div class="grid grid-cols-2 gap-2">
@@ -40831,6 +40905,82 @@ async function guardarCita() {
   }
 }
 
+// ── Autocomplete helper ────────────────────────────────────────────────────
+function montarAC(inputEl, fetchFn, onSelect) {
+  const list = document.createElement('div');
+  list.className = 'absolute left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 hidden overflow-hidden';
+  list.style.cssText = 'top:calc(100% + 2px); max-height:200px; overflow-y:auto';
+  inputEl.parentElement.appendChild(list);
+
+  let items = [], idx = -1, tmr;
+
+  function render() {
+    list.innerHTML = '';
+    if (!items.length) { list.classList.add('hidden'); return; }
+    list.classList.remove('hidden');
+    items.forEach((it, i) => {
+      const d = document.createElement('div');
+      d.className = 'px-3 py-2 text-sm cursor-pointer border-b border-gray-100 last:border-0 hover:bg-indigo-50';
+      d.innerHTML = it._html;
+      d.addEventListener('mousedown', e => { e.preventDefault(); pick(i); });
+      list.appendChild(d);
+    });
+    hl();
+  }
+
+  function hl() {
+    list.querySelectorAll('div').forEach((r, i) => r.classList.toggle('bg-indigo-100', i === idx));
+    if (idx >= 0) list.querySelectorAll('div')[idx]?.scrollIntoView({block:'nearest'});
+  }
+
+  function pick(i) {
+    if (i >= 0 && i < items.length) { onSelect(items[i]); list.classList.add('hidden'); idx = -1; }
+  }
+
+  inputEl.addEventListener('input', () => {
+    clearTimeout(tmr); idx = -1;
+    const q = inputEl.value.trim();
+    if (q.length < 2) { items = []; list.classList.add('hidden'); return; }
+    tmr = setTimeout(async () => { items = await fetchFn(q); render(); }, 280);
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!items.length) return;
+      if (list.classList.contains('hidden')) render();
+      idx = Math.min(idx + 1, items.length - 1); hl();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = Math.max(idx - 1, -1); hl();
+    } else if (e.key === 'Enter' && idx >= 0) {
+      e.preventDefault(); pick(idx);
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden'); idx = -1;
+    }
+  });
+
+  inputEl.addEventListener('blur',  () => setTimeout(() => list.classList.add('hidden'), 160));
+  inputEl.addEventListener('focus', () => { if (items.length) list.classList.remove('hidden'); });
+}
+
+async function fetchTerceros(q) {
+  try {
+    const r = await fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    return d.map(t => ({ ...t, _html: '<span class="font-semibold">' + t.nombre + '</span>&nbsp;<span class="text-gray-400 text-xs">' + (t.telefono||'') + '</span>' }));
+  } catch { return []; }
+}
+
+async function fetchNegocios(q) {
+  try {
+    const r = await fetch('/api/vendedor/buscar-negocios?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    const ic = {restaurante:'🍽️', tienda:'🛒'};
+    return d.map(n => ({ ...n, _html: (ic[n.tipo]||'🏪') + ' <span class="font-semibold">' + n.nombre + '</span>&nbsp;<span class="text-gray-400 text-xs">' + n.tipo + '</span>' }));
+  } catch { return []; }
+}
+
 // ── Situaciones ────────────────────────────────────────────────────────────
 let sitActiva = null;
 function abrirSituacion(n) {
@@ -40885,6 +41035,43 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   // Fecha mínima del picker = hoy
   document.getElementById('cita-fecha') && (document.getElementById('cita-fecha').min = new Date().toISOString().slice(0,10));
+
+  // ── Autocomplete: nombre dueño → terceros ─────────────────────────────────
+  montarAC(
+    document.getElementById('cita-nombre-due'),
+    fetchTerceros,
+    item => {
+      document.getElementById('cita-nombre-due').value = item.nombre;
+      if (!document.getElementById('cita-telefono').value.trim() && item.telefono)
+        document.getElementById('cita-telefono').value = item.telefono;
+    }
+  );
+
+  // ── Autocomplete: nombre negocio → restaurantes/tiendas ──────────────────
+  montarAC(
+    document.getElementById('cita-nombre-neg'),
+    fetchNegocios,
+    item => { document.getElementById('cita-nombre-neg').value = item.nombre; }
+  );
+
+  // ── Teléfono blur → pre-llenar nombre del dueño ───────────────────────────
+  document.getElementById('cita-telefono').addEventListener('blur', async () => {
+    const tel   = document.getElementById('cita-telefono').value.replace(/\\D/g,'');
+    const badge = document.getElementById('badge-tercero');
+    if (tel.length < 7) { badge.classList.add('hidden'); return; }
+    try {
+      const r = await fetch('/api/vendedor/buscar-tercero?tel=' + encodeURIComponent(tel));
+      const d = await r.json();
+      if (d.ok && d.encontrado) {
+        badge.innerHTML = '✓ Ya registrado: <strong>' + d.nombre + '</strong>';
+        badge.classList.remove('hidden');
+        const inp = document.getElementById('cita-nombre-due');
+        if (!inp.value.trim()) inp.value = d.nombre;
+      } else {
+        badge.classList.add('hidden');
+      }
+    } catch { badge.classList.add('hidden'); }
+  });
 });
 </script>
 

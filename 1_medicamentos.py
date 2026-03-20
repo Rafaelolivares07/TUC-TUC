@@ -41076,17 +41076,17 @@ function renderCitas(citas) {
                    cerrada:'bg-indigo-100 text-indigo-700', descartada:'bg-gray-100 text-gray-500'}[ct.estado] || '';
     const div = document.createElement('div');
     div.className = 'bg-white rounded-2xl shadow p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition';
-    div.innerHTML = \`
-      <div class="flex-1" onclick="iniciarDemo(\${JSON.stringify(ct).replace(/"/g,'&quot;')})">
+    div.innerHTML = `
+      <div class="flex-1" onclick="iniciarDemo(${JSON.stringify(ct).replace(/"/g,'&quot;')})">
         <div class="flex items-center gap-2 mb-0.5">
-          <p class="font-bold text-gray-800 text-sm">\${ct.nombre_negocio}</p>
-          <span class="text-xs px-2 py-0.5 rounded-full font-semibold \${badge}">\${ct.estado}</span>
+          <p class="font-bold text-gray-800 text-sm">${ct.nombre_negocio}</p>
+          <span class="text-xs px-2 py-0.5 rounded-full font-semibold ${badge}">${ct.estado}</span>
         </div>
-        <p class="text-xs text-gray-500">\${ct.nombre_dueno} · \${ct.telefono}</p>
-        <p class="text-xs text-indigo-600 font-semibold mt-0.5">\${fecha}</p>
+        <p class="text-xs text-gray-500">${ct.nombre_dueno} · ${ct.telefono}</p>
+        <p class="text-xs text-indigo-600 font-semibold mt-0.5">${fecha}</p>
       </div>
-      <button onclick="marcarHecha(\${ct.id},event)" class="text-green-500 text-xl shrink-0 hover:scale-110 transition" title="Marcar hecha">✓</button>
-    \`;
+      <button onclick="marcarHecha(${ct.id},event)" class="text-green-500 text-xl shrink-0 hover:scale-110 transition" title="Marcar hecha">✓</button>
+    `;
     c.appendChild(div);
   });
 }

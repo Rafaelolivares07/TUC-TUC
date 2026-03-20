@@ -40927,6 +40927,61 @@ def vendedor_dashboard():
     </div>
   </div>
 
+  <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
+    <p class="font-extrabold text-green-800 text-sm mb-1">💰 Tu comisión</p>
+    <p class="text-sm text-green-700"><strong>20%</strong> de cada pago del cliente — recurrente mientras siga activo.</p>
+    <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real.</p>
+  </div>
+
+  <!-- ════ MIS ENVÍOS ════ -->
+  <div>
+    <button onclick="toggleHistorialGeneral()"
+            class="w-full flex items-center justify-between px-1 mb-2">
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis envíos recientes</p>
+      <span id="ico-historial-toggle" class="text-gray-400 text-sm">▼</span>
+    </button>
+    <div id="sec-historial-general" class="hidden space-y-1 mb-4">
+      <div id="lista-historial-general" class="text-xs text-gray-400 text-center py-2">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- ════ MIS CONTACTOS ════ -->
+  <div>
+    <div class="flex items-center justify-between px-1 mb-0">
+      <button onclick="toggleContactos()" class="flex items-center gap-2 flex-1 py-2 text-left">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis contactos</p>
+        <span id="ico-contactos-toggle" class="text-gray-400 text-sm ml-2">▼</span>
+      </button>
+      <div class="flex gap-2">
+        <button onclick="abrirImportarContactos()"
+                class="bg-gray-100 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-gray-200 transition">
+          Importar
+        </button>
+        <button onclick="abrirAgregarContacto()"
+                class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow hover:bg-indigo-700 transition active:scale-95">
+          + Agregar
+        </button>
+      </div>
+    </div>
+    <div id="sec-contactos" class="hidden space-y-2">
+      <!-- Buscador rápido -->
+      <div class="relative">
+        <input id="inp-buscar-contacto" type="search" placeholder="Buscar en mis contactos..."
+               oninput="filtrarContactos(this.value)"
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 bg-white">
+      </div>
+      <p class="text-xs text-gray-400 text-center py-4" id="txt-contactos-vacio">Cargando...</p>
+      <div id="lista-contactos" class="space-y-2"></div>
+      <!-- Botón de migración: vincula contactos importados antes del nuevo sistema -->
+      <div id="sec-reclamar" class="hidden text-center pt-1">
+        <button onclick="reclamarContactos()"
+                class="text-xs text-indigo-600 underline">
+          ¿Tenés contactos importados que no aparecen? Vincularlos a tu cuenta
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ════ COLAPSABLES ════ -->
   <details class="bg-white rounded-2xl shadow">
     <summary class="p-4 font-extrabold text-gray-800 text-sm cursor-pointer select-none">🛡️ Objeciones frecuentes</summary>
@@ -40967,56 +41022,6 @@ def vendedor_dashboard():
       <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="rounded"> Nombre del dueño confirmado</label>
     </div>
   </details>
-
-  <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
-    <p class="font-extrabold text-green-800 text-sm mb-1">💰 Tu comisión</p>
-    <p class="text-sm text-green-700"><strong>20%</strong> de cada pago del cliente — recurrente mientras siga activo.</p>
-    <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real.</p>
-  </div>
-
-  <!-- ════ MIS ENVÍOS ════ -->
-  <div>
-    <button onclick="toggleHistorialGeneral()"
-            class="w-full flex items-center justify-between px-1 mb-2">
-      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis envíos recientes</p>
-      <span id="ico-historial-toggle" class="text-gray-400 text-sm">▼</span>
-    </button>
-    <div id="sec-historial-general" class="hidden space-y-1 mb-4">
-      <div id="lista-historial-general" class="text-xs text-gray-400 text-center py-2">Cargando...</div>
-    </div>
-  </div>
-
-  <!-- ════ MIS CONTACTOS ════ -->
-  <div>
-    <div class="flex items-center justify-between mb-2 px-1">
-      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis contactos</p>
-      <div class="flex gap-2">
-        <button onclick="abrirImportarContactos()"
-                class="bg-gray-100 text-gray-700 text-xs font-bold px-3 py-1.5 rounded-full hover:bg-gray-200 transition">
-          Importar
-        </button>
-        <button onclick="abrirAgregarContacto()"
-                class="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow hover:bg-indigo-700 transition active:scale-95">
-          + Agregar
-        </button>
-      </div>
-    </div>
-    <!-- Buscador rápido -->
-    <div class="relative mb-2">
-      <input id="inp-buscar-contacto" type="search" placeholder="Buscar en mis contactos..."
-             oninput="filtrarContactos(this.value)"
-             class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 bg-white">
-    </div>
-    <p class="text-xs text-gray-400 text-center py-4" id="txt-contactos-vacio">Cargando...</p>
-    <div id="lista-contactos" class="space-y-2"></div>
-    <!-- Botón de migración: vincula contactos importados antes del nuevo sistema -->
-    <div id="sec-reclamar" class="hidden text-center pt-1">
-      <button onclick="reclamarContactos()"
-              class="text-xs text-indigo-600 underline">
-        ¿Tenés contactos importados que no aparecen? Vincularlos a tu cuenta
-      </button>
-    </div>
-  </div>
 
 </div>
 <p class="text-center text-xs text-gray-400 py-4">TUC TUC · Kit del Vendedor · 2026</p>
@@ -41669,6 +41674,13 @@ function _fmtFecha(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'}) + ' ' +
          d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+}
+
+function toggleContactos() {
+  const sec = document.getElementById('sec-contactos');
+  const ico = document.getElementById('ico-contactos-toggle');
+  const oculto = sec.classList.toggle('hidden');
+  ico.textContent = oculto ? '▼' : '▲';
 }
 
 function toggleHistorialGeneral() {

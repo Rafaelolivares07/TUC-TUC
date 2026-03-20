@@ -40723,7 +40723,8 @@ def api_vendedor_envios_contacto(cid):
         rows = conn.execute("""
             SELECT e.medio, e.created_at::text,
                    tv.nombre AS vendedor_nombre,
-                   p.titulo AS plantilla_titulo
+                   p.titulo AS plantilla_titulo,
+                   p.cuerpo AS plantilla_cuerpo
             FROM plantillas_crm_envios e
             JOIN terceros tv ON tv.id = e.vendedor_id
             LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
@@ -41151,55 +41152,74 @@ def vendedor_dashboard():
   </div>
 </div>
 
-<!-- ════ MODAL HISTORIAL CONTACTO ════ -->
-<div id="modal-historial-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-4">
-  <div class="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl">
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="font-bold text-gray-800">Historial de mensajes</p>
-        <p class="text-xs text-gray-500" id="txt-historial-nombre">—</p>
-      </div>
-      <button onclick="document.getElementById('modal-historial-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
-    </div>
-    <div id="lista-historial-contacto" class="space-y-2 max-h-72 overflow-y-auto text-sm text-gray-500 text-center py-4">
-      Cargando...
-    </div>
-  </div>
-</div>
+<!-- ════ MODAL CONTACTO UNIFICADO — historial + canales + envío ════ -->
+<div id="modal-wa-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-end justify-center px-2 pb-2">
+  <div class="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
-<!-- ════ MODAL ENVIAR WA A CONTACTO ════ -->
-<div id="modal-wa-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-4">
-  <div class="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl">
-    <div class="flex items-center justify-between">
+    <!-- Cabecera -->
+    <div class="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
       <div>
-        <h2 class="font-extrabold text-gray-800 text-base">WhatsApp</h2>
-        <p class="text-xs text-gray-500" id="txt-wa-destinatario">—</p>
+        <p class="font-extrabold text-gray-800 text-base" id="txt-wa-destinatario">—</p>
+        <p class="text-xs text-gray-400">Contacto</p>
       </div>
-      <button onclick="document.getElementById('modal-wa-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
+      <button onclick="cerrarModalContacto()" class="text-gray-400 text-2xl leading-none">&times;</button>
     </div>
-    <!-- Mensajes rápidos del vendedor -->
-    <div id="plantillas-wa" class="flex flex-wrap gap-1.5 min-h-[28px]">
-      <span class="text-xs text-gray-400 italic">Cargando...</span>
+
+    <!-- Historial de mensajes previos -->
+    <div class="px-5 pb-2 shrink-0">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Mensajes anteriores</p>
     </div>
-    <!-- Formulario nueva plantilla (oculto) -->
-    <div id="form-nueva-plt" class="hidden space-y-2 bg-gray-50 border border-gray-200 rounded-xl p-3">
-      <input id="inp-plt-titulo" type="text" placeholder="Nombre del mensaje (ej: Seguimiento)"
-             class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400">
-      <textarea id="inp-plt-cuerpo" rows="2" placeholder="Texto del mensaje..."
-                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
+    <div id="lista-historial-modal" class="px-5 overflow-y-auto space-y-1.5 shrink-1 min-h-[40px] max-h-40">
+      <p class="text-xs text-gray-400 text-center py-2">Cargando...</p>
+    </div>
+
+    <!-- Separador + selector de canal -->
+    <div class="px-5 pt-3 pb-2 shrink-0 border-t border-gray-100 mt-2">
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Enviar por</p>
       <div class="flex gap-2">
-        <button onclick="guardarPlantilla()" class="flex-1 bg-indigo-600 text-white text-xs font-bold py-1.5 rounded-lg hover:bg-indigo-700 transition">Guardar</button>
-        <button onclick="cancelarNuevaPlantilla()" class="text-xs text-gray-400 underline px-2">Cancelar</button>
+        <button id="btn-canal-wa" onclick="seleccionarCanal('whatsapp')"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition"
+                style="border-color:#25D366;background:#25D366;color:white">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          WhatsApp
+        </button>
+        <button id="btn-canal-tg" onclick="seleccionarCanal('telegram')"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition"
+                style="border-color:#2AABEE;color:#2AABEE;background:white">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+          Telegram
+        </button>
       </div>
     </div>
-    <textarea id="inp-wa-mensaje" rows="3" placeholder="Escribe el mensaje o elige uno arriba..."
-              class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-green-400"
-              onkeydown="if(event.ctrlKey&&event.key==='Enter') enviarWaContacto()"></textarea>
-    <p class="text-xs text-gray-400 text-right">Ctrl+Enter para enviar</p>
-    <button onclick="enviarWaContacto()"
-            class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl hover:bg-green-700 transition active:scale-95">
-      Abrir en WhatsApp →
-    </button>
+
+    <!-- Zona WA (plantillas + textarea + enviar) -->
+    <div id="zona-envio-wa" class="px-5 pb-5 pt-2 space-y-2 shrink-0">
+      <div id="plantillas-wa" class="flex flex-wrap gap-1.5 min-h-[28px]">
+        <span class="text-xs text-gray-400 italic">Cargando...</span>
+      </div>
+      <div id="form-nueva-plt" class="hidden space-y-2 bg-gray-50 border border-gray-200 rounded-xl p-3">
+        <input id="inp-plt-titulo" type="text" placeholder="Nombre del mensaje (ej: Seguimiento)"
+               class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400">
+        <textarea id="inp-plt-cuerpo" rows="2" placeholder="Texto del mensaje..."
+                  class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
+        <div class="flex gap-2">
+          <button onclick="guardarPlantilla()" class="flex-1 bg-indigo-600 text-white text-xs font-bold py-1.5 rounded-lg hover:bg-indigo-700 transition">Guardar</button>
+          <button onclick="cancelarNuevaPlantilla()" class="text-xs text-gray-400 underline px-2">Cancelar</button>
+        </div>
+      </div>
+      <textarea id="inp-wa-mensaje" rows="3" placeholder="Escribe el mensaje o elige uno arriba..."
+                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-green-400"
+                onkeydown="if(event.ctrlKey&&event.key==='Enter') enviarPorCanal()"></textarea>
+    </div>
+
+    <!-- Botón enviar — siempre visible -->
+    <div class="px-5 pb-5 shrink-0">
+      <button onclick="enviarPorCanal()" id="btn-enviar-canal"
+              class="w-full bg-green-600 text-white font-bold py-3 rounded-2xl hover:bg-green-700 transition active:scale-95">
+        Abrir en WhatsApp →
+      </button>
+    </div>
+
   </div>
 </div>
 
@@ -41608,29 +41628,22 @@ function renderContactos(lista) {
   document.getElementById('sec-reclamar').classList.add('hidden');
   vacio.classList.add('hidden');
   el.innerHTML = lista.map(c => `
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-center gap-3">
-      <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-extrabold text-sm shrink-0">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-start gap-3">
+      <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-extrabold text-sm shrink-0 mt-0.5">
         ${(c.nombre || c.telefono || '?')[0].toUpperCase()}
       </div>
       <div class="flex-1 min-w-0">
-        <p class="font-bold text-gray-800 text-sm truncate">${c.nombre || '—'}</p>
+        <p class="font-bold text-gray-800 text-sm break-words">${c.nombre || '—'}</p>
         <p class="text-xs text-gray-400">${c.telefono || 'Sin número'}</p>
       </div>
-      <div class="flex gap-1 shrink-0">
+      <div class="flex gap-1 shrink-0 mt-0.5">
         ${c.telefono ? `
         <button onclick="llamar('${c.telefono}')" title="Llamar"
                 class="w-8 h-8 rounded-full bg-gray-100 hover:bg-green-100 flex items-center justify-center text-base transition">📞</button>
-        <button onclick="abrirWa('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono}',${c.id})" title="WhatsApp"
-                class="w-8 h-8 rounded-full bg-[#25D366] hover:bg-[#1ebe5d] flex items-center justify-center transition" style="background:#25D366">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        </button>
-        <button onclick="abrirTelegram('${c.telefono}',${c.id})" title="Telegram"
-                class="w-8 h-8 rounded-full flex items-center justify-center transition" style="background:#2AABEE">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-        </button>
+        <button onclick="abrirWa('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono}',${c.id})" title="Mensajes"
+                class="w-8 h-8 rounded-full flex items-center justify-center text-white text-base transition font-bold"
+                style="background:#25D366">💬</button>
         ` : ''}
-        <button onclick="verHistorialContacto(${c.id},'${(c.nombre||c.telefono||'?').replace(/'/g,"\\'")}')" title="Historial de mensajes"
-                class="w-8 h-8 rounded-full bg-gray-100 hover:bg-yellow-100 flex items-center justify-center text-base transition">🕐</button>
         <button onclick="agendarDesdeContacto('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono||''}')" title="Agendar cita"
                 class="w-8 h-8 rounded-full bg-gray-100 hover:bg-indigo-100 flex items-center justify-center text-base transition">📅</button>
         <button onclick="eliminarContacto(${c.id})" title="Eliminar"
@@ -41692,47 +41705,72 @@ async function cargarHistorialGeneral() {
   } catch { zona.innerHTML = '<p class="text-center py-2 text-red-400">Error de red.</p>'; }
 }
 
-async function verHistorialContacto(cid, nombre) {
-  document.getElementById('txt-historial-nombre').textContent = nombre;
-  const zona = document.getElementById('lista-historial-contacto');
-  zona.innerHTML = '<p class="text-center py-4 text-gray-400">Cargando...</p>';
-  document.getElementById('modal-historial-contacto').classList.remove('hidden');
-  try {
-    const r = await fetch('/api/vendedor/envios/contacto/' + cid);
-    const d = await r.json();
-    if (!d.ok || !d.envios.length) {
-      zona.innerHTML = '<p class="text-center py-4 text-gray-400">Nadie le ha enviado mensajes aún.</p>';
-      return;
-    }
-    zona.innerHTML = d.envios.map(e => `
-      <div class="bg-gray-50 rounded-xl px-3 py-2 flex items-start gap-2">
-        <span class="text-base mt-0.5">${_medioLabel[e.medio] || '📨'}</span>
-        <div class="flex-1 min-w-0">
-          <p class="font-semibold text-gray-800 text-xs">${e.vendedor_nombre || 'Vendedor'}</p>
-          <p class="text-xs text-gray-500 truncate">${e.plantilla_titulo || 'Sin plantilla'}</p>
-          <p class="text-xs text-gray-400">${_fmtFecha(e.created_at)}</p>
-        </div>
-      </div>
-    `).join('');
-  } catch { zona.innerHTML = '<p class="text-center py-4 text-red-400">Error de red.</p>'; }
-}
-
 function llamar(tel) {
   window.location.href = 'tel:' + tel.replace(/\\s/g,'');
 }
 
 let _plantillaSeleccionadaId = null;
+let _canalActivo = 'whatsapp';
 
-function abrirWa(nombre, tel, contactoId) {
-  document.getElementById('txt-wa-destinatario').textContent = nombre || tel;
+function seleccionarCanal(canal) {
+  _canalActivo = canal;
+  const btnWa = document.getElementById('btn-canal-wa');
+  const btnTg = document.getElementById('btn-canal-tg');
+  const zonaWa = document.getElementById('zona-envio-wa');
+  const btnEnviar = document.getElementById('btn-enviar-canal');
+  if (canal === 'whatsapp') {
+    btnWa.style.background = '#25D366'; btnWa.style.color = 'white';
+    btnTg.style.background = 'white';   btnTg.style.color = '#2AABEE';
+    zonaWa.classList.remove('hidden');
+    btnEnviar.textContent = 'Abrir en WhatsApp →';
+    btnEnviar.style.background = '#16a34a';
+  } else {
+    btnTg.style.background = '#2AABEE'; btnTg.style.color = 'white';
+    btnWa.style.background = 'white';   btnWa.style.color = '#25D366';
+    zonaWa.classList.add('hidden');
+    btnEnviar.textContent = 'Abrir en Telegram →';
+    btnEnviar.style.background = '#2AABEE';
+  }
+}
+
+function cerrarModalContacto() {
+  document.getElementById('modal-wa-contacto').classList.add('hidden');
+}
+
+async function abrirWa(nombre, tel, contactoId) {
   const modal = document.getElementById('modal-wa-contacto');
+  document.getElementById('txt-wa-destinatario').textContent = nombre || tel;
   modal.dataset.tel = tel;
   modal.dataset.contactoId = contactoId || '';
   document.getElementById('inp-wa-mensaje').value = '';
   document.getElementById('form-nueva-plt').classList.add('hidden');
   _plantillaSeleccionadaId = null;
+  seleccionarCanal('whatsapp');
   modal.classList.remove('hidden');
   cargarPlantillas();
+  // Cargar historial del contacto
+  if (contactoId) {
+    const zona = document.getElementById('lista-historial-modal');
+    zona.innerHTML = '<p class="text-xs text-gray-400 text-center py-1">Cargando...</p>';
+    try {
+      const r = await fetch('/api/vendedor/envios/contacto/' + contactoId);
+      const d = await r.json();
+      if (!d.ok || !d.envios.length) {
+        zona.innerHTML = '<p class="text-xs text-gray-400 text-center py-1">Sin mensajes anteriores.</p>';
+      } else {
+        zona.innerHTML = d.envios.map(e => `
+          <div class="bg-gray-50 rounded-xl px-3 py-1.5 text-xs">
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <span>${_medioLabel[e.medio] || '📨'}</span>
+              <span class="font-semibold text-gray-700">${e.vendedor_nombre || '?'}</span>
+              <span class="text-gray-400 ml-auto">${_fmtFecha(e.created_at)}</span>
+            </div>
+            <p class="text-gray-600 leading-snug">${e.plantilla_cuerpo || '(sin texto)'}</p>
+          </div>
+        `).join('');
+      }
+    } catch { zona.innerHTML = '<p class="text-xs text-red-400 text-center py-1">Error.</p>'; }
+  }
   setTimeout(() => document.getElementById('inp-wa-mensaje').focus(), 100);
 }
 
@@ -41815,14 +41853,23 @@ async function eliminarPlantilla(id) {
   cargarPlantillas();
 }
 
-function abrirTelegram(tel, contactoId) {
-  const num = tel.replace(/[^\\d]/g,'');
-  window.open('https://t.me/+' + num, '_blank');
-  if (contactoId) {
-    fetch('/api/vendedor/plantillas/envio', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor() })
-    }).catch(() => {});
+function enviarPorCanal() {
+  if (_canalActivo === 'telegram') {
+    const modal = document.getElementById('modal-wa-contacto');
+    const tel = modal.dataset.tel || '';
+    const contactoId = modal.dataset.contactoId || '';
+    const num = tel.replace(/[^\\d]/g,'');
+    modal.classList.add('hidden');
+    window.open('https://t.me/+' + num, '_blank');
+    if (contactoId) {
+      fetch('/api/vendedor/plantillas/envio', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor() })
+      }).catch(() => {});
+    }
+    _plantillaSeleccionadaId = null;
+  } else {
+    enviarWaContacto();
   }
 }
 

@@ -41036,10 +41036,27 @@ window.addEventListener('DOMContentLoaded', () => {
   const srvNombre = "{{ vd_nombre }}";
   const srvTel    = "{{ vd_telefono }}";
 
-  // Si el servidor ya conoce al usuario, guardamos y saltamos el modal
+  // Si el servidor ya conoce al usuario (teléfono incluido), guardamos y saltamos el modal
   if (srvTel && srvTel.length >= 10) {
     localStorage.setItem('vd_tel',    srvTel);
     localStorage.setItem('vd_nombre', srvNombre);
+  } else if (srvNombre && srvNombre.length >= 3 && !telVendedor()) {
+    // Servidor tiene nombre pero no teléfono (login admin) → buscar en terceros por nombre
+    fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(srvNombre))
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.length === 1 && data[0].telefono) {
+          localStorage.setItem('vd_tel',    data[0].telefono);
+          localStorage.setItem('vd_nombre', data[0].nombre);
+          document.getElementById('modal-codigo').classList.add('hidden');
+          document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + data[0].nombre.split(' ')[0];
+          cargarCitas();
+        } else {
+          // Pre-llenar nombre en el modal para que solo tenga que escribir el teléfono
+          document.getElementById('inp-nombre-v').value = srvNombre;
+          document.getElementById('inp-tel-v') && document.getElementById('inp-tel-v').focus();
+        }
+      }).catch(() => {});
   }
 
   const tel = telVendedor();

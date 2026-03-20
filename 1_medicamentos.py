@@ -40120,6 +40120,42 @@ def api_ayuda_contextual_eliminar(entrada_id):
             except: pass
 
 
+@app.route('/api/vendedor/identificar', methods=['POST'])
+def api_vendedor_identificar():
+    """Identifica al vendedor por teléfono. Crea tercero si no existe."""
+    data     = request.get_json()
+    nombre   = data.get('nombre', '').strip()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
+        ).fetchone()
+        if tercero:
+            tercero_id  = tercero['id']
+            nombre_real = tercero['nombre']
+            conn.execute("UPDATE terceros SET nombre=%s WHERE id=%s", (nombre, tercero_id))
+            conn.commit()
+        else:
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+                (nombre, telefono)
+            )
+            tercero_id  = cur.fetchone()[0]
+            nombre_real = nombre
+            conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'tercero_id': tercero_id, 'nombre': nombre_real, 'telefono': telefono})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def _crear_tabla_citas_vendedor(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS citas_vendedor (
@@ -40594,15 +40630,20 @@ def vendedor_dashboard():
   </div>
 </div>
 
-<!-- ════ MODAL CÓDIGO VENDEDOR ════ -->
+<!-- ════ MODAL IDENTIFICACIÓN VENDEDOR ════ -->
 <div id="modal-codigo" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
   <div class="bg-white rounded-3xl w-80 p-6 space-y-4 shadow-2xl">
-    <h2 class="font-extrabold text-gray-800 text-base text-center">Identificate</h2>
-    <p class="text-xs text-gray-500 text-center">Ingresá tu código o nombre de vendedor. Se guarda en este celular.</p>
-    <input id="inp-codigo" type="text" placeholder="ej: carlos-v"
-           class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 text-center"
-           onkeydown="if(event.key==='Enter') confirmarCodigo()">
-    <button onclick="confirmarCodigo()"
+    <h2 class="font-extrabold text-gray-800 text-base text-center">¿Quién eres?</h2>
+    <p class="text-xs text-gray-500 text-center">Tu nombre y celular se guardan en este dispositivo.</p>
+    <div class="space-y-3">
+      <input id="inp-nombre-v" type="text" placeholder="Nombre completo"
+             class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+      <input id="inp-tel-v" type="tel" placeholder="Celular (ej: 3001234567)"
+             class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+             onkeydown="if(event.key==='Enter') confirmarIdentidad()">
+    </div>
+    <p id="txt-id-error" class="text-xs text-red-500 hidden text-center"></p>
+    <button onclick="confirmarIdentidad()"
             class="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-bold text-sm hover:bg-indigo-700 transition">
       Entrar
     </button>
@@ -40616,26 +40657,48 @@ let _tipo    = 'restaurante';
 let _subtipo = 'menu_dia';
 let _demoCita = null;
 
-// ── Código vendedor ────────────────────────────────────────────────────────
-function codVendedor() { return localStorage.getItem('vd_cod') || ''; }
+// ── Identidad del vendedor ─────────────────────────────────────────────────
+function telVendedor()    { return localStorage.getItem('vd_tel') || ''; }
+function nombreVendedor() { return localStorage.getItem('vd_nombre') || ''; }
 
-function confirmarCodigo() {
-  const v = document.getElementById('inp-codigo').value.trim().toLowerCase().replace(/\\s+/g,'-');
-  if (!v) return;
-  localStorage.setItem('vd_cod', v);
-  document.getElementById('modal-codigo').classList.add('hidden');
-  document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + v;
-  cargarCitas();
+async function confirmarIdentidad() {
+  const nombre   = document.getElementById('inp-nombre-v').value.trim();
+  const telefono = document.getElementById('inp-tel-v').value.trim();
+  const err      = document.getElementById('txt-id-error');
+  if (!nombre || telefono.replace(/\\D/g,'').length < 10) {
+    err.textContent = 'Completá nombre y celular (mín. 10 dígitos).';
+    err.classList.remove('hidden'); return;
+  }
+  const btn = document.querySelector('#modal-codigo button:last-child');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  try {
+    const r = await fetch('/api/vendedor/identificar', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({nombre, telefono})
+    });
+    const d = await r.json();
+    if (!d.ok) { err.textContent = d.error; err.classList.remove('hidden'); btn.disabled=false; btn.textContent='Entrar'; return; }
+    localStorage.setItem('vd_tel',    d.telefono);
+    localStorage.setItem('vd_nombre', d.nombre);
+    document.getElementById('modal-codigo').classList.add('hidden');
+    document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + d.nombre.split(' ')[0];
+    cargarCitas();
+  } catch(e) {
+    err.textContent = 'Error de red.'; err.classList.remove('hidden');
+    btn.disabled=false; btn.textContent='Entrar';
+  }
 }
 
 function cambiarCodigo() {
-  document.getElementById('inp-codigo').value = codVendedor();
+  document.getElementById('inp-nombre-v').value = nombreVendedor();
+  document.getElementById('inp-tel-v').value    = telVendedor();
+  document.getElementById('txt-id-error').classList.add('hidden');
   document.getElementById('modal-codigo').classList.remove('hidden');
 }
 
 // ── Citas ──────────────────────────────────────────────────────────────────
 async function cargarCitas() {
-  const cod = codVendedor();
+  const cod = telVendedor();
   if (!cod) return;
   try {
     const r = await fetch('/api/vendedor/citas?cod=' + encodeURIComponent(cod));
@@ -40729,7 +40792,7 @@ function selTipo(tipo, subtipo) {
 async function guardarCita() {
   const err = document.getElementById('txt-cita-error');
   const payload = {
-    vendedor_cod: codVendedor(),
+    vendedor_cod: telVendedor(),
     tipo:         _tipo,
     subtipo:      _subtipo,
     nombre_negocio: document.getElementById('cita-nombre-neg').value.trim(),
@@ -40791,10 +40854,11 @@ function enviarRol(rol) {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  const cod = codVendedor();
-  if (cod) {
+  const tel = telVendedor();
+  if (tel) {
     document.getElementById('modal-codigo').classList.add('hidden');
-    document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + cod;
+    const nom = nombreVendedor();
+    document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + (nom ? nom.split(' ')[0] : tel);
     cargarCitas();
   }
   // Fecha mínima del picker = hoy

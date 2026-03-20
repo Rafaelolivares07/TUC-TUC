@@ -1,5 +1,5 @@
 # CRM Vendedor — Documento de Desarrollo
-**Última actualización: 2026-03-20**
+**Última actualización: 2026-03-20 (rev. modal unificado + layout)**
 
 ---
 
@@ -10,18 +10,31 @@
 
 ### Módulos activos
 - **Agenda de citas** — crear, ver, marcar como completada
-- **Contactos** — lista personal, importar desde CSV/texto, buscar
+- **Contactos** — lista personal (colapsable), importar desde CSV/texto, buscar. Nombre del contacto usa `break-words` (no trunca en móvil)
 - **Demo launcher** — situaciones predefinidas + lanzar WhatsApp con rol asignado
 - **Plantillas CRM** — mensajes pregrabados, pool compartido entre todos los vendedores
-- **Envío por WhatsApp** — modal con plantillas, detección app nativa vs web fallback
+- **Modal unificado de comunicación** — historial del contacto + selector de canal (WA/Telegram) + compose + envío. Un solo modal para todo.
+- **Log de envíos** — general (mis envíos recientes, colapsable) + por contacto (dentro del modal). Registra siempre aunque no se use plantilla.
+
+### Layout del dashboard (orden actual)
+1. Demo launcher / situaciones
+2. Comisión
+3. Mis envíos recientes (colapsable)
+4. Mis contactos (colapsable, cerrado por defecto)
+5. Objeciones frecuentes (colapsable)
+6. Antes de entrar al local / checklist (colapsable)
 
 ### Tablas de BD involucradas
 | Tabla | Qué guarda |
 |---|---|
 | `contactos` | Lista de prospectos por vendedor (`tercero_id` del vendedor, `negocio_id`) |
 | `plantillas_crm` | Mensajes pregrabados — pool compartido (sin filtro por vendedor) |
-| `plantillas_crm_envios` | Log: qué plantilla, a quién, quién envió, cuándo |
+| `plantillas_crm_envios` | Log: `plantilla_id` (nullable), `contacto_id`, `vendedor_id`, `medio`, `created_at` |
 | `citas_vendedor` | Agenda de citas del vendedor |
+
+### Columnas migradas en esta sesión
+- `plantillas_crm_envios.plantilla_id` → nullable (antes NOT NULL). Permite registrar envíos sin plantilla.
+- `plantillas_crm_envios.medio` → `VARCHAR(20) DEFAULT 'whatsapp'`. Valores: `whatsapp`, `telegram`, `otro`.
 
 ---
 
@@ -76,20 +89,18 @@ Futuro: agregar `negocio_id` a `plantillas_crm` → cada negocio tiene sus propi
 3. Pasar `negocio_id` en todas las APIs: contactos, plantillas, envíos
 4. Agregar columna `negocio_id` a `plantillas_crm_envios`
 
-### Fase 2 — Historial de envíos por contacto
-Al seleccionar un contacto, mostrar panel lateral con:
-- Qué plantilla se usó
-- Quién la envió (`terceros.nombre` del vendedor)
-- Desde qué negocio (`terceros.nombre` del negocio)
-- Cuándo
+### ~~Fase 2 — Historial de envíos por contacto~~ ✅ IMPLEMENTADO
+Historial visible en el modal unificado al abrir un contacto.
+- Muestra `cuerpo` real (no título), vendedor que envió, medio, fecha
+- API: `GET /api/vendedor/envios/contacto/<cid>` — devuelve todos los envíos a ese contacto (cualquier vendedor)
+- API: `GET /api/vendedor/envios` — envíos propios, últimos 100
 
-Query:
+Query interno:
 ```sql
-SELECT p.titulo, tv.nombre AS vendedor, tn.nombre AS negocio, e.created_at
+SELECT p.cuerpo AS plantilla_cuerpo, tv.nombre AS vendedor_nombre, e.medio, e.created_at
 FROM plantillas_crm_envios e
-JOIN plantillas_crm p ON p.id = e.plantilla_id
 JOIN terceros tv ON tv.id = e.vendedor_id
-LEFT JOIN terceros tn ON tn.id = e.negocio_id
+LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
 WHERE e.contacto_id = %s
 ORDER BY e.created_at DESC
 ```
@@ -99,8 +110,17 @@ Actualizar `contactos.negocio_id` con el `tercero_id` del dueño del negocio (en
 
 ---
 
-## 4. WhatsApp — comportamiento implementado
+## 4. Canales de comunicación — comportamiento implementado
 
+### Modal unificado (`modal-wa-contacto`)
+Un solo modal abre desde el botón 💬 en la tarjeta del contacto. Contiene:
+1. Nombre del contacto (cabecera)
+2. Historial de mensajes previos (cuerpo real, medio, fecha)
+3. Selector de canal: [💬 WhatsApp] [✈️ Telegram]
+4. Zona compose (plantillas + textarea) — se oculta si el canal es Telegram
+5. Botón "Abrir en WhatsApp/Telegram →" (siempre visible)
+
+### WhatsApp
 | Contexto | URL usada |
 |---|---|
 | Móvil (cualquier OS) | `wa.me/NUM?text=MSG` |
@@ -109,7 +129,14 @@ Actualizar `contactos.negocio_id` con el `tercero_id` del dueño del negocio (en
 
 Detección de app nativa: `visibilitychange` — si la página pierde foco en <1.5s → app abierta. Si permanece visible → fallback a web.
 
-El fallback web reutiliza pestaña (`_wappWin`) cuando es posible (limitado por COOP headers de WhatsApp).
+### Telegram
+`https://t.me/+NUM` — abre siempre en nueva pestaña. Se registra el envío con `medio='telegram'` y sin plantilla.
+
+### Registro de envíos
+Toda apertura de WA o Telegram se registra en `plantillas_crm_envios`:
+- `plantilla_id` = id de la plantilla seleccionada, o NULL si se escribió manual
+- `medio` = `'whatsapp'` o `'telegram'`
+- `vendedor_id` = tercero_id del vendedor (buscado por teléfono)
 
 ---
 

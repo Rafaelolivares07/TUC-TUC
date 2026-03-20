@@ -40572,12 +40572,20 @@ def _crear_tabla_plantillas_crm(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS plantillas_crm_envios (
             id           SERIAL PRIMARY KEY,
-            plantilla_id INTEGER NOT NULL,
+            plantilla_id INTEGER,
             contacto_id  INTEGER NOT NULL,
             vendedor_id  INTEGER NOT NULL,
+            medio        VARCHAR(20) DEFAULT 'whatsapp',
             created_at   TIMESTAMP DEFAULT NOW()
         )
     """)
+    # Migraciones para tablas ya existentes en producción
+    for sql in [
+        "ALTER TABLE plantillas_crm_envios ALTER COLUMN plantilla_id DROP NOT NULL",
+        "ALTER TABLE plantillas_crm_envios ADD COLUMN IF NOT EXISTS medio VARCHAR(20) DEFAULT 'whatsapp'",
+    ]:
+        try: conn.execute(sql)
+        except Exception: pass
     conn.commit()
 
 
@@ -40652,11 +40660,12 @@ def api_vendedor_plantillas_eliminar(pid):
 @app.route('/api/vendedor/plantillas/envio', methods=['POST'])
 def api_vendedor_plantillas_envio():
     data = request.get_json() or {}
-    plantilla_id = data.get('plantilla_id')
+    plantilla_id = data.get('plantilla_id')  # puede ser None
     contacto_id  = data.get('contacto_id')
     tel_vendedor = (data.get('tel_vendedor') or '').strip()
-    if not plantilla_id or not contacto_id:
-        return jsonify({'ok': False, 'error': 'plantilla_id y contacto_id requeridos'}), 400
+    medio        = (data.get('medio') or 'whatsapp').strip()
+    if not contacto_id:
+        return jsonify({'ok': False, 'error': 'contacto_id requerido'}), 400
     vendedor_id = _tercero_id_por_tel(tel_vendedor) if tel_vendedor else None
     if not vendedor_id:
         return jsonify({'ok': False, 'error': 'vendedor no identificado'}), 400
@@ -40664,14 +40673,67 @@ def api_vendedor_plantillas_envio():
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
         conn.execute(
-            "INSERT INTO plantillas_crm_envios (plantilla_id, contacto_id, vendedor_id) VALUES (%s,%s,%s)",
-            (plantilla_id, contacto_id, vendedor_id)
+            "INSERT INTO plantillas_crm_envios (plantilla_id, contacto_id, vendedor_id, medio) VALUES (%s,%s,%s,%s)",
+            (plantilla_id, contacto_id, vendedor_id, medio)
         )
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/envios')
+def api_vendedor_envios_general():
+    """Historial de envíos del vendedor (solo los suyos)."""
+    tel = request.args.get('tel', '').strip()
+    vendedor_id = _tercero_id_por_tel(tel) if tel else None
+    if not vendedor_id:
+        return jsonify({'ok': True, 'envios': []})
+    try:
+        conn = get_db_connection()
+        _crear_tabla_plantillas_crm(conn)
+        rows = conn.execute("""
+            SELECT e.id, e.medio, e.created_at::text,
+                   c.nombre AS contacto_nombre, c.telefono AS contacto_tel,
+                   p.titulo AS plantilla_titulo
+            FROM plantillas_crm_envios e
+            JOIN contactos c ON c.id = e.contacto_id
+            LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
+            WHERE e.vendedor_id = %s
+            ORDER BY e.created_at DESC
+            LIMIT 100
+        """, (vendedor_id,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'envios': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/vendedor/envios/contacto/<int:cid>')
+def api_vendedor_envios_contacto(cid):
+    """Historial de todos los envíos a un contacto (cualquier vendedor)."""
+    try:
+        conn = get_db_connection()
+        _crear_tabla_plantillas_crm(conn)
+        rows = conn.execute("""
+            SELECT e.medio, e.created_at::text,
+                   tv.nombre AS vendedor_nombre,
+                   p.titulo AS plantilla_titulo
+            FROM plantillas_crm_envios e
+            JOIN terceros tv ON tv.id = e.vendedor_id
+            LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
+            WHERE e.contacto_id = %s
+            ORDER BY e.created_at DESC
+        """, (cid,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'envios': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -40911,6 +40973,18 @@ def vendedor_dashboard():
     <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real.</p>
   </div>
 
+  <!-- ════ MIS ENVÍOS ════ -->
+  <div>
+    <button onclick="toggleHistorialGeneral()"
+            class="w-full flex items-center justify-between px-1 mb-2">
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">Mis envíos recientes</p>
+      <span id="ico-historial-toggle" class="text-gray-400 text-sm">▼</span>
+    </button>
+    <div id="sec-historial-general" class="hidden space-y-1 mb-4">
+      <div id="lista-historial-general" class="text-xs text-gray-400 text-center py-2">Cargando...</div>
+    </div>
+  </div>
+
   <!-- ════ MIS CONTACTOS ════ -->
   <div>
     <div class="flex items-center justify-between mb-2 px-1">
@@ -41074,6 +41148,22 @@ def vendedor_dashboard():
             class="w-full bg-indigo-600 text-white font-bold py-3 rounded-2xl hover:bg-indigo-700 transition">
       Guardar
     </button>
+  </div>
+</div>
+
+<!-- ════ MODAL HISTORIAL CONTACTO ════ -->
+<div id="modal-historial-contacto" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center px-4">
+  <div class="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 shadow-2xl">
+    <div class="flex items-center justify-between">
+      <div>
+        <p class="font-bold text-gray-800">Historial de mensajes</p>
+        <p class="text-xs text-gray-500" id="txt-historial-nombre">—</p>
+      </div>
+      <button onclick="document.getElementById('modal-historial-contacto').classList.add('hidden')" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="lista-historial-contacto" class="space-y-2 max-h-72 overflow-y-auto text-sm text-gray-500 text-center py-4">
+      Cargando...
+    </div>
   </div>
 </div>
 
@@ -41534,11 +41624,13 @@ function renderContactos(lista) {
                 class="w-8 h-8 rounded-full bg-[#25D366] hover:bg-[#1ebe5d] flex items-center justify-center transition" style="background:#25D366">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
         </button>
-        <button onclick="abrirTelegram('${c.telefono}')" title="Telegram"
+        <button onclick="abrirTelegram('${c.telefono}',${c.id})" title="Telegram"
                 class="w-8 h-8 rounded-full flex items-center justify-center transition" style="background:#2AABEE">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="white"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
         </button>
         ` : ''}
+        <button onclick="verHistorialContacto(${c.id},'${(c.nombre||c.telefono||'?').replace(/'/g,"\\'")}')" title="Historial de mensajes"
+                class="w-8 h-8 rounded-full bg-gray-100 hover:bg-yellow-100 flex items-center justify-center text-base transition">🕐</button>
         <button onclick="agendarDesdeContacto('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono||''}')" title="Agendar cita"
                 class="w-8 h-8 rounded-full bg-gray-100 hover:bg-indigo-100 flex items-center justify-center text-base transition">📅</button>
         <button onclick="eliminarContacto(${c.id})" title="Eliminar"
@@ -41554,6 +41646,75 @@ function filtrarContactos(q) {
   renderContactos(_todosContactos.filter(c =>
     (c.nombre||'').toLowerCase().includes(lo) || (c.telefono||'').includes(lo)
   ));
+}
+
+// ── HISTORIAL DE ENVÍOS ────────────────────────────────────────────────────
+const _medioLabel = { whatsapp: '💬 WhatsApp', telegram: '✈️ Telegram', otro: '📨 Otro' };
+
+function _fmtFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-CO', {day:'2-digit', month:'short', year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+}
+
+function toggleHistorialGeneral() {
+  const sec = document.getElementById('sec-historial-general');
+  const ico = document.getElementById('ico-historial-toggle');
+  const oculto = sec.classList.toggle('hidden');
+  ico.textContent = oculto ? '▼' : '▲';
+  if (!oculto && document.getElementById('lista-historial-general').textContent === 'Cargando...') {
+    cargarHistorialGeneral();
+  }
+}
+
+async function cargarHistorialGeneral() {
+  const tel = telVendedor();
+  const zona = document.getElementById('lista-historial-general');
+  if (!tel) { zona.innerHTML = '<p class="text-center py-2">Ingresa tu teléfono primero.</p>'; return; }
+  try {
+    const r = await fetch('/api/vendedor/envios?tel=' + encodeURIComponent(tel));
+    const d = await r.json();
+    if (!d.ok || !d.envios.length) {
+      zona.innerHTML = '<p class="text-center py-2 text-gray-400">Aún no hay envíos registrados.</p>';
+      return;
+    }
+    zona.innerHTML = d.envios.map(e => `
+      <div class="bg-gray-50 rounded-xl px-3 py-2 flex items-start gap-2">
+        <span class="text-base mt-0.5">${_medioLabel[e.medio] || '📨'}</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-800 text-xs truncate">${e.contacto_nombre || e.contacto_tel || '?'}</p>
+          <p class="text-xs text-gray-500 truncate">${e.plantilla_titulo || 'Sin plantilla'}</p>
+          <p class="text-xs text-gray-400">${_fmtFecha(e.created_at)}</p>
+        </div>
+      </div>
+    `).join('');
+  } catch { zona.innerHTML = '<p class="text-center py-2 text-red-400">Error de red.</p>'; }
+}
+
+async function verHistorialContacto(cid, nombre) {
+  document.getElementById('txt-historial-nombre').textContent = nombre;
+  const zona = document.getElementById('lista-historial-contacto');
+  zona.innerHTML = '<p class="text-center py-4 text-gray-400">Cargando...</p>';
+  document.getElementById('modal-historial-contacto').classList.remove('hidden');
+  try {
+    const r = await fetch('/api/vendedor/envios/contacto/' + cid);
+    const d = await r.json();
+    if (!d.ok || !d.envios.length) {
+      zona.innerHTML = '<p class="text-center py-4 text-gray-400">Nadie le ha enviado mensajes aún.</p>';
+      return;
+    }
+    zona.innerHTML = d.envios.map(e => `
+      <div class="bg-gray-50 rounded-xl px-3 py-2 flex items-start gap-2">
+        <span class="text-base mt-0.5">${_medioLabel[e.medio] || '📨'}</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold text-gray-800 text-xs">${e.vendedor_nombre || 'Vendedor'}</p>
+          <p class="text-xs text-gray-500 truncate">${e.plantilla_titulo || 'Sin plantilla'}</p>
+          <p class="text-xs text-gray-400">${_fmtFecha(e.created_at)}</p>
+        </div>
+      </div>
+    `).join('');
+  } catch { zona.innerHTML = '<p class="text-center py-4 text-red-400">Error de red.</p>'; }
 }
 
 function llamar(tel) {
@@ -41654,9 +41815,15 @@ async function eliminarPlantilla(id) {
   cargarPlantillas();
 }
 
-function abrirTelegram(tel) {
+function abrirTelegram(tel, contactoId) {
   const num = tel.replace(/[^\\d]/g,'');
   window.open('https://t.me/+' + num, '_blank');
+  if (contactoId) {
+    fetch('/api/vendedor/plantillas/envio', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor() })
+    }).catch(() => {});
+  }
 }
 
 let _wappWin = null;  // referencia a pestaña web de WhatsApp (fallback sin app)
@@ -41697,14 +41864,14 @@ function enviarWaContacto() {
     }, 1500);
   }
 
-  // Registrar envío si se usó una plantilla
-  if (_plantillaSeleccionadaId && contactoId) {
+  // Registrar siempre (con o sin plantilla)
+  if (contactoId) {
     fetch('/api/vendedor/plantillas/envio', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        plantilla_id: _plantillaSeleccionadaId,
+        plantilla_id: _plantillaSeleccionadaId || null,
         contacto_id: parseInt(contactoId),
+        medio: 'whatsapp',
         tel_vendedor: telVendedor()
       })
     }).catch(() => {});

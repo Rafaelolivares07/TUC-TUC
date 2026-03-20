@@ -40812,9 +40812,8 @@ def vendedor_dashboard():
              oninput="filtrarContactos(this.value)"
              class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 bg-white">
     </div>
-    <div id="lista-contactos" class="space-y-2">
-      <p class="text-xs text-gray-400 text-center py-4" id="txt-contactos-vacio">Cargando...</p>
-    </div>
+    <p class="text-xs text-gray-400 text-center py-4" id="txt-contactos-vacio">Cargando...</p>
+    <div id="lista-contactos" class="space-y-2"></div>
     <!-- Botón de migración: vincula contactos importados antes del nuevo sistema -->
     <div id="sec-reclamar" class="hidden text-center pt-1">
       <button onclick="reclamarContactos()"

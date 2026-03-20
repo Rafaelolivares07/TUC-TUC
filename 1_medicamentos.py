@@ -41615,6 +41615,8 @@ function abrirWaContacto(nombre, tel) {
   document.getElementById('modal-wa-contacto').dataset.tel = tel;
 }
 
+let _wappWin = null;  // referencia a la pestaña de WhatsApp
+
 function enviarWaContacto() {
   const tel = document.getElementById('modal-wa-contacto').dataset.tel || '';
   const msg = document.getElementById('inp-wa-mensaje').value.trim();
@@ -41626,7 +41628,14 @@ function enviarWaContacto() {
   } else {
     url = 'https://web.whatsapp.com/send?phone=' + num + (msg ? '&text=' + encodeURIComponent(msg) : '');
   }
-  window.open(url, 'wapp_tab');  // reutiliza siempre la misma pestaña
+  if (isMobile) {
+    window.open(url, '_blank');  // en móvil siempre abre la app
+  } else if (_wappWin && !_wappWin.closed) {
+    _wappWin.location.href = url;  // navega la pestaña existente
+    _wappWin.focus();
+  } else {
+    _wappWin = window.open(url, '_blank');  // primera vez: abre y guarda referencia
+  }
   document.getElementById('modal-wa-contacto').classList.add('hidden');
 }
 

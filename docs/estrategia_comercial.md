@@ -567,7 +567,7 @@ El admin del negocio decide si el cliente en el local solo ve la carta o puede h
 - [ ] Definir precio oficial por plan (actualmente orientativo, confirmar con Rafael)
 - [ ] Construir guión adaptado para tienda (dolor WhatsApp, demo con catálogo)
 - [ ] Definir el proceso de onboarding para vendedores externos
-- [ ] CRM básico para vendedores — diseñar revisando este manual. Estados: visitado / demo hecha / en pausa / cerrado / descartado. Incluye: días de prueba activos/pausados, fecha última interacción, razón de no cierre. Prospectos quedan en BD aunque se elimine el negocio. **Validación de agenda:** calcular si el tiempo de desplazamiento entre citas programadas es factible — usar la cadena de routing ya existente: grafo propio → Waze → OSRM (sin dependencias nuevas).
+- ~~[ ] CRM básico para vendedores~~  ✅ IMPLEMENTADO (2026-03-19) — ver detalle abajo
 - [ ] Identificar los 10 negocios ideales para primeras visitas (datos, mapa, prioridad)
 - [ ] Afinar el comparativo con argumentos concretos para cada objeción
 
@@ -590,6 +590,38 @@ Esto no rompe la estrategia porque quien llega a `/empieza` ya pasó por un filt
 - Métricas por vendedor (demos → registros → conversión)
 
 Hoy la asociación vendedor-cliente se hace manualmente. Este pendiente técnico es la siguiente pieza del modelo de comisiones.
+
+---
+
+### Dashboard del vendedor `/vendedor` ✅ IMPLEMENTADO (2026-03-19)
+
+Herramienta de campo completa para vendedores externos. URL pública, sin login de admin.
+
+**Identificación:**
+- Primera vez: pide nombre completo + celular (patrón `terceros`, igual que el resto de la plataforma)
+- Si ya hay sesión activa en el navegador (entró a TUC TUC antes): se auto-identifica, sin modal
+- El teléfono es el identificador — si ya existe en `terceros`, bienvenido de vuelta
+
+**Agenda de citas (`citas_vendedor` BD):**
+- "Nueva cita" → el vendedor llena: tipo de negocio (restaurante menú/carta, tienda), nombre del negocio, nombre del dueño, teléfono, fecha y hora
+- Al confirmar: el negocio se **pre-crea en la plataforma** con `dias_pagados=0` (mismo mecanismo que `/empieza`)
+- El sistema valida que no haya otra cita en una franja de 1.5 horas
+- Si choca: avisa con el nombre y hora del conflicto
+- Estados de cita: `pendiente → hecha → cerrada → descartada`
+
+**Demo launcher (se activa al tocar una cita):**
+- Carga el slug del negocio automáticamente
+- Menú de "situaciones" (no "dolores" — lenguaje del dueño):
+  - Situación #1 — El mesero viaja a cocina: guión de 4 pasos + selector Mesero/Cocinero → WhatsApp con link `/r/<slug>/mesero` o `/r/<slug>/cocina`
+  - Situación #2 — WhatsApp todo el día: guión + botón abrir página pública
+  - Situaciones 3 y 4: desactivadas (próximamente)
+- El vendedor nunca toca el celular del cliente — le envía el link por WhatsApp, el cliente lo abre en el suyo
+
+**APIs:**
+- `POST /api/vendedor/identificar` — busca/crea tercero por teléfono
+- `POST /api/vendedor/cita` — crea negocio + guarda cita + valida horario
+- `GET /api/vendedor/citas?cod=<tel>` — lista citas próximas del vendedor
+- `POST /api/vendedor/cita/<id>/estado` — actualiza estado
 
 ---
 

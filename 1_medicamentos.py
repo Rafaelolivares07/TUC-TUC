@@ -40353,6 +40353,18 @@ def api_vendedor_cita_estado(cita_id):
 def vendedor_dashboard():
     """Dashboard público para vendedores externos — agenda + demo launcher."""
     from flask import render_template_string
+    # Si hay sesión activa, recuperar nombre y teléfono del tercero
+    uid = session.get('usuario_id')
+    vendedor_pre = {'nombre': '', 'telefono': ''}
+    if uid:
+        try:
+            conn = get_db_connection()
+            t = conn.execute("SELECT nombre, telefono FROM terceros WHERE id=%s", (uid,)).fetchone()
+            conn.close()
+            if t:
+                vendedor_pre = {'nombre': t['nombre'] or '', 'telefono': t['telefono'] or ''}
+        except Exception:
+            pass
     html = """<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -40854,6 +40866,16 @@ function enviarRol(rol) {
 
 // ── Init ───────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  // Datos pre-cargados desde la sesión del servidor (si el usuario ya estaba logueado)
+  const srvNombre = "{{ vd_nombre }}";
+  const srvTel    = "{{ vd_telefono }}";
+
+  // Si el servidor ya conoce al usuario, guardamos y saltamos el modal
+  if (srvTel && srvTel.length >= 10) {
+    localStorage.setItem('vd_tel',    srvTel);
+    localStorage.setItem('vd_nombre', srvNombre);
+  }
+
   const tel = telVendedor();
   if (tel) {
     document.getElementById('modal-codigo').classList.add('hidden');
@@ -40867,7 +40889,9 @@ window.addEventListener('DOMContentLoaded', () => {
 </script>
 
 </body></html>"""
-    return render_template_string(html)
+    return render_template_string(html,
+        vd_nombre=vendedor_pre['nombre'],
+        vd_telefono=vendedor_pre['telefono'])
 
 
 @app.route('/api/admin/contabilidad/variables-modulos', methods=['GET'])

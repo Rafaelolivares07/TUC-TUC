@@ -41423,7 +41423,11 @@ function llamar(tel) {
 
 function abrirWa(tel) {
   const num = tel.replace(/[^\\d+]/g,'');
-  window.open('https://web.whatsapp.com/send?phone=' + num, '_blank');
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const url = isMobile
+    ? 'https://wa.me/' + num
+    : 'https://web.whatsapp.com/send?phone=' + num;
+  window.open(url, '_blank');
 }
 
 function abrirTelegram(tel) {

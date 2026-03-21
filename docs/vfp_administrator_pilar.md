@@ -1,5 +1,5 @@
 # Proyecto VFP — Administrator (SAR) — Contexto y Pendientes
-_Actualizado: 2026-03-21_
+_Actualizado: 2026-03-21 — análisis SCT profundo agregado_
 
 ---
 
@@ -18,7 +18,7 @@ _Actualizado: 2026-03-21_
 | Recurso | Ruta |
 |---|---|
 | BD cliente (VFP) | `C:\D\Pilar Peralta\basedatosempresas\` |
-| Tabla facturas Allegra | `prod_fact1.dbf` (dentro de la ruta anterior) |
+| Archivo `prod_fact1.dbf` | Existe en la ruta anterior — **propósito desconocido**. Fue etiquetado incorrectamente como "tabla de facturas Allegra" en una sesión anterior sin base real. No asumir nada hasta verificar. |
 | Proyecto VFP | `C:\S.A.R\PROYECTO\` |
 | Scripts de trabajo Python | `C:\S.A.R\` |
 
@@ -177,19 +177,118 @@ Formulario de **captura de ítems**. El vendedor busca cliente y productos, los 
 | `PROD_FACT` | SELECT + DELETE ALL | Origen ítems → limpia al cerrar |
 | `PROD_FACT1` | INSERT | **Registro DEFINITIVO de ventas** |
 | `CONSECUTIVOS` | SELECT + UPDATE | Consecutivo de factura |
-| `REG_CTAS` | SELECT + INSERT | Cuentas por cobrar |
-| `reg_ctas_notas_documentos` | INSERT | Notas del documento |
+| `REG_CTAS` | APPEND BLANK + REPLACE | **Asientos contables — tabla principal de contabilidad** |
+| `SAL_DOC` | APPEND BLANK + REPLACE | Saldos por documento (usado en contabilización de comisión vendedor) |
+| `reg_ctas_notas_documentos` | INSERT | Notas asociadas al documento contable |
+| `reg_costos_temporal` | APPEND BLANK + REPLACE + DELETE ALL | **Tabla de paso de costos** (física en disco, se vacía al cerrar) |
+| `REG_PROD` | Abierta en Init / cerrada en Unload | **Movimientos de inventario** — este formulario la abre pero NO escribe directamente; la escribe `costo_ventas_contabiliza.prg` |
 | `TIPO_DOC` | SELECT | Tipos de documento disponibles |
 | `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR` | SELECT | Config. contable |
 | `EMPRESA_CONFIGURAR` | SELECT | Config. por empresa/máquina |
 | `TERCEROS` | SELECT | Datos del cliente |
 | `TELEFONOS` | SELECT | Teléfono del cliente |
 | `VENTAS_VENDEDOR` | SELECT | Comisiones |
-| `reg_costos_temporal` | APPEND + REPLACE | Costo de ventas |
 | `FACTURAR_CONFIGURAR` | SELECT + UPDATE + INSERT | Config. ticket/impresión |
 | `facturas_entregas` | INSERT | Despachos |
 | `FACTURAR_PERSONAS_FACTURA` | INSERT | Propina/personas (restaurante) |
 | `productos_reservas` | SELECT + REPLACE | Liberar reservas |
+
+---
+
+#### Análisis profundo de tablas por módulo — extraído del SCT (2026-03-21)
+
+> ✅ = confirmado directamente en el código del SCT
+> 🔍 = suposición de análisis — posibilidad razonable, no confirmada desde este formulario
+
+---
+
+##### INVENTARIO
+
+**Tabla `PROD_FACT1`** ✅
+- `INSERT INTO PROD_FACT1` con campos: `consecutivo, cod_pro, cantidad, precio, cod_fac, descuento, usuario, empresa, fechahora, por_iva, sector, vendedor, cliente, tip_fac, conse_reg_pro, conse_origen, costo, comision`
+- Es el **registro definitivo** de cada ítem vendido. Se escribe en `REGISTRA_PROD_FACT1`.
+
+**Tabla `PROD_FACT`** ✅
+- Solo se lee (SELECT) y al final se vacía: `DELETE ALL` — limpia los ítems temporales del cliente o sector al cerrar la factura.
+
+**Procedimiento `STANDAR`** ✅ (PRG externo)
+- Llamado así desde `registra_prod_fact1`:
+  ```foxpro
+  DO STANDAR WITH LCTIP_FAC, LNUMERO, LLAPSO, LNCANTIDAD, UPPER(ALLTRIM(LCPRODUCTO)), LNCOSTO
+  ```
+- Devuelve `LNCONSE` (consecutivo del registro creado) y `vncosto` (costo calculado).
+- **El formulario NO sabe qué tablas escribe STANDAR** — eso está en `standar.prg`.
+- 🔍 **Suposición**: `STANDAR` probablemente actualiza saldos de stock (tabla como `REG_PROD_SALDOS` o similar), pero no está confirmado desde aquí.
+
+**Tabla `REG_PROD`** ✅ (apertura confirmada) / 🔍 (escritura no confirmada desde aquí)
+- `PROC_ABRIR_TABLA("REG_PROD")` en el Init del formulario — se abre al cargar.
+- Cerrada con `USE` en el Unload.
+- Este formulario NO tiene INSERT/APPEND/REPLACE sobre `REG_PROD` en su código.
+- 🔍 **Suposición**: `costo_ventas_contabiliza.prg` (PRG externo llamado desde este formulario) la escribe con el movimiento de inventario — pero esto no se confirmó leyendo ese PRG.
+
+---
+
+##### CONTABILIDAD
+
+**Tabla `REG_CTAS`** ✅ — tabla principal de asientos contables
+
+Dos rutas de escritura confirmadas:
+
+**Ruta A — venta (automática)**:
+```foxpro
+INSERTAR_REG_CTAS_AUTOMATICO(LDLAPSO, LCTIPODOC, LCNUMTER, LNNUMDOC)
+```
+Función externa en `busquedad_registros.prg`. El comentario en el código dice explícitamente: `** LLAMA AL PROCEDIMIENTO QUE INSERTA LA INFORMACION EN LA TABLA REG_CTAS`.
+
+**Ruta B — comisión del vendedor (directa)**:
+```foxpro
+APPEND BLANK
+REPLACE TIP_DOC, NUM_DOC, COD_CUE ("613502"), NAT_CUE ("D"), FEC_DOC, EMP, ...
+APPEND BLANK
+REPLACE TIP_DOC, NUM_DOC, COD_CUE ("233520"), NAT_CUE ("C"), FEC_DOC, EMP, ...
+```
+- Débito: cuenta `613502` (gasto de comisión de ventas)
+- Crédito: cuenta `233520` (comisión por pagar al vendedor)
+
+**Tabla `SAL_DOC`** ✅ — saldos por documento
+```foxpro
+PROC_ABRIR_TABLA("SAL_DOC")
+APPEND BLANK
+REPLACE TIP_DOC, NUM_DOC, COD_CUE ("233520"), COD_TER, NAT_CUE ("C"), FEC_DOC, EMP, FEC_HOR, USU, VALOR
+```
+Escrita en el mismo procedimiento de comisión vendedor.
+
+**Tabla `reg_ctas_notas_documentos`** ✅
+```foxpro
+INSERT INTO reg_ctas_notas_documentos (tipo, numero, empresa, tercero, nota, ...)
+```
+Notas asociadas a cada documento contable.
+
+---
+
+##### COSTOS
+
+**Tabla `reg_costos_temporal`** ✅ — tabla de paso física (confirmada como física, no cursor)
+
+Flujo completo confirmado:
+1. `PROC_ABRIR_TABLA("reg_costos_temporal")` — se abre como tabla física en disco
+2. `DELETE ALL` — se limpia antes de usar (asegura que esté vacía para esta factura)
+3. Por cada producto: `APPEND blank` + `REPLACE cod_pro, cantidad, cod_fac, usuario, empresa, tipo_doc, tercero, costo`
+4. `DO costo_ventas_contabiliza` — PRG externo que lee esta tabla y genera los asientos de costo
+5. Al cerrar el formulario: si `VAR_SALIR_COMPLETO_COSTOS = 1` → `DELETE ALL` (vacía para próxima factura)
+
+🔍 **Suposición**: `costo_ventas_contabiliza.prg` probablemente escribe en `REG_CTAS` (asientos de costo de ventas) y en `REG_PROD` (movimiento de inventario) — pero no se confirmó leyendo ese PRG.
+
+---
+
+##### PRGs EXTERNOS CLAVE (identificados pero no leídos aún)
+| PRG | Llamado desde | Función probable (🔍 suposición) |
+|---|---|---|
+| `standar.prg` | `REGISTRA_PROD_FACT1` | Movimiento de stock/inventario |
+| `costo_ventas_contabiliza.prg` | procedure de costos | Lee `reg_costos_temporal`, escribe asientos de costo |
+| `busquedad_registros.prg` | `CONTABILIZAR` | Contiene `INSERTAR_REG_CTAS_AUTOMATICO` |
+
+> Estos PRGs son el siguiente nivel de profundidad — cuando sea necesario diseñar la interfaz con Allegra, habrá que leerlos también.
 
 #### Queries SQL clave
 ```sql
@@ -245,12 +344,12 @@ INTO CURSOR CRTIPOVENTA READWRITE
 Pilar paga $90.000/mes por Allegra solo para facturación. Si Administrator cubre esa funcionalidad, hay ahorro directo para el cliente y servicio de valor para SAR.
 
 ### Datos disponibles para análisis
-- `C:\D\Pilar Peralta\basedatosempresas\prod_fact1.dbf` — facturas de Allegra
-- Se puede consultar cuántas facturas hacen por mes, volumen, y comparar con el límite de Allegra
+- `C:\D\Pilar Peralta\basedatosempresas\prod_fact1.dbf` — archivo presente en la BD del cliente. **Propósito desconocido — no asumir** (ver nota en sección 1, Rutas clave).
+- Una vez identificado qué es `prod_fact1.dbf`, se puede consultar volumen y estructura.
 
 ### Próximos pasos cuando se cierre el negocio
-1. Revisar el módulo de facturación actual en Administrator y comparar con lo que usa Allegra
-2. Consultar `prod_fact1.dbf` para entender estructura y volumen de facturas de Allegra
+1. Identificar qué es realmente `prod_fact1.dbf` — abrirlo con Python y ver sus campos
+2. Revisar el módulo de facturación actual en Administrator y comparar con lo que usa Allegra
 3. Definir qué falta en Administrator para reemplazar completamente a Allegra
 4. Plan de migración: transición gradual o corte total
 

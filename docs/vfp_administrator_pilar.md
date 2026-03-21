@@ -427,9 +427,66 @@ INTO CURSOR CRTIPOVENTA READWRITE
 - **Las rutas exactas se perdieron** — pendiente recuperarlas desde el portal/web de Allegra.
 - Pilar Peralta es cliente de Allegra. Rafael accede como proveedor/integrador de Administrator.
 
+---
+
+### Arquitectura de la interfaz — ESQUELETO LISTO (2026-03-21)
+
+**Decisión de diseño**: NO se usa `facturar_cancelar.scx` como intermediario. La interfaz llama directamente a los PRGs. Esto permite procesamiento automático sin abrir formularios.
+
+```
+[Portal web Allegra]
+        ↓  (HTTP/API — rutas ⚠️ PENDIENTES)
+allegra_sync.py  (C:\S.A.R\allegra_sync.py)
+        ↓  (escribe DBF intermedio)
+allegra_pendientes.dbf  (C:\S.A.R\)
+        ↓  (VFP lee el DBF)
+interfaz_allegra.prg  (C:\S.A.R\PROYECTO\)
+        ↓  (llama PRGs existentes en orden)
+  standar.prg           → REG_PROD + REG_PROD_SALDOS
+  costo_ventas_contabiliza.prg → REG_CTAS (costo)
+  contabilizar.prg      → valores_insertar → inserta_reg_ctas → REG_CTAS + REG_CTAS_SALDOS
+        ↓
+  PROD_FACT1, CONSECUTIVOS, reg_ctas_notas_documentos
+```
+
+**Archivos creados (esqueleto)**:
+| Archivo | Ruta | Estado |
+|---|---|---|
+| `allegra_sync.py` | `C:\S.A.R\` | ✅ Esqueleto Python — completar con credenciales/endpoints |
+| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Esqueleto VFP — completar con valores BD de Pilar |
+
+### Checklist — lo que falta para activar la interfaz
+
+#### De Allegra (necesita acceso al portal)
+- [ ] URL base del portal de Allegra
+- [ ] Endpoint de facturas (GET o POST, params de filtro)
+- [ ] Endpoint de ítems por factura (o si vienen dentro de la factura)
+- [ ] Tipo de autenticación (API key, OAuth, usuario/contraseña)
+- [ ] Nombres exactos de campos en la respuesta (id, nit, tipo_doc, num_doc, cod_pro, cantidad, precio, iva, descuento, costo)
+- [ ] ¿Allegra expone el costo del producto o solo el precio de venta?
+
+#### De la BD de Pilar (consultar con `python` o con VFP directamente)
+- [ ] `VAR_CODIGO_EMPRESA_USUARIO` — valor exacto en tabla `EMPRESAS`
+- [ ] `VAR_CODIGO_BODEGA_ACTUAL` — bodega activa de Pilar
+- [ ] `PVNOMBRE_MAQUINA` — nombre del PC en `EMPRESA_CONFIGURAR`
+- [ ] `VP_CONSECUTIVO_FORMULARIO` — **CRÍTICO**: número de configuración contable para FV. Consultar:
+  ```sql
+  SELECT DISTINCT NUMERO FROM CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR
+  WHERE ALLTRIM(DOCUMENTO)=="FV" AND ALLTRIM(EMPRESA)==VAR_CODIGO_EMPRESA_USUARIO
+  ```
+- [ ] Mapeo `PVAR_CON_PRO1..9` → qué concepto representa cada número en `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR` para FV
+- [ ] Campo de NIT en `TERCEROS` (candidato: `IDENTIFICACION`) — confirmar nombre exacto
+- [ ] Campo de PK en `TERCEROS` — confirmar nombre exacto (candidato: `CONSECUTIVO`)
+- [ ] `TIPO_INVE` para documento `FV` en tabla `TIPO_DOC` — confirmar que es 2 (salida)
+
+#### Decisión pendiente
+- [ ] Numeración de facturas: ¿usar el número de Allegra o el consecutivo propio de Administrator?
+
 ### Lo que falta para continuar
-1. Recuperar las rutas/endpoints del portal web de Allegra
-2. Diseñar la interfaz: cómo los datos de Allegra alimentan `facturar_cancelar.scx` — probablemente pre-llenando `PROD_FACT` con los ítems de Allegra y luego disparando el cierre normal
+1. Obtener acceso al portal de Allegra y recuperar rutas/endpoints
+2. Llenar los `???` en `allegra_sync.py` con credenciales y endpoints reales
+3. Llenar los `???` en `interfaz_allegra.prg` con valores de la BD de Pilar
+4. Probar con una factura real antes de activar en producción
 
 ---
 

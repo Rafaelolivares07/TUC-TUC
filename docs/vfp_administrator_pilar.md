@@ -480,8 +480,25 @@ interfaz_allegra.prg  (C:\S.A.R\PROYECTO\)
   - PRO1: cuenta 413548 CREDITO → ingreso bruto (subtotal sin IVA) — probable
   - PRO2: cuenta 240801 CREDITO → IVA 19% — probable
   - PRO7: cuenta 130505 DEBITO CRUZE=1 → cartera CxC (total con IVA) — probable
-  - PRO3..6, PRO8: cuentas 530535, 240807, 11100503, 110505, 111002 — **confirmar observando una factura real procesada**
+  - PRO3..6, PRO8: cuentas 530535, 240807, 11100503, 110505, 111002 — probablemente $0 en facturas normales de contado (retenciones, otras formas de pago)
+  - **Cómo verificar**: leer REG_CTAS filtrando por una factura reciente (TIP_DOC='013', empresa='02') y cruzar cuenta→valor con CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR.VAR_CON_PRO
+
+  ```python
+  # Script de verificación a correr antes del primer run real:
+  # SELECT cuenta, debito, credito, valor FROM REG_CTAS
+  # WHERE ALLTRIM(tipo_doc)=='013' AND ALLTRIM(empresa)=='02'
+  # AND num_doc = <número de una factura conocida>
+  # Resultado: confirma qué monto fue a qué cuenta → mapea al PRO correspondiente
+  ```
+
 - [ ] Confirmar TIPO_INVE del documento '013' en TIPO_DOC (esperado: 2=salida)
+
+#### Estrategia de prueba recomendada (antes de activar en producción)
+1. Correr `interfaz_allegra.prg` con **1 sola factura de prueba**
+2. Revisar inmediatamente `REG_CTAS` — verificar que débitos = créditos
+3. Revisar `PROD_FACT1` — verificar que el ítem quedó registrado correctamente
+4. Revisar `REG_PROD` / `REG_PROD_SALDOS` — verificar movimiento de inventario
+5. Si todo cuadra → activar procesamiento del lote completo
 
 #### Decisión pendiente
 - [ ] Numeración de facturas: **Por ahora Opción A** (número de Allegra = LC_NUM_DOC). CONSECUTIVOS empresa='02' TIPO_DOC='013' tiene 43.584 — sugiere que ya se sincronizaban. Confirmar si los números de Allegra coinciden con CONSECUTIVOS.

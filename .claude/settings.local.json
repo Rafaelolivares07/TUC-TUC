@@ -44,7 +44,14 @@
       "Bash(pg_dump:*)",
       "Bash(move:*)",
       "Bash(\"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\" -h localhost -U postgres -d tuctuc_local -c \"SELECT * FROM festivos ORDER BY fecha;\")",
-      "Bash(git filter-branch:*)"
+      "Bash(git filter-branch:*)",
+      "Bash(chmod:*)",
+      "Bash(xxd)",
+      "Bash(bash .git/hooks/post-push)",
+      "Skill(update-config)",
+      "Bash(\"/c/Program Files/PostgreSQL/18/bin/psql\" \"postgresql://postgres:grandesventas99@localhost:5432/tuctuc_local\" -c \"UPDATE config_tipologia SET dias_gratis = 0;\")",
+      "Bash(pip show:*)",
+      "Bash(pipwin install:*)"
     ],
     "deny": [],
     "ask": []

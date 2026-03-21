@@ -72,8 +72,15 @@ def get_requerimientos():
 
 def set_window_title():
     try:
-        import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleW("Claude Code")
+        import subprocess
+        r = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             'Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Id'],
+            capture_output=True, text=True, timeout=5
+        )
+        pid_str = r.stdout.strip()
+        if pid_str.isdigit():
+            Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt").write_text(pid_str)
     except Exception:
         pass
 

@@ -1,8 +1,8 @@
 # Manual de Usuario — Domótica (TUC TUC Smart Home)
 
 **Módulo:** Domótica
-**Versión:** 1.1
-**Última actualización:** 2026-03-14
+**Versión:** 1.2
+**Última actualización:** 2026-03-17
 **Audiencia:** Propietarios de inmuebles registrados en TUC TUC
 
 ---
@@ -80,6 +80,30 @@ Las automatizaciones permiten que los dispositivos reaccionen a condiciones del 
 **Ejemplo**: Encender el enchufe del cargador de laptops cuando la batería solar supera el 90%, y apagarlo cuando baja del 40%.
 
 Esta función es avanzada y generalmente la configura el equipo técnico de TUC TUC. Comunícate si necesitas ajustar estos parámetros.
+
+---
+
+## Apagar PC remotamente
+
+Si tu propiedad tiene el sistema de presencia configurado con `captura_watcher.ps1` corriendo en la laptop, puedes apagar el PC desde cualquier lugar usando el panel de domótica.
+
+### Cómo apagar el PC
+
+1. Abre el panel de domótica en tu celular
+2. Busca la tarjeta **Laptop / PC** en el panel
+3. Toca el botón **🔴 Apagar PC**
+4. Confirma la acción en el diálogo
+5. El botón cambia a "✓ Comando enviado"
+6. En el próximo ciclo del heartbeat (máximo ~60 segundos) el PC recibe la orden y se apaga en 15 segundos
+
+### ¿Qué pasa exactamente?
+
+- El botón envía el comando al servidor (se guarda en la base de datos)
+- La próxima vez que el script local (`captura_watcher.ps1`) hace su chequeo de presencia, recibe el comando
+- El script ejecuta `shutdown.exe /s /f /t 15` — el PC se apaga en 15 segundos
+- Si el PC ya estaba apagado, el comando se descarta automáticamente en el próximo heartbeat
+
+> **Nota**: el PC tarda máximo ~75 segundos en apagarse (60s de ciclo + 15s del shutdown). No hay manera de cancelar el shutdown una vez que el script lo recibió.
 
 ---
 

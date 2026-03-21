@@ -105,11 +105,14 @@ Sin `since_id`: devuelve los últimos 60 mensajes (carga inicial).
 $DB_URL            = "postgresql://..."    # conexión directa a Render
 $CLAUDE_WINDOW     = "Claude Code"        # título de ventana a activar
 $COOLDOWN_SEC      = 45                   # mínimo entre disparos
-$POLL_SEC          = 10                   # intervalo de polling
+$POLL_SEC          = 2                    # intervalo de polling (reducido para menor latencia)
+$DB_POLL_CADA      = 10                   # check completo de BD cada N segundos
 $HB_CADA           = 60                   # heartbeat de presencia cada N segundos
 $SENDKEYS_COOLDOWN = 90                   # segundos a ignorar windowsIdle después de SendKeys
 $PID_FILE          = "C:\Users\RAFAEL OLIVARES\claude_pid.txt"
 ```
+
+> **Nota (2026-03-18):** TTS (Helena leía respuestas) y STT (escuchaba micrófono) fueron eliminados del watcher. El único punto de voz que queda es el saludo de Helena en `iniciar_tuctuc.ps1`.
 
 ### Query de detección (Python embebido)
 ```python
@@ -338,6 +341,7 @@ const SILENCIO_MS = 1800;  // ms de silencio antes de auto-enviar
 | Int32 overflow en elapsed | [int] no cabe 63B segundos | Usar [long] y chequear $null |
 | Heartbeat reporta presencia con usuario ausente | SendKeys resetea idle de Windows → watcher leía windowsIdle<30 y actualizaba lastRealInput | $lastSendKeys + $SENDKEYS_COOLDOWN=90s — no actualizar lastRealInput por 90s después de SendKeys |
 | Dos emisores de heartbeat en paralelo | presencia_heartbeat.ps1 + captura_watcher.ps1 corrían a la vez | Eliminar presencia_heartbeat.ps1 del startup; único emisor = captura_watcher.ps1 |
+| Botón ayuda contextual tapa el input en móvil | `#btn-ayuda-inspector` posicionado a `bottom:24px` coincide con el área del textarea en pantallas pequeñas | Override CSS en `captura_chat.html`: `#btn-ayuda-inspector { bottom: 90px; }` |
 
 ---
 
@@ -372,10 +376,19 @@ Start-Process powershell `
 Start-Process wt `
     -ArgumentList "-w 0 nt --title `"✨ Claude Code`" -d `"...\MiAppMedicamentos`" powershell -NoExit -Command claude" `
     -WindowStyle Minimized
+
+# 3. Saludo de voz Helena (5s después de que Claude abre)
+Start-Sleep -Seconds 5
+Add-Type -AssemblyName System.Speech
+$voz = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try { $voz.SelectVoice("Helena") } catch {}
+$voz.Speak("Hola Rafael, ya estoy disponible")
 ```
 
 **Nota**: `presencia_heartbeat.ps1` (que existía antes) fue eliminado del startup.
 El heartbeat de presencia ahora lo gestiona exclusivamente `captura_watcher.ps1` (ver sección 4).
+
+**Saludo de voz**: Helena habla "Hola Rafael, ya estoy disponible" ~5 segundos después del arranque, para que Rafael sepa que Claude está listo sin tener que abrir la terminal.
 
 **Política de ejecución:** `RemoteSigned` en `CurrentUser` — scripts locales corren sin aviso, sin necesidad de intervención.
 
@@ -442,4 +455,99 @@ En el markdown, un link normal:
 3. Clic en el 🔗 que aparece
 4. La URL completa (incluyendo `#anchor`) queda en el portapapeles
 
-*Creado: 2026-03-16 | Última actualización: 2026-03-17 (fix heartbeat contaminado por SendKeys)*
+---
+
+## 10. Deploy Monitor — notificación automática de deploys en Render
+
+Sistema que detecta cuándo un commit quedó live en Render y notifica por dos canales: **Windows** (MessageBox) y **Telegram**.
+
+### Arquitectura
+
+```
+git commit
+    └─► post-commit hook (.git/hooks/post-commit)
+            └─► deploy_watcher.py <commit> [background]
+                    ├─► poll GET /api/version cada 20s
+                    ├─► al confirmar live:
+                    │       ├─► MessageBox Windows (TopMost, persistente)
+                    │       └─► POST /api/webhook/render-deploy → enviar_notificacion_telegram()
+                    └─► timeout 30 min → alerta
+
+git push → Render despliega → Flask arranca
+    └─► _notificar_deploy_startup() [thread daemon]
+            ├─► lee _GIT_COMMIT (git rev-parse --short HEAD)
+            ├─► compara con CONFIGURACION_SISTEMA.ultimo_commit_notificado
+            ├─► si es nuevo → enviar_notificacion_telegram() con commit + mensaje
+            └─► actualiza ultimo_commit_notificado en BD
+```
+
+### Archivos involucrados
+
+| Archivo | Descripción |
+|---|---|
+| `deploy_watcher.py` | Script independiente — polling + notificaciones |
+| `deploy_estado.json` | Estado local: commit, estado (pendiente/live/timeout), fechas |
+| `deploy_watcher.log` | Log del watcher actual (se sobreescribe en cada commit) |
+| `.git/hooks/post-commit` | Hook que lanza el watcher automáticamente al hacer commit |
+| `1_medicamentos.py` (final) | `_notificar_deploy_startup()`, `GET /api/version`, `POST /api/webhook/render-deploy` |
+
+### Endpoints en Flask
+
+```
+GET  /api/version
+     → {"ok": true, "commit": "abc1234"}
+
+POST /api/webhook/render-deploy
+     body: {"commit": {"id": "abc1234", "message": "feat: mejora UI"}, "status": "live"}
+     → llama enviar_notificacion_telegram() con detalle del commit
+```
+
+### Notificaciones
+
+**Telegram (canal servidor — siempre funciona aunque el PC esté apagado):**
+```
+✅ Deploy listo
+Commit: abc1234
+feat: mejora de UI en pitch vendedor
+Hora: 14:35:00
+```
+
+**Windows MessageBox (canal PC — solo si el PC está prendido):**
+```
+TUC TUC — Deploy Listo
+Commit abc1234 en produccion.
+feat: mejora de UI en pitch vendedor
+```
+El MessageBox es TopMost (flota sobre todas las ventanas) y persistente (requiere clic en OK).
+
+### post-commit hook
+
+```sh
+#!/bin/sh
+COMMIT=$(git rev-parse --short HEAD)
+REPO_DIR=$(git rev-parse --show-toplevel)
+python -c "
+import subprocess, sys, os
+repo = r'$REPO_DIR'
+commit = '$COMMIT'
+script = os.path.join(repo, 'deploy_watcher.py')
+log = open(os.path.join(repo, 'deploy_watcher.log'), 'w')
+subprocess.Popen([sys.executable, script, commit],
+    stdout=log, stderr=log,
+    creationflags=0x00000200)
+"
+```
+
+El hook está en `.git/hooks/post-commit` (no se versiona en git — hay que recrearlo si se clona el repo).
+
+### CONFIGURACION_SISTEMA — columna `ultimo_commit_notificado`
+
+La migración se aplica automáticamente al arrancar Flask en producción:
+```sql
+ALTER TABLE CONFIGURACION_SISTEMA
+ADD COLUMN IF NOT EXISTS ultimo_commit_notificado VARCHAR(20);
+```
+
+Evita spam de Telegram en reinicios por crash (Flask puede reiniciar varias veces en producción).
+
+*Creado: 2026-03-16 | Última actualización: 2026-03-19 (deploy monitor completo)*

@@ -1,5 +1,5 @@
 # Convenios de Desarrollo — TUC TUC
-**Documento vivo | Última actualización: 2026-03-20**
+**Documento vivo | Última actualización: 2026-03-20 (rev. bugs JS)**
 
 Reglas de UX y arquitectura que aplican a **todos los módulos** de la plataforma.
 Antes de construir cualquier formulario o componente nuevo, revisar este documento.
@@ -79,6 +79,51 @@ Todas las APIs del proyecto responden:
 ```json
 { "ok": true/false, "error": "mensaje si ok=false", ...datos }
 ```
+
+---
+
+## 5. JavaScript en templates Python — reglas de escritura
+
+### El problema
+El HTML del proyecto se genera con `render_template_string` en Python. El código JS
+queda dentro de un string Python (`"""..."""`). Python interpreta las secuencias de
+escape, lo que puede romper silenciosamente el JS renderizado.
+
+### Reglas
+
+**5.1 — Backticks en template literals JS**
+
+Nunca escribir `\`` en el string Python. El backtick no necesita escape en Python.
+
+```python
+# MAL — Python renderiza \` (2 chars), JS falla con "Invalid or unexpected token"
+div.innerHTML = \`...contenido...\`;
+
+# BIEN — backtick directo
+div.innerHTML = `...contenido...`;
+```
+
+**5.2 — Expresiones `${}` dentro de template literals JS**
+
+Dentro de un template literal, `\${...}` escapa la interpolación (la convierte en
+texto literal). En Python string, `\$` no es una secuencia reconocida, pero Python
+mantiene ambos caracteres (`\$`), lo que en JS dentro del template literal ES válido.
+
+```python
+# Esto sí funciona (dentro de un template literal activo):
+div.innerHTML = `<span onclick="fn(\${JSON.stringify(obj)})">${nombre}</span>`;
+```
+
+**5.3 — Validar antes de hacer push**
+
+Después de cualquier modificación al template del vendedor (o cualquier otro
+`render_template_string`), correr:
+
+```bash
+python -W error -c "import ast; ast.parse(open('1_medicamentos.py').read())"
+```
+
+Si hay escapes inválidos, falla con `SyntaxWarning` antes de llegar a Render.
 
 ---
 

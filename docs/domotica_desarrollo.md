@@ -1,7 +1,7 @@
 # Manual de Desarrollo — Domótica (TUC TUC Smart Home)
 
 **Módulo:** Domótica
-**Versión:** 1.1
+**Versión:** 1.2
 **Última actualización:** 2026-03-17
 **Audiencia:** Desarrolladores que mantienen o extienden el módulo
 
@@ -80,6 +80,7 @@ presencia_ventana_seg INTEGER DEFAULT 360
 laptop_last_seen TIMESTAMP   -- NULL = ausente
 laptop_bat_pct INTEGER
 laptop_charging BOOLEAN
+pc_comando VARCHAR(20)       -- NULL | 'shutdown' — se limpia tras leer
 ```
 
 ---
@@ -121,7 +122,20 @@ else:
     laptop_last_seen = NULL    # ausente
 
 threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
+
+# Leer y limpiar comando pendiente para el PC
+cfg2 = conn.execute("SELECT pc_comando FROM CONFIGURACION_SISTEMA WHERE id=1").fetchone()
+pc_cmd = cfg2['pc_comando'] if cfg2 else None
+if pc_cmd:
+    conn.execute("UPDATE CONFIGURACION_SISTEMA SET pc_comando = NULL WHERE id=1")
+    conn.commit()
 ```
+
+**Respuesta incluye `comando` si hay uno pendiente:**
+```json
+{ "ok": true, "activo": true, "idle": 120, "comando": "shutdown" }
+```
+El cliente (`captura_watcher.ps1`) verifica `$resp.comando -eq "shutdown"` y ejecuta el shutdown local.
 
 El scheduler evalúa `laptop_last_seen IS NULL` para determinar ausencia.
 El heartbeat también dispara la evaluación inmediatamente en un thread.
@@ -267,9 +281,27 @@ Ver `feedback_ui_domotica.md` en memoria para el historial completo. Resumen:
 | `/api/domotica/propiedad/<pid>/dispositivos` | GET | admin o propietario | Dispositivos + switches + automatizaciones + programaciones |
 | `/api/domotica/switch/<sid>/toggle` | POST | admin o propietario | Encender/apagar via Tuya |
 | `/api/domotica/switch/<sid>/temporizador` | POST | admin o propietario | Encender N minutos |
-| `/api/domotica/heartbeat` | POST | token dispositivo | Reporte batería + idle → detecta presencia |
+| `/api/domotica/heartbeat` | GET | token dispositivo | Reporte idle → detecta presencia; retorna comando pendiente (ej. `shutdown`) |
+| `/api/domotica/pc/apagar` | POST | admin | Escribe `pc_comando='shutdown'` en BD; el watcher lo ejecuta en el próximo ciclo |
 | `/api/domotica/config/presencia` | POST | admin | Guardar ventana de inactividad en minutos |
 | `/api/domotica/dispositivo/<did>/setup-bat` | GET | admin o propietario | Descarga .bat auto-instalable del monitor |
+
+### Flujo "Apagar PC"
+
+```
+[Celular /domotica]
+    POST /api/domotica/pc/apagar
+        → UPDATE CONFIGURACION_SISTEMA SET pc_comando='shutdown'
+    ↓ (hasta 60s después)
+[captura_watcher.ps1]
+    GET /api/domotica/heartbeat?...
+        ← { "ok": true, "comando": "shutdown" }
+        → START shutdown.exe /s /f /t 15
+    ↓ (15s después)
+[PC apagado]
+```
+
+**Columna `pc_comando`**: se limpia inmediatamente al leerla en el heartbeat (un solo disparo, no reintentable). Se crea con `ALTER TABLE CONFIGURACION_SISTEMA ADD COLUMN IF NOT EXISTS pc_comando VARCHAR(20)` en `crear_tablas_domotica`.
 
 ---
 

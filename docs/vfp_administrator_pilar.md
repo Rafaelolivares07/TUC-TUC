@@ -281,14 +281,108 @@ Flujo completo confirmado:
 
 ---
 
-##### PRGs EXTERNOS CLAVE (identificados pero no leídos aún)
-| PRG | Llamado desde | Función probable (🔍 suposición) |
-|---|---|---|
-| `standar.prg` | `REGISTRA_PROD_FACT1` | Movimiento de stock/inventario |
-| `costo_ventas_contabiliza.prg` | procedure de costos | Lee `reg_costos_temporal`, escribe asientos de costo |
-| `busquedad_registros.prg` | `CONTABILIZAR` | Contiene `INSERTAR_REG_CTAS_AUTOMATICO` |
+##### PRGs EXTERNOS — LEÍDOS Y ANALIZADOS (2026-03-21)
 
-> Estos PRGs son el siguiente nivel de profundidad — cuando sea necesario diseñar la interfaz con Allegra, habrá que leerlos también.
+---
+
+###### `standar.prg` ✅
+
+Parámetros de entrada: `PTIPO, PNUMERO, PLAPSO, CANT_ENTRADA, LCCODPRO, LNCOSTO, LNVALOR_IVA`
+
+Modo controlado por `LNESTADOINVEN` (viene de `TIPO_DOC.TIPO_INVE`):
+
+**Modo 3 — Producción** (entrada de producto terminado + salida de materias primas):
+- Lee la receta/composición del producto desde `TRANS_MAT` y `TRANS_MAT_UNO`
+- Por cada materia prima: `INSERT INTO REG_PROD` (salida) + `UPDATE REG_PROD_SALDOS`
+- Para el producto terminado: `INSERT INTO REG_PROD` (entrada) + `UPDATE REG_PROD_SALDOS`
+
+**Modo 1 — Entrada con costo** (compras a proveedores, devoluciones de clientes):
+- `INSERT INTO REG_PROD` con campos: `VAL_ENT, CONSECUTIVO, TIP_DOC, NUM_DOC, LAP, CAN_ENT, COS_ENT, COD_PRO, FEC, USU, TER_COM, EMP, ENT_BOD, SAL_EXI, VAL_EXI_CON, COS_UND_CON, COD_ORI, CONCEPTO`
+- `UPDATE REG_PROD_SALDOS` (o INSERT si no existe): actualiza saldo existencias y costo unitario promedio
+- También puede actualizar `CUAL_PROD_TERC` (precio de compra por producto-proveedor)
+
+**Tablas escritas por `standar.prg`** ✅:
+| Tabla | Operación | Descripción |
+|---|---|---|
+| `REG_PROD` | INSERT INTO | **Movimiento de inventario** — cada línea = un movimiento (entrada o salida) |
+| `REG_PROD_SALDOS` | UPDATE + INSERT | **Saldo por producto/bodega** — existencias actuales + costo unitario ponderado |
+| `CUAL_PROD_TERC` | UPDATE + INSERT | Precio de compra por producto y proveedor (solo en modo compra) |
+
+**Tablas solo leídas por `standar.prg`**:
+- `TIPO_DOC` — para determinar el modo (`TIPO_INVE`)
+- `REG_PROD_SALDOS` — para calcular nuevo costo unitario promedio
+- `TRANS_MAT` / `TRANS_MAT_UNO` — receta/composición del producto (modo producción)
+- `TRANS_MAT_TEMP` — receta temporal (cotizaciones)
+
+---
+
+###### `costo_ventas_contabiliza.prg` ✅
+
+Condición: solo ejecuta si `VAR_EMPRESA_COSTEA = 1`.
+
+Lee `reg_costos_temporal` (tabla de paso llenada por `facturar_cancelar`) y por cada producto:
+1. Busca en `PRODUCTOS` el grupo del producto
+2. Busca en `GRUPOS` las cuentas contables: `cuenta_inve` (inventario) y `cuenta_cos` (costo de ventas)
+3. Obtiene consecutivo de `REGCTA_CONSE`
+4. Escribe **DOS asientos en `REG_CTAS`**:
+   - Asiento 1 (crédito inventario): `cuenta = cuenta_inve`, `tot_cre = costo`, `tot_deb = 0`
+   - Asiento 2 (débito costo de ventas): `cuenta = cuenta_cos`, `tot_deb = costo`, `tot_cre = 0`
+
+**Tablas escritas por `costo_ventas_contabiliza.prg`** ✅:
+| Tabla | Operación |
+|---|---|
+| `REG_CTAS` | APPEND BLANK + REPLACE (2 registros por producto) |
+| `REGCTA_CONSE` | REPLACE (actualiza consecutivo) |
+
+**Tablas solo leídas**: `reg_costos_temporal`, `PRODUCTOS`, `GRUPOS`
+
+---
+
+###### `busquedad_registros.prg` → `INSERTAR_REG_CTAS_AUTOMATICO` ✅
+
+Parámetros: `LDPARAMDLAPSO, LCPARAMTIPODOC, LCPARAMNUMTER, LNPARAMNUMDOC`
+
+Lee el cursor `TMP_REG_CTAS_FINAL` (pre-construido por la lógica de `CONTABILIZAR`) y por cada fila:
+1. Obtiene consecutivo de `REGCTA_CONSE`
+2. Si la cuenta tiene `DOC_CRUZE = 1`: llama `PROC_SAL_DOC` → escribe en `SAL_DOC`
+3. `APPEND BLANK` + REPLACE en `REG_CTAS` con: `LAPSO, FECHAHORA, TIPO, CONSECUTIVO, CUENTA, TERCERO, TER_COD, DOCUMENTO, EMPRESA, USUARIO, BODEGA, TOT_DEB, TOT_CRE, TIP_DOC_CRU, NUM_DOC_CRU`
+4. Actualiza `REG_CTAS_SALDOS` (saldo acumulado por cuenta): si existe → `REPLACE SALDO WITH SALDO + delta`; si no → INSERT
+
+**Tablas escritas** ✅:
+| Tabla | Operación |
+|---|---|
+| `REG_CTAS` | APPEND BLANK + REPLACE |
+| `REG_CTAS_SALDOS` | UPDATE SALDO + INSERT si no existe |
+| `SAL_DOC` | vía `PROC_SAL_DOC` (cuentas con documento cruce) |
+| `REGCTA_CONSE` | REPLACE (consecutivo) |
+
+---
+
+##### MAPA COMPLETO DE TABLAS — CICLO DE VENTA (2026-03-21)
+
+```
+PROD_FACT (staging ítems)
+  ↓ facturar_cancelar: SELECT → CRPRODFACTURARC_AUX
+  ↓
+  ├── INSERT INTO PROD_FACT1                    (registro definitivo ventas)
+  │
+  ├── DO STANDAR (por cada ítem)
+  │     ├── INSERT INTO REG_PROD               (movimiento inventario)
+  │     └── UPDATE/INSERT REG_PROD_SALDOS      (saldo existencias)
+  │
+  ├── APPEND/REPLACE reg_costos_temporal       (tabla de paso costos)
+  │     ↓ DO costo_ventas_contabiliza
+  │         └── APPEND REG_CTAS × 2           (crédito inventario + débito costo ventas)
+  │
+  ├── INSERTAR_REG_CTAS_AUTOMATICO             (contabilidad de la venta)
+  │     ├── APPEND REG_CTAS                   (por cada línea contable configurada)
+  │     ├── UPDATE/INSERT REG_CTAS_SALDOS     (saldo acumulado por cuenta)
+  │     └── PROC_SAL_DOC → SAL_DOC            (cuentas con documento cruce)
+  │
+  └── DELETE ALL PROD_FACT                     (limpia staging)
+```
+
+**Tabla auxiliar de consecutivos**: `REGCTA_CONSE` — contador global de asientos contables.
 
 #### Queries SQL clave
 ```sql

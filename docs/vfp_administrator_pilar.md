@@ -95,7 +95,7 @@ ENDPROC
 
 ---
 
-## 3. Interfaz Allegra ↔ Administrator — PENDIENTE RETOMAR
+## 3. Interfaz Allegra ↔ Administrator — ESQUELETO COMPLETO (2026-03-21)
 
 ### Objetivo
 Conectar los datos de facturación de Allegra (que Pilar usa para facturar) con los dos formularios clave de Administrator, para que los registros queden integrados en inventarios, costos y contabilidad automáticamente.
@@ -429,85 +429,191 @@ INTO CURSOR CRTIPOVENTA READWRITE
 
 ---
 
-### Arquitectura de la interfaz — ESQUELETO LISTO (2026-03-21)
+### Arquitectura — COMPLETA Y CONECTADA (2026-03-21)
 
-**Decisión de diseño**: NO se usa `facturar_cancelar.scx` como intermediario. La interfaz llama directamente a los PRGs. Esto permite procesamiento automático sin abrir formularios.
+**Principio de diseño**: Todo vive dentro del mundo Administrator. Las dos tablas de estado (`allegra_config.dbf` y `allegra_pendientes.dbf`) están dentro de la BD de Pilar. El usuario nunca sale de Administrator para operar la interfaz.
+
+**Decisión de diseño**: NO se usa `facturar_cancelar.scx` como intermediario. La interfaz llama directamente a los PRGs. Esto permite procesamiento automático sin abrir formularios visuales.
 
 ```
-[Portal web Allegra]
-        ↓  (HTTP/API — rutas ⚠️ PENDIENTES)
-allegra_sync.py  (C:\S.A.R\allegra_sync.py)
-        ↓  (escribe DBF intermedio)
-allegra_pendientes.dbf  (C:\S.A.R\)
-        ↓  (VFP lee el DBF)
-interfaz_allegra.prg  (C:\S.A.R\PROYECTO\)
-        ↓  (llama PRGs existentes en orden)
-  standar.prg           → REG_PROD + REG_PROD_SALDOS
-  costo_ventas_contabiliza.prg → REG_CTAS (costo)
-  contabilizar.prg      → valores_insertar → inserta_reg_ctas → REG_CTAS + REG_CTAS_SALDOS
-        ↓
-  PROD_FACT1, CONSECUTIVOS, reg_ctas_notas_documentos
+Administrator arranca
+  └─ DO agregar_menu_allegra.prg         ← agrega pad "Allegra" al menú VFP
+
+Usuario → Allegra → "Configurar / Sincronizar"
+  └─ configurar_allegra.prg              ← formulario VFP (dentro de Administrator UI)
+       ├─ Guardar  → allegra_config.dbf  (C:\D\Pilar Peralta\basedatosempresas\)
+       └─ Sincronizar ahora
+            ├─ SHELL: allegra_sync.py
+            │    ├─ Lee  allegra_config.dbf (max_fact, desde_ult, ultima_sin)
+            │    └─ Escribe allegra_pendientes.dbf (misma carpeta BD Pilar)
+            └─ DO interfaz_allegra.prg
+                 ├─ Lee  allegra_config.dbf → max_fact (límite de lote)
+                 ├─ Lee  allegra_pendientes.dbf → facturas a procesar
+                 ├─ Ciclo por factura (hasta max_fact):
+                 │    ├─ Resolver NIT → TERCEROS.COD_TER (campo IDENTIFICA)
+                 │    ├─ Llenar PROD_FACT con los ítems
+                 │    ├─ DO STANDAR → REG_PROD + REG_PROD_SALDOS
+                 │    ├─ INSERT PROD_FACT1
+                 │    ├─ Llenar reg_costos_temporal
+                 │    ├─ DO costo_ventas_contabiliza → REG_CTAS (costos)
+                 │    ├─ DO contabilizar → REG_CTAS + REG_CTAS_SALDOS + SAL_DOC
+                 │    ├─ INSERT reg_ctas_notas_documentos
+                 │    ├─ REPLACE allegra_pendientes.procesado = .T.
+                 │    └─ Limpiar PROD_FACT + reg_costos_temporal
+                 └─ Actualiza allegra_config: ultima_sin + total_proc
+
+Usuario → Allegra → "Ver pendientes"
+  └─ ver_allegra_pendientes.prg          ← BROWSE de allegra_pendientes.dbf
 ```
 
-**Archivos creados (esqueleto)**:
+---
+
+### Archivos de la interfaz — ESTADO ACTUAL
+
 | Archivo | Ruta | Estado |
 |---|---|---|
-| `allegra_sync.py` | `C:\S.A.R\` | ✅ Esqueleto Python — completar con credenciales/endpoints |
-| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Esqueleto VFP — valores BD de Pilar CONFIRMADOS |
+| `allegra_sync.py` | `C:\S.A.R\` | ✅ Listo — rellena credenciales/endpoints cuando se tenga acceso Allegra |
+| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — valores BD de Pilar CONFIRMADOS, lee/escribe config |
+| `configurar_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — formulario VFP completo |
+| `agregar_menu_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — integración al menú de Administrator |
+| `ver_allegra_pendientes.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — BROWSE de pendientes |
+| `allegra_config.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | 🔲 Se crea solo al primer arranque del formulario |
+| `allegra_pendientes.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | 🔲 Se crea solo cuando Python ejecute por primera vez |
 
-### Checklist — lo que falta para activar la interfaz
+**Backup BD Pilar**: `C:\D\Pilar Peralta\basedatosempresas_BAK_20260321` — punto de restauración seguro.
 
-#### De Allegra (necesita acceso al portal)
+---
+
+### Manual por persona — quién hace qué
+
+---
+
+#### RAFAEL — Lo que falta hacer (técnico)
+
+**PASO A — Integrar el menú de Allegra en Administrator** *(1 línea de código)*
+
+Buscar en el startup de Administrator el punto donde se lanza el menú principal y agregar:
+```foxpro
+DO C:\S.A.R\PROYECTO\agregar_menu_allegra.prg
+```
+Debe ejecutarse DESPUÉS de `DO administrador.mpr` (o el nombre del .mpr que use Administrator). El pad "Allegra" aparecerá en la barra de menú.
+
+**PASO B — Confirmar PVAR_CON_PRO1..9** *(con acceso a VFP, ~5 min)*
+
+Ejecutar en VFP Command (o crear PRG temporal):
+```foxpro
+USE C:\D\Pilar Peralta\basedatosempresas\REG_CTAS SHARED
+SELECT tipo_doc, num_doc, cod_cue, nat_cue, tot_deb, tot_cre;
+FROM REG_CTAS;
+WHERE ALLTRIM(tipo_doc)='013' AND ALLTRIM(empresa)='02';
+AND num_doc = <número de una factura reciente conocida>;
+INTO CURSOR CR_CHECK
+BROWSE NOCLEAR
+```
+Resultado: lista de cuentas + montos por factura. Cruzar con `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR` filtrando empresa='02', documento='013'. El campo `VAR_CON_PRO` (1..9) indica a qué PVAR_CON_PROx corresponde cada cuenta.
+
+**PASO C — Confirmar TIPO_INVE del documento '013'** *(1 consulta)*
+```foxpro
+SELECT codigo, tipo_inve FROM TIPO_DOC WHERE ALLTRIM(codigo)='013'
+```
+Resultado esperado: `TIPO_INVE = 2` (salida de inventario). Si es diferente, actualizar la llamada a `STANDAR` en `interfaz_allegra.prg`.
+
+**PASO D — Obtener acceso al portal de Allegra** *(requiere gestión con Allegra o con Pilar)*
+
+Ver checklist de Allegra abajo — son ~4 datos que se obtienen en ~10 min con acceso al portal.
+
+**PASO E — Primera prueba con 1 factura** *(sobre el backup `_BAK_20260321`)*
+
+1. En `configurar_allegra.prg` → Máximo de facturas = **1**
+2. Sincronizar
+3. Revisar:
+   - `REG_CTAS`: débitos == créditos para esa factura
+   - `PROD_FACT1`: ítem registrado correctamente
+   - `REG_PROD` / `REG_PROD_SALDOS`: movimiento de inventario ok
+4. Si todo cuadra → aumentar el lote
+
+---
+
+#### PILAR — Lo que necesita para usar la interfaz
+
+> Una vez que Rafael integre el menú (Paso A arriba), Pilar no necesita hacer nada técnico.
+
+**Uso diario** (cuando esté activo):
+1. Abrir Administrator normalmente
+2. En el menú → **Allegra** → **Configurar / Sincronizar**
+3. Clic en **"Sincronizar ahora"** — el sistema jalará las facturas de Allegra y las registrará en Administrator automáticamente
+4. El formulario muestra: fecha de última sincronización + total de facturas procesadas históricas
+
+**Si quiere verificar**: Allegra → **"Ver pendientes"** → browse con todas las facturas y su estado (procesado Sí/No)
+
+**Parámetros que puede ajustar** (en el mismo formulario):
+- `Máximo de facturas por lote` — cuántas procesa por ejecución (default 50)
+- `Intervalo automático` — 0 = solo manual (recomendado al inicio)
+- `Solo desde última sincronización` — marcado = solo trae lo nuevo
+
+---
+
+#### CLAUDE FUTURO — Para activar la interfaz con Allegra real
+
+Cuando se tenga acceso al portal de Allegra, completar en `C:\S.A.R\allegra_sync.py`:
+
+```python
+# Líneas ~60-64 — reemplazar los "???"
+ALLEGRA_BASE_URL   = "https://..."   # URL base del portal
+ALLEGRA_CLIENTE_ID = "..."           # ID de Pilar Peralta en Allegra
+ALLEGRA_API_KEY    = "..."           # token/clave
+ENDPOINT_FACTURAS  = "/facturas"     # endpoint real
+ENDPOINT_DETALLE   = "/facturas/{id}/items"  # si los ítems son separados
+```
+
+Luego en `obtener_token_allegra()` — descomentear el método que aplique (API key o usuario/contraseña).
+
+Luego en `mapear_item(factura, item)` — reemplazar todos los `"???"` con los nombres reales de campos de la API de Allegra. Los únicos confirmados:
+- `cod_pro` de Allegra = mismo código que Administrator ✅ (idénticos)
+- `nit_cliente` de Allegra mapea a `TERCEROS.IDENTIFICA` en Administrator ✅
+
+Finalmente en `main()` — descomentar el bloque (lines ~250-262).
+
+---
+
+### Checklist técnica — estado completo
+
+#### ✅ HECHO — BD de Pilar (confirmado 2026-03-21)
+- [x] `VAR_CODIGO_EMPRESA_USUARIO = "02"` — EMPRESAS.COD_EMP
+- [x] `VAR_CODIGO_BODEGA_ACTUAL = 2` — BODEGAS.COD_BOD=2 'PRINCIPAL'
+- [x] `PVNOMBRE_MAQUINA = "DESKTOP-B2T06N0"` — EMPRESA_CONFIGURAR EMPRESA='-1'
+- [x] `VAR_CODIGO_TERCERO_USUARIO = 1` — TERCEROS.COD_TER=1 (Rafael)
+- [x] `PLNTIPODOC = "013"` — código POS Allegra. 43.584 facturas en CONSECUTIVOS. 8 entradas en CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR
+- [x] TERCEROS.IDENTIFICA = NIT/cédula (NO `IDENTIFICACION`)
+- [x] TERCEROS.COD_TER = PK (NO `CONSECUTIVO`)
+- [x] Todo dentro del mundo Administrator — `allegra_config.dbf` y `allegra_pendientes.dbf` en `C:\D\Pilar Peralta\basedatosempresas\`
+- [x] Formulario `configurar_allegra.prg` — dentro de la UI de Administrator, guarda parámetros en la BD de Pilar
+- [x] `interfaz_allegra.prg` — lee config (max_fact), procesa facturas, actualiza config (ultima_sin, total_proc)
+- [x] `allegra_sync.py` — lee config (max_fact, desde_ult, ultima_sin) antes de llamar a Allegra
+- [x] `agregar_menu_allegra.prg` — integración al menú de Administrator (pad "Allegra")
+- [x] Backup BD: `C:\D\Pilar Peralta\basedatosempresas_BAK_20260321`
+
+#### 🔲 PENDIENTE — Rafael hace esto (no depende de Allegra)
+- [ ] **Integrar `agregar_menu_allegra.prg` al startup de Administrator** (1 línea: `DO C:\S.A.R\PROYECTO\agregar_menu_allegra.prg`)
+- [ ] Confirmar mapeo PVAR_CON_PRO1..9 (ver script en Paso B arriba)
+- [ ] Confirmar TIPO_INVE del documento '013' en TIPO_DOC
+
+#### 🔲 PENDIENTE — Depende de acceso al portal Allegra (~10 min con acceso)
 - [ ] URL base del portal de Allegra
-- [ ] Endpoint de facturas (GET o POST, params de filtro)
-- [ ] Endpoint de ítems por factura (o si vienen dentro de la factura)
+- [ ] Endpoint de facturas (GET/POST, params de filtro)
+- [ ] Endpoint de ítems por factura (o si vienen dentro)
 - [ ] Tipo de autenticación (API key, OAuth, usuario/contraseña)
-- [ ] Nombres exactos de campos en la respuesta (id, nit, tipo_doc, num_doc, cod_pro, cantidad, precio, iva, descuento, costo)
-- [ ] ¿Allegra expone el costo del producto o solo el precio de venta?
+- [ ] Nombres de campos en la respuesta JSON (id, nit, cod_pro, cantidad, precio, iva, etc.)
+- [ ] ¿Allegra expone el costo del producto?
 
-#### De la BD de Pilar — CONFIRMADOS (2026-03-21)
-- [x] `VAR_CODIGO_EMPRESA_USUARIO = "02"` — EMPRESAS.COD_EMP, NIT='31998001-3', NOMBRE='MARIA DEL PILAR PERALTA MOSQUERA'
-- [x] `VAR_CODIGO_BODEGA_ACTUAL = 2` — BODEGAS.COD_BOD=2, NOMBRE='PRINCIPAL', empresa '02'
-- [x] `PVNOMBRE_MAQUINA = "DESKTOP-B2T06N0"` — EMPRESA_CONFIGURAR, EMPRESA='-1' (máquina de Rafael)
-- [x] `VAR_CODIGO_TERCERO_USUARIO = 1` — TERCEROS.COD_TER=1 (Rafael, ADMINISTRATOR COMPANY)
-- [x] TERCEROS.IDENTIFICA = campo NIT/cédula (**NO** IDENTIFICACION)
-- [x] TERCEROS.COD_TER = campo PK (**NO** CONSECUTIVO)
-- [x] `PLNTIPODOC = "013"` — código POS de Allegra en empresa '02'. **IMPORTANTE**: la BD NO usa "FV". Documento '013' tiene 43.584 facturas en CONSECUTIVOS y está configurado en CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR (8 entradas)
-- [x] TIPO_DOC='013' tiene TIPO_INVE=2 (salida inventario) — confirmado en TIPO_DOC: CODIGO='01' (FV estándar) TIPO_INVE=2. Verificar que '013' también sea 2 ⚠️
+#### 🔲 PENDIENTE — Decisión técnica abierta
+- [ ] Numeración de facturas: **Opción A activa** (número de Allegra = LC_NUM_DOC). CONSECUTIVOS empresa='02' TIPO_DOC='013' tiene 43.584 — ¿estos coinciden con números de Allegra? Verificar con una factura real.
 
-#### Pendiente de la BD de Pilar
-- [ ] Mapeo exacto `PVAR_CON_PRO1..9` para documento '013' empresa '02':
-  - PRO1: cuenta 413548 CREDITO → ingreso bruto (subtotal sin IVA) — probable
-  - PRO2: cuenta 240801 CREDITO → IVA 19% — probable
-  - PRO7: cuenta 130505 DEBITO CRUZE=1 → cartera CxC (total con IVA) — probable
-  - PRO3..6, PRO8: cuentas 530535, 240807, 11100503, 110505, 111002 — probablemente $0 en facturas normales de contado (retenciones, otras formas de pago)
-  - **Cómo verificar**: leer REG_CTAS filtrando por una factura reciente (TIP_DOC='013', empresa='02') y cruzar cuenta→valor con CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR.VAR_CON_PRO
-
-  ```python
-  # Script de verificación a correr antes del primer run real:
-  # SELECT cuenta, debito, credito, valor FROM REG_CTAS
-  # WHERE ALLTRIM(tipo_doc)=='013' AND ALLTRIM(empresa)=='02'
-  # AND num_doc = <número de una factura conocida>
-  # Resultado: confirma qué monto fue a qué cuenta → mapea al PRO correspondiente
-  ```
-
-- [ ] Confirmar TIPO_INVE del documento '013' en TIPO_DOC (esperado: 2=salida)
-
-#### Estrategia de prueba recomendada (antes de activar en producción)
-1. Correr `interfaz_allegra.prg` con **1 sola factura de prueba**
-2. Revisar inmediatamente `REG_CTAS` — verificar que débitos = créditos
-3. Revisar `PROD_FACT1` — verificar que el ítem quedó registrado correctamente
-4. Revisar `REG_PROD` / `REG_PROD_SALDOS` — verificar movimiento de inventario
-5. Si todo cuadra → activar procesamiento del lote completo
-
-#### Decisión pendiente
-- [ ] Numeración de facturas: **Por ahora Opción A** (número de Allegra = LC_NUM_DOC). CONSECUTIVOS empresa='02' TIPO_DOC='013' tiene 43.584 — sugiere que ya se sincronizaban. Confirmar si los números de Allegra coinciden con CONSECUTIVOS.
-
-### Lo que falta para continuar
-1. Obtener acceso al portal de Allegra y recuperar rutas/endpoints
-2. Llenar los `???` en `allegra_sync.py` con credenciales y endpoints reales
-3. Confirmar mapeo PVAR_CON_PRO1..9 observando una factura procesada en Administrator
-4. Probar con una factura real antes de activar en producción
+#### Estrategia de prueba (antes de activar en producción)
+1. Backup activo ✅ (`basedatosempresas_BAK_20260321`)
+2. `configurar_allegra.prg` → Máximo = **1**
+3. Sincronizar → revisar REG_CTAS (débitos=créditos), PROD_FACT1, REG_PROD
+4. Si ok → aumentar lote gradualmente
 
 ---
 

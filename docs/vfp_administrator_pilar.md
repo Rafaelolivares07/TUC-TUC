@@ -593,9 +593,15 @@ Finalmente en `main()` — descomentar el bloque (lines ~250-262).
 - [x] `agregar_menu_allegra.prg` — integración al menú de Administrator (pad "Allegra")
 - [x] Backup BD: `C:\D\Pilar Peralta\basedatosempresas_BAK_20260321`
 
+#### ✅ HECHO — Integración al menú de Administrator (2026-03-21)
+- [x] Registro insertado en `formularios.dbf`: CONSECUTIV=295, NOMBRE_MEN='ALLEGRA - Configurar y Sincronizar', NOMBRE=`DO C:\S.A.R\PROYECTO\configurar_allegra.prg`, MODULO=2 (FACTURACION)
+- [x] Acceso habilitado en `usuarios_perfiles_formularios.dbf`: USUARIO=1 (Rafael, COD_TER=1) y USUARIO=971 (Pilar, COD_TER=971)
+- El menú `menu_administrator.scx` detecta que NOMBRE empieza con "DO" y ejecuta el PRG directamente — sin necesidad de .scx ni modificar archivos binarios
+
+**Para habilitar acceso a otros usuarios**: en Administrator → formulario de niveles/perfiles → buscar "ALLEGRA" → habilitar al usuario deseado (o insertar directamente en `usuarios_perfiles_formularios.dbf` con el COD_TER del usuario)
+
 #### 🔲 PENDIENTE — Rafael hace esto (no depende de Allegra)
-- [ ] **Integrar `agregar_menu_allegra.prg` al startup de Administrator** (1 línea: `DO C:\S.A.R\PROYECTO\agregar_menu_allegra.prg`)
-- [ ] Confirmar mapeo PVAR_CON_PRO1..9 (ver script en Paso B arriba)
+- [ ] Confirmar mapeo PVAR_CON_PRO1..9 (ver script en sección Paso B arriba)
 - [ ] Confirmar TIPO_INVE del documento '013' en TIPO_DOC
 
 #### 🔲 PENDIENTE — Depende de acceso al portal Allegra (~10 min con acceso)

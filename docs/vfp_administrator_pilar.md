@@ -1,5 +1,5 @@
 # Proyecto VFP — Administrator (SAR) — Contexto y Pendientes
-_Actualizado: 2026-03-21 — análisis SCT profundo agregado_
+_Actualizado: 2026-03-21 — valores BD de Pilar confirmados, interfaz_allegra.prg actualizado_
 
 ---
 
@@ -453,7 +453,7 @@ interfaz_allegra.prg  (C:\S.A.R\PROYECTO\)
 | Archivo | Ruta | Estado |
 |---|---|---|
 | `allegra_sync.py` | `C:\S.A.R\` | ✅ Esqueleto Python — completar con credenciales/endpoints |
-| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Esqueleto VFP — completar con valores BD de Pilar |
+| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Esqueleto VFP — valores BD de Pilar CONFIRMADOS |
 
 ### Checklist — lo que falta para activar la interfaz
 
@@ -465,27 +465,31 @@ interfaz_allegra.prg  (C:\S.A.R\PROYECTO\)
 - [ ] Nombres exactos de campos en la respuesta (id, nit, tipo_doc, num_doc, cod_pro, cantidad, precio, iva, descuento, costo)
 - [ ] ¿Allegra expone el costo del producto o solo el precio de venta?
 
-#### De la BD de Pilar (consultar con `python` o con VFP directamente)
-- [ ] `VAR_CODIGO_EMPRESA_USUARIO` — valor exacto en tabla `EMPRESAS`
-- [ ] `VAR_CODIGO_BODEGA_ACTUAL` — bodega activa de Pilar
-- [ ] `PVNOMBRE_MAQUINA` — nombre del PC en `EMPRESA_CONFIGURAR`
-- [ ] `VP_CONSECUTIVO_FORMULARIO` — **CRÍTICO**: número de configuración contable para FV. Consultar:
-  ```sql
-  SELECT DISTINCT NUMERO FROM CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR
-  WHERE ALLTRIM(DOCUMENTO)=="FV" AND ALLTRIM(EMPRESA)==VAR_CODIGO_EMPRESA_USUARIO
-  ```
-- [ ] Mapeo `PVAR_CON_PRO1..9` → qué concepto representa cada número en `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR` para FV
-- [ ] Campo de NIT en `TERCEROS` (candidato: `IDENTIFICACION`) — confirmar nombre exacto
-- [ ] Campo de PK en `TERCEROS` — confirmar nombre exacto (candidato: `CONSECUTIVO`)
-- [ ] `TIPO_INVE` para documento `FV` en tabla `TIPO_DOC` — confirmar que es 2 (salida)
+#### De la BD de Pilar — CONFIRMADOS (2026-03-21)
+- [x] `VAR_CODIGO_EMPRESA_USUARIO = "02"` — EMPRESAS.COD_EMP, NIT='31998001-3', NOMBRE='MARIA DEL PILAR PERALTA MOSQUERA'
+- [x] `VAR_CODIGO_BODEGA_ACTUAL = 2` — BODEGAS.COD_BOD=2, NOMBRE='PRINCIPAL', empresa '02'
+- [x] `PVNOMBRE_MAQUINA = "DESKTOP-B2T06N0"` — EMPRESA_CONFIGURAR, EMPRESA='-1' (máquina de Rafael)
+- [x] `VAR_CODIGO_TERCERO_USUARIO = 1` — TERCEROS.COD_TER=1 (Rafael, ADMINISTRATOR COMPANY)
+- [x] TERCEROS.IDENTIFICA = campo NIT/cédula (**NO** IDENTIFICACION)
+- [x] TERCEROS.COD_TER = campo PK (**NO** CONSECUTIVO)
+- [x] `PLNTIPODOC = "013"` — código POS de Allegra en empresa '02'. **IMPORTANTE**: la BD NO usa "FV". Documento '013' tiene 43.584 facturas en CONSECUTIVOS y está configurado en CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR (8 entradas)
+- [x] TIPO_DOC='013' tiene TIPO_INVE=2 (salida inventario) — confirmado en TIPO_DOC: CODIGO='01' (FV estándar) TIPO_INVE=2. Verificar que '013' también sea 2 ⚠️
+
+#### Pendiente de la BD de Pilar
+- [ ] Mapeo exacto `PVAR_CON_PRO1..9` para documento '013' empresa '02':
+  - PRO1: cuenta 413548 CREDITO → ingreso bruto (subtotal sin IVA) — probable
+  - PRO2: cuenta 240801 CREDITO → IVA 19% — probable
+  - PRO7: cuenta 130505 DEBITO CRUZE=1 → cartera CxC (total con IVA) — probable
+  - PRO3..6, PRO8: cuentas 530535, 240807, 11100503, 110505, 111002 — **confirmar observando una factura real procesada**
+- [ ] Confirmar TIPO_INVE del documento '013' en TIPO_DOC (esperado: 2=salida)
 
 #### Decisión pendiente
-- [ ] Numeración de facturas: ¿usar el número de Allegra o el consecutivo propio de Administrator?
+- [ ] Numeración de facturas: **Por ahora Opción A** (número de Allegra = LC_NUM_DOC). CONSECUTIVOS empresa='02' TIPO_DOC='013' tiene 43.584 — sugiere que ya se sincronizaban. Confirmar si los números de Allegra coinciden con CONSECUTIVOS.
 
 ### Lo que falta para continuar
 1. Obtener acceso al portal de Allegra y recuperar rutas/endpoints
 2. Llenar los `???` en `allegra_sync.py` con credenciales y endpoints reales
-3. Llenar los `???` en `interfaz_allegra.prg` con valores de la BD de Pilar
+3. Confirmar mapeo PVAR_CON_PRO1..9 observando una factura procesada en Administrator
 4. Probar con una factura real antes de activar en producción
 
 ---

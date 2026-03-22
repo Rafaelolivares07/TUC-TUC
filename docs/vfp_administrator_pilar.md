@@ -594,11 +594,26 @@ Finalmente en `main()` — descomentar el bloque (lines ~250-262).
 - [x] Backup BD: `C:\D\Pilar Peralta\basedatosempresas_BAK_20260321`
 
 #### ✅ HECHO — Integración al menú de Administrator (2026-03-21)
-- [x] Registro insertado en `formularios.dbf`: CONSECUTIV=295, NOMBRE_MEN='ALLEGRA - Configurar y Sincronizar', NOMBRE=`DO C:\S.A.R\PROYECTO\configurar_allegra.prg`, MODULO=2 (FACTURACION)
-- [x] Acceso habilitado en `usuarios_perfiles_formularios.dbf`: USUARIO=1 (Rafael, COD_TER=1) y USUARIO=971 (Pilar, COD_TER=971)
-- El menú `menu_administrator.scx` detecta que NOMBRE empieza con "DO" y ejecuta el PRG directamente — sin necesidad de .scx ni modificar archivos binarios
+- [x] Registro en `formularios.dbf`: CONSECUTIV=295, NOMBRE_MEN='ALLEGRA - Configurar y Sincronizar', **NOMBRE='configurar_allegra'** (sin prefijo DO), MODULO=2
+- [x] Acceso en `usuarios_perfiles_formularios.dbf`: USUARIO=1 (Rafael) y USUARIO=971 (Pilar)
+- [x] Wrapper `configurar_allegra.scx` + `configurar_allegra.SCT` — form invisible (Visible=.F., ShowWindow=0), Init llama el PRG y retorna .F.
+- [x] CDX de formularios.dbf reconstruido con `reindex_bd_allegra.prg`
+- [x] Instalador `instalar_allegra_bd.py` — idempotente, aplica a cualquier BD (2 comandos)
+- [x] `configurar_allegra.prg` — clase frm_allegra con `WindowType=1` (modal real en VFP)
 
-**Para habilitar acceso a otros usuarios**: en Administrator → formulario de niveles/perfiles → buscar "ALLEGRA" → habilitar al usuario deseado (o insertar directamente en `usuarios_perfiles_formularios.dbf` con el COD_TER del usuario)
+**Flujo completo**: `ayuda_manual.scx` → `DO FORM CONFIGURAR_ALLEGRA` → wrapper SCX Init → `DO (lc_prg)` → PRG define clase + `CREATEOBJECT("frm_allegra")` + `Show()` → form modal de configuración
+
+**Para instalar en BD nueva**:
+1. `python C:\S.A.R\instalar_allegra_bd.py "C:\D\BD_NUEVA\"`
+2. En VFP: `DO C:\S.A.R\PROYECTO\reindex_bd_allegra.prg WITH "C:\D\BD_NUEVA\"`
+3. En VFP: `COMPILE FORM C:\S.A.R\PROYECTO\configurar_allegra.scx`
+
+**Para habilitar acceso a otros usuarios**: insertar en `usuarios_perfiles_formularios.dbf` con COD_TER del usuario, FORMULARIO=295, ESTADO=1
+
+#### 🔲 PENDIENTE INMEDIATO — Prueba final (próxima sesión)
+- [ ] Probar desde el menú de ayuda de Administrator: buscar "allegra" → clic → debe abrirse el formulario de Allegra sin ventana extra ni error
+  - Fix aplicado: `WindowType=1` en clase frm_allegra + `Show()` sin parámetro
+  - **No probado aún** — sesión terminada antes de la prueba
 
 #### 🔲 PENDIENTE — Rafael hace esto (no depende de Allegra)
 - [ ] Confirmar mapeo PVAR_CON_PRO1..9 (ver script en sección Paso B arriba)
@@ -647,4 +662,9 @@ Pilar paga $90.000/mes por Allegra solo para facturación. Si Administrator cubr
   `COMPILE FORM C:\S.A.R\PROYECTO\contabilidad_movimiento_cuentas_terceros.scx`
 - **SCAN vs SEEK**: en CR_TERCEROS no se podía hacer SEEK directo (el orden/índice no coincidía con COD_TER). Solución: SCAN/IF/EXIT.
 - **Cursor READWRITE**: `INTO CURSOR &lcCursor READWRITE` permite agregar columnas al cursor existente.
+- **CDX no actualizado por Python**: dbf library de Python NO actualiza el CDX (índice binario de VFP) al hacer append/insert. Siempre correr `REINDEX` en VFP después de insertar desde Python.
+- **Show(1) NO es modal en VFP**: `loForm.Show(1)` = muestra el form, el `1` es window style. Para modal usar `WindowType = 1` en la clase + `loForm.Show()` sin parámetro.
+- **CREATEOBJECT con LOCAL**: si loForm es LOCAL y Show() no bloquea, el GC destruye el form al instante. WindowType=1 hace que Show() bloquee.
+- **DO (variable)**: usar `lc = "ruta.prg" && DO (lc)` en lugar de `DO ruta.prg` en código guardado en SCX/SCT para evitar que VFP intente resolver la ruta en compilación.
+- **FPT/SCT corrupción**: insertar bytes en medio del FPT corrompe todos los offsets de memos siguientes. Siempre usar dbf library para escribir memos completos, nunca editar bytes crudos en el medio del archivo.
 - **Rafael tiene años de experiencia en VFP** — no necesita explicaciones básicas del lenguaje.

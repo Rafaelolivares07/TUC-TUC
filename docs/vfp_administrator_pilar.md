@@ -1,5 +1,5 @@
 # Proyecto VFP — Administrator (SAR) — Contexto y Pendientes
-_Actualizado: 2026-03-21 — valores BD de Pilar confirmados, interfaz_allegra.prg actualizado_
+_Actualizado: 2026-03-22 — documentación OBJCODE/METHODS bug, estado formulario configurar_allegra, decisión de pausar_
 
 ---
 
@@ -610,10 +610,26 @@ Finalmente en `main()` — descomentar el bloque (lines ~250-262).
 
 **Para habilitar acceso a otros usuarios**: insertar en `usuarios_perfiles_formularios.dbf` con COD_TER del usuario, FORMULARIO=295, ESTADO=1
 
-#### 🔲 PENDIENTE INMEDIATO — Prueba final (próxima sesión)
-- [ ] Probar desde el menú de ayuda de Administrator: buscar "allegra" → clic → debe abrirse el formulario de Allegra sin ventana extra ni error
-  - Fix aplicado: `WindowType=1` en clase frm_allegra + `Show()` sin parámetro
-  - **No probado aún** — sesión terminada antes de la prueba
+#### ❌ BLOQUEADO — formulario configurar_allegra.scx (2026-03-22)
+
+**Estado**: La forma abre desde el menú de Administrator pero aparece VACÍA (sin controles, título "Form").
+
+**Causa raíz identificada**: Dos problemas encadenados:
+1. `COMPILE FORM` escribe en SCX el campo `OBJCODE` apuntando a P-code compilado en el SCT. Cuando Python modifica el SCT (cambiando tamaños), ese puntero queda fuera de rango.
+2. VFP intenta cargar el P-code de `OBJCODE` → falla por out-of-range → intenta compilar METHODS → pero el source contenía `STRTOFILE()` que no existe en esta versión de VFP runtime → compilación falla → forma vacía.
+
+**Fix v12 aplicado**: `fix_sct_v12.py` hace (1) `OBJCODE=0` en SCX para que VFP ignore el P-code y use METHODS, (2) restaura Init v8 sin STRTOFILE. El script corrió sin errores. Sin embargo la forma sigue vacía — causa desconocida sin acceso a más herramientas de debug en VFP runtime sin Command Window.
+
+**Decisión**: Pausar el formulario SCX por ahora. Opciones futuras (ver nota al final de esta sección).
+
+**REGLA CRÍTICA para cualquier trabajo futuro en este SCX:**
+- **NUNCA correr COMPILE FORM** sobre `configurar_allegra.scx` — cada vez que se corra, OBJCODE queda apuntando a un valor que se desactualiza cuando Python modifica el SCT. Hay que volver a correr `revert_scx.py` + `fix_sct_v12.py`.
+- Si se corre COMPILE FORM por accidente: ejecutar `python C:\S.A.R\revert_scx.py` + `python C:\S.A.R\fix_sct_v12.py`
+
+**Opciones para retomar la configuración de Allegra:**
+- **Opción A**: Agregar los controles de config Allegra a un formulario de parámetros existente en Administrator (el que Pilar ya usa para otras configs).
+- **Opción B**: Crear un nuevo formulario `.scx` desde cero con VFP abierto en modo desarrollo (no compilado), sin tocar el SCT con Python.
+- **Opción C**: Usar el `configurar_allegra.prg` directamente (tiene la clase `frm_allegra` completa) y ajustar la entrada desde el menú para llamar al PRG.
 
 #### 🔲 PENDIENTE — Rafael hace esto (no depende de Allegra)
 - [ ] Confirmar mapeo PVAR_CON_PRO1..9 (ver script en sección Paso B arriba)
@@ -656,15 +672,247 @@ Pilar paga $90.000/mes por Allegra solo para facturación. Si Administrator cubr
 
 ## 4. Notas técnicas VFP — Aprendizajes
 
-- **SCX/SCT como binario**: VFP almacena formularios como DBF+FPT. Los METHODS son memo fields. Se modifican con Python usando `struct`.
+### 4.1 SCX/SCT — Estructura binaria (crítico)
+
+- **SCX/SCT como binario**: VFP almacena formularios como DBF (`.scx`) + FPT memo (`.SCT`). Los METHODS de cada objeto son memo fields en el SCT. Se modifican con Python usando `struct`.
 - **Backups numerados**: `_bak1`, `_bak3`, `_bak5` — siempre restaurar desde `_bak5` (punto más limpio).
-- **Compile obligatorio**: después de modificar el SCX/SCT:
-  `COMPILE FORM C:\S.A.R\PROYECTO\contabilidad_movimiento_cuentas_terceros.scx`
+- **Compile obligatorio**: después de modificar el SCX/SCT siempre correr en VFP:
+  ```foxpro
+  COMPILE FORM C:\S.A.R\PROYECTO\nombre_form.scx
+  ```
+- **FPT/SCT corrupción**: insertar bytes en medio del FPT corrompe todos los offsets de memos siguientes. Siempre usar dbf library para escribir memos completos, nunca editar bytes crudos en el medio del archivo.
+
+### 4.2 SCT — Formato FPT y el bug crítico del record length (2026-03-22)
+
+**El bug más importante aprendido:** Cuando Python escribe contenido nuevo al SCT, hay DOS longitudes que deben coincidir:
+1. El campo `next_free_block` en el header FPT (bytes 0-3, big-endian) — indica el tamaño total del archivo.
+2. El **record length** dentro de cada bloque memo (bytes 4-7 de cada bloque, big-endian) — indica cuántos bytes de contenido hay en ese bloque específico.
+
+Si solo se actualiza `next_free_block` pero NO el record length del bloque, `COMPILE FORM` lee solo los bytes que dice el record length antiguo (ej: 102 bytes de los 5000 que escribiste). El Init se compila truncado, la forma abre vacía.
+
+**Cómo leer/escribir correctamente el SCT con Python:**
+```python
+import struct
+
+sct_path = r'C:\S.A.R\PROYECTO\nombre.SCT'
+with open(sct_path, 'rb') as f:
+    data = bytearray(f.read())
+
+# Encontrar el bloque del Init
+idx = data.find(b'PROCEDURE Init')
+header_start = idx - 8  # 8 bytes antes del contenido: 4 type + 4 length
+
+# Nuevo contenido a escribir
+new_content = "PROCEDURE Init\r\n\t... código ...\r\nENDPROC".encode('cp1252')
+new_len = len(new_content)
+
+# Construir nuevo SCT
+prefix = bytes(data[:header_start])
+new_record_header = struct.pack('>I', 1) + struct.pack('>I', new_len)  # type=1, length=correct
+new_data = bytearray(prefix + new_record_header + new_content)
+
+# Actualizar next_free_block en header FPT
+new_data[0:4] = struct.pack('>I', len(new_data))
+
+with open(sct_path, 'wb') as f:
+    f.write(new_data)
+```
+
+**Verificación obligatoria antes de COMPILE FORM:**
+```python
+with open(sct_path, 'rb') as f:
+    verify = f.read()
+idx = verify.find(b'PROCEDURE Init')
+rec_len = struct.unpack('>I', verify[idx-4:idx])[0]
+print(f'Record length: {rec_len}')  # debe coincidir con len(new_content)
+```
+
+**Estructura del SCX (DBF):**
+- `record_size = 109` bytes por registro
+- Campos: PLATFORM(C8), UNIQUEID(C10), TIMESTAMP(N10), luego 20 memo fields de 4 bytes c/u
+- Campos memo en orden: CLASS, CLASSLOC, BASECLASS, OBJNAME, PARENT, PROPERTIES, PROTECTED, METHODS, OBJCODE, OLE, OLE2, RESERVED1-8, USER
+- Registros: COMMENT, DataEnvironment, Form, COMMENT (estructura base mínima)
+- Para agregar controles design-time: append registros al SCX DBF + memos al SCT
+
+**PROPERTIES format en SCX:**
+```
+DoCreate = .T.
+Caption = "Texto"
+Left = 10
+Top = 270
+Width = 110
+Height = 30
+Name = "nombre_control"
+```
+(Usa `\n` LF-only, no CRLF)
+
+**Agregar registros de controles al SCX desde Python:**
+```python
+# Quitar EOF marker (0x1A), append nuevo record, agregar EOF de nuevo
+# Actualizar record count en bytes 4-7 (little-endian)
+```
+
+### 4.3 DEFINE CLASS — Limitación crítica de VFP
+
+**DEFINE CLASS falla silenciosamente cuando se llama desde un DO sub-programa.**
+
+- `DEFINE CLASS` es una directiva de compilación que VFP procesa al compilar un `.prg`.
+- Cuando se ejecuta `DO mi_prg.prg` desde el Command Window o desde otra forma, el código compilado del DEFINE CLASS no registra la clase en el ámbito de runtime.
+- Síntoma: Solo aparece el primer MESSAGEBOX del PRG (antes del DEFINE CLASS), luego nada. ON ERROR tampoco captura este fallo.
+- Confirmado con test mínimo: PRG con `MESSAGEBOX("A") + DEFINE CLASS testc AS Custom + MESSAGEBOX("B")` — solo sale "A".
+
+**Solución:** Poner toda la lógica del form directamente en el SCT del wrapper SCX, usando `ADDOBJECT()` sobre `THIS`. No usar DEFINE CLASS ni PRGs intermedios para definir formularios.
+
+### 4.4 ADDOBJECT en SCT Init — La arquitectura correcta
+
+La arquitectura que funciona para forms abiertos desde el menú de Administrator:
+
+```foxpro
+* SCT del wrapper configurar_allegra.scx — PROCEDURE Init
+PROCEDURE Init
+    THIS.Width      = 480
+    THIS.Height     = 320
+    THIS.Caption    = "Allegra - Configuracion"
+    THIS.AutoCenter = .T.
+    * ... más propiedades del form ...
+
+    * Cargar datos desde DBF
+    LOCAL lc_cfg, ln_max, ...
+    lc_cfg = "C:\D\Pilar Peralta\basedatosempresas\allegra_config.dbf"
+    USE (lc_cfg) IN 0 ALIAS allegra_cfg SHARED
+    SELECT allegra_cfg : GO TOP
+    ln_max = allegra_cfg.max_fact
+    USE IN allegra_cfg
+
+    THIS.AddProperty("cfg_path", lc_cfg)
+
+    * Agregar controles
+    THIS.AddObject("lbl_titulo", "Label")
+    THIS.lbl_titulo.Caption = "Allegra - Configuracion"
+    THIS.lbl_titulo.Left = 10 : THIS.lbl_titulo.Top = 8
+    THIS.lbl_titulo.Visible = .T.
+
+    THIS.AddObject("spn_max", "Spinner")
+    THIS.spn_max.Value = ln_max
+    THIS.spn_max.Visible = .T.
+    * ... más controles ...
+
+    RETURN .T.
+ENDPROC
+
+* Métodos de forma (llamados desde botones design-time con THISFORM.m_guardar())
+PROCEDURE m_guardar
+    LOCAL ln_mf
+    ln_mf = THISFORM.spn_max.Value
+    USE (THISFORM.cfg_path) IN 0 ALIAS allegra_sav EXCLUSIVE
+    SELECT allegra_sav : GO TOP
+    REPLACE max_fact WITH ln_mf
+    USE IN allegra_sav
+    MESSAGEBOX("Guardado.", 64, "Allegra")
+ENDPROC
+
+PROCEDURE m_cerrar
+    THISFORM.Release()
+ENDPROC
+```
+
+**Reglas clave de ADDOBJECT:**
+- Siempre poner `Visible = .T.` explícitamente — el default de controles creados con ADDOBJECT es Visible=.F.
+- NO intentar setear `THIS.ShowWindow` en Init — es read-only en runtime.
+- Usar `THISFORM.` en vez de `THIS.` dentro de métodos de botones design-time.
+
+### 4.5 BINDEVENT — No disponible en esta versión de VFP
+
+`BINDEVENT()` (función VFP 9 para conectar eventos de controles dinámicos a métodos) **no está disponible en la versión de VFP runtime que usa Administrator de Pilar**.
+
+- Síntoma: VFP lanza error "El archivo BINDEVENT.PRG no existe" — lo trata como un programa a DO.
+- Causa probable: Runtime VFP 8 o VFP 9 sin las DLLs completas.
+
+**Solución:** Agregar los botones como controles design-time en el SCX (no via ADDOBJECT), con sus métodos Click definidos en el SCT. Así los Click handlers se compilan con COMPILE FORM y funcionan sin BINDEVENT.
+
+Los botones design-time tienen en su METHODS memo:
+```foxpro
+PROCEDURE Click
+    THISFORM.m_guardar()
+ENDPROC
+```
+
+### 4.6 Otras notas VFP
+
 - **SCAN vs SEEK**: en CR_TERCEROS no se podía hacer SEEK directo (el orden/índice no coincidía con COD_TER). Solución: SCAN/IF/EXIT.
 - **Cursor READWRITE**: `INTO CURSOR &lcCursor READWRITE` permite agregar columnas al cursor existente.
 - **CDX no actualizado por Python**: dbf library de Python NO actualiza el CDX (índice binario de VFP) al hacer append/insert. Siempre correr `REINDEX` en VFP después de insertar desde Python.
 - **Show(1) NO es modal en VFP**: `loForm.Show(1)` = muestra el form, el `1` es window style. Para modal usar `WindowType = 1` en la clase + `loForm.Show()` sin parámetro.
 - **CREATEOBJECT con LOCAL**: si loForm es LOCAL y Show() no bloquea, el GC destruye el form al instante. WindowType=1 hace que Show() bloquee.
-- **DO (variable)**: usar `lc = "ruta.prg" && DO (lc)` en lugar de `DO ruta.prg` en código guardado en SCX/SCT para evitar que VFP intente resolver la ruta en compilación.
-- **FPT/SCT corrupción**: insertar bytes en medio del FPT corrompe todos los offsets de memos siguientes. Siempre usar dbf library para escribir memos completos, nunca editar bytes crudos en el medio del archivo.
+- **DO (variable)**: usar `lc = "ruta.prg" : DO (lc)` en lugar de `DO ruta.prg` en código guardado en SCX/SCT para evitar que VFP intente resolver la ruta en compilación.
 - **Rafael tiene años de experiencia en VFP** — no necesita explicaciones básicas del lenguaje.
+
+### 4.7 Scripts de trabajo en `C:\S.A.R\` (2026-03-22)
+
+| Script | Qué hace | Estado |
+|---|---|---|
+| `fix_sct.py` | Reescribe el SCT de configurar_allegra con Init ADDOBJECT completo y record length correcto | Supersedido por v8+ |
+| `fix_sct_v6.py` | Init + m_guardar con `_SCREEN.SetFocus()` + MESSAGEBOX | Supersedido |
+| `fix_sct_v7.py` | Init + m_guardar con `DECLARE MessageBoxA IN user32.dll` | Supersedido |
+| `fix_sct_v8.py` | **Init completo + m_guardar sin MESSAGEBOX (THISFORM.Caption = "Guardado")** — última versión sin STRTOFILE | Referencia — v8 es la base limpia |
+| `fix_sct_v9.py` | v8 + `ON ERROR MESSAGEBOX(...)` al inicio del Init | Problemático — MESSAGEBOX aparecía detrás de Administrator |
+| `fix_sct_v10.py` | v9 + ON ERROR escribe a `allegra_err.txt` con STRTOFILE | Roto — STRTOFILE no existe en este VFP runtime |
+| `fix_sct_v11.py` | Init mínimo de prueba con STRTOFILE al inicio | Confirmó la causa raíz: STRTOFILE → compilación falla → forma vacía |
+| `fix_sct_v12.py` | **Combinado: (1) OBJCODE=0 en SCX, (2) Init v8 sin STRTOFILE al SCT** | Última versión — corrió OK pero forma sigue vacía (causa desconocida) |
+| `revert_scx.py` | Trunca SCX a 4 registros (revierte los que agrega COMPILE FORM) | Necesario después de cada COMPILE FORM accidental |
+| `add_buttons_scx.py` | Agrega btn_guardar y btn_cerrar como registros design-time al SCX | Usado en etapas intermedias |
+| `compile_allegra.prg` | PRG con ON ERROR para compilar configurar_allegra.scx | **NO ejecutar** — corrompe OBJCODE |
+| `instalar_allegra_bd.py` | Instalador idempotente — registra Allegra en formularios.dbf + permisos de usuarios | ✅ Funciona |
+| `test_class.prg` | PRG diagnóstico para confirmar que DEFINE CLASS falla en sub-programa | Diagnóstico histórico |
+
+### 4.8 OBJCODE vs METHODS — El bug de SCX/SCT más importante (2026-03-22)
+
+**Contexto**: En el SCX (DBF) existe el campo `METHODS` (puntero al source code en SCT) y el campo `OBJCODE` (puntero al P-code compilado en SCT). VFP prefiere OBJCODE sobre METHODS — si OBJCODE != 0, intenta cargar P-code desde esa posición.
+
+**El bug**: `COMPILE FORM` escribe en `OBJCODE` la posición en bytes del P-code dentro del SCT en ese momento. Luego, cuando Python modifica el SCT (reemplazando el METHODS block con contenido diferente), el tamaño del archivo cambia y la posición en `OBJCODE` queda desapuntando a P-code corrupto o fuera del archivo.
+
+**Resultado**: VFP intenta cargar P-code desde la posición `OBJCODE` → falla (out of range o P-code inválido) → cae back a compilar METHODS en runtime → si METHODS tiene código inválido (ej: `STRTOFILE`) → compilación falla → forma abre vacía con título "Form".
+
+**STRTOFILE no existe**: Esta versión del VFP runtime de Administrator no tiene `STRTOFILE()`. Si se usa, todo el Init falla en compilación.
+
+**Cómo revisar el estado del SCX (Python)**:
+```python
+import struct
+with open(r'C:\S.A.R\PROYECTO\configurar_allegra.scx', 'rb') as f:
+    data = f.read()
+# Form record: header_size=1032, 2 records antes, record_size=109
+# OBJCODE offset dentro del registro = 61
+# => posición absoluta = 1032 + 2*109 + 61 = 1311
+objcode_val = struct.unpack('<I', data[1311:1315])[0]
+print(f'OBJCODE = {objcode_val}')  # debe ser 0 para forzar uso de METHODS
+```
+
+**Cómo resetear OBJCODE a 0 (Python)**:
+```python
+with open(r'C:\S.A.R\PROYECTO\configurar_allegra.scx', 'r+b') as f:
+    f.seek(1311)
+    f.write(struct.pack('<I', 0))
+```
+
+**Secuencia correcta de trabajo (sin COMPILE FORM)**:
+1. `python C:\S.A.R\fix_sct_v12.py` — escribe source correcto al SCT y OBJCODE=0 al SCX
+2. Abrir la forma en VFP — usa METHODS (source) → VFP lo compila en runtime
+3. **No correr COMPILE FORM** — si se corre por error: `python C:\S.A.R\revert_scx.py` + `python C:\S.A.R\fix_sct_v12.py`
+
+### 4.8 Estado actual del formulario configurar_allegra (2026-03-22)
+
+| Componente | Estado |
+|---|---|
+| Wrapper SCX + SCT | ✅ SCT contiene Init con ADDOBJECT + m_guardar + m_cerrar |
+| btn_guardar (design-time) | ✅ Registro en SCX, Click=`THISFORM.m_guardar()` en SCT |
+| btn_cerrar (design-time) | ✅ Registro en SCX, Click=`THISFORM.Release()` en SCT |
+| Form abre con controles | ✅ Confirmado en prueba — labels, spinners, checkbox, editbox |
+| Guardar config funciona | 🔲 Pendiente prueba post-COMPILE FORM con botones design-time |
+| BINDEVENT | ❌ No disponible — abandonado, reemplazado por botones design-time |
+
+**Para compilar y probar:**
+```foxpro
+DO C:\S.A.R\compile_allegra.prg
+* → debe decir "Compilado OK"
+* Luego: Oficina → facturacion → ALLEGRA
+```

@@ -41020,7 +41020,8 @@ def vendedor_dashboard():
       <div class="relative flex-1">
         <select id="sel-negocio"
                 onchange="cambiarNegocioActivo()"
-                class="w-full bg-transparent text-white text-sm font-bold appearance-none cursor-pointer focus:outline-none pr-4">
+                style="background:#312e81;color:white;height:28px"
+                class="w-full text-sm font-bold cursor-pointer focus:outline-none pr-4 rounded">
         </select>
         <span class="pointer-events-none absolute right-0 top-0 text-indigo-300 text-xs">▾</span>
       </div>
@@ -41496,9 +41497,12 @@ async function cargarNegocios() {
     const r = await fetch('/api/vendedor/mis-negocios?tel=' + encodeURIComponent(tel));
     const d = await r.json();
     if (!d.ok || !d.negocios.length) return;
+    // Deduplicar por id
+    const vistos = new Set();
+    const unicos = d.negocios.filter(n => { if (vistos.has(n.id)) return false; vistos.add(n.id); return true; });
     const sel = document.getElementById('sel-negocio');
-    sel.innerHTML = d.negocios.map(n => `<option value="${n.id}">${n.nombre}</option>`).join('');
-    _negocioActivo = d.negocios[0];
+    sel.innerHTML = unicos.map(n => `<option value="${n.id}" style="background:#312e81;color:white">${n.nombre}</option>`).join('');
+    _negocioActivo = unicos[0];
     document.getElementById('bloque-negocio').style.display = '';
   } catch {}
 }

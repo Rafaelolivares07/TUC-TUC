@@ -41160,12 +41160,6 @@ def vendedor_dashboard():
     </div>
   </div>
 
-  <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
-    <p class="font-extrabold text-green-800 text-sm mb-1">💰 Tu comisión</p>
-    <p class="text-sm text-green-700"><strong>20%</strong> de cada pago del cliente — recurrente mientras siga activo.</p>
-    <p class="text-xs text-green-600 mt-1">Solo se paga cuando hay ingreso real.</p>
-  </div>
-
   <!-- ════ MIS ENVÍOS ════ -->
   <div>
     <button onclick="toggleHistorialGeneral()"

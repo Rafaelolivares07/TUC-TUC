@@ -40854,6 +40854,20 @@ def api_vendedor_envios_general():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/vendedor/envios/<int:envio_id>', methods=['DELETE'])
+def api_vendedor_envio_eliminar(envio_id):
+    """Elimina un registro del historial de envíos."""
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM plantillas_crm_envios WHERE id = %s", (envio_id,))
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/vendedor/envios/contacto/<int:cid>')
 def api_vendedor_envios_contacto(cid):
     """Historial de todos los envíos a un contacto (cualquier vendedor)."""
@@ -41970,11 +41984,32 @@ async function cargarHistorialGeneral() {
           ${e.texto_enviado ? `<p class="text-xs text-gray-600 leading-snug mt-0.5 line-clamp-2">${e.texto_enviado}</p>` : ''}
           <p class="text-xs text-gray-400 mt-0.5">${_fmtFecha(e.created_at)}</p>
         </div>
-        ${e.contacto_tel ? `<button onclick="abrirWa('${(e.contacto_nombre||'').replace(/'/g,'')}','${e.contacto_tel}','${e.contacto_id||''}')"
-          class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white text-base transition mt-0.5" title="Escribir por WhatsApp">💬</button>` : ''}
+        <div class="flex flex-col gap-1 shrink-0 mt-0.5">
+          ${e.contacto_tel ? `<button onclick="abrirWa('${(e.contacto_nombre||'').replace(/'/g,'')}','${e.contacto_tel}','${e.contacto_id||''}')"
+            class="w-8 h-8 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white text-base transition" title="Escribir por WhatsApp">💬</button>` : ''}
+          <button onclick="borrarEnvio(${e.id}, this)"
+            class="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 hover:bg-red-200 text-red-500 text-base transition" title="Eliminar registro">🗑</button>
+        </div>
       </div>
     `).join('');
   } catch { zona.innerHTML = '<p class="text-center py-2 text-red-400">Error de red.</p>'; }
+}
+
+async function borrarEnvio(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  const r = await fetch('/api/vendedor/envios/' + id, { method: 'DELETE' });
+  const d = await r.json();
+  if (d.ok) {
+    btn.closest('.bg-gray-50').remove();
+    const zona = document.getElementById('lista-historial-general');
+    if (!zona.querySelector('.bg-gray-50')) {
+      zona.innerHTML = '<p class="text-center py-2 text-gray-400">Aún no hay envíos registrados.</p>';
+    }
+  } else {
+    btn.disabled = false;
+    btn.textContent = '🗑';
+  }
 }
 
 function llamar(tel) {

@@ -40904,7 +40904,7 @@ def _get_or_create_tuctuc_id(conn):
     if row:
         return row['id']
     new = conn.execute(
-        "INSERT INTO terceros (nombre, fecha_creacion) VALUES ('TUC TUC', NOW()) RETURNING id"
+        "INSERT INTO terceros (nombre) VALUES ('TUC TUC') RETURNING id"
     ).fetchone()
     conn.commit()
     return new['id']

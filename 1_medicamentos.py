@@ -40583,6 +40583,7 @@ def _crear_tabla_plantillas_crm(conn):
     for sql in [
         "ALTER TABLE plantillas_crm_envios ALTER COLUMN plantilla_id DROP NOT NULL",
         "ALTER TABLE plantillas_crm_envios ADD COLUMN IF NOT EXISTS medio VARCHAR(20) DEFAULT 'whatsapp'",
+        "ALTER TABLE plantillas_crm_envios ADD COLUMN IF NOT EXISTS mensaje_enviado TEXT",
     ]:
         try: conn.execute(sql)
         except Exception: pass
@@ -40679,10 +40680,11 @@ def api_vendedor_plantillas_editar(pid):
 @app.route('/api/vendedor/plantillas/envio', methods=['POST'])
 def api_vendedor_plantillas_envio():
     data = request.get_json() or {}
-    plantilla_id = data.get('plantilla_id')  # puede ser None
-    contacto_id  = data.get('contacto_id')
-    tel_vendedor = (data.get('tel_vendedor') or '').strip()
-    medio        = (data.get('medio') or 'whatsapp').strip()
+    plantilla_id    = data.get('plantilla_id')  # puede ser None
+    contacto_id     = data.get('contacto_id')
+    tel_vendedor    = (data.get('tel_vendedor') or '').strip()
+    medio           = (data.get('medio') or 'whatsapp').strip()
+    mensaje_enviado = (data.get('mensaje_enviado') or '').strip() or None
     if not contacto_id:
         return jsonify({'ok': False, 'error': 'contacto_id requerido'}), 400
     vendedor_id = _tercero_id_por_tel(tel_vendedor) if tel_vendedor else None
@@ -40692,8 +40694,8 @@ def api_vendedor_plantillas_envio():
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
         conn.execute(
-            "INSERT INTO plantillas_crm_envios (plantilla_id, contacto_id, vendedor_id, medio) VALUES (%s,%s,%s,%s)",
-            (plantilla_id, contacto_id, vendedor_id, medio)
+            "INSERT INTO plantillas_crm_envios (plantilla_id, contacto_id, vendedor_id, medio, mensaje_enviado) VALUES (%s,%s,%s,%s,%s)",
+            (plantilla_id, contacto_id, vendedor_id, medio, mensaje_enviado)
         )
         conn.commit()
         conn.close()
@@ -40716,8 +40718,10 @@ def api_vendedor_envios_general():
         _crear_tabla_plantillas_crm(conn)
         rows = conn.execute("""
             SELECT e.id, e.medio, e.created_at::text,
+                   e.contacto_id,
                    c.nombre AS contacto_nombre, c.telefono AS contacto_tel,
-                   p.titulo AS plantilla_titulo
+                   p.titulo AS plantilla_titulo,
+                   COALESCE(e.mensaje_enviado, p.cuerpo) AS texto_enviado
             FROM plantillas_crm_envios e
             JOIN contactos c ON c.id = e.contacto_id
             LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
@@ -41728,9 +41732,12 @@ async function cargarHistorialGeneral() {
         <span class="text-base mt-0.5">${_medioLabel[e.medio] || '📨'}</span>
         <div class="flex-1 min-w-0">
           <p class="font-semibold text-gray-800 text-xs truncate">${e.contacto_nombre || e.contacto_tel || '?'}</p>
-          <p class="text-xs text-gray-500 truncate">${e.plantilla_titulo || 'Sin plantilla'}</p>
-          <p class="text-xs text-gray-400">${_fmtFecha(e.created_at)}</p>
+          ${e.plantilla_titulo ? `<p class="text-xs text-gray-500 truncate">${e.plantilla_titulo}</p>` : ''}
+          ${e.texto_enviado ? `<p class="text-xs text-gray-600 leading-snug mt-0.5 line-clamp-2">${e.texto_enviado}</p>` : ''}
+          <p class="text-xs text-gray-400 mt-0.5">${_fmtFecha(e.created_at)}</p>
         </div>
+        ${e.contacto_tel ? `<button onclick="abrirWa('${(e.contacto_nombre||'').replace(/'/g,'')}','${e.contacto_tel}','${e.contacto_id||''}')"
+          class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white text-base transition mt-0.5" title="Escribir por WhatsApp">💬</button>` : ''}
       </div>
     `).join('');
   } catch { zona.innerHTML = '<p class="text-center py-2 text-red-400">Error de red.</p>'; }
@@ -41914,9 +41921,10 @@ function enviarPorCanal() {
     modal.classList.add('hidden');
     window.open('https://t.me/+' + num, '_blank');
     if (contactoId) {
+      const msgTg = document.getElementById('inp-wa-mensaje').value.trim();
       fetch('/api/vendedor/plantillas/envio', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor() })
+        body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor(), mensaje_enviado: msgTg || null })
       }).catch(() => {});
     }
     _plantillaSeleccionadaId = null;
@@ -41971,7 +41979,8 @@ function enviarWaContacto() {
         plantilla_id: _plantillaSeleccionadaId || null,
         contacto_id: parseInt(contactoId),
         medio: 'whatsapp',
-        tel_vendedor: telVendedor()
+        tel_vendedor: telVendedor(),
+        mensaje_enviado: msg || null
       })
     }).catch(() => {});
   }

@@ -40250,22 +40250,6 @@ def api_vendedor_identificar():
             tercero_id  = cur.fetchone()[0]
             nombre_real = nombre
             conn.commit()
-        # Auto-asignar TUC TUC si no está ya en vendedor_negocios
-        try:
-            _crear_tabla_plantillas_crm(conn)
-            tuctuc_id = _get_or_create_tuctuc_id(conn)
-            existe = conn.execute(
-                "SELECT 1 FROM vendedor_negocios WHERE vendedor_id=%s AND negocio_id=%s",
-                (tercero_id, tuctuc_id)
-            ).fetchone()
-            if not existe:
-                conn.execute(
-                    "INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo) VALUES (%s, %s, TRUE)",
-                    (tercero_id, tuctuc_id)
-                )
-                conn.commit()
-        except Exception:
-            pass
         conn.close()
         return jsonify({'ok': True, 'tercero_id': tercero_id, 'nombre': nombre_real, 'telefono': telefono})
     except Exception as e:
@@ -40921,18 +40905,6 @@ def api_vendedor_mis_negocios():
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
         crear_tablas_tienda(conn)
-        # Auto-asignar TUC TUC si no está ya (retrocompatibilidad con vendedores existentes)
-        tuctuc_id = _get_or_create_tuctuc_id(conn)
-        existe = conn.execute(
-            "SELECT 1 FROM vendedor_negocios WHERE vendedor_id=%s AND negocio_id=%s",
-            (vendedor_id, tuctuc_id)
-        ).fetchone()
-        if not existe:
-            conn.execute(
-                "INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo) VALUES (%s, %s, TRUE)",
-                (vendedor_id, tuctuc_id)
-            )
-            conn.commit()
         # Negocios genéricos (terceros)
         rows = conn.execute("""
             SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo
@@ -40952,7 +40924,14 @@ def api_vendedor_mis_negocios():
         """, (vendedor_id,)).fetchall()
         negocios += [dict(r) for r in tienda_rows]
         conn.close()
-        return jsonify({'ok': True, 'negocios': negocios})
+        # Deduplicar por nombre (puede haber duplicados en BD por deploys previos)
+        vistos = set()
+        negocios_unicos = []
+        for n in negocios:
+            if n['nombre'] not in vistos:
+                vistos.add(n['nombre'])
+                negocios_unicos.append(n)
+        return jsonify({'ok': True, 'negocios': negocios_unicos})
     except Exception as e:
         try: conn.close()
         except Exception: pass

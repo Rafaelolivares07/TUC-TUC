@@ -40657,6 +40657,25 @@ def api_vendedor_plantillas_eliminar(pid):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/vendedor/plantillas/<int:pid>', methods=['PUT'])
+def api_vendedor_plantillas_editar(pid):
+    data   = request.get_json() or {}
+    titulo = (data.get('titulo') or '').strip()[:80]
+    cuerpo = (data.get('cuerpo') or '').strip()
+    if not titulo or not cuerpo:
+        return jsonify({'ok': False, 'error': 'titulo y cuerpo requeridos'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE plantillas_crm SET titulo=%s, cuerpo=%s WHERE id=%s", (titulo, cuerpo, pid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/vendedor/plantillas/envio', methods=['POST'])
 def api_vendedor_plantillas_envio():
     data = request.get_json() or {}
@@ -41208,7 +41227,7 @@ def vendedor_dashboard():
         <textarea id="inp-plt-cuerpo" rows="2" placeholder="Texto del mensaje..."
                   class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:border-indigo-400"></textarea>
         <div class="flex gap-2">
-          <button onclick="guardarPlantilla()" class="flex-1 bg-indigo-600 text-white text-xs font-bold py-1.5 rounded-lg hover:bg-indigo-700 transition">Guardar</button>
+          <button id="btn-guardar-plt" onclick="guardarPlantilla()" class="flex-1 bg-indigo-600 text-white text-xs font-bold py-1.5 rounded-lg hover:bg-indigo-700 transition">Guardar</button>
           <button onclick="cancelarNuevaPlantilla()" class="text-xs text-gray-400 underline px-2">Cancelar</button>
         </div>
       </div>
@@ -41820,6 +41839,7 @@ function renderPlantillas(lista, zona) {
   const chips = lista.map((p, i) => `
     <span class="inline-flex items-center gap-1 bg-gray-100 hover:bg-green-50 text-gray-700 rounded-full pl-2.5 pr-1 py-1 text-xs transition">
       <button onclick="usarPlantilla(${i})" class="hover:text-green-700 font-medium">${p.titulo}</button>
+      <button onclick="editarPlantilla(${i})" class="text-gray-300 hover:text-indigo-500 px-0.5" title="Editar">✏</button>
       <button onclick="eliminarPlantilla(${p.id})" class="text-gray-300 hover:text-red-500 font-bold px-0.5">✕</button>
     </span>
   `).join('');
@@ -41831,14 +41851,31 @@ function renderPlantillas(lista, zona) {
 }
 
 function abrirNuevaPlantilla() {
+  const form = document.getElementById('form-nueva-plt');
   document.getElementById('inp-plt-titulo').value = '';
   document.getElementById('inp-plt-cuerpo').value = '';
-  document.getElementById('form-nueva-plt').classList.remove('hidden');
+  delete form.dataset.pid;
+  document.getElementById('btn-guardar-plt').textContent = 'Guardar';
+  form.classList.remove('hidden');
   document.getElementById('inp-plt-titulo').focus();
 }
 
+function editarPlantilla(idx) {
+  const p    = _todasPlantillas[idx];
+  if (!p) return;
+  const form = document.getElementById('form-nueva-plt');
+  document.getElementById('inp-plt-titulo').value = p.titulo;
+  document.getElementById('inp-plt-cuerpo').value = p.cuerpo;
+  form.dataset.pid = p.id;
+  document.getElementById('btn-guardar-plt').textContent = 'Actualizar';
+  form.classList.remove('hidden');
+  document.getElementById('inp-plt-cuerpo').focus();
+}
+
 function cancelarNuevaPlantilla() {
-  document.getElementById('form-nueva-plt').classList.add('hidden');
+  const form = document.getElementById('form-nueva-plt');
+  delete form.dataset.pid;
+  form.classList.add('hidden');
 }
 
 async function guardarPlantilla() {
@@ -41846,14 +41883,17 @@ async function guardarPlantilla() {
   const titulo = document.getElementById('inp-plt-titulo').value.trim();
   const cuerpo = document.getElementById('inp-plt-cuerpo').value.trim();
   if (!titulo || !cuerpo) return;
+  const form = document.getElementById('form-nueva-plt');
+  const pid  = form.dataset.pid;
   try {
-    const r = await fetch('/api/vendedor/plantillas', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
+    const r = await fetch(pid ? '/api/vendedor/plantillas/' + pid : '/api/vendedor/plantillas', {
+      method: pid ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({tel, titulo, cuerpo})
     });
     const d = await r.json();
     if (d.ok) {
-      document.getElementById('form-nueva-plt').classList.add('hidden');
+      delete form.dataset.pid;
+      form.classList.add('hidden');
       cargarPlantillas();
     }
   } catch {}

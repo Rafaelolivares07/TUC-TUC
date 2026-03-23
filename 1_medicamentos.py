@@ -41790,6 +41790,29 @@ window.addEventListener('DOMContentLoaded', () => {
     const nom = nombreVendedor();
     document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + (nom ? nom.split(' ')[0] : tel);
     cargarNegocios(); cargarCitas(); cargarContactos();
+  } else {
+    // Leer ?tel= del URL (enlace enviado por el admin del negocio)
+    const urlTel = new URLSearchParams(window.location.search).get('tel');
+    if (urlTel && urlTel.replace(/\\D/g,'').length >= 10) {
+      document.getElementById('inp-tel-v').value = urlTel;
+      // Intentar auto-identificar si ya existe en terceros
+      fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(urlTel))
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.length) { document.getElementById('inp-nombre-v').focus(); return; }
+          const limpio = urlTel.replace(/\\D/g,'');
+          const match = data.find(t => (t.telefono||'').replace(/\\D/g,'') === limpio);
+          if (match) {
+            localStorage.setItem('vd_tel',    match.telefono);
+            localStorage.setItem('vd_nombre', match.nombre);
+            document.getElementById('modal-codigo').classList.add('hidden');
+            document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + match.nombre.split(' ')[0];
+            cargarNegocios(); cargarCitas(); cargarContactos();
+          } else {
+            document.getElementById('inp-nombre-v').focus();
+          }
+        }).catch(() => { document.getElementById('inp-nombre-v').focus(); });
+    }
   }
   // Fecha mínima del picker = hoy
   document.getElementById('cita-fecha') && (document.getElementById('cita-fecha').min = new Date().toISOString().slice(0,10));

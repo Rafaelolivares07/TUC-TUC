@@ -1,5 +1,5 @@
 # CRM Vendedor — Documento de Desarrollo
-**Última actualización: 2026-03-20 (rev. modal unificado + layout)**
+**Última actualización: 2026-03-23 (rev. multi-negocio + historial real + edición plantillas)**
 
 ---
 
@@ -9,32 +9,38 @@
 `/vendedor` — dashboard público, sin login obligatorio. El vendedor se identifica por su teléfono (input en la página).
 
 ### Módulos activos
-- **Agenda de citas** — crear, ver, marcar como completada
-- **Contactos** — lista personal (colapsable), importar desde CSV/texto, buscar. Nombre del contacto usa `break-words` (no trunca en móvil)
+- **Selector de negocio activo** — en el header, visible después de identificarse. Auto-asigna TUC TUC si no hay asignación previa. Permite cambiar entre negocios representados.
+- **Agenda de citas** — crear, ver, marcar como completada. Guarda `negocio_id` (contexto del negocio para el que se vende)
+- **Contactos** — lista personal del vendedor (colapsable), importar desde CSV/texto, buscar. **Los contactos son del vendedor, no del negocio.**
 - **Demo launcher** — situaciones predefinidas + lanzar WhatsApp con rol asignado
-- **Plantillas CRM** — mensajes pregrabados, pool compartido entre todos los vendedores
-- **Modal unificado de comunicación** — historial del contacto + selector de canal (WA/Telegram) + compose + envío. Un solo modal para todo.
-- **Log de envíos** — general (mis envíos recientes, colapsable) + por contacto (dentro del modal). Registra siempre aunque no se use plantilla.
+- **Plantillas CRM** — mensajes pregrabados, pool compartido entre TODOS los usuarios de la plataforma (sin `negocio_id`). Soporta crear, editar (botón ✏) y eliminar.
+- **Modal unificado de comunicación** — historial del contacto + selector de canal (WA/Telegram) + compose + envío
+- **Log de envíos** — general (mis envíos recientes) + por contacto. Guarda `mensaje_enviado` (texto real enviado) + `negocio_id`
 
 ### Layout del dashboard (orden actual)
-1. Demo launcher / situaciones
-2. Comisión
-3. Mis envíos recientes (colapsable)
-4. Mis contactos (colapsable, cerrado por defecto)
-5. Objeciones frecuentes (colapsable)
-6. Antes de entrar al local / checklist (colapsable)
+1. Header con selector de negocio activo
+2. Demo launcher / situaciones
+3. Comisión
+4. Mis envíos recientes (colapsable)
+5. Mis contactos (colapsable, cerrado por defecto)
+6. Objeciones frecuentes (colapsable)
+7. Antes de entrar al local / checklist (colapsable)
 
 ### Tablas de BD involucradas
-| Tabla | Qué guarda |
-|---|---|
-| `contactos` | Lista de prospectos por vendedor (`tercero_id` del vendedor, `negocio_id`) |
-| `plantillas_crm` | Mensajes pregrabados — pool compartido (sin filtro por vendedor) |
-| `plantillas_crm_envios` | Log: `plantilla_id` (nullable), `contacto_id`, `vendedor_id`, `medio`, `created_at` |
-| `citas_vendedor` | Agenda de citas del vendedor |
+| Tabla | Qué guarda | `negocio_id` |
+|---|---|---|
+| `contactos` | Lista de prospectos — del vendedor, no del negocio | ❌ NO |
+| `plantillas_crm` | Mensajes pregrabados — pool global de la plataforma | ❌ NO |
+| `plantillas_crm_envios` | Log de envíos: `plantilla_id` (nullable), `contacto_id`, `vendedor_id`, `medio`, `mensaje_enviado`, `negocio_id` | ✅ SÍ |
+| `citas_vendedor` | Agenda de citas del vendedor | ✅ SÍ |
+| `vendedor_negocios` | Relación vendedor ↔ negocios que representa | tabla de relación |
 
-### Columnas migradas en esta sesión
-- `plantillas_crm_envios.plantilla_id` → nullable (antes NOT NULL). Permite registrar envíos sin plantilla.
-- `plantillas_crm_envios.medio` → `VARCHAR(20) DEFAULT 'whatsapp'`. Valores: `whatsapp`, `telegram`, `otro`.
+### Columnas migradas (historial)
+- `plantillas_crm_envios.plantilla_id` → nullable
+- `plantillas_crm_envios.medio` → `VARCHAR(20) DEFAULT 'whatsapp'`
+- `plantillas_crm_envios.mensaje_enviado` → `TEXT` (texto real enviado, no el de la plantilla)
+- `plantillas_crm_envios.negocio_id` → `INTEGER` (contexto del negocio para el que se vendió)
+- `citas_vendedor.negocio_id` → `INTEGER`
 
 ---
 
@@ -42,106 +48,90 @@
 
 ### 2.1 Identificador universal de negocio = `terceros.id`
 
-Tanto personas como negocios son `terceros` — cada entidad tiene su propio `tercero_id` independiente.
+Tanto personas como negocios son `terceros`. TUC TUC mismo tiene su propio `tercero_id` como entidad.
 
 ```
-Persona "Don Carlos"          → terceros.id = 5
-Negocio "Restaurante El Rincón" → terceros.id = 42  ← entidad propia, no el dueño
+TUC TUC (plataforma)              → terceros donde nombre='TUC TUC' y telefono IS NULL
+Restaurante El Rincón (negocio)   → terceros.id = 42
+Don Carlos (persona/vendedor)     → terceros.id = 5
 ```
 
-El parámetro `n` en la URL apunta al `tercero_id` del **negocio como entidad**, no al de su dueño.
+### 2.2 Contactos son del vendedor, NO del negocio
 
-```
-/vendedor?n=42   ← id del negocio-entidad en terceros
-```
+Un vendedor puede representar múltiples negocios, pero su base de contactos es personal — la construyó él. Los mismos contactos sirven para cualquier negocio que represente. La tabla `contactos` NO tiene `negocio_id`.
 
-- TUC TUC central → `n=X` (tercero_id de TUC TUC como entidad)
-- Restaurante El Rincón → `n=42`
-- Tienda La Esquina → `n=Z`
+### 2.3 Plantillas son globales de la plataforma
 
-### 2.2 Multi-tenancy por URL
+Las plantillas en `plantillas_crm` son herramientas genéricas de comunicación. Todos los vendedores de todos los negocios las ven y pueden usarlas. **NO tienen `negocio_id`.**
 
-Cada negocio que quiera tener sus propios vendedores recibe un link:
-```
-https://tuctuc.app/vendedor?n=42
-```
-El JS lee `n`, lo guarda como variable global, y lo pasa en todas las llamadas a API.
+### 2.4 Multi-negocio — implementado (2026-03-23)
 
-**Esto NO está implementado aún** — pendiente codear.
+Tabla `vendedor_negocios(vendedor_id, negocio_id, activo)` — relación N:N entre vendedores y negocios.
 
-### 2.3 Contactos pertenecen al negocio, no al vendedor individual
-
-Hoy: `contactos.tercero_id` = id del vendedor que importó el contacto.
-Futuro: `contactos.negocio_id` = `tercero_id` del negocio → lista compartida entre todos los vendedores de ese negocio.
-
-### 2.4 Plantillas — pool global + futuro por negocio
-
-Hoy: todas las plantillas son visibles para todos (sin filtro).
-Futuro: agregar `negocio_id` a `plantillas_crm` → cada negocio tiene sus propias plantillas, más las globales (negocio_id=NULL).
+Flujo:
+1. Vendedor se identifica por teléfono
+2. Sistema llama `GET /api/vendedor/mis-negocios?tel=...`
+3. Si no tiene ninguno → auto-crea asociación con TUC TUC y la devuelve
+4. Si tiene varios → selector dropdown en header del dashboard
+5. El negocio seleccionado (`_negocioActivo.id`) se pasa en citas y envíos
 
 ---
 
-## 3. Cambios pendientes de implementar (en orden)
+## 3. APIs del módulo CRM
 
-### Fase 1 — `?n=` en la URL (sin migrar datos)
-1. Leer `n` del query string al cargar `/vendedor`
-2. Guardar como `let _negocioId = null` (JS global)
-3. Pasar `negocio_id` en todas las APIs: contactos, plantillas, envíos
-4. Agregar columna `negocio_id` a `plantillas_crm_envios`
+### Identidad
+- `POST /api/vendedor/identificar` — busca/crea tercero por teléfono
 
-### ~~Fase 2 — Historial de envíos por contacto~~ ✅ IMPLEMENTADO
-Historial visible en el modal unificado al abrir un contacto.
-- Muestra `cuerpo` real (no título), vendedor que envió, medio, fecha
-- API: `GET /api/vendedor/envios/contacto/<cid>` — devuelve todos los envíos a ese contacto (cualquier vendedor)
-- API: `GET /api/vendedor/envios` — envíos propios, últimos 100
+### Negocios
+- `GET /api/vendedor/mis-negocios?tel=...` — negocios que representa el vendedor (auto-asigna TUC TUC si ninguno)
 
-Query interno:
-```sql
-SELECT p.cuerpo AS plantilla_cuerpo, tv.nombre AS vendedor_nombre, e.medio, e.created_at
-FROM plantillas_crm_envios e
-JOIN terceros tv ON tv.id = e.vendedor_id
-LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
-WHERE e.contacto_id = %s
-ORDER BY e.created_at DESC
-```
+### Citas
+- `GET /api/vendedor/citas?cod=<tel>` — lista citas próximas
+- `POST /api/vendedor/cita` — crea cita + pre-crea negocio en plataforma. Acepta `negocio_id`
+- `POST /api/vendedor/cita/<id>/estado` — actualiza estado
 
-### Fase 3 — Migrar contactos a negocio_id real
-Actualizar `contactos.negocio_id` con el `tercero_id` del dueño del negocio (en vez del vendedor individual).
+### Contactos
+- `GET /api/vendedor/contactos?tel=...` — lista contactos del vendedor
+- `POST /api/vendedor/contacto` — crea o actualiza contacto
+- `GET /api/vendedor/buscar-terceros?q=...` — autocomplete terceros
+
+### Plantillas
+- `GET /api/vendedor/plantillas?tel=...` — lista todas las plantillas (pool global)
+- `POST /api/vendedor/plantillas` — crea nueva plantilla
+- `PUT /api/vendedor/plantillas/<pid>` — edita plantilla existente
+- `DELETE /api/vendedor/plantillas/<pid>` — elimina
+
+### Envíos
+- `POST /api/vendedor/plantillas/envio` — registra envío (WA o Telegram). Guarda `mensaje_enviado` + `negocio_id`
+- `GET /api/vendedor/envios?tel=...` — mis envíos recientes (últimos 100)
+- `GET /api/vendedor/envios/contacto/<cid>` — historial de envíos a un contacto
 
 ---
 
-## 4. Canales de comunicación — comportamiento implementado
+## 4. Canales de comunicación — comportamiento
 
 ### Modal unificado (`modal-wa-contacto`)
-Un solo modal abre desde el botón 💬 en la tarjeta del contacto. Contiene:
 1. Nombre del contacto (cabecera)
-2. Historial de mensajes previos (cuerpo real, medio, fecha)
+2. Historial de mensajes previos (texto real, medio, fecha)
 3. Selector de canal: [💬 WhatsApp] [✈️ Telegram]
-4. Zona compose (plantillas + textarea) — se oculta si el canal es Telegram
-5. Botón "Abrir en WhatsApp/Telegram →" (siempre visible)
+4. Zona compose (plantillas editables + textarea)
+5. Botón enviar
 
 ### WhatsApp
 | Contexto | URL usada |
 |---|---|
-| Móvil (cualquier OS) | `wa.me/NUM?text=MSG` |
-| Desktop con app instalada | `whatsapp://send?phone=NUM&text=MSG` |
+| Móvil | `wa.me/NUM?text=MSG` |
+| Desktop con app | `whatsapp://send?phone=NUM&text=MSG` |
 | Desktop sin app | `https://web.whatsapp.com/send?phone=NUM&text=MSG` |
 
-Detección de app nativa: `visibilitychange` — si la página pierde foco en <1.5s → app abierta. Si permanece visible → fallback a web.
+Detección app nativa: `visibilitychange` — si la página pierde foco en <1.5s → app abierta.
 
-### Telegram
-`https://t.me/+NUM` — abre siempre en nueva pestaña. Se registra el envío con `medio='telegram'` y sin plantilla.
-
-### Registro de envíos
-Toda apertura de WA o Telegram se registra en `plantillas_crm_envios`:
-- `plantilla_id` = id de la plantilla seleccionada, o NULL si se escribió manual
-- `medio` = `'whatsapp'` o `'telegram'`
-- `vendedor_id` = tercero_id del vendedor (buscado por teléfono)
+### Historial de envíos recientes
+Muestra: ícono canal + nombre contacto + título plantilla + texto enviado (2 líneas) + fecha + botón 💬 verde para retomar contacto.
 
 ---
 
 ## 5. Modelo de comisión (referencia)
-
 Ver `docs/estrategia_comercial.md` para detalle.
 - Vendedor externo: 20% de cada recaudo, sin salario
 - Vendedor interno: $2.7M/mes fijo, sin comisión

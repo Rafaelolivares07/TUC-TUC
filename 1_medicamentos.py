@@ -40220,6 +40220,7 @@ def api_vendedor_cita_post():
     nombre_due     = data.get('nombre_dueno', '').strip()
     telefono       = ''.join(filter(str.isdigit, data.get('telefono', '')))
     fecha_hora_str = data.get('fecha_hora', '').strip()
+    negocio_id_crm = data.get('negocio_id')  # negocio TUC TUC que el vendedor representa
 
     if not vendedor_cod:
         return jsonify({'ok': False, 'error': 'Código de vendedor requerido'}), 400
@@ -40312,9 +40313,9 @@ def api_vendedor_cita_post():
         # Guardar cita
         conn.execute("""
             INSERT INTO citas_vendedor (vendedor_cod, tipo_negocio, subtipo, negocio_slug,
-                nombre_negocio, nombre_dueno, telefono, fecha_hora)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (vendedor_cod, tipo, subtipo, slug, nombre_neg, nombre_due, telefono, fecha_hora))
+                nombre_negocio, nombre_dueno, telefono, fecha_hora, negocio_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (vendedor_cod, tipo, subtipo, slug, nombre_neg, nombre_due, telefono, fecha_hora, negocio_id_crm))
         conn.commit()
         conn.close()
 
@@ -40579,11 +40580,24 @@ def _crear_tabla_plantillas_crm(conn):
             created_at   TIMESTAMP DEFAULT NOW()
         )
     """)
+    # Tabla relación vendedor ↔ negocios que representa
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vendedor_negocios (
+            id          SERIAL PRIMARY KEY,
+            vendedor_id INTEGER NOT NULL,
+            negocio_id  INTEGER NOT NULL,
+            activo      BOOLEAN DEFAULT TRUE,
+            created_at  TIMESTAMP DEFAULT NOW(),
+            UNIQUE(vendedor_id, negocio_id)
+        )
+    """)
     # Migraciones para tablas ya existentes en producción
     for sql in [
         "ALTER TABLE plantillas_crm_envios ALTER COLUMN plantilla_id DROP NOT NULL",
         "ALTER TABLE plantillas_crm_envios ADD COLUMN IF NOT EXISTS medio VARCHAR(20) DEFAULT 'whatsapp'",
         "ALTER TABLE plantillas_crm_envios ADD COLUMN IF NOT EXISTS mensaje_enviado TEXT",
+        "ALTER TABLE plantillas_crm_envios ADD COLUMN IF NOT EXISTS negocio_id INTEGER",
+        "ALTER TABLE citas_vendedor ADD COLUMN IF NOT EXISTS negocio_id INTEGER",
     ]:
         try: conn.execute(sql)
         except Exception: pass
@@ -40685,6 +40699,7 @@ def api_vendedor_plantillas_envio():
     tel_vendedor    = (data.get('tel_vendedor') or '').strip()
     medio           = (data.get('medio') or 'whatsapp').strip()
     mensaje_enviado = (data.get('mensaje_enviado') or '').strip() or None
+    negocio_id      = data.get('negocio_id')
     if not contacto_id:
         return jsonify({'ok': False, 'error': 'contacto_id requerido'}), 400
     vendedor_id = _tercero_id_por_tel(tel_vendedor) if tel_vendedor else None
@@ -40694,8 +40709,8 @@ def api_vendedor_plantillas_envio():
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
         conn.execute(
-            "INSERT INTO plantillas_crm_envios (plantilla_id, contacto_id, vendedor_id, medio, mensaje_enviado) VALUES (%s,%s,%s,%s,%s)",
-            (plantilla_id, contacto_id, vendedor_id, medio, mensaje_enviado)
+            "INSERT INTO plantillas_crm_envios (plantilla_id, contacto_id, vendedor_id, medio, mensaje_enviado, negocio_id) VALUES (%s,%s,%s,%s,%s,%s)",
+            (plantilla_id, contacto_id, vendedor_id, medio, mensaje_enviado, negocio_id)
         )
         conn.commit()
         conn.close()
@@ -40761,6 +40776,56 @@ def api_vendedor_envios_contacto(cid):
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+# ── MULTI-NEGOCIO: vendedor_negocios ──────────────────────────────────────────
+
+def _get_or_create_tuctuc_id(conn):
+    """Devuelve el tercero_id de TUC TUC como entidad, creándolo si no existe."""
+    row = conn.execute(
+        "SELECT id FROM terceros WHERE nombre = 'TUC TUC' AND telefono IS NULL LIMIT 1"
+    ).fetchone()
+    if row:
+        return row['id']
+    new = conn.execute(
+        "INSERT INTO terceros (nombre, fecha_creacion) VALUES ('TUC TUC', NOW()) RETURNING id"
+    ).fetchone()
+    conn.commit()
+    return new['id']
+
+
+@app.route('/api/vendedor/mis-negocios')
+def api_vendedor_mis_negocios():
+    """Devuelve los negocios que representa el vendedor. Si ninguno, asigna TUC TUC."""
+    tel = request.args.get('tel', '').strip()
+    vendedor_id = _tercero_id_por_tel(tel) if tel else None
+    if not vendedor_id:
+        return jsonify({'ok': False, 'error': 'vendedor no identificado'}), 400
+    try:
+        conn = get_db_connection()
+        _crear_tabla_plantillas_crm(conn)
+        rows = conn.execute("""
+            SELECT vn.negocio_id AS id, t.nombre
+            FROM vendedor_negocios vn
+            JOIN terceros t ON t.id = vn.negocio_id
+            WHERE vn.vendedor_id = %s AND vn.activo = TRUE
+            ORDER BY vn.created_at ASC
+        """, (vendedor_id,)).fetchall()
+        negocios = [dict(r) for r in rows]
+        # Si no tiene ninguno → asignar TUC TUC automáticamente
+        if not negocios:
+            tuctuc_id = _get_or_create_tuctuc_id(conn)
+            conn.execute(
+                "INSERT INTO vendedor_negocios (vendedor_id, negocio_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (vendedor_id, tuctuc_id)
+            )
+            conn.commit()
+            negocios = [{'id': tuctuc_id, 'nombre': 'TUC TUC'}]
+        conn.close()
+        return jsonify({'ok': True, 'negocios': negocios})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 # ── FIN PLANTILLAS CRM ────────────────────────────────────────────────────────
 
 
@@ -40815,6 +40880,19 @@ def vendedor_dashboard():
       </div>
     </div>
     <button onclick="cambiarCodigo()" class="text-indigo-200 text-xs underline">Cambiar código</button>
+  </div>
+  <!-- Selector de negocio activo -->
+  <div class="max-w-2xl mx-auto mt-3" id="bloque-negocio" style="display:none">
+    <div class="bg-indigo-800 rounded-xl px-3 py-2 flex items-center gap-2">
+      <span class="text-indigo-300 text-xs font-bold uppercase tracking-wide">Vendiendo para:</span>
+      <div class="relative flex-1">
+        <select id="sel-negocio"
+                onchange="cambiarNegocioActivo()"
+                class="w-full bg-transparent text-white text-sm font-bold appearance-none cursor-pointer focus:outline-none pr-4">
+        </select>
+        <span class="pointer-events-none absolute right-0 top-0 text-indigo-300 text-xs">▾</span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -41282,6 +41360,29 @@ let _demoCita = null;
 function telVendedor()    { return localStorage.getItem('vd_tel') || ''; }
 function nombreVendedor() { return localStorage.getItem('vd_nombre') || ''; }
 
+// ── Negocio activo ─────────────────────────────────────────────────────────
+let _negocioActivo = { id: null, nombre: '' };
+
+async function cargarNegocios() {
+  const tel = telVendedor();
+  if (!tel) return;
+  try {
+    const r = await fetch('/api/vendedor/mis-negocios?tel=' + encodeURIComponent(tel));
+    const d = await r.json();
+    if (!d.ok || !d.negocios.length) return;
+    const sel = document.getElementById('sel-negocio');
+    sel.innerHTML = d.negocios.map(n => `<option value="${n.id}">${n.nombre}</option>`).join('');
+    _negocioActivo = d.negocios[0];
+    document.getElementById('bloque-negocio').style.display = '';
+  } catch {}
+}
+
+function cambiarNegocioActivo() {
+  const sel = document.getElementById('sel-negocio');
+  const opt = sel.options[sel.selectedIndex];
+  _negocioActivo = { id: parseInt(sel.value), nombre: opt.text };
+}
+
 async function confirmarIdentidad() {
   const nombre   = document.getElementById('inp-nombre-v').value.trim();
   const telefono = document.getElementById('inp-tel-v').value.trim();
@@ -41303,7 +41404,7 @@ async function confirmarIdentidad() {
     localStorage.setItem('vd_nombre', d.nombre);
     document.getElementById('modal-codigo').classList.add('hidden');
     document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + d.nombre.split(' ')[0];
-    cargarCitas(); cargarContactos();
+    cargarNegocios(); cargarCitas(); cargarContactos();
   } catch(e) {
     err.textContent = 'Error de red.'; err.classList.remove('hidden');
     btn.disabled=false; btn.textContent='Entrar';
@@ -41419,7 +41520,8 @@ async function guardarCita() {
     nombre_negocio: document.getElementById('cita-nombre-neg').value.trim(),
     nombre_dueno:   document.getElementById('cita-nombre-due').value.trim(),
     telefono:       document.getElementById('cita-telefono').value.trim(),
-    fecha_hora: document.getElementById('cita-fecha').value + 'T' + document.getElementById('cita-hora').value
+    fecha_hora: document.getElementById('cita-fecha').value + 'T' + document.getElementById('cita-hora').value,
+    negocio_id: _negocioActivo.id || null
   };
   if (!payload.nombre_negocio || !payload.nombre_dueno || !payload.telefono) {
     err.textContent = 'Completá todos los campos.'; err.classList.remove('hidden'); return;
@@ -41569,7 +41671,7 @@ window.addEventListener('DOMContentLoaded', () => {
           localStorage.setItem('vd_nombre', data[0].nombre);
           document.getElementById('modal-codigo').classList.add('hidden');
           document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + data[0].nombre.split(' ')[0];
-          cargarCitas(); cargarContactos();
+          cargarNegocios(); cargarCitas(); cargarContactos();
         } else {
           // Pre-llenar nombre en el modal para que solo tenga que escribir el teléfono
           document.getElementById('inp-nombre-v').value = srvNombre;
@@ -41583,7 +41685,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-codigo').classList.add('hidden');
     const nom = nombreVendedor();
     document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + (nom ? nom.split(' ')[0] : tel);
-    cargarCitas(); cargarContactos();
+    cargarNegocios(); cargarCitas(); cargarContactos();
   }
   // Fecha mínima del picker = hoy
   document.getElementById('cita-fecha') && (document.getElementById('cita-fecha').min = new Date().toISOString().slice(0,10));
@@ -41924,7 +42026,7 @@ function enviarPorCanal() {
       const msgTg = document.getElementById('inp-wa-mensaje').value.trim();
       fetch('/api/vendedor/plantillas/envio', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor(), mensaje_enviado: msgTg || null })
+        body: JSON.stringify({ contacto_id: parseInt(contactoId), medio: 'telegram', tel_vendedor: telVendedor(), mensaje_enviado: msgTg || null, negocio_id: _negocioActivo.id || null })
       }).catch(() => {});
     }
     _plantillaSeleccionadaId = null;
@@ -41980,7 +42082,8 @@ function enviarWaContacto() {
         contacto_id: parseInt(contactoId),
         medio: 'whatsapp',
         tel_vendedor: telVendedor(),
-        mensaje_enviado: msg || null
+        mensaje_enviado: msg || null,
+        negocio_id: _negocioActivo.id || null
       })
     }).catch(() => {});
   }

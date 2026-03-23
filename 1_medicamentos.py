@@ -25628,6 +25628,14 @@ def crear_tablas_tienda(conn):
         "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN nombre DROP NOT NULL",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
+        """CREATE TABLE IF NOT EXISTS tienda_vendedores (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL,
+            vendedor_id INTEGER NOT NULL,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(tienda_id, vendedor_id)
+        )""",
     ]
     for sql in alters:
         try:
@@ -29201,6 +29209,100 @@ def api_tienda_cajero_eliminar(slug, cajero_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         conn.execute("DELETE FROM tienda_cajeros WHERE id = %s AND tienda_id = %s", (cajero_id, tienda['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── VENDEDORES DE TIENDA ──────────────────────────────────────────────────────
+
+@app.route('/api/tienda/<slug>/vendedores', methods=['GET'])
+def api_tienda_vendedores_listar(slug):
+    """Lista vendedores asignados a esta tienda"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        rows = conn.execute("""
+            SELECT tv.id, tv.vendedor_id, t.nombre, t.telefono
+            FROM tienda_vendedores tv
+            JOIN terceros t ON t.id = tv.vendedor_id
+            WHERE tv.tienda_id = %s AND tv.activo = TRUE
+            ORDER BY tv.created_at ASC
+        """, (tienda['id'],)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'vendedores': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/vendedores', methods=['POST'])
+def api_tienda_vendedores_agregar(slug):
+    """Asigna un vendedor a la tienda por teléfono"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()[:100]
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Teléfono requerido'}), 400
+    try:
+        conn = get_db_connection()
+        crear_tablas_tienda(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        # Buscar o crear tercero por teléfono
+        tercero = conn.execute("SELECT id, nombre FROM terceros WHERE telefono = %s", (telefono,)).fetchone()
+        if tercero:
+            vendedor_id = tercero['id']
+            nombre_real = tercero['nombre']
+        else:
+            if not nombre:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Vendedor no registrado — envía también su nombre'}), 400
+            new = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, fecha_creacion) VALUES (%s, %s, NOW()) RETURNING id",
+                (nombre, telefono)
+            ).fetchone()
+            conn.commit()
+            vendedor_id = new['id']
+            nombre_real = nombre
+        conn.execute(
+            "INSERT INTO tienda_vendedores (tienda_id, vendedor_id, activo) VALUES (%s, %s, TRUE) "
+            "ON CONFLICT (tienda_id, vendedor_id) DO UPDATE SET activo = TRUE",
+            (tienda['id'], vendedor_id)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'vendedor_id': vendedor_id, 'nombre': nombre_real})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/tienda/<slug>/vendedores/<int:vid>', methods=['DELETE'])
+def api_tienda_vendedores_eliminar(slug, vid):
+    """Desasigna un vendedor de la tienda"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute(
+            "UPDATE tienda_vendedores SET activo = FALSE WHERE tienda_id = %s AND id = %s",
+            (tienda['id'], vid)
+        )
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -40794,7 +40896,7 @@ def _get_or_create_tuctuc_id(conn):
 
 @app.route('/api/vendedor/mis-negocios')
 def api_vendedor_mis_negocios():
-    """Devuelve los negocios que representa el vendedor. Si ninguno, asigna TUC TUC."""
+    """Devuelve los negocios que representa el vendedor (asignados por el admin del negocio)."""
     tel = request.args.get('tel', '').strip()
     vendedor_id = _tercero_id_por_tel(tel) if tel else None
     if not vendedor_id:
@@ -40802,23 +40904,25 @@ def api_vendedor_mis_negocios():
     try:
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
+        crear_tablas_tienda(conn)
+        # Negocios genéricos (terceros)
         rows = conn.execute("""
-            SELECT vn.negocio_id AS id, t.nombre
+            SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo
             FROM vendedor_negocios vn
             JOIN terceros t ON t.id = vn.negocio_id
             WHERE vn.vendedor_id = %s AND vn.activo = TRUE
             ORDER BY vn.created_at ASC
         """, (vendedor_id,)).fetchall()
         negocios = [dict(r) for r in rows]
-        # Si no tiene ninguno → asignar TUC TUC automáticamente
-        if not negocios:
-            tuctuc_id = _get_or_create_tuctuc_id(conn)
-            conn.execute(
-                "INSERT INTO vendedor_negocios (vendedor_id, negocio_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                (vendedor_id, tuctuc_id)
-            )
-            conn.commit()
-            negocios = [{'id': tuctuc_id, 'nombre': 'TUC TUC'}]
+        # Tiendas asignadas directamente
+        tienda_rows = conn.execute("""
+            SELECT tv.tienda_id AS id, ti.nombre, 'tienda' AS tipo
+            FROM tienda_vendedores tv
+            JOIN tiendas ti ON ti.id = tv.tienda_id
+            WHERE tv.vendedor_id = %s AND tv.activo = TRUE
+            ORDER BY tv.created_at ASC
+        """, (vendedor_id,)).fetchall()
+        negocios += [dict(r) for r in tienda_rows]
         conn.close()
         return jsonify({'ok': True, 'negocios': negocios})
     except Exception as e:

@@ -41483,6 +41483,9 @@ def vendedor_dashboard():
             class="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-bold text-sm hover:bg-indigo-700 transition">
       Entrar
     </button>
+    <button id="btn-cancelar-modal" onclick="cerrarModalCodigo()" class="hidden w-full text-gray-400 text-xs py-1 hover:text-gray-600 transition">
+      Cancelar — quedarme como estoy
+    </button>
   </div>
 </div>
 
@@ -41550,6 +41553,7 @@ async function confirmarIdentidad() {
     });
     const d = await r.json();
     if (!d.ok) { err.textContent = d.error; err.classList.remove('hidden'); btn.disabled=false; btn.textContent='Entrar'; return; }
+    localStorage.removeItem('vd_negocio_id');
     localStorage.setItem('vd_tel',    d.telefono);
     localStorage.setItem('vd_nombre', d.nombre);
     document.getElementById('modal-codigo').classList.add('hidden');
@@ -41562,13 +41566,15 @@ async function confirmarIdentidad() {
 }
 
 function cambiarCodigo() {
-  localStorage.removeItem('vd_tel');
-  localStorage.removeItem('vd_nombre');
-  localStorage.removeItem('vd_negocio_id');
   document.getElementById('inp-nombre-v').value = '';
   document.getElementById('inp-tel-v').value    = '';
   document.getElementById('txt-id-error').classList.add('hidden');
+  document.getElementById('btn-cancelar-modal').classList.remove('hidden');
   document.getElementById('modal-codigo').classList.remove('hidden');
+}
+
+function cerrarModalCodigo() {
+  document.getElementById('modal-codigo').classList.add('hidden');
 }
 
 // ── Citas ──────────────────────────────────────────────────────────────────

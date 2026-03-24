@@ -19269,6 +19269,25 @@ def chat_invitado(token):
                            nombre_creador=nombre_creador, foto_creador=foto_creador)
 
 
+@app.route('/api/chat/mi-perfil', methods=['GET'])
+def api_chat_mi_perfil():
+    """Datos del usuario autenticado: nombre y foto_perfil"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False}), 401
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            'SELECT nombre, foto_perfil FROM terceros WHERE id = %s',
+            (session['usuario_id'],)
+        ).fetchone()
+        conn.close()
+        if row:
+            return jsonify({'ok': True, 'nombre': row['nombre'], 'foto': row['foto_perfil'] or ''})
+        return jsonify({'ok': False})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 @app.route('/api/chat/perfil/foto', methods=['POST'])
 def api_chat_perfil_foto():
     """Subir o actualizar foto de perfil (auth o token de invitado)"""

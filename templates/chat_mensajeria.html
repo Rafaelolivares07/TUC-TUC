@@ -96,12 +96,15 @@ setInterval(cargarConversaciones, 15000);
 cargarMiPerfil();
 
 async function cargarMiPerfil() {
-  // Obtener foto de perfil del usuario desde terceros
-  const r = await fetch('/api/chat/mis-conversaciones').then(r => r.json()).catch(() => null);
-  // Usamos el endpoint de conversaciones que ya tiene sesión — no necesitamos uno nuevo
-  // La foto la guardamos en localStorage para no hacer fetch extra
-  const fotoGuardada = localStorage.getItem('mi_foto_perfil');
-  if (fotoGuardada) aplicarAvatar(document.getElementById('mi-avatar'), fotoGuardada);
+  const el = document.getElementById('mi-avatar');
+  const r = await fetch('/api/chat/mi-perfil').then(r => r.json()).catch(() => null);
+  if (r && r.ok && r.foto) {
+    localStorage.setItem('mi_foto_perfil', r.foto);
+    aplicarAvatar(el, r.foto);
+  } else {
+    const fotoLocal = localStorage.getItem('mi_foto_perfil');
+    if (fotoLocal) aplicarAvatar(el, fotoLocal);
+  }
 }
 
 function aplicarAvatar(el, url) {

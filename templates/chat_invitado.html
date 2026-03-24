@@ -6,7 +6,8 @@
   <title>TUC TUC Chat</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { overscroll-behavior: none; }
+    html, body { height: 100%; height: 100dvh; overscroll-behavior: none; }
+    body { display: flex; flex-direction: column; max-height: 100dvh; }
     #mensajes { scroll-behavior: smooth; }
     .bubble-in  { animation: slideIn  .18s ease-out; }
     .bubble-out { animation: slideOut .18s ease-out; }
@@ -25,9 +26,10 @@
     .audio-hook { background: linear-gradient(135deg, #1e3a5f 0%, #1a2d4a 100%); border: 1px solid #2563eb44; }
 
     textarea { field-sizing: content; }
+    .barra-input { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
   </style>
 </head>
-<body class="bg-gray-950 h-screen flex flex-col text-white overflow-hidden">
+<body class="bg-gray-950 text-white overflow-hidden">
 
 <!-- HEADER -->
 <div id="header" class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3">
@@ -49,7 +51,7 @@
 <div id="mensajes" class="flex-1 overflow-y-auto px-4 py-3 space-y-2"></div>
 
 <!-- BARRA INFERIOR -->
-<div class="flex-shrink-0 bg-gray-900 border-t border-gray-800 px-3 py-2.5 safe-area-bottom">
+<div class="flex-shrink-0 bg-gray-900 border-t border-gray-800 px-3 pt-2.5 barra-input">
 
   <!-- Identificador invitado -->
   <div class="flex items-center gap-1.5 mb-2 px-1">

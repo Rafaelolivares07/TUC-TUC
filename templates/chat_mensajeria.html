@@ -9,7 +9,7 @@
 <body class="bg-gray-950 flex overflow-hidden text-white" style="height:100dvh">
 
 <!-- SIDEBAR CONVERSACIONES -->
-<div id="sidebar" class="w-full md:w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+<div id="sidebar" class="w-full md:w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col md:!flex">
 
   <!-- Header -->
   <div class="p-4 border-b border-gray-800 flex items-center justify-between">
@@ -122,10 +122,8 @@ function cargarConversaciones() {
 }
 
 function abrirConv(token, nombre) {
-  // En móvil: ocultar sidebar, mostrar chat. En desktop: ambos visibles.
-  if (window.innerWidth < 768) {
-    document.getElementById('sidebar').classList.add('hidden');
-  }
+  // En móvil se oculta (md:!flex lo mantiene visible en desktop sin importar esta clase)
+  document.getElementById('sidebar').classList.add('hidden');
   document.getElementById('panel-chat').classList.remove('hidden');
   document.getElementById('panel-chat').classList.add('flex');
 

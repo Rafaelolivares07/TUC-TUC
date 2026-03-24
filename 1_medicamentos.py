@@ -40947,7 +40947,7 @@ def api_vendedor_mis_negocios():
         negocios = [dict(r) for r in rows]
         # Tiendas asignadas directamente
         tienda_rows = conn.execute("""
-            SELECT tv.tienda_id AS id, ti.nombre, 'tienda' AS tipo
+            SELECT COALESCE(ti.tercero_id, tv.tienda_id) AS id, ti.nombre, 'tienda' AS tipo
             FROM tienda_vendedores tv
             JOIN tiendas ti ON ti.id = tv.tienda_id
             WHERE tv.vendedor_id = %s AND tv.activo = TRUE

@@ -41021,7 +41021,7 @@ def vendedor_dashboard():
         <p class="text-indigo-200 text-xs" id="txt-vendedor-nombre">Cargando...</p>
       </div>
     </div>
-    <button onclick="cambiarCodigo()" class="text-indigo-200 text-xs underline">Cambiar código</button>
+    <button onclick="cambiarCodigo()" class="text-indigo-200 text-xs underline">Cerrar sesión</button>
   </div>
   <!-- Selector de negocio activo -->
   <div class="max-w-2xl mx-auto mt-3" id="bloque-negocio" style="display:none">
@@ -41562,8 +41562,11 @@ async function confirmarIdentidad() {
 }
 
 function cambiarCodigo() {
-  document.getElementById('inp-nombre-v').value = nombreVendedor();
-  document.getElementById('inp-tel-v').value    = telVendedor();
+  localStorage.removeItem('vd_tel');
+  localStorage.removeItem('vd_nombre');
+  localStorage.removeItem('vd_negocio_id');
+  document.getElementById('inp-nombre-v').value = '';
+  document.getElementById('inp-tel-v').value    = '';
   document.getElementById('txt-id-error').classList.add('hidden');
   document.getElementById('modal-codigo').classList.remove('hidden');
 }

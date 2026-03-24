@@ -226,19 +226,32 @@ async function toggleGrabacion() {
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
+        btn.textContent = '⏳';
         const blob = new Blob(audioChunks, {type: 'audio/webm'});
-        const form = new FormData();
-        form.append('audio', blob, 'audio.webm');
-        const r = await fetch('/api/chat/invitado/audio', {method:'POST', body: form});
-        const d = await r.json();
-        if (d.ok) {
-          await fetch('/api/chat/invitado/enviar', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({token: tokenActivo, mensaje: '', tipo: 'audio', url_archivo: d.url, es_creador: true})
-          });
-          cargarMensajesConv();
+        console.log('Audio blob size:', blob.size);
+        if (blob.size < 200) { btn.innerHTML = restoreIconMic(); return; }
+        try {
+          const form = new FormData();
+          form.append('audio', blob, 'audio.webm');
+          const r = await fetch('/api/chat/invitado/audio', {method:'POST', body: form});
+          const d = await r.json();
+          console.log('Upload result:', d);
+          if (d.ok) {
+            const rs = await fetch('/api/chat/invitado/enviar', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({token: tokenActivo, mensaje: '', tipo: 'audio', url_archivo: d.url, es_creador: true})
+            });
+            const ds = await rs.json();
+            console.log('Enviar result:', ds);
+            cargarMensajesConv();
+          } else {
+            alert('Error subiendo audio: ' + (d.error || 'desconocido'));
+          }
+        } catch(e) {
+          alert('Error: ' + e.message);
         }
+        btn.innerHTML = restoreIconMic();
       };
       mediaRecorder.start();
       grabando = true;
@@ -308,6 +321,10 @@ function copiarLink() {
     const btn = event.target.closest('button');
     if (btn) { btn.textContent = '✓ Copiado!'; setTimeout(() => btn.textContent = '📋 Copiar link', 1500); }
   });
+}
+
+function restoreIconMic() {
+  return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>';
 }
 
 function cerrarModalLink() {

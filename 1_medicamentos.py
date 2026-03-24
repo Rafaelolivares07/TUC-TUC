@@ -40825,27 +40825,43 @@ def api_vendedor_plantillas_envio():
 
 @app.route('/api/vendedor/envios')
 def api_vendedor_envios_general():
-    """Historial de envíos del vendedor (solo los suyos)."""
+    """Historial de envíos del vendedor filtrado por negocio."""
     tel = request.args.get('tel', '').strip()
+    negocio_id = request.args.get('negocio_id', type=int)
     vendedor_id = _tercero_id_por_tel(tel) if tel else None
     if not vendedor_id:
         return jsonify({'ok': True, 'envios': []})
     try:
         conn = get_db_connection()
         _crear_tabla_plantillas_crm(conn)
-        rows = conn.execute("""
-            SELECT e.id, e.medio, e.created_at::text,
-                   e.contacto_id,
-                   c.nombre AS contacto_nombre, c.telefono AS contacto_tel,
-                   p.titulo AS plantilla_titulo,
-                   COALESCE(e.mensaje_enviado, p.cuerpo) AS texto_enviado
-            FROM plantillas_crm_envios e
-            JOIN contactos c ON c.id = e.contacto_id
-            LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
-            WHERE e.vendedor_id = %s
-            ORDER BY e.created_at DESC
-            LIMIT 100
-        """, (vendedor_id,)).fetchall()
+        if negocio_id:
+            rows = conn.execute("""
+                SELECT e.id, e.medio, e.created_at::text,
+                       e.contacto_id,
+                       c.nombre AS contacto_nombre, c.telefono AS contacto_tel,
+                       p.titulo AS plantilla_titulo,
+                       COALESCE(e.mensaje_enviado, p.cuerpo) AS texto_enviado
+                FROM plantillas_crm_envios e
+                JOIN contactos c ON c.id = e.contacto_id
+                LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
+                WHERE e.vendedor_id = %s AND e.negocio_id = %s
+                ORDER BY e.created_at DESC
+                LIMIT 100
+            """, (vendedor_id, negocio_id)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT e.id, e.medio, e.created_at::text,
+                       e.contacto_id,
+                       c.nombre AS contacto_nombre, c.telefono AS contacto_tel,
+                       p.titulo AS plantilla_titulo,
+                       COALESCE(e.mensaje_enviado, p.cuerpo) AS texto_enviado
+                FROM plantillas_crm_envios e
+                JOIN contactos c ON c.id = e.contacto_id
+                LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
+                WHERE e.vendedor_id = %s
+                ORDER BY e.created_at DESC
+                LIMIT 100
+            """, (vendedor_id,)).fetchall()
         conn.close()
         return jsonify({'ok': True, 'envios': [dict(r) for r in rows]})
     except Exception as e:
@@ -41496,7 +41512,11 @@ async function cargarNegocios() {
     const unicos = d.negocios.filter(n => { if (vistos.has(n.id)) return false; vistos.add(n.id); return true; });
     const sel = document.getElementById('sel-negocio');
     sel.innerHTML = unicos.map(n => `<option value="${n.id}" style="background:#312e81;color:white">${n.nombre}</option>`).join('');
-    _negocioActivo = unicos[0];
+    // Restaurar último negocio usado
+    const guardado = parseInt(localStorage.getItem('vd_negocio_id') || '0');
+    const existe = unicos.find(n => n.id === guardado);
+    _negocioActivo = existe || unicos[0];
+    sel.value = _negocioActivo.id;
     document.getElementById('bloque-negocio').style.display = '';
   } catch {}
 }
@@ -41505,6 +41525,12 @@ function cambiarNegocioActivo() {
   const sel = document.getElementById('sel-negocio');
   const opt = sel.options[sel.selectedIndex];
   _negocioActivo = { id: parseInt(sel.value), nombre: opt.text };
+  localStorage.setItem('vd_negocio_id', _negocioActivo.id);
+  // Recargar historial si está visible
+  const sec = document.getElementById('sec-historial-general');
+  if (sec && !sec.classList.contains('hidden')) {
+    cargarHistorialGeneral();
+  }
 }
 
 async function confirmarIdentidad() {
@@ -41970,7 +41996,8 @@ async function cargarHistorialGeneral() {
   const zona = document.getElementById('lista-historial-general');
   if (!tel) { zona.innerHTML = '<p class="text-center py-2">Ingresa tu teléfono primero.</p>'; return; }
   try {
-    const r = await fetch('/api/vendedor/envios?tel=' + encodeURIComponent(tel));
+    const nid = _negocioActivo && _negocioActivo.id ? '&negocio_id=' + _negocioActivo.id : '';
+    const r = await fetch('/api/vendedor/envios?tel=' + encodeURIComponent(tel) + nid);
     const d = await r.json();
     if (!d.ok || !d.envios.length) {
       zona.innerHTML = '<p class="text-center py-2 text-gray-400">Aún no hay envíos registrados.</p>';

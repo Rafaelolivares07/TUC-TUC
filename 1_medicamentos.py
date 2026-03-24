@@ -19085,6 +19085,55 @@ def api_chat_invitar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/chat/invitado/invitar', methods=['POST'])
+def api_chat_invitado_invitar():
+    """El invitado crea su propio link para invitar a alguien más (expansión viral)"""
+    data = request.get_json()
+    token_inv = (data.get('token_invitado') or '').strip()
+    nombre_nuevo = (data.get('nombre') or 'Invitado').strip()
+    origen = (data.get('origen') or '').strip()
+
+    if not token_inv:
+        return jsonify({'ok': False, 'error': 'token_invitado requerido'}), 400
+    try:
+        import secrets
+        conn = get_db_connection()
+
+        # Verificar que el invitador existe
+        invitador = conn.execute(
+            'SELECT id, nombre FROM terceros WHERE token_chat = %s AND tipo_tercero = %s',
+            (token_inv, 'invitado')
+        ).fetchone()
+        if not invitador:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Token inválido'}), 404
+
+        nuevo_token = secrets.token_urlsafe(12)
+
+        # Crear el nuevo invitado
+        nuevo = conn.execute('''
+            INSERT INTO terceros (nombre, token_chat, tipo_tercero)
+            VALUES (%s, %s, 'invitado')
+            RETURNING id
+        ''', (nombre_nuevo, nuevo_token)).fetchone()
+
+        # Conversación: el invitador es ahora el creador
+        conv = conn.execute('''
+            INSERT INTO conversaciones (creador_id, invitado_id, token, nombre_invitado, origen)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (invitador['id'], nuevo['id'], nuevo_token, nombre_nuevo, origen)).fetchone()
+
+        conn.commit()
+        conn.close()
+
+        host = request.host_url.rstrip('/')
+        link = f'{host}/chat/{nuevo_token}'
+        return jsonify({'ok': True, 'token': nuevo_token, 'link': link, 'nombre': nombre_nuevo})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
 def api_chat_invitado_mensajes(token):
     """Obtener mensajes de una conversación por token (sin login)"""

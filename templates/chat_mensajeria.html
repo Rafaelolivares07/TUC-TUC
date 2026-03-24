@@ -64,17 +64,34 @@
   </div>
 </div>
 
-<!-- MODAL FOTO GRANDE -->
-<div id="modal-foto" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden" onclick="cerrarFotoGrande()">
-  <div class="flex flex-col items-center gap-4 p-6" onclick="event.stopPropagation()">
-    <div id="foto-grande-circulo" class="w-64 h-64 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-7xl font-bold text-white shadow-2xl flex-shrink-0">
+<!-- MODAL GALERÍA -->
+<div id="modal-foto" class="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between hidden py-6 px-4" onclick="cerrarFotoGrande()">
+  <!-- Header nombre + cerrar -->
+  <div class="flex items-center justify-between w-full max-w-sm" onclick="event.stopPropagation()">
+    <span id="galeria-nombre" class="text-white font-semibold text-lg"></span>
+    <button onclick="cerrarFotoGrande()" class="text-gray-400 hover:text-white text-2xl leading-none">×</button>
+  </div>
+
+  <!-- Foto central con flechas -->
+  <div class="relative flex items-center justify-center w-full max-w-sm flex-1 py-4" onclick="event.stopPropagation()">
+    <button id="btn-gal-prev" onclick="galeriaNav(-1)"
+            class="absolute left-0 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white text-xl hover:bg-black/80 transition hidden">‹</button>
+    <div id="galeria-foto-wrap" class="w-72 h-72 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-7xl font-bold text-white shadow-2xl flex-shrink-0">
     </div>
-    <div id="foto-grande-nombre" class="text-white font-semibold text-xl"></div>
-    <button id="btn-cambiar-foto-modal" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-5 py-2.5 rounded-full transition hidden"
-            onclick="cerrarFotoGrande(); document.getElementById('inp-foto-perfil').click()">
-      Cambiar foto
-    </button>
-    <button onclick="cerrarFotoGrande()" class="text-gray-500 hover:text-gray-300 text-sm mt-1">Cerrar</button>
+    <button id="btn-gal-next" onclick="galeriaNav(1)"
+            class="absolute right-0 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white text-xl hover:bg-black/80 transition hidden">›</button>
+  </div>
+
+  <!-- Dots + acciones -->
+  <div class="flex flex-col items-center gap-3 w-full max-w-sm" onclick="event.stopPropagation()">
+    <div id="galeria-dots" class="flex gap-1.5 min-h-[8px]"></div>
+    <div class="flex gap-3">
+      <button id="btn-galeria-agregar" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-full transition hidden"
+              onclick="document.getElementById('inp-foto-galeria').click()">+ Agregar foto</button>
+      <button id="btn-galeria-eliminar" class="bg-red-900/60 hover:bg-red-800 text-red-300 text-sm px-4 py-2 rounded-full transition hidden"
+              onclick="galeriaEliminarActual()">Eliminar</button>
+    </div>
+    <input id="inp-foto-galeria" type="file" accept="image/*" class="hidden" onchange="galeriaSubirFoto(this)">
   </div>
 </div>
 
@@ -104,6 +121,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let grabando = false;
 let miFoto = '';
+let miTerceroId = null;
 let convData = {}; // token → datos completos
 
 // ---- INIT ----
@@ -111,16 +129,31 @@ cargarConversaciones();
 setInterval(cargarConversaciones, 15000);
 cargarMiPerfil();
 
+// Swipe táctil en galería (delegado en el modal)
+let _swipeX = null;
+document.getElementById('modal-foto').addEventListener('touchstart', e => {
+  _swipeX = e.touches[0].clientX;
+}, { passive: true });
+document.getElementById('modal-foto').addEventListener('touchend', e => {
+  if (_swipeX === null) return;
+  const dx = e.changedTouches[0].clientX - _swipeX;
+  if (Math.abs(dx) > 40) galeriaNav(dx < 0 ? 1 : -1);
+  _swipeX = null;
+});
+
 async function cargarMiPerfil() {
   const el = document.getElementById('mi-avatar');
   const r = await fetch('/api/chat/mi-perfil').then(r => r.json()).catch(() => null);
-  if (r && r.ok && r.foto) {
-    miFoto = r.foto;
-    localStorage.setItem('mi_foto_perfil', r.foto);
-    aplicarAvatar(el, r.foto);
-  } else {
-    const fotoLocal = localStorage.getItem('mi_foto_perfil');
-    if (fotoLocal) { miFoto = fotoLocal; aplicarAvatar(el, fotoLocal); }
+  if (r && r.ok) {
+    if (r.id) miTerceroId = r.id;
+    if (r.foto) {
+      miFoto = r.foto;
+      localStorage.setItem('mi_foto_perfil', r.foto);
+      aplicarAvatar(el, r.foto);
+    } else {
+      const fotoLocal = localStorage.getItem('mi_foto_perfil');
+      if (fotoLocal) { miFoto = fotoLocal; aplicarAvatar(el, fotoLocal); }
+    }
   }
 }
 
@@ -129,25 +162,122 @@ function aplicarAvatar(el, url) {
   el.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
 }
 
-function verFotoGrande(url, nombre, esMia) {
-  const circulo = document.getElementById('foto-grande-circulo');
-  const btnCambiar = document.getElementById('btn-cambiar-foto-modal');
-  document.getElementById('foto-grande-nombre').textContent = nombre;
-  if (url) {
-    circulo.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
-  } else {
-    circulo.innerHTML = `<span>${nombre[0].toUpperCase()}</span>`;
-  }
-  btnCambiar.classList.toggle('hidden', !esMia);
+// ---- GALERÍA ----
+let gFotos = [];       // [{id, url, orden}, ...]
+let gIndice = 0;
+let gEsMia = false;
+let gTerceroId = null;
+
+async function abrirGaleria(terceroId, nombre, esMia) {
+  gEsMia = esMia;
+  gTerceroId = terceroId;
+  document.getElementById('galeria-nombre').textContent = nombre;
   document.getElementById('modal-foto').classList.remove('hidden');
+  document.getElementById('btn-galeria-agregar').classList.toggle('hidden', !esMia);
+
+  const r = await fetch(`/api/chat/fotos/ver?tercero_id=${terceroId}`).then(r => r.json()).catch(() => null);
+  gFotos = (r && r.fotos) ? r.fotos : [];
+
+  // Si no tiene fotos en galería pero tiene foto_perfil, mostrarla como placeholder
+  if (gFotos.length === 0 && esMia && miFoto) {
+    gFotos = [{ id: null, url: miFoto, orden: 0 }];
+  }
+
+  gIndice = 0;
+  galeriaRender();
+}
+
+function verFotoGrande(url, nombre, esMia) {
+  // Compatibilidad — si viene de contacto con terceroId conocido usa galería
+  // Si no, muestra la foto directamente
+  gEsMia = esMia;
+  gTerceroId = null;
+  gFotos = url ? [{ id: null, url, orden: 0 }] : [];
+  gIndice = 0;
+  document.getElementById('galeria-nombre').textContent = nombre;
+  document.getElementById('btn-galeria-agregar').classList.add('hidden');
+  document.getElementById('btn-galeria-eliminar').classList.add('hidden');
+  document.getElementById('modal-foto').classList.remove('hidden');
+  galeriaRender();
 }
 
 function verMiFotoGrande() {
-  verFotoGrande(miFoto, 'Mi perfil', true);
+  if (miTerceroId) {
+    abrirGaleria(miTerceroId, 'Mi galería', true);
+  } else {
+    // fallback: mostrar solo la foto de perfil si aún no tenemos el id
+    verFotoGrande(miFoto, 'Mi perfil', true);
+  }
 }
 
 function cerrarFotoGrande() {
   document.getElementById('modal-foto').classList.add('hidden');
+  gFotos = [];
+}
+
+function galeriaRender() {
+  const wrap = document.getElementById('galeria-foto-wrap');
+  const dots = document.getElementById('galeria-dots');
+  const btnPrev = document.getElementById('btn-gal-prev');
+  const btnNext = document.getElementById('btn-gal-next');
+  const btnElim = document.getElementById('btn-galeria-eliminar');
+
+  if (gFotos.length === 0) {
+    wrap.innerHTML = `<span>${(document.getElementById('galeria-nombre').textContent || '?')[0].toUpperCase()}</span>`;
+    dots.innerHTML = '';
+    btnPrev.classList.add('hidden');
+    btnNext.classList.add('hidden');
+    btnElim.classList.add('hidden');
+    return;
+  }
+
+  const f = gFotos[gIndice];
+  wrap.innerHTML = `<img src="${f.url}" class="w-full h-full object-cover">`;
+
+  // Dots
+  dots.innerHTML = gFotos.map((_, i) =>
+    `<div class="w-2 h-2 rounded-full transition ${i === gIndice ? 'bg-white' : 'bg-gray-600'}"></div>`
+  ).join('');
+
+  btnPrev.classList.toggle('hidden', gFotos.length <= 1);
+  btnNext.classList.toggle('hidden', gFotos.length <= 1);
+  // Solo mostrar eliminar si es mía y la foto tiene id real (subida a galería, no solo perfil)
+  btnElim.classList.toggle('hidden', !gEsMia || !f.id);
+}
+
+function galeriaNav(dir) {
+  gIndice = (gIndice + dir + gFotos.length) % gFotos.length;
+  galeriaRender();
+}
+
+async function galeriaSubirFoto(input) {
+  if (!input.files[0]) return;
+  const wrap = document.getElementById('galeria-foto-wrap');
+  wrap.innerHTML = '<div class="text-white text-2xl animate-pulse">⏳</div>';
+  const form = new FormData();
+  form.append('foto', input.files[0]);
+  const r = await fetch('/api/chat/fotos/agregar', { method: 'POST', body: form }).then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    gFotos.push({ id: r.id, url: r.url, orden: r.orden });
+    gIndice = gFotos.length - 1;
+    galeriaRender();
+  } else {
+    wrap.innerHTML = '<span>Error</span>';
+    alert('Error subiendo foto: ' + (r?.error || 'desconocido'));
+  }
+  input.value = '';
+}
+
+async function galeriaEliminarActual() {
+  const f = gFotos[gIndice];
+  if (!f || !f.id) return;
+  if (!confirm('¿Eliminar esta foto?')) return;
+  const r = await fetch(`/api/chat/fotos/${f.id}`, { method: 'DELETE' }).then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    gFotos.splice(gIndice, 1);
+    if (gIndice >= gFotos.length) gIndice = Math.max(0, gFotos.length - 1);
+    galeriaRender();
+  }
 }
 
 async function subirFotoPerfil(input) {
@@ -229,7 +359,7 @@ function abrirConv(token, nombre) {
       <button onclick="volverSidebar()" class="md:hidden text-gray-400 hover:text-white mr-1">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
       </button>
-      <div onclick="verFotoGrande('${fotoInv}', '${nombre}', false)"
+      <div onclick="abrirGaleria(${c.tercero_id_invitado || 0}, '${nombre}', false)"
            class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">
         ${avatarInvHeader}
       </div>

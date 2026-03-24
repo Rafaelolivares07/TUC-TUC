@@ -19213,6 +19213,7 @@ def api_chat_mis_conversaciones():
 
         convs = conn.execute('''
             SELECT c.id, c.token, c.nombre_invitado, c.origen, c.creada_en,
+                   c.invitado_id as tercero_id_invitado,
                    t.nombre as nombre_invitado_actual, t.foto_perfil as foto_invitado,
                    (SELECT COUNT(*) FROM mensajes m
                     WHERE m.conversacion_id = c.id
@@ -19277,12 +19278,12 @@ def api_chat_mi_perfil():
     try:
         conn = get_db_connection()
         row = conn.execute(
-            'SELECT nombre, foto_perfil FROM terceros WHERE id = %s',
+            'SELECT id, nombre, foto_perfil FROM terceros WHERE id = %s',
             (session['usuario_id'],)
         ).fetchone()
         conn.close()
         if row:
-            return jsonify({'ok': True, 'nombre': row['nombre'], 'foto': row['foto_perfil'] or ''})
+            return jsonify({'ok': True, 'id': row['id'], 'nombre': row['nombre'], 'foto': row['foto_perfil'] or ''})
         return jsonify({'ok': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
@@ -19345,6 +19346,142 @@ def api_chat_eliminar(token):
         conn.execute('DELETE FROM conversaciones WHERE id = %s', (conv['id'],))
         conn.execute('DELETE FROM terceros WHERE id = %s AND tipo_tercero = %s',
                      (conv['invitado_id'], 'invitado'))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# -------------------------------------------------------------------
+# --- ENDPOINTS GALERÍA DE FOTOS (fotos_tercero) ---
+# -------------------------------------------------------------------
+
+def _crear_tabla_fotos(conn):
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS fotos_tercero (
+            id SERIAL PRIMARY KEY,
+            tercero_id INTEGER NOT NULL,
+            url TEXT NOT NULL,
+            orden INTEGER DEFAULT 0,
+            subida_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+
+@app.route('/api/chat/fotos/agregar', methods=['POST'])
+def api_chat_fotos_agregar():
+    """Agregar foto a la galería — auth o token_invitado"""
+    token_inv = request.form.get('token_invitado', '').strip()
+    usuario_id = session.get('usuario_id')
+
+    if not usuario_id and not token_inv:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if 'foto' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió foto'}), 400
+    try:
+        archivo = request.files['foto']
+        result = cloudinary.uploader.upload(
+            archivo,
+            folder='tuctuc_chat_fotos',
+            transformation=[{'width': 800, 'height': 800, 'crop': 'limit'}]
+        )
+        url = result['secure_url']
+
+        conn = get_db_connection()
+        _crear_tabla_fotos(conn)
+
+        if usuario_id:
+            tercero_id = usuario_id
+        else:
+            row = conn.execute(
+                'SELECT id FROM terceros WHERE token_chat = %s AND tipo_tercero = %s',
+                (token_inv, 'invitado')
+            ).fetchone()
+            if not row:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Token inválido'}), 404
+            tercero_id = row['id']
+
+        orden = conn.execute(
+            'SELECT COALESCE(MAX(orden), -1) + 1 FROM fotos_tercero WHERE tercero_id = %s',
+            (tercero_id,)
+        ).fetchone()[0]
+
+        nueva = conn.execute(
+            'INSERT INTO fotos_tercero (tercero_id, url, orden) VALUES (%s, %s, %s) RETURNING id',
+            (tercero_id, url, orden)
+        ).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': nueva['id'], 'url': url, 'orden': orden})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/fotos/ver', methods=['GET'])
+def api_chat_fotos_ver():
+    """Ver fotos de un tercero — ?tercero_id=X o ?token=X (invitado)"""
+    tercero_id = request.args.get('tercero_id')
+    token_inv = request.args.get('token', '').strip()
+    try:
+        conn = get_db_connection()
+        _crear_tabla_fotos(conn)
+
+        if not tercero_id and token_inv:
+            row = conn.execute(
+                'SELECT id FROM terceros WHERE token_chat = %s',
+                (token_inv,)
+            ).fetchone()
+            if row:
+                tercero_id = row['id']
+
+        if not tercero_id:
+            conn.close()
+            return jsonify({'ok': False, 'fotos': []})
+
+        fotos = conn.execute(
+            'SELECT id, url, orden FROM fotos_tercero WHERE tercero_id = %s ORDER BY orden ASC',
+            (int(tercero_id),)
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'fotos': [dict(f) for f in fotos]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'fotos': []})
+
+
+@app.route('/api/chat/fotos/<int:foto_id>', methods=['DELETE'])
+def api_chat_fotos_eliminar(foto_id):
+    """Eliminar una foto de la galería — solo dueño (auth o token_invitado)"""
+    token_inv = request.get_json(silent=True, force=True) or {}
+    token_inv = token_inv.get('token_invitado', '') if isinstance(token_inv, dict) else ''
+    usuario_id = session.get('usuario_id')
+
+    if not usuario_id and not token_inv:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        _crear_tabla_fotos(conn)
+
+        foto = conn.execute('SELECT * FROM fotos_tercero WHERE id = %s', (foto_id,)).fetchone()
+        if not foto:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrada'}), 404
+
+        # Verificar que el dueño es quien borra
+        if usuario_id:
+            autorizado = (foto['tercero_id'] == usuario_id)
+        else:
+            inv = conn.execute(
+                'SELECT id FROM terceros WHERE token_chat = %s', (token_inv,)
+            ).fetchone()
+            autorizado = inv and foto['tercero_id'] == inv['id']
+
+        if not autorizado:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin permiso'}), 403
+
+        conn.execute('DELETE FROM fotos_tercero WHERE id = %s', (foto_id,))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

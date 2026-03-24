@@ -19213,7 +19213,7 @@ def api_chat_mis_conversaciones():
 
         convs = conn.execute('''
             SELECT c.id, c.token, c.nombre_invitado, c.origen, c.creada_en,
-                   t.nombre as nombre_invitado_actual,
+                   t.nombre as nombre_invitado_actual, t.foto_perfil as foto_invitado,
                    (SELECT COUNT(*) FROM mensajes m
                     WHERE m.conversacion_id = c.id
                     AND m.remitente_id = c.invitado_id

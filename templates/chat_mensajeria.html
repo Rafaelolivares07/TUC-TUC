@@ -14,8 +14,8 @@
   <!-- Header -->
   <div class="p-4 border-b border-gray-800 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <div id="mi-avatar" onclick="document.getElementById('inp-foto-perfil').click()"
-           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Cambiar foto de perfil">
+      <div id="mi-avatar" onclick="verMiFotoGrande()"
+           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Ver / cambiar foto de perfil">
         R
       </div>
       <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
@@ -64,6 +64,20 @@
   </div>
 </div>
 
+<!-- MODAL FOTO GRANDE -->
+<div id="modal-foto" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden" onclick="cerrarFotoGrande()">
+  <div class="flex flex-col items-center gap-4 p-6" onclick="event.stopPropagation()">
+    <div id="foto-grande-circulo" class="w-64 h-64 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-7xl font-bold text-white shadow-2xl flex-shrink-0">
+    </div>
+    <div id="foto-grande-nombre" class="text-white font-semibold text-xl"></div>
+    <button id="btn-cambiar-foto-modal" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-5 py-2.5 rounded-full transition hidden"
+            onclick="cerrarFotoGrande(); document.getElementById('inp-foto-perfil').click()">
+      Cambiar foto
+    </button>
+    <button onclick="cerrarFotoGrande()" class="text-gray-500 hover:text-gray-300 text-sm mt-1">Cerrar</button>
+  </div>
+</div>
+
 <!-- MODAL LINK GENERADO -->
 <div id="modal-link" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center hidden p-4">
   <div class="bg-gray-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
@@ -89,6 +103,8 @@ const idsRenderizados = new Set();
 let mediaRecorder = null;
 let audioChunks = [];
 let grabando = false;
+let miFoto = '';
+let convData = {}; // token → datos completos
 
 // ---- INIT ----
 cargarConversaciones();
@@ -99,17 +115,39 @@ async function cargarMiPerfil() {
   const el = document.getElementById('mi-avatar');
   const r = await fetch('/api/chat/mi-perfil').then(r => r.json()).catch(() => null);
   if (r && r.ok && r.foto) {
+    miFoto = r.foto;
     localStorage.setItem('mi_foto_perfil', r.foto);
     aplicarAvatar(el, r.foto);
   } else {
     const fotoLocal = localStorage.getItem('mi_foto_perfil');
-    if (fotoLocal) aplicarAvatar(el, fotoLocal);
+    if (fotoLocal) { miFoto = fotoLocal; aplicarAvatar(el, fotoLocal); }
   }
 }
 
 function aplicarAvatar(el, url) {
   if (!url) return;
   el.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+}
+
+function verFotoGrande(url, nombre, esMia) {
+  const circulo = document.getElementById('foto-grande-circulo');
+  const btnCambiar = document.getElementById('btn-cambiar-foto-modal');
+  document.getElementById('foto-grande-nombre').textContent = nombre;
+  if (url) {
+    circulo.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+  } else {
+    circulo.innerHTML = `<span>${nombre[0].toUpperCase()}</span>`;
+  }
+  btnCambiar.classList.toggle('hidden', !esMia);
+  document.getElementById('modal-foto').classList.remove('hidden');
+}
+
+function verMiFotoGrande() {
+  verFotoGrande(miFoto, 'Mi perfil', true);
+}
+
+function cerrarFotoGrande() {
+  document.getElementById('modal-foto').classList.add('hidden');
 }
 
 async function subirFotoPerfil(input) {
@@ -120,6 +158,7 @@ async function subirFotoPerfil(input) {
   form.append('foto', input.files[0]);
   const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
   if (r && r.ok) {
+    miFoto = r.url;
     localStorage.setItem('mi_foto_perfil', r.url);
     aplicarAvatar(el, r.url);
   } else {
@@ -128,28 +167,35 @@ async function subirFotoPerfil(input) {
   }
 }
 
+function avatarHtml(foto, nombre, size='w-10 h-10') {
+  const inicial = (nombre || '?')[0].toUpperCase();
+  if (foto) return `<div class="${size} rounded-full overflow-hidden flex-shrink-0"><img src="${foto}" class="w-full h-full object-cover"></div>`;
+  return `<div class="${size} rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0">${inicial}</div>`;
+}
+
 function cargarConversaciones() {
   fetch('/api/chat/mis-conversaciones')
     .then(r => r.json())
     .then(d => {
       if (!d.ok) return;
+      // Guardar datos por token para acceder desde abrirConv
+      d.conversaciones.forEach(c => { convData[c.token] = c; });
       const el = document.getElementById('lista-convs');
       if (!d.conversaciones.length) {
         el.innerHTML = '<div class="p-6 text-center text-gray-600 text-sm">Sin conversaciones aún.<br>Invita a alguien.</div>';
         return;
       }
       el.innerHTML = d.conversaciones.map(c => {
+        const nombre = c.nombre_invitado || c.nombre_invitado_actual;
         const noLeidos = c.no_leidos > 0 ? `<span class="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">${c.no_leidos}</span>` : '';
         const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_mensaje || '');
         const origen = c.origen ? `<span class="text-gray-600 text-xs"> · ${c.origen}</span>` : '';
-        return `<div onclick="abrirConv('${c.token}', '${c.nombre_invitado || c.nombre_invitado_actual}')"
+        return `<div onclick="abrirConv('${c.token}', '${nombre}')"
                      class="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800/50 transition ${tokenActivo === c.token ? 'bg-gray-800' : ''}">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
-            ${(c.nombre_invitado || c.nombre_invitado_actual || '?')[0].toUpperCase()}
-          </div>
+          ${avatarHtml(c.foto_invitado, nombre)}
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between">
-              <span class="font-medium text-sm truncate">${c.nombre_invitado || c.nombre_invitado_actual}${noLeidos}</span>
+              <span class="font-medium text-sm truncate">${nombre}${noLeidos}</span>
               ${origen}
             </div>
             <div class="text-gray-500 text-xs truncate mt-0.5">${ultimoMsg}</div>
@@ -170,14 +216,22 @@ function abrirConv(token, nombre) {
   idsRenderizados.clear();
   if (pollingInterval) clearInterval(pollingInterval);
 
+  // Obtener foto del invitado si existe
+  const c = convData[token] || {};
+  const fotoInv = c.foto_invitado || '';
+  const avatarInvHeader = fotoInv
+    ? `<img src="${fotoInv}" class="w-full h-full object-cover">`
+    : `<span>${nombre[0].toUpperCase()}</span>`;
+
   // Renderizar panel chat
   document.getElementById('panel-chat').innerHTML = `
     <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 flex-shrink-0">
       <button onclick="volverSidebar()" class="md:hidden text-gray-400 hover:text-white mr-1">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
       </button>
-      <div class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
-        ${nombre[0].toUpperCase()}
+      <div onclick="verFotoGrande('${fotoInv}', '${nombre}', false)"
+           class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">
+        ${avatarInvHeader}
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-semibold text-sm">${nombre}</div>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TUC TUC Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { overscroll-behavior: none; }
+    #mensajes { scroll-behavior: smooth; }
+    .bubble-in  { animation: slideIn  .18s ease-out; }
+    .bubble-out { animation: slideOut .18s ease-out; }
+    @keyframes slideIn  { from { opacity:0; transform: translateY(8px) translateX(-8px); } to { opacity:1; transform: none; } }
+    @keyframes slideOut { from { opacity:0; transform: translateY(8px) translateX(8px);  } to { opacity:1; transform: none; } }
+
+    /* Onda de grabación */
+    .onda span { display:inline-block; width:4px; border-radius:4px; background:#ef4444; animation: ondaUp .7s ease-in-out infinite alternate; }
+    .onda span:nth-child(2) { animation-delay:.1s; }
+    .onda span:nth-child(3) { animation-delay:.2s; }
+    .onda span:nth-child(4) { animation-delay:.3s; }
+    .onda span:nth-child(5) { animation-delay:.4s; }
+    @keyframes ondaUp { from { height:6px; } to { height:22px; } }
+
+    /* Audio invitado — primer mensaje especial */
+    .audio-hook { background: linear-gradient(135deg, #1e3a5f 0%, #1a2d4a 100%); border: 1px solid #2563eb44; }
+
+    textarea { field-sizing: content; }
+  </style>
+</head>
+<body class="bg-gray-950 h-screen flex flex-col text-white overflow-hidden">
+
+<!-- HEADER -->
+<div id="header" class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3">
+  <div id="avatar-creador" class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base flex-shrink-0">?</div>
+  <div class="flex-1 min-w-0">
+    <div id="nombre-creador" class="font-semibold text-sm truncate">TUC TUC</div>
+    <div class="text-xs text-emerald-400">en línea</div>
+  </div>
+  <div class="flex items-center gap-2">
+    <div class="w-6 h-6 rounded-full bg-blue-700 flex items-center justify-center" title="TUC TUC">
+      <svg class="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 3a1 1 0 110 2 1 1 0 010-2zm0 4a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ÁREA MENSAJES -->
+<div id="mensajes" class="flex-1 overflow-y-auto px-4 py-3 space-y-2"></div>
+
+<!-- BARRA INFERIOR -->
+<div class="flex-shrink-0 bg-gray-900 border-t border-gray-800 px-3 py-2.5 safe-area-bottom">
+
+  <!-- Identificador invitado -->
+  <div class="flex items-center gap-1.5 mb-2 px-1">
+    <span class="text-xs text-gray-500">Tu nombre:</span>
+    <button id="btn-nombre-inv" onclick="editarNombreInvitado()"
+            class="text-xs text-blue-400 hover:text-blue-300 font-medium transition">
+      ...
+    </button>
+  </div>
+
+  <!-- Input de texto -->
+  <div class="flex items-end gap-2">
+    <div class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
+      <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
+                class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none overflow-hidden max-h-28"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
+                oninput="autoResize(this)"></textarea>
+    </div>
+
+    <!-- Botón micrófono -->
+    <button id="btn-mic"
+            onclick="toggleGrabacion()"
+            class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition relative"
+            title="Grabar audio">
+      <svg id="icono-mic" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+      </svg>
+      <!-- Onda grabando -->
+      <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </button>
+
+    <!-- Botón enviar -->
+    <button onclick="enviarTexto()"
+            class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center flex-shrink-0 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Botón STT (transcripción de voz a texto) -->
+  <div class="flex justify-center mt-1.5">
+    <button id="btn-stt" onclick="toggleSTT()"
+            class="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition px-2 py-1 rounded-full">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+      </svg>
+      Dictado de voz
+    </button>
+  </div>
+</div>
+
+<!-- MODAL NOMBRE INVITADO -->
+<div id="modal-nombre" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md p-6 pb-8 shadow-2xl">
+    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5"></div>
+    <h2 class="text-base font-semibold mb-1">¿Cómo te llamas?</h2>
+    <p class="text-xs text-gray-500 mb-4">Así te verá la otra persona en la conversación.</p>
+    <input id="inp-nombre-inv" type="text" placeholder="Tu nombre"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+           onkeydown="if(event.key==='Enter')guardarNombre()">
+    <div class="flex gap-3">
+      <button onclick="cerrarModalNombre()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
+      <button onclick="guardarNombre()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ESTADO CARGA / ERROR -->
+<div id="estado-inicial" class="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center z-40">
+  <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30">
+    <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/>
+      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"/>
+    </svg>
+  </div>
+  <div id="msg-estado" class="text-gray-400 text-sm">Conectando...</div>
+</div>
+
+<script>
+const TOKEN = "{{ token }}";
+let convInfo   = null;
+let ultimoId   = 0;
+let grabando   = false;
+let mediaRec   = null;
+let audioChunks= [];
+let pollingInt = null;
+
+// STT
+const STT = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconocedor = null;
+let sttActivo = false;
+
+// ── Arranque ────────────────────────────────────────────────────────
+init();
+
+async function init() {
+  const r = await fetch(`/api/chat/invitado/mensajes/${TOKEN}?desde=0`).then(r => r.json()).catch(() => null);
+  if (!r || !r.ok) {
+    document.getElementById('msg-estado').textContent = 'Conversación no encontrada o expirada.';
+    return;
+  }
+
+  convInfo = r.conv;
+  document.getElementById('estado-inicial').classList.add('hidden');
+
+  // Header
+  const nombreC = convInfo.nombre_creador || 'TUC TUC';
+  document.getElementById('nombre-creador').textContent = nombreC;
+  document.getElementById('avatar-creador').textContent = nombreC[0].toUpperCase();
+
+  // Nombre invitado (localStorage > nombre_invitado de la conv)
+  const nombreGuardado = localStorage.getItem(`nombre_inv_${TOKEN}`);
+  setNombreInvitado(nombreGuardado || convInfo.nombre_invitado || 'Tú', false);
+
+  // Mensajes iniciales
+  renderMensajes(r.mensajes);
+
+  // Polling
+  pollingInt = setInterval(poll, 3000);
+}
+
+async function poll() {
+  const r = await fetch(`/api/chat/invitado/mensajes/${TOKEN}?desde=${ultimoId}`)
+               .then(r => r.json()).catch(() => null);
+  if (!r || !r.ok) return;
+  renderMensajes(r.mensajes);
+}
+
+function renderMensajes(msgs) {
+  if (!msgs.length) return;
+  const cont = document.getElementById('mensajes');
+  const esInicio = ultimoId === 0;
+
+  msgs.forEach((m, idx) => {
+    ultimoId = Math.max(ultimoId, m.id);
+    const esInvitado = m.remitente_tipo === 'invitado';
+
+    const div = document.createElement('div');
+    div.className = `flex ${esInvitado ? 'justify-end' : 'justify-start'} ${esInvitado ? 'bubble-out' : 'bubble-in'}`;
+
+    // Primer audio del creador = hook especial
+    if (!esInvitado && m.tipo === 'audio' && idx === 0 && esInicio) {
+      div.innerHTML = `
+        <div class="audio-hook rounded-2xl rounded-bl-sm p-4 max-w-[80%] w-full">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+              ${(convInfo.nombre_creador || 'T')[0].toUpperCase()}
+            </div>
+            <div>
+              <div class="text-xs font-medium text-blue-300">${convInfo.nombre_creador || 'TUC TUC'}</div>
+              <div class="text-xs text-gray-500">${formatHora(m.fecha)}</div>
+            </div>
+          </div>
+          <div class="text-sm text-gray-300 mb-2">🎵 Te envió un audio exclusivo</div>
+          <audio controls src="${m.url_archivo}" class="w-full h-9 rounded-lg" preload="metadata"></audio>
+          <div class="text-xs text-gray-500 mt-2 text-center">Solo disponible en TUC TUC</div>
+        </div>`;
+    } else if (m.tipo === 'audio' && m.url_archivo) {
+      div.innerHTML = `
+        <div class="px-3 py-2.5 rounded-2xl ${esInvitado ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
+          <audio controls src="${m.url_archivo}" class="max-w-[210px] h-8" preload="metadata"></audio>
+          <div class="text-xs opacity-50 mt-1 ${esInvitado ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+        </div>`;
+    } else {
+      div.innerHTML = `
+        <div class="px-3 py-2 rounded-2xl ${esInvitado ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
+          <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
+          <div class="text-xs opacity-50 mt-0.5 ${esInvitado ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+        </div>`;
+    }
+
+    cont.appendChild(div);
+  });
+
+  cont.scrollTop = cont.scrollHeight;
+}
+
+// ── Enviar texto ────────────────────────────────────────────────────
+function enviarTexto() {
+  const el = document.getElementById('txt-msg');
+  const msg = el.value.trim();
+  if (!msg) return;
+  el.value = '';
+  el.style.height = 'auto';
+  fetch('/api/chat/invitado/enviar', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: TOKEN, mensaje: msg, tipo: 'texto', es_creador: false})
+  }).then(() => poll());
+}
+
+// ── Grabación de audio ──────────────────────────────────────────────
+async function toggleGrabacion() {
+  const btn  = document.getElementById('btn-mic');
+  const onda = document.getElementById('onda-mic');
+  const icon = document.getElementById('icono-mic');
+
+  if (!grabando) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      audioChunks = [];
+      mediaRec = new MediaRecorder(stream);
+      mediaRec.ondataavailable = e => audioChunks.push(e.data);
+      mediaRec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunks, {type: 'audio/webm'});
+        if (blob.size < 500) return; // muy corto, ignorar
+        const form = new FormData();
+        form.append('audio', blob, 'audio.webm');
+        const rUp = await fetch('/api/chat/invitado/audio', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+        if (rUp && rUp.ok) {
+          await fetch('/api/chat/invitado/enviar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: TOKEN, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: false})
+          });
+          poll();
+        }
+      };
+      mediaRec.start();
+      grabando = true;
+      btn.classList.replace('bg-gray-700', 'bg-red-600');
+      btn.classList.replace('hover:bg-gray-600', 'hover:bg-red-500');
+      onda.classList.remove('hidden');
+      icon.style.display = 'none';
+    } catch(e) {
+      alert('No se pudo acceder al micrófono. Verifica los permisos.');
+    }
+  } else {
+    mediaRec.stop();
+    grabando = false;
+    btn.classList.replace('bg-red-600', 'bg-gray-700');
+    btn.classList.replace('hover:bg-red-500', 'hover:bg-gray-600');
+    onda.classList.add('hidden');
+    icon.style.display = '';
+  }
+}
+
+// ── Speech-to-text (dictado voz → caja de texto) ────────────────────
+function toggleSTT() {
+  if (!STT) {
+    alert('Tu navegador no soporta dictado de voz. Prueba Chrome o Edge.');
+    return;
+  }
+  const btn = document.getElementById('btn-stt');
+  if (!sttActivo) {
+    reconocedor = new STT();
+    reconocedor.lang = 'es-CO';
+    reconocedor.continuous = true;
+    reconocedor.interimResults = false;
+    reconocedor.onresult = e => {
+      const txt = e.results[e.results.length - 1][0].transcript;
+      const el = document.getElementById('txt-msg');
+      el.value += (el.value ? ' ' : '') + txt;
+      autoResize(el);
+    };
+    reconocedor.onerror = () => { desactivarSTT(); };
+    reconocedor.onend   = () => { if (sttActivo) reconocedor.start(); };
+    reconocedor.start();
+    sttActivo = true;
+    btn.classList.add('text-emerald-400', 'bg-gray-800', 'rounded-full');
+    btn.classList.remove('text-gray-600');
+    btn.innerHTML = `
+      <svg class="w-3.5 h-3.5 mr-1 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="#10b981" opacity=".3"/>
+        <circle cx="12" cy="12" r="5" fill="#10b981"/>
+      </svg>
+      Dictando... (toca para parar)`;
+  } else {
+    desactivarSTT();
+  }
+}
+
+function desactivarSTT() {
+  if (reconocedor) reconocedor.stop();
+  sttActivo = false;
+  const btn = document.getElementById('btn-stt');
+  btn.classList.remove('text-emerald-400', 'bg-gray-800');
+  btn.classList.add('text-gray-600');
+  btn.innerHTML = `
+    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Dictado de voz`;
+}
+
+// ── Nombre invitado ─────────────────────────────────────────────────
+function setNombreInvitado(nombre, animar) {
+  const btn = document.getElementById('btn-nombre-inv');
+  btn.textContent = nombre;
+  if (animar) { btn.classList.add('text-emerald-400'); setTimeout(() => btn.classList.remove('text-emerald-400'), 1000); }
+}
+
+function editarNombreInvitado() {
+  const actual = document.getElementById('btn-nombre-inv').textContent;
+  document.getElementById('inp-nombre-inv').value = actual === '...' ? '' : actual;
+  document.getElementById('modal-nombre').classList.remove('hidden');
+  setTimeout(() => document.getElementById('inp-nombre-inv').focus(), 150);
+}
+
+function cerrarModalNombre() {
+  document.getElementById('modal-nombre').classList.add('hidden');
+}
+
+function guardarNombre() {
+  const nombre = document.getElementById('inp-nombre-inv').value.trim();
+  if (!nombre) return;
+  localStorage.setItem(`nombre_inv_${TOKEN}`, nombre);
+  setNombreInvitado(nombre, true);
+  cerrarModalNombre();
+  // Opcional: notificar al backend (no bloqueante)
+  fetch('/api/chat/invitado/enviar', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: TOKEN, mensaje: `[nombre:${nombre}]`, tipo: 'sistema', es_creador: false})
+  }).catch(() => {});
+}
+
+// ── Utilidades ──────────────────────────────────────────────────────
+function formatHora(fecha) {
+  return new Date(fecha).toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 112) + 'px';
+}
+</script>
+</body>
+</html>

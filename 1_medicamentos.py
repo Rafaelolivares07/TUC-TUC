@@ -18960,6 +18960,271 @@ def api_chat_enviar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+
+# -------------------------------------------------------------------
+# --- MÓDULO MENSAJERÍA TUC TUC — INVITADOS POR TOKEN ---
+# -------------------------------------------------------------------
+
+@app.route('/api/chat/migrar-mensajeria', methods=['POST'])
+def api_chat_migrar_mensajeria():
+    """Migración BD para el módulo de mensajería con invitados"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        pasos = []
+
+        # Columnas en terceros
+        for col, tipo in [('token_chat', 'VARCHAR(64)'), ('tipo_tercero', "VARCHAR(20) DEFAULT 'registrado'")]:
+            try:
+                conn.execute(f'ALTER TABLE terceros ADD COLUMN IF NOT EXISTS {col} {tipo}')
+                pasos.append(f'terceros.{col}')
+            except Exception as e:
+                conn.rollback()
+                pasos.append(f'SKIP {col}: {e}')
+
+        # Columnas en mensajes
+        for col, tipo in [('url_archivo', 'TEXT'), ('conversacion_id', 'INTEGER')]:
+            try:
+                conn.execute(f'ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS {col} {tipo}')
+                pasos.append(f'mensajes.{col}')
+            except Exception as e:
+                conn.rollback()
+                pasos.append(f'SKIP {col}: {e}')
+
+        # Tabla conversaciones
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS conversaciones (
+                id SERIAL PRIMARY KEY,
+                creador_id INTEGER NOT NULL,
+                invitado_id INTEGER NOT NULL,
+                token VARCHAR(64) UNIQUE NOT NULL,
+                nombre_invitado VARCHAR(200),
+                origen VARCHAR(100),
+                creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                activa BOOLEAN DEFAULT TRUE
+            )
+        ''')
+        pasos.append('tabla conversaciones')
+
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'pasos': pasos})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/invitar', methods=['POST'])
+def api_chat_invitar():
+    """Rafael crea un contacto invitado y obtiene el link de conversación"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    data = request.get_json()
+    nombre = (data.get('nombre') or 'Invitado').strip()
+    origen = (data.get('origen') or '').strip()
+
+    try:
+        import secrets
+        token = secrets.token_urlsafe(12)
+
+        conn = get_db_connection()
+
+        # Crear tercero provisional
+        invitado = conn.execute('''
+            INSERT INTO terceros (nombre, token_chat, tipo_tercero)
+            VALUES (%s, %s, 'invitado')
+            RETURNING id
+        ''', (nombre, token)).fetchone()
+        invitado_id = invitado['id']
+
+        # Crear conversación
+        conv = conn.execute('''
+            INSERT INTO conversaciones (creador_id, invitado_id, token, nombre_invitado, origen)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        ''', (usuario_id, invitado_id, token, nombre, origen)).fetchone()
+
+        conn.commit()
+        conn.close()
+
+        host = request.host_url.rstrip('/')
+        link = f'{host}/chat/{token}'
+
+        return jsonify({'ok': True, 'token': token, 'link': link, 'nombre': nombre, 'conv_id': conv['id']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
+def api_chat_invitado_mensajes(token):
+    """Obtener mensajes de una conversación por token (sin login)"""
+    try:
+        conn = get_db_connection()
+
+        conv = conn.execute('''
+            SELECT c.*, t_inv.nombre as nombre_invitado, t_cre.nombre as nombre_creador
+            FROM conversaciones c
+            JOIN terceros t_inv ON c.invitado_id = t_inv.id
+            JOIN terceros t_cre ON c.creador_id = t_cre.id
+            WHERE c.token = %s AND c.activa = TRUE
+        ''', (token,)).fetchone()
+
+        if not conv:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Conversación no encontrada'}), 404
+
+        desde_id = request.args.get('desde', 0, type=int)
+
+        mensajes = conn.execute('''
+            SELECT m.id, m.remitente_id, m.mensaje, m.tipo, m.url_archivo, m.estado, m.fecha,
+                   t.nombre as remitente_nombre, t.tipo_tercero as remitente_tipo
+            FROM mensajes m
+            JOIN terceros t ON m.remitente_id = t.id
+            WHERE m.conversacion_id = %s AND m.id > %s
+            ORDER BY m.fecha ASC
+        ''', (conv['id'], desde_id)).fetchall()
+
+        # Marcar como leídos los mensajes del invitado si el creador está consultando
+        conn.execute('''
+            UPDATE mensajes SET estado = 'leido'
+            WHERE conversacion_id = %s AND remitente_id = %s AND estado = 'pendiente'
+        ''', (conv['id'], conv['invitado_id']))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'ok': True,
+            'conv': dict(conv),
+            'mensajes': [dict(m) for m in mensajes]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/invitado/enviar', methods=['POST'])
+def api_chat_invitado_enviar():
+    """Invitado (o creador) envía mensaje en conversación por token"""
+    data = request.get_json()
+    token = data.get('token', '').strip()
+    mensaje = (data.get('mensaje') or '').strip()
+    tipo = data.get('tipo', 'texto')
+    url_archivo = data.get('url_archivo', '')
+    es_creador = data.get('es_creador', False)
+
+    if not token or (not mensaje and not url_archivo):
+        return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        conv = conn.execute('''
+            SELECT * FROM conversaciones WHERE token = %s AND activa = TRUE
+        ''', (token,)).fetchone()
+
+        if not conv:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Conversación no válida'}), 404
+
+        # El remitente es el creador (Rafael) o el invitado
+        if es_creador:
+            # Verificar que sea el creador real
+            creador_id = session.get('usuario_id')
+            if not creador_id or creador_id != conv['creador_id']:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No autorizado'}), 401
+            remitente_id = conv['creador_id']
+            destinatario_id = conv['invitado_id']
+        else:
+            remitente_id = conv['invitado_id']
+            destinatario_id = conv['creador_id']
+
+        nuevo = conn.execute('''
+            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, url_archivo, conversacion_id, estado, fecha)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
+            RETURNING id, fecha
+        ''', (remitente_id, destinatario_id, mensaje or '', tipo, url_archivo, conv['id'])).fetchone()
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'ok': True, 'id': nuevo['id'], 'fecha': str(nuevo['fecha'])})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/invitado/audio', methods=['POST'])
+def api_chat_invitado_audio():
+    """Subir audio para mensajería (Cloudinary)"""
+    if 'audio' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió audio'}), 400
+    try:
+        archivo = request.files['audio']
+        result = cloudinary.uploader.upload(
+            archivo,
+            resource_type='video',  # Cloudinary usa 'video' para audio
+            folder='tuctuc_chat_audio',
+            format='mp3'
+        )
+        return jsonify({'ok': True, 'url': result['secure_url']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/mis-conversaciones', methods=['GET'])
+def api_chat_mis_conversaciones():
+    """Conversaciones del usuario autenticado (invitados + normales)"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    try:
+        conn = get_db_connection()
+
+        convs = conn.execute('''
+            SELECT c.id, c.token, c.nombre_invitado, c.origen, c.creada_en,
+                   t.nombre as nombre_invitado_actual,
+                   (SELECT COUNT(*) FROM mensajes m
+                    WHERE m.conversacion_id = c.id
+                    AND m.remitente_id = c.invitado_id
+                    AND m.estado = 'pendiente') as no_leidos,
+                   (SELECT m2.mensaje FROM mensajes m2
+                    WHERE m2.conversacion_id = c.id
+                    ORDER BY m2.fecha DESC LIMIT 1) as ultimo_mensaje,
+                   (SELECT m2.tipo FROM mensajes m2
+                    WHERE m2.conversacion_id = c.id
+                    ORDER BY m2.fecha DESC LIMIT 1) as ultimo_tipo,
+                   (SELECT m2.fecha FROM mensajes m2
+                    WHERE m2.conversacion_id = c.id
+                    ORDER BY m2.fecha DESC LIMIT 1) as ultima_fecha
+            FROM conversaciones c
+            JOIN terceros t ON c.invitado_id = t.id
+            WHERE c.creador_id = %s AND c.activa = TRUE
+            ORDER BY ultima_fecha DESC NULLS LAST
+        ''', (usuario_id,)).fetchall()
+
+        conn.close()
+        return jsonify({'ok': True, 'conversaciones': [dict(c) for c in convs]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/chat')
+def chat_panel():
+    """Panel de mensajería de Rafael (requiere sesión)"""
+    if 'usuario_id' not in session:
+        return redirect('/login')
+    return render_template('chat_mensajeria.html')
+
+
+@app.route('/chat/<token>')
+def chat_invitado(token):
+    """Página pública de conversación para el invitado"""
+    return render_template('chat_invitado.html', token=token)
+
+
 # -------------------------------------------------------------------
 # --- ENDPOINTS DE GESTIÓN DE PASTILLEROS ---
 # -------------------------------------------------------------------

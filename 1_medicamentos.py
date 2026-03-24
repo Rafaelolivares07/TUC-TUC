@@ -41982,7 +41982,7 @@ async function cargarHistorialGeneral() {
         <div class="flex-1 min-w-0">
           <p class="font-semibold text-gray-800 text-xs truncate">${e.contacto_nombre || e.contacto_tel || '?'}</p>
           ${e.plantilla_titulo ? `<p class="text-xs text-gray-500 truncate">${e.plantilla_titulo}</p>` : ''}
-          ${e.texto_enviado ? `<p class="text-xs text-gray-600 leading-snug mt-0.5 line-clamp-2">${e.texto_enviado}</p>` : ''}
+          ${e.texto_enviado ? `<p class="text-xs text-gray-600 leading-snug mt-0.5">${e.texto_enviado}</p>` : ''}
           <p class="text-xs text-gray-400 mt-0.5">${_fmtFecha(e.created_at)}</p>
         </div>
         <div class="flex flex-col gap-1 shrink-0 mt-0.5">

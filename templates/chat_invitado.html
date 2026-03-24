@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>{{ nombre_creador }} te envió un audio 🎵</title>
   <!-- Open Graph — preview en WhatsApp, Tinder, Instagram -->
-  <meta property="og:title" content="{{ nombre_creador }} te envió un audio 🎵">
-  <meta property="og:description" content="¡Escúchalo aquí! Solo disponible en TUC TUC — respóndele con voz o texto.">
+  <meta property="og:title" content="{{ nombre_creador }} te envió un audio exclusivo 🎵">
+  <meta property="og:description" content="Escúchalo aquí — solo disponible en TUC TUC. Respóndele con voz o texto, sin registrarte.">
   <meta property="og:type" content="website">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="{{ nombre_creador }} te envió un audio 🎵">
-  <meta name="twitter:description" content="¡Escúchalo aquí! Solo disponible en TUC TUC.">
+  {% if foto_creador %}<meta property="og:image" content="{{ foto_creador }}">{% endif %}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ nombre_creador }} te envió un audio exclusivo 🎵">
+  <meta name="twitter:description" content="Escúchalo aquí — solo disponible en TUC TUC.">
+  {% if foto_creador %}<meta name="twitter:image" content="{{ foto_creador }}">{% endif %}
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html, body { height: 100%; height: 100dvh; overscroll-behavior: none; }

@@ -19250,7 +19250,20 @@ def chat_panel():
 @app.route('/chat/<token>')
 def chat_invitado(token):
     """Página pública de conversación para el invitado"""
-    return render_template('chat_invitado.html', token=token)
+    nombre_creador = 'TUC TUC'
+    try:
+        conn = get_db_connection()
+        row = conn.execute('''
+            SELECT t.nombre FROM conversaciones c
+            JOIN terceros t ON c.creador_id = t.id
+            WHERE c.token = %s
+        ''', (token,)).fetchone()
+        conn.close()
+        if row:
+            nombre_creador = row['nombre']
+    except Exception:
+        pass
+    return render_template('chat_invitado.html', token=token, nombre_creador=nombre_creador)
 
 
 # -------------------------------------------------------------------

@@ -40947,20 +40947,43 @@ def api_vendedor_mis_negocios():
         negocios = [dict(r) for r in rows]
         # Tiendas asignadas directamente
         tienda_rows = conn.execute("""
-            SELECT COALESCE(ti.tercero_id, tv.tienda_id) AS id, ti.nombre, 'tienda' AS tipo
+            SELECT tv.tienda_id, ti.nombre, ti.tercero_id, ti.admin_id
             FROM tienda_vendedores tv
             JOIN tiendas ti ON ti.id = tv.tienda_id
             WHERE tv.vendedor_id = %s AND tv.activo = TRUE
             ORDER BY tv.created_at ASC
         """, (vendedor_id,)).fetchall()
-        negocios += [dict(r) for r in tienda_rows]
+        for row in tienda_rows:
+            d = dict(row)
+            tid = d['tercero_id']
+            # Si tercero_id es NULL o coincide con el admin (dato mal cargado),
+            # buscar o crear el tercero del negocio como entidad propia
+            if not tid or tid == d['admin_id']:
+                existing = conn.execute(
+                    "SELECT id FROM terceros WHERE nombre = %s AND telefono IS NULL LIMIT 1",
+                    (d['nombre'],)
+                ).fetchone()
+                if existing:
+                    tid = existing['id']
+                else:
+                    new_t = conn.execute(
+                        "INSERT INTO terceros (nombre) VALUES (%s) RETURNING id",
+                        (d['nombre'],)
+                    ).fetchone()
+                    tid = new_t['id']
+                conn.execute(
+                    "UPDATE tiendas SET tercero_id = %s WHERE id = %s",
+                    (tid, d['tienda_id'])
+                )
+            negocios.append({'id': tid, 'nombre': d['nombre'], 'tipo': 'tienda'})
+        conn.commit()
         conn.close()
-        # Deduplicar por nombre (puede haber duplicados en BD por deploys previos)
+        # Deduplicar por id (cada negocio tiene su propio tercero_id único)
         vistos = set()
         negocios_unicos = []
         for n in negocios:
-            if n['nombre'] not in vistos:
-                vistos.add(n['nombre'])
+            if n['id'] not in vistos:
+                vistos.add(n['id'])
                 negocios_unicos.append(n)
         return jsonify({'ok': True, 'negocios': negocios_unicos})
     except Exception as e:

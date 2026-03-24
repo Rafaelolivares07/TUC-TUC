@@ -38534,27 +38534,61 @@ def api_domotica_heartbeat():
     try:
         from datetime import datetime, timedelta
         import threading
-        idle_seg = int(request.args.get('idle', '0'))
-        ahora = datetime.now()
+        idle_seg   = int(request.args.get('idle', '0'))
+        mouse      = int(request.args.get('mouse', '0'))
+        audio      = int(request.args.get('audio', '0'))
+        ventana_pc = request.args.get('ventana', '')[:100]
+        ahora      = datetime.now()
         conn = get_db_connection()
         crear_tablas_domotica(conn)
-        # Leer config para saber umbral de inactividad (presencia_ventana_seg = lo que guarda la UI)
+        # Migración inline: tabla presencia_eventos
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS presencia_eventos (
+                id            SERIAL PRIMARY KEY,
+                registrado_en TIMESTAMP DEFAULT NOW(),
+                idle_seg      INTEGER,
+                resultado     VARCHAR(10),
+                disparador    VARCHAR(200),
+                ventana_activa VARCHAR(100)
+            )
+        ''')
+        conn.commit()
+        # Leer config
         cfg = conn.execute(
             "SELECT laptop_last_seen, presencia_ventana_seg FROM CONFIGURACION_SISTEMA WHERE id=1"
         ).fetchone()
-        ventana = int(cfg['presencia_ventana_seg'] or 360) if cfg else 360
-        # Si idle >= ventana: forzar NULL → scheduler detecta ausente en la misma evaluación
-        # Si idle < ventana: marcar activo con timestamp actual
-        usuario_activo = idle_seg < ventana
+        ventana_seg = int(cfg['presencia_ventana_seg'] or 360) if cfg else 360
+        usuario_activo = idle_seg < ventana_seg and idle_seg < 99990
         if usuario_activo:
-            conn.execute(
-                "UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = %s WHERE id=1",
-                (ahora,)
-            )
+            conn.execute("UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = %s WHERE id=1", (ahora,))
         else:
-            conn.execute(
-                "UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = NULL WHERE id=1"
-            )
+            conn.execute("UPDATE CONFIGURACION_SISTEMA SET laptop_last_seen = NULL WHERE id=1")
+        conn.commit()
+        # Calcular disparador legible
+        if idle_seg >= 99990 or ventana_pc == 'apagado':
+            disparador = 'PC apagado / cierre de sesión'
+            resultado  = 'ausente'
+        elif not usuario_activo:
+            mins = idle_seg // 60
+            disparador = f'Sin actividad por {mins} min'
+            resultado  = 'ausente'
+        else:
+            partes = []
+            if mouse:                   partes.append('🖱 Mouse')
+            if audio:                   partes.append('🔊 Audio')
+            if not mouse and not audio: partes.append('⌨️ Teclado')
+            disparador = ' · '.join(partes)
+            resultado  = 'activo'
+        # Insertar evento y borrar los que superen 30 (borrado real)
+        conn.execute(
+            '''INSERT INTO presencia_eventos (registrado_en, idle_seg, resultado, disparador, ventana_activa)
+               VALUES (%s, %s, %s, %s, %s)''',
+            (ahora, idle_seg, resultado, disparador, ventana_pc or None)
+        )
+        conn.execute(
+            '''DELETE FROM presencia_eventos
+               WHERE id NOT IN (SELECT id FROM presencia_eventos ORDER BY id DESC LIMIT 30)'''
+        )
         conn.commit()
         elapsed = 0
         # Verificar si hay comando pendiente para el PC
@@ -38565,13 +38599,30 @@ def api_domotica_heartbeat():
             conn.commit()
         conn.close()
         threading.Thread(target=evaluar_reglas_domotica, daemon=True).start()
-        resp = {'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed), 'ts': ahora.isoformat()}
+        resp = {'ok': True, 'activo': usuario_activo, 'idle': idle_seg, 'elapsed': int(elapsed),
+                'ts': ahora.isoformat(), 'disparador': disparador}
         if pc_cmd:
             resp['comando'] = pc_cmd
         return jsonify(resp)
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/presencia/eventos', methods=['GET'])
+@admin_required
+def api_domotica_presencia_eventos():
+    """Últimos 30 eventos de presencia para el log en tiempo real."""
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            '''SELECT id, registrado_en, idle_seg, resultado, disparador, ventana_activa
+               FROM presencia_eventos ORDER BY id DESC LIMIT 30'''
+        ).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'eventos': [dict(r) for r in rows]})
+    except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

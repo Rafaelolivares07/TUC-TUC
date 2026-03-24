@@ -139,6 +139,7 @@
 const TOKEN = "{{ token }}";
 let convInfo   = null;
 let ultimoId   = 0;
+const idsRenderizados = new Set();
 let grabando   = false;
 let mediaRec   = null;
 let audioChunks= [];
@@ -191,6 +192,8 @@ function renderMensajes(msgs) {
   const esInicio = ultimoId === 0;
 
   msgs.forEach((m, idx) => {
+    if (idsRenderizados.has(m.id)) return;
+    idsRenderizados.add(m.id);
     ultimoId = Math.max(ultimoId, m.id);
     const esInvitado = m.remitente_tipo === 'invitado';
 

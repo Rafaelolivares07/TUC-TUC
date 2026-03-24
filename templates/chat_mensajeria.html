@@ -81,6 +81,7 @@ let convActiva = null;
 let tokenActivo = null;
 let pollingInterval = null;
 let ultimoMsgId = 0;
+const idsRenderizados = new Set();
 let mediaRecorder = null;
 let audioChunks = [];
 let grabando = false;
@@ -128,6 +129,7 @@ function abrirConv(token, nombre) {
 
   tokenActivo = token;
   ultimoMsgId = 0;
+  idsRenderizados.clear();
   if (pollingInterval) clearInterval(pollingInterval);
 
   // Renderizar panel chat
@@ -182,6 +184,8 @@ function cargarMensajesConv() {
       const cont = document.getElementById('mensajes-container');
       if (!cont) return;
       d.mensajes.forEach(m => {
+        if (idsRenderizados.has(m.id)) return;
+        idsRenderizados.add(m.id);
         ultimoMsgId = Math.max(ultimoMsgId, m.id);
         const esCreador = m.remitente_tipo !== 'invitado';
         const div = document.createElement('div');

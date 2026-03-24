@@ -19294,7 +19294,8 @@ def chat_panel():
     """Panel de mensajería de Rafael (requiere sesión)"""
     if 'usuario_id' not in session:
         return redirect('/login')
-    return render_template('chat_mensajeria.html')
+    return render_template('chat.html', modo='creador', token='',
+                           nombre_creador='', foto_creador='', tercero_creador_id=0)
 
 
 @app.route('/chat/<token>')
@@ -19302,21 +19303,24 @@ def chat_invitado(token):
     """Página pública de conversación para el invitado"""
     nombre_creador = 'TUC TUC'
     foto_creador = ''
+    tercero_creador_id = 0
     try:
         conn = get_db_connection()
         row = conn.execute('''
-            SELECT t.nombre, t.foto_perfil FROM conversaciones c
+            SELECT t.id, t.nombre, t.foto_perfil FROM conversaciones c
             JOIN terceros t ON c.creador_id = t.id
             WHERE c.token = %s
         ''', (token,)).fetchone()
         conn.close()
         if row:
+            tercero_creador_id = row['id']
             nombre_creador = row['nombre']
             foto_creador = row['foto_perfil'] or ''
     except Exception:
         pass
-    return render_template('chat_invitado.html', token=token,
-                           nombre_creador=nombre_creador, foto_creador=foto_creador)
+    return render_template('chat.html', modo='invitado', token=token,
+                           nombre_creador=nombre_creador, foto_creador=foto_creador,
+                           tercero_creador_id=tercero_creador_id)
 
 
 @app.route('/api/chat/mi-perfil', methods=['GET'])

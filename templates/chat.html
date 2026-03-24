@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  {% if modo == 'invitado' %}
+  <title>{{ nombre_creador }} te envió un audio 🎵</title>
+  <meta property="og:title" content="{{ nombre_creador }} te envió un audio exclusivo 🎵">
+  <meta property="og:description" content="Escúchalo aquí — solo disponible en TUC TUC. Respóndele con voz o texto, sin registrarte.">
+  <meta property="og:type" content="website">
+  {% if foto_creador %}<meta property="og:image" content="{{ foto_creador }}">{% endif %}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ nombre_creador }} te envió un audio exclusivo 🎵">
+  <meta name="twitter:description" content="Escúchalo aquí — solo disponible en TUC TUC.">
+  {% if foto_creador %}<meta name="twitter:image" content="{{ foto_creador }}">{% endif %}
+  {% else %}
+  <title>Mensajería — TUC TUC</title>
+  {% endif %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; height: 100dvh; overscroll-behavior: none; }
+    body { display: flex; flex-direction: column; max-height: 100dvh; }
+    #mensajes { scroll-behavior: smooth; }
+    .bubble-in  { animation: slideIn  .18s ease-out; }
+    .bubble-out { animation: slideOut .18s ease-out; }
+    @keyframes slideIn  { from { opacity:0; transform: translateY(8px) translateX(-8px); } to { opacity:1; transform: none; } }
+    @keyframes slideOut { from { opacity:0; transform: translateY(8px) translateX( 8px); } to { opacity:1; transform: none; } }
+    .onda span { display:inline-block; width:4px; border-radius:4px; background:#ef4444; animation: ondaUp .7s ease-in-out infinite alternate; }
+    .onda span:nth-child(2) { animation-delay:.1s; }
+    .onda span:nth-child(3) { animation-delay:.2s; }
+    .onda span:nth-child(4) { animation-delay:.3s; }
+    .onda span:nth-child(5) { animation-delay:.4s; }
+    @keyframes ondaUp { from { height:6px; } to { height:22px; } }
+    .audio-hook { background: linear-gradient(135deg, #1e3a5f 0%, #1a2d4a 100%); border: 1px solid #2563eb44; }
+    textarea { field-sizing: content; }
+    .barra-input { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body class="bg-gray-950 text-white overflow-hidden flex" style="height:100dvh">
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SIDEBAR — solo modo creador                                    -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+{% if modo == 'creador' %}
+<div id="sidebar" class="w-full md:w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col md:!flex">
+
+  <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div id="mi-avatar" onclick="verMiFotoGrande()"
+           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Ver / cambiar foto">
+        R
+      </div>
+      <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
+      <span class="font-semibold">TUC TUC Chat</span>
+    </div>
+    <button onclick="abrirNuevoInvitado()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full transition font-medium">
+      + Invitar
+    </button>
+  </div>
+
+  <div id="lista-convs" class="flex-1 overflow-y-auto">
+    <div class="p-4 text-gray-500 text-sm text-center">Cargando...</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PANEL CHAT                                                     -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-chat" class="flex-1 flex flex-col {% if modo == 'creador' %}hidden md:flex{% endif %}">
+
+  {% if modo == 'creador' %}
+  <!-- Estado vacío — se reemplaza al abrir una conversación -->
+  <div class="flex-1 flex items-center justify-center text-gray-600">
+    <div class="text-center">
+      <div class="text-5xl mb-3">💬</div>
+      <p class="text-lg">Selecciona una conversación</p>
+      <p class="text-sm mt-1">o invita a alguien nuevo</p>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ── HEADER invitado ─────────────────────────────────────────── -->
+  <div id="header" class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3">
+    <div id="avatar-creador"
+         onclick="abrirGaleria(TERCERO_CREADOR_ID, '{{ nombre_creador }}', false)"
+         class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">
+      {% if foto_creador %}<img src="{{ foto_creador }}" class="w-full h-full object-cover">{% else %}?{% endif %}
+    </div>
+    <div class="flex-1 min-w-0">
+      <div id="nombre-creador" class="font-semibold text-sm truncate">TUC TUC</div>
+      <div class="text-xs text-emerald-400">en línea</div>
+    </div>
+    <button onclick="abrirModalInvitar()"
+            class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-full transition flex-shrink-0">
+      + Invitar
+    </button>
+  </div>
+
+  <!-- ── MENSAJES invitado ───────────────────────────────────────── -->
+  <div id="mensajes" class="flex-1 overflow-y-auto px-4 py-3 space-y-2"></div>
+
+  <!-- ── BARRA INFERIOR invitado ────────────────────────────────── -->
+  <div class="flex-shrink-0 bg-gray-900 border-t border-gray-800 px-3 pt-2.5 barra-input">
+    <div class="flex items-center gap-2 mb-2 px-1">
+      <div id="mi-avatar-inv" onclick="document.getElementById('inp-foto-inv').click()"
+           class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-xs font-bold cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Cambiar mi foto">
+        ?
+      </div>
+      <input id="inp-foto-inv" type="file" accept="image/*" class="hidden" onchange="subirMiFoto(this)">
+      <span class="text-xs text-gray-500">Yo:</span>
+      <button id="btn-nombre-inv" onclick="editarNombreInvitado()" class="text-xs text-blue-400 hover:text-blue-300 font-medium transition">...</button>
+    </div>
+    <div class="flex items-end gap-2">
+      <div class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
+        <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
+                  class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none overflow-hidden max-h-28"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
+                  oninput="autoResize(this)"></textarea>
+      </div>
+      <button id="btn-mic" onclick="toggleGrabacion()"
+              class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition relative" title="Grabar audio">
+        <svg id="icono-mic" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+        </svg>
+        <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </button>
+      <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center flex-shrink-0 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+      </button>
+    </div>
+    <div class="flex justify-center mt-1.5">
+      <button id="btn-stt" onclick="toggleSTT()"
+              class="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition px-2 py-1 rounded-full">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Dictado de voz
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL GALERÍA (compartido)                                     -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="modal-foto" class="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between hidden py-6 px-4" onclick="cerrarFotoGrande()">
+  <div class="flex items-center justify-between w-full max-w-sm" onclick="event.stopPropagation()">
+    <span id="galeria-nombre" class="text-white font-semibold text-lg"></span>
+    <button onclick="cerrarFotoGrande()" class="text-gray-400 hover:text-white text-2xl leading-none">×</button>
+  </div>
+  <div class="relative flex items-center justify-center w-full max-w-sm flex-1 py-4" onclick="event.stopPropagation()">
+    <button id="btn-gal-prev" onclick="galeriaNav(-1)"
+            class="absolute left-0 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white text-xl hover:bg-black/80 transition hidden">‹</button>
+    <div id="galeria-foto-wrap" class="w-72 h-72 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-7xl font-bold text-white shadow-2xl flex-shrink-0"></div>
+    <button id="btn-gal-next" onclick="galeriaNav(1)"
+            class="absolute right-0 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white text-xl hover:bg-black/80 transition hidden">›</button>
+  </div>
+  <div class="flex flex-col items-center gap-3 w-full max-w-sm" onclick="event.stopPropagation()">
+    <div id="galeria-dots" class="flex gap-1.5 min-h-[8px]"></div>
+    <div class="flex gap-3">
+      <button id="btn-galeria-agregar" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-full transition hidden"
+              onclick="document.getElementById('inp-foto-galeria').click()">+ Agregar foto</button>
+      <button id="btn-galeria-eliminar" class="bg-red-900/60 hover:bg-red-800 text-red-300 text-sm px-4 py-2 rounded-full transition hidden"
+              onclick="galeriaEliminarActual()">Eliminar</button>
+    </div>
+    <input id="inp-foto-galeria" type="file" accept="image/*" class="hidden" onchange="galeriaSubirFoto(this)">
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODALES CREADOR                                                -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+{% if modo == 'creador' %}
+<div id="modal-invitado" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-gray-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+    <h2 class="text-lg font-bold mb-4">Nueva conversación</h2>
+    <div class="mb-3">
+      <label class="text-xs text-gray-400 mb-1 block">Nombre del contacto</label>
+      <input id="inv-nombre" type="text" placeholder="ej: María" autocomplete="off"
+             class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div class="mb-5">
+      <label class="text-xs text-gray-400 mb-1 block">Origen (opcional)</label>
+      <input id="inv-origen" type="text" placeholder="ej: Tinder, WhatsApp..."
+             class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div class="flex gap-3">
+      <button onclick="cerrarModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 py-3 rounded-xl transition text-sm">Cancelar</button>
+      <button onclick="crearInvitado()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl transition text-sm font-medium">Crear link</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODALES INVITADO                                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+{% if modo == 'invitado' %}
+<div id="modal-invitar" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md p-6 pb-8 shadow-2xl">
+    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5"></div>
+    <h2 class="text-base font-semibold mb-1">Invitar a alguien</h2>
+    <p class="text-xs text-gray-500 mb-4">Genera un link exclusivo para que te escuche un audio.</p>
+    <input id="inp-inv-nombre" type="text" placeholder="Nombre del contacto"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+           onkeydown="if(event.key==='Enter')crearMiLink()">
+    <input id="inp-inv-origen" type="text" placeholder="Origen (ej: Tinder, Instagram...)"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+           onkeydown="if(event.key==='Enter')crearMiLink()">
+    <div id="mi-link-generado" class="hidden mb-4">
+      <div id="mi-link-texto" class="bg-gray-800 rounded-xl p-3 text-blue-400 text-sm break-all mb-3 cursor-pointer select-all" onclick="copiarMiLink()"></div>
+      <button onclick="copiarMiLink()" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl text-sm font-medium transition">📋 Copiar link</button>
+    </div>
+    <div id="btns-invitar" class="flex gap-3">
+      <button onclick="cerrarModalInvitar()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
+      <button onclick="crearMiLink()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Crear link</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-nombre" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md p-6 pb-8 shadow-2xl">
+    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5"></div>
+    <h2 class="text-base font-semibold mb-1">¿Cómo te llamas?</h2>
+    <p class="text-xs text-gray-500 mb-4">Así te verá la otra persona en la conversación.</p>
+    <input id="inp-nombre-inv" type="text" placeholder="Tu nombre"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+           onkeydown="if(event.key==='Enter')guardarNombre()">
+    <div class="flex gap-3">
+      <button onclick="cerrarModalNombre()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
+      <button onclick="guardarNombre()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Listo</button>
+    </div>
+  </div>
+</div>
+
+<div id="estado-inicial" class="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center z-40">
+  <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30">
+    <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/>
+      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"/>
+    </svg>
+  </div>
+  <div id="msg-estado" class="text-gray-400 text-sm">Conectando...</div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCRIPT UNIFICADO                                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<script>
+// ── Contexto desde Flask ─────────────────────────────────────────
+const MODO  = "{{ modo }}";
+const TOKEN = "{{ token }}";
+const TERCERO_CREADOR_ID = {{ tercero_creador_id or 0 }};
+
+// ── Estado compartido ────────────────────────────────────────────
+let grabando = false, mediaRecorder = null, audioChunks = [];
+const idsRenderizados = new Set();
+let pollingInterval = null;
+let ultimoMsgId = 0;
+let miFoto = '', miTerceroId = null;
+let convData = {}, tokenActivo = '';
+let convInfo = null;
+
+// Galería
+let gFotos = [], gIndice = 0, gEsMia = false, gTerceroId = null, _swipeX = null;
+
+// STT (solo invitado)
+const STT = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconocedor = null, sttActivo = false;
+
+// ── Init ─────────────────────────────────────────────────────────
+if (MODO === 'creador') {
+  cargarConversaciones();
+  setInterval(cargarConversaciones, 15000);
+  cargarMiPerfil();
+} else {
+  initInvitado();
+}
+
+// Swipe galería
+document.getElementById('modal-foto').addEventListener('touchstart', e => { _swipeX = e.touches[0].clientX; }, { passive: true });
+document.getElementById('modal-foto').addEventListener('touchend', e => {
+  if (_swipeX === null) return;
+  const dx = e.changedTouches[0].clientX - _swipeX;
+  if (Math.abs(dx) > 40) galeriaNav(dx < 0 ? 1 : -1);
+  _swipeX = null;
+});
+
+// ══════════════════════════════════════════════════════════════════
+// FUNCIONES COMPARTIDAS
+// ══════════════════════════════════════════════════════════════════
+
+function aplicarAvatar(el, url) {
+  if (!url || !el) return;
+  el.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+}
+
+function avatarHtml(foto, nombre, size='w-10 h-10') {
+  const inicial = (nombre || '?')[0].toUpperCase();
+  if (foto) return `<div class="${size} rounded-full overflow-hidden flex-shrink-0"><img src="${foto}" class="w-full h-full object-cover"></div>`;
+  return `<div class="${size} rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0">${inicial}</div>`;
+}
+
+function formatHora(fecha) {
+  return new Date(fecha).toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 112) + 'px';
+}
+
+function micIconSvg() {
+  return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>';
+}
+
+// ── Enviar texto (unificado) ──────────────────────────────────────
+function enviarTexto() {
+  const txId = MODO === 'creador' ? 'txt-msg' : 'txt-msg';
+  const el = document.getElementById(txId);
+  if (!el) return;
+  const msg = el.value.trim();
+  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
+  if (!msg || !tok) return;
+  el.value = ''; el.style.height = 'auto';
+  fetch('/api/chat/invitado/enviar', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tok, mensaje: msg, tipo: 'texto', es_creador: MODO === 'creador'})
+  }).then(() => pollMensajes());
+}
+
+// ── Grabación audio (unificado) ───────────────────────────────────
+async function toggleGrabacion() {
+  const btn  = document.getElementById('btn-mic');
+  const onda = document.getElementById('onda-mic');
+  const icon = document.getElementById('icono-mic');
+  const tok  = MODO === 'creador' ? tokenActivo : TOKEN;
+
+  if (!grabando) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunks, {type: 'audio/webm'});
+        if (blob.size < 300) { if(icon) icon.style.display=''; if(onda) onda.classList.add('hidden'); btn.innerHTML=micIconSvg(); return; }
+        btn.innerHTML = '⏳';
+        const form = new FormData();
+        form.append('audio', blob, 'audio.webm');
+        const rUp = await fetch('/api/chat/invitado/audio', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+        if (rUp && rUp.ok) {
+          await fetch('/api/chat/invitado/enviar', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({token: tok, mensaje:'', tipo:'audio', url_archivo: rUp.url, es_creador: MODO === 'creador'})
+          });
+          pollMensajes();
+        } else {
+          alert('Error subiendo audio: ' + (rUp?.error || 'desconocido'));
+        }
+        btn.innerHTML = micIconSvg();
+        if (onda) onda.classList.add('hidden');
+        if (icon) icon.style.display = '';
+      };
+      mediaRecorder.start();
+      grabando = true;
+      btn.classList.replace('bg-gray-700','bg-red-600');
+      if (btn.classList.contains('hover:bg-gray-600')) btn.classList.replace('hover:bg-gray-600','hover:bg-red-500');
+      btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+      if (onda) onda.classList.remove('hidden');
+      if (icon) icon.style.display = 'none';
+    } catch(e) {
+      alert('No se pudo acceder al micrófono. Verifica los permisos.');
+    }
+  } else {
+    mediaRecorder.stop();
+    grabando = false;
+    btn.classList.replace('bg-red-600','bg-gray-700');
+    if (btn.classList.contains('hover:bg-red-500')) btn.classList.replace('hover:bg-red-500','hover:bg-gray-600');
+  }
+}
+
+// ── Polling mensajes (unificado) ──────────────────────────────────
+function pollMensajes() {
+  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
+  if (!tok) return;
+  fetch(`/api/chat/invitado/mensajes/${tok}?desde=${ultimoMsgId}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) return;
+      const contId = MODO === 'creador' ? 'mensajes' : 'mensajes';
+      const cont = document.getElementById(contId);
+      if (!cont) return;
+      renderMensajes(d.mensajes, cont);
+    });
+}
+
+// ── Render mensajes (unificado) ───────────────────────────────────
+function renderMensajes(msgs, cont) {
+  if (!msgs || !msgs.length) return;
+  const esInicio = ultimoMsgId === 0;
+  msgs.forEach((m, idx) => {
+    if (idsRenderizados.has(m.id)) return;
+    idsRenderizados.add(m.id);
+    ultimoMsgId = Math.max(ultimoMsgId, m.id);
+
+    // ¿Quién lo envió? — "mío" = lado derecho
+    const esMio = MODO === 'creador'
+      ? (m.remitente_tipo !== 'invitado')
+      : (m.remitente_tipo === 'invitado');
+
+    const animClass = esMio ? 'bubble-out' : 'bubble-in';
+    const div = document.createElement('div');
+    div.className = `flex ${esMio ? 'justify-end' : 'justify-start'} ${animClass}`;
+
+    // Hook especial: primer audio del creador visto por invitado
+    if (MODO === 'invitado' && !esMio && m.tipo === 'audio' && idx === 0 && esInicio && m.url_archivo) {
+      const nc = convInfo?.nombre_creador || 'TUC TUC';
+      div.innerHTML = `
+        <div class="audio-hook rounded-2xl rounded-bl-sm p-4 max-w-[80%] w-full">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">${nc[0].toUpperCase()}</div>
+            <div>
+              <div class="text-xs font-medium text-blue-300">${escHtml(nc)}</div>
+              <div class="text-xs text-gray-500">${formatHora(m.fecha)}</div>
+            </div>
+          </div>
+          <div class="text-sm text-gray-300 mb-2">🎵 Te envió un audio exclusivo</div>
+          <audio controls src="${m.url_archivo}" class="w-full h-9 rounded-lg" preload="metadata"></audio>
+          <div class="text-xs text-gray-500 mt-2 text-center">Solo disponible en TUC TUC</div>
+        </div>`;
+    } else if (m.tipo === 'audio' && m.url_archivo) {
+      div.innerHTML = `
+        <div class="px-3 py-2.5 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
+          <audio controls src="${m.url_archivo}" class="max-w-[210px] h-8" preload="metadata"></audio>
+          <div class="text-xs opacity-50 mt-1 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+        </div>`;
+    } else if (m.tipo !== 'sistema') {
+      div.innerHTML = `
+        <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
+          <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
+          <div class="text-xs opacity-50 mt-0.5 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+        </div>`;
+    }
+    if (div.innerHTML) cont.appendChild(div);
+  });
+  cont.scrollTop = cont.scrollHeight;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GALERÍA (compartida)
+// ══════════════════════════════════════════════════════════════════
+
+async function abrirGaleria(terceroId, nombre, esMia) {
+  if (!terceroId) return;
+  gEsMia = esMia; gTerceroId = terceroId;
+  document.getElementById('galeria-nombre').textContent = nombre;
+  document.getElementById('modal-foto').classList.remove('hidden');
+  document.getElementById('btn-galeria-agregar').classList.toggle('hidden', !esMia);
+
+  const r = await fetch(`/api/chat/fotos/ver?tercero_id=${terceroId}`).then(r => r.json()).catch(() => null);
+  gFotos = (r && r.fotos) ? r.fotos : [];
+  if (gFotos.length === 0 && esMia && miFoto) gFotos = [{id: null, url: miFoto, orden: 0}];
+  gIndice = 0; galeriaRender();
+}
+
+function verFotoGrande(url, nombre, esMia) {
+  gEsMia = esMia; gTerceroId = null;
+  gFotos = url ? [{id: null, url, orden: 0}] : [];
+  gIndice = 0;
+  document.getElementById('galeria-nombre').textContent = nombre;
+  document.getElementById('btn-galeria-agregar').classList.add('hidden');
+  document.getElementById('btn-galeria-eliminar').classList.add('hidden');
+  document.getElementById('modal-foto').classList.remove('hidden');
+  galeriaRender();
+}
+
+function verMiFotoGrande() {
+  if (miTerceroId) abrirGaleria(miTerceroId, 'Mi galería', true);
+  else verFotoGrande(miFoto, 'Mi perfil', true);
+}
+
+function cerrarFotoGrande() {
+  document.getElementById('modal-foto').classList.add('hidden');
+  gFotos = [];
+}
+
+function galeriaRender() {
+  const wrap = document.getElementById('galeria-foto-wrap');
+  const dots = document.getElementById('galeria-dots');
+  const btnP = document.getElementById('btn-gal-prev');
+  const btnN = document.getElementById('btn-gal-next');
+  const btnE = document.getElementById('btn-galeria-eliminar');
+  if (gFotos.length === 0) {
+    wrap.innerHTML = `<span>${(document.getElementById('galeria-nombre').textContent || '?')[0].toUpperCase()}</span>`;
+    dots.innerHTML = ''; btnP.classList.add('hidden'); btnN.classList.add('hidden'); btnE.classList.add('hidden'); return;
+  }
+  const f = gFotos[gIndice];
+  wrap.innerHTML = `<img src="${f.url}" class="w-full h-full object-cover">`;
+  dots.innerHTML = gFotos.map((_,i) => `<div class="w-2 h-2 rounded-full transition ${i===gIndice?'bg-white':'bg-gray-600'}"></div>`).join('');
+  btnP.classList.toggle('hidden', gFotos.length <= 1);
+  btnN.classList.toggle('hidden', gFotos.length <= 1);
+  btnE.classList.toggle('hidden', !gEsMia || !f.id);
+}
+
+function galeriaNav(dir) { gIndice = (gIndice + dir + gFotos.length) % gFotos.length; galeriaRender(); }
+
+async function galeriaSubirFoto(input) {
+  if (!input.files[0]) return;
+  const wrap = document.getElementById('galeria-foto-wrap');
+  wrap.innerHTML = '<div class="text-white text-2xl animate-pulse">⏳</div>';
+  const form = new FormData(); form.append('foto', input.files[0]);
+  if (MODO === 'invitado') form.append('token_invitado', TOKEN);
+  const r = await fetch('/api/chat/fotos/agregar', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { gFotos.push({id: r.id, url: r.url, orden: r.orden}); gIndice = gFotos.length - 1; galeriaRender(); }
+  else { wrap.innerHTML = '<span>Error</span>'; alert('Error: ' + (r?.error || 'desconocido')); }
+  input.value = '';
+}
+
+async function galeriaEliminarActual() {
+  const f = gFotos[gIndice]; if (!f || !f.id) return;
+  if (!confirm('¿Eliminar esta foto?')) return;
+  const body = MODO === 'invitado' ? JSON.stringify({token_invitado: TOKEN}) : '{}';
+  const r = await fetch(`/api/chat/fotos/${f.id}`, {method:'DELETE', headers:{'Content-Type':'application/json'}, body}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { gFotos.splice(gIndice, 1); if (gIndice >= gFotos.length) gIndice = Math.max(0, gFotos.length-1); galeriaRender(); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODO CREADOR
+// ══════════════════════════════════════════════════════════════════
+
+async function cargarMiPerfil() {
+  const el = document.getElementById('mi-avatar');
+  const r = await fetch('/api/chat/mi-perfil').then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    if (r.id) miTerceroId = r.id;
+    if (r.foto) { miFoto = r.foto; localStorage.setItem('mi_foto_perfil', r.foto); aplicarAvatar(el, r.foto); }
+    else { const fl = localStorage.getItem('mi_foto_perfil'); if (fl) { miFoto = fl; aplicarAvatar(el, fl); } }
+  }
+}
+
+async function subirFotoPerfil(input) {
+  if (!input.files[0]) return;
+  const el = document.getElementById('mi-avatar'); el.innerHTML = '⏳';
+  const form = new FormData(); form.append('foto', input.files[0]);
+  const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { miFoto = r.url; localStorage.setItem('mi_foto_perfil', r.url); aplicarAvatar(el, r.url); }
+  else { el.innerHTML = 'R'; alert('Error: ' + (r?.error || 'desconocido')); }
+}
+
+function cargarConversaciones() {
+  fetch('/api/chat/mis-conversaciones').then(r => r.json()).then(d => {
+    if (!d.ok) return;
+    d.conversaciones.forEach(c => { convData[c.token] = c; });
+    const el = document.getElementById('lista-convs');
+    if (!d.conversaciones.length) {
+      el.innerHTML = '<div class="p-6 text-center text-gray-600 text-sm">Sin conversaciones aún.<br>Invita a alguien.</div>'; return;
+    }
+    el.innerHTML = d.conversaciones.map(c => {
+      const nombre = c.nombre_invitado || c.nombre_invitado_actual;
+      const noLeidos = c.no_leidos > 0 ? `<span class="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">${c.no_leidos}</span>` : '';
+      const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_mensaje || '');
+      const origen = c.origen ? `<span class="text-gray-600 text-xs"> · ${c.origen}</span>` : '';
+      return `<div onclick="abrirConv('${c.token}','${nombre}')"
+                   class="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800/50 transition ${tokenActivo===c.token?'bg-gray-800':''}">
+        ${avatarHtml(c.foto_invitado, nombre)}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-sm truncate">${nombre}${noLeidos}</span>${origen}
+          </div>
+          <div class="text-gray-500 text-xs truncate mt-0.5">${ultimoMsg}</div>
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+
+function abrirConv(token, nombre) {
+  document.getElementById('sidebar').classList.add('hidden');
+  const panel = document.getElementById('panel-chat');
+  panel.classList.remove('hidden'); panel.classList.add('flex');
+  tokenActivo = token; ultimoMsgId = 0; idsRenderizados.clear();
+  if (pollingInterval) clearInterval(pollingInterval);
+
+  const c = convData[token] || {};
+  const fotoInv = c.foto_invitado || '';
+  const avatarH = fotoInv ? `<img src="${fotoInv}" class="w-full h-full object-cover">` : `<span>${nombre[0].toUpperCase()}</span>`;
+
+  panel.innerHTML = `
+    <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 flex-shrink-0">
+      <button onclick="volverSidebar()" class="md:hidden text-gray-400 hover:text-white mr-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div onclick="abrirGaleria(${c.tercero_id_invitado||0},'${nombre}',false)"
+           class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">${avatarH}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm">${nombre}</div>
+        <div class="text-xs text-gray-500">Sin registrarse</div>
+      </div>
+      <button onclick="copiarLinkActivo()" id="btn-compartir"
+              class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-full transition flex-shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+        </svg>
+        Compartir
+      </button>
+      <button onclick="eliminarConv('${token}')"
+              class="w-8 h-8 rounded-full bg-gray-800 hover:bg-red-900 text-gray-500 hover:text-red-400 flex items-center justify-center transition flex-shrink-0" title="Eliminar">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+      </button>
+    </div>
+    <div id="mensajes" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+    <div class="p-3 border-t border-gray-800 bg-gray-900 flex-shrink-0 barra-input">
+      <div class="flex items-end gap-2">
+        <div class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
+          <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
+                    class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none max-h-24 overflow-y-auto"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
+                    oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        </div>
+        <button id="btn-mic" onclick="toggleGrabacion()" title="Grabar audio"
+                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0 relative">
+          ${micIconSvg()}
+          <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </button>
+        <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </div>
+    </div>`;
+
+  pollMensajes();
+  pollingInterval = setInterval(pollMensajes, 3000);
+}
+
+function volverSidebar() {
+  document.getElementById('sidebar').classList.remove('hidden');
+  document.getElementById('panel-chat').classList.add('hidden');
+  if (pollingInterval) clearInterval(pollingInterval);
+}
+
+function copiarLinkActivo() {
+  if (!tokenActivo) return;
+  const link = `${location.origin}/chat/${tokenActivo}`;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('btn-compartir');
+    if (btn) { const o=btn.innerHTML; btn.textContent='✓ Copiado'; setTimeout(()=>btn.innerHTML=o, 1800); }
+  });
+}
+
+let linkGenerado = '';
+function abrirNuevoInvitado() {
+  document.getElementById('inv-nombre').value = '';
+  document.getElementById('inv-origen').value = '';
+  document.getElementById('modal-invitado').classList.remove('hidden');
+  setTimeout(() => document.getElementById('inv-nombre').focus(), 100);
+}
+function cerrarModal() { document.getElementById('modal-invitado').classList.add('hidden'); }
+
+function crearInvitado() {
+  const nombre = document.getElementById('inv-nombre').value.trim() || 'Invitado';
+  const origen = document.getElementById('inv-origen').value.trim();
+  fetch('/api/chat/invitar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, origen})})
+    .then(r => r.json()).then(d => {
+      if (!d.ok) { alert('Error: ' + d.error); return; }
+      cerrarModal(); linkGenerado = d.link;
+      cargarConversaciones();
+      abrirConv(d.token, nombre);
+    });
+}
+
+function eliminarConv(token) {
+  if (!confirm('¿Eliminar esta conversación y todos sus mensajes?')) return;
+  fetch(`/api/chat/eliminar/${token}`, {method:'DELETE'}).then(r => r.json()).then(d => {
+    if (!d.ok) { alert('Error: ' + d.error); return; }
+    volverSidebar(); tokenActivo = null;
+    document.getElementById('panel-chat').innerHTML = `
+      <div class="flex-1 flex items-center justify-center text-gray-600">
+        <div class="text-center"><div class="text-5xl mb-3">💬</div><p class="text-lg">Selecciona una conversación</p></div>
+      </div>`;
+    cargarConversaciones();
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODO INVITADO
+// ══════════════════════════════════════════════════════════════════
+
+async function initInvitado() {
+  const r = await fetch(`/api/chat/invitado/mensajes/${TOKEN}?desde=0`).then(r => r.json()).catch(() => null);
+  if (!r || !r.ok) {
+    document.getElementById('msg-estado').textContent = 'Conversación no encontrada o expirada.'; return;
+  }
+  convInfo = r.conv;
+  document.getElementById('estado-inicial').classList.add('hidden');
+
+  const nc = convInfo.nombre_creador || 'TUC TUC';
+  document.getElementById('nombre-creador').textContent = nc;
+  const avC = document.getElementById('avatar-creador');
+  if (avC && !avC.querySelector('img')) avC.textContent = nc[0].toUpperCase();
+
+  const fotoGuardada = localStorage.getItem(`foto_inv_${TOKEN}`);
+  if (fotoGuardada) aplicarAvatarInv(fotoGuardada);
+
+  const nombreGuardado = localStorage.getItem(`nombre_inv_${TOKEN}`);
+  setNombreInvitado(nombreGuardado || convInfo.nombre_invitado || 'Tú', false);
+
+  const cont = document.getElementById('mensajes');
+  renderMensajes(r.mensajes, cont);
+  pollingInterval = setInterval(pollMensajes, 3000);
+}
+
+function setNombreInvitado(nombre, animar) {
+  const btn = document.getElementById('btn-nombre-inv');
+  if (!btn) return;
+  btn.textContent = nombre;
+  if (animar) { btn.classList.add('text-emerald-400'); setTimeout(() => btn.classList.remove('text-emerald-400'), 1000); }
+}
+
+function editarNombreInvitado() {
+  const actual = document.getElementById('btn-nombre-inv').textContent;
+  document.getElementById('inp-nombre-inv').value = actual === '...' ? '' : actual;
+  document.getElementById('modal-nombre').classList.remove('hidden');
+  setTimeout(() => document.getElementById('inp-nombre-inv').focus(), 150);
+}
+function cerrarModalNombre() { document.getElementById('modal-nombre').classList.add('hidden'); }
+
+function guardarNombre() {
+  const nombre = document.getElementById('inp-nombre-inv').value.trim();
+  if (!nombre) return;
+  localStorage.setItem(`nombre_inv_${TOKEN}`, nombre);
+  setNombreInvitado(nombre, true);
+  cerrarModalNombre();
+  fetch('/api/chat/invitado/enviar', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({token: TOKEN, mensaje: `[nombre:${nombre}]`, tipo: 'sistema', es_creador: false})
+  }).catch(() => {});
+}
+
+function aplicarAvatarInv(url) { aplicarAvatar(document.getElementById('mi-avatar-inv'), url); }
+
+async function subirMiFoto(input) {
+  if (!input.files[0]) return;
+  const el = document.getElementById('mi-avatar-inv'); el.innerHTML = '⏳';
+  const form = new FormData(); form.append('foto', input.files[0]); form.append('token_invitado', TOKEN);
+  const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { localStorage.setItem(`foto_inv_${TOKEN}`, r.url); aplicarAvatarInv(r.url); }
+  else { el.innerHTML = '?'; alert('Error: ' + (r?.error || 'desconocido')); }
+}
+
+// Invitar contacto
+let miLinkGenerado = '';
+function abrirModalInvitar() {
+  document.getElementById('mi-link-generado').classList.add('hidden');
+  document.getElementById('btns-invitar').classList.remove('hidden');
+  document.getElementById('inp-inv-nombre').value = '';
+  document.getElementById('inp-inv-origen').value = '';
+  miLinkGenerado = '';
+  document.getElementById('modal-invitar').classList.remove('hidden');
+  setTimeout(() => document.getElementById('inp-inv-nombre').focus(), 150);
+}
+function cerrarModalInvitar() { document.getElementById('modal-invitar').classList.add('hidden'); }
+
+async function crearMiLink() {
+  const nombre = document.getElementById('inp-inv-nombre').value.trim();
+  if (!nombre) { document.getElementById('inp-inv-nombre').focus(); return; }
+  const origen = document.getElementById('inp-inv-origen').value.trim();
+  const r = await fetch('/api/chat/invitado/invitar', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({token_invitado: TOKEN, nombre, origen})
+  }).then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    miLinkGenerado = r.link;
+    document.getElementById('mi-link-texto').textContent = r.link;
+    document.getElementById('mi-link-generado').classList.remove('hidden');
+    document.getElementById('btns-invitar').classList.add('hidden');
+  } else { alert('Error: ' + (r?.error || 'desconocido')); }
+}
+
+function copiarMiLink() {
+  if (!miLinkGenerado) return;
+  navigator.clipboard.writeText(miLinkGenerado).then(() => {
+    const btn = document.querySelector('#modal-invitar button.bg-green-600');
+    if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = '📋 Copiar link', 2000); }
+  });
+}
+
+// STT
+function toggleSTT() {
+  if (!STT) { alert('Tu navegador no soporta dictado de voz. Prueba Chrome o Edge.'); return; }
+  const btn = document.getElementById('btn-stt');
+  if (!sttActivo) {
+    reconocedor = new STT();
+    reconocedor.lang = 'es-CO'; reconocedor.continuous = true; reconocedor.interimResults = false;
+    reconocedor.onresult = e => {
+      const txt = e.results[e.results.length-1][0].transcript;
+      const el = document.getElementById('txt-msg');
+      el.value += (el.value ? ' ' : '') + txt; autoResize(el);
+    };
+    reconocedor.onerror = () => desactivarSTT();
+    reconocedor.onend = () => { if (sttActivo) reconocedor.start(); };
+    reconocedor.start(); sttActivo = true;
+    btn.classList.add('text-emerald-400','bg-gray-800','rounded-full'); btn.classList.remove('text-gray-600');
+    btn.innerHTML = `<svg class="w-3.5 h-3.5 mr-1 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#10b981" opacity=".3"/><circle cx="12" cy="12" r="5" fill="#10b981"/></svg>Dictando... (toca para parar)`;
+  } else { desactivarSTT(); }
+}
+
+function desactivarSTT() {
+  if (reconocedor) reconocedor.stop(); sttActivo = false;
+  const btn = document.getElementById('btn-stt');
+  btn.classList.remove('text-emerald-400','bg-gray-800');
+  btn.classList.add('text-gray-600');
+  btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Dictado de voz`;
+}
+</script>
+</body>
+</html>

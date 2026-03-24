@@ -40860,6 +40860,7 @@ def api_vendedor_envio_eliminar(envio_id):
     try:
         conn = get_db_connection()
         conn.execute("DELETE FROM plantillas_crm_envios WHERE id = %s", (envio_id,))
+        conn.commit()
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:

@@ -19266,6 +19266,32 @@ def chat_invitado(token):
     return render_template('chat_invitado.html', token=token, nombre_creador=nombre_creador)
 
 
+@app.route('/api/chat/eliminar/<token>', methods=['DELETE'])
+def api_chat_eliminar(token):
+    """Eliminar conversación completa — mensajes, tercero invitado y conversación"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        conv = conn.execute(
+            'SELECT * FROM conversaciones WHERE token = %s AND creador_id = %s',
+            (token, session['usuario_id'])
+        ).fetchone()
+        if not conv:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+
+        conn.execute('DELETE FROM mensajes WHERE conversacion_id = %s', (conv['id'],))
+        conn.execute('DELETE FROM conversaciones WHERE id = %s', (conv['id'],))
+        conn.execute('DELETE FROM terceros WHERE id = %s AND tipo_tercero = %s',
+                     (conv['invitado_id'], 'invitado'))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # -------------------------------------------------------------------
 # --- ENDPOINTS DE GESTIÓN DE PASTILLEROS ---
 # -------------------------------------------------------------------

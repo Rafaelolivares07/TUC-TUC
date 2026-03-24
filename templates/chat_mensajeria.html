@@ -152,6 +152,12 @@ function abrirConv(token, nombre) {
         </svg>
         Compartir
       </button>
+      <button onclick="eliminarConv('${token}')"
+              class="w-8 h-8 rounded-full bg-gray-800 hover:bg-red-900 text-gray-500 hover:text-red-400 flex items-center justify-center transition flex-shrink-0" title="Eliminar conversación">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+      </button>
     </div>
     <div id="mensajes-container" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
     <div class="p-3 border-t border-gray-800 bg-gray-900 flex-shrink-0">
@@ -334,6 +340,24 @@ function copiarLink() {
     const btn = event.target.closest('button');
     if (btn) { btn.textContent = '✓ Copiado!'; setTimeout(() => btn.textContent = '📋 Copiar link', 1500); }
   });
+}
+
+function eliminarConv(token) {
+  if (!confirm('¿Eliminar esta conversación y todos sus mensajes?')) return;
+  fetch(`/api/chat/eliminar/${token}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) { alert('Error: ' + d.error); return; }
+      // Volver al sidebar y recargar lista
+      volverSidebar();
+      tokenActivo = null;
+      document.getElementById('panel-chat').innerHTML = `
+        <div class="flex-1 flex items-center justify-center text-gray-600">
+          <div class="text-center"><div class="text-5xl mb-3">💬</div>
+          <p class="text-lg">Selecciona una conversación</p></div>
+        </div>`;
+      cargarConversaciones();
+    });
 }
 
 function restoreIconMic() {

@@ -19014,6 +19014,34 @@ def api_chat_migrar_mensajeria():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/chat/fix-tipo-audio', methods=['POST'])
+def api_chat_fix_tipo_audio():
+    """Elimina el check constraint de tipo en mensajes para permitir 'audio'"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        # Obtener todos los check constraints de la tabla mensajes
+        constraints = conn.execute("""
+            SELECT constraint_name FROM information_schema.table_constraints
+            WHERE table_name = 'mensajes' AND constraint_type = 'CHECK'
+        """).fetchall()
+        dropped = []
+        for c in constraints:
+            nombre = c['constraint_name']
+            try:
+                conn.execute(f'ALTER TABLE mensajes DROP CONSTRAINT IF EXISTS "{nombre}"')
+                dropped.append(nombre)
+            except Exception as e:
+                conn.rollback()
+                dropped.append(f'SKIP {nombre}: {e}')
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'dropped': dropped})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/chat/invitar', methods=['POST'])
 def api_chat_invitar():
     """Rafael crea un contacto invitado y obtiene el link de conversación"""

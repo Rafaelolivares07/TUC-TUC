@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asesoría Laboral — Leticia Oviedo — 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&family=Open+Sans:wght@300;400;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Open Sans', Arial, sans-serif;
+    font-size: 11pt;
+    color: #2c2c2c;
+    background: #f4f4f4;
+    line-height: 1.6;
+  }
+
+  .page {
+    background: white;
+    max-width: 820px;
+    margin: 30px auto;
+    padding: 60px 70px 50px 70px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  }
+
+  /* ENCABEZADO */
+  .header {
+    border-bottom: 3px solid #1a3a5c;
+    padding-bottom: 18px;
+    margin-bottom: 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .header-left h1 {
+    font-family: 'Merriweather', serif;
+    font-size: 16pt;
+    color: #1a3a5c;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .header-left p {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 3px;
+  }
+  .header-right {
+    text-align: right;
+    font-size: 9pt;
+    color: #888;
+  }
+  .header-right .fecha {
+    font-size: 10pt;
+    color: #1a3a5c;
+    font-weight: 600;
+  }
+
+  /* DESTINATARIO */
+  .destinatario {
+    background: #f8f9fb;
+    border-left: 4px solid #1a3a5c;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    border-radius: 0 6px 6px 0;
+  }
+  .destinatario p { font-size: 10.5pt; }
+  .destinatario strong { color: #1a3a5c; }
+
+  /* SOLICITUD ORIGINAL */
+  .solicitud-box {
+    background: #fffbf0;
+    border: 1px solid #e8d88a;
+    border-left: 4px solid #c9a227;
+    border-radius: 0 6px 6px 0;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 10pt;
+    font-style: italic;
+    color: #5a4a1a;
+  }
+  .solicitud-box .label {
+    font-style: normal;
+    font-weight: 700;
+    font-size: 8.5pt;
+    color: #c9a227;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  /* RESPUESTA DIRECTA */
+  .respuesta-directa {
+    background: #eef4ee;
+    border: 1px solid #a8cca8;
+    border-left: 4px solid #2e7d32;
+    border-radius: 0 6px 6px 0;
+    padding: 18px 20px;
+    margin-bottom: 32px;
+    font-size: 11pt;
+    line-height: 1.7;
+  }
+  .respuesta-directa .label {
+    font-weight: 700;
+    font-size: 8.5pt;
+    color: #2e7d32;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  /* SECCIONES */
+  .section {
+    margin-bottom: 30px;
+  }
+  .section-title {
+    font-family: 'Merriweather', serif;
+    font-size: 12pt;
+    color: #1a3a5c;
+    font-weight: 700;
+    border-bottom: 2px solid #e0e8f0;
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+    letter-spacing: 0.3px;
+  }
+  .section-subtitle {
+    font-size: 10.5pt;
+    font-weight: 700;
+    color: #2c4a6e;
+    margin: 16px 0 8px 0;
+    border-left: 3px solid #4a90c4;
+    padding-left: 10px;
+  }
+
+  p { margin-bottom: 10px; }
+
+  /* FORMULA */
+  .formula {
+    background: #f0f4f8;
+    border: 1px solid #c5d8ea;
+    border-radius: 6px;
+    padding: 12px 18px;
+    margin: 12px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 10.5pt;
+    color: #1a3a5c;
+    text-align: center;
+  }
+  .formula strong { font-size: 12pt; }
+
+  /* TABLAS */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 9.5pt;
+  }
+  thead tr {
+    background: #1a3a5c;
+    color: white;
+  }
+  thead th {
+    padding: 9px 11px;
+    text-align: center;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  thead th:first-child { text-align: left; }
+  tbody tr:nth-child(even) { background: #f5f8fb; }
+  tbody tr:hover { background: #eaf0f6; }
+  tbody td {
+    padding: 8px 11px;
+    border-bottom: 1px solid #e8edf2;
+    text-align: right;
+  }
+  tbody td:first-child { text-align: left; font-weight: 600; color: #1a3a5c; }
+  tfoot tr { background: #e8f0f8; font-weight: 700; }
+  tfoot td {
+    padding: 9px 11px;
+    border-top: 2px solid #1a3a5c;
+    text-align: right;
+    color: #1a3a5c;
+  }
+  tfoot td:first-child { text-align: left; }
+  .row-separator td {
+    background: #dde8f0 !important;
+    font-style: italic;
+    color: #888;
+    font-size: 8pt;
+    text-align: center !important;
+    padding: 3px;
+  }
+  .highlight-row td {
+    background: #fff3cd !important;
+    font-weight: 700;
+    color: #7d4a00;
+  }
+  .descuento-row td { color: #c0392b; }
+  .neto-row td { background: #e8f5e9 !important; font-weight: 700; color: #1b5e20; }
+
+  /* ADVERTENCIA */
+  .advertencia {
+    background: #fff5f5;
+    border: 1px solid #f5c6cb;
+    border-left: 5px solid #c0392b;
+    border-radius: 0 6px 6px 0;
+    padding: 16px 20px;
+    margin: 14px 0;
+  }
+  .advertencia .adv-title {
+    font-weight: 700;
+    color: #c0392b;
+    font-size: 10.5pt;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .advertencia ul { padding-left: 18px; }
+  .advertencia li { margin-bottom: 7px; font-size: 10pt; line-height: 1.6; }
+
+  /* SUGERENCIAS */
+  .sugerencias {
+    background: #f8f9fb;
+    border: 1px solid #c5d8ea;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-top: 20px;
+  }
+  .sugerencias ol { padding-left: 20px; }
+  .sugerencias li { margin-bottom: 10px; font-size: 10.5pt; line-height: 1.6; }
+
+  /* FIRMA */
+  .firma-section {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .firma-box {
+    text-align: center;
+    min-width: 240px;
+  }
+  .firma-linea {
+    border-top: 2px solid #1a3a5c;
+    margin-bottom: 8px;
+    width: 200px;
+    margin: 0 auto 8px auto;
+  }
+  .firma-nombre {
+    font-family: 'Merriweather', serif;
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1a3a5c;
+    letter-spacing: 0.5px;
+  }
+  .firma-cargo {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 3px;
+  }
+  .firma-nota {
+    font-size: 8pt;
+    color: #999;
+    margin-top: 12px;
+    font-style: italic;
+    text-align: center;
+    border-top: 1px solid #eee;
+    padding-top: 12px;
+  }
+
+  /* MARCO LEGAL TABLE */
+  .legal-table td:first-child {
+    font-weight: 600;
+    color: #1a3a5c;
+    width: 38%;
+    white-space: nowrap;
+  }
+  .legal-table td:last-child {
+    text-align: left;
+    font-weight: normal;
+    color: #2c2c2c;
+  }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .page { box-shadow: none; margin: 0; padding: 40px 50px; max-width: 100%; }
+    thead tr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .advertencia, .solicitud-box, .respuesta-directa, .sugerencias,
+    .destiantario, .formula { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ENCABEZADO -->
+  <div class="header">
+    <div class="header-left">
+      <h1>RAFAEL OLIVARES GIRALDO</h1>
+      <p>Contador Público &nbsp;·&nbsp; Asesor Laboral y Tributario</p>
+      <p style="margin-top:3px; font-size:9pt; color:#555;">Cel. / WhatsApp: +57 317 571 8658</p>
+    </div>
+    <div class="header-right">
+      <div class="fecha">Cali, 24 de marzo de 2026</div>
+      <div style="margin-top:4px;">Ref.: Asesoría Laboral No. 2026-001</div>
+    </div>
+  </div>
+
+  <!-- DESTINATARIO -->
+  <div class="destinatario">
+    <p><strong>Para:</strong> Señora Leticia Oviedo</p>
+    <p><strong>Asunto:</strong> Contratación legal de empleada doméstica — jornada parcial (2 días/semana)</p>
+    <p><strong>Carácter:</strong> Asesoría profesional con afecto</p>
+  </div>
+
+  <!-- SOLICITUD ORIGINAL -->
+  <div class="solicitud-box">
+    <div class="label">Su consulta</div>
+    "Buenos días, Rafael. ¿Cómo amaneces? Quiero preguntarte si tú me podrías asesorar sobre la forma correcta de contratar a una empleada del servicio doméstico que viene a mi casa dos veces por semana, y el pago legal por esa labor. Y, si me puedes asesorar, ¿de cuánto son tus honorarios?"
+  </div>
+
+  <!-- RESPUESTA DIRECTA -->
+  <div class="respuesta-directa">
+    <div class="label">Respuesta directa</div>
+    <p>Leticia, con mucho gusto te asesoro. Mis honorarios por esta consulta son <strong>$70.000</strong>.</p>
+    <p>La respuesta corta es esta: <strong>sí existe una obligación legal, incluso sin contrato escrito</strong>, y el valor a pagar depende de un único dato: <strong>cuántas horas al día va a trabajar tu empleada</strong>. Todo lo demás se calcula sobre esa base. A continuación te explico todo con los valores vigentes para 2026 y el respaldo legal de cada cifra.</p>
+  </div>
+
+  <!-- SECCIÓN I: MARCO LEGAL -->
+  <div class="section">
+    <div class="section-title">I. Marco Legal Aplicable</div>
+    <p>La relación laboral con una empleada doméstica está plenamente regulada en Colombia. Estas son las normas que aplican a tu caso:</p>
+    <table class="legal-table">
+      <thead>
+        <tr><th>Norma</th><th>Qué establece</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CST Arts. 23 y 37–38</td><td>El contrato verbal tiene exactamente la misma validez que uno escrito. Desde el primer día que tu empleada trabaje, existe un contrato de trabajo a término indefinido con todos los derechos.</td></tr>
+        <tr><td>Ley 1788 de 2016</td><td>Igualó al trabajador doméstico al régimen general — tiene derecho a prima, cesantías, vacaciones e intereses, exactamente igual que cualquier empleado de empresa.</td></tr>
+        <tr><td>Decreto 721 de 2013</td><td>Obliga a afiliar al empleado doméstico al sistema de seguridad social (salud, pensión y ARL) desde el primer día de trabajo.</td></tr>
+        <tr><td>Decreto 1469 de 2025</td><td>Fijó el Salario Mínimo Legal Mensual Vigente 2026 en <strong>$1.750.905</strong> y el Auxilio de Transporte en <strong>$249.095</strong>.</td></tr>
+        <tr><td>Ley 2101 de 2021</td><td>Redujo la jornada máxima legal a <strong>42 horas semanales</strong>, vigente desde el 15 de julio de 2025. Este es el parámetro que hoy rige todos los cálculos.</td></tr>
+        <tr><td>Ley 100 de 1993 Art. 204</td><td>El trabajador está <em>obligado por ley</em> a cubrir su parte de seguridad social (8% del salario). No es opcional ni puede ser absorbida por el empleador como favor.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECCIÓN II: VALOR HORA -->
+  <div class="section">
+    <div class="section-title">II. La Unidad Base: El Valor de la Hora</div>
+    <p>Dado que tu empleada trabaja por días (jornada parcial), la unidad correcta de cálculo no es el día calendario ni el mes, sino <strong>la hora trabajada</strong>. La razón es sencilla: el salario mínimo está establecido para quien trabaja el máximo legal de horas, que hoy es 42 horas/semana.</p>
+
+    <div class="formula">
+      Valor hora = SMLMV ÷ (42 horas/semana × 4.3 semanas/mes)<br>
+      <strong>$1.750.905 ÷ 180.6 = $9.695 por hora</strong>
+    </div>
+
+    <p>Este valor de <strong>$9.695/hora</strong> aplica a cualquier trabajador colombiano bajo jornada ordinaria — no es un régimen especial del servicio doméstico. Es el piso legal. Nadie puede pagar menos que esto por hora ordinaria.</p>
+    <p>El salario diario de tu empleada será entonces: <strong>$9.695 × las horas que acuerden por día</strong>. La ley permite hasta <strong>9 horas por día</strong> como jornada ordinaria; si se excede ese límite, las horas adicionales son extras con recargo mínimo del 25%.</p>
+  </div>
+
+  <!-- SECCIÓN III: AUXILIO DE TRANSPORTE -->
+  <div class="section">
+    <div class="section-title">III. Auxilio de Transporte Proporcional</div>
+    <p>El auxilio de transporte ($249.095/mes) fue diseñado para el trabajador de tiempo completo. Para tu empleada, que trabaja jornada parcial, se calcula proporcionalmente por día trabajado, usando como referencia los días que le correspondería trabajar al mes si llevara esa jornada a tiempo completo:</p>
+
+    <div class="formula">
+      Días/mes referencia = (42 ÷ horas por día) × 4.3<br>
+      Auxilio por día = $249.095 ÷ días/mes referencia
+    </div>
+
+    <p>Importante: el auxilio de transporte <strong>no entra en la base</strong> para calcular prestaciones sociales ni seguridad social (Art. 128 CST). Es un beneficio adicional al salario.</p>
+    <p>Aplica únicamente si la empleada <strong>no vive en tu casa</strong> y si su salario no supera 2 SMLMV (lo cual no ocurre en ninguno de estos escenarios).</p>
+  </div>
+
+  <!-- SECCIÓN IV: CUADRO BASE -->
+  <div class="section">
+    <div class="section-title">IV. Cuadro Base — Salario y Auxilio según Horas Pactadas</div>
+    <p>Tu empleada irá <strong>2 días por semana</strong>, lo que equivale a <strong>8.6 días al mes</strong> (2 × 4.3 semanas). Según las horas que acuerden por día:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Horas/día</th>
+          <th>Salario/día</th>
+          <th>Aux. transp./día</th>
+          <th>Total devengado/día</th>
+          <th>Salario/mes (8.6d)</th>
+          <th>Aux. transp./mes</th>
+          <th>Total devengado/mes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>6 horas</td>
+          <td>$58.170</td><td>$8.275</td><td>$66.445</td>
+          <td>$500.262</td><td>$71.165</td><td>$571.427</td>
+        </tr>
+        <tr>
+          <td>7 horas</td>
+          <td>$67.865</td><td>$9.655</td><td>$77.520</td>
+          <td>$583.639</td><td>$83.033</td><td>$666.672</td>
+        </tr>
+        <tr class="highlight-row">
+          <td>8 horas ★</td>
+          <td>$77.560</td><td>$11.034</td><td>$88.594</td>
+          <td>$667.016</td><td>$94.892</td><td>$761.908</td>
+        </tr>
+        <tr>
+          <td>9 horas (máx.)</td>
+          <td>$87.255</td><td>$12.413</td><td>$99.668</td>
+          <td>$750.393</td><td>$106.752</td><td>$857.145</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:9pt; color:#666; margin-top:6px;">★ Se usa 8 horas como ejemplo en los cálculos siguientes. Los valores aplican proporcionalmente para cualquier opción.</p>
+    <p><em>Estos valores son solo el devengado (lo que la empleada gana). Falta agregar las prestaciones y la seguridad social a cargo del empleador, que se detallan a continuación.</em></p>
+  </div>
+
+  <!-- SECCIÓN V: PRESTACIONES -->
+  <div class="section">
+    <div class="section-title">V. Prestaciones Sociales</div>
+    <p>Por ley (Ley 1788/2016), tu empleada tiene derecho a todas las prestaciones del régimen general. Se calculan <strong>sobre el salario devengado</strong> (sin incluir el auxilio de transporte):</p>
+
+    <table>
+      <thead>
+        <tr><th>Prestación</th><th>%</th><th>Base legal</th><th>Cuándo se paga</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Prima de servicios</td><td style="text-align:center">8.33%</td><td style="text-align:left">Art. 306 CST</td><td style="text-align:left">Junio 30 y Dic. 20</td></tr>
+        <tr><td>Cesantías</td><td style="text-align:center">8.33%</td><td style="text-align:left">Art. 249 CST</td><td style="text-align:left">Feb. 14 (al fondo)</td></tr>
+        <tr><td>Intereses sobre cesantías</td><td style="text-align:center">1.00%</td><td style="text-align:left">Art. 99 Ley 50/1990</td><td style="text-align:left">Enero 31</td></tr>
+        <tr><td>Vacaciones</td><td style="text-align:center">4.17%</td><td style="text-align:left">Art. 186 CST</td><td style="text-align:left">15 días hábiles/año</td></tr>
+      </tbody>
+      <tfoot>
+        <tr><td>Total prestaciones</td><td style="text-align:center">21.83%</td><td colspan="2" style="text-align:left">Sobre el salario devengado</td></tr>
+      </tfoot>
+    </table>
+    <p>Aunque algunas prestaciones se pagan semestralmente o al año, es una buena práctica hacer la provisión mensual — es decir, reservar ese porcentaje cada mes para no llegar a las fechas sin el dinero disponible.</p>
+  </div>
+
+  <!-- SECCIÓN VI: SEGURIDAD SOCIAL -->
+  <div class="section">
+    <div class="section-title">VI. Seguridad Social</div>
+    <p>La afiliación es obligatoria desde el primer día (Decreto 721/2013). Los aportes los hace <strong>el empleador a través de la PILA</strong> (Planilla Integrada de Liquidación de Aportes), pero cada parte paga lo que le corresponde:</p>
+
+    <div class="section-subtitle">Lo que paga el empleador (encima del salario):</div>
+    <table>
+      <thead><tr><th>Concepto</th><th>%</th><th>Valor/mes (base $667.016)</th></tr></thead>
+      <tbody>
+        <tr><td>Salud — aporte empleador</td><td style="text-align:center">8.50%</td><td>$56.696</td></tr>
+        <tr><td>Pensión — aporte empleador</td><td style="text-align:center">12.00%</td><td>$80.042</td></tr>
+        <tr><td>ARL — Clase I (riesgo mínimo)</td><td style="text-align:center">0.522%</td><td>$3.482</td></tr>
+      </tbody>
+      <tfoot><tr><td>Total a cargo del empleador</td><td style="text-align:center">21.022%</td><td>$140.220</td></tr></tfoot>
+    </table>
+
+    <div class="section-subtitle">Lo que paga el trabajador (obligatorio por ley — se descuenta de su salario):</div>
+    <table>
+      <thead><tr><th>Concepto</th><th>%</th><th>Valor/mes (base $667.016)</th></tr></thead>
+      <tbody>
+        <tr><td>Salud — aporte trabajador</td><td style="text-align:center">4.00%</td><td>$26.681</td></tr>
+        <tr><td>Pensión — aporte trabajador</td><td style="text-align:center">4.00%</td><td>$26.681</td></tr>
+      </tbody>
+      <tfoot><tr><td>Total a cargo del trabajador</td><td style="text-align:center">8.00%</td><td>$53.361</td></tr></tfoot>
+    </table>
+    <p>El empleador recauda el 8% del trabajador descontándolo del salario y lo incluye en la planilla junto con su propio aporte. <strong>No es una opción: es una obligación del trabajador establecida en el Art. 204 de la Ley 100/1993.</strong></p>
+  </div>
+
+  <!-- SECCIÓN VII: LIQUIDACIÓN COMPLETA -->
+  <div class="section">
+    <div class="section-title">VII. Liquidación Completa — Ejemplo 8 Horas/Día</div>
+    <p>Para que tengas la imagen completa, aquí está el desglose de todos los conceptos, tanto por día como por mes:</p>
+
+    <div class="section-subtitle">A) Por día trabajado — 8 horas</div>
+    <table>
+      <thead><tr><th>Concepto</th><th>Cálculo</th><th>Valor/día</th></tr></thead>
+      <tbody>
+        <tr><td>Salario ordinario</td><td style="text-align:left">8h × $9.695</td><td>$77.560</td></tr>
+        <tr><td>Auxilio de transporte</td><td style="text-align:left">$249.095 ÷ 22.575 días</td><td>$11.034</td></tr>
+        <tr class="row-separator"><td colspan="3">— prestaciones proporcionales al día —</td></tr>
+        <tr><td>Prima de servicios (8.33%)</td><td style="text-align:left">$77.560 × 8.33%</td><td>$6.461</td></tr>
+        <tr><td>Cesantías (8.33%)</td><td style="text-align:left">$77.560 × 8.33%</td><td>$6.461</td></tr>
+        <tr><td>Intereses s/cesantías (1%)</td><td style="text-align:left">$77.560 × 1%</td><td>$776</td></tr>
+        <tr><td>Vacaciones (4.17%)</td><td style="text-align:left">$77.560 × 4.17%</td><td>$3.234</td></tr>
+        <tr class="row-separator"><td colspan="3">— seguridad social empleador —</td></tr>
+        <tr><td>Salud empleador (8.5%)</td><td style="text-align:left">$77.560 × 8.5%</td><td>$6.593</td></tr>
+        <tr><td>Pensión empleador (12%)</td><td style="text-align:left">$77.560 × 12%</td><td>$9.307</td></tr>
+        <tr><td>ARL clase I (0.522%)</td><td style="text-align:left">$77.560 × 0.522%</td><td>$405</td></tr>
+      </tbody>
+      <tfoot>
+        <tr><td>COSTO TOTAL EMPLEADOR / DÍA</td><td></td><td>$121.831</td></tr>
+      </tfoot>
+    </table>
+    <table style="margin-top:6px;">
+      <tbody>
+        <tr class="descuento-row"><td>Descuento SS trabajador (−8%)</td><td style="text-align:left; color:#c0392b;">$77.560 × 8%</td><td style="color:#c0392b;">−$6.205</td></tr>
+        <tr class="neto-row"><td>Salario neto recibido por la empleada / día</td><td style="text-align:left; color:#1b5e20;"></td><td style="color:#1b5e20;">$82.389</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-subtitle">B) Por mes — 8.6 días (2 días/semana)</div>
+    <table>
+      <thead><tr><th>Concepto</th><th>Valor/mes</th><th>Quién lo paga</th></tr></thead>
+      <tbody>
+        <tr><td>Salario</td><td>$667.016</td><td style="text-align:left">Empleador</td></tr>
+        <tr><td>Auxilio de transporte</td><td>$94.892</td><td style="text-align:left">Empleador</td></tr>
+        <tr><td>Prestaciones sociales (21.83%)</td><td>$145.615</td><td style="text-align:left">Empleador</td></tr>
+        <tr><td>Seguridad social empleador (21.022%)</td><td>$140.220</td><td style="text-align:left">Empleador</td></tr>
+      </tbody>
+      <tfoot>
+        <tr><td>COSTO TOTAL PARA EL EMPLEADOR / MES</td><td>$1.047.743</td><td style="text-align:left"></td></tr>
+      </tfoot>
+    </table>
+    <table style="margin-top:6px;">
+      <tbody>
+        <tr class="descuento-row"><td>Descuento SS trabajador (−8% del salario)</td><td style="color:#c0392b;">−$53.361</td><td style="text-align:left; color:#c0392b;">Obligación trabajador</td></tr>
+        <tr class="neto-row"><td>SALARIO NETO QUE RECIBE LA EMPLEADA / MES</td><td style="color:#1b5e20;">$708.547</td><td style="text-align:left; color:#1b5e20;"></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECCIÓN VIII: TODOS LOS ESCENARIOS -->
+  <div class="section">
+    <div class="section-title">VIII. Costo Total Empleador — Todos los Escenarios</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Horas/día</th>
+          <th>Salario/mes</th>
+          <th>Aux. transp.</th>
+          <th>Prestaciones</th>
+          <th>SS empleador</th>
+          <th>Costo total/mes</th>
+          <th>Neto empleada</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>6 horas</td><td>$500.262</td><td>$71.165</td><td>$109.207</td><td>$105.105</td><td>$785.739</td><td>$534.280</td></tr>
+        <tr><td>7 horas</td><td>$583.639</td><td>$83.033</td><td>$127.408</td><td>$122.623</td><td>$916.703</td><td>$623.327</td></tr>
+        <tr class="highlight-row"><td>8 horas ★</td><td>$667.016</td><td>$94.892</td><td>$145.615</td><td>$140.220</td><td>$1.047.743</td><td>$708.547</td></tr>
+        <tr><td>9 horas (máx.)</td><td>$750.393</td><td>$106.752</td><td>$163.811</td><td>$157.758</td><td>$1.178.714</td><td>$793.612</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECCIÓN IX: ADVERTENCIA PAGO POR DÍA -->
+  <div class="section">
+    <div class="section-title">IX. Sobre el Pago por Día Sin Afiliación</div>
+    <p>Es común que en el servicio doméstico se hable de un "valor por día todo incluido" sin hacer la afiliación formal. Aunque en la práctica ocurre con frecuencia, es importante que entiendas los riesgos:</p>
+
+    <div class="advertencia">
+      <div class="adv-title">Advertencia Legal — Esta práctica no cubre los riesgos inherentes a la relación laboral</div>
+      <ul>
+        <li><strong>Sin ARL no hay cobertura por accidente laboral.</strong> Si tu empleada sufre una caída, un corte, o cualquier accidente dentro de tu casa mientras trabaja, tú como empleadora respondes de forma directa y sin límite por los gastos médicos y la incapacidad.</li>
+        <li><strong>Sin afiliación a salud, una incapacidad queda sin respaldo.</strong> El empleador puede ser declarado responsable solidario de las prestaciones médicas no cubiertas.</li>
+        <li><strong>La falta de aportes a pensión genera deuda acumulada.</strong> En cualquier momento — incluso años después — la empleada puede reclamar retroactivamente todos los aportes no realizados, más intereses y sanciones legales.</li>
+        <li><strong>El contrato existe igual aunque no haya afiliación.</strong> No hacer los aportes no "deshace" la relación laboral — solo genera una deuda creciente con el sistema.</li>
+      </ul>
+    </div>
+    <p>Dicho lo anterior, si en algún momento acordáis un valor único por día, ese valor debe cubrir <em>al menos</em> el salario + auxilio de transporte. Las prestaciones y la seguridad social siguen siendo obligaciones legales que no desaparecen por no pagarse en el momento.</p>
+  </div>
+
+  <!-- SECCIÓN X: SUGERENCIAS LEGALES -->
+  <div class="section">
+    <div class="section-title">X. Sugerencias para Proceder Correctamente</div>
+    <div class="sugerencias">
+      <ol>
+        <li><strong>Define las horas por día</strong> antes de comenzar la relación laboral. Acuerda claramente el horario de entrada y salida, y ponlo por escrito aunque la ley no lo exija — es una buena práctica y evita malentendidos futuros.</li>
+        <li><strong>Afíliate a la PILA desde el primer mes.</strong> El ingreso a la planilla se hace en el portal de la PILA (Mi Planilla, Aportes en Línea u otro operador) con el número de cédula de la empleada. Como empleadora de persona natural con menos de un empleado, tienes opciones simplificadas.</li>
+        <li><strong>Reserva mensualmente el valor de las prestaciones</strong> (21.83% del salario) en una cuenta aparte. Así, cuando llegue junio o diciembre, tendrás el dinero disponible para la prima y las cesantías.</li>
+        <li><strong>Guarda un registro de asistencia.</strong> Una hoja sencilla firmada por ambas (o incluso mensajes de WhatsApp) sirve como soporte en caso de cualquier reclamación futura.</li>
+        <li><strong>No pactes un valor "todo incluido" que esté por debajo del mínimo legal.</strong> El salario mínimo proporcional no puede negociarse a la baja — es un piso, no un punto de partida.</li>
+        <li><strong>Si terminas el contrato</strong>, liquida primas, cesantías, vacaciones e intereses proporcionales a los días trabajados en el período. Hazlo por escrito y conserva la firma de recibido.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- CIERRE -->
+  <div class="section" style="margin-top:20px;">
+    <p>Espero que esta asesoría te sea de utilidad, Leticia. Si tienes dudas adicionales sobre algún punto, con mucho gusto las aclaramos. Lo importante es que tanto tú como tu empleada estén protegidas desde el primer día.</p>
+    <p style="color:#666; font-size:10pt;">Un abrazo,</p>
+  </div>
+
+  <!-- FIRMA -->
+  <div class="firma-section">
+    <div class="firma-box">
+      <div style="height:40px;"></div>
+      <div class="firma-linea"></div>
+      <div class="firma-nombre">RAFAEL OLIVARES GIRALDO</div>
+      <div class="firma-cargo">Contador Público</div>
+      <div class="firma-cargo" style="margin-top:2px; color:#888;">Asesor Laboral y Tributario</div>
+      <div class="firma-cargo" style="margin-top:4px; color:#4a90c4;">+57 317 571 8658</div>
+    </div>
+  </div>
+
+  <!-- NOTA AL PIE -->
+  <div class="firma-nota">
+    Asesoría elaborada con base en la normativa laboral colombiana vigente a marzo de 2026. Los valores corresponden al SMLMV y auxilio de transporte fijados por el Decreto 1469 del 29 de diciembre de 2025. Este documento tiene carácter informativo y no reemplaza la revisión de un caso particular ante una situación específica de conflicto laboral.
+  </div>
+
+</div>
+</body>
+</html>

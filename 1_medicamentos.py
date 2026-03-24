@@ -40844,7 +40844,7 @@ def api_vendedor_envios_general():
                 FROM plantillas_crm_envios e
                 JOIN contactos c ON c.id = e.contacto_id
                 LEFT JOIN plantillas_crm p ON p.id = e.plantilla_id
-                WHERE e.vendedor_id = %s AND e.negocio_id = %s
+                WHERE e.vendedor_id = %s AND (e.negocio_id = %s OR e.negocio_id IS NULL)
                 ORDER BY e.created_at DESC
                 LIMIT 100
             """, (vendedor_id, negocio_id)).fetchall()

@@ -1,5 +1,5 @@
 # CRM Vendedor — Documento de Desarrollo
-**Última actualización: 2026-03-23 (rev. multi-negocio + historial real + edición plantillas)**
+**Última actualización: 2026-03-23 (rev. cerrar sesión + fix selector multi-negocio + tiendas.tercero_id)**
 
 ---
 
@@ -66,14 +66,26 @@ Las plantillas en `plantillas_crm` son herramientas genéricas de comunicación.
 
 ### 2.4 Multi-negocio — implementado (2026-03-23)
 
-Tabla `vendedor_negocios(vendedor_id, negocio_id, activo)` — relación N:N entre vendedores y negocios.
+Dos tablas cubren los negocios de un vendedor:
+- `vendedor_negocios(vendedor_id, negocio_id, activo)` — negocios genéricos (terceros directos)
+- `tienda_vendedores(tienda_id, vendedor_id, activo)` — tiendas del módulo tienda
+
+`GET /api/vendedor/mis-negocios?tel=...` consulta ambas y devuelve la lista unificada con `id = terceros.id` del negocio como entidad.
 
 Flujo:
 1. Vendedor se identifica por teléfono
 2. Sistema llama `GET /api/vendedor/mis-negocios?tel=...`
-3. Si no tiene ninguno → auto-crea asociación con TUC TUC y la devuelve
+3. Combina `vendedor_negocios` + `tienda_vendedores`
 4. Si tiene varios → selector dropdown en header del dashboard
-5. El negocio seleccionado (`_negocioActivo.id`) se pasa en citas y envíos
+5. El negocio seleccionado (`_negocioActivo.id`) se pasa en citas y envíos — siempre es `tercero_id`
+
+**Bug conocido / resuelto (2026-03-23)**: `tiendas.tercero_id` se guardaba con el `admin_id` del creador, no con el id del negocio como entidad. El API ahora lo detecta y auto-crea el tercero del negocio si falta, actualizando `tiendas.tercero_id` al vuelo.
+
+IDs conocidos:
+- TUC TUC entidad → `terceros.id = 101` (nombre='TUC TUC', telefono IS NULL)
+- Tang Solar entidad → tercero creado en deploy 2026-03-23
+
+**Deuda técnica pendiente**: al crear una tienda, debería crearse automáticamente su tercero como entidad y asignarse a `tiendas.tercero_id`. Hoy el fix es reactivo (se corrige al primer acceso del vendedor).
 
 ---
 

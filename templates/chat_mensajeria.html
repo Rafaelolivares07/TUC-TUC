@@ -14,7 +14,11 @@
   <!-- Header -->
   <div class="p-4 border-b border-gray-800 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm">R</div>
+      <div id="mi-avatar" onclick="document.getElementById('inp-foto-perfil').click()"
+           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Cambiar foto de perfil">
+        R
+      </div>
+      <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
       <span class="font-semibold">TUC TUC Chat</span>
     </div>
     <button onclick="abrirNuevoInvitado()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full transition font-medium">
@@ -89,6 +93,37 @@ let grabando = false;
 // ---- INIT ----
 cargarConversaciones();
 setInterval(cargarConversaciones, 15000);
+cargarMiPerfil();
+
+async function cargarMiPerfil() {
+  // Obtener foto de perfil del usuario desde terceros
+  const r = await fetch('/api/chat/mis-conversaciones').then(r => r.json()).catch(() => null);
+  // Usamos el endpoint de conversaciones que ya tiene sesión — no necesitamos uno nuevo
+  // La foto la guardamos en localStorage para no hacer fetch extra
+  const fotoGuardada = localStorage.getItem('mi_foto_perfil');
+  if (fotoGuardada) aplicarAvatar(document.getElementById('mi-avatar'), fotoGuardada);
+}
+
+function aplicarAvatar(el, url) {
+  if (!url) return;
+  el.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+}
+
+async function subirFotoPerfil(input) {
+  if (!input.files[0]) return;
+  const el = document.getElementById('mi-avatar');
+  el.innerHTML = '⏳';
+  const form = new FormData();
+  form.append('foto', input.files[0]);
+  const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    localStorage.setItem('mi_foto_perfil', r.url);
+    aplicarAvatar(el, r.url);
+  } else {
+    el.innerHTML = 'R';
+    alert('Error subiendo foto: ' + (r?.error || 'desconocido'));
+  }
+}
 
 function cargarConversaciones() {
   fetch('/api/chat/mis-conversaciones')

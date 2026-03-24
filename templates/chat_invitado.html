@@ -40,7 +40,9 @@
 
 <!-- HEADER -->
 <div id="header" class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3">
-  <div id="avatar-creador" class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base flex-shrink-0">?</div>
+  <div id="avatar-creador" class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base flex-shrink-0 overflow-hidden">
+    {% if foto_creador %}<img src="{{ foto_creador }}" class="w-full h-full object-cover">{% else %}?{% endif %}
+  </div>
   <div class="flex-1 min-w-0">
     <div id="nombre-creador" class="font-semibold text-sm truncate">TUC TUC</div>
     <div class="text-xs text-emerald-400">en línea</div>
@@ -61,8 +63,13 @@
 <div class="flex-shrink-0 bg-gray-900 border-t border-gray-800 px-3 pt-2.5 barra-input">
 
   <!-- Identificador invitado -->
-  <div class="flex items-center gap-1.5 mb-2 px-1">
-    <span class="text-xs text-gray-500">Tu nombre:</span>
+  <div class="flex items-center gap-2 mb-2 px-1">
+    <div id="mi-avatar-inv" onclick="document.getElementById('inp-foto-inv').click()"
+         class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-xs font-bold cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Cambiar mi foto">
+      ?
+    </div>
+    <input id="inp-foto-inv" type="file" accept="image/*" class="hidden" onchange="subirMiFoto(this)">
+    <span class="text-xs text-gray-500">Yo:</span>
     <button id="btn-nombre-inv" onclick="editarNombreInvitado()"
             class="text-xs text-blue-400 hover:text-blue-300 font-medium transition">
       ...
@@ -174,6 +181,10 @@ async function init() {
   const nombreC = convInfo.nombre_creador || 'TUC TUC';
   document.getElementById('nombre-creador').textContent = nombreC;
   document.getElementById('avatar-creador').textContent = nombreC[0].toUpperCase();
+
+  // Foto propia del invitado (localStorage)
+  const fotoGuardada = localStorage.getItem(`foto_inv_${TOKEN}`);
+  if (fotoGuardada) aplicarAvatarInv(fotoGuardada);
 
   // Nombre invitado (localStorage > nombre_invitado de la conv)
   const nombreGuardado = localStorage.getItem(`nombre_inv_${TOKEN}`);
@@ -384,6 +395,29 @@ function guardarNombre() {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({token: TOKEN, mensaje: `[nombre:${nombre}]`, tipo: 'sistema', es_creador: false})
   }).catch(() => {});
+}
+
+// ── Foto de perfil del invitado ─────────────────────────────────────
+function aplicarAvatarInv(url) {
+  const el = document.getElementById('mi-avatar-inv');
+  if (el) el.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+}
+
+async function subirMiFoto(input) {
+  if (!input.files[0]) return;
+  const el = document.getElementById('mi-avatar-inv');
+  el.innerHTML = '⏳';
+  const form = new FormData();
+  form.append('foto', input.files[0]);
+  form.append('token_invitado', TOKEN);
+  const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    localStorage.setItem(`foto_inv_${TOKEN}`, r.url);
+    aplicarAvatarInv(r.url);
+  } else {
+    el.innerHTML = '?';
+    alert('Error: ' + (r?.error || 'desconocido'));
+  }
 }
 
 // ── Utilidades ──────────────────────────────────────────────────────

@@ -19251,19 +19251,60 @@ def chat_panel():
 def chat_invitado(token):
     """Página pública de conversación para el invitado"""
     nombre_creador = 'TUC TUC'
+    foto_creador = ''
     try:
         conn = get_db_connection()
         row = conn.execute('''
-            SELECT t.nombre FROM conversaciones c
+            SELECT t.nombre, t.foto_perfil FROM conversaciones c
             JOIN terceros t ON c.creador_id = t.id
             WHERE c.token = %s
         ''', (token,)).fetchone()
         conn.close()
         if row:
             nombre_creador = row['nombre']
+            foto_creador = row['foto_perfil'] or ''
     except Exception:
         pass
-    return render_template('chat_invitado.html', token=token, nombre_creador=nombre_creador)
+    return render_template('chat_invitado.html', token=token,
+                           nombre_creador=nombre_creador, foto_creador=foto_creador)
+
+
+@app.route('/api/chat/perfil/foto', methods=['POST'])
+def api_chat_perfil_foto():
+    """Subir o actualizar foto de perfil (auth o token de invitado)"""
+    token_inv = request.form.get('token_invitado', '').strip()
+    usuario_id = session.get('usuario_id')
+
+    if not usuario_id and not token_inv:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if 'foto' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió foto'}), 400
+    try:
+        archivo = request.files['foto']
+        result = cloudinary.uploader.upload(
+            archivo,
+            folder='tuctuc_chat_avatars',
+            transformation=[{'width': 400, 'height': 400, 'crop': 'fill', 'gravity': 'face'}]
+        )
+        url = result['secure_url']
+
+        conn = get_db_connection()
+        # Asegurar que la columna existe
+        conn.execute('ALTER TABLE terceros ADD COLUMN IF NOT EXISTS foto_perfil TEXT')
+
+        if usuario_id:
+            conn.execute('UPDATE terceros SET foto_perfil = %s WHERE id = %s', (url, usuario_id))
+        else:
+            # Invitado actualiza su propia foto por token
+            conn.execute(
+                'UPDATE terceros SET foto_perfil = %s WHERE token_chat = %s AND tipo_tercero = %s',
+                (url, token_inv, 'invitado')
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'url': url})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/api/chat/eliminar/<token>', methods=['DELETE'])

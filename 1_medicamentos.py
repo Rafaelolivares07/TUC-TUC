@@ -19134,6 +19134,48 @@ def api_chat_invitado_invitar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/chat/reclamar/<token>', methods=['POST'])
+def api_chat_reclamar(token):
+    """Token de un solo uso — la primera persona que lo abre lo reclama.
+       Los demás ven 'enlace ya usado'."""
+    try:
+        conn = get_db_connection()
+        # Migración inline
+        conn.execute('''
+            ALTER TABLE conversaciones
+            ADD COLUMN IF NOT EXISTS invitacion_usada BOOLEAN DEFAULT FALSE
+        ''')
+        conn.execute('''
+            ALTER TABLE conversaciones
+            ADD COLUMN IF NOT EXISTS invitacion_usada_en TIMESTAMP
+        ''')
+        conn.commit()
+
+        row = conn.execute(
+            'SELECT id, invitacion_usada FROM conversaciones WHERE token = %s',
+            (token,)
+        ).fetchone()
+
+        if not row:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'no_existe'}), 404
+
+        if row['invitacion_usada']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'ya_usado'})
+
+        # Marcar como usado
+        conn.execute(
+            'UPDATE conversaciones SET invitacion_usada = TRUE, invitacion_usada_en = NOW() WHERE id = %s',
+            (row['id'],)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
 def api_chat_invitado_mensajes(token):
     """Obtener mensajes de una conversación por token (sin login)"""

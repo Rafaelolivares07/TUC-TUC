@@ -710,6 +710,27 @@ function eliminarConv(token) {
 // ══════════════════════════════════════════════════════════════════
 
 async function initInvitado() {
+  const yaReclamado = localStorage.getItem(`claimed_${TOKEN}`);
+  if (!yaReclamado) {
+    // Primera vez — reclamar el token de un solo uso
+    const rc = await fetch(`/api/chat/reclamar/${TOKEN}`, {method:'POST'}).then(r => r.json()).catch(() => null);
+    if (!rc || !rc.ok) {
+      const msgEl = document.getElementById('msg-estado');
+      if (rc && rc.error === 'ya_usado') {
+        msgEl.innerHTML = `
+          <div class="text-center px-6">
+            <div class="text-4xl mb-4">🔒</div>
+            <p class="text-white font-semibold mb-2">Este enlace ya fue usado</p>
+            <p class="text-gray-400 text-sm">Pídele a quien te lo envió que genere uno nuevo para ti.</p>
+          </div>`;
+      } else {
+        msgEl.textContent = 'Conversación no encontrada o expirada.';
+      }
+      return;
+    }
+    localStorage.setItem(`claimed_${TOKEN}`, '1');
+  }
+
   const r = await fetch(`/api/chat/invitado/mensajes/${TOKEN}?desde=0`).then(r => r.json()).catch(() => null);
   if (!r || !r.ok) {
     document.getElementById('msg-estado').textContent = 'Conversación no encontrada o expirada.'; return;

@@ -122,8 +122,10 @@ function cargarConversaciones() {
 }
 
 function abrirConv(token, nombre) {
-  // En móvil: ocultar sidebar, mostrar chat
-  document.getElementById('sidebar').classList.add('hidden');
+  // En móvil: ocultar sidebar, mostrar chat. En desktop: ambos visibles.
+  if (window.innerWidth < 768) {
+    document.getElementById('sidebar').classList.add('hidden');
+  }
   document.getElementById('panel-chat').classList.remove('hidden');
   document.getElementById('panel-chat').classList.add('flex');
 

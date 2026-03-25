@@ -739,6 +739,12 @@ function toggleDarkMode() {
     const temp = Math.round(c.temperature_2m);
     const hum = c.relativehumidity_2m;
     document.getElementById('clima-cali').textContent = `${emoji} Cali ${temp}°C · 💧${hum}%`;
+    // Sincronizar temp fresca en BD para que automatizaciones no usen caché
+    fetch('/api/domotica/temperatura', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({temperatura: c.temperature_2m})
+    }).catch(() => {});
   } catch(e) { /* silencioso si falla */ }
 })();
 

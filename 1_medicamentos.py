@@ -1183,6 +1183,28 @@ def enviar_telegram(telefono, mensaje):
 
 
 # -------------------------------------------------------------------
+# --- TEMPERATURA CALI — actualización periódica (APScheduler) ---
+# -------------------------------------------------------------------
+
+def actualizar_temperatura_cali():
+    """Fetch Open-Meteo cada 15 min y guarda en CONFIGURACION_SISTEMA."""
+    try:
+        url = ('https://api.open-meteo.com/v1/forecast'
+               '?latitude=3.4516&longitude=-76.5320'
+               '&current=temperature_2m&timezone=America%2FBogota&forecast_days=1')
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = _json.loads(resp.read())
+            temp = data['current']['temperature_2m']
+        conn = get_db_connection()
+        conn.execute("UPDATE CONFIGURACION_SISTEMA SET ultima_temperatura=%s WHERE id=1", (temp,))
+        conn.commit()
+        conn.close()
+        print(f"[TEMP] Temperatura Cali actualizada: {temp}°C")
+    except Exception as e:
+        print(f"[TEMP] Error actualizando temperatura: {e}")
+
+
+# -------------------------------------------------------------------
 # --- FUNCIN DE RECORDATORIOS AUTOMTICOS (APScheduler) ---
 # -------------------------------------------------------------------
 
@@ -1638,6 +1660,15 @@ scheduler.add_job(
     trigger=IntervalTrigger(minutes=5),
     id='evaluar_reglas',
     name='Domótica: reglas contextuales',
+    replace_existing=True
+)
+
+# Temperatura Cali: actualización cada 15 min (Open-Meteo solo actualiza cada ~15 min)
+scheduler.add_job(
+    func=actualizar_temperatura_cali,
+    trigger=IntervalTrigger(minutes=15),
+    id='actualizar_temperatura',
+    name='Temperatura Cali: fetch Open-Meteo',
     replace_existing=True
 )
 
@@ -38667,21 +38698,7 @@ def api_domotica_reglas_contexto():
         laptop_activa = bool(ls and (ahora - ls).total_seconds() < ventana)
         laptop_hace = int((ahora - ls).total_seconds() / 60) if ls else None
 
-        temperatura = None
-        temp_es_cache = False
-        try:
-            url = ('https://api.open-meteo.com/v1/forecast'
-                   '?latitude=3.4516&longitude=-76.5320'
-                   '&current=temperature_2m&timezone=America%2FBogota&forecast_days=1')
-            with urllib.request.urlopen(url, timeout=8) as resp:
-                data = _json.loads(resp.read())
-                temperatura = data['current']['temperature_2m']
-            conn.execute("UPDATE CONFIGURACION_SISTEMA SET ultima_temperatura=%s WHERE id=1", (temperatura,))
-            conn.commit()
-        except Exception:
-            if config and config['ultima_temperatura'] is not None:
-                temperatura = float(config['ultima_temperatura'])
-                temp_es_cache = True
+        temperatura = float(config['ultima_temperatura']) if config and config['ultima_temperatura'] is not None else None
 
         conn.close()
         return jsonify({
@@ -38691,13 +38708,30 @@ def api_domotica_reglas_contexto():
             'laptop_last_seen': ls.isoformat() if ls else None,
             'laptop_hace_min': laptop_hace,
             'temperatura': temperatura,
-            'temp_es_cache': temp_es_cache,
             'presencia_inactividad_min': int((config['presencia_inactividad_seg'] or 300) / 60) if config else 5,
             'presencia_ventana_min': int((config['presencia_ventana_seg'] or 360) / 60) if config else 6,
         })
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domotica/temperatura', methods=['POST'])
+@admin_required
+def api_domotica_temperatura():
+    """Recibe temperatura fresca del cliente y la persiste en BD."""
+    try:
+        data = request.get_json() or {}
+        temp = data.get('temperatura')
+        if temp is None:
+            return jsonify({'ok': False, 'error': 'falta temperatura'}), 400
+        conn = get_db_connection()
+        conn.execute("UPDATE CONFIGURACION_SISTEMA SET ultima_temperatura=%s WHERE id=1", (float(temp),))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

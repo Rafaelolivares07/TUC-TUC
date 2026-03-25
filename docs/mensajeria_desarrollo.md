@@ -91,6 +91,7 @@ El servidor lee el nombre del creador desde BD y lo inyecta en meta tags:
 | `POST` | `/api/chat/invitado/audio` | Upload audio → Cloudinary, devuelve URL |
 | `GET` | `/api/chat/mis-conversaciones` | Panel Rafael — todas sus convs con no_leidos (auth) |
 | `POST` | `/api/chat/fix-tipo-audio` | Drop check constraints en mensajes.tipo (auth, one-time) |
+| `POST` | `/api/chat/reclamar/<token>` | Marca token como usado en primera visita; devuelve `ya_usado` si ya fue reclamado por otro device |
 | `GET` | `/chat` | Panel Rafael (requiere sesión) |
 | `GET` | `/chat/<token>` | Página pública invitado (sin sesión) |
 
@@ -98,21 +99,31 @@ El servidor lee el nombre del creador desde BD y lo inyecta en meta tags:
 
 ## 5. Templates
 
-### `chat_mensajeria.html` — panel de Rafael
-- Sidebar izquierdo: lista conversaciones con badge no-leídos
-- Panel derecho: chat activo con polling cada 3s
-- `md:!flex` en sidebar — nunca se oculta en desktop (importante override CSS)
-- Botón **Compartir** en header del chat (no modal — flujo correcto: audio primero)
-- `idsRenderizados` Set — evita mensajes duplicados por race condition en polling
-- Audio: MediaRecorder → upload Cloudinary → enviar como mensaje tipo 'audio'
+### `chat.html` — template unificado (desde 2026-03-24)
 
-### `chat_invitado.html` — página pública
-- Mobile-first, full screen con `100dvh` (dynamic viewport height)
-- `env(safe-area-inset-bottom)` para iOS
-- Hook especial: primer audio del creador → card prominente "exclusivo"
-- Nombre editable por el invitado (localStorage)
-- Speech-to-text dictado: Web Speech API, `lang='es-CO'`, continuo
-- Audio recording: MediaRecorder → Cloudinary → mensaje
+Un único template reemplaza `chat_mensajeria.html` y `chat_invitado.html`. El modo se detecta via variable Jinja2:
+
+```python
+# Panel Rafael
+render_template('chat.html', modo='creador', token='', nombre_creador='', foto_creador='', tercero_creador_id=0)
+
+# Invitado
+render_template('chat.html', modo='invitado', token=token, nombre_creador=..., foto_creador=..., tercero_creador_id=...)
+```
+
+Bloques Jinja2: `{% if modo == 'creador' %}` oculta/muestra sidebar, botones de invitar, etc.
+
+**Layout (crítico):**
+- `body { display: flex; flex-direction: row; height: 100dvh; overflow: hidden }` — sidebar y panel lado a lado
+- Panel: `min-width: 0; min-height: 0` — permite scroll interno sin desbordarse
+- `abrirConv()` / `volverSidebar()` usan `style.display` (no classList) para evitar conflicto con Tailwind `!important`
+
+**Token de un solo uso (desde 2026-03-24):**
+- BD: columnas `invitacion_usada BOOLEAN DEFAULT FALSE` + `invitacion_usada_en TIMESTAMP` en `conversaciones`
+- Endpoint: `POST /api/chat/reclamar/<token>` — marca el token en la primera visita, devuelve `{error: 'ya_usado'}` si ya fue reclamado
+- JS en `initInvitado()`: verifica `localStorage.getItem('claimed_TOKEN')` para distinguir dueño vs intrusos
+- Primera visita: llama a `/reclamar`, guarda en localStorage; visitas posteriores del mismo device → pasan directo
+- Si token ya usado por otro device: muestra pantalla 🔒 "Este enlace ya fue usado"
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Módulo:** Domótica
 **Versión:** 1.2
-**Última actualización:** 2026-03-17
+**Última actualización:** 2026-03-24
 **Audiencia:** Desarrolladores que mantienen o extienden el módulo
 
 ---
@@ -104,13 +104,24 @@ Credenciales en variables de entorno de Render:
 
 ## Sistema de presencia/ausencia
 
-### Heartbeat (`GET /api/domotica/heartbeat`)
+### Heartbeat (`GET /api/domotica/heartbeat`) — v2 (2026-03-24)
 
-**Emisor único**: `captura_watcher.ps1` — envía cada 60s con idle protegido contra contaminación.
+**Emisor único**: `captura_watcher.ps1` — envía cada 60s con parámetros extendidos.
 
 ```
-GET /api/domotica/heartbeat?token=tuctuc-hb-2026&idle=<segundos>
+GET /api/domotica/heartbeat?token=tuctuc-hb-2026&idle=<seg>&mouse=0/1&audio=0/1&ventana=<titulo>
 ```
+
+**Parámetros nuevos (desde 2026-03-24):**
+- `mouse=1` si el cursor cambió de posición desde el ciclo anterior (`Win32Cursor.GetCursorPos`)
+- `audio=1` si hay un proceso de media activo con CPU > 0.3s (chrome, spotify, vlc, etc.)
+- `ventana=<titulo>` — título de la ventana en primer plano (`Win32Focus.GetWindowText`)
+
+El servidor calcula `disparador`:
+- `mouse=1` → "🖱 Mouse"
+- `audio=1` → "🔊 Audio"
+- `idle < ventana` → "⌨️ Teclado" (fallback)
+- idle expirado → "PC apagado" o "Sin actividad por X min"
 
 Lógica del servidor:
 ```python
@@ -136,6 +147,40 @@ if pc_cmd:
 { "ok": true, "activo": true, "idle": 120, "comando": "shutdown" }
 ```
 El cliente (`captura_watcher.ps1`) verifica `$resp.comando -eq "shutdown"` y ejecuta el shutdown local.
+
+### Tabla `presencia_eventos` (nueva, 2026-03-24)
+
+Guarda los últimos 30 eventos de presencia — log visible en el panel:
+
+```sql
+CREATE TABLE IF NOT EXISTS presencia_eventos (
+    id SERIAL PRIMARY KEY,
+    registrado_en TIMESTAMP DEFAULT NOW(),
+    idle_seg INTEGER,
+    resultado VARCHAR(10),    -- 'activo' | 'ausente'
+    disparador VARCHAR(200),  -- "🖱 Mouse", "⌨️ Teclado", etc.
+    ventana_activa VARCHAR(100)
+)
+```
+
+**Endpoint:** `GET /api/domotica/presencia/eventos` (admin requerido)
+
+**Rotación automática:** después de cada INSERT, se ejecuta:
+```sql
+DELETE FROM presencia_eventos
+WHERE id NOT IN (SELECT id FROM presencia_eventos ORDER BY id DESC LIMIT 30)
+```
+Nunca crece más de 30 filas — DELETE real, no FoxPro-style marcado.
+
+### Log visible en `/domotica`
+
+La card de Presencia muestra:
+- Estado actual (✅ Activo / ⚫ Ausente) con tiempo relativo
+- Disparador del último evento
+- Ventana activa actual
+- Tabla de últimos 30 eventos con hora, ícono, disparador y ventana
+
+El scheduler de la card corre cada 60s (antes 120s).
 
 El scheduler evalúa `laptop_last_seen IS NULL` para determinar ausencia.
 El heartbeat también dispara la evaluación inmediatamente en un thread.

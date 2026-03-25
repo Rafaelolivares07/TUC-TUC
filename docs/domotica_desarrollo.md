@@ -185,6 +185,37 @@ El scheduler de la card corre cada 60s (antes 120s).
 El scheduler evalúa `laptop_last_seen IS NULL` para determinar ausencia.
 El heartbeat también dispara la evaluación inmediatamente en un thread.
 
+### Timestamps en el log de presencia (UI)
+
+Los timestamps de `presencia_eventos` se muestran en **UTC** (sin conversión a zona horaria local). El PC de Rafael está configurado en UTC, por lo que el log coincide con el reloj del sistema.
+
+Implementación en `domotica.html`:
+```js
+const _d = new Date((_ts.endsWith('Z')||_ts.includes('+')) ? _ts : _ts+'Z');
+const hora = _d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', timeZone:'UTC'});
+```
+
+### Inicio automático del watcher
+
+Tarea programada creada en Windows: `TucTuc-CapWatcher`
+- Se activa en cada login del usuario
+- Comando: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "C:\Users\RAFAEL OLIVARES\captura_watcher.ps1"`
+- **Nota crítica**: requiere `-ExecutionPolicy Bypass` — sin este flag, el proceso oculto crashea silenciosamente (no hereda la política de la sesión padre)
+
+### Bug crítico resuelto: idle siempre 0, ventilador no se apagaba (2026-03-24)
+
+**Síntoma**: el ventilador nunca se apagaba aunque el usuario se ausentara por 20+ minutos.
+
+**Causa**: la lógica usaba `$realIdleSec` calculado con un umbral de 30 segundos. Cualquier toque mínimo del mouse (incluso involuntario o de procesos de Windows) en menos de 30s hacía que `$lastRealInput` se actualizara, manteniendo `$realIdleSec = 0` perpetuamente.
+
+**Fix**: reemplazado `$realIdleSec` por `$efectiveIdle`:
+```powershell
+$efectiveIdle = if ($sendKeysSec -lt $SENDKEYS_COOLDOWN) { 0 } else { $windowsIdle }
+```
+- Si `SendKeys` disparó hace menos de 90s → forzar `0` (evita falsa ausencia por SendKeys)
+- En caso contrario → usar `$windowsIdle` directamente (crece correctamente con la ausencia real)
+- Resultado: idle crece de 0 → 60 → 120 → 180 → ... → supera `ventana_seg` → ventilador OFF ✓
+
 ### Problema crítico resuelto: contaminación del idle por SendKeys (2026-03-17)
 
 `captura_watcher.ps1` usa `SendKeys(".")` para activar la terminal de Claude Code cuando llega

@@ -38621,7 +38621,12 @@ def api_domotica_presencia_eventos():
                FROM presencia_eventos ORDER BY id DESC LIMIT 30'''
         ).fetchall()
         conn.close()
-        return jsonify({'ok': True, 'eventos': [dict(r) for r in rows]})
+        def ser(r):
+            d = dict(r)
+            if d.get('registrado_en'):
+                d['registrado_en'] = d['registrado_en'].strftime('%Y-%m-%dT%H:%M:%SZ')
+            return d
+        return jsonify({'ok': True, 'eventos': [ser(r) for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

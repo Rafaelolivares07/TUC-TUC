@@ -1986,7 +1986,9 @@ async function cargarPresenciaLog() {
     if (ven) ven.textContent = ultimo.ventana_activa ? `💻 ${ultimo.ventana_activa}` : '';
     // Log completo
     cont.innerHTML = d.eventos.map(ev => {
-      const hora = new Date(ev.registrado_en).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+      const _ts = ev.registrado_en;
+      const _d = new Date((_ts.endsWith('Z')||_ts.includes('+')) ? _ts : _ts+'Z');
+      const hora = _d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', timeZone:'UTC'});
       const icono = ev.resultado === 'activo' ? '✅' : '⚫';
       const ven = ev.ventana_activa ? ` <span class="text-gray-400 italic">· ${ev.ventana_activa.substring(0,30)}</span>` : '';
       return `<div class="flex items-start gap-1 py-0.5 border-b border-gray-100 last:border-0">

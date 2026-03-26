@@ -19210,10 +19210,27 @@ def api_chat_reclamar(token):
 
 
 @app.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
+def _asegurar_schema_chat(conn):
+    """Garantiza que las columnas opcionales de mensajes existan.
+    Llamar antes de cualquier operación sobre mensajes."""
+    for sql in [
+        "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS url_archivo TEXT",
+        "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS conversacion_id INTEGER",
+        "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS card_payload JSONB",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+
 def api_chat_invitado_mensajes(token):
     """Obtener mensajes de una conversación por token (sin login)"""
     try:
         conn = get_db_connection()
+        _asegurar_schema_chat(conn)
 
         conv = conn.execute('''
             SELECT c.*, t_inv.nombre as nombre_invitado, t_cre.nombre as nombre_creador
@@ -19273,6 +19290,7 @@ def api_chat_invitado_enviar():
 
     try:
         conn = get_db_connection()
+        _asegurar_schema_chat(conn)
 
         conv = conn.execute('''
             SELECT * FROM conversaciones WHERE token = %s AND activa = TRUE

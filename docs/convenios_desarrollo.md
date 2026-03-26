@@ -127,4 +127,36 @@ Si hay escapes inválidos, falla con `SyntaxWarning` antes de llegar a Render.
 
 ---
 
+## 6. Migraciones de BD — patrón obligatorio
+
+Nunca depender de que el usuario llame un endpoint manualmente para aplicar un cambio en esquema.
+
+### Regla
+Toda columna o tabla nueva debe garantizarse automáticamente mediante una función
+`_asegurar_*` o `crear_tablas_*` que use `ADD COLUMN IF NOT EXISTS` y sea llamada
+**al inicio de cada endpoint que usa esa tabla**.
+
+### Ejemplo de referencia
+```python
+def _asegurar_schema_chat(conn):
+    for sql in [
+        "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS card_payload JSONB",
+    ]:
+        try:
+            conn.execute(sql); conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+def api_chat_invitado_mensajes(token):
+    conn = get_db_connection()
+    _asegurar_schema_chat(conn)   # ← siempre primero
+    ...
+```
+
+### Lo que NO hacer
+- Endpoint `GET /api/migrar-algo` que Rafael tiene que llamar manualmente
+- Comentario "ejecutar antes de desplegar"
+- Migración dentro de `if __name__ == '__main__'` (no corre en Render/Gunicorn)
+
 *Agregar nuevas convenciones aquí cuando surjan en sesiones de desarrollo.*

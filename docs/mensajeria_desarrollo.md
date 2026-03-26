@@ -99,6 +99,7 @@ El servidor lee el nombre del creador desde BD y lo inyecta en meta tags:
 | `GET` | `/api/chat/mi-perfil` | Nombre, foto y `token_chat` del tercero autenticado |
 | `GET` | `/api/chat/cards/negocios` | Restaurantes y tiendas del creador (por token_chat o sesión) |
 | `GET` | `/api/chat/cards/items` | Platos u productos de un negocio (`?tipo=restaurante&slug=...`) |
+| `POST` | `/api/chat/merlin/iniciar` | Crea o recupera conversación con Merlin para usuario autenticado |
 | `POST` | `/api/chat/reclamar/<token>` | Marca token como usado en primera visita |
 | `GET` | `/chat` | Panel Rafael (requiere sesión) |
 | `GET` | `/chat/<token>` | Página pública invitado (sin sesión) |
@@ -130,6 +131,37 @@ El servidor lee el nombre del creador desde BD y lo inyecta en meta tags:
 ```
 
 Render en ambos templates: imagen full-width + nombre negocio (azul) + título + descripción + precio (verde) + botón acción. Click abre `url` en nueva pestaña.
+
+---
+
+## 5.2 Merlin — contacto IA en el chat (2026-03-26)
+
+Merlin (Claude) es un contacto real en el chat TUC TUC. Los usuarios autenticados pueden abrir una conversación con Merlin desde el sidebar.
+
+**Arquitectura:**
+- `tipo_tercero = 'merlin'` en tabla `terceros` — se crea automáticamente en el primer `/api/chat/merlin/iniciar`
+- Conversación: `creador_id = usuario`, `invitado_id = MERLIN_ID` (como cualquier conversación)
+- `chat_merlin_bridge.py` — daemon local en PC de Rafael: polling cada 4s a mensajes donde `conv.invitado_id = MERLIN_ID AND remitente != MERLIN AND estado = 'pendiente'`
+- Bridge llama a `claude --print` con contexto del usuario (nombre, negocios, historial)
+- Respuesta se inserta como `remitente_id = MERLIN_ID, estado = 'pendiente'`
+
+**UI en `chat.html`:**
+- Botón "Merlin" (índigo) en el header del sidebar, junto a "+ Invitar"
+- Avatar especial índigo con ícono ⚡ + badge "IA" en la lista de conversaciones
+- `abrirChatMerlin()` → POST `/api/chat/merlin/iniciar` → `abrirConv(data.token)`
+
+**Bridge local:**
+- Archivo: `chat_merlin_bridge.py` (en raíz del proyecto)
+- Arranque automático: `tuctuc_merlin_bridge.bat` en `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\`
+- Lock en puerto `47834` (evita instancias duplicadas)
+- Prompt: incluye nombre, teléfono, negocios del usuario e historial de la conversación
+- Timeout Claude: 45s. Respaldo en caso de error: mensaje de disculpa insertado automáticamente
+
+**Endpoint `POST /api/chat/merlin/iniciar`:**
+- Requiere sesión (`session['tercero_id']`)
+- Busca `tipo_tercero='merlin'` en terceros; si no existe, lo crea con foto avatar Cloudinary
+- Busca conversación existente entre `creador_id = usuario` y `invitado_id = merlin`; si no existe, la crea con `nombre_invitado = 'Merlin'`
+- Devuelve `{ok: true, token: "...", conv_id: ...}`
 
 ---
 
@@ -180,3 +212,4 @@ Se limpia al abrir nueva conversación con `idsRenderizados.clear()`.
 - [ ] Voz de Claude como respuesta en el chat de desarrollo (req #19)
 - [x] ~~Cards de productos/platos (2026-03-26)~~
 - [x] ~~Integración contactos vendedor ↔ chat (2026-03-26)~~
+- [x] ~~Merlin (Claude IA) como contacto en el chat (2026-03-26)~~

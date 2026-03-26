@@ -2,9 +2,17 @@
 _Actualizado: 2026-03-26_
 
 ## Módulo en trabajo
-**Chat + CRM Vendedor** — integración chat ↔ contactos + cards de productos
+**Chat + CRM Vendedor** — integración chat ↔ contactos + cards + Merlin IA
 
 ## Commits de esta sesión — pusheados
+
+### Commit `ea8dfd1` — feat(merlin): Merlin como contacto en el chat TUC TUC
+- `chat_merlin_bridge.py` — daemon local: detecta mensajes a Merlin, llama `claude --print`, responde
+- `start_merlin_bridge.bat` — auto-restart loop para el bridge
+- `POST /api/chat/merlin/iniciar` — crea/recupera conv con Merlin para usuario autenticado
+- `chat.html`: botón "Merlin" (índigo) en sidebar header, avatar especial índigo + badge "IA" en lista convs
+- `tipo_tercero='merlin'` — tercero se crea automáticamente en primera llamada al endpoint
+- **Para activar localmente**: ejecutar `start_merlin_bridge.bat`
 
 ### Commit `606bb0f` — feat(vendedor+chat): integrar contactos con chat TUC TUC
 - `contactos.chat_token TEXT` — nueva columna (se crea automáticamente vía `crear_tablas_contactos`)
@@ -34,6 +42,7 @@ _Actualizado: 2026-03-26_
 - `docs/convenios_desarrollo.md` §6 ampliado con checklist, tabla de funciones existentes, antipatrones
 
 ## Próximos pasos sugeridos
+- **Merlin**: ejecutar `start_merlin_bridge.bat` localmente → abrir `/chat` → botón Merlin → escribir mensaje → verificar respuesta en ~5s
 - Probar en producción: abrir `/vendedor`, identificarse, buscar un contacto → botón burbuja → verificar que abre el chat
 - Probar card: en `/chat` modo creador, tocar botón carrito → seleccionar negocio → enviar card → verificar render en `chat_invitado.html`
 - Streaming de audio (commit `5a8f2d4` sesión anterior): pendiente verificar que los chunks se limpian correctamente en producción

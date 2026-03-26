@@ -57,9 +57,16 @@
       <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
       <span class="font-semibold">TUC TUC Chat</span>
     </div>
-    <button onclick="abrirNuevoInvitado()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full transition font-medium">
-      + Invitar
-    </button>
+    <div class="flex gap-1.5">
+      <button onclick="abrirChatMerlin()" title="Hablar con Merlin"
+              class="bg-indigo-700 hover:bg-indigo-600 text-white text-xs px-2.5 py-1.5 rounded-full transition font-medium flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>
+        Merlin
+      </button>
+      <button onclick="abrirNuevoInvitado()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full transition font-medium">
+        + Invitar
+      </button>
+    </div>
   </div>
 
   <div id="lista-convs" class="flex-1 overflow-y-auto">
@@ -666,12 +673,18 @@ function cargarConversaciones() {
       const noLeidos = c.no_leidos > 0 ? `<span class="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">${c.no_leidos}</span>` : '';
       const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_mensaje || '');
       const origen = c.origen ? `<span class="text-gray-600 text-xs"> · ${c.origen}</span>` : '';
+      const esMerlin = nombre === 'Merlin';
+      const avatarEl = esMerlin
+        ? `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center flex-shrink-0 text-white">
+             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>
+           </div>`
+        : avatarHtml(c.foto_invitado, nombre);
       return `<div onclick="abrirConv('${c.token}','${nombre}')"
                    class="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800/50 transition ${tokenActivo===c.token?'bg-gray-800':''}">
-        ${avatarHtml(c.foto_invitado, nombre)}
+        ${avatarEl}
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between">
-            <span class="font-medium text-sm truncate">${nombre}${noLeidos}</span>${origen}
+            <span class="font-medium text-sm truncate">${nombre}${esMerlin ? ' <span class="text-xs text-indigo-400">IA</span>' : ''}${noLeidos}</span>${origen}
           </div>
           <div class="text-gray-500 text-xs truncate mt-0.5">${ultimoMsg}</div>
         </div>
@@ -895,6 +908,17 @@ async function subirMiFoto(input) {
   const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
   if (r && r.ok) { localStorage.setItem(`foto_inv_${TOKEN}`, r.url); aplicarAvatarInv(r.url); }
   else { el.innerHTML = '?'; alert('Error: ' + (r?.error || 'desconocido')); }
+}
+
+// ── MERLIN ────────────────────────────────────────────────────────────────────
+async function abrirChatMerlin() {
+  try {
+    const r = await fetch('/api/chat/merlin/iniciar', {method: 'POST'}).then(r => r.json());
+    if (!r.ok) throw new Error(r.error);
+    abrirConv(r.token, 'Merlin');
+  } catch(e) {
+    alert('Error abriendo chat con Merlin: ' + e.message);
+  }
 }
 
 // Invitar contacto

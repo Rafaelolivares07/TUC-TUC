@@ -19735,6 +19735,66 @@ def api_chat_fotos_eliminar(foto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── MERLIN — CHAT CON IA ──────────────────────────────────────────────────────
+
+@app.route('/api/chat/merlin/iniciar', methods=['POST'])
+def api_chat_merlin_iniciar():
+    """Crea o recupera la conversación entre el usuario autenticado y Merlin.
+    Devuelve token + link para abrir el chat."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    usuario_id = session['usuario_id']
+    try:
+        import secrets as _sec
+        conn = get_db_connection()
+
+        # Garantizar que Merlin existe como tercero
+        merlin = conn.execute(
+            "SELECT id FROM terceros WHERE tipo_tercero = 'merlin' LIMIT 1"
+        ).fetchone()
+        if not merlin:
+            merlin = conn.execute(
+                """INSERT INTO terceros (nombre, tipo_tercero)
+                   VALUES ('Merlin', 'merlin') RETURNING id"""
+            ).fetchone()
+            conn.commit()
+        merlin_id = merlin['id']
+
+        # Buscar conversación activa existente
+        conv = conn.execute(
+            """SELECT token FROM conversaciones
+               WHERE creador_id = %s AND invitado_id = %s AND activa = TRUE
+               LIMIT 1""",
+            (usuario_id, merlin_id)
+        ).fetchone()
+
+        if conv:
+            conn.close()
+            host = request.host_url.rstrip('/')
+            return jsonify({'ok': True, 'token': conv['token'],
+                            'link': f"{host}/chat/{conv['token']}", 'nuevo': False})
+
+        # Crear nueva conversación
+        token = _sec.token_urlsafe(12)
+        conn.execute(
+            """INSERT INTO conversaciones
+               (creador_id, invitado_id, token, nombre_invitado, origen)
+               VALUES (%s, %s, %s, 'Merlin', 'merlin')""",
+            (usuario_id, merlin_id, token)
+        )
+        conn.commit()
+        conn.close()
+
+        host = request.host_url.rstrip('/')
+        return jsonify({'ok': True, 'token': token,
+                        'link': f"{host}/chat/{token}", 'nuevo': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ── CARDS DE NEGOCIOS PARA EL CHAT ────────────────────────────────────────────
 
 @app.route('/api/chat/cards/negocios')

@@ -19017,7 +19017,7 @@ def api_chat_migrar_mensajeria():
                 pasos.append(f'SKIP {col}: {e}')
 
         # Columnas en mensajes
-        for col, tipo in [('url_archivo', 'TEXT'), ('conversacion_id', 'INTEGER')]:
+        for col, tipo in [('url_archivo', 'TEXT'), ('conversacion_id', 'INTEGER'), ('card_payload', 'JSONB')]:
             try:
                 conn.execute(f'ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS {col} {tipo}')
                 pasos.append(f'mensajes.{col}')
@@ -19231,6 +19231,7 @@ def api_chat_invitado_mensajes(token):
 
         mensajes = conn.execute('''
             SELECT m.id, m.remitente_id, m.mensaje, m.tipo, m.url_archivo, m.estado, m.fecha,
+                   m.card_payload,
                    t.nombre as remitente_nombre, t.tipo_tercero as remitente_tipo
             FROM mensajes m
             JOIN terceros t ON m.remitente_id = t.id
@@ -19264,9 +19265,10 @@ def api_chat_invitado_enviar():
     mensaje = (data.get('mensaje') or '').strip()
     tipo = data.get('tipo', 'texto')
     url_archivo = data.get('url_archivo', '')
+    card_payload = data.get('card_payload') or None
     es_creador = data.get('es_creador', False)
 
-    if not token or (not mensaje and not url_archivo):
+    if not token or (not mensaje and not url_archivo and not card_payload):
         return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
 
     try:
@@ -19293,11 +19295,13 @@ def api_chat_invitado_enviar():
             remitente_id = conv['invitado_id']
             destinatario_id = conv['creador_id']
 
+        import json as _json
         nuevo = conn.execute('''
-            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, url_archivo, conversacion_id, estado, fecha)
-            VALUES (%s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
+            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, url_archivo, card_payload, conversacion_id, estado, fecha)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
             RETURNING id, fecha
-        ''', (remitente_id, destinatario_id, mensaje or '', tipo, url_archivo, conv['id'])).fetchone()
+        ''', (remitente_id, destinatario_id, mensaje or '', tipo, url_archivo,
+              _json.dumps(card_payload) if card_payload else None, conv['id'])).fetchone()
 
         conn.commit()
         conn.close()
@@ -19492,12 +19496,13 @@ def api_chat_mi_perfil():
     try:
         conn = get_db_connection()
         row = conn.execute(
-            'SELECT id, nombre, foto_perfil FROM terceros WHERE id = %s',
+            'SELECT id, nombre, foto_perfil, token_chat FROM terceros WHERE id = %s',
             (session['usuario_id'],)
         ).fetchone()
         conn.close()
         if row:
-            return jsonify({'ok': True, 'id': row['id'], 'nombre': row['nombre'], 'foto': row['foto_perfil'] or ''})
+            return jsonify({'ok': True, 'id': row['id'], 'nombre': row['nombre'],
+                            'foto': row['foto_perfil'] or '', 'token_chat': row['token_chat'] or ''})
         return jsonify({'ok': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
@@ -19709,6 +19714,130 @@ def api_chat_fotos_eliminar(foto_id):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── CARDS DE NEGOCIOS PARA EL CHAT ────────────────────────────────────────────
+
+@app.route('/api/chat/cards/negocios')
+def api_chat_cards_negocios():
+    """Devuelve los negocios (restaurantes/tiendas) del tercero identificado por token_chat.
+    Se usa desde el chat para que el creador elija qué compartir."""
+    token_chat = request.args.get('token_chat', '').strip()
+    # También acepta usuario_id de sesión
+    uid = session.get('usuario_id')
+
+    try:
+        conn = get_db_connection()
+        tercero_id = None
+
+        if token_chat:
+            t = conn.execute(
+                "SELECT id FROM terceros WHERE token_chat = %s LIMIT 1", (token_chat,)
+            ).fetchone()
+            if t:
+                tercero_id = t['id']
+        elif uid:
+            tercero_id = uid
+
+        if not tercero_id:
+            conn.close()
+            return jsonify({'ok': True, 'negocios': []})
+
+        negocios = []
+
+        # Restaurantes donde es admin (admin_id = tercero_id)
+        rests = conn.execute("""
+            SELECT 'restaurante' as tipo, slug, nombre,
+                   NULL as imagen
+            FROM restaurantes WHERE admin_id = %s AND activo = TRUE
+            ORDER BY nombre
+        """, (tercero_id,)).fetchall()
+        negocios.extend([dict(r) for r in rests])
+
+        # Tiendas donde es admin (admin_id = tercero_id)
+        tiendas = conn.execute("""
+            SELECT 'tienda' as tipo, slug, nombre,
+                   NULL as imagen
+            FROM tiendas WHERE admin_id = %s AND activo = TRUE
+            ORDER BY nombre
+        """, (tercero_id,)).fetchall()
+        negocios.extend([dict(t) for t in tiendas])
+
+        conn.close()
+        return jsonify({'ok': True, 'negocios': negocios})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/cards/items')
+def api_chat_cards_items():
+    """Devuelve los productos/platos de un negocio para armar la card."""
+    tipo = request.args.get('tipo', '').strip()   # 'restaurante' | 'tienda'
+    slug = request.args.get('slug', '').strip()
+    if not tipo or not slug:
+        return jsonify({'ok': False, 'error': 'tipo y slug requeridos'}), 400
+
+    try:
+        conn = get_db_connection()
+        items = []
+        host = request.host_url.rstrip('/')
+
+        if tipo == 'restaurante':
+            rest = conn.execute(
+                "SELECT id, nombre FROM restaurantes WHERE slug = %s LIMIT 1", (slug,)
+            ).fetchone()
+            if rest:
+                rows = conn.execute("""
+                    SELECT om.id, om.nombre, om.precio, om.imagen, om.descripcion, om.tipo
+                    FROM opciones_menu om
+                    WHERE om.restaurante_id = %s AND om.activo = TRUE
+                    ORDER BY om.tipo, om.nombre
+                """, (rest['id'],)).fetchall()
+                negocio_nombre = rest['nombre']
+                items = [{
+                    'id': r['id'],
+                    'titulo': r['nombre'],
+                    'descripcion': r['descripcion'] or '',
+                    'precio': r['precio'],
+                    'imagen': r['imagen'] or '',
+                    'negocio': negocio_nombre,
+                    'tipo_item': r['tipo'] or 'plato',
+                    'url': f"{host}/r/{slug}",
+                    'tipo_card': 'plato'
+                } for r in rows]
+
+        elif tipo == 'tienda':
+            tienda = conn.execute(
+                "SELECT id, nombre FROM tiendas WHERE slug = %s LIMIT 1", (slug,)
+            ).fetchone()
+            if tienda:
+                rows = conn.execute("""
+                    SELECT id, nombre, precio, imagen, descripcion
+                    FROM productos_tienda
+                    WHERE tienda_id = %s AND disponible = TRUE
+                    ORDER BY nombre
+                """, (tienda['id'],)).fetchall()
+                negocio_nombre = tienda['nombre']
+                items = [{
+                    'id': r['id'],
+                    'titulo': r['nombre'],
+                    'descripcion': r['descripcion'] or '',
+                    'precio': r['precio'],
+                    'imagen': r['imagen'] or '',
+                    'negocio': negocio_nombre,
+                    'tipo_item': 'producto',
+                    'url': f"{host}/t/{slug}",
+                    'tipo_card': 'producto'
+                } for r in rows]
+
+        conn.close()
+        return jsonify({'ok': True, 'items': items})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 

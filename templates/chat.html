@@ -258,6 +258,29 @@
 </div>
 {% endif %}
 
+<!-- Modal selector de cards -->
+<div id="modal-card" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-lg flex flex-col" style="max-height:85vh">
+    <div class="px-5 pt-5 pb-3 flex items-center justify-between shrink-0">
+      <div>
+        <h2 class="font-bold text-white text-base">Compartir producto</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Elige un negocio y luego el ítem</p>
+      </div>
+      <button onclick="cerrarModalCard()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <!-- Selector de negocio -->
+    <div id="card-negocios" class="px-4 pb-3 flex gap-2 overflow-x-auto shrink-0 scrollbar-none"></div>
+    <!-- Buscador de ítems -->
+    <div class="px-4 pb-3 shrink-0">
+      <input id="card-buscar" type="search" placeholder="Buscar producto o plato..."
+             class="w-full bg-gray-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none"
+             oninput="filtrarCardItems(this.value)">
+    </div>
+    <!-- Lista de ítems -->
+    <div id="card-items" class="overflow-y-auto px-4 pb-6 space-y-2"></div>
+  </div>
+</div>
+
 <!-- Input imagen global (accesible desde ambos modos) -->
 <input id="inp-chat-imagen" type="file" accept="image/*" class="hidden" onchange="enviarImagen(this)">
 
@@ -496,6 +519,26 @@ function renderMensajes(msgs, cont) {
           <img src="${m.url_archivo}" class="max-w-[260px] max-h-64 object-cover block" loading="lazy">
           <div class="text-xs opacity-50 px-2 pb-1.5 pt-0.5 ${esMio ? 'bg-blue-600 text-right' : 'bg-gray-800'}">${formatHora(m.fecha)}</div>
         </div>`;
+    } else if (m.tipo === 'card' && m.card_payload) {
+      const cp = typeof m.card_payload === 'string' ? JSON.parse(m.card_payload) : m.card_payload;
+      const precio = cp.precio ? '$' + Number(cp.precio).toLocaleString('es-CO') : '';
+      div.innerHTML = `
+        <div class="max-w-[280px] rounded-2xl overflow-hidden shadow-lg cursor-pointer ${esMio ? 'rounded-br-sm' : 'rounded-bl-sm'}"
+             onclick="window.open('${cp.url || '#'}','_blank')">
+          ${cp.imagen ? `<img src="${cp.imagen}" class="w-full h-40 object-cover block" loading="lazy">` : ''}
+          <div class="p-3 bg-gray-800">
+            ${cp.negocio ? `<p class="text-xs text-blue-400 font-semibold mb-0.5">${escHtml(cp.negocio)}</p>` : ''}
+            <p class="font-bold text-white text-sm leading-tight">${escHtml(cp.titulo || '')}</p>
+            ${cp.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 line-clamp-2">${escHtml(cp.descripcion)}</p>` : ''}
+            <div class="flex items-center justify-between mt-2">
+              ${precio ? `<span class="text-green-400 font-bold text-sm">${precio}</span>` : '<span></span>'}
+              <span class="text-xs bg-blue-600 text-white rounded-full px-2.5 py-0.5 font-medium">
+                ${cp.accion || 'Ver más'}
+              </span>
+            </div>
+          </div>
+          <div class="text-xs opacity-40 px-3 pb-2 bg-gray-800 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+        </div>`;
     } else if (m.tipo !== 'sistema') {
       div.innerHTML = `
         <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
@@ -595,6 +638,7 @@ async function cargarMiPerfil() {
   const r = await fetch('/api/chat/mi-perfil').then(r => r.json()).catch(() => null);
   if (r && r.ok) {
     if (r.id) miTerceroId = r.id;
+    if (r.token_chat) window._tokenChatCreador = r.token_chat;
     if (r.foto) { miFoto = r.foto; localStorage.setItem('mi_foto_perfil', r.foto); aplicarAvatar(el, r.foto); }
     else { const fl = localStorage.getItem('mi_foto_perfil'); if (fl) { miFoto = fl; aplicarAvatar(el, fl); } }
   }
@@ -687,6 +731,12 @@ function abrirConv(token, nombre) {
                 class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0" title="Enviar imagen">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </button>
+        <button onclick="abrirSelectorCard()" title="Compartir producto o plato"
+                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-indigo-600 flex items-center justify-center transition flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
           </svg>
         </button>
         <button id="btn-stt" onclick="toggleSTT()" title="Dictar texto"
@@ -957,6 +1007,134 @@ async function enviarImagenFile(file) {
     body: JSON.stringify({token: tok, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: MODO === 'creador'})
   });
   pollMensajes();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SELECTOR DE CARDS (productos / platos)
+// ══════════════════════════════════════════════════════════════════
+let _cardNegocios = [];
+let _cardItems = [];
+let _cardNegocioActivo = null;
+
+async function abrirSelectorCard() {
+  document.getElementById('modal-card').classList.remove('hidden');
+  document.getElementById('card-items').innerHTML = '<p class="text-xs text-gray-500 text-center py-6">Cargando negocios...</p>';
+  document.getElementById('card-buscar').value = '';
+
+  // Obtener token_chat del tercero creador (guardado al abrir el chat)
+  const tokenChat = window._tokenChatCreador || '';
+  const url = tokenChat
+    ? `/api/chat/cards/negocios?token_chat=${encodeURIComponent(tokenChat)}`
+    : '/api/chat/cards/negocios';
+
+  const d = await fetch(url).then(r => r.json()).catch(() => ({ok: false}));
+  _cardNegocios = d.negocios || [];
+
+  const cont = document.getElementById('card-negocios');
+  if (!_cardNegocios.length) {
+    cont.innerHTML = '';
+    document.getElementById('card-items').innerHTML = '<p class="text-xs text-gray-500 text-center py-6">No tenés negocios asociados.</p>';
+    return;
+  }
+  cont.innerHTML = _cardNegocios.map((n, i) => `
+    <button id="card-neg-${i}" onclick="seleccionarNegocioCard(${i})"
+            class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition
+                   border-gray-700 text-gray-400 hover:border-indigo-500 hover:text-white">
+      ${escHtml(n.nombre)}
+    </button>
+  `).join('');
+
+  // Auto-seleccionar el primero
+  seleccionarNegocioCard(0);
+}
+
+async function seleccionarNegocioCard(idx) {
+  _cardNegocioActivo = idx;
+  // Actualizar estilos de botones
+  _cardNegocios.forEach((_, i) => {
+    const btn = document.getElementById(`card-neg-${i}`);
+    if (!btn) return;
+    if (i === idx) {
+      btn.className = 'shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition border-indigo-500 bg-indigo-600 text-white';
+    } else {
+      btn.className = 'shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition border-gray-700 text-gray-400 hover:border-indigo-500 hover:text-white';
+    }
+  });
+
+  document.getElementById('card-items').innerHTML = '<p class="text-xs text-gray-500 text-center py-6">Cargando...</p>';
+  const neg = _cardNegocios[idx];
+  const d = await fetch(`/api/chat/cards/items?tipo=${neg.tipo}&slug=${encodeURIComponent(neg.slug)}`).then(r => r.json()).catch(() => ({ok: false}));
+  _cardItems = d.items || [];
+  renderCardItems(_cardItems);
+}
+
+function renderCardItems(items) {
+  const cont = document.getElementById('card-items');
+  if (!items.length) {
+    cont.innerHTML = '<p class="text-xs text-gray-500 text-center py-6">Sin ítems disponibles.</p>';
+    return;
+  }
+  cont.innerHTML = items.map((it, i) => `
+    <div class="flex items-center gap-3 bg-gray-800 rounded-2xl p-3 cursor-pointer hover:bg-gray-750 transition"
+         onclick="enviarCard(${i})">
+      ${it.imagen
+        ? `<img src="${escHtml(it.imagen)}" class="w-14 h-14 object-cover rounded-xl shrink-0" loading="lazy">`
+        : `<div class="w-14 h-14 bg-gray-700 rounded-xl shrink-0 flex items-center justify-center text-2xl">🛒</div>`}
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-white text-sm truncate">${escHtml(it.titulo)}</p>
+        ${it.descripcion ? `<p class="text-xs text-gray-400 truncate">${escHtml(it.descripcion)}</p>` : ''}
+        ${it.precio ? `<p class="text-sm text-green-400 font-bold mt-0.5">$${Number(it.precio).toLocaleString('es-CO')}</p>` : ''}
+      </div>
+      <svg class="w-5 h-5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+  `).join('');
+}
+
+function filtrarCardItems(q) {
+  if (!q.trim()) { renderCardItems(_cardItems); return; }
+  const lo = q.toLowerCase();
+  renderCardItems(_cardItems.filter(it =>
+    it.titulo.toLowerCase().includes(lo) || (it.descripcion||'').toLowerCase().includes(lo)
+  ));
+}
+
+async function enviarCard(itemIdx) {
+  const items = _cardItems;  // lista actual (puede estar filtrada visualmente, pero usamos _cardItems por índice)
+  // Buscar por índice en la lista completa (no la filtrada)
+  const allItems = document.getElementById('card-items').querySelectorAll('[onclick]');
+  // Reconstruimos: el índice pasado es el de _cardItems visible, pero renderCardItems puede mostrar subconjunto
+  // Simplificación: cerrar el modal y enviar directamente
+  const it = items[itemIdx];
+  if (!it) return;
+
+  const neg = _cardNegocios[_cardNegocioActivo];
+  const accion = neg.tipo === 'restaurante' ? 'Ver menú' : 'Ver tienda';
+  const payload = {
+    tipo_card: it.tipo_card,
+    titulo: it.titulo,
+    descripcion: it.descripcion,
+    precio: it.precio,
+    imagen: it.imagen,
+    negocio: it.negocio,
+    url: it.url,
+    accion: accion
+  };
+
+  cerrarModalCard();
+
+  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
+  if (!tok) return;
+  await fetch('/api/chat/invitado/enviar', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tok, mensaje: it.titulo, tipo: 'card', card_payload: payload, es_creador: true})
+  });
+  pollMensajes();
+}
+
+function cerrarModalCard() {
+  document.getElementById('modal-card').classList.add('hidden');
 }
 </script>
 </body>

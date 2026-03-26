@@ -19323,6 +19323,23 @@ def api_chat_invitado_audio():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/chat/invitado/imagen', methods=['POST'])
+def api_chat_invitado_imagen():
+    """Subir imagen para mensajería (Cloudinary)"""
+    if 'imagen' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió imagen'}), 400
+    try:
+        archivo = request.files['imagen']
+        result = cloudinary.uploader.upload(
+            archivo,
+            folder='tuctuc_chat_imagenes',
+            transformation=[{'width': 1200, 'crop': 'limit', 'quality': 'auto'}]
+        )
+        return jsonify({'ok': True, 'url': result['secure_url']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/chat/mis-conversaciones', methods=['GET'])
 def api_chat_mis_conversaciones():
     """Conversaciones del usuario autenticado (invitados + normales)"""

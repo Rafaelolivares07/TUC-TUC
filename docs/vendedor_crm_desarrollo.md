@@ -1,5 +1,5 @@
 # CRM Vendedor — Documento de Desarrollo
-**Última actualización: 2026-03-23 (rev. cerrar sesión + fix selector multi-negocio + tiendas.tercero_id)**
+**Última actualización: 2026-03-26 (rev. integración chat TUC TUC + cards)**
 
 ---
 
@@ -41,6 +41,7 @@
 - `plantillas_crm_envios.mensaje_enviado` → `TEXT` (texto real enviado, no el de la plantilla)
 - `plantillas_crm_envios.negocio_id` → `INTEGER` (contexto del negocio para el que se vendió)
 - `citas_vendedor.negocio_id` → `INTEGER`
+- `contactos.chat_token TEXT` → token de la conversación de chat TUC TUC del contacto (2026-03-26)
 
 ---
 
@@ -103,9 +104,14 @@ IDs conocidos:
 - `POST /api/vendedor/cita/<id>/estado` — actualiza estado
 
 ### Contactos
-- `GET /api/vendedor/contactos?tel=...` — lista contactos del vendedor
+- `GET /api/vendedor/contactos?tel=...` — lista contactos del vendedor, incluye `chat_token` (directo o cruzado por teléfono)
 - `POST /api/vendedor/contacto` — crea o actualiza contacto
 - `GET /api/vendedor/buscar-terceros?q=...` — autocomplete terceros
+- `POST /api/vendedor/contactos/<cid>/chat` — crea o recupera conversación de chat para el contacto (body: `{tel}`)
+  - Usa `vendedor_tid` como `creador_id` en `conversaciones` (sin requerir sesión)
+  - Si el contacto tiene teléfono: busca tercero existente; si no: crea uno con `tipo_tercero='invitado'`
+  - Guarda `chat_token` en `contactos` para accesos futuros
+  - Responde `{ok, token, link, nuevo}`
 
 ### Plantillas
 - `GET /api/vendedor/plantillas?tel=...` — lista todas las plantillas (pool global)
@@ -143,7 +149,42 @@ Muestra: ícono canal + nombre contacto + título plantilla + texto enviado (2 l
 
 ---
 
-## 5. Modelo de comisión (referencia)
+## 5. Integración Chat TUC TUC (2026-03-26)
+
+### Concepto
+El chat es el canal de mayor cercanía con el contacto. Desde el panel del vendedor se puede abrir o crear una conversación de chat para cualquier contacto, y desde ese chat compartir productos/platos como cards interactivas.
+
+### Flujo completo
+1. Vendedor ve su lista de contactos en `/vendedor`
+2. Contactos con chat activo muestran punto verde + etiqueta "Chat TUC TUC activo"
+3. Botón burbuja (verde = ya tiene chat, gris = no tiene):
+   - Si tiene → abre `/chat/<token>` en nueva pestaña
+   - Si no tiene → `POST /api/vendedor/contactos/<cid>/chat` → crea conv → abre en nueva pestaña
+4. Dentro del chat (modo creador), botón carrito → modal selector de negocios → ítems → envía card al contacto
+5. El contacto (en su pestaña de invitado) ve la card con imagen, precio y botón para ver el menú/tienda
+
+### Cómo se vinculan los mundos
+
+```
+contactos.tercero_id  →  terceros.id (vendedor = dueño de la lista)
+contactos.chat_token  →  conversaciones.token
+conversaciones.creador_id  →  terceros.id (vendedor)
+conversaciones.invitado_id →  terceros.id (contacto, tipo='invitado' o 'registrado')
+```
+
+**Nota:** `contactos.tercero_id` identifica al VENDEDOR (dueño de la lista), no al contacto. El contacto se identifica por su `telefono` o por `chat_token`.
+
+### UI en renderContactos
+```
+[avatar + punto verde]  Nombre del contacto
+                        Número de teléfono
+                        Chat TUC TUC activo  ← si tiene chat
+  [📞] [💬 WA] [🟢burbuja] [📅] [✕]
+```
+
+---
+
+## 6. Modelo de comisión (referencia)
 Ver `docs/estrategia_comercial.md` para detalle.
 - Vendedor externo: 20% de cada recaudo, sin salario
 - Vendedor interno: $2.7M/mes fijo, sin comisión

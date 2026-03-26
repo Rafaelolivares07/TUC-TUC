@@ -1,8 +1,8 @@
 # Módulo Mensajería TUC TUC
 ## Documento de Desarrollo
 
-**Estado:** MVP funcional (2026-03-24)
-**Concepto:** Red de comunicación propia, crecimiento viral por token
+**Estado:** MVP funcional + integración vendedor + cards (2026-03-26)
+**Concepto:** Red de comunicación propia, crecimiento viral por token. Canal de distribución del catálogo TUC TUC.
 
 ---
 
@@ -61,10 +61,13 @@ activa BOOLEAN DEFAULT TRUE
 - `tipo_tercero VARCHAR(20) DEFAULT 'registrado'` — 'registrado' | 'invitado'
 
 **Columnas añadidas a `mensajes`:**
-- `url_archivo TEXT` — URL Cloudinary para audios
+- `url_archivo TEXT` — URL Cloudinary para audios e imágenes
 - `conversacion_id INTEGER` — FK a conversaciones
+- `card_payload JSONB` — payload de tarjeta de producto/plato (tipo='card')
 
-⚠️ Se eliminaron 8 check constraints de `mensajes.tipo` para permitir tipo='audio'.
+⚠️ Se eliminaron los check constraints de `mensajes.tipo` para permitir tipo='audio', 'imagen', 'card'.
+
+**Garantía de esquema:** `_asegurar_schema_chat(conn)` — se llama al inicio de `api_chat_invitado_mensajes` y `api_chat_invitado_enviar`. Nunca requiere endpoint manual.
 
 ### Audio
 - Grabación: `MediaRecorder API` (webm en browser)
@@ -84,20 +87,53 @@ El servidor lee el nombre del creador desde BD y lo inyecta en meta tags:
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/api/chat/migrar-mensajeria` | Crea tabla conversaciones + columnas (auth) |
-| `POST` | `/api/chat/invitar` | Crea tercero invitado + conversación, devuelve token/link |
+| `POST` | `/api/chat/migrar-mensajeria` | Crea tabla conversaciones + columnas (auth, legado) |
+| `POST` | `/api/chat/invitar` | Crea tercero invitado + conversación, devuelve token/link (requiere sesión) |
 | `GET` | `/api/chat/invitado/mensajes/<token>` | Mensajes de una conv por token (público) |
-| `POST` | `/api/chat/invitado/enviar` | Enviar mensaje (público o auth con `es_creador:true`) |
+| `POST` | `/api/chat/invitado/enviar` | Enviar mensaje texto/audio/imagen/card (público o auth con `es_creador:true`) |
 | `POST` | `/api/chat/invitado/audio` | Upload audio → Cloudinary, devuelve URL |
+| `POST` | `/api/chat/audio/chunk` | Acumula chunk de audio en `/tmp/` durante grabación streaming |
+| `POST` | `/api/chat/audio/finalizar` | Sube chunks a Cloudinary, limpia temp, devuelve URL |
+| `POST` | `/api/chat/invitado/imagen` | Upload imagen → Cloudinary (resize 1200px), devuelve URL |
 | `GET` | `/api/chat/mis-conversaciones` | Panel Rafael — todas sus convs con no_leidos (auth) |
-| `POST` | `/api/chat/fix-tipo-audio` | Drop check constraints en mensajes.tipo (auth, one-time) |
-| `POST` | `/api/chat/reclamar/<token>` | Marca token como usado en primera visita; devuelve `ya_usado` si ya fue reclamado por otro device |
+| `GET` | `/api/chat/mi-perfil` | Nombre, foto y `token_chat` del tercero autenticado |
+| `GET` | `/api/chat/cards/negocios` | Restaurantes y tiendas del creador (por token_chat o sesión) |
+| `GET` | `/api/chat/cards/items` | Platos u productos de un negocio (`?tipo=restaurante&slug=...`) |
+| `POST` | `/api/chat/reclamar/<token>` | Marca token como usado en primera visita |
 | `GET` | `/chat` | Panel Rafael (requiere sesión) |
 | `GET` | `/chat/<token>` | Página pública invitado (sin sesión) |
 
 ---
 
-## 5. Templates
+## 5. Tipos de mensaje soportados
+
+| `tipo` | Campo extra | Descripción |
+|---|---|---|
+| `texto` | — | Texto plano |
+| `audio` | `url_archivo` | Audio Cloudinary (mp3), streaming de chunks durante grabación |
+| `imagen` | `url_archivo` | Imagen Cloudinary (jpg resize 1200px), drag&drop + Ctrl+V |
+| `card` | `card_payload` | Tarjeta de producto/plato (ver §5.1) |
+
+### 5.1 Payload de card (`card_payload` JSONB)
+
+```json
+{
+  "tipo_card": "plato" | "producto",
+  "titulo":    "Bandeja paisa",
+  "descripcion": "...",
+  "precio":    18000,
+  "imagen":    "https://res.cloudinary.com/...",
+  "negocio":   "Restaurante El Fogón",
+  "url":       "https://tuc-tuc.onrender.com/r/slug",
+  "accion":    "Ver menú" | "Ver tienda"
+}
+```
+
+Render en ambos templates: imagen full-width + nombre negocio (azul) + título + descripción + precio (verde) + botón acción. Click abre `url` en nueva pestaña.
+
+---
+
+## 6. Templates
 
 ### `chat.html` — template unificado (desde 2026-03-24)
 
@@ -127,7 +163,7 @@ Bloques Jinja2: `{% if modo == 'creador' %}` oculta/muestra sidebar, botones de 
 
 ---
 
-## 6. Deduplicación de mensajes
+## 7. Deduplicación de mensajes
 
 Race condition entre `poll()` inmediato post-envío y el intervalo de 3s.
 Solución: `const idsRenderizados = new Set()` — si un ID ya fue renderizado, se ignora.
@@ -135,10 +171,12 @@ Se limpia al abrir nueva conversación con `idsRenderizados.clear()`.
 
 ---
 
-## 7. Próximos pasos
+## 8. Próximos pasos
 
 - [ ] Notificación push/Telegram a Rafael cuando invitado responde
 - [ ] El invitado puede crear su propio canal y atraer personas (expansión viral)
 - [ ] Perfil TUC TUC propio del invitado — onboarding natural dentro del chat
 - [ ] Integración con módulo de conductores / negocios (comunicación interna)
 - [ ] Voz de Claude como respuesta en el chat de desarrollo (req #19)
+- [x] ~~Cards de productos/platos (2026-03-26)~~
+- [x] ~~Integración contactos vendedor ↔ chat (2026-03-26)~~

@@ -176,17 +176,30 @@ Una vez creada la cuenta:
 
 ---
 
-## 8. Seguimiento — CRM básico
+## 8. Seguimiento — CRM del vendedor
 
-*(Módulo en desarrollo. Mientras tanto, usar hoja de cálculo o notas)*
+El módulo está disponible en `/vendedor`. El vendedor se identifica con su nombre y celular — no necesita crear cuenta.
 
-Para cada visita registrar:
-- Nombre del negocio y dirección
-- Nombre del contacto (dueño + encargado de operación)
-- Teléfono WhatsApp
-- Estado: `contactado` / `demo hecha` / `prueba activa` / `cliente` / `descartado`
-- Fecha de siguiente seguimiento
-- Nota de la visita (qué dijo, qué le interesó, qué objeción tuvo)
+### Qué podés hacer desde el panel
+
+**Contactos:** tu base de prospectos personal, no ligada a ningún negocio en particular. Podés:
+- Importarlos desde tu agenda (botón "Importar contactos")
+- Agregarlos uno a uno
+- Buscar dentro de tu lista
+- Ver historial de mensajes enviados a cada uno
+
+**Citas:** agenda de visitas a prospectos. Cada cita queda asociada al negocio para el que estás vendiendo.
+
+**Plantillas CRM:** mensajes pregrabados para enviar por WhatsApp o Telegram. El pool es compartido entre todos los vendedores de la plataforma — podés crear los tuyos y los demás también los ven.
+
+**Chat TUC TUC con el contacto:** desde la lista de contactos, el botón burbuja abre una conversación de chat directa con el prospecto. Funciona sin que el prospecto tenga la app — solo necesita el link. Desde ese chat podés enviarle cards de productos o platos de los negocios que representás.
+
+### Flujo recomendado post-visita
+1. Agendar la cita antes de salir del local
+2. Agregar al dueño como contacto con su número de WhatsApp
+3. Enviarle el link del chat TUC TUC (botón burbuja) — así tenés un canal propio
+4. Desde el chat, compartirle la card del menú o los productos de su negocio recién creado
+5. Registrar el estado en la agenda para el seguimiento a 7 días
 
 **Regla de oro:** nadie sale del embudo sin una fecha de siguiente acción.
 Si dijo "no por ahora", la siguiente acción es "volver en 30 días".

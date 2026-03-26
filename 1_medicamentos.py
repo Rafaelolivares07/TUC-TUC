@@ -7,6 +7,8 @@ from psycopg2 import sql as psycopg2_sql
 import uuid
 import json
 import os
+import tempfile
+import time
 import re
 from werkzeug.utils import secure_filename
 import hashlib
@@ -19321,6 +19323,75 @@ def api_chat_invitado_audio():
         return jsonify({'ok': True, 'url': result['secure_url']})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+_AUDIO_TMP = os.path.join(tempfile.gettempdir(), 'tuctuc_audio_chunks')
+os.makedirs(_AUDIO_TMP, exist_ok=True)
+
+
+@app.route('/api/chat/audio/chunk', methods=['POST'])
+def api_chat_audio_chunk():
+    """Recibe un chunk de audio mientras se graba y lo acumula en disco"""
+    upload_id = request.form.get('upload_id', '').strip()
+    # Sanitizar para evitar path traversal
+    upload_id = ''.join(c for c in upload_id if c.isalnum() or c == '-')
+    if not upload_id or len(upload_id) > 64:
+        return jsonify({'ok': False, 'error': 'upload_id inválido'}), 400
+    if 'chunk' not in request.files:
+        return jsonify({'ok': False, 'error': 'Sin chunk'}), 400
+    try:
+        chunk_path = os.path.join(_AUDIO_TMP, f'{upload_id}.webm')
+        data = request.files['chunk'].read()
+        with open(chunk_path, 'ab') as f:
+            f.write(data)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/audio/finalizar', methods=['POST'])
+def api_chat_audio_finalizar():
+    """Sube a Cloudinary el audio acumulado y devuelve la URL"""
+    upload_id = request.form.get('upload_id', '').strip()
+    upload_id = ''.join(c for c in upload_id if c.isalnum() or c == '-')
+    if not upload_id:
+        return jsonify({'ok': False, 'error': 'Sin upload_id'}), 400
+
+    # Puede llegar un chunk final junto con la petición de finalizar
+    chunk_path = os.path.join(_AUDIO_TMP, f'{upload_id}.webm')
+    if 'chunk' in request.files:
+        data = request.files['chunk'].read()
+        with open(chunk_path, 'ab') as f:
+            f.write(data)
+
+    if not os.path.exists(chunk_path):
+        return jsonify({'ok': False, 'error': 'Audio no encontrado'}), 404
+
+    try:
+        with open(chunk_path, 'rb') as f:
+            result = cloudinary.uploader.upload(
+                f,
+                resource_type='video',
+                folder='tuctuc_chat_audio',
+                format='mp3'
+            )
+        return jsonify({'ok': True, 'url': result['secure_url']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        try:
+            os.remove(chunk_path)
+        except Exception:
+            pass
+        # Limpiar archivos huérfanos > 1 hora
+        try:
+            ahora = time.time()
+            for f in os.listdir(_AUDIO_TMP):
+                fp = os.path.join(_AUDIO_TMP, f)
+                if ahora - os.path.getmtime(fp) > 3600:
+                    os.remove(fp)
+        except Exception:
+            pass
 
 
 @app.route('/api/chat/invitado/imagen', methods=['POST'])

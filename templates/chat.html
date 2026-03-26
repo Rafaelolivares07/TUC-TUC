@@ -367,31 +367,47 @@ function enviarImagen(input) {
   if (file) enviarImagenFile(file);
 }
 
-// ── Grabación audio (unificado) ───────────────────────────────────
+// ── Grabación audio con streaming de chunks ───────────────────────
+let _uploadId = null, _chunkPromises = [];
+
 async function toggleGrabacion() {
   const btn  = document.getElementById('btn-mic');
   const onda = document.getElementById('onda-mic');
-  const icon = document.getElementById('icono-mic');
   const tok  = MODO === 'creador' ? tokenActivo : TOKEN;
 
   if (!grabando) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      _uploadId = crypto.randomUUID();
+      _chunkPromises = [];
+      let totalBytes = 0;
+
+      mediaRecorder = new MediaRecorder(stream, {audioBitsPerSecond: 32000});
+
+      mediaRecorder.ondataavailable = e => {
+        if (!e.data || e.data.size === 0) return;
+        totalBytes += e.data.size;
+        const form = new FormData();
+        form.append('upload_id', _uploadId);
+        form.append('chunk', e.data, 'chunk.webm');
+        _chunkPromises.push(
+          fetch('/api/chat/audio/chunk', {method: 'POST', body: form}).catch(() => {})
+        );
+      };
+
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunks, {type: 'audio/webm'});
-        if (blob.size < 300) { if(icon) icon.style.display=''; if(onda) onda.classList.add('hidden'); btn.innerHTML=micIconSvg(); return; }
+        if (totalBytes < 300) { btn.innerHTML = micIconSvg(); if(onda) onda.classList.add('hidden'); return; }
         btn.innerHTML = '⏳';
+        await Promise.all(_chunkPromises);
         const form = new FormData();
-        form.append('audio', blob, 'audio.webm');
-        const rUp = await fetch('/api/chat/invitado/audio', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+        form.append('upload_id', _uploadId);
+        const rUp = await fetch('/api/chat/audio/finalizar', {method: 'POST', body: form})
+          .then(r => r.json()).catch(() => null);
         if (rUp && rUp.ok) {
           await fetch('/api/chat/invitado/enviar', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({token: tok, mensaje:'', tipo:'audio', url_archivo: rUp.url, es_creador: MODO === 'creador'})
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: MODO === 'creador'})
           });
           pollMensajes();
         } else {
@@ -399,23 +415,22 @@ async function toggleGrabacion() {
         }
         btn.innerHTML = micIconSvg();
         if (onda) onda.classList.add('hidden');
-        if (icon) icon.style.display = '';
       };
-      mediaRecorder.start();
+
+      mediaRecorder.start(3000); // chunk cada 3 s
       grabando = true;
-      btn.classList.replace('bg-gray-700','bg-red-600');
-      if (btn.classList.contains('hover:bg-gray-600')) btn.classList.replace('hover:bg-gray-600','hover:bg-red-500');
+      btn.classList.replace('bg-gray-700', 'bg-red-600');
+      if (btn.classList.contains('hover:bg-gray-600')) btn.classList.replace('hover:bg-gray-600', 'hover:bg-red-500');
       btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
       if (onda) onda.classList.remove('hidden');
-      if (icon) icon.style.display = 'none';
     } catch(e) {
       alert('No se pudo acceder al micrófono. Verifica los permisos.');
     }
   } else {
     mediaRecorder.stop();
     grabando = false;
-    btn.classList.replace('bg-red-600','bg-gray-700');
-    if (btn.classList.contains('hover:bg-red-500')) btn.classList.replace('hover:bg-red-500','hover:bg-gray-600');
+    btn.classList.replace('bg-red-600', 'bg-gray-700');
+    if (btn.classList.contains('hover:bg-red-500')) btn.classList.replace('hover:bg-red-500', 'hover:bg-gray-600');
   }
 }
 

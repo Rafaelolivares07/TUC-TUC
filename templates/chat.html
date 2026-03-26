@@ -129,6 +129,12 @@
         </svg>
       </button>
       <input id="inp-chat-imagen" type="file" accept="image/*" class="hidden" onchange="enviarImagen(this)">
+      <button id="btn-stt" onclick="toggleSTT()"
+              class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition" title="Dictar texto">
+        <svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+        </svg>
+      </button>
       <button id="btn-mic" onclick="toggleGrabacion()"
               class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition relative" title="Grabar audio">
         <svg id="icono-mic" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,16 +148,6 @@
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
         </svg>
-      </button>
-    </div>
-    <div class="flex justify-center mt-1.5">
-      <button id="btn-stt" onclick="toggleSTT()"
-              class="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition px-2 py-1 rounded-full">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
-        Dictado de voz
       </button>
     </div>
   </div>
@@ -676,6 +672,12 @@ function abrirConv(token, nombre) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
         </button>
+        <button id="btn-stt" onclick="toggleSTT()" title="Dictar texto"
+                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0">
+          <svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+          </svg>
+        </button>
         <button id="btn-mic" onclick="toggleGrabacion()" title="Grabar audio"
                 class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0 relative">
           ${micIconSvg()}
@@ -685,16 +687,6 @@ function abrirConv(token, nombre) {
         </button>
         <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-        </button>
-      </div>
-      <div class="flex justify-center mt-1.5">
-        <button id="btn-stt" onclick="toggleSTT()"
-                class="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition px-2 py-1 rounded-full">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-          </svg>
-          Dictado de voz
         </button>
       </div>
     </div>`;
@@ -876,6 +868,9 @@ function copiarMiLink() {
 }
 
 // STT
+const _sttIconNormal = `<svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>`;
+const _sttIconActivo = `<svg class="w-5 h-5 text-emerald-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#10b981" opacity=".25"/><circle cx="12" cy="12" r="5" fill="#10b981"/></svg>`;
+
 function toggleSTT() {
   if (!STT) { alert('Tu navegador no soporta dictado de voz. Prueba Chrome o Edge.'); return; }
   const btn = document.getElementById('btn-stt');
@@ -890,17 +885,14 @@ function toggleSTT() {
     reconocedor.onerror = () => desactivarSTT();
     reconocedor.onend = () => { if (sttActivo) reconocedor.start(); };
     reconocedor.start(); sttActivo = true;
-    btn.classList.add('text-emerald-400','bg-gray-800','rounded-full'); btn.classList.remove('text-gray-600');
-    btn.innerHTML = `<svg class="w-3.5 h-3.5 mr-1 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#10b981" opacity=".3"/><circle cx="12" cy="12" r="5" fill="#10b981"/></svg>Dictando... (toca para parar)`;
+    if (btn) { btn.classList.add('bg-emerald-900'); btn.classList.remove('bg-gray-700'); btn.innerHTML = _sttIconActivo; }
   } else { desactivarSTT(); }
 }
 
 function desactivarSTT() {
   if (reconocedor) reconocedor.stop(); sttActivo = false;
   const btn = document.getElementById('btn-stt');
-  btn.classList.remove('text-emerald-400','bg-gray-800');
-  btn.classList.add('text-gray-600');
-  btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Dictado de voz`;
+  if (btn) { btn.classList.remove('bg-emerald-900'); btn.classList.add('bg-gray-700'); btn.innerHTML = _sttIconNormal; }
 }
 
 // ── Drag & drop + paste de imágenes ──────────────────────────────

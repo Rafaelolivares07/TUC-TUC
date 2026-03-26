@@ -693,13 +693,14 @@
     <!-- Botón salir (esquina sup izq) -->
     <button id="btn-salir" onclick="salir()">&#x2715;</button>
 
-    <!-- Columna derecha: sonido, vista, estilo, explorar, recalcular -->
+    <!-- Columna derecha: sonido, vista, estilo, explorar, recalcular, waze -->
     <div id="columna-derecha">
         <button id="btn-sonido" onclick="toggleSonido()">&#x1F50A;</button>
         <button id="btn-vista" onclick="toggleVista()">3/3</button>
         <button id="btn-estilo" onclick="toggleEstilo()">&#x2600;&#xFE0F;</button>
         <button id="btn-explorar" onclick="toggleModoLibre()">&#x1F5FA;</button>
         <button id="btn-recalcular" onclick="recalcularRuta()" title="Recalcular ruta">&#x21BB;</button>
+        <button id="btn-waze-fijo" onclick="abrirWaze()" title="Navegar con Waze" style="background:#06caf4;color:#000;">W</button>
     </div>
 
     <!-- Botón volver a conducción (solo visible en modo libre) -->
@@ -1676,15 +1677,17 @@
         }
 
         function abrirWaze() {
-            if (!viajeActivo) return;
-            const lat = viajeActivo.destino_lat;
-            const lon = viajeActivo.destino_lon;
-            if (!lat || !lon) return;
-            // Intentar app Waze primero (mobile), fallback web
-            const urlApp = `waze://?ll=${lat},${lon}&navigate=yes`;
-            const urlWeb = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes&zoom=17`;
-            // En mobile abre la app; si no está instalada, el navegador ignora el scheme
-            // Abrimos la web como fallback con un pequeño delay
+            let urlApp, urlWeb;
+            if (viajeActivo && viajeActivo.destino_lat && viajeActivo.destino_lon) {
+                const lat = viajeActivo.destino_lat;
+                const lon = viajeActivo.destino_lon;
+                urlApp = `waze://?ll=${lat},${lon}&navigate=yes`;
+                urlWeb = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes&zoom=17`;
+            } else {
+                // Sin destino: abrir Waze en la ubicación actual o solo la app
+                urlApp = 'waze://';
+                urlWeb = 'https://waze.com';
+            }
             window.location.href = urlApp;
             setTimeout(() => { window.open(urlWeb, '_blank'); }, 1500);
         }

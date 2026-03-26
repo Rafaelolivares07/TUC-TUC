@@ -19075,13 +19075,17 @@ def api_chat_fix_tipo_audio():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def get_chat_tercero_id():
+    """Devuelve el tercero_id del usuario actual: por sesión registrada o sesión de invitado."""
+    return session.get('usuario_id') or session.get('chat_tercero_id') or None
+
+
 @app.route('/api/chat/invitar', methods=['POST'])
 def api_chat_invitar():
-    """Rafael crea un contacto invitado y obtiene el link de conversación"""
-    if 'usuario_id' not in session:
+    """Cualquier tercero autenticado crea una conversación y obtiene el link"""
+    usuario_id = get_chat_tercero_id()
+    if not usuario_id:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
-    usuario_id = session['usuario_id']
     data = request.get_json()
     nombre = (data.get('nombre') or 'Invitado').strip()
     origen = (data.get('origen') or '').strip()
@@ -19256,11 +19260,16 @@ def api_chat_invitado_mensajes(token):
             ORDER BY m.fecha ASC
         ''', (conv['id'], desde_id)).fetchall()
 
-        # Marcar como leídos los mensajes del invitado si el creador está consultando
+        # Marcar como leídos los mensajes del OTRO participante (según sesión)
+        viewer_id = get_chat_tercero_id()
+        if viewer_id:
+            otro_id = conv['creador_id'] if viewer_id == conv['invitado_id'] else conv['invitado_id']
+        else:
+            otro_id = conv['invitado_id']  # fallback antiguo
         conn.execute('''
             UPDATE mensajes SET estado = 'leido'
             WHERE conversacion_id = %s AND remitente_id = %s AND estado = 'pendiente'
-        ''', (conv['id'], conv['invitado_id']))
+        ''', (conv['id'], otro_id))
 
         conn.commit()
         conn.close()
@@ -19302,9 +19311,8 @@ def api_chat_invitado_enviar():
 
         # El remitente es el creador (Rafael) o el invitado
         if es_creador:
-            # Verificar que sea el creador real
-            creador_id = session.get('usuario_id')
-            if not creador_id or creador_id != conv['creador_id']:
+            sender = get_chat_tercero_id()
+            if not sender or sender != conv['creador_id']:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'No autorizado'}), 401
             remitente_id = conv['creador_id']
@@ -19435,37 +19443,37 @@ def api_chat_invitado_imagen():
 
 @app.route('/api/chat/mis-conversaciones', methods=['GET'])
 def api_chat_mis_conversaciones():
-    """Conversaciones del usuario autenticado (invitados + normales)"""
-    if 'usuario_id' not in session:
+    """Conversaciones del usuario actual — funciona para registrados e invitados."""
+    mid = get_chat_tercero_id()
+    if not mid:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-
-    usuario_id = session['usuario_id']
     try:
         conn = get_db_connection()
-
         convs = conn.execute('''
-            SELECT c.id, c.token, c.nombre_invitado, c.origen, c.creada_en,
-                   c.invitado_id as tercero_id_invitado,
-                   t.nombre as nombre_invitado_actual, t.foto_perfil as foto_invitado,
+            SELECT c.id, c.token, c.origen, c.creador_id,
+                   CASE WHEN c.creador_id = %(mid)s THEN c.invitado_id ELSE c.creador_id END AS otro_id,
+                   t_otro.nombre    AS nombre_otro,
+                   t_otro.foto_perfil AS foto_otro,
+                   t_otro.tipo_tercero AS tipo_otro,
                    (SELECT COUNT(*) FROM mensajes m
                     WHERE m.conversacion_id = c.id
-                    AND m.remitente_id = c.invitado_id
-                    AND m.estado = 'pendiente') as no_leidos,
+                      AND m.remitente_id != %(mid)s
+                      AND m.estado = 'pendiente') AS no_leidos,
                    (SELECT m2.mensaje FROM mensajes m2
                     WHERE m2.conversacion_id = c.id
-                    ORDER BY m2.fecha DESC LIMIT 1) as ultimo_mensaje,
+                    ORDER BY m2.fecha DESC LIMIT 1) AS ultimo_mensaje,
                    (SELECT m2.tipo FROM mensajes m2
                     WHERE m2.conversacion_id = c.id
-                    ORDER BY m2.fecha DESC LIMIT 1) as ultimo_tipo,
+                    ORDER BY m2.fecha DESC LIMIT 1) AS ultimo_tipo,
                    (SELECT m2.fecha FROM mensajes m2
                     WHERE m2.conversacion_id = c.id
-                    ORDER BY m2.fecha DESC LIMIT 1) as ultima_fecha
+                    ORDER BY m2.fecha DESC LIMIT 1) AS ultima_fecha
             FROM conversaciones c
-            JOIN terceros t ON c.invitado_id = t.id
-            WHERE c.creador_id = %s AND c.activa = TRUE
+            JOIN terceros t_otro
+              ON t_otro.id = CASE WHEN c.creador_id = %(mid)s THEN c.invitado_id ELSE c.creador_id END
+            WHERE (c.creador_id = %(mid)s OR c.invitado_id = %(mid)s) AND c.activa = TRUE
             ORDER BY ultima_fecha DESC NULLS LAST
-        ''', (usuario_id,)).fetchall()
-
+        ''', {'mid': mid}).fetchall()
         conn.close()
         return jsonify({'ok': True, 'conversaciones': [dict(c) for c in convs]})
     except Exception as e:
@@ -19474,63 +19482,140 @@ def api_chat_mis_conversaciones():
 
 @app.route('/chat')
 def chat_panel():
-    """Panel de mensajería de Rafael (requiere sesión)"""
+    """Panel de mensajería — requiere sesión registrada"""
     if 'usuario_id' not in session:
         return redirect('/login')
-    return render_template('chat.html', modo='creador', token='',
-                           nombre_creador='', foto_creador='', tercero_creador_id=0)
+    return render_template('chat.html',
+                           mi_tercero_id=session['usuario_id'],
+                           es_invitado=False,
+                           token_inicial='')
 
 
 @app.route('/chat/<token>')
 def chat_invitado(token):
-    """Página pública de conversación para el invitado"""
-    nombre_creador = 'TUC TUC'
-    foto_creador = ''
-    tercero_creador_id = 0
+    """Conversación por link — establece sesión de invitado"""
     try:
         conn = get_db_connection()
-        row = conn.execute('''
-            SELECT t.id, t.nombre, t.foto_perfil FROM conversaciones c
-            JOIN terceros t ON c.creador_id = t.id
-            WHERE c.token = %s
+        conv = conn.execute('''
+            SELECT c.invitado_id, c.activa FROM conversaciones c WHERE c.token = %s
         ''', (token,)).fetchone()
         conn.close()
-        if row:
-            tercero_creador_id = row['id']
-            nombre_creador = row['nombre']
-            foto_creador = row['foto_perfil'] or ''
     except Exception:
-        pass
-    return render_template('chat.html', modo='invitado', token=token,
-                           nombre_creador=nombre_creador, foto_creador=foto_creador,
-                           tercero_creador_id=tercero_creador_id)
+        conv = None
+
+    if not conv or not conv['activa']:
+        return "Conversación no encontrada", 404
+
+    # Establecer sesión de invitado (si no hay sesión registrada ya)
+    if 'usuario_id' not in session:
+        session['chat_tercero_id'] = conv['invitado_id']
+        session['chat_token'] = token
+
+    mi_id = session.get('usuario_id') or conv['invitado_id']
+    es_inv = 'usuario_id' not in session
+
+    return render_template('chat.html',
+                           mi_tercero_id=mi_id,
+                           es_invitado=es_inv,
+                           token_inicial=token)
 
 
 @app.route('/api/chat/mi-perfil', methods=['GET'])
 def api_chat_mi_perfil():
-    """Datos del usuario autenticado: nombre y foto_perfil"""
-    if 'usuario_id' not in session:
+    """Datos del tercero actual (registrado o invitado)"""
+    mid = get_chat_tercero_id()
+    if not mid:
         return jsonify({'ok': False}), 401
     try:
         conn = get_db_connection()
         row = conn.execute(
-            'SELECT id, nombre, foto_perfil, token_chat FROM terceros WHERE id = %s',
-            (session['usuario_id'],)
+            'SELECT id, nombre, foto_perfil, token_chat, tipo_tercero FROM terceros WHERE id = %s',
+            (mid,)
         ).fetchone()
         conn.close()
         if row:
             return jsonify({'ok': True, 'id': row['id'], 'nombre': row['nombre'],
-                            'foto': row['foto_perfil'] or '', 'token_chat': row['token_chat'] or ''})
+                            'foto': row['foto_perfil'] or '', 'token_chat': row['token_chat'] or '',
+                            'tipo_tercero': row['tipo_tercero'] or 'invitado'})
         return jsonify({'ok': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
 
 
+@app.route('/api/chat/registrar-telefono', methods=['POST'])
+def api_chat_registrar_telefono():
+    """Convierte un tercero invitado en registrado. Caso A: sin conflicto → update.
+    Caso B: teléfono ya existe → fusionar (migrar referencias al tercero existente)."""
+    mid = get_chat_tercero_id()
+    if not mid:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json() or {}
+    telefono = (data.get('telefono') or '').strip()
+    nombre   = (data.get('nombre')   or '').strip()
+
+    if not telefono or len(telefono) < 7:
+        return jsonify({'ok': False, 'error': 'Teléfono inválido'})
+
+    try:
+        conn = get_db_connection()
+
+        actual = conn.execute(
+            'SELECT id, tipo_tercero, telefono FROM terceros WHERE id = %s', (mid,)
+        ).fetchone()
+        if not actual:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'})
+
+        if actual['tipo_tercero'] == 'registrado' and actual['telefono']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ya tienes cuenta registrada'})
+
+        # Caso B: teléfono ya pertenece a otro tercero → fusionar
+        existente = conn.execute(
+            'SELECT id FROM terceros WHERE telefono = %s AND id != %s', (telefono, mid)
+        ).fetchone()
+
+        if existente:
+            winner = existente['id']
+            for tabla, col in [('conversaciones','creador_id'), ('conversaciones','invitado_id'),
+                                ('mensajes','remitente_id'), ('mensajes','destinatario_id')]:
+                conn.execute(f'UPDATE {tabla} SET {col} = %s WHERE {col} = %s', (winner, mid))
+            if nombre:
+                conn.execute('UPDATE terceros SET nombre = %s WHERE id = %s', (nombre, winner))
+            conn.execute('DELETE FROM terceros WHERE id = %s', (mid,))
+            conn.commit()
+            conn.close()
+            session.pop('chat_tercero_id', None)
+            session.pop('chat_token', None)
+            session['usuario_id'] = winner
+            return jsonify({'ok': True, 'tercero_id': winner, 'merged': True})
+        else:
+            # Caso A: upgrade in-place
+            updates = ['tipo_tercero = %s', 'telefono = %s']
+            params  = ['registrado', telefono]
+            if nombre:
+                updates.append('nombre = %s')
+                params.append(nombre)
+            params.append(mid)
+            conn.execute(f"UPDATE terceros SET {', '.join(updates)} WHERE id = %s", params)
+            conn.commit()
+            conn.close()
+            session.pop('chat_tercero_id', None)
+            session.pop('chat_token', None)
+            session['usuario_id'] = mid
+            return jsonify({'ok': True, 'tercero_id': mid, 'merged': False})
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)})
+
+
 @app.route('/api/chat/perfil/foto', methods=['POST'])
 def api_chat_perfil_foto():
-    """Subir o actualizar foto de perfil (auth o token de invitado)"""
+    """Subir o actualizar foto de perfil (cualquier tercero autenticado)"""
     token_inv = request.form.get('token_invitado', '').strip()
-    usuario_id = session.get('usuario_id')
+    usuario_id = get_chat_tercero_id()
 
     if not usuario_id and not token_inv:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401

@@ -3,18 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  {% if modo == 'invitado' %}
-  <title>{{ nombre_creador }} te envió un audio 🎵</title>
-  <meta property="og:title" content="{{ nombre_creador }} te envió un audio exclusivo 🎵">
-  <meta property="og:description" content="Escúchalo aquí — solo disponible en TUC TUC. Respóndele con voz o texto, sin registrarte.">
+  <title>TUC TUC Chat</title>
+  {% if es_invitado %}
+  <meta property="og:title" content="Tienes un mensaje en TUC TUC 💬">
+  <meta property="og:description" content="Responde con texto, audio o imagen — sin registrarte.">
   <meta property="og:type" content="website">
-  {% if foto_creador %}<meta property="og:image" content="{{ foto_creador }}">{% endif %}
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="{{ nombre_creador }} te envió un audio exclusivo 🎵">
-  <meta name="twitter:description" content="Escúchalo aquí — solo disponible en TUC TUC.">
-  {% if foto_creador %}<meta name="twitter:image" content="{{ foto_creador }}">{% endif %}
-  {% else %}
-  <title>Mensajería — TUC TUC</title>
+  <meta name="twitter:card" content="summary">
   {% endif %}
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -43,19 +37,18 @@
 <body class="bg-gray-950 text-white overflow-hidden flex" style="height:100dvh">
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- SIDEBAR — solo modo creador                                    -->
+<!-- SIDEBAR — todos los terceros                                   -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-{% if modo == 'creador' %}
 <div id="sidebar" class="w-full md:w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
 
   <div class="p-4 border-b border-gray-800 flex items-center justify-between">
     <div class="flex items-center gap-2">
       <div id="mi-avatar" onclick="abrirModalPerfil()"
            class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Perfil y configuración">
-        R
+        ?
       </div>
       <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
-      <span class="font-semibold">TUC TUC Chat</span>
+      <span id="mi-nombre-sidebar" class="font-semibold text-sm truncate">TUC TUC Chat</span>
     </div>
     <div class="flex gap-1.5">
       <button onclick="abrirChatMerlin()" title="Hablar con Merlin"
@@ -69,18 +62,24 @@
     </div>
   </div>
 
-  <div id="lista-convs" class="flex-1 overflow-y-auto">
+  {% if es_invitado %}
+  <div id="banner-registro" class="mx-3 mt-3 bg-indigo-900/40 border border-indigo-700/50 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+    <p class="text-xs text-indigo-300 leading-snug">Regístrate para no perder tus conversaciones</p>
+    <button onclick="abrirModalRegistro()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition whitespace-nowrap flex-shrink-0">
+      Registrar
+    </button>
+  </div>
+  {% endif %}
+
+  <div id="lista-convs" class="flex-1 overflow-y-auto mt-1">
     <div class="p-4 text-gray-500 text-sm text-center">Cargando...</div>
   </div>
 </div>
-{% endif %}
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <!-- PANEL CHAT                                                     -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<div id="panel-chat" class="flex-1 flex flex-col {% if modo == 'creador' %}hidden md:flex{% endif %}">
-
-  {% if modo == 'creador' %}
+<div id="panel-chat" class="flex-1 flex flex-col hidden md:flex">
   <!-- Estado vacío — se reemplaza al abrir una conversación -->
   <div class="flex-1 flex items-center justify-center text-gray-600">
     <div class="text-center">
@@ -89,76 +88,6 @@
       <p class="text-sm mt-1">o invita a alguien nuevo</p>
     </div>
   </div>
-
-  {% else %}
-  <!-- ── HEADER invitado ─────────────────────────────────────────── -->
-  <div id="header" class="flex-shrink-0 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3">
-    <div id="avatar-creador"
-         onclick="abrirGaleria(TERCERO_CREADOR_ID, '{{ nombre_creador }}', false)"
-         class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">
-      {% if foto_creador %}<img src="{{ foto_creador }}" class="w-full h-full object-cover">{% else %}?{% endif %}
-    </div>
-    <div class="flex-1 min-w-0">
-      <div id="nombre-creador" class="font-semibold text-sm truncate">TUC TUC</div>
-      <div class="text-xs text-emerald-400">en línea</div>
-    </div>
-    <button onclick="abrirModalInvitar()"
-            class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-full transition flex-shrink-0">
-      + Invitar
-    </button>
-  </div>
-
-  <!-- ── MENSAJES invitado ───────────────────────────────────────── -->
-  <div id="mensajes" class="flex-1 overflow-y-auto px-4 py-3 space-y-2"></div>
-
-  <!-- ── BARRA INFERIOR invitado ────────────────────────────────── -->
-  <div class="flex-shrink-0 bg-gray-900 border-t border-gray-800 px-3 pt-2.5 barra-input">
-    <div class="flex items-center gap-2 mb-2 px-1">
-      <div id="mi-avatar-inv" onclick="document.getElementById('inp-foto-inv').click()"
-           class="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-xs font-bold cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Cambiar mi foto">
-        ?
-      </div>
-      <input id="inp-foto-inv" type="file" accept="image/*" class="hidden" onchange="subirMiFoto(this)">
-      <span class="text-xs text-gray-500">Yo:</span>
-      <button id="btn-nombre-inv" onclick="editarNombreInvitado()" class="text-xs text-blue-400 hover:text-blue-300 font-medium transition">...</button>
-    </div>
-    <div class="flex items-end gap-2">
-      <div class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
-        <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
-                  class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none overflow-hidden max-h-28"
-                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
-                  oninput="autoResize(this)"></textarea>
-      </div>
-      <button onclick="document.getElementById('inp-chat-imagen').click()"
-              class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition" title="Enviar imagen">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-      </button>
-      <button id="btn-stt" onclick="toggleSTT()"
-              class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition" title="Dictar texto">
-        <svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
-        </svg>
-      </button>
-      <button id="btn-mic" onclick="toggleGrabacion()"
-              class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center flex-shrink-0 transition relative" title="Grabar audio">
-        <svg id="icono-mic" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-        </svg>
-        <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
-      </button>
-      <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center flex-shrink-0 transition">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-        </svg>
-      </button>
-    </div>
-  </div>
-  {% endif %}
-
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -189,29 +118,33 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- MODALES CREADOR                                                -->
+<!-- MODAL NUEVA CONVERSACIÓN (todos)                               -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-{% if modo == 'creador' %}
 <div id="modal-invitado" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center hidden p-4">
   <div class="bg-gray-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
     <h2 class="text-lg font-bold mb-4">Nueva conversación</h2>
     <div class="mb-3">
       <label class="text-xs text-gray-400 mb-1 block">Nombre del contacto</label>
       <input id="inv-nombre" type="text" placeholder="ej: María" autocomplete="off"
-             class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+             class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+             onkeydown="if(event.key==='Enter')crearInvitado()">
     </div>
     <div class="mb-5">
       <label class="text-xs text-gray-400 mb-1 block">Origen (opcional)</label>
       <input id="inv-origen" type="text" placeholder="ej: Tinder, WhatsApp..."
              class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
     </div>
-    <div class="flex gap-3">
+    <div id="inv-link-wrap" class="hidden mb-4">
+      <div id="inv-link-texto" class="bg-gray-800 rounded-xl p-3 text-blue-400 text-sm break-all mb-3 cursor-pointer select-all" onclick="copiarLinkInv()"></div>
+      <button onclick="copiarLinkInv()" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl text-sm font-medium transition">📋 Copiar link</button>
+    </div>
+    <div id="inv-btns" class="flex gap-3">
       <button onclick="cerrarModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 py-3 rounded-xl transition text-sm">Cancelar</button>
       <button onclick="crearInvitado()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl transition text-sm font-medium">Crear link</button>
     </div>
   </div>
 </div>
-<!-- Modal perfil creador -->
+<!-- Modal perfil (todos) -->
 <div id="modal-perfil" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
   <div class="bg-gray-900 rounded-t-3xl w-full max-w-md shadow-2xl pb-safe" onclick="event.stopPropagation()">
     <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mt-4 mb-5"></div>
@@ -262,57 +195,28 @@
     </div>
   </div>
 </div>
-{% endif %}
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- MODALES INVITADO                                               -->
+<!-- MODAL REGISTRO TELÉFONO (invitados)                            -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-{% if modo == 'invitado' %}
-<div id="modal-invitar" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+{% if es_invitado %}
+<div id="modal-registro" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
   <div class="bg-gray-900 rounded-t-3xl w-full max-w-md p-6 pb-8 shadow-2xl">
     <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5"></div>
-    <h2 class="text-base font-semibold mb-1">Invitar a alguien</h2>
-    <p class="text-xs text-gray-500 mb-4">Genera un link exclusivo para que te escuche un audio.</p>
-    <input id="inp-inv-nombre" type="text" placeholder="Nombre del contacto"
+    <h2 class="text-base font-semibold mb-1">Registrar mi número</h2>
+    <p class="text-xs text-gray-500 mb-5">Asocia tu número para acceder desde cualquier dispositivo y no perder tus conversaciones.</p>
+    <input id="reg-nombre" type="text" placeholder="Tu nombre"
            class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
-           onkeydown="if(event.key==='Enter')crearMiLink()">
-    <input id="inp-inv-origen" type="text" placeholder="Origen (ej: Tinder, Instagram...)"
-           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-           onkeydown="if(event.key==='Enter')crearMiLink()">
-    <div id="mi-link-generado" class="hidden mb-4">
-      <div id="mi-link-texto" class="bg-gray-800 rounded-xl p-3 text-blue-400 text-sm break-all mb-3 cursor-pointer select-all" onclick="copiarMiLink()"></div>
-      <button onclick="copiarMiLink()" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl text-sm font-medium transition">📋 Copiar link</button>
-    </div>
-    <div id="btns-invitar" class="flex gap-3">
-      <button onclick="cerrarModalInvitar()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
-      <button onclick="crearMiLink()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Crear link</button>
-    </div>
-  </div>
-</div>
-
-<div id="modal-nombre" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
-  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md p-6 pb-8 shadow-2xl">
-    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5"></div>
-    <h2 class="text-base font-semibold mb-1">¿Cómo te llamas?</h2>
-    <p class="text-xs text-gray-500 mb-4">Así te verá la otra persona en la conversación.</p>
-    <input id="inp-nombre-inv" type="text" placeholder="Tu nombre"
-           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-           onkeydown="if(event.key==='Enter')guardarNombre()">
+           onkeydown="if(event.key==='Enter')document.getElementById('reg-telefono').focus()">
+    <input id="reg-telefono" type="tel" placeholder="Teléfono (ej: 3001234567)"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-5"
+           onkeydown="if(event.key==='Enter')registrarTelefono()">
+    <div id="reg-error" class="hidden text-red-400 text-xs mb-3"></div>
     <div class="flex gap-3">
-      <button onclick="cerrarModalNombre()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
-      <button onclick="guardarNombre()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Listo</button>
+      <button onclick="cerrarModalRegistro()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
+      <button onclick="registrarTelefono()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Registrar</button>
     </div>
   </div>
-</div>
-
-<div id="estado-inicial" class="absolute inset-0 bg-gray-950 flex flex-col items-center justify-center z-40">
-  <div class="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/30">
-    <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
-      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/>
-      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"/>
-    </svg>
-  </div>
-  <div id="msg-estado" class="text-gray-400 text-sm">Conectando...</div>
 </div>
 {% endif %}
 
@@ -355,9 +259,9 @@
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <script>
 // ── Contexto desde Flask ─────────────────────────────────────────
-const MODO  = "{{ modo }}";
-const TOKEN = "{{ token }}";
-const TERCERO_CREADOR_ID = {{ tercero_creador_id or 0 }};
+const MI_TERCERO_ID  = {{ mi_tercero_id or 0 }};
+const ES_INVITADO    = {{ 'true' if es_invitado else 'false' }};
+const TOKEN_INICIAL  = "{{ token_inicial }}";
 
 // ── Estado compartido ────────────────────────────────────────────
 let grabando = false, mediaRecorder = null, audioChunks = [];
@@ -382,13 +286,9 @@ let _bufferPersonalizado = null;
 let _nombreArchivoTono = '';
 
 // ── Init ─────────────────────────────────────────────────────────
-if (MODO === 'creador') {
-  cargarConversaciones();
-  setInterval(cargarConversaciones, 15000);
-  cargarMiPerfil();
-} else {
-  initInvitado();
-}
+cargarConversaciones();
+setInterval(cargarConversaciones, 15000);
+cargarMiPerfil();
 
 // Swipe galería
 document.getElementById('modal-foto').addEventListener('touchstart', e => { _swipeX = e.touches[0].clientX; }, { passive: true });
@@ -431,19 +331,18 @@ function micIconSvg() {
   return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>';
 }
 
-// ── Enviar texto (unificado) ──────────────────────────────────────
+// ── Enviar texto ──────────────────────────────────────────────────
 function enviarTexto() {
-  const txId = MODO === 'creador' ? 'txt-msg' : 'txt-msg';
-  const el = document.getElementById(txId);
+  const el = document.getElementById('txt-msg');
   if (!el) return;
   const msg = el.value.trim();
-  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
-  if (!msg || !tok) return;
+  if (!msg || !tokenActivo) return;
   el.value = ''; el.style.height = 'auto';
+  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
   fetch('/api/chat/invitado/enviar', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({token: tok, mensaje: msg, tipo: 'texto', es_creador: MODO === 'creador'})
+    body: JSON.stringify({token: tokenActivo, mensaje: msg, tipo: 'texto', es_creador: esCreador})
   }).then(() => pollMensajes());
 }
 
@@ -460,7 +359,7 @@ let _uploadId = null, _chunkPromises = [];
 async function toggleGrabacion() {
   const btn  = document.getElementById('btn-mic');
   const onda = document.getElementById('onda-mic');
-  const tok  = MODO === 'creador' ? tokenActivo : TOKEN;
+  const tok  = tokenActivo;
 
   if (!grabando) {
     try {
@@ -494,7 +393,7 @@ async function toggleGrabacion() {
         if (rUp && rUp.ok) {
           await fetch('/api/chat/invitado/enviar', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: MODO === 'creador'})
+            body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: (convData[tok]?.creador_id === MI_TERCERO_ID)})
           });
           pollMensajes();
         } else {
@@ -521,16 +420,15 @@ async function toggleGrabacion() {
   }
 }
 
-// ── Polling mensajes (unificado) ──────────────────────────────────
+// ── Polling mensajes ──────────────────────────────────────────────
 function pollMensajes() {
-  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
-  if (!tok) return;
-  fetch(`/api/chat/invitado/mensajes/${tok}?desde=${ultimoMsgId}`)
+  if (!tokenActivo) return;
+  fetch(`/api/chat/invitado/mensajes/${tokenActivo}?desde=${ultimoMsgId}`)
     .then(r => r.json())
     .then(d => {
       if (!d.ok) return;
-      const contId = MODO === 'creador' ? 'mensajes' : 'mensajes';
-      const cont = document.getElementById(contId);
+      convInfo = d.conv;
+      const cont = document.getElementById('mensajes');
       if (!cont) return;
       renderMensajes(d.mensajes, cont);
     });
@@ -547,9 +445,7 @@ function renderMensajes(msgs, cont) {
     ultimoMsgId = Math.max(ultimoMsgId, m.id);
 
     // ¿Quién lo envió? — "mío" = lado derecho
-    const esMio = MODO === 'creador'
-      ? (m.remitente_tipo !== 'invitado')
-      : (m.remitente_tipo === 'invitado');
+    const esMio = m.remitente_id === MI_TERCERO_ID;
 
     if (!esInicio && !esMio) hayMsgAjeno = true;
 
@@ -557,8 +453,8 @@ function renderMensajes(msgs, cont) {
     const div = document.createElement('div');
     div.className = `flex ${esMio ? 'justify-end' : 'justify-start'} ${animClass}`;
 
-    // Hook especial: primer audio del creador visto por invitado
-    if (MODO === 'invitado' && !esMio && m.tipo === 'audio' && idx === 0 && esInicio && m.url_archivo) {
+    // Hook especial: primer audio ajeno al llegar por un link de invitación
+    if (ES_INVITADO && !esMio && m.tipo === 'audio' && idx === 0 && esInicio && m.url_archivo) {
       const nc = convInfo?.nombre_creador || 'TUC TUC';
       div.innerHTML = `
         <div class="audio-hook rounded-2xl rounded-bl-sm p-4 max-w-[80%] w-full">
@@ -682,7 +578,7 @@ async function galeriaSubirFoto(input) {
   const wrap = document.getElementById('galeria-foto-wrap');
   wrap.innerHTML = '<div class="text-white text-2xl animate-pulse">⏳</div>';
   const form = new FormData(); form.append('foto', input.files[0]);
-  if (MODO === 'invitado') form.append('token_invitado', TOKEN);
+  // token_invitado no requerido cuando hay sesión; se envía por compatibilidad
   const r = await fetch('/api/chat/fotos/agregar', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
   if (r && r.ok) { gFotos.push({id: r.id, url: r.url, orden: r.orden}); gIndice = gFotos.length - 1; galeriaRender(); }
   else { wrap.innerHTML = '<span>Error</span>'; alert('Error: ' + (r?.error || 'desconocido')); }
@@ -692,7 +588,7 @@ async function galeriaSubirFoto(input) {
 async function galeriaEliminarActual() {
   const f = gFotos[gIndice]; if (!f || !f.id) return;
   if (!confirm('¿Eliminar esta foto?')) return;
-  const body = MODO === 'invitado' ? JSON.stringify({token_invitado: TOKEN}) : '{}';
+  const body = '{}';
   const r = await fetch(`/api/chat/fotos/${f.id}`, {method:'DELETE', headers:{'Content-Type':'application/json'}, body}).then(r => r.json()).catch(() => null);
   if (r && r.ok) { gFotos.splice(gIndice, 1); if (gIndice >= gFotos.length) gIndice = Math.max(0, gFotos.length-1); galeriaRender(); }
 }
@@ -844,40 +740,44 @@ async function subirFotoPerfil(input) {
   const form = new FormData(); form.append('foto', input.files[0]);
   const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
   if (r && r.ok) { miFoto = r.url; localStorage.setItem('mi_foto_perfil', r.url); aplicarAvatar(el, r.url); }
-  else { el.innerHTML = 'R'; alert('Error: ' + (r?.error || 'desconocido')); }
+  else { el.innerHTML = '?'; alert('Error: ' + (r?.error || 'desconocido')); }
 }
 
-function cargarConversaciones() {
-  fetch('/api/chat/mis-conversaciones').then(r => r.json()).then(d => {
-    if (!d.ok) return;
-    d.conversaciones.forEach(c => { convData[c.token] = c; });
-    const el = document.getElementById('lista-convs');
-    if (!d.conversaciones.length) {
-      el.innerHTML = '<div class="p-6 text-center text-gray-600 text-sm">Sin conversaciones aún.<br>Invita a alguien.</div>'; return;
-    }
+async function cargarConversaciones() {
+  const d = await fetch('/api/chat/mis-conversaciones').then(r => r.json()).catch(() => null);
+  if (!d || !d.ok) return;
+  d.conversaciones.forEach(c => { convData[c.token] = c; });
+  const el = document.getElementById('lista-convs');
+  if (!d.conversaciones.length) {
+    el.innerHTML = '<div class="p-6 text-center text-gray-600 text-sm">Sin conversaciones aún.<br>Invita a alguien.</div>';
+  } else {
     el.innerHTML = d.conversaciones.map(c => {
-      const nombre = c.nombre_invitado || c.nombre_invitado_actual;
+      const nombre = c.nombre_otro || '...';
       const noLeidos = c.no_leidos > 0 ? `<span class="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">${c.no_leidos}</span>` : '';
-      const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_mensaje || '');
+      const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_tipo === 'imagen' ? '📷 Imagen' : (c.ultimo_tipo === 'card' ? '🛒 Producto' : (c.ultimo_mensaje || '')));
       const origen = c.origen ? `<span class="text-gray-600 text-xs"> · ${c.origen}</span>` : '';
-      const esMerlin = nombre === 'Merlin';
+      const esMerlin = c.tipo_otro === 'merlin';
       const avatarEl = esMerlin
         ? `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center flex-shrink-0 text-white">
              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>
            </div>`
-        : avatarHtml(c.foto_invitado, nombre);
-      return `<div onclick="abrirConv('${c.token}','${nombre}')"
+        : avatarHtml(c.foto_otro, nombre);
+      return `<div onclick="abrirConv('${c.token}','${escHtml(nombre)}')"
                    class="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800/50 transition ${tokenActivo===c.token?'bg-gray-800':''}">
         ${avatarEl}
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between">
-            <span class="font-medium text-sm truncate">${nombre}${esMerlin ? ' <span class="text-xs text-indigo-400">IA</span>' : ''}${noLeidos}</span>${origen}
+            <span class="font-medium text-sm truncate">${escHtml(nombre)}${esMerlin ? ' <span class="text-xs text-indigo-400">IA</span>' : ''}${noLeidos}</span>${origen}
           </div>
-          <div class="text-gray-500 text-xs truncate mt-0.5">${ultimoMsg}</div>
+          <div class="text-gray-500 text-xs truncate mt-0.5">${escHtml(ultimoMsg)}</div>
         </div>
       </div>`;
     }).join('');
-  });
+  }
+  // Auto-abrir conv inicial (para invitados que llegan por link)
+  if (TOKEN_INICIAL && !tokenActivo && convData[TOKEN_INICIAL]) {
+    abrirConv(TOKEN_INICIAL, convData[TOKEN_INICIAL].nombre_otro || '...');
+  }
 }
 
 function abrirConv(token, nombre) {
@@ -890,19 +790,24 @@ function abrirConv(token, nombre) {
   if (pollingInterval) clearInterval(pollingInterval);
 
   const c = convData[token] || {};
-  const fotoInv = c.foto_invitado || '';
-  const avatarH = fotoInv ? `<img src="${fotoInv}" class="w-full h-full object-cover">` : `<span>${nombre[0].toUpperCase()}</span>`;
+  const otroId = c.otro_id || 0;
+  const fotoOtro = c.foto_otro || '';
+  const tipoOtro = c.tipo_otro || 'invitado';
+  const avatarH = fotoOtro ? `<img src="${fotoOtro}" class="w-full h-full object-cover">` : `<span>${nombre[0].toUpperCase()}</span>`;
+  const estadoLabel = tipoOtro === 'merlin' ? '<span class="text-xs text-indigo-400">IA</span>'
+                    : tipoOtro === 'registrado' ? '<span class="text-xs text-emerald-400">registrado</span>'
+                    : '<span class="text-xs text-gray-500">sin registro</span>';
 
   panel.innerHTML = `
     <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 flex-shrink-0">
       <button onclick="volverSidebar()" class="md:hidden text-gray-400 hover:text-white mr-1">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
       </button>
-      <div onclick="abrirGaleria(${c.tercero_id_invitado||0},'${nombre}',false)"
+      <div onclick="abrirGaleria(${otroId},'${escHtml(nombre)}',false)"
            class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">${avatarH}</div>
       <div class="flex-1 min-w-0">
-        <div class="font-semibold text-sm">${nombre}</div>
-        <div class="text-xs text-gray-500">Sin registrarse</div>
+        <div class="font-semibold text-sm">${escHtml(nombre)}</div>
+        <div>${estadoLabel}</div>
       </div>
       <button onclick="copiarLinkActivo()" id="btn-compartir"
               class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-full transition flex-shrink-0">
@@ -981,21 +886,32 @@ let linkGenerado = '';
 function abrirNuevoInvitado() {
   document.getElementById('inv-nombre').value = '';
   document.getElementById('inv-origen').value = '';
+  document.getElementById('inv-link-wrap').classList.add('hidden');
+  document.getElementById('inv-btns').classList.remove('hidden');
   document.getElementById('modal-invitado').classList.remove('hidden');
   setTimeout(() => document.getElementById('inv-nombre').focus(), 100);
 }
 function cerrarModal() { document.getElementById('modal-invitado').classList.add('hidden'); }
 
-function crearInvitado() {
+function copiarLinkInv() {
+  navigator.clipboard.writeText(linkGenerado).then(() => {
+    const btn = document.querySelector('#inv-link-wrap button');
+    if (btn) { const o = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = o, 1800); }
+  });
+}
+
+async function crearInvitado() {
   const nombre = document.getElementById('inv-nombre').value.trim() || 'Invitado';
   const origen = document.getElementById('inv-origen').value.trim();
-  fetch('/api/chat/invitar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, origen})})
-    .then(r => r.json()).then(d => {
-      if (!d.ok) { alert('Error: ' + d.error); return; }
-      cerrarModal(); linkGenerado = d.link;
-      cargarConversaciones();
-      abrirConv(d.token, nombre);
-    });
+  const d = await fetch('/api/chat/invitar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, origen})})
+    .then(r => r.json()).catch(() => null);
+  if (!d || !d.ok) { alert('Error: ' + (d?.error || 'desconocido')); return; }
+  linkGenerado = d.link;
+  document.getElementById('inv-link-texto').textContent = d.link;
+  document.getElementById('inv-link-wrap').classList.remove('hidden');
+  document.getElementById('inv-btns').classList.add('hidden');
+  await cargarConversaciones();
+  abrirConv(d.token, nombre);
 }
 
 function eliminarConv(token) {
@@ -1015,134 +931,51 @@ function eliminarConv(token) {
 // MODO INVITADO
 // ══════════════════════════════════════════════════════════════════
 
-async function initInvitado() {
-  const yaReclamado = localStorage.getItem(`claimed_${TOKEN}`);
-  if (!yaReclamado) {
-    // Primera vez — reclamar el token de un solo uso
-    const rc = await fetch(`/api/chat/reclamar/${TOKEN}`, {method:'POST'}).then(r => r.json()).catch(() => null);
-    if (!rc || !rc.ok) {
-      const msgEl = document.getElementById('msg-estado');
-      if (rc && rc.error === 'ya_usado') {
-        msgEl.innerHTML = `
-          <div class="text-center px-6">
-            <div class="text-4xl mb-4">🔒</div>
-            <p class="text-white font-semibold mb-2">Este enlace ya fue usado</p>
-            <p class="text-gray-400 text-sm">Pídele a quien te lo envió que genere uno nuevo para ti.</p>
-          </div>`;
-      } else {
-        msgEl.textContent = 'Conversación no encontrada o expirada.';
-      }
-      return;
-    }
-    localStorage.setItem(`claimed_${TOKEN}`, '1');
-  }
-
-  const r = await fetch(`/api/chat/invitado/mensajes/${TOKEN}?desde=0`).then(r => r.json()).catch(() => null);
-  if (!r || !r.ok) {
-    document.getElementById('msg-estado').textContent = 'Conversación no encontrada o expirada.'; return;
-  }
-  convInfo = r.conv;
-  document.getElementById('estado-inicial').classList.add('hidden');
-
-  const nc = convInfo.nombre_creador || 'TUC TUC';
-  document.getElementById('nombre-creador').textContent = nc;
-  const avC = document.getElementById('avatar-creador');
-  if (avC && !avC.querySelector('img')) avC.textContent = nc[0].toUpperCase();
-
-  const fotoGuardada = localStorage.getItem(`foto_inv_${TOKEN}`);
-  if (fotoGuardada) aplicarAvatarInv(fotoGuardada);
-
-  const nombreGuardado = localStorage.getItem(`nombre_inv_${TOKEN}`);
-  setNombreInvitado(nombreGuardado || convInfo.nombre_invitado || 'Tú', false);
-
-  const cont = document.getElementById('mensajes');
-  renderMensajes(r.mensajes, cont);
-  pollingInterval = setInterval(pollMensajes, 3000);
-}
-
-function setNombreInvitado(nombre, animar) {
-  const btn = document.getElementById('btn-nombre-inv');
-  if (!btn) return;
-  btn.textContent = nombre;
-  if (animar) { btn.classList.add('text-emerald-400'); setTimeout(() => btn.classList.remove('text-emerald-400'), 1000); }
-}
-
-function editarNombreInvitado() {
-  const actual = document.getElementById('btn-nombre-inv').textContent;
-  document.getElementById('inp-nombre-inv').value = actual === '...' ? '' : actual;
-  document.getElementById('modal-nombre').classList.remove('hidden');
-  setTimeout(() => document.getElementById('inp-nombre-inv').focus(), 150);
-}
-function cerrarModalNombre() { document.getElementById('modal-nombre').classList.add('hidden'); }
-
-function guardarNombre() {
-  const nombre = document.getElementById('inp-nombre-inv').value.trim();
-  if (!nombre) return;
-  localStorage.setItem(`nombre_inv_${TOKEN}`, nombre);
-  setNombreInvitado(nombre, true);
-  cerrarModalNombre();
-  fetch('/api/chat/invitado/enviar', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({token: TOKEN, mensaje: `[nombre:${nombre}]`, tipo: 'sistema', es_creador: false})
-  }).catch(() => {});
-}
-
-function aplicarAvatarInv(url) { aplicarAvatar(document.getElementById('mi-avatar-inv'), url); }
-
-async function subirMiFoto(input) {
-  if (!input.files[0]) return;
-  const el = document.getElementById('mi-avatar-inv'); el.innerHTML = '⏳';
-  const form = new FormData(); form.append('foto', input.files[0]); form.append('token_invitado', TOKEN);
-  const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
-  if (r && r.ok) { localStorage.setItem(`foto_inv_${TOKEN}`, r.url); aplicarAvatarInv(r.url); }
-  else { el.innerHTML = '?'; alert('Error: ' + (r?.error || 'desconocido')); }
-}
-
 // ── MERLIN ────────────────────────────────────────────────────────────────────
 async function abrirChatMerlin() {
   try {
     const r = await fetch('/api/chat/merlin/iniciar', {method: 'POST'}).then(r => r.json());
     if (!r.ok) throw new Error(r.error);
+    await cargarConversaciones();
     abrirConv(r.token, 'Merlin');
   } catch(e) {
     alert('Error abriendo chat con Merlin: ' + e.message);
   }
 }
 
-// Invitar contacto
-let miLinkGenerado = '';
-function abrirModalInvitar() {
-  document.getElementById('mi-link-generado').classList.add('hidden');
-  document.getElementById('btns-invitar').classList.remove('hidden');
-  document.getElementById('inp-inv-nombre').value = '';
-  document.getElementById('inp-inv-origen').value = '';
-  miLinkGenerado = '';
-  document.getElementById('modal-invitar').classList.remove('hidden');
-  setTimeout(() => document.getElementById('inp-inv-nombre').focus(), 150);
+// ── Registro de teléfono ──────────────────────────────────────────
+function abrirModalRegistro() {
+  const m = document.getElementById('modal-registro'); if (!m) return;
+  document.getElementById('reg-nombre').value = '';
+  document.getElementById('reg-telefono').value = '';
+  document.getElementById('reg-error').classList.add('hidden');
+  m.classList.remove('hidden');
+  setTimeout(() => document.getElementById('reg-nombre').focus(), 150);
 }
-function cerrarModalInvitar() { document.getElementById('modal-invitar').classList.add('hidden'); }
+function cerrarModalRegistro() {
+  document.getElementById('modal-registro')?.classList.add('hidden');
+}
 
-async function crearMiLink() {
-  const nombre = document.getElementById('inp-inv-nombre').value.trim();
-  if (!nombre) { document.getElementById('inp-inv-nombre').focus(); return; }
-  const origen = document.getElementById('inp-inv-origen').value.trim();
-  const r = await fetch('/api/chat/invitado/invitar', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({token_invitado: TOKEN, nombre, origen})
+async function registrarTelefono() {
+  const nombre   = document.getElementById('reg-nombre').value.trim();
+  const telefono = document.getElementById('reg-telefono').value.trim();
+  const errEl    = document.getElementById('reg-error');
+  errEl.classList.add('hidden');
+  if (!telefono || telefono.length < 7) { errEl.textContent = 'Ingresa un teléfono válido.'; errEl.classList.remove('hidden'); return; }
+
+  const r = await fetch('/api/chat/registrar-telefono', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nombre, telefono})
   }).then(r => r.json()).catch(() => null);
-  if (r && r.ok) {
-    miLinkGenerado = r.link;
-    document.getElementById('mi-link-texto').textContent = r.link;
-    document.getElementById('mi-link-generado').classList.remove('hidden');
-    document.getElementById('btns-invitar').classList.add('hidden');
-  } else { alert('Error: ' + (r?.error || 'desconocido')); }
-}
 
-function copiarMiLink() {
-  if (!miLinkGenerado) return;
-  navigator.clipboard.writeText(miLinkGenerado).then(() => {
-    const btn = document.querySelector('#modal-invitar button.bg-green-600');
-    if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = '📋 Copiar link', 2000); }
-  });
+  if (!r || !r.ok) { errEl.textContent = r?.error || 'Error al registrar.'; errEl.classList.remove('hidden'); return; }
+
+  cerrarModalRegistro();
+  document.getElementById('banner-registro')?.remove();
+  // Actualizar UI con nueva identidad
+  cargarMiPerfil();
+  cargarConversaciones();
+  alert(r.merged ? '¡Cuenta unificada! Tus conversaciones se fusionaron.' : '¡Registrado correctamente! Ya puedes acceder desde cualquier dispositivo.');
 }
 
 // STT
@@ -1207,15 +1040,15 @@ document.addEventListener('paste', e => {
 });
 
 async function enviarImagenFile(file) {
-  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
-  if (!tok) return;
+  if (!tokenActivo) return;
   const form = new FormData();
   form.append('imagen', file);
   const rUp = await fetch('/api/chat/invitado/imagen', {method: 'POST', body: form}).then(r => r.json()).catch(() => null);
   if (!rUp || !rUp.ok) { alert('Error subiendo imagen: ' + (rUp?.error || 'desconocido')); return; }
+  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
   await fetch('/api/chat/invitado/enviar', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({token: tok, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: MODO === 'creador'})
+    body: JSON.stringify({token: tokenActivo, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: esCreador})
   });
   pollMensajes();
 }
@@ -1335,11 +1168,11 @@ async function enviarCard(itemIdx) {
 
   cerrarModalCard();
 
-  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
+  const tok = tokenActivo;
   if (!tok) return;
   await fetch('/api/chat/invitado/enviar', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({token: tok, mensaje: it.titulo, tipo: 'card', card_payload: payload, es_creador: true})
+    body: JSON.stringify({token: tok, mensaje: it.titulo, tipo: 'card', card_payload: payload, es_creador: convData[tok]?.creador_id === MI_TERCERO_ID})
   });
   pollMensajes();
 }

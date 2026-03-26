@@ -23,6 +23,7 @@ import io
 import os
 import sys
 import time
+import uuid
 import socket
 import subprocess
 import psycopg2
@@ -40,16 +41,21 @@ load_dotenv()
 DB_URL         = os.getenv('DATABASE_URL')
 APP_DIR        = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\AppData\Roaming\npm\claude.cmd"
+SESSIONS_DIR   = Path.home() / '.claude' / 'projects'
+MEMORIA_DIR    = Path(r"C:\Users\RAFAEL OLIVARES\.claude\projects\C--Users-RAFAEL-OLIVARES-Documents-MiAppMedicamentos\memory")
+SESSION_FILE   = APP_DIR / 'merlin_rafael_session_id.txt'  # sesión persistente para Rafael
 
 POLL_INTERVAL  = 4     # segundos entre checks
 MAX_HISTORIAL  = 12    # mensajes de contexto por conversación
 LOCK_PORT      = 47834 # diferente al de chat_bridge (47832) y git_bridge
 MERLIN_NOMBRE  = 'Merlin'
 MERLIN_TIPO    = 'merlin'
+RAFAEL_ID      = 16    # tercero_id de Rafael — usa sesión persistente con herramientas
 # ─────────────────────────────────────────────────────────────────────────────
 
-_lock_socket = None
-_merlin_id   = None   # cache en memoria
+_lock_socket    = None
+_merlin_id      = None   # cache en memoria
+_rafael_session = None   # cache de session_id para Rafael
 
 
 def ts():
@@ -327,6 +333,111 @@ def llamar_claude(prompt):
         return f'_(Error: {e})_'
 
 
+# ── Sesión persistente Rafael ─────────────────────────────────────────────────
+
+def leer_memoria():
+    """Lee todos los archivos .md del directorio de memoria."""
+    if not MEMORIA_DIR.exists():
+        return '(sin memoria disponible)'
+    contenido = ''
+    for f in sorted(MEMORIA_DIR.glob('*.md')):
+        if f.name == 'MEMORY.md':
+            continue
+        try:
+            contenido += f'\n\n--- {f.stem} ---\n' + f.read_text(encoding='utf-8')
+        except Exception:
+            pass
+    return contenido.strip() or '(sin memoria disponible)'
+
+
+def obtener_sesion_rafael():
+    """Sesión persistente para Rafael — igual que chat_bridge.py."""
+    global _rafael_session
+    if _rafael_session:
+        return _rafael_session, False
+    if SESSION_FILE.exists():
+        sid = SESSION_FILE.read_text(encoding='utf-8').strip()
+        if sid and list(SESSIONS_DIR.rglob(f'{sid}.jsonl')):
+            _rafael_session = sid
+            return sid, False
+    sid = str(uuid.uuid4())
+    SESSION_FILE.write_text(sid, encoding='utf-8')
+    _rafael_session = sid
+    return sid, True
+
+
+def llamar_claude_rafael(msgs_nuevos, historial):
+    """Para Rafael: reanuda la sesión de Claude Code con memoria y herramientas."""
+    hist_texto = ''
+    for h in historial:
+        quien = 'Merlin' if h['quien'] == 'Merlin' else 'Rafael'
+        contenido = h['mensaje'] or ('[' + h['tipo'] + ']')
+        hist_texto += f'\n{quien}: {contenido}'
+
+    if len(msgs_nuevos) == 1:
+        nuevo_texto = msgs_nuevos[0]['mensaje'] or f'[{msgs_nuevos[0]["tipo"]}]'
+    else:
+        lineas = [f'[Rafael envió {len(msgs_nuevos)} mensajes seguidos]\n']
+        for i, m in enumerate(msgs_nuevos, 1):
+            lineas.append('Mensaje ' + str(i) + ': ' + (m['mensaje'] or '[' + m['tipo'] + ']'))
+        nuevo_texto = '\n'.join(lineas)
+
+    memoria = leer_memoria()
+
+    prompt = f"""Eres Merlin — el asistente Claude Code de Rafael en TUC TUC.
+Rafael te escribe desde el chat de TUC TUC (puede estar en su celular o en otro dispositivo).
+Tienes acceso completo a herramientas: leer archivos, editar código, ejecutar bash, etc.
+Actúa exactamente como lo harías en una sesión interactiva de Claude Code.
+Responde en español. Sé directo y concreto — sin preámbulos.
+
+El proyecto está en: C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos
+El backend principal es: 1_medicamentos.py
+
+━━━ MEMORIA DEL PROYECTO ━━━
+{memoria}
+
+━━━ HISTORIAL DE ESTA CONVERSACIÓN ━━━
+{hist_texto if hist_texto else '(inicio de conversación)'}
+
+━━━ MENSAJE DE RAFAEL ━━━
+{nuevo_texto}"""
+
+    try:
+        env = os.environ.copy()
+        for var in ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID',
+                    'CLAUDE_CODE_API_KEY_HELPER', 'ANTHROPIC_API_KEY']:
+            env.pop(var, None)
+
+        session_id, es_primera = obtener_sesion_rafael()
+        if es_primera:
+            session_flags = ['--session-id', session_id]
+            print(f'  🆕 Nueva sesión Rafael: {session_id}')
+        else:
+            session_flags = ['-r', session_id]
+            print(f'  ↩  Reanudando sesión Rafael: {session_id[:8]}...')
+
+        result = subprocess.run(
+            ['cmd', '/c', CLAUDE_CMD] + session_flags + ['-p', '--dangerously-skip-permissions'],
+            input=prompt,
+            capture_output=True, text=True,
+            encoding='utf-8', errors='replace',
+            cwd=str(APP_DIR),
+            timeout=90,
+            env=env,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        err = result.stderr.strip() or result.stdout.strip() or 'Sin respuesta'
+        print(f'  ✗ Claude error: {err[:200]}')
+        return '_(No pude generar una respuesta. Intenta de nuevo.)_'
+    except subprocess.TimeoutExpired:
+        return '⚠️ Tardé demasiado. Escríbeme de nuevo en un momento.'
+    except FileNotFoundError:
+        return '_(claude no encontrado — verifica instalación de Claude Code)_'
+    except Exception as e:
+        return f'_(Error: {e})_'
+
+
 # ── Loop principal ────────────────────────────────────────────────────────────
 
 def main():
@@ -362,11 +473,15 @@ def main():
                 # Marcar leídos antes de responder (evita que el bridge lo tome dos veces)
                 marcar_leidos(msg_ids)
 
-                ctx    = get_contexto_usuario(creador_id, conv_id, merlin_id)
-                prompt = construir_prompt(ctx, msgs)
+                ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
 
-                print(f"[{ts()}] 🧠 Llamando a Claude ({len(ctx['historial'])} msgs contexto)...")
-                respuesta = llamar_claude(prompt)
+                if creador_id == RAFAEL_ID:
+                    print(f"[{ts()}] 🧠 Rafael → sesión persistente con herramientas...")
+                    respuesta = llamar_claude_rafael(msgs, ctx['historial'])
+                else:
+                    prompt = construir_prompt(ctx, msgs)
+                    print(f"[{ts()}] 🧠 Llamando a Claude ({len(ctx['historial'])} msgs contexto)...")
+                    respuesta = llamar_claude(prompt)
                 print(f"[{ts()}] 💬 {respuesta[:80]}...")
 
                 guardar_respuesta(conv_id, merlin_id, creador_id, respuesta)

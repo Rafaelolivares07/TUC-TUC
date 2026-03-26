@@ -36,6 +36,8 @@
     .audio-hook { background: linear-gradient(135deg, #1e3a5f 0%, #1a2d4a 100%); border: 1px solid #2563eb44; }
     textarea { field-sizing: content; }
     .barra-input { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+    #drop-overlay { pointer-events: none; opacity: 0; transition: opacity .15s; }
+    #drop-overlay.activo { pointer-events: all; opacity: 1; }
   </style>
 </head>
 <body class="bg-gray-950 text-white overflow-hidden flex" style="height:100dvh">
@@ -261,6 +263,14 @@
 </div>
 {% endif %}
 
+<!-- Overlay drag & drop -->
+<div id="drop-overlay" class="fixed inset-0 z-50 bg-blue-900/80 flex flex-col items-center justify-center gap-3 rounded-none">
+  <svg class="w-16 h-16 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+  </svg>
+  <p class="text-blue-100 text-lg font-semibold">Suelta para enviar la imagen</p>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════════ -->
 <!-- SCRIPT UNIFICADO                                               -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -353,24 +363,10 @@ function enviarTexto() {
 }
 
 // ── Enviar imagen ─────────────────────────────────────────────────
-async function enviarImagen(input) {
+function enviarImagen(input) {
   const file = input.files[0];
   input.value = '';
-  if (!file) return;
-  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
-  if (!tok) return;
-
-  const form = new FormData();
-  form.append('imagen', file);
-  const rUp = await fetch('/api/chat/invitado/imagen', {method: 'POST', body: form}).then(r => r.json()).catch(() => null);
-  if (!rUp || !rUp.ok) { alert('Error subiendo imagen: ' + (rUp?.error || 'desconocido')); return; }
-
-  await fetch('/api/chat/invitado/enviar', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({token: tok, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: MODO === 'creador'})
-  });
-  pollMensajes();
+  if (file) enviarImagenFile(file);
 }
 
 // ── Grabación audio (unificado) ───────────────────────────────────
@@ -905,6 +901,53 @@ function desactivarSTT() {
   btn.classList.remove('text-emerald-400','bg-gray-800');
   btn.classList.add('text-gray-600');
   btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Dictado de voz`;
+}
+
+// ── Drag & drop + paste de imágenes ──────────────────────────────
+let _dragCounter = 0;
+const overlay = document.getElementById('drop-overlay');
+
+function _tieneImagen(dt) {
+  return [...(dt.types || [])].includes('Files') &&
+         [...(dt.items || [])].some(i => i.kind === 'file' && i.type.startsWith('image/'));
+}
+
+document.addEventListener('dragenter', e => {
+  if (!_tieneImagen(e.dataTransfer)) return;
+  _dragCounter++;
+  overlay.classList.add('activo');
+  e.preventDefault();
+});
+document.addEventListener('dragleave', () => {
+  _dragCounter--;
+  if (_dragCounter <= 0) { _dragCounter = 0; overlay.classList.remove('activo'); }
+});
+document.addEventListener('dragover', e => { e.preventDefault(); });
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  _dragCounter = 0; overlay.classList.remove('activo');
+  const file = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
+  if (file) enviarImagenFile(file);
+});
+
+document.addEventListener('paste', e => {
+  const file = [...(e.clipboardData.items || [])]
+    .find(i => i.kind === 'file' && i.type.startsWith('image/'));
+  if (file) enviarImagenFile(file.getAsFile());
+});
+
+async function enviarImagenFile(file) {
+  const tok = MODO === 'creador' ? tokenActivo : TOKEN;
+  if (!tok) return;
+  const form = new FormData();
+  form.append('imagen', file);
+  const rUp = await fetch('/api/chat/invitado/imagen', {method: 'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (!rUp || !rUp.ok) { alert('Error subiendo imagen: ' + (rUp?.error || 'desconocido')); return; }
+  await fetch('/api/chat/invitado/enviar', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tok, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: MODO === 'creador'})
+  });
+  pollMensajes();
 }
 </script>
 </body>

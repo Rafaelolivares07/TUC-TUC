@@ -40,7 +40,7 @@ load_dotenv()
 # ── Config ────────────────────────────────────────────────────────────────────
 DB_URL         = os.getenv('DATABASE_URL')
 APP_DIR        = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
-CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\AppData\Roaming\npm\claude.cmd"
+CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\.local\bin\claude.exe"
 SESSIONS_DIR   = Path.home() / '.claude' / 'projects'
 MEMORIA_DIR    = Path(r"C:\Users\RAFAEL OLIVARES\.claude\projects\C--Users-RAFAEL-OLIVARES-Documents-MiAppMedicamentos\memory")
 SESSION_FILE   = APP_DIR / 'merlin_rafael_session_id.txt'  # sesión persistente para Rafael
@@ -302,24 +302,24 @@ Si el usuario pregunta algo técnico sobre su negocio en TUC TUC que no puedes r
 desde aquí, dile que le avise a Rafael directamente."""
 
 
+def _cmd_claude(extra_flags, prompt, timeout=45):
+    """Ejecuta claude.exe directamente (sin cmd /c — evita problemas de quoting con espacios en el path)."""
+    env = os.environ.copy()
+    for var in ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID',
+                'CLAUDE_CODE_API_KEY_HELPER', 'ANTHROPIC_API_KEY']:
+        env.pop(var, None)
+    return subprocess.run(
+        [CLAUDE_CMD] + extra_flags + ['-p', '--dangerously-skip-permissions'],
+        input=prompt,
+        capture_output=True, text=True,
+        encoding='utf-8', errors='replace',
+        cwd=str(APP_DIR), timeout=timeout, env=env,
+    )
+
+
 def llamar_claude(prompt):
     try:
-        env = os.environ.copy()
-        for var in ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID',
-                    'CLAUDE_CODE_API_KEY_HELPER', 'ANTHROPIC_API_KEY']:
-            env.pop(var, None)
-
-        result = subprocess.run(
-            ['cmd', '/c', CLAUDE_CMD, '-p', '--dangerously-skip-permissions'],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            cwd=str(APP_DIR),
-            timeout=45,
-            env=env,
-        )
+        result = _cmd_claude([], prompt, timeout=45)
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
         err = result.stderr.strip() or result.stdout.strip() or 'Sin respuesta'
@@ -403,11 +403,6 @@ El backend principal es: 1_medicamentos.py
 {nuevo_texto}"""
 
     try:
-        env = os.environ.copy()
-        for var in ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID',
-                    'CLAUDE_CODE_API_KEY_HELPER', 'ANTHROPIC_API_KEY']:
-            env.pop(var, None)
-
         session_id, es_primera = obtener_sesion_rafael()
         if es_primera:
             session_flags = ['--session-id', session_id]
@@ -416,15 +411,7 @@ El backend principal es: 1_medicamentos.py
             session_flags = ['-r', session_id]
             print(f'  ↩  Reanudando sesión Rafael: {session_id[:8]}...')
 
-        result = subprocess.run(
-            ['cmd', '/c', CLAUDE_CMD] + session_flags + ['-p', '--dangerously-skip-permissions'],
-            input=prompt,
-            capture_output=True, text=True,
-            encoding='utf-8', errors='replace',
-            cwd=str(APP_DIR),
-            timeout=90,
-            env=env,
-        )
+        result = _cmd_claude(session_flags, prompt, timeout=90)
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
         err = result.stderr.strip() or result.stdout.strip() or 'Sin respuesta'

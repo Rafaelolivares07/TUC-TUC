@@ -129,34 +129,115 @@ Si hay escapes inválidos, falla con `SyntaxWarning` antes de llegar a Render.
 
 ## 6. Migraciones de BD — patrón obligatorio
 
-Nunca depender de que el usuario llame un endpoint manualmente para aplicar un cambio en esquema.
+**La regla en una línea:** ningún cambio de esquema puede requerir acción manual de Rafael.
 
-### Regla
-Toda columna o tabla nueva debe garantizarse automáticamente mediante una función
-`_asegurar_*` o `crear_tablas_*` que use `ADD COLUMN IF NOT EXISTS` y sea llamada
-**al inicio de cada endpoint que usa esa tabla**.
+---
 
-### Ejemplo de referencia
+### Por qué existe esta regla
+
+El app corre en Render (Gunicorn). No hay `if __name__ == '__main__'` corriendo en producción.
+No hay pipeline de migraciones (Alembic, Flyway, etc.). El único momento seguro para
+aplicar un ALTER es **durante el request**, justo antes de usar la tabla.
+
+---
+
+### Patrón obligatorio: función `_asegurar_*` o `crear_tablas_*`
+
 ```python
 def _asegurar_schema_chat(conn):
+    """Garantiza columnas opcionales de mensajes. Llamar antes de cualquier
+    operación sobre mensajes."""
     for sql in [
+        "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS url_archivo TEXT",
+        "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS conversacion_id INTEGER",
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS card_payload JSONB",
     ]:
         try:
-            conn.execute(sql); conn.commit()
+            conn.execute(sql)
+            conn.commit()
         except Exception:
             try: conn.rollback()
             except Exception: pass
-
-def api_chat_invitado_mensajes(token):
-    conn = get_db_connection()
-    _asegurar_schema_chat(conn)   # ← siempre primero
-    ...
 ```
 
+**Reglas de la función:**
+- Nombre: `_asegurar_schema_<modulo>(conn)` o `crear_tablas_<modulo>(conn)`
+- Parámetro: siempre recibe `conn` (ya abierta por el endpoint)
+- Cada ALTER en su propio try/except — un fallo no debe frenar los demás
+- Usar siempre `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`
+- No lanzar excepciones hacia afuera — silenciar y seguir
+
+**Llamarla siempre al inicio del endpoint, antes de cualquier query:**
+
+```python
+@app.route('/api/chat/invitado/mensajes/<token>')
+def api_chat_invitado_mensajes(token):
+    try:
+        conn = get_db_connection()
+        _asegurar_schema_chat(conn)   # ← PRIMERO, siempre
+        # ... resto del endpoint
+```
+
+---
+
+### Cuándo crear una función nueva vs. agregar a una existente
+
+| Situación | Acción |
+|---|---|
+| Módulo nuevo con tabla propia | Crear `crear_tablas_<modulo>(conn)` |
+| Columna nueva en tabla de módulo existente | Agregar el ALTER a la función existente del módulo |
+| Columna en tabla compartida (`terceros`, `mensajes`, `pedidos`) | Agregar a `_asegurar_schema_<modulo>` del módulo que introduce el cambio |
+
+---
+
+### Funciones de aseguramiento existentes (referencia rápida)
+
+| Función | Tabla(s) que cubre | Dónde se llama |
+|---|---|---|
+| `crear_tablas_contactos(conn)` | `contactos` | Todo endpoint `/api/vendedor/contactos/*` |
+| `_asegurar_schema_chat(conn)` | `mensajes` (url_archivo, conversacion_id, card_payload) | `api_chat_invitado_mensajes`, `api_chat_invitado_enviar` |
+| `_crear_tabla_citas_vendedor(conn)` | `citas_vendedor` | Todo endpoint `/api/vendedor/cita*` |
+| `_crear_tabla_plantillas_crm(conn)` | `plantillas_crm`, `plantillas_crm_envios` | Todo endpoint `/api/vendedor/plantillas*` |
+
+Cuando agregues una columna nueva, busca primero si ya existe la función del módulo
+y agrega el ALTER ahí — no crees una función duplicada.
+
+---
+
 ### Lo que NO hacer
-- Endpoint `GET /api/migrar-algo` que Rafael tiene que llamar manualmente
-- Comentario "ejecutar antes de desplegar"
-- Migración dentro de `if __name__ == '__main__'` (no corre en Render/Gunicorn)
+
+```python
+# ❌ MAL — endpoint manual que Rafael tiene que llamar
+@app.route('/api/migrar-chat', methods=['GET'])
+def migrar_chat():
+    conn.execute("ALTER TABLE mensajes ADD COLUMN ...")
+
+# ❌ MAL — comentario "acordarse de ejecutar"
+# NOTA: antes de desplegar, correr ALTER TABLE mensajes ADD COLUMN card_payload JSONB
+
+# ❌ MAL — dentro de if __name__ == '__main__' (no corre en Render/Gunicorn)
+if __name__ == '__main__':
+    conn.execute("ALTER TABLE ...")
+    app.run(...)
+
+# ❌ MAL — un solo try/except que engloba todos los ALTERs
+# (si el primero falla, los demás no corren)
+try:
+    conn.execute("ALTER TABLE a ADD COLUMN x ...")
+    conn.execute("ALTER TABLE b ADD COLUMN y ...")
+except: pass
+```
+
+---
+
+### Checklist al agregar cualquier columna o tabla nueva
+
+- [ ] ¿Existe ya una función `_asegurar_*` / `crear_tablas_*` para este módulo?
+  - Sí → agregar el ALTER ahí
+  - No → crear la función con el patrón de arriba
+- [ ] ¿La función se llama al inicio de **todos** los endpoints que usan esa tabla?
+- [ ] ¿Cada ALTER tiene su propio try/except?
+- [ ] ¿Se usó `IF NOT EXISTS`?
+- [ ] ¿Se corrió `ast.parse` antes del push?
 
 *Agregar nuevas convenciones aquí cuando surjan en sesiones de desarrollo.*

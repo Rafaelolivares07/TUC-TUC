@@ -50,8 +50,8 @@
 
   <div class="p-4 border-b border-gray-800 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <div id="mi-avatar" onclick="verMiFotoGrande()"
-           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Ver / cambiar foto">
+      <div id="mi-avatar" onclick="abrirModalPerfil()"
+           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Perfil y configuración">
         R
       </div>
       <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
@@ -211,6 +211,57 @@
     </div>
   </div>
 </div>
+<!-- Modal perfil creador -->
+<div id="modal-perfil" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md shadow-2xl pb-safe" onclick="event.stopPropagation()">
+    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mt-4 mb-5"></div>
+    <!-- Cabecera: avatar + nombre -->
+    <div class="px-6 pb-5 flex items-center gap-4 border-b border-gray-800">
+      <div id="perfil-modal-avatar"
+           onclick="cerrarModalPerfil(); setTimeout(verMiFotoGrande, 150)"
+           class="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xl cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition">R</div>
+      <div class="flex-1 min-w-0">
+        <p id="perfil-modal-nombre" class="font-semibold text-white text-base truncate">—</p>
+        <button onclick="cerrarModalPerfil(); setTimeout(verMiFotoGrande, 150)"
+                class="text-xs text-blue-400 hover:text-blue-300 transition mt-0.5">Ver galería →</button>
+      </div>
+    </div>
+    <!-- Tonos -->
+    <div class="px-6 py-5">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tono de notificación</p>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button id="tono-btn-clasico" onclick="seleccionarTono('clasico')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          🔔 Clásico
+        </button>
+        <button id="tono-btn-suave" onclick="seleccionarTono('suave')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          🎵 Suave
+        </button>
+        <button id="tono-btn-alegre" onclick="seleccionarTono('alegre')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          ✨ Alegre
+        </button>
+        <button id="tono-btn-pop" onclick="seleccionarTono('pop')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          ⚡ Pop
+        </button>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="tono-btn-personalizado" onclick="document.getElementById('inp-tono-file').click()"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          📁 Personalizado
+        </button>
+        <span id="tono-custom-label" class="text-xs text-gray-500 truncate flex-1"></span>
+        <input id="inp-tono-file" type="file" accept="audio/*" class="hidden" onchange="cargarTonoPersonalizado(this)">
+      </div>
+      <p class="text-xs text-gray-600 mt-3">Toca cada tono para previsualizarlo antes de elegir.</p>
+    </div>
+    <div class="px-6 pb-7">
+      <button onclick="cerrarModalPerfil()" class="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-xl text-sm transition">Cerrar</button>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -323,6 +374,12 @@ let gFotos = [], gIndice = 0, gEsMia = false, gTerceroId = null, _swipeX = null;
 // STT (solo invitado)
 const STT = window.SpeechRecognition || window.webkitSpeechRecognition;
 let reconocedor = null, sttActivo = false;
+
+// Sonido de notificación
+let tonoActual = localStorage.getItem('chat_tono') || 'clasico';
+let _audioCtxInst = null;
+let _bufferPersonalizado = null;
+let _nombreArchivoTono = '';
 
 // ── Init ─────────────────────────────────────────────────────────
 if (MODO === 'creador') {
@@ -483,6 +540,7 @@ function pollMensajes() {
 function renderMensajes(msgs, cont) {
   if (!msgs || !msgs.length) return;
   const esInicio = ultimoMsgId === 0;
+  let hayMsgAjeno = false;
   msgs.forEach((m, idx) => {
     if (idsRenderizados.has(m.id)) return;
     idsRenderizados.add(m.id);
@@ -492,6 +550,8 @@ function renderMensajes(msgs, cont) {
     const esMio = MODO === 'creador'
       ? (m.remitente_tipo !== 'invitado')
       : (m.remitente_tipo === 'invitado');
+
+    if (!esInicio && !esMio) hayMsgAjeno = true;
 
     const animClass = esMio ? 'bubble-out' : 'bubble-in';
     const div = document.createElement('div');
@@ -556,6 +616,7 @@ function renderMensajes(msgs, cont) {
     if (div.innerHTML) cont.appendChild(div);
   });
   cont.scrollTop = cont.scrollHeight;
+  if (hayMsgAjeno) sonarNotificacion();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -637,6 +698,128 @@ async function galeriaEliminarActual() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// SONIDO DE NOTIFICACIÓN
+// ══════════════════════════════════════════════════════════════════
+
+function _ctx() {
+  if (!_audioCtxInst) _audioCtxInst = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtxInst.state === 'suspended') _audioCtxInst.resume();
+  return _audioCtxInst;
+}
+
+function _nota(ctx, freq, tipo, volumen, ataque, decaimiento, retardo) {
+  const when = ctx.currentTime + (retardo || 0);
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = tipo || 'sine';
+  osc.frequency.setValueAtTime(freq, when);
+  gain.gain.setValueAtTime(0, when);
+  gain.gain.linearRampToValueAtTime(volumen, when + ataque);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + ataque + decaimiento);
+  osc.start(when); osc.stop(when + ataque + decaimiento + 0.01);
+}
+
+function tocarTono(nombre) {
+  try {
+    const n = nombre || tonoActual;
+    if (n === 'personalizado' && _bufferPersonalizado) {
+      const ctx = _ctx();
+      const src = ctx.createBufferSource();
+      src.buffer = _bufferPersonalizado;
+      src.connect(ctx.destination);
+      src.start();
+      return;
+    }
+    const ctx = _ctx();
+    if (n === 'clasico') {
+      // Ding limpio: 880 Hz, sine
+      _nota(ctx, 880, 'sine', 0.35, 0.01, 0.5);
+    } else if (n === 'suave') {
+      // Dos notas suaves: C5 → E5
+      _nota(ctx, 523, 'sine', 0.25, 0.02, 0.3, 0);
+      _nota(ctx, 659, 'sine', 0.20, 0.02, 0.35, 0.18);
+    } else if (n === 'alegre') {
+      // Tres notas ascendentes: C5 → E5 → G5
+      _nota(ctx, 523, 'sine', 0.22, 0.015, 0.22, 0);
+      _nota(ctx, 659, 'sine', 0.22, 0.015, 0.22, 0.13);
+      _nota(ctx, 784, 'sine', 0.20, 0.015, 0.30, 0.26);
+    } else if (n === 'pop') {
+      // Sweep corto estilo synth
+      const ctx2 = _ctx();
+      const osc  = ctx2.createOscillator();
+      const gain = ctx2.createGain();
+      osc.connect(gain); gain.connect(ctx2.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(440, ctx2.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx2.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.12, ctx2.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx2.currentTime + 0.22);
+      osc.start(ctx2.currentTime); osc.stop(ctx2.currentTime + 0.25);
+    }
+  } catch(e) {}
+}
+
+function sonarNotificacion() { tocarTono(tonoActual); }
+
+// ── Modal de perfil (creador) ─────────────────────────────────────
+
+function abrirModalPerfil() {
+  const modal = document.getElementById('modal-perfil');
+  if (!modal) { verMiFotoGrande(); return; }
+  // Sincronizar avatar y nombre
+  const av = document.getElementById('perfil-modal-avatar');
+  const src = document.getElementById('mi-avatar');
+  if (av && src) av.innerHTML = src.innerHTML;
+  const nomEl = document.getElementById('perfil-modal-nombre');
+  if (nomEl) nomEl.textContent = document.querySelector('#sidebar .font-semibold')?.textContent || '—';
+  _refrescarTonosBtns();
+  modal.classList.remove('hidden');
+}
+
+function cerrarModalPerfil() {
+  document.getElementById('modal-perfil')?.classList.add('hidden');
+}
+
+function _refrescarTonosBtns() {
+  ['clasico','suave','alegre','pop','personalizado'].forEach(id => {
+    const btn = document.getElementById(`tono-btn-${id}`);
+    if (!btn) return;
+    const activo = tonoActual === id;
+    btn.className = btn.className
+      .replace(/bg-\S+/g, '').replace(/border-\S+/g, '').replace(/text-white/g, '').replace(/text-gray-\d+/g, '').trim();
+    if (activo) {
+      btn.classList.add('bg-blue-600', 'border-blue-500', 'text-white');
+    } else {
+      btn.classList.add('bg-gray-800', 'border-gray-700', 'text-gray-300');
+    }
+  });
+}
+
+function seleccionarTono(nombre) {
+  tonoActual = nombre;
+  localStorage.setItem('chat_tono', nombre);
+  _refrescarTonosBtns();
+  tocarTono(nombre);  // preview inmediato
+}
+
+async function cargarTonoPersonalizado(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  _nombreArchivoTono = file.name;
+  document.getElementById('tono-custom-label').textContent = file.name;
+  try {
+    const ctx = _ctx();
+    const buf = await file.arrayBuffer();
+    _bufferPersonalizado = await ctx.decodeAudioData(buf);
+    seleccionarTono('personalizado');
+  } catch(e) {
+    alert('No se pudo cargar el archivo de audio.');
+  }
+  input.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
 // MODO CREADOR
 // ══════════════════════════════════════════════════════════════════
 
@@ -646,6 +829,10 @@ async function cargarMiPerfil() {
   if (r && r.ok) {
     if (r.id) miTerceroId = r.id;
     if (r.token_chat) window._tokenChatCreador = r.token_chat;
+    if (r.nombre) {
+      const nomEl = document.getElementById('perfil-modal-nombre');
+      if (nomEl) nomEl.textContent = r.nombre;
+    }
     if (r.foto) { miFoto = r.foto; localStorage.setItem('mi_foto_perfil', r.foto); aplicarAvatar(el, r.foto); }
     else { const fl = localStorage.getItem('mi_foto_perfil'); if (fl) { miFoto = fl; aplicarAvatar(el, fl); } }
   }

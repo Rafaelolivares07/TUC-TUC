@@ -41364,10 +41364,21 @@ def api_vendedor_contactos_lista():
         conn = get_db_connection()
         crear_tablas_contactos(conn)
         rows = conn.execute(
-            """SELECT id, nombre, telefono, created_at::text
-               FROM contactos
-               WHERE tercero_id = %s
-               ORDER BY nombre NULLS LAST""",
+            """SELECT c.id, c.nombre, c.telefono, c.created_at::text,
+                      COALESCE(
+                          c.chat_token,
+                          (SELECT conv.token
+                           FROM conversaciones conv
+                           JOIN terceros t2 ON t2.id = conv.invitado_id
+                           WHERE conv.activa = TRUE
+                             AND c.telefono IS NOT NULL
+                             AND REGEXP_REPLACE(COALESCE(t2.telefono,''), '[^0-9]', '', 'g')
+                               = REGEXP_REPLACE(c.telefono, '[^0-9]', '', 'g')
+                           LIMIT 1)
+                      ) AS chat_token
+               FROM contactos c
+               WHERE c.tercero_id = %s
+               ORDER BY c.nombre NULLS LAST""",
             (tid,)
         ).fetchall()
         conn.close()
@@ -41468,6 +41479,84 @@ def api_vendedor_contactos_eliminar(cid):
         try: conn.rollback(); conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vendedor/contactos/<int:cid>/chat', methods=['POST'])
+def api_vendedor_contacto_chat(cid):
+    """Crea o recupera la conversación de chat para un contacto del vendedor.
+    Devuelve el link directo al chat. El vendedor se identifica por su teléfono."""
+    data = request.get_json() or {}
+    tel_vendedor = (data.get('tel') or '').strip()
+    if not tel_vendedor:
+        return jsonify({'ok': False, 'error': 'tel requerido'}), 400
+    vendedor_tid = _tercero_id_por_tel(tel_vendedor)
+    if not vendedor_tid:
+        return jsonify({'ok': False, 'error': 'Vendedor no encontrado'}), 404
+    try:
+        import secrets
+        conn = get_db_connection()
+        crear_tablas_contactos(conn)
+
+        # Verificar que el contacto pertenece al vendedor
+        contacto = conn.execute(
+            "SELECT id, nombre, telefono, chat_token FROM contactos WHERE id = %s AND tercero_id = %s",
+            (cid, vendedor_tid)
+        ).fetchone()
+        if not contacto:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Contacto no encontrado'}), 404
+
+        # Si ya tiene chat_token activo, devolverlo
+        if contacto['chat_token']:
+            conv = conn.execute(
+                "SELECT id, token, activa FROM conversaciones WHERE token = %s",
+                (contacto['chat_token'],)
+            ).fetchone()
+            if conv and conv['activa']:
+                conn.close()
+                host = request.host_url.rstrip('/')
+                return jsonify({'ok': True, 'token': conv['token'],
+                                'link': f"{host}/chat/{conv['token']}", 'nuevo': False})
+
+        # Buscar si el contacto ya tiene tercero por teléfono
+        invitado_id = None
+        if contacto['telefono']:
+            tel_limpio = ''.join(filter(str.isdigit, contacto['telefono']))
+            t = conn.execute(
+                "SELECT id FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono,''), '[^0-9]', '', 'g') = %s LIMIT 1",
+                (tel_limpio,)
+            ).fetchone()
+            if t:
+                invitado_id = t['id']
+
+        # Crear tercero invitado si no existe
+        if not invitado_id:
+            token_chat = secrets.token_urlsafe(12)
+            inv = conn.execute(
+                "INSERT INTO terceros (nombre, token_chat, tipo_tercero, telefono) VALUES (%s, %s, 'invitado', %s) RETURNING id",
+                (contacto['nombre'] or 'Invitado', token_chat, contacto['telefono'])
+            ).fetchone()
+            invitado_id = inv['id']
+
+        # Crear conversación
+        token_conv = secrets.token_urlsafe(12)
+        conv = conn.execute(
+            "INSERT INTO conversaciones (creador_id, invitado_id, token, nombre_invitado, origen) VALUES (%s, %s, %s, %s, 'vendedor') RETURNING id",
+            (vendedor_tid, invitado_id, token_conv, contacto['nombre'] or 'Invitado')
+        ).fetchone()
+
+        # Guardar token en contacto para futura recuperación
+        conn.execute("UPDATE contactos SET chat_token = %s WHERE id = %s", (token_conv, cid))
+        conn.commit()
+        conn.close()
+
+        host = request.host_url.rstrip('/')
+        return jsonify({'ok': True, 'token': token_conv,
+                        'link': f"{host}/chat/{token_conv}", 'nuevo': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 # ── FIN CONTACTOS VENDEDOR ────────────────────────────────────────────────────
 
@@ -42775,21 +42864,30 @@ function renderContactos(lista) {
   vacio.classList.add('hidden');
   el.innerHTML = lista.map(c => `
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-start gap-3">
-      <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-extrabold text-sm shrink-0 mt-0.5">
-        ${(c.nombre || c.telefono || '?')[0].toUpperCase()}
+      <div class="relative shrink-0 mt-0.5">
+        <div class="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-extrabold text-sm">
+          ${(c.nombre || c.telefono || '?')[0].toUpperCase()}
+        </div>
+        ${c.chat_token ? `<span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" title="Chat TUC TUC activo"></span>` : ''}
       </div>
       <div class="flex-1 min-w-0">
         <p class="font-bold text-gray-800 text-sm break-words">${c.nombre || '—'}</p>
         <p class="text-xs text-gray-400">${c.telefono || 'Sin número'}</p>
+        ${c.chat_token ? `<p class="text-xs text-green-600 font-medium mt-0.5">Chat TUC TUC activo</p>` : ''}
       </div>
       <div class="flex gap-1 shrink-0 mt-0.5">
         ${c.telefono ? `
         <button onclick="llamar('${c.telefono}')" title="Llamar"
                 class="w-8 h-8 rounded-full bg-gray-100 hover:bg-green-100 flex items-center justify-center text-base transition">📞</button>
-        <button onclick="abrirWa('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono}',${c.id})" title="Mensajes"
+        <button onclick="abrirWa('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono}',${c.id})" title="WhatsApp"
                 class="w-8 h-8 rounded-full flex items-center justify-center text-white text-base transition font-bold"
                 style="background:#25D366">💬</button>
         ` : ''}
+        <button onclick="abrirChatContacto(${c.id},'${(c.nombre||'').replace(/'/g,"\\'")}',${c.chat_token ? `'${c.chat_token}'` : 'null'})"
+                title="Chat TUC TUC"
+                class="w-8 h-8 rounded-full flex items-center justify-center text-base transition ${c.chat_token ? 'bg-green-100 text-green-700' : 'bg-gray-100 hover:bg-green-100 text-gray-400 hover:text-green-600'}">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>
+        </button>
         <button onclick="agendarDesdeContacto('${(c.nombre||'').replace(/'/g,"\\'")}','${c.telefono||''}')" title="Agendar cita"
                 class="w-8 h-8 rounded-full bg-gray-100 hover:bg-indigo-100 flex items-center justify-center text-base transition">📅</button>
         <button onclick="eliminarContacto(${c.id})" title="Eliminar"
@@ -42805,6 +42903,37 @@ function filtrarContactos(q) {
   renderContactos(_todosContactos.filter(c =>
     (c.nombre||'').toLowerCase().includes(lo) || (c.telefono||'').includes(lo)
   ));
+}
+
+// ── CHAT TUC TUC DESDE CONTACTO ───────────────────────────────────────────────
+async function abrirChatContacto(cid, nombre, tokenExistente) {
+  if (tokenExistente) {
+    window.open('/chat/' + tokenExistente, '_blank');
+    return;
+  }
+  const tel = telVendedor();
+  if (!tel) { alert('Identificate primero'); return; }
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>';
+  try {
+    const r = await fetch(`/api/vendedor/contactos/${cid}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tel})
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    // Actualizar el contacto en memoria con el nuevo token
+    const idx = _todosContactos.findIndex(c => c.id === cid);
+    if (idx >= 0) _todosContactos[idx].chat_token = d.token;
+    renderContactos(_todosContactos);
+    window.open(d.link, '_blank');
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>';
+    alert('Error: ' + e.message);
+  }
 }
 
 // ── HISTORIAL DE ENVÍOS ────────────────────────────────────────────────────
@@ -43601,6 +43730,7 @@ def crear_tablas_contactos(conn):
         conn.rollback()
     alters = [
         "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS tercero_id INTEGER",
+        "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS chat_token TEXT",
     ]
     for sql in alters:
         try:

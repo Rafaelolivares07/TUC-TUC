@@ -19213,7 +19213,6 @@ def api_chat_reclamar(token):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@app.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
 def _asegurar_schema_chat(conn):
     """Garantiza que las columnas opcionales de mensajes existan.
     Llamar antes de cualquier operación sobre mensajes."""
@@ -19230,6 +19229,7 @@ def _asegurar_schema_chat(conn):
             except Exception: pass
 
 
+@app.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
 def api_chat_invitado_mensajes(token):
     """Obtener mensajes de una conversación por token (sin login)"""
     try:

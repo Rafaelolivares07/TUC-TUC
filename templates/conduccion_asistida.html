@@ -342,6 +342,39 @@
         #info-viaje .btn-llegue { background: #eab308; }
         #info-viaje .btn-iniciar { background: #22c55e; }
         #info-viaje .btn-finalizar { background: #ef4444; color: #fff; }
+        #info-viaje .btn-waze { background: #06caf4; color: #000; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+        /* Toast llegada */
+        #toast-llegada {
+            display: none;
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #22c55e;
+            color: #fff;
+            padding: 14px 22px;
+            border-radius: 16px;
+            font-size: 15px;
+            font-weight: 700;
+            z-index: 9999;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            text-align: center;
+            max-width: 280px;
+        }
+        #toast-llegada button {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            background: #fff;
+            color: #166534;
+            border: none;
+            border-radius: 10px;
+            padding: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
 
         /* Botón colapsar/expandir info-viaje */
         #btn-toggle-info-viaje {
@@ -731,6 +764,12 @@
         <span id="fuente-ruta" style="opacity: 0.5; font-style: italic;"></span>
     </div>
 
+    <!-- Toast detección de llegada -->
+    <div id="toast-llegada">
+        <div id="toast-llegada-texto">📍 Cerca del destino</div>
+        <button onclick="confirmarLlegada()">✅ Confirmar llegada</button>
+    </div>
+
     <!-- Barra "¿A dónde vamos?" (cuando no hay viaje activo) -->
     <div id="barra-vamos-a" onclick="abrirPanelBusqueda()">
         <span class="vamos-texto">&#x1F50D; ¿A dónde vamos?</span>
@@ -778,6 +817,7 @@
         const COOLDOWN_RECALCULO = 15000; // mínimo 15s entre recálculos
         let marcadoresViaje = [];
         let intervalRutaActiva = null;
+        let llegadaDetectada = false;
         let puntosRutaNueva = [];
         let mapaListo = false;
         let timeoutBusqueda = null;
@@ -800,7 +840,8 @@
             DISTANCIA_PELIGRO_CAMARA: 200,
             INTERVALO_BUSCAR_CAMARAS: 5000,
             ZOOM_DEFAULT: 18,
-            DISTANCIA_MIN_NUEVO_PUNTO: 10
+            DISTANCIA_MIN_NUEVO_PUNTO: 10,
+            RADIO_LLEGADA: 80  // metros para detección automática de llegada
         };
 
         function crearEstilo(flavor) {
@@ -861,6 +902,14 @@
             // Inicializar audio al primer toque
             document.addEventListener('touchstart', () => inicializarAudio(), { once: true });
             document.addEventListener('click', () => inicializarAudio(), { once: true });
+
+            // Al retornar de Waze (u otra app), verificar llegada
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && viajeActivo && ubicacionActual) {
+                    llegadaDetectada = false; // permitir re-verificar al volver
+                    verificarLlegadaDestino();
+                }
+            });
         });
 
         async function inicializarMapa() {
@@ -994,6 +1043,9 @@
 
             // Actualizar distancia/tiempo restante
             if (viajeActivo) actualizarDistanciaTiempo();
+
+            // Verificar llegada al destino por proximidad
+            if (viajeActivo) verificarLlegadaDestino();
 
             // Registrar nuevo segmento
             registrarNuevoSegmento();
@@ -1598,23 +1650,75 @@
             if (!viajeActivo) return;
             const contenedor = document.getElementById('viaje-acciones');
             const esPersonal = viajeActivo.tipo_servicio === 'personal';
+            const btnWaze = `<button class="btn-accion-viaje btn-waze" onclick="abrirWaze()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12c0 3.4 1.4 6.5 3.7 8.7l-1 3.6 3.7-1c1.7.9 3.6 1.4 5.6 1.4 6.6 0 12-5.4 12-12S18.6 0 12 0zm0 22c-1.8 0-3.6-.5-5.1-1.4l-.4-.2-2.2.6.6-2.1-.3-.4C2.9 17.2 2 14.7 2 12 2 6.5 6.5 2 12 2s10 4.5 10 10-4.5 10-10 10zm5.5-7.5c-.3-.1-1.8-.9-2.1-1s-.5-.1-.7.1c-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1s-1.2-.4-2.3-1.4c-.8-.7-1.4-1.6-1.5-1.9-.2-.3 0-.4.1-.6l.4-.5c.1-.2.2-.3.2-.5s-.1-.4-.2-.5L9 9.7c-.2-.3-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3C7 9.8 6.4 10.4 6.4 11.6s.8 2.4.9 2.5c.1.2 1.7 2.6 4.1 3.7.6.2 1 .4 1.4.5.6.2 1.1.2 1.5.1.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2z"/></svg>
+                Navegar con Waze
+            </button>`;
 
             if (esPersonal) {
                 contenedor.innerHTML =
-                    '<button class="btn-accion-viaje btn-iniciar" onclick="finalizarViajePersonal()">Llegué al destino</button>' +
+                    btnWaze +
+                    '<button class="btn-accion-viaje btn-iniciar" style="margin-top:4px" onclick="finalizarViajePersonal()">Llegué al destino</button>' +
                     '<button class="btn-accion-viaje btn-finalizar" style="margin-top:4px" onclick="cancelarViajePersonal()">Cancelar ruta</button>';
                 return;
             }
 
             const estado = viajeActivo.estado;
             if (estado === 'aceptada') {
-                contenedor.innerHTML = '<button class="btn-accion-viaje btn-llegue" onclick="accionLlegue()">Ya llegué</button>';
+                contenedor.innerHTML = btnWaze + '<button class="btn-accion-viaje btn-llegue" style="margin-top:4px" onclick="accionLlegue()">Ya llegué al punto de recogida</button>';
             } else if (estado === 'recogiendo') {
-                contenedor.innerHTML = '<button class="btn-accion-viaje btn-iniciar" onclick="accionIniciar()">Usuario abordó - Iniciar</button>';
+                contenedor.innerHTML = btnWaze + '<button class="btn-accion-viaje btn-iniciar" style="margin-top:4px" onclick="accionIniciar()">Usuario abordó - Iniciar</button>';
             } else if (estado === 'en_curso') {
-                contenedor.innerHTML = '<button class="btn-accion-viaje btn-finalizar" onclick="accionFinalizar()">Llegamos al destino</button>';
+                contenedor.innerHTML = btnWaze + '<button class="btn-accion-viaje btn-finalizar" style="margin-top:4px" onclick="accionFinalizar()">Llegamos al destino</button>';
             } else {
                 contenedor.innerHTML = '';
+            }
+        }
+
+        function abrirWaze() {
+            if (!viajeActivo) return;
+            const lat = viajeActivo.destino_lat;
+            const lon = viajeActivo.destino_lon;
+            if (!lat || !lon) return;
+            // Intentar app Waze primero (mobile), fallback web
+            const urlApp = `waze://?ll=${lat},${lon}&navigate=yes`;
+            const urlWeb = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes&zoom=17`;
+            // En mobile abre la app; si no está instalada, el navegador ignora el scheme
+            // Abrimos la web como fallback con un pequeño delay
+            window.location.href = urlApp;
+            setTimeout(() => { window.open(urlWeb, '_blank'); }, 1500);
+        }
+
+        function verificarLlegadaDestino() {
+            if (!viajeActivo || !ubicacionActual || llegadaDetectada) return;
+            const dLat = viajeActivo.destino_lat;
+            const dLon = viajeActivo.destino_lon;
+            if (!dLat || !dLon) return;
+
+            // Solo verificar cuando el viaje está en curso o es personal
+            const estado = viajeActivo.estado;
+            const esPersonal = viajeActivo.tipo_servicio === 'personal';
+            if (!esPersonal && estado !== 'en_curso') return;
+
+            const dist = calcularDistancia(ubicacionActual.lat, ubicacionActual.lon, parseFloat(dLat), parseFloat(dLon));
+            if (dist <= CONFIG.RADIO_LLEGADA) {
+                llegadaDetectada = true;
+                const toast = document.getElementById('toast-llegada');
+                document.getElementById('toast-llegada-texto').textContent =
+                    `📍 Llegaste al destino (${Math.round(dist)}m)`;
+                toast.style.display = 'block';
+                // Auto-ocultar a los 30s si no confirma
+                setTimeout(() => { if (toast.style.display !== 'none') toast.style.display = 'none'; llegadaDetectada = false; }, 30000);
+            }
+        }
+
+        async function confirmarLlegada() {
+            document.getElementById('toast-llegada').style.display = 'none';
+            if (!viajeActivo) return;
+            if (viajeActivo.tipo_servicio === 'personal') {
+                await finalizarViajePersonal();
+            } else {
+                accionFinalizar();
             }
         }
 
@@ -2301,6 +2405,8 @@
                 clearInterval(intervalRutaActiva);
                 intervalRutaActiva = null;
             }
+            llegadaDetectada = false;
+            document.getElementById('toast-llegada').style.display = 'none';
             viajeActivo = null;
             geometriaRutaActiva = null;
             camarasEnRuta = [];

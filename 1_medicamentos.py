@@ -19587,8 +19587,17 @@ def api_chat_fotos_ver():
             'SELECT id, url, orden FROM fotos_tercero WHERE tercero_id = %s ORDER BY orden ASC',
             (int(tercero_id),)
         ).fetchall()
+        resultado = [dict(f) for f in fotos]
+        # Fallback: si no hay fotos en la galería, usar foto_perfil del tercero
+        if not resultado:
+            row = conn.execute(
+                'SELECT foto_perfil FROM terceros WHERE id = %s AND foto_perfil IS NOT NULL',
+                (int(tercero_id),)
+            ).fetchone()
+            if row and row['foto_perfil']:
+                resultado = [{'id': None, 'url': row['foto_perfil'], 'orden': 0}]
         conn.close()
-        return jsonify({'ok': True, 'fotos': [dict(f) for f in fotos]})
+        return jsonify({'ok': True, 'fotos': resultado})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'fotos': []})
 

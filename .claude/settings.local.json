@@ -55,5 +55,18 @@
     ],
     "deny": [],
     "ask": []
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos\\chat_terminal_hook.py\""
+          }
+        ]
+      }
+    ]
   }
 }

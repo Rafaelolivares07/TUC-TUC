@@ -23,7 +23,6 @@ import io
 import os
 import sys
 import time
-import uuid
 import socket
 import tempfile
 import subprocess
@@ -39,25 +38,26 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='repla
 
 load_dotenv()
 
+# ── ffmpeg en PATH para Whisper ───────────────────────────────────────────────
+_FFMPEG_BIN = r"C:\Users\RAFAEL OLIVARES\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin"
+if _FFMPEG_BIN not in os.environ.get('PATH', ''):
+    os.environ['PATH'] = os.environ.get('PATH', '') + os.pathsep + _FFMPEG_BIN
+
 # ── Config ────────────────────────────────────────────────────────────────────
 DB_URL         = os.getenv('DATABASE_URL')
 APP_DIR        = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\.local\bin\claude.exe"
-SESSIONS_DIR   = Path.home() / '.claude' / 'projects'
-MEMORIA_DIR    = Path(r"C:\Users\RAFAEL OLIVARES\.claude\projects\C--Users-RAFAEL-OLIVARES-Documents-MiAppMedicamentos\memory")
-SESSION_FILE   = APP_DIR / 'merlin_rafael_session_id.txt'  # sesión persistente para Rafael
 
 POLL_INTERVAL  = 4     # segundos entre checks
 MAX_HISTORIAL  = 12    # mensajes de contexto por conversación
 LOCK_PORT      = 47834 # diferente al de chat_bridge (47832) y git_bridge
 MERLIN_NOMBRE  = 'Merlin'
 MERLIN_TIPO    = 'merlin'
-RAFAEL_ID      = 16    # tercero_id de Rafael — usa sesión persistente con herramientas
+RAFAEL_ID      = 16    # tercero_id de Rafael — sus mensajes van via relay captura_watcher
 # ─────────────────────────────────────────────────────────────────────────────
 
-_lock_socket    = None
-_merlin_id      = None   # cache en memoria
-_rafael_session = None   # cache de session_id para Rafael
+_lock_socket = None
+_merlin_id   = None   # cache en memoria
 
 
 def ts():
@@ -376,23 +376,6 @@ def llamar_claude(prompt):
         return f'_(Error: {e})_'
 
 
-# ── Sesión persistente Rafael ─────────────────────────────────────────────────
-
-def leer_memoria():
-    """Lee todos los archivos .md del directorio de memoria."""
-    if not MEMORIA_DIR.exists():
-        return '(sin memoria disponible)'
-    contenido = ''
-    for f in sorted(MEMORIA_DIR.glob('*.md')):
-        if f.name == 'MEMORY.md':
-            continue
-        try:
-            contenido += f'\n\n--- {f.stem} ---\n' + f.read_text(encoding='utf-8')
-        except Exception:
-            pass
-    return contenido.strip() or '(sin memoria disponible)'
-
-
 def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
     """
     Para Rafael: en vez de spawnar claude --print, inserta el mensaje en
@@ -414,9 +397,9 @@ def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
         cur = conn.cursor()
         # Max id assistant actual — para detectar respuesta nueva
         cur.execute(
-            "SELECT COALESCE(MAX(id), 0) FROM chat_mensajes WHERE rol = 'assistant' AND archivado = FALSE"
+            "SELECT COALESCE(MAX(id), 0) AS max_id FROM chat_mensajes WHERE rol = 'assistant' AND archivado = FALSE"
         )
-        max_asst_antes = cur.fetchone()[0]
+        max_asst_antes = cur.fetchone()['max_id']
 
         # Insertar en chat_mensajes con canal='captura', sin estado='pendiente'
         # (para que chat_bridge.py no lo tome — él busca estado='pendiente')
@@ -424,7 +407,7 @@ def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
             "INSERT INTO chat_mensajes (rol, contenido, canal) VALUES ('user', %s, 'captura') RETURNING id",
             (nuevo_texto,)
         )
-        chat_id = cur.fetchone()[0]
+        chat_id = cur.fetchone()['id']
         conn.commit()
         print(f'  📤 Relay captura id={chat_id}, max_asst={max_asst_antes}. Esperando respuesta...')
     finally:
@@ -445,7 +428,7 @@ def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
                 # Archivar el mensaje captura para que el watcher no lo reprocese
                 cur.execute("UPDATE chat_mensajes SET archivado = TRUE WHERE id = %s", (chat_id,))
                 conn.commit()
-                return row[0]
+                return row['contenido']
         finally:
             conn.close()
 

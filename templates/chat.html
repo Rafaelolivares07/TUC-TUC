@@ -16,7 +16,7 @@
     body { display: flex; flex-direction: row; height: 100dvh; overflow: hidden; }
     #panel-chat { min-width: 0; min-height: 0; }
     #sidebar { min-height: 0; }
-    #mensajes { scroll-behavior: smooth; }
+    #mensajes { scroll-behavior: auto; }
     .bubble-in  { animation: slideIn  .18s ease-out; }
     .bubble-out { animation: slideOut .18s ease-out; }
     @keyframes slideIn  { from { opacity:0; transform: translateY(8px) translateX(-8px); } to { opacity:1; transform: none; } }
@@ -315,7 +315,10 @@ function avatarHtml(foto, nombre, size='w-10 h-10') {
 }
 
 function formatHora(fecha) {
-  return new Date(fecha).toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+  if (!fecha) return '';
+  let s = String(fecha).replace(' ', 'T');
+  if (!s.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(s)) s += 'Z';
+  return new Date(s).toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
 }
 
 function escHtml(s) {
@@ -512,6 +515,9 @@ function renderMensajes(msgs, cont) {
     if (div.innerHTML) cont.appendChild(div);
   });
   cont.scrollTop = cont.scrollHeight;
+  cont.querySelectorAll('img').forEach(img => {
+    if (!img.complete) img.addEventListener('load', () => { cont.scrollTop = cont.scrollHeight; }, {once: true});
+  });
   if (hayMsgAjeno) sonarNotificacion();
 }
 

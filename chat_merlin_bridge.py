@@ -25,7 +25,9 @@ import sys
 import time
 import uuid
 import socket
+import tempfile
 import subprocess
+import urllib.request
 import psycopg2
 import psycopg2.extras
 from pathlib import Path
@@ -130,14 +132,14 @@ def get_pendientes(merlin_id):
         cur = conn.cursor()
         cur.execute("""
             SELECT m.id, m.conversacion_id, m.remitente_id, m.mensaje, m.tipo, m.fecha::text,
-                   c.token as conv_token, c.creador_id
+                   m.url_archivo, c.token as conv_token, c.creador_id
             FROM mensajes m
             JOIN conversaciones c ON c.id = m.conversacion_id
             WHERE c.invitado_id   = %s
               AND c.activa        = TRUE
               AND m.remitente_id != %s
               AND m.estado        = 'pendiente'
-              AND m.tipo          IN ('texto', 'imagen')
+              AND m.tipo          IN ('texto', 'imagen', 'audio')
             ORDER BY m.conversacion_id ASC, m.id ASC
         """, (merlin_id, merlin_id))
         rows = cur.fetchall()
@@ -154,10 +156,11 @@ def get_pendientes(merlin_id):
                     'msgs':      [],
                 }
             convs[cid]['msgs'].append({
-                'id':      r['id'],
-                'mensaje': r['mensaje'],
-                'tipo':    r['tipo'],
-                'fecha':   r['fecha'],
+                'id':          r['id'],
+                'mensaje':     r['mensaje'],
+                'tipo':        r['tipo'],
+                'fecha':       r['fecha'],
+                'url_archivo': r.get('url_archivo'),
             })
         return list(convs.values())
     finally:
@@ -250,6 +253,46 @@ def get_contexto_usuario(creador_id, conv_id, merlin_id):
         conn.close()
 
 
+# ── Transcripción de audio ────────────────────────────────────────────────────
+
+_whisper_model = None
+
+def transcribir_audio(url):
+    """Descarga el WebM de Cloudinary y transcribe con openai-whisper local."""
+    global _whisper_model
+    if not url:
+        return None
+    try:
+        import whisper
+        if _whisper_model is None:
+            print('  🔊 Cargando modelo Whisper (base)...')
+            _whisper_model = whisper.load_model('base')
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp:
+            urllib.request.urlretrieve(url, tmp.name)
+            result = _whisper_model.transcribe(tmp.name, language='es')
+            texto = result.get('text', '').strip()
+            os.unlink(tmp.name)
+            return texto if texto else None
+    except ImportError:
+        return None  # whisper no instalado — silencioso
+    except Exception as e:
+        print(f'  ✗ Error transcribiendo audio: {e}')
+        return None
+
+
+def _contenido_msg(m):
+    """Convierte un mensaje a texto para el prompt."""
+    tipo = m.get('tipo', 'texto')
+    if tipo == 'audio':
+        transcripcion = transcribir_audio(m.get('url_archivo'))
+        if transcripcion:
+            return f'[Audio]: {transcripcion}'
+        return '[Audio — sin transcripción. Instala openai-whisper para habilitar: pip install openai-whisper]'
+    if tipo == 'imagen':
+        return f'[Imagen enviada]'
+    return m.get('mensaje') or f'[{tipo}]'
+
+
 # ── Llamada a Claude ──────────────────────────────────────────────────────────
 
 def construir_prompt(ctx, msgs_nuevos):
@@ -274,11 +317,11 @@ def construir_prompt(ctx, msgs_nuevos):
 
     # Mensajes nuevos
     if len(msgs_nuevos) == 1:
-        nuevo_texto = msgs_nuevos[0]['mensaje'] or f'[{msgs_nuevos[0]["tipo"]}]'
+        nuevo_texto = _contenido_msg(msgs_nuevos[0])
     else:
         lineas = [f"[{nombre} envió {len(msgs_nuevos)} mensajes seguidos]\n"]
         for i, m in enumerate(msgs_nuevos, 1):
-            lineas.append(f"Mensaje {i}: {m['mensaje'] or f'[{m['tipo']}]'}")
+            lineas.append(f"Mensaje {i}: {_contenido_msg(m)}")
         nuevo_texto = '\n'.join(lineas)
 
     return f"""Eres Merlin, el asistente inteligente de TUC TUC.
@@ -350,79 +393,71 @@ def leer_memoria():
     return contenido.strip() or '(sin memoria disponible)'
 
 
-def obtener_sesion_rafael():
-    """Sesión persistente para Rafael — igual que chat_bridge.py."""
-    global _rafael_session
-    if _rafael_session:
-        return _rafael_session, False
-    if SESSION_FILE.exists():
-        sid = SESSION_FILE.read_text(encoding='utf-8').strip()
-        if sid and list(SESSIONS_DIR.rglob(f'{sid}.jsonl')):
-            _rafael_session = sid
-            return sid, False
-    sid = str(uuid.uuid4())
-    SESSION_FILE.write_text(sid, encoding='utf-8')
-    _rafael_session = sid
-    return sid, True
-
-
-def llamar_claude_rafael(msgs_nuevos, historial):
-    """Para Rafael: reanuda la sesión de Claude Code con memoria y herramientas."""
-    hist_texto = ''
-    for h in historial:
-        quien = 'Merlin' if h['quien'] == 'Merlin' else 'Rafael'
-        contenido = h['mensaje'] or ('[' + h['tipo'] + ']')
-        hist_texto += f'\n{quien}: {contenido}'
-
+def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
+    """
+    Para Rafael: en vez de spawnar claude --print, inserta el mensaje en
+    chat_mensajes (canal='captura') para que el captura_watcher active esta
+    terminal y yo (Claude Code) responda directamente.
+    Luego espera la respuesta y la copia a mensajes.
+    """
+    # Armar texto del mensaje
     if len(msgs_nuevos) == 1:
-        nuevo_texto = msgs_nuevos[0]['mensaje'] or f'[{msgs_nuevos[0]["tipo"]}]'
+        nuevo_texto = _contenido_msg(msgs_nuevos[0])
     else:
-        lineas = [f'[Rafael envió {len(msgs_nuevos)} mensajes seguidos]\n']
+        lineas = [f'[Rafael envió {len(msgs_nuevos)} mensajes seguidos]']
         for i, m in enumerate(msgs_nuevos, 1):
-            lineas.append('Mensaje ' + str(i) + ': ' + (m['mensaje'] or '[' + m['tipo'] + ']'))
+            lineas.append(f'Mensaje {i}: {_contenido_msg(m)}')
         nuevo_texto = '\n'.join(lineas)
 
-    memoria = leer_memoria()
-
-    prompt = f"""Eres Merlin — el asistente Claude Code de Rafael en TUC TUC.
-Rafael te escribe desde el chat de TUC TUC (puede estar en su celular o en otro dispositivo).
-Tienes acceso completo a herramientas: leer archivos, editar código, ejecutar bash, etc.
-Actúa exactamente como lo harías en una sesión interactiva de Claude Code.
-Responde en español. Sé directo y concreto — sin preámbulos.
-
-El proyecto está en: C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos
-El backend principal es: 1_medicamentos.py
-
-━━━ MEMORIA DEL PROYECTO ━━━
-{memoria}
-
-━━━ HISTORIAL DE ESTA CONVERSACIÓN ━━━
-{hist_texto if hist_texto else '(inicio de conversación)'}
-
-━━━ MENSAJE DE RAFAEL ━━━
-{nuevo_texto}"""
-
+    conn = get_conn()
     try:
-        session_id, es_primera = obtener_sesion_rafael()
-        if es_primera:
-            session_flags = ['--session-id', session_id]
-            print(f'  🆕 Nueva sesión Rafael: {session_id}')
-        else:
-            session_flags = ['-r', session_id]
-            print(f'  ↩  Reanudando sesión Rafael: {session_id[:8]}...')
+        cur = conn.cursor()
+        # Max id assistant actual — para detectar respuesta nueva
+        cur.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM chat_mensajes WHERE rol = 'assistant' AND archivado = FALSE"
+        )
+        max_asst_antes = cur.fetchone()[0]
 
-        result = _cmd_claude(session_flags, prompt, timeout=90)
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-        err = result.stderr.strip() or result.stdout.strip() or 'Sin respuesta'
-        print(f'  ✗ Claude error: {err[:200]}')
-        return '_(No pude generar una respuesta. Intenta de nuevo.)_'
-    except subprocess.TimeoutExpired:
-        return '⚠️ Tardé demasiado. Escríbeme de nuevo en un momento.'
-    except FileNotFoundError:
-        return '_(claude no encontrado — verifica instalación de Claude Code)_'
-    except Exception as e:
-        return f'_(Error: {e})_'
+        # Insertar en chat_mensajes con canal='captura', sin estado='pendiente'
+        # (para que chat_bridge.py no lo tome — él busca estado='pendiente')
+        cur.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, canal) VALUES ('user', %s, 'captura') RETURNING id",
+            (nuevo_texto,)
+        )
+        chat_id = cur.fetchone()[0]
+        conn.commit()
+        print(f'  📤 Relay captura id={chat_id}, max_asst={max_asst_antes}. Esperando respuesta...')
+    finally:
+        conn.close()
+
+    # Esperar hasta 3 minutos a que aparezca la respuesta del assistant
+    for _ in range(90):
+        time.sleep(2)
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT contenido FROM chat_mensajes WHERE rol = 'assistant' AND archivado = FALSE AND id > %s ORDER BY id DESC LIMIT 1",
+                (max_asst_antes,)
+            )
+            row = cur.fetchone()
+            if row:
+                # Archivar el mensaje captura para que el watcher no lo reprocese
+                cur.execute("UPDATE chat_mensajes SET archivado = TRUE WHERE id = %s", (chat_id,))
+                conn.commit()
+                return row[0]
+        finally:
+            conn.close()
+
+    # Timeout — archivar de todas formas
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE chat_mensajes SET archivado = TRUE WHERE id = %s", (chat_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return '⚠️ Sin respuesta. Escríbeme de nuevo en un momento.'
 
 
 # ── Loop principal ────────────────────────────────────────────────────────────
@@ -463,8 +498,8 @@ def main():
                 ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
 
                 if creador_id == RAFAEL_ID:
-                    print(f"[{ts()}] 🧠 Rafael → sesión persistente con herramientas...")
-                    respuesta = llamar_claude_rafael(msgs, ctx['historial'])
+                    print(f"[{ts()}] 🔀 Rafael → relay via captura_watcher...")
+                    respuesta = relay_via_captura(conv_id, merlin_id, creador_id, msgs)
                 else:
                     prompt = construir_prompt(ctx, msgs)
                     print(f"[{ts()}] 🧠 Llamando a Claude ({len(ctx['historial'])} msgs contexto)...")

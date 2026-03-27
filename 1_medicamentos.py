@@ -13,7 +13,7 @@ import re
 from werkzeug.utils import secure_filename
 import hashlib
 import requests
-from datetime import datetime, timedelta, date as date_class
+from datetime import datetime, timedelta, date as date_class, timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from io import BytesIO
@@ -19274,10 +19274,16 @@ def api_chat_invitado_mensajes(token):
         conn.commit()
         conn.close()
 
+        def _ser_msg(m):
+            d = dict(m)
+            if d.get('fecha') and hasattr(d['fecha'], 'replace'):
+                d['fecha'] = d['fecha'].replace(tzinfo=timezone.utc).isoformat()
+            return d
+
         return jsonify({
             'ok': True,
             'conv': dict(conv),
-            'mensajes': [dict(m) for m in mensajes]
+            'mensajes': [_ser_msg(m) for m in mensajes]
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

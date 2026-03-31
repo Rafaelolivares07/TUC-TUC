@@ -265,6 +265,7 @@ const TOKEN_INICIAL  = "{{ token_inicial }}";
 
 // ── Estado compartido ────────────────────────────────────────────
 let grabando = false, mediaRecorder = null, audioChunks = [];
+let modoApunte = false;
 const idsRenderizados = new Set();
 let pollingInterval = null;
 let ultimoMsgId = 0;
@@ -341,6 +342,10 @@ function enviarTexto() {
   const msg = el.value.trim();
   if (!msg || !tokenActivo) return;
   el.value = ''; el.style.height = 'auto';
+  if (modoApunte) {
+    guardarApunte('texto', msg, null);
+    return;
+  }
   const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
   fetch('/api/chat/invitado/enviar', {
     method: 'POST',
@@ -394,11 +399,15 @@ async function toggleGrabacion() {
         const rUp = await fetch('/api/chat/audio/finalizar', {method: 'POST', body: form})
           .then(r => r.json()).catch(() => null);
         if (rUp && rUp.ok) {
-          await fetch('/api/chat/invitado/enviar', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: (convData[tok]?.creador_id === MI_TERCERO_ID)})
-          });
-          pollMensajes();
+          if (modoApunte) {
+            await guardarApunte('audio', '', rUp.url);
+          } else {
+            await fetch('/api/chat/invitado/enviar', {
+              method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: (convData[tok]?.creador_id === MI_TERCERO_ID)})
+            });
+            pollMensajes();
+          }
         } else {
           alert('Error subiendo audio: ' + (rUp?.error || 'desconocido'));
         }
@@ -830,22 +839,36 @@ function abrirConv(token, nombre) {
         </svg>
       </button>
     </div>
+    <!-- Sección apuntes (colapsable, solo visible si hay apuntes) -->
+    <div id="sec-apuntes" class="hidden border-b border-amber-900/50 bg-amber-950/30 flex-shrink-0">
+      <button onclick="toggleApuntesPanel()" class="w-full flex items-center justify-between px-4 py-2 text-amber-400 text-xs font-medium">
+        <span id="apuntes-header">📌 0 apuntes</span>
+        <svg id="apuntes-chevron" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="apuntes-body" class="hidden px-4 pb-2 max-h-48 overflow-y-auto"></div>
+    </div>
     <div id="mensajes" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
     <div class="px-3 pt-2 pb-1 border-t border-gray-800 bg-gray-900 flex-shrink-0 barra-input">
       <!-- Fila principal: textarea + enviar -->
       <div class="flex items-end gap-2">
-        <div class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
+        <div id="wrap-txt-msg" class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center transition-all duration-200">
           <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
                     class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none max-h-24 overflow-y-auto"
                     onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
                     oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
         </div>
-        <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
+        <button id="btn-enviar" onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
         </button>
       </div>
       <!-- Fila secundaria: íconos de acciones -->
       <div class="flex items-center gap-1 pt-1 pb-1">
+        <button id="btn-apunte" onclick="toggleModoApunte()" title="Modo apunte"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-amber-700 flex items-center justify-center transition text-base leading-none">
+          📌
+        </button>
         <button onclick="document.getElementById('inp-chat-imagen').click()"
                 class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition" title="Enviar imagen">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -874,6 +897,8 @@ function abrirConv(token, nombre) {
       </div>
     </div>`;
 
+  modoApunte = false; // reset al cambiar de chat
+  cargarApuntes();
   pollMensajes();
   pollingInterval = setInterval(pollMensajes, 3000);
 }
@@ -1056,12 +1081,107 @@ async function enviarImagenFile(file) {
   form.append('imagen', file);
   const rUp = await fetch('/api/chat/invitado/imagen', {method: 'POST', body: form}).then(r => r.json()).catch(() => null);
   if (!rUp || !rUp.ok) { alert('Error subiendo imagen: ' + (rUp?.error || 'desconocido')); return; }
+  if (modoApunte) {
+    await guardarApunte('imagen', '', rUp.url);
+    return;
+  }
   const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
   await fetch('/api/chat/invitado/enviar', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({token: tokenActivo, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: esCreador})
   });
   pollMensajes();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// APUNTES
+// ══════════════════════════════════════════════════════════════════
+
+function toggleModoApunte() {
+  modoApunte = !modoApunte;
+  const btn    = document.getElementById('btn-apunte');
+  const wrap   = document.getElementById('wrap-txt-msg');
+  const txtEl  = document.getElementById('txt-msg');
+  const btnEnv = document.getElementById('btn-enviar');
+  if (modoApunte) {
+    btn?.classList.add('bg-amber-600');
+    btn?.classList.remove('bg-gray-800');
+    wrap?.classList.add('ring-2', 'ring-amber-500');
+    wrap?.classList.remove('bg-gray-800');
+    wrap?.classList.add('bg-amber-950');
+    if (txtEl) txtEl.placeholder = 'Escribe tu apunte...';
+    if (btnEnv) { btnEnv.classList.replace('bg-blue-600', 'bg-amber-600'); btnEnv.classList.replace('hover:bg-blue-500', 'hover:bg-amber-500'); }
+  } else {
+    btn?.classList.remove('bg-amber-600');
+    btn?.classList.add('bg-gray-800');
+    wrap?.classList.remove('ring-2', 'ring-amber-500', 'bg-amber-950');
+    wrap?.classList.add('bg-gray-800');
+    if (txtEl) txtEl.placeholder = 'Escribe un mensaje...';
+    if (btnEnv) { btnEnv.classList.replace('bg-amber-600', 'bg-blue-600'); btnEnv.classList.replace('hover:bg-amber-500', 'hover:bg-blue-500'); }
+  }
+}
+
+async function guardarApunte(tipo, contenido, url_archivo) {
+  const r = await fetch('/api/chat/apunte', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tokenActivo, contenido, tipo, url_archivo})
+  }).then(r => r.json()).catch(() => null);
+  if (r?.ok) {
+    if (modoApunte) toggleModoApunte(); // desactivar modo
+    await cargarApuntes();
+  }
+}
+
+async function cargarApuntes() {
+  if (!tokenActivo) return;
+  const r = await fetch(`/api/chat/apuntes/${tokenActivo}`).then(r => r.json()).catch(() => null);
+  if (!r?.ok) return;
+  renderApuntes(r.apuntes || []);
+}
+
+function renderApuntes(lista) {
+  const sec = document.getElementById('sec-apuntes');
+  const hdr = document.getElementById('apuntes-header');
+  const body = document.getElementById('apuntes-body');
+  if (!sec || !hdr || !body) return;
+
+  if (lista.length === 0) {
+    sec.classList.add('hidden');
+    return;
+  }
+  sec.classList.remove('hidden');
+  hdr.textContent = `📌 ${lista.length} apunte${lista.length > 1 ? 's' : ''}`;
+
+  body.innerHTML = lista.map(a => {
+    const fecha = formatHora(a.created_at);
+    let contenidoHtml = '';
+    if (a.tipo === 'audio' && a.url_archivo) {
+      contenidoHtml = `<audio controls src="${escHtml(a.url_archivo)}" class="w-full h-8 mt-1"></audio>`;
+    } else if (a.tipo === 'imagen' && a.url_archivo) {
+      contenidoHtml = `<img src="${escHtml(a.url_archivo)}" class="max-h-24 rounded mt-1 object-cover">`;
+    } else {
+      contenidoHtml = `<span class="text-sm text-gray-200">${escHtml(a.contenido || '')}</span>`;
+    }
+    return `<div class="flex items-start gap-2 py-1.5 border-b border-amber-900/40 last:border-0">
+      <div class="flex-1 min-w-0">${contenidoHtml}<div class="text-xs text-amber-600 mt-0.5">${fecha}</div></div>
+      <button onclick="eliminarApunte(${a.id})" class="text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function eliminarApunte(id) {
+  await fetch(`/api/chat/apunte/${id}`, {method: 'DELETE'});
+  await cargarApuntes();
+}
+
+function toggleApuntesPanel() {
+  const body = document.getElementById('apuntes-body');
+  const hdr  = document.getElementById('apuntes-chevron');
+  if (!body) return;
+  const oculto = body.classList.toggle('hidden');
+  if (hdr) hdr.style.transform = oculto ? '' : 'rotate(180deg)';
 }
 
 // ══════════════════════════════════════════════════════════════════

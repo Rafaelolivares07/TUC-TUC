@@ -20013,6 +20013,91 @@ def api_chat_cards_items():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── APUNTES ─────────────────────────────────────────────────────────
+
+def _asegurar_tabla_apuntes(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS apuntes (
+            id          SERIAL PRIMARY KEY,
+            autor_id    INTEGER NOT NULL,
+            token_conv  VARCHAR(100) NOT NULL,
+            contenido   TEXT,
+            tipo        VARCHAR(20) DEFAULT 'texto',
+            url_archivo TEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+
+
+@app.route('/api/chat/apunte', methods=['POST'])
+def api_chat_apunte_crear():
+    autor_id = get_chat_tercero_id()
+    if not autor_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    token = (data.get('token') or '').strip()
+    contenido = (data.get('contenido') or '').strip()
+    tipo = data.get('tipo', 'texto')
+    url_archivo = data.get('url_archivo') or None
+    if not token:
+        return jsonify({'ok': False, 'error': 'token requerido'}), 400
+    try:
+        conn = get_db_connection()
+        _asegurar_tabla_apuntes(conn)
+        row = conn.execute("""
+            INSERT INTO apuntes (autor_id, token_conv, contenido, tipo, url_archivo)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (autor_id, token, contenido or None, tipo, url_archivo)).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/apuntes/<token>', methods=['GET'])
+def api_chat_apuntes_listar(token):
+    autor_id = get_chat_tercero_id()
+    if not autor_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        _asegurar_tabla_apuntes(conn)
+        from zoneinfo import ZoneInfo
+        _bogota = ZoneInfo('America/Bogota')
+        rows = conn.execute("""
+            SELECT id, contenido, tipo, url_archivo, created_at
+            FROM apuntes
+            WHERE token_conv = %s AND autor_id = %s
+            ORDER BY created_at ASC
+        """, (token, autor_id)).fetchall()
+        conn.close()
+        def _ser(r):
+            d = dict(r)
+            if d.get('created_at') and hasattr(d['created_at'], 'replace'):
+                d['created_at'] = d['created_at'].replace(tzinfo=_bogota).isoformat()
+            return d
+        return jsonify({'ok': True, 'apuntes': [_ser(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/chat/apunte/<int:apunte_id>', methods=['DELETE'])
+def api_chat_apunte_eliminar(apunte_id):
+    autor_id = get_chat_tercero_id()
+    if not autor_id:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM apuntes WHERE id = %s AND autor_id = %s", (apunte_id, autor_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # -------------------------------------------------------------------
 # --- ENDPOINTS DE GESTIÓN DE PASTILLEROS ---
 # -------------------------------------------------------------------

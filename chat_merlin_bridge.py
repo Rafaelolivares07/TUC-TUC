@@ -78,11 +78,14 @@ def adquirir_lock():
 
 
 def get_conn():
-    return psycopg2.connect(
+    conn = psycopg2.connect(
         DB_URL,
         cursor_factory=psycopg2.extras.RealDictCursor,
         connect_timeout=10,
     )
+    conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
+    conn.commit()
+    return conn
 
 
 # ── Merlin tercero ────────────────────────────────────────────────────────────

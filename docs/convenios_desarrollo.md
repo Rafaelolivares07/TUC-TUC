@@ -241,3 +241,99 @@ except: pass
 - [ ] ¿Se corrió `ast.parse` antes del push?
 
 *Agregar nuevas convenciones aquí cuando surjan en sesiones de desarrollo.*
+
+---
+
+## 7. Timestamps — convenio PostgreSQL + Python + JS
+
+> Establecido: 2026-03-31
+
+### Raíz del problema
+
+La función `get_db_connection()` ejecuta `SET TIME ZONE 'America/Bogota'` en cada conexión.
+Esto significa que `CURRENT_TIMESTAMP` en PostgreSQL **guarda la hora Colombia local**,
+no UTC. La columna `mensajes.fecha` es `timestamp without time zone` — no hay offset en BD.
+
+**Esta decisión no se cambia** — revertirla rompería todos los timestamps históricos.
+
+---
+
+### Regla 1 — Python: serializar con ZoneInfo, nunca con UTC
+
+```python
+from zoneinfo import ZoneInfo
+
+def _ser_msg(m):
+    _bogota = ZoneInfo('America/Bogota')
+    d = dict(m)
+    if d.get('fecha') and hasattr(d['fecha'], 'replace'):
+        # La sesión PG usa America/Bogota → fecha naive = hora Bogotá
+        d['fecha'] = d['fecha'].replace(tzinfo=_bogota).isoformat()
+        # Produce: "2026-03-31T11:30:00-05:00"
+    return d
+```
+
+**NO usar `timezone.utc`** — produce offset `+00:00` sobre hora Colombia = doble error de 5h.
+
+---
+
+### Regla 2 — Todas las conexiones deben setear la zona
+
+Tanto Flask (`get_db_connection()`) como cualquier otro proceso que escriba timestamps
+(bridge, scripts, workers) debe ejecutar:
+
+```python
+conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
+conn.commit()
+```
+
+Inmediatamente después de abrir la conexión.
+
+---
+
+### Regla 3 — JS en /chat (usuarios pueden estar en cualquier zona horaria)
+
+```javascript
+function formatHora(fecha) {
+  if (!fecha) return '';
+  let s = String(fecha).replace(' ', 'T');
+  // Si no tiene offset ni Z, el server debería haberlo enviado con -05:00
+  if (!s.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(s)) s += 'Z'; // fallback defensivo
+  return new Date(s).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+  // SIN timeZone forzado — el offset -05:00 del servidor hace la conversión automáticamente
+}
+```
+
+**Por qué no se fuerza timeZone:** un usuario en Europa vería la hora Colombia, no la suya.
+El offset `-05:00` en el string ISO permite que el browser de cada usuario haga la conversión
+correcta a su zona local.
+
+---
+
+### Regla 4 — JS en logs/domótica (solo pantallas internas, siempre Colombia)
+
+Para logs de presencia, eventos domótica u otros strings del servidor **sin offset**:
+
+```javascript
+function fmtTs(str, opts) {
+  // Si ya tiene offset o Z, respetarlo; si no, tratar como UTC naive → Bogotá
+  const s = (str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str)) ? str : str + 'Z';
+  return new Date(s).toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    ...(opts || {})
+  });
+}
+```
+
+Aquí **sí** se fuerza `timeZone: 'America/Bogota'` porque las pantallas de domótica
+son internas, siempre en Colombia.
+
+---
+
+### Resumen rápido
+
+| Contexto | Python | JS |
+|---|---|---|
+| Chat (cualquier usuario) | `ZoneInfo('America/Bogota')` → `-05:00` | `toLocaleTimeString('es-CO')` sin `timeZone` |
+| Logs / domótica (solo Colombia) | igual | `toLocaleString('es-CO', { timeZone: 'America/Bogota' })` |
+| Conexión BD | `SET TIME ZONE 'America/Bogota'` en todas | — |

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>TUC TUC Chat</title>
+  <title>Chat — TUC TUC</title>
   {% if es_invitado %}
   <meta property="og:title" content="Tienes un mensaje en TUC TUC 💬">
   <meta property="og:description" content="Responde con texto, audio o imagen — sin registrarte.">
@@ -897,6 +897,7 @@ function abrirConv(token, nombre) {
       </div>
     </div>`;
 
+  document.title = `${nombre} — TUC TUC`;
   modoApunte = false; // reset al cambiar de chat
   cargarApuntes();
   pollMensajes();
@@ -904,6 +905,7 @@ function abrirConv(token, nombre) {
 }
 
 function volverSidebar() {
+  document.title = 'Chat — TUC TUC';
   document.getElementById('sidebar').style.display = '';
   document.getElementById('panel-chat').style.display = 'none';
   if (pollingInterval) clearInterval(pollingInterval);

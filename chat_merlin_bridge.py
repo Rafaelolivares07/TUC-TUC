@@ -48,7 +48,7 @@ DB_URL         = os.getenv('DATABASE_URL')
 APP_DIR        = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\.local\bin\claude.exe"
 
-POLL_INTERVAL  = 4     # segundos entre checks
+POLL_INTERVAL  = 2     # segundos entre checks
 MAX_HISTORIAL  = 12    # mensajes de contexto por conversación
 LOCK_PORT      = 47834 # diferente al de chat_bridge (47832) y git_bridge
 MERLIN_NOMBRE  = 'Merlin'
@@ -256,6 +256,17 @@ def get_contexto_usuario(creador_id, conv_id, merlin_id):
 # ── Transcripción de audio ────────────────────────────────────────────────────
 
 _whisper_model = None
+WHISPER_MODEL  = 'tiny'   # tiny=rápido, base=más preciso
+
+def _precargar_whisper():
+    global _whisper_model
+    try:
+        import whisper
+        print(f'  🔊 Precargando modelo Whisper ({WHISPER_MODEL})...')
+        _whisper_model = whisper.load_model(WHISPER_MODEL)
+        print(f'  ✓ Whisper listo')
+    except Exception as e:
+        print(f'  ⚠️ Whisper no disponible: {e}')
 
 def transcribir_audio(url):
     """Descarga el WebM de Cloudinary y transcribe con openai-whisper local."""
@@ -265,14 +276,20 @@ def transcribir_audio(url):
     try:
         import whisper
         if _whisper_model is None:
-            print('  🔊 Cargando modelo Whisper (base)...')
-            _whisper_model = whisper.load_model('base')
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp:
-            urllib.request.urlretrieve(url, tmp.name)
-            result = _whisper_model.transcribe(tmp.name, language='es')
+            print(f'  🔊 Cargando modelo Whisper ({WHISPER_MODEL})...')
+            _whisper_model = whisper.load_model(WHISPER_MODEL)
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+            tmppath = tmp.name
+        urllib.request.urlretrieve(url, tmppath)
+        try:
+            result = _whisper_model.transcribe(tmppath, language='es')
             texto = result.get('text', '').strip()
-            os.unlink(tmp.name)
-            return texto if texto else None
+        finally:
+            try:
+                os.unlink(tmppath)
+            except Exception:
+                pass
+        return texto if texto else None
     except ImportError:
         return None  # whisper no instalado — silencioso
     except Exception as e:
@@ -457,6 +474,7 @@ def main():
     print(f'  BD: {(DB_URL or "")[:40]}...')
     print()
 
+    _precargar_whisper()
     merlin_id = get_or_create_merlin()
     print(f'[{ts()}] Merlin listo (id={merlin_id}). Esperando mensajes...\n')
 

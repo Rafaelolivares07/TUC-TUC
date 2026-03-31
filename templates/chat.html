@@ -318,7 +318,7 @@ function formatHora(fecha) {
   if (!fecha) return '';
   let s = String(fecha).replace(' ', 'T');
   if (!s.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(s)) s += 'Z';
-  return new Date(s).toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+  return new Date(s).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', timeZone: 'America/Bogota'});
 }
 
 function escHtml(s) {

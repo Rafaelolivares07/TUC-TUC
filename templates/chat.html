@@ -266,6 +266,7 @@ const TOKEN_INICIAL  = "{{ token_inicial }}";
 // ── Estado compartido ────────────────────────────────────────────
 let grabando = false, mediaRecorder = null, audioChunks = [];
 let modoApunte = false;
+let ttsActivo = localStorage.getItem('chat_tts') === '1';
 const idsRenderizados = new Set();
 let pollingInterval = null;
 let ultimoMsgId = 0;
@@ -333,6 +334,32 @@ function autoResize(el) {
 
 function micIconSvg() {
   return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>';
+}
+
+function toggleTTS() {
+  ttsActivo = !ttsActivo;
+  localStorage.setItem('chat_tts', ttsActivo ? '1' : '0');
+  const btn = document.getElementById('btn-tts');
+  if (!btn) return;
+  if (ttsActivo) {
+    btn.classList.add('bg-emerald-800'); btn.classList.remove('bg-gray-800');
+  } else {
+    btn.classList.remove('bg-emerald-800'); btn.classList.add('bg-gray-800');
+    speechSynthesis.cancel();
+  }
+}
+
+function leerEnVoz(texto) {
+  if (!ttsActivo || !texto) return;
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(texto);
+  utt.lang = 'es-CO';
+  utt.rate = 1.05;
+  // intentar voz en español si hay disponible
+  const voces = speechSynthesis.getVoices();
+  const vozEs = voces.find(v => v.lang.startsWith('es') && v.localService) || voces.find(v => v.lang.startsWith('es'));
+  if (vozEs) utt.voice = vozEs;
+  speechSynthesis.speak(utt);
 }
 
 // ── Enviar texto ──────────────────────────────────────────────────
@@ -521,7 +548,13 @@ function renderMensajes(msgs, cont) {
           <div class="text-xs opacity-50 mt-0.5 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
         </div>`;
     }
-    if (div.innerHTML) cont.appendChild(div);
+    if (div.innerHTML) {
+      cont.appendChild(div);
+      // TTS: leer mensajes ajenos nuevos (no al cargar el historial)
+      if (!esInicio && !esMio && ttsActivo && m.tipo === 'texto' && m.mensaje) {
+        leerEnVoz(m.mensaje);
+      }
+    }
   });
   const _scrollFin = () => { cont.scrollTop = cont.scrollHeight; };
   requestAnimationFrame(() => requestAnimationFrame(_scrollFin));
@@ -865,6 +898,10 @@ function abrirConv(token, nombre) {
       </div>
       <!-- Fila secundaria: íconos de acciones -->
       <div class="flex items-center gap-1 pt-1 pb-1">
+        <button id="btn-tts" onclick="toggleTTS()" title="Leer mensajes en voz alta"
+                class="w-10 h-10 rounded-full ${ttsActivo ? 'bg-emerald-800' : 'bg-gray-800'} hover:bg-emerald-700 flex items-center justify-center transition text-base leading-none">
+          🔊
+        </button>
         <button id="btn-apunte" onclick="toggleModoApunte()" title="Modo apunte"
                 class="w-10 h-10 rounded-full bg-gray-800 hover:bg-amber-700 flex items-center justify-center transition text-base leading-none">
           📌

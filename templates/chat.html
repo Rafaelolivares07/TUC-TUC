@@ -831,7 +831,8 @@ function abrirConv(token, nombre) {
       </button>
     </div>
     <div id="mensajes" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
-    <div class="p-3 border-t border-gray-800 bg-gray-900 flex-shrink-0 barra-input">
+    <div class="px-3 pt-2 pb-1 border-t border-gray-800 bg-gray-900 flex-shrink-0 barra-input">
+      <!-- Fila principal: textarea + enviar -->
       <div class="flex items-end gap-2">
         <div class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center">
           <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
@@ -839,33 +840,36 @@ function abrirConv(token, nombre) {
                     onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
                     oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
         </div>
+        <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </div>
+      <!-- Fila secundaria: íconos de acciones -->
+      <div class="flex items-center gap-1 pt-1 pb-1">
         <button onclick="document.getElementById('inp-chat-imagen').click()"
-                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0" title="Enviar imagen">
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition" title="Enviar imagen">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
         </button>
         <button onclick="abrirSelectorCard()" title="Compartir producto o plato"
-                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-indigo-600 flex items-center justify-center transition flex-shrink-0">
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-indigo-600 flex items-center justify-center transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
           </svg>
         </button>
         <button id="btn-stt" onclick="toggleSTT()" title="Dictar texto"
-                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0">
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition">
           <svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
           </svg>
         </button>
         <button id="btn-mic" onclick="toggleGrabacion()" title="Grabar audio"
-                class="w-11 h-11 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition flex-shrink-0 relative">
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition relative">
           ${micIconSvg()}
           <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
             <span></span><span></span><span></span><span></span><span></span>
           </div>
-        </button>
-        <button onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
         </button>
       </div>
     </div>`;

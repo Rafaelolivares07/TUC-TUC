@@ -514,9 +514,10 @@ function renderMensajes(msgs, cont) {
     }
     if (div.innerHTML) cont.appendChild(div);
   });
-  cont.scrollTop = cont.scrollHeight;
+  const _scrollFin = () => { cont.scrollTop = cont.scrollHeight; };
+  requestAnimationFrame(() => requestAnimationFrame(_scrollFin));
   cont.querySelectorAll('img').forEach(img => {
-    if (!img.complete) img.addEventListener('load', () => { cont.scrollTop = cont.scrollHeight; }, {once: true});
+    if (!img.complete) img.addEventListener('load', _scrollFin, {once: true});
   });
   if (hayMsgAjeno) sonarNotificacion();
 }

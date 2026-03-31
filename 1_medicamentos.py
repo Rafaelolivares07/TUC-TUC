@@ -19275,9 +19275,12 @@ def api_chat_invitado_mensajes(token):
         conn.close()
 
         def _ser_msg(m):
+            from zoneinfo import ZoneInfo
+            _bogota = ZoneInfo('America/Bogota')
             d = dict(m)
             if d.get('fecha') and hasattr(d['fecha'], 'replace'):
-                d['fecha'] = d['fecha'].replace(tzinfo=timezone.utc).isoformat()
+                # La sesión PG usa America/Bogota → fecha naive = hora Bogotá
+                d['fecha'] = d['fecha'].replace(tzinfo=_bogota).isoformat()
             return d
 
         return jsonify({

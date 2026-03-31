@@ -1164,8 +1164,13 @@ function renderApuntes(lista) {
     } else {
       contenidoHtml = `<span class="text-sm text-gray-200">${escHtml(a.contenido || '')}</span>`;
     }
+    const enviarBtn = `<button onclick="enviarApunte(${a.id},'${escHtml(a.tipo)}','${escHtml(a.url_archivo||'')}','${escHtml(a.contenido||'')}')"
+        class="text-gray-600 hover:text-blue-400 flex-shrink-0 mt-0.5" title="Enviar al chat">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+      </button>`;
     return `<div class="flex items-start gap-2 py-1.5 border-b border-amber-900/40 last:border-0">
       <div class="flex-1 min-w-0">${contenidoHtml}<div class="text-xs text-amber-600 mt-0.5">${fecha}</div></div>
+      ${enviarBtn}
       <button onclick="eliminarApunte(${a.id})" class="text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
@@ -1176,6 +1181,19 @@ function renderApuntes(lista) {
 async function eliminarApunte(id) {
   await fetch(`/api/chat/apunte/${id}`, {method: 'DELETE'});
   await cargarApuntes();
+}
+
+async function enviarApunte(id, tipo, url_archivo, contenido) {
+  if (!tokenActivo) return;
+  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
+  await fetch('/api/chat/invitado/enviar', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tokenActivo, mensaje: contenido || '', tipo, url_archivo: url_archivo || null, es_creador: esCreador})
+  });
+  // eliminar el apunte después de enviarlo
+  await fetch(`/api/chat/apunte/${id}`, {method: 'DELETE'});
+  await cargarApuntes();
+  pollMensajes();
 }
 
 function toggleApuntesPanel() {

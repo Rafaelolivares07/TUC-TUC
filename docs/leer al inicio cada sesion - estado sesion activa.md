@@ -2,58 +2,42 @@
 _Actualizado: 2026-03-31_
 
 ## Módulo en trabajo
-**Bridge Merlin + /chat timestamps + captura_watcher**
+**Chat /chat — features nuevos + Alegra/Pilar Peralta (pendiente)**
 
-## Trabajo sesión 2026-03-31 — commits pusheados
+## Trabajo sesión 2026-03-31 (continuación tarde)
 
-### Bridge Merlin — operativo y mejorado
-- Trigger cambiado de `"."` a `"__MERLIN__"` — más inequívoco, menos colisiones
-- `captura_watcher.ps1` actualizado con nuevo trigger (3 instancias)
-- `CLAUDE.md` raíz y TUC TUC actualizados con instrucción `__MERLIN__` y query exacta
-- `POLL_INTERVAL` reducido de 4s → 2s
-- Modelo Whisper cambiado de `base` → `tiny` (3x más rápido)
-- Whisper precargado al arranque (no paga costo en primer audio)
-- Fix crítico: archivo temporal `.webm` ahora se crea y cierra ANTES de que Whisper lo lea (bug Windows handle)
-- `get_conn()` del bridge ahora hace `SET TIME ZONE 'America/Bogota'` — consistente con Flask
+### /chat — features implementados
+- **Barra input rediseñada**: fila 1 = textarea + enviar, fila 2 = íconos secundarios
+- **Title dinámico**: pestaña muestra "Nombre — TUC TUC" al abrir un chat, "Chat — TUC TUC" en el listado
+- **Sistema apuntes**: tabla `apuntes`, modo apunte (toggle 📌), panel colapsable "📌 N apuntes" encima del hilo, botón ➤ por apunte para enviar al contacto cuando se decida
+- **TTS 🔊**: toggle en barra secundaria — activo (verde) lee mis mensajes en voz alta al llegar. Persiste en localStorage. Web Speech API, sin costo.
+- **Chulos ✓✓**: ✓ gris = llegó al servidor, ✓✓ azul = bridge/destinatario lo procesó (estado='leido'). Aplica a texto, audio e imagen. Polling actualiza en vivo cada 3s. Endpoint `/api/chat/mensajes/estados`.
 
-### Timestamps /chat — fix completo
-- **Raíz del problema**: sesión PG usa `America/Bogota` → `CURRENT_TIMESTAMP` guarda hora local Colombia
-- **`_ser_msg`**: cambiado de `.replace(tzinfo=timezone.utc)` a `.replace(tzinfo=ZoneInfo('America/Bogota'))` → serializa como `-05:00`
-- **`formatHora`** en `chat.html`: usa `toLocaleTimeString('es-CO')` sin forzar timeZone — el offset `-05:00` maneja la conversión
-- **Regla para logs vs chat**: logs de sistema (domótica, presencia) pueden usar `America/Bogota` explícito en JS. Para chat, los timestamps vienen del servidor con offset correcto — no forzar timezone en el cliente. Usuarios en otras zonas horarias verán su hora local automáticamente si el offset es correcto.
+### Convenios actualizados
+- §7 timestamps en `convenios_desarrollo.md`
+- Reglas de trabajo actualizadas (timestamps corregidos, §6 y §7 en índice)
 
-### Scroll /chat — fix
-- `renderMensajes` usa doble `requestAnimationFrame` antes de `scrollTop = scrollHeight` — garantiza scroll al final exacto después del paint completo
-
-### Whisper instalado
-- `openai-whisper` instalado en sistema (`pip install openai-whisper`)
-- Funcional en Python314 (el que usa el bridge)
-
-## Estado del bridge
-- `chat_merlin_bridge.py` corriendo — PID activo (reiniciar con `tuctuc_merlin_bridge.bat` en Startup)
-- `captura_watcher.ps1` corriendo — PID activo
-- Flujo completo funcional: audio/texto en /chat → bridge transcribe → relay a esta terminal → respuesta → /chat
+### Commits de esta sesión (tarde)
+- `e28464e` — fix(chat): barra input rediseñada
+- `2c0274c` — fix(chat): title dinámico con nombre del contacto
+- `00396f4` — feat(chat): sistema de apuntes completo
+- `78114a2` — feat(apuntes): botón enviar al chat por apunte
+- `29885fd` — feat(chat): TTS toggle con Web Speech API
+- `37061c7` — feat(chat): chulos ✓✓ en burbujas propias
 
 ## Pendientes
-- **Logs de presencia /domótica**: Rafael mencionó que ya tienen un buen comportamiento — revisar si algo quedó pendiente
-- **Sistema de apuntes**: diseñado en sesión — tabla `apuntes` con autor + contacto_vinculado opcional. Pendiente implementar en TUC TUC
-- **Alegra/Pilar**: sync operativo y probado — pendiente BROWSE VFP contra BD TEST → producción
+- **Alegra/Pilar:** identificar registro "bolsa" ($73) → manejarlo como impuesto separado en formulario VFP. Mapeo métodos de pago también pendiente.
+- **Whisper tiny**: transcripción de audios imprecisa — considerar `small` para apuntes de audio que Merlin debe leer
+- **Logs de presencia /domótica**: Rafael mencionó buen comportamiento — verificar si algo quedó pendiente
 
-## Regla de timestamps (convenio)
+## Regla de timestamps (convenio §7)
 - **BD**: sesión PG en `America/Bogota` → `CURRENT_TIMESTAMP` guarda hora Colombia
 - **Python**: serializar con `ZoneInfo('America/Bogota')` → ISO con `-05:00`
-- **JS chat**: `toLocaleTimeString('es-CO')` sin `timeZone` forzado — el offset del servidor maneja todo
-- **JS logs/domótica**: `toLocaleString('es-CO', { timeZone: 'America/Bogota' })` — para strings sin offset
-- **Usuarios en otras zonas**: el offset `-05:00` en el ISO string hace que cada browser muestre su hora local automáticamente ✓
-
-## Commits de esta sesión
-- `c4103b3` — fix(chat): hora mensajes forzada a America/Bogota
-- `2aa3477` — fix(chat): scroll al final exacto al cargar
-- `eedb6ca` — fix(chat): timestamps — sesion PG es Bogota, serializar con -05:00 no UTC
-- `80126d8` — fix(bridge): SET TIME ZONE Bogota en conexiones
+- **JS chat**: `toLocaleTimeString('es-CO')` sin `timeZone` forzado
+- **JS logs/domótica**: `toLocaleString('es-CO', { timeZone: 'America/Bogota' })`
 
 ## Contexto técnico
 - bypassPermissions activo en `~/.claude/settings.json` ✓
 - Rafael trabaja en Cali, Colombia — timezone America/Bogota
 - App en producción: `tuc-tuc.onrender.com`
-- Todas las migraciones de BD son automáticas vía `_asegurar_*` / `crear_tablas_*`
+- Rafael trabaja principalmente desde el celular — responder siempre por /chat, no preguntar en terminal

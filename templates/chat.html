@@ -1096,13 +1096,10 @@ function toggleSTT() {
       if (e.error === 'not-allowed') {
         alert('Permiso de micrófono denegado. Habilítalo en la configuración del navegador.');
         desactivarSTT();
-      } else if (e.error === 'no-speech' || e.error === 'audio-capture') {
-        // no-speech es normal en silencio — no desactivar, onend reiniciará
-      } else {
-        desactivarSTT();
       }
+      // no-speech, audio-capture, network — no desactivar, onend reiniciará
     };
-    reconocedor.onend = () => { if (sttActivo) setTimeout(() => { try { reconocedor.start(); } catch(e){} }, 150); };
+    reconocedor.onend = () => { if (sttActivo) setTimeout(() => { try { reconocedor.start(); } catch(e){} }, 300); };
     reconocedor.start(); sttActivo = true;
     if (btn) { btn.classList.add('bg-emerald-900'); btn.classList.remove('bg-gray-700'); btn.innerHTML = _sttIconActivo; }
   } else { desactivarSTT(); }

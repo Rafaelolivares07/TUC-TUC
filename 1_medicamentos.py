@@ -20030,6 +20030,27 @@ def _asegurar_tabla_apuntes(conn):
     conn.commit()
 
 
+@app.route('/api/chat/mensajes/estados', methods=['GET'])
+def api_chat_mensajes_estados():
+    """Devuelve estado actual de una lista de ids de mensajes (para actualizar chulos)."""
+    ids_str = request.args.get('ids', '')
+    if not ids_str:
+        return jsonify({'ok': True, 'estados': {}})
+    try:
+        ids = [int(i) for i in ids_str.split(',') if i.strip().isdigit()]
+    except Exception:
+        return jsonify({'ok': True, 'estados': {}})
+    if not ids:
+        return jsonify({'ok': True, 'estados': {}})
+    try:
+        conn = get_db_connection()
+        rows = conn.execute('SELECT id, estado FROM mensajes WHERE id = ANY(%s)', (ids,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'estados': {str(r['id']): r['estado'] for r in rows}})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/chat/apunte', methods=['POST'])
 def api_chat_apunte_crear():
     autor_id = get_chat_tercero_id()

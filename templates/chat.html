@@ -267,6 +267,7 @@ const TOKEN_INICIAL  = "{{ token_inicial }}";
 let grabando = false, mediaRecorder = null, audioChunks = [];
 let modoApunte = false;
 let ttsActivo = localStorage.getItem('chat_tts') === '1';
+let _pendientesEstado = new Set();
 const idsRenderizados = new Set();
 let pollingInterval = null;
 let ultimoMsgId = 0;
@@ -325,6 +326,26 @@ function formatHora(fecha) {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function chulito(estado, esMio) {
+  if (!esMio) return '';
+  if (estado === 'leido') return ' <span style="color:#93c5fd;font-size:11px">✓✓</span>';
+  return ' <span style="opacity:.5;font-size:11px">✓</span>';
+}
+
+async function actualizarEstados() {
+  if (!_pendientesEstado.size || !tokenActivo) return;
+  const ids = [..._pendientesEstado].join(',');
+  const r = await fetch(`/api/chat/mensajes/estados?ids=${ids}`).then(r => r.json()).catch(() => null);
+  if (!r?.ok) return;
+  for (const [id, estado] of Object.entries(r.estados)) {
+    if (estado === 'leido') {
+      const el = document.getElementById(`est-${id}`);
+      if (el) el.outerHTML = '<span id="est-' + id + '" style="color:#93c5fd;font-size:11px">✓✓</span>';
+      _pendientesEstado.delete(Number(id));
+    }
+  }
 }
 
 function autoResize(el) {
@@ -470,6 +491,7 @@ function pollMensajes() {
       const cont = document.getElementById('mensajes');
       if (!cont) return;
       renderMensajes(d.mensajes, cont);
+      actualizarEstados();
     });
 }
 
@@ -512,14 +534,14 @@ function renderMensajes(msgs, cont) {
       div.innerHTML = `
         <div class="px-3 py-2.5 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
           <audio controls src="${m.url_archivo}" class="max-w-[210px] h-8" preload="metadata"></audio>
-          <div class="text-xs opacity-50 mt-1 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+          <div class="text-xs opacity-50 mt-1 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
         </div>`;
     } else if (m.tipo === 'imagen' && m.url_archivo) {
       div.innerHTML = `
         <div class="rounded-2xl overflow-hidden ${esMio ? 'rounded-br-sm' : 'rounded-bl-sm'} max-w-[75%] cursor-pointer"
              onclick="verFotoGrande('${m.url_archivo}', '', false)">
           <img src="${m.url_archivo}" class="max-w-[260px] max-h-64 object-cover block" loading="lazy">
-          <div class="text-xs opacity-50 px-2 pb-1.5 pt-0.5 ${esMio ? 'bg-blue-600 text-right' : 'bg-gray-800'}">${formatHora(m.fecha)}</div>
+          <div class="text-xs opacity-50 px-2 pb-1.5 pt-0.5 ${esMio ? 'bg-blue-600 text-right' : 'bg-gray-800'}">${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
         </div>`;
     } else if (m.tipo === 'card' && m.card_payload) {
       const cp = typeof m.card_payload === 'string' ? JSON.parse(m.card_payload) : m.card_payload;
@@ -539,17 +561,19 @@ function renderMensajes(msgs, cont) {
               </span>
             </div>
           </div>
-          <div class="text-xs opacity-40 px-3 pb-2 bg-gray-800 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+          <div class="text-xs opacity-40 px-3 pb-2 bg-gray-800 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
         </div>`;
     } else if (m.tipo !== 'sistema') {
       div.innerHTML = `
         <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
           <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
-          <div class="text-xs opacity-50 mt-0.5 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}</div>
+          <div class="text-xs opacity-50 mt-0.5 ${esMio ? 'text-right' : ''}">${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
         </div>`;
     }
     if (div.innerHTML) {
       cont.appendChild(div);
+      // Trackear mis mensajes pendientes para actualizar chulos
+      if (esMio && m.estado !== 'leido') _pendientesEstado.add(m.id);
       // TTS: leer mensajes ajenos nuevos (no al cargar el historial)
       if (!esInicio && !esMio && ttsActivo && m.tipo === 'texto' && m.mensaje) {
         leerEnVoz(m.mensaje);

@@ -8,6 +8,7 @@ agente_cliente.py — Versión para el cliente final
 import base64
 import io
 import os
+import zipfile
 import threading
 import time
 import sys
@@ -184,37 +185,79 @@ def on_command(data):
     ejecutar_comando(data)
 
 
-@sio.on('file_incoming')
-def on_file_incoming(data):
-    """Técnico envía un archivo — lo guardamos en el Desktop del usuario."""
-    try:
-        nombre = os.path.basename(data.get('nombre', 'archivo_recibido'))
-        desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
-        os.makedirs(desktop, exist_ok=True)
-        ruta_destino = os.path.join(desktop, nombre)
-        contenido = base64.b64decode(data['b64'])
-        with open(ruta_destino, 'wb') as f:
-            f.write(contenido)
-        ventana.set_archivo(f"📥 {nombre} guardado en Desktop")
-    except Exception as e:
-        ventana.set_archivo(f"✗ Error al recibir archivo: {e}", color="#f87171")
+CHUNK_SIZE = 512 * 1024  # 512 KB por chunk
+_chunks_entrantes = {}   # nombre -> {total, chunks: {idx: bytes}}
+
+
+@sio.on('file_chunk_in')
+def on_file_chunk_in(data):
+    """Técnico envía archivo en chunks — ensamblar y guardar en Desktop."""
+    nombre = os.path.basename(data.get('nombre', 'archivo_recibido'))
+    idx    = data['idx']
+    total  = data['total']
+
+    if nombre not in _chunks_entrantes:
+        _chunks_entrantes[nombre] = {'total': total, 'chunks': {}}
+
+    _chunks_entrantes[nombre]['chunks'][idx] = base64.b64decode(data['b64'])
+    recibidos = len(_chunks_entrantes[nombre]['chunks'])
+    ventana.set_archivo(f"📥 {nombre} — {recibidos}/{total}")
+
+    if recibidos == total:
+        try:
+            contenido = b''.join(_chunks_entrantes[nombre]['chunks'][i] for i in range(total))
+            desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+            os.makedirs(desktop, exist_ok=True)
+            with open(os.path.join(desktop, nombre), 'wb') as f:
+                f.write(contenido)
+            del _chunks_entrantes[nombre]
+            ventana.set_archivo(f"📥 {nombre} guardado en Desktop")
+        except Exception as e:
+            ventana.set_archivo(f"✗ Error al guardar: {e}", color="#f87171")
 
 
 @sio.on('file_request')
 def on_file_request(data):
-    """Técnico pide un archivo — lo leemos y lo enviamos de vuelta."""
-    ruta = data.get('ruta', '')
-    try:
-        with open(ruta, 'rb') as f:
-            contenido = f.read()
-        b64 = base64.b64encode(contenido).decode()
-        nombre = os.path.basename(ruta)
-        sio.emit('file_response', {'session_id': SESSION, 'nombre': nombre, 'b64': b64})
-        ventana.set_archivo(f"📤 {nombre} enviado al técnico")
-    except FileNotFoundError:
-        sio.emit('file_response', {'session_id': SESSION, 'error': f'Archivo no encontrado: {ruta}'})
-    except Exception as e:
-        sio.emit('file_response', {'session_id': SESSION, 'error': str(e)})
+    """Técnico pide archivo o carpeta — comprimir si es carpeta, enviar en chunks."""
+    ruta = data.get('ruta', '').strip()
+
+    def _enviar():
+        try:
+            buf = io.BytesIO()
+            if os.path.isdir(ruta):
+                nombre = os.path.basename(ruta.rstrip('/\\')) + '.zip'
+                ventana.set_archivo(f"📦 Comprimiendo {nombre}...")
+                with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for root, dirs, files in os.walk(ruta):
+                        for fname in files:
+                            fp = os.path.join(root, fname)
+                            zf.write(fp, os.path.relpath(fp, os.path.dirname(ruta)))
+            elif os.path.isfile(ruta):
+                nombre = os.path.basename(ruta)
+                with open(ruta, 'rb') as f:
+                    buf.write(f.read())
+            else:
+                sio.emit('file_chunk', {'session_id': SESSION, 'error': f'No encontrado: {ruta}', 'idx': 0, 'total': 0})
+                return
+
+            contenido = buf.getvalue()
+            total = (len(contenido) + CHUNK_SIZE - 1) // CHUNK_SIZE
+            for i in range(total):
+                chunk = contenido[i * CHUNK_SIZE:(i + 1) * CHUNK_SIZE]
+                sio.emit('file_chunk', {
+                    'session_id': SESSION,
+                    'nombre': nombre,
+                    'idx': i,
+                    'total': total,
+                    'b64': base64.b64encode(chunk).decode()
+                })
+                ventana.set_archivo(f"📤 {nombre} — {i + 1}/{total}")
+            ventana.set_archivo(f"📤 {nombre} enviado ({len(contenido) // 1024} KB)")
+        except Exception as e:
+            sio.emit('file_chunk', {'session_id': SESSION, 'error': str(e), 'idx': 0, 'total': 0})
+            ventana.set_archivo(f"✗ Error: {e}", color="#f87171")
+
+    threading.Thread(target=_enviar, daemon=True).start()
 
 @sio.event
 def disconnect():

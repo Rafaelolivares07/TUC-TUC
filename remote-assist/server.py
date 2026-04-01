@@ -189,7 +189,7 @@ function conectar() {
     }
   });
   socket.on('disconnect', () => setStatus('red', 'Desconectado'));
-  socket.on('file_response', onFileResponse);
+  socket.on('file_chunk', onFileChunk);
 }
 
 function formatCodigo(c) { return c.slice(0,3) + '-' + c.slice(3); }
@@ -257,7 +257,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ─── Transferencia de archivos ────────────────────────────────────────────────
-const MAX_FILE_MB = 20;
+const CHUNK_SIZE = 512 * 1024;
+let _chunksRecibidos = {};  // nombre -> {total, chunks: {idx: ArrayBuffer}}
 
 function toggleArchivos() {
   const panel = document.getElementById('panel-archivos');
@@ -272,44 +273,58 @@ function setArcEstado(id, msg, tipo) {
   el.className = 'arc-estado' + (tipo ? ' ' + tipo : '');
 }
 
-function enviarArchivo() {
+async function enviarArchivo() {
   if (!socket) { setArcEstado('arc-estado-enviar', 'Conéctate primero', 'err'); return; }
   const fileInput = document.getElementById('arc-file-input');
   const file = fileInput.files[0];
   if (!file) { setArcEstado('arc-estado-enviar', 'Selecciona un archivo', 'err'); return; }
-  if (file.size > MAX_FILE_MB * 1024 * 1024) {
-    setArcEstado('arc-estado-enviar', `Máximo ${MAX_FILE_MB}MB`, 'err'); return;
+
+  const buf = await file.arrayBuffer();
+  const total = Math.ceil(buf.byteLength / CHUNK_SIZE);
+  setArcEstado('arc-estado-enviar', `Enviando ${file.name} (0/${total})...`);
+
+  for (let i = 0; i < total; i++) {
+    const slice = buf.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(slice)));
+    socket.emit('file_chunk_in', { session_id: sessionId, nombre: file.name, idx: i, total, b64 });
+    setArcEstado('arc-estado-enviar', `Enviando ${file.name} (${i+1}/${total})...`);
+    await new Promise(r => setTimeout(r, 20));  // pequeña pausa para no saturar el socket
   }
-  setArcEstado('arc-estado-enviar', 'Leyendo archivo...');
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const b64 = e.target.result.split(',')[1];
-    setArcEstado('arc-estado-enviar', 'Enviando...');
-    socket.emit('file_incoming', { session_id: sessionId, nombre: file.name, b64 });
-    setArcEstado('arc-estado-enviar', `✓ ${file.name} enviado`, 'ok');
-    fileInput.value = '';
-  };
-  reader.readAsDataURL(file);
+  setArcEstado('arc-estado-enviar', `✓ ${file.name} enviado`, 'ok');
+  fileInput.value = '';
 }
 
 function pedirArchivo() {
   if (!socket) { setArcEstado('arc-estado-pedir', 'Conéctate primero', 'err'); return; }
   const ruta = document.getElementById('arc-ruta-input').value.trim();
-  if (!ruta) { setArcEstado('arc-estado-pedir', 'Ingresa la ruta del archivo', 'err'); return; }
+  if (!ruta) { setArcEstado('arc-estado-pedir', 'Ingresa la ruta', 'err'); return; }
+  _chunksRecibidos = {};
   setArcEstado('arc-estado-pedir', 'Solicitando...');
   socket.emit('file_request', { session_id: sessionId, ruta });
 }
 
-// Recibir archivo del agente
-function onFileResponse(data) {
+// Recibir chunks del agente
+function onFileChunk(data) {
   if (data.error) { setArcEstado('arc-estado-pedir', '✗ ' + data.error, 'err'); return; }
-  const bytes = Uint8Array.from(atob(data.b64), c => c.charCodeAt(0));
-  const blob = new Blob([bytes]);
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = data.nombre;
-  a.click();
-  setArcEstado('arc-estado-pedir', `✓ ${data.nombre} descargado`, 'ok');
+  const { nombre, idx, total, b64 } = data;
+
+  if (!_chunksRecibidos[nombre]) _chunksRecibidos[nombre] = { total, chunks: {} };
+  _chunksRecibidos[nombre].chunks[idx] = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+  const recibidos = Object.keys(_chunksRecibidos[nombre].chunks).length;
+  setArcEstado('arc-estado-pedir', `Recibiendo ${nombre} (${recibidos}/${total})...`);
+
+  if (recibidos === total) {
+    const partes = [];
+    for (let i = 0; i < total; i++) partes.push(_chunksRecibidos[nombre].chunks[i]);
+    const blob = new Blob(partes);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nombre;
+    a.click();
+    delete _chunksRecibidos[nombre];
+    setArcEstado('arc-estado-pedir', `✓ ${nombre} descargado`, 'ok');
+  }
 }
 </script>
 </body>
@@ -381,25 +396,25 @@ def on_command(data):
     emit('command', data, room=f'agent_{session_id}')
 
 
-@socketio.on('file_incoming')
-def on_file_incoming(data):
-    """Técnico → agente: enviar archivo al cliente."""
+@socketio.on('file_chunk_in')
+def on_file_chunk_in(data):
+    """Técnico → agente: chunk de archivo entrante."""
     session_id = data.get('session_id', 'default')
-    emit('file_incoming', data, room=f'agent_{session_id}')
+    emit('file_chunk_in', data, room=f'agent_{session_id}')
 
 
 @socketio.on('file_request')
 def on_file_request(data):
-    """Técnico → agente: pedir un archivo del cliente."""
+    """Técnico → agente: pedir archivo o carpeta del cliente."""
     session_id = data.get('session_id', 'default')
     emit('file_request', data, room=f'agent_{session_id}')
 
 
-@socketio.on('file_response')
-def on_file_response(data):
-    """Agente → técnico: responde con el archivo solicitado."""
+@socketio.on('file_chunk')
+def on_file_chunk(data):
+    """Agente → técnico: chunk de archivo solicitado."""
     session_id = data.get('session_id', 'default')
-    emit('file_response', data, room=f'viewer_{session_id}')
+    emit('file_chunk', data, room=f'viewer_{session_id}')
 
 
 @socketio.on('disconnect')

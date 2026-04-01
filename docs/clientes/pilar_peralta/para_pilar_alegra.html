@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integración Alegra — Pilar Peralta</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; color: #2d3748; padding: 30px 20px; }
+  .card { background: white; border-radius: 12px; padding: 36px; max-width: 680px; margin: 0 auto; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  .logo { text-align: center; margin-bottom: 28px; }
+  .logo span { font-size: 22px; font-weight: 700; color: #2b6cb0; letter-spacing: 1px; }
+  h1 { font-size: 20px; color: #1a202c; margin-bottom: 8px; }
+  .subtitulo { color: #718096; font-size: 14px; margin-bottom: 32px; }
+  .opcion { border: 2px solid #e2e8f0; border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+  .opcion.recomendada { border-color: #3182ce; background: #ebf8ff; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge.azul { background: #3182ce; color: white; }
+  .badge.gris { background: #718096; color: white; }
+  h2 { font-size: 16px; color: #1a202c; margin-bottom: 10px; }
+  p { font-size: 14px; line-height: 1.7; color: #4a5568; }
+  .dato { background: #edf2f7; border-radius: 8px; padding: 14px 18px; margin-top: 14px; }
+  .dato strong { display: block; font-size: 13px; color: #2d3748; margin-bottom: 3px; }
+  .dato span { font-size: 13px; color: #718096; }
+  .pasos { margin-top: 14px; padding-left: 0; list-style: none; }
+  .pasos li { font-size: 14px; color: #4a5568; padding: 8px 0 8px 32px; position: relative; border-bottom: 1px solid #e2e8f0; }
+  .pasos li:last-child { border-bottom: none; }
+  .pasos li::before { content: attr(data-n); position: absolute; left: 0; top: 8px; width: 22px; height: 22px; background: #3182ce; color: white; border-radius: 50%; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .nota { background: #fffbeb; border-left: 4px solid #f6ad55; border-radius: 0 8px 8px 0; padding: 12px 16px; margin-top: 24px; font-size: 13px; color: #744210; }
+  .firma { text-align: center; margin-top: 32px; font-size: 13px; color: #a0aec0; }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div class="logo">
+    <span>S.A.R — Administrator</span>
+  </div>
+
+  <h1>Integración con Alegra</h1>
+  <p class="subtitulo">Para conectar su cuenta de Alegra con Administrator necesitamos un acceso técnico de solo lectura. Tiene dos opciones:</p>
+
+  <!-- OPCIÓN 1 -->
+  <div class="opcion recomendada">
+    <span class="badge azul">Opción 1 — Recomendada</span>
+    <h2>Nosotros lo hacemos por usted</h2>
+    <p>Usted nos da sus datos de acceso a Alegra, nosotros configuramos la conexión y listo. No tiene que hacer nada técnico.</p>
+
+    <div class="dato">
+      <strong>Dato 1 — Su correo de Alegra</strong>
+      <span>El email con el que entra a su cuenta en alegra.com</span>
+    </div>
+    <div class="dato">
+      <strong>Dato 2 — Su contraseña de Alegra</strong>
+      <span>La clave que usa para ingresar. Una vez configurado, puede cambiarla si lo desea.</span>
+    </div>
+
+    <div class="nota">
+      Estos datos se usan una sola vez para generar el token de conexión. No quedan almacenados en ningún lugar.
+    </div>
+  </div>
+
+  <!-- OPCIÓN 2 -->
+  <div class="opcion">
+    <span class="badge gris">Opción 2 — Usted lo hace</span>
+    <h2>Usted genera el token en Alegra</h2>
+    <p>Si prefiere no compartir su contraseña, puede generar un token de acceso desde su cuenta. Siga estos pasos:</p>
+
+    <ol class="pasos">
+      <li data-n="1">Abra su navegador y vaya a <strong>alegra.com</strong> — inicie sesión normalmente.</li>
+      <li data-n="2">Haga clic en su nombre (arriba a la derecha) → seleccione <strong>"Mi perfil"</strong>.</li>
+      <li data-n="3">Busque la sección <strong>"Token de API"</strong> o <strong>"Integraciones"</strong>.</li>
+      <li data-n="4">Copie el token que aparece (es un código largo) y envíenoslo por WhatsApp o correo.</li>
+    </ol>
+
+    <div class="dato" style="margin-top:16px;">
+      <strong>También necesitamos su correo de Alegra</strong>
+      <span>El email con el que ingresa a la plataforma.</span>
+    </div>
+  </div>
+
+  <div class="firma">
+    Documento preparado por Rafael Olivares — S.A.R
+  </div>
+
+</div>
+</body>
+</html>

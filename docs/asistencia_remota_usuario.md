@@ -1,8 +1,8 @@
 # Manual de Usuario — Asistencia Remota (TUC TUC Remote)
 
 **Módulo:** Asistencia Remota
-**Versión:** 1.0
-**Última actualización:** 2026-03-14
+**Versión:** 1.2
+**Última actualización:** 2026-04-01
 **Audiencia:** Dueños de negocio, usuarios finales que necesitan soporte técnico
 
 ---

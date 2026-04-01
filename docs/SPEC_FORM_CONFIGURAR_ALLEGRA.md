@@ -13,11 +13,10 @@ _Autor: Rafael / Claude — 2026-03-31 (actualizado 2026-04-01)_
 │   Configure los parámetros de sincronización         │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
-│  Máximo de facturas por lote:        [  50  ]        │
+│  Máximo de facturas por lote:        [  30  ]        │
 │                                                      │
-│  Intervalo automático (min, 0=manual):  [  0  ]      │
+│  Intervalo automático en minutos (0=solo manual):  [  0  ]      │
 │                                                      │
-│  Solo desde última sincronización:   [✓]             │
 │                                                      │
 ├──────────────────────────────────────────────────────┤
 │                                                      │
@@ -96,6 +95,8 @@ Los campos globales (max_fact, intervalo, desde_ult) se leen del registro de emp
 | `MinButton` | .F. |
 | `BorderStyle` | 2 |
 | `Name` | frm_configurar_allegra |
+| `lc_num_inicio_02_orig` | "" (propiedad custom — se llena en Init) |
+| `lc_num_inicio_lp_orig` | "" (propiedad custom — se llena en Init) |
 
 ---
 
@@ -117,11 +118,10 @@ Los campos globales (max_fact, intervalo, desde_ult) se leen del registro de emp
 | # | Label (Caption) | Control | Tipo | Left | Top | Width |
 |---|---|---|---|---|---|---|
 | 1 | "Máximo de facturas por lote:" | `txt_max_fact` | Textbox | 220 | 70 | 60 |
-| 2 | "Intervalo automático (min, 0=manual):" | `txt_intervalo` | Textbox | 220 | 100 | 60 |
-| 3 | "Solo desde última sincronización:" | `chk_desde_ult` | Checkbox | 220 | 130 | 20 |
-
+| — | `lbl_max_fact_ayuda` | Label "Facturas que se procesan por cada ejecución (recomendado: 30)" | 290 | 73 | 200 | 14 |
+| 2 | "Intervalo automático en minutos (0 = solo manual):" | `txt_intervalo` | Textbox | 220 | 100 | 60 |
+| — | `lbl_intervalo_ayuda` | Label "Cada cuántos minutos sincroniza automáticamente. 0 = solo manual." | 290 | 103 | 200 | 14 |
 - `txt_max_fact` y `txt_intervalo`: `Format = "9"` (solo numérico)
-- `chk_desde_ult`: Caption = "" (el label va a la izquierda)
 - Todos los labels: Left=10, Width=200, Height=18, Alignment=1 (derecha)
 
 ---
@@ -138,13 +138,15 @@ Separador visual (Shape o línea). Top=155.
 - Ambos: `InputMask = "XXXXXXXXXXXXXXXXXXXX"` (20 chars alfanumérico)
 - Labels: Left=10, Width=200, Height=18, Alignment=1
 
-**Texto de ayuda:**
+**Textos de ayuda:**
 
 | Control | Caption | Left | Top | Width |
 |---|---|---|---|---|
-| `lbl_ayuda_inicio` | Label | "Ej: 02=PTV21200 LP=PJP15780 — el sistema procesará desde el siguiente" | 10 | 222 | 480 |
+| `lbl_ayuda_inicio` | "Ej: 02=PTV21200 LP=PJP15780 — el sistema procesará desde el siguiente número" | 10 | 222 | 480 |
+| `lbl_ayuda_reproc` | "Para reprocesar un lote: baje el número al anterior al primero que desea reprocesar, ajuste el máximo de facturas y haga clic en Sincronizar ahora. Al terminar el sistema restaurará los valores automáticamente." | 10 | 238 | 480 |
 
 `lbl_ayuda_inicio`: FontSize=8, ForeColor=RGB(120,120,120), FontItalic=.T.
+`lbl_ayuda_reproc`: FontSize=8, ForeColor=RGB(180,100,0), FontItalic=.T., FontBold=.T.
 
 ---
 
@@ -235,8 +237,8 @@ ENDIF
 LOCATE FOR ALLTRIM(allegra_cfg.empresa) == "02"
 THISFORM.txt_max_fact.Value  = allegra_cfg.max_fact
 THISFORM.txt_intervalo.Value = allegra_cfg.intervalo
-THISFORM.chk_desde_ult.Value = IIF(allegra_cfg.desde_ult, 1, 0)
 THISFORM.txt_num_inicio_02.Value = ALLTRIM(allegra_cfg.num_inicio)
+THISFORM.lc_num_inicio_02_orig = ALLTRIM(allegra_cfg.num_inicio)  && guarda original para comparar al guardar
 THISFORM.lbl_ultima_sin_02.Caption = IIF(EMPTY(allegra_cfg.ultima_sin), ;
     "Sin sincronizaciones", ;
     DTOC(DATE(allegra_cfg.ultima_sin)) + " " + TTOC(allegra_cfg.ultima_sin, 2))
@@ -250,25 +252,51 @@ THISFORM.lbl_ultima_sin_lp.Caption = IIF(EMPTY(allegra_cfg.ultima_sin), ;
     "Sin sincronizaciones", ;
     DTOC(DATE(allegra_cfg.ultima_sin)) + " " + TTOC(allegra_cfg.ultima_sin, 2))
 THISFORM.lbl_total_proc_lp.Caption = ALLTRIM(STR(allegra_cfg.total_proc)) + " facturas"
+THISFORM.lc_num_inicio_lp_orig = ALLTRIM(allegra_cfg.num_inicio)  && guarda original para comparar al guardar
 
 USE IN allegra_cfg
 ```
+
+### `txt_max_fact.LostFocus`
+```foxpro
+LOCAL LN_VAL
+LN_VAL = VAL(ALLTRIM(STR(THIS.Value)))
+IF LN_VAL > 50
+    MESSAGEBOX("El máximo permitido es 50 facturas por lote.", 48, "Alegra")
+    THIS.Value = 50
+    THIS.SetFocus
+ENDIF
+IF LN_VAL <= 0
+    THIS.Value = 1
+ENDIF
+```
+
+---
 
 ### `btn_guardar.Click`
 ```foxpro
 DO C:\S.A.R\PROYECTO\alegra_get_bd.prg
 
-LOCAL LC_CFG, LN_MAX, LN_INT, LB_DESDE, LC_NUM02, LC_NUMLP
+LOCAL LC_CFG, LN_MAX, LN_INT, LC_NUM02, LC_NUMLP, LN_RESP
 LC_CFG   = LC_ALEGRA_BD + "allegra_config.dbf"
 LN_MAX   = VAL(ALLTRIM(STR(THISFORM.txt_max_fact.Value)))
 LN_INT   = VAL(ALLTRIM(STR(THISFORM.txt_intervalo.Value)))
-LB_DESDE = (THISFORM.chk_desde_ult.Value == 1)
 LC_NUM02 = UPPER(ALLTRIM(THISFORM.txt_num_inicio_02.Value))
 LC_NUMLP = UPPER(ALLTRIM(THISFORM.txt_num_inicio_lp.Value))
 
-IF LN_MAX <= 0
-    MESSAGEBOX("El máximo de facturas debe ser mayor a 0.", 48, "Alegra")
+IF LN_MAX <= 0 OR LN_MAX > 50
+    MESSAGEBOX("El máximo de facturas debe ser entre 1 y 50.", 48, "Alegra")
     RETURN
+ENDIF
+
+**** Advertir si cambiaron los números de inicio
+IF LC_NUM02 <> UPPER(THISFORM.lc_num_inicio_02_orig) OR LC_NUMLP <> UPPER(THISFORM.lc_num_inicio_lp_orig)
+    LN_RESP = MESSAGEBOX("Cambió el número de inicio de una o ambas empresas." + CHR(13) + ;
+        "Esto puede reprocesar facturas ya ingresadas en Administrator." + CHR(13) + CHR(13) + ;
+        "¿Desea continuar?", 4+48, "Alegra — Advertencia")
+    IF LN_RESP <> 6  && 6 = Sí
+        RETURN
+    ENDIF
 ENDIF
 
 USE (LC_CFG) IN 0 ALIAS allegra_cfg_w EXCLUSIVE
@@ -277,13 +305,13 @@ SELECT allegra_cfg_w
 LOCATE FOR ALLTRIM(allegra_cfg_w.empresa) == "02"
 IF FOUND()
     REPLACE max_fact WITH LN_MAX, intervalo WITH LN_INT, ;
-            desde_ult WITH LB_DESDE, num_inicio WITH LC_NUM02
+            desde_ult WITH .T., num_inicio WITH LC_NUM02
 ENDIF
 
 LOCATE FOR ALLTRIM(allegra_cfg_w.empresa) == "LP"
 IF FOUND()
     REPLACE max_fact WITH LN_MAX, intervalo WITH LN_INT, ;
-            desde_ult WITH LB_DESDE, num_inicio WITH LC_NUMLP
+            desde_ult WITH .T., num_inicio WITH LC_NUMLP
 ENDIF
 
 USE IN allegra_cfg_w
@@ -299,8 +327,51 @@ MESSAGEBOX("Configuración guardada.", 64, "Alegra")
 
 ### `btn_sync.Click`
 ```foxpro
-THISFORM.Release
+DO C:\S.A.R\PROYECTO\alegra_get_bd.prg
+
+LOCAL LB_MAX_CAMBIO, LN_MAX_ACTUAL
+LN_MAX_ACTUAL = VAL(ALLTRIM(STR(THISFORM.txt_max_fact.Value)))
+LB_MAX_CAMBIO = (LN_MAX_ACTUAL <> 30)
+
+**** Guardar primero antes de sincronizar
+THISFORM.btn_guardar.Click
+
+**** Correr el sync
 DO C:\S.A.R\PROYECTO\alegra_forzar_sync.prg
+
+**** Recargar valores del DBF (el sync actualizó num_inicio, ultima_sin, total_proc, ultimo_log)
+LOCAL LC_CFG
+LC_CFG = LC_ALEGRA_BD + "allegra_config.dbf"
+USE (LC_CFG) IN 0 ALIAS allegra_cfg_r SHARED
+SELECT allegra_cfg_r
+
+LOCATE FOR ALLTRIM(allegra_cfg_r.empresa) == "02"
+THISFORM.txt_num_inicio_02.Value  = ALLTRIM(allegra_cfg_r.num_inicio)
+THISFORM.lc_num_inicio_02_orig    = ALLTRIM(allegra_cfg_r.num_inicio)
+THISFORM.lbl_ultima_sin_02.Caption = IIF(EMPTY(allegra_cfg_r.ultima_sin), ;
+    "Sin sincronizaciones", ;
+    DTOC(DATE(allegra_cfg_r.ultima_sin)) + " " + TTOC(allegra_cfg_r.ultima_sin, 2))
+THISFORM.lbl_total_proc_02.Caption = ALLTRIM(STR(allegra_cfg_r.total_proc)) + " facturas"
+THISFORM.edt_ultimo_log.Value = allegra_cfg_r.ultimo_log
+
+LOCATE FOR ALLTRIM(allegra_cfg_r.empresa) == "LP"
+THISFORM.txt_num_inicio_lp.Value  = ALLTRIM(allegra_cfg_r.num_inicio)
+THISFORM.lc_num_inicio_lp_orig    = ALLTRIM(allegra_cfg_r.num_inicio)
+THISFORM.lbl_ultima_sin_lp.Caption = IIF(EMPTY(allegra_cfg_r.ultima_sin), ;
+    "Sin sincronizaciones", ;
+    DTOC(DATE(allegra_cfg_r.ultima_sin)) + " " + TTOC(allegra_cfg_r.ultima_sin, 2))
+THISFORM.lbl_total_proc_lp.Caption = ALLTRIM(STR(allegra_cfg_r.total_proc)) + " facturas"
+
+USE IN allegra_cfg_r
+
+**** Si max_fact fue modificado para reprocesar, ofrecer restaurar a 30
+IF LB_MAX_CAMBIO
+    IF MESSAGEBOX("El máximo de facturas quedó en " + ALLTRIM(STR(LN_MAX_ACTUAL)) + "." + CHR(13) + ;
+        "¿Restaurar al valor normal (30)?", 4+32, "Alegra — Restaurar") == 6
+        THISFORM.txt_max_fact.Value = 30
+        THISFORM.btn_guardar.Click
+    ENDIF
+ENDIF
 ```
 
 ### `btn_cancelar.Click`

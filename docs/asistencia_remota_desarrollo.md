@@ -1,15 +1,15 @@
 # Manual de Desarrollo — Asistencia Remota (TUC TUC Remote)
 
 **Módulo:** Asistencia Remota
-**Versión:** 1.0
-**Última actualización:** 2026-03-14
+**Versión:** 1.2
+**Última actualización:** 2026-04-01
 **Audiencia:** Desarrolladores que mantienen o extienden el módulo
 
 ---
 
 ## Visión general
 
-El módulo de Asistencia Remota permite que un técnico controle la pantalla de un usuario a través del navegador. La arquitectura es de 3 capas:
+El módulo de Asistencia Remota permite que un técnico controle la pantalla de un usuario a través del navegador, transfiera archivos, y ejecute comandos remotamente. La arquitectura es de 3 capas:
 
 ```
 [Agente - PC del usuario]
@@ -19,9 +19,10 @@ El módulo de Asistencia Remota permite que un técnico controle la pantalla de 
 [Visor - navegador del técnico]
 ```
 
-- **Agente** (`agente.py` / `AsistenciaTucTuc.exe`): corre en el PC del usuario. Captura pantalla y la envía. Recibe comandos y los ejecuta.
-- **Relay** (`server.py`): servidor Flask + SocketIO desplegado en Render. Solo hace de puente. No procesa ni almacena nada de las pantallas.
-- **Visor**: página HTML embebida en `server.py` (`VIEWER_HTML`). El técnico la abre en su navegador.
+- **Agente** (`agente_cliente.py` / `AsistenciaTucTuc.exe`): corre en el PC del usuario. Captura pantalla, recibe comandos, ejecuta comandos shell, transfiere archivos.
+- **Relay** (`server.py`): servidor Flask + SocketIO en Render. Solo hace de puente.
+- **Visor**: página HTML embebida en `server.py`. El técnico la abre en el navegador.
+- **merlin_remote.py**: cliente Python que conecta al relay como visor y expone una API local en `:7777` para que Merlin (IA) opere remotamente.
 
 ---
 
@@ -40,297 +41,192 @@ remote-assist/
 ├── build/                 ← archivos intermedios de PyInstaller (ignorar)
 └── dist/
     └── AsistenciaTucTuc.exe ← el ejecutable final para distribuir al usuario
+
+C:\S.A.R\
+└── merlin_remote.py       ← puente Merlin ↔ relay (API local :7777)
 ```
 
 ---
 
-## Agente (`agente.py`)
+## Agente (`agente_cliente.py`)
 
 ### Dependencias
 ```
-mss              # captura de pantalla (nativo, multiplataforma)
+mss              # captura de pantalla
 pyautogui        # control de mouse y teclado
-python-socketio[client]  # cliente SocketIO
-Pillow           # redimensionado y compresión JPEG
-tkinter          # ventana de código (incluido en Python estándar)
+python-socketio[client]
+Pillow
+tkinter          # incluido en Python estándar
+zipfile          # incluido en Python estándar
+subprocess       # incluido en Python estándar
 ```
 
-### Configuración por defecto (constantes en el archivo)
+### Configuración por defecto
 
 | Constante | Valor | Descripción |
 |---|---|---|
-| `DEFAULT_SERVER` | `https://tuc-tuc-remote.onrender.com` | URL del relay |
-| `DEFAULT_TOKEN` | `tuctuc-remote-2026` | Token de autenticación compartido con el relay |
-| `FPS_TARGET` | `8` | Frames por segundo de captura |
-| `QUALITY` | `70` | Calidad JPEG (1-95). Menor = más rápido, peor imagen |
-| `SCALE` | `0.85` | Factor de escala de pantalla antes de enviar. Reduce ancho de banda |
+| `SERVER` | `https://tuc-tuc-remote.onrender.com` | URL del relay |
+| `TOKEN` | `tuctuc-remote-2026` | Token de autenticación |
+| `SESSION` | `random.randint(100000,999999)` | Código aleatorio por sesión |
+| `FPS` | `8` | Frames por segundo |
+| `QUALITY` | `70` | Calidad JPEG |
+| `SCALE` | `0.85` | Factor de escala |
 
-Estos valores son los predeterminados. Se pueden sobreescribir por argumentos de línea de comandos:
-```bash
-python agente.py --server URL --token TOKEN --fps 12 --quality 80 --scale 0.9
-```
-
-### Flujo de ejecución
-
-```
-main()
-  ├── Detectar resolución real del monitor principal (mss)
-  ├── generar_codigo() → "XXX-XXX" (6 dígitos aleatorios, formato 3-3)
-  ├── session_id = codigo sin guion ("XXXXXX")
-  ├── mostrar_ventana(codigo) → tkinter en main thread (BLOQUEANTE)
-  └── socket_loop() → thread daemon
-        ├── sio.connect(server, transports=['websocket'])
-        ├── emit('agent_join', {token, session_id})
-        └── loop mientras sio.connected:
-              ├── capturar_frame() → base64 JPEG
-              ├── emit('frame', {session_id, img})
-              └── sleep para mantener FPS_TARGET
-```
-
-### Captura de pantalla (`capturar_frame`)
-
-1. `mss` captura el monitor principal (`sc.monitors[1]`) en formato BGRX raw
-2. Convierte a `PIL.Image` en modo RGB
-3. Redimensiona por factor `SCALE` con `Image.LANCZOS`
-4. Comprime a JPEG en memoria (no toca disco)
-5. Codifica en base64 para envío por SocketIO
-6. Retorna `(base64_str, width, height)`
-
-**Por qué JPEG y no PNG:** JPEG con quality=70 produce frames de ~50-100KB. PNG sin comprimir serían 3-10MB. La pérdida de calidad es imperceptible en uso de soporte.
-
-### Control remoto (`ejecutar_comando`)
-
-Recibe un dict `data` con campo `type`. Tipos soportados:
+### Comandos soportados (evento `command`)
 
 | type | Parámetros | Acción |
 |---|---|---|
-| `move` | `x`, `y` (0.0-1.0 relativo) | `pyautogui.moveTo()` |
-| `click` | `x`, `y`, `button` ('left'/'right') | `pyautogui.click()` |
-| `double_click` | `x`, `y` | `pyautogui.doubleClick()` |
-| `scroll` | `dy` (int) | `pyautogui.scroll()` |
-| `key` | `key` (nombre tecla JS) | `pyautogui.press()` con mapeo de nombres |
+| `move` | `x`, `y` (0.0-1.0) | Mover mouse |
+| `click` | `x`, `y`, `button` | Clic |
+| `double_click` | `x`, `y` | Doble clic |
+| `scroll` | `dy` | Rueda |
+| `key` | `key` | Tecla |
 
-Las coordenadas `x` e `y` son **relativas** (0.0 a 1.0). Se multiplican por `screen_w` / `screen_h` (resolución real detectada al iniciar) para obtener coordenadas absolutas en píxeles.
+### Transferencia de archivos — chunks (512KB)
 
-**Teclas especiales:** El mapeo `key_map` convierte nombres de teclas de JavaScript (`Enter`, `Backspace`, `ArrowUp`, etc.) a los nombres que acepta pyautogui. Teclas modificadoras solas (`Control`, `Shift`, `Alt`, `Meta`) no se envían — el visor captura la combinación completa y el mapeo se puede extender en `ejecutar_comando`.
+**Recibir archivo del técnico (`file_chunk_in`):**
+- El visor divide el archivo en chunks de 512KB y los envía con `{nombre, idx, total, b64}`
+- El agente ensambla los chunks en memoria y guarda el archivo completo en `Desktop\`
+- Muestra progreso en la ventana tkinter
 
-### Código de sesión
+**Enviar archivo/carpeta al técnico (`file_request`):**
+- El visor envía `{ruta}` — puede ser archivo o carpeta
+- Si es carpeta: el agente la zipea en memoria con `zipfile.ZipFile`
+- Divide el contenido en chunks de 512KB y emite `file_chunk` con cada uno
+- El visor ensambla y descarga automáticamente
+- Corre en thread separado para no bloquear los frames
 
-```python
-def generar_codigo():
-    digits = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-    return digits[:3] + '-' + digits[3:]
-```
-
-- Genera 6 dígitos aleatorios → formato `XXX-XXX` para mostrar al usuario
-- `session_id` = código sin guion (6 dígitos puros) → es la sala SocketIO
-- Cada ejecución del agente genera un código distinto
-- No hay persistencia ni base de datos: el código vive mientras el proceso corre
-
-### Reconexión automática
+### Terminal remota (`exec`)
 
 ```python
-sio = sio_lib.Client(reconnection=True, reconnection_delay=3, reconnection_attempts=0)
+@sio.on('exec')
+def on_exec(data):
+    cmd = data.get('cmd', '')
+    subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+    sio.emit('exec_result', {'session_id': SESSION, 'output': output})
 ```
 
-`reconnection_attempts=0` = intentos infinitos. Si el relay se cae (Render hace cold start en ~30s la primera vez), el agente seguirá intentando hasta que el relay responda.
-
-Si la conexión se pierde pero el proceso sigue vivo, al reconectar emite `agent_join` de nuevo con el mismo `session_id`. El técnico puede reconectarse con el mismo código.
+- Timeout: 60 segundos
+- Corre en thread daemon para no bloquear
+- Captura stdout + stderr
+- Si el comando no produce output, devuelve el código de salida
 
 ---
 
 ## Servidor Relay (`server.py`)
 
-### Stack
-- Flask + Flask-SocketIO
-- `async_mode='gevent'` (necesario para Render)
-- Desplegado en Render, URL: `https://tuc-tuc-remote.onrender.com`
-
-### Autenticación
-
-Un único token compartido (`ACCESS_TOKEN`) valida tanto al agente como al visor. El token está en la variable de entorno `ACCESS_TOKEN` del servicio de Render. Por defecto: `tuctuc-remote-2026`.
-
-**⚠️ Para cambiar el token:** actualizar la variable de entorno en Render Y el valor `DEFAULT_TOKEN` en `agente.py` (y recompilar el `.exe`). Son dos lugares.
-
-### Rooms SocketIO
-
-Por cada sesión `XXX-XXX` existen 3 rooms:
-
-| Room | Miembros | Para qué |
-|---|---|---|
-| `session_XXXXXX` | agente + visor | room base (no se usa directamente ahora) |
-| `agent_XXXXXX` | solo el agente | recibir comandos del visor |
-| `viewer_XXXXXX` | solo el visor | recibir frames y notificaciones del agente |
-
-### Eventos SocketIO
-
-**Agente → Relay:**
-
-| Evento | Payload | Acción |
-|---|---|---|
-| `agent_join` | `{token, session_id}` | Valida token, une a rooms, emite `agent_ready` al agente, `agent_connected` al visor |
-| `frame` | `{session_id, img}` | Re-emite al room `viewer_XXXXXX` sin modificar |
-
-**Visor → Relay:**
-
-| Evento | Payload | Acción |
-|---|---|---|
-| `viewer_join` | `{token, session_id}` | Valida token, une a rooms, emite `viewer_ok` |
-| `command` | `{session_id, type, ...}` | Re-emite al room `agent_XXXXXX` |
-
-**Relay → cliente (agente o visor):**
-
-| Evento | Destino | Cuándo |
-|---|---|---|
-| `agent_ready` | agente | Después de `agent_join` exitoso |
-| `agent_error` | agente | Token incorrecto en `agent_join` |
-| `viewer_ok` | visor | Después de `viewer_join` exitoso |
-| `viewer_error` | visor | Token incorrecto en `viewer_join` |
-| `agent_connected` | visor | Cuando el agente hace `agent_join` |
-| `agent_disconnected` | visor | Cuando el agente se desconecta (evento `disconnect`) |
-
-### Registro de sesiones activas
-
+### Buffer
 ```python
-active_sessions = {}   # session_id → timestamp de conexión
-sid_to_session = {}    # socket.sid → session_id
+max_http_buffer_size=50 * 1024 * 1024  # 50MB — soporta chunks de archivos
 ```
 
-- Se llena en `on_agent_join` y se limpia en `on_disconnect`
-- Expuesto por `GET /api/sessions` → `{"sessions": [{"session_id": "...", "ts": 1234}]}`
-- El visor consulta este endpoint cada 3 segundos para mostrar sesiones disponibles
+### Eventos SocketIO completos
 
-### Límite de tamaño de buffer
+**Visor → Relay → Agente:**
 
-```python
-max_http_buffer_size=8 * 1024 * 1024  # 8MB
-```
+| Evento | Descripción |
+|---|---|
+| `viewer_join` | Autenticar visor |
+| `command` | Mouse/teclado |
+| `file_chunk_in` | Chunk de archivo enviado al cliente |
+| `file_request` | Pedir archivo/carpeta del cliente |
+| `exec` | Ejecutar comando en PC del cliente |
 
-Un frame JPEG con `SCALE=0.85` y `QUALITY=70` pesa ~50-150KB (depende del contenido de la pantalla). El límite de 8MB da margen amplio incluso si se sube calidad.
+**Agente → Relay → Visor:**
 
-### Rutas HTTP
+| Evento | Descripción |
+|---|---|
+| `agent_join` | Autenticar agente |
+| `frame` | Frame de pantalla (base64 JPEG) |
+| `file_chunk` | Chunk de archivo del cliente al técnico |
+| `exec_result` | Output del comando ejecutado |
 
-| Ruta | Método | Respuesta |
-|---|---|---|
-| `/` | GET | Página HTML del visor (embebida en `VIEWER_HTML`) |
-| `/health` | GET | `"ok"` — para health checks de Render |
-| `/api/sessions` | GET | JSON con sesiones activas |
+### Visor — paneles adicionales (V1.1+)
+
+**Panel Archivos (`📁 Archivos`):**
+- Sección "Enviar archivo al cliente": `input file` → chunks → Desktop del agente
+- Sección "Pedir archivo del cliente": input de ruta → agente zipea si es carpeta → descarga en navegador
+
+**Panel Terminal (`⌨️ Terminal`):**
+- Input de comando con historial (↑↓)
+- Output en verde sobre fondo negro
+- Muestra `❯ comando` y resultado
+- Enter para ejecutar
 
 ---
 
-## Visor (página HTML embebida en `server.py`)
+## merlin_remote.py (`C:\S.A.R\`)
 
-La constante `VIEWER_HTML` en `server.py` contiene todo el HTML, CSS y JS del visor. No hay archivos separados.
+Script que conecta al relay como visor y expone API REST local para que Merlin (IA) opere remotamente desde esta terminal.
 
-### Flujo del visor
-
-1. Al cargar, consulta `/api/sessions` y muestra sesiones activas (refresca cada 3s)
-2. El técnico ingresa token + código `XXX-XXX`
-3. JS emite `viewer_join` → recibe `viewer_ok` → oculta overlay, muestra `<img id="screen">`
-4. Cada evento `frame` del relay actualiza el `src` del `<img>` con el nuevo base64 JPEG
-5. Mouse y teclado del técnico sobre la imagen disparan eventos que emiten `command` al relay
-
-### Coordenadas relativas
-
-El visor calcula posición relativa dividiendo por las dimensiones del elemento `<img>`:
-```javascript
-x: (e.clientX - rect.left) / rect.width,
-y: (e.clientY - rect.top) / rect.height
-```
-
-El agente recibe estas coordenadas relativas y las multiplica por la resolución real de su pantalla. Así el mapeo es correcto sin importar el tamaño de la ventana del técnico ni la resolución del usuario.
-
-### FPS display
-
-El visor cuenta frames recibidos en ventanas de 1 segundo y muestra los fps reales en el header.
-
----
-
-## Build del ejecutable (`AsistenciaTucTuc.exe`)
-
-### ¿Cuándo recompilar?
-
-Cada vez que se modifique `agente.py` o `agente_cliente.py` **el `.exe` en GitHub Releases debe actualizarse manualmente**. El `.exe` no es parte del repositorio git (solo el código fuente lo es).
-
-### Prerequisitos
-
-- Python 3.10+ en Windows (se recomienda el mismo Python con que correrá el .exe)
-- Las dependencias del agente instaladas:
-  ```bash
-  pip install mss pyautogui Pillow "python-socketio[client]"
-  pip install pyinstaller
-  ```
-
-### Comando de compilación (desde `remote-assist/`)
-
-Usando `build_exe.bat` (doble clic en Windows):
-```bat
-pyinstaller --onefile --windowed --name "AsistenciaTucTuc" ^
-  --hidden-import=mss ^
-  --hidden-import=mss.windows ^
-  --hidden-import=PIL ^
-  --hidden-import=PIL.Image ^
-  --hidden-import=pyautogui ^
-  --hidden-import=socketio ^
-  --hidden-import=engineio ^
-  agente_cliente.py
-```
-
-O directamente desde terminal (si `pyinstaller` no está en PATH):
+### Uso
 ```bash
-cd "C:/Users/RAFAEL OLIVARES/Documents/MiAppMedicamentos/remote-assist"
-python -m PyInstaller --onefile --noconsole --name AsistenciaTucTuc agente.py
+python C:\S.A.R\merlin_remote.py <codigo_sesion>
+# Ejemplo:
+python C:\S.A.R\merlin_remote.py 847293
 ```
 
-**Flags clave:**
-- `--onefile`: todo en un solo `.exe` (no carpeta)
-- `--windowed` / `--noconsole`: suprime la ventana de consola negra (usa tkinter en su lugar)
-- `--hidden-import`: PyInstaller a veces no detecta imports dinámicos de mss/PIL/socketio — hay que declararlos explícitamente
+### API local (`http://localhost:7777`)
 
-El `.exe` resultante queda en `dist/AsistenciaTucTuc.exe`.
+| Endpoint | Método | Body | Descripción |
+|---|---|---|---|
+| `/estado` | GET | — | Estado de conexión |
+| `/pantalla` | GET | — | Guarda screenshot en `%TEMP%\merlin_screen.jpg`, retorna path |
+| `/exec` | POST | `{"cmd": "..."}` | Ejecuta comando, retorna output |
+| `/click` | POST | `{"x": 0.5, "y": 0.5, "button": "left"}` | Clic (coords 0.0-1.0) |
+| `/doble_click` | POST | `{"x", "y"}` | Doble clic |
+| `/mover` | POST | `{"x", "y"}` | Mover mouse |
+| `/tecla` | POST | `{"key": "enter"}` | Presionar tecla |
+| `/escribir` | POST | `{"texto": "hola"}` | Escribir texto |
+| `/scroll` | POST | `{"dy": 3}` | Scroll |
 
-### Subir a GitHub Releases
+### Flujo Merlin opera PC remota
 
-El `.exe` se distribuye como **asset de GitHub Release** (no como archivo del repo).
+1. Pilar abre `AsistenciaTucTuc.exe` → aparece código ej. `847-293`
+2. Rafael le dice a Merlin: "conéctate a 847293"
+3. Merlin corre: `python C:\S.A.R\merlin_remote.py 847293` en background
+4. Merlin llama `/pantalla` → lee la imagen con visión → ve la pantalla de Pilar
+5. Merlin llama `/exec`, `/click`, `/escribir` para operar
+6. Rafael puede conectarse al mismo tiempo desde el visor web y ver todo en vivo
 
-1. Ir a: `https://github.com/Rafaelolivares07/TUC-TUC/releases/tag/V1.0`
-   *(Ojo: `V1.0` con V mayúscula — así fue creado el tag)*
-2. Editar el release → arrastrar/subir el nuevo `dist/AsistenciaTucTuc.exe`
-3. Guardar
+---
 
-El enlace de descarga directo es:
-`https://github.com/Rafaelolivares07/TUC-TUC/releases/download/V1.0/AsistenciaTucTuc.exe`
+## Build del ejecutable
 
-Este enlace no cambia aunque se reemplace el archivo en el release.
+### Comando (desde `remote-assist/`)
+```bash
+python -m PyInstaller --onefile --windowed --name "AsistenciaTucTuc" \
+  --hidden-import=mss --hidden-import=mss.windows \
+  --hidden-import=PIL --hidden-import=PIL.Image \
+  --hidden-import=pyautogui --hidden-import=socketio \
+  --hidden-import=engineio agente_cliente.py
+```
 
-### Diferencia entre `agente.py` y `agente_cliente.py`
+### Publicar release en GitHub
+```bash
+'C:\Program Files\GitHub CLI\gh.exe' release create V1.X \
+  'remote-assist/dist/AsistenciaTucTuc.exe' \
+  --title "V1.X — descripcion" --notes "..."
+```
 
-- `agente.py`: versión de desarrollo, se puede correr directamente con Python
-- `agente_cliente.py`: variante pensada para empaquetar (puede tener ajustes de paths o imports para que PyInstaller los detecte bien)
-- El `build_exe.bat` apunta a `agente_cliente.py`
-- Para desarrollo y pruebas rápidas, usar `agente.py` directamente
+La URL de descarga `releases/latest/download/AsistenciaTucTuc.exe` siempre apunta al release más reciente — no hay que actualizar templates.
+
+### Historial de versiones
+
+| Versión | Fecha | Cambios |
+|---|---|---|
+| V1.0 | 2026-03-14 | Control remoto básico (pantalla + mouse/teclado) |
+| V1.1 | 2026-04-01 | Transferencia de archivos y carpetas por chunks, terminal remota |
+| V1.2 | 2026-04-01 | Código de sesión aleatorio visible en la ventana del agente |
 
 ---
 
 ## Despliegue del relay en Render
 
-El servidor relay ya está desplegado. Para referencia, el `render.yaml` define:
-
-```yaml
-services:
-  - type: web
-    name: tuctuc-remote
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python server.py
-    envVars:
-      - key: SECRET_KEY
-        generateValue: true
-      - key: ACCESS_TOKEN
-        value: tuctuc-remote-2026
-```
-
-**Cold start:** Render en plan gratuito duerme el servicio tras ~15 minutos de inactividad. El primer frame puede tardar 20-30 segundos mientras Render levanta el proceso. El agente reconecta automáticamente. Para evitar cold starts se puede usar un servicio de ping externo (UptimeRobot, etc.) al endpoint `/health`.
+- URL: `https://tuc-tuc-remote.onrender.com`
+- Autodespliega en cada push a `main` que toque archivos en `remote-assist/`
+- Cold start: ~20-30s en plan gratuito
+- Buffer: 50MB (aumentado en V1.1 para soportar transferencia de archivos)
 
 **requirements.txt del servidor:**
 ```
@@ -342,40 +238,10 @@ gevent-websocket
 
 ---
 
-## Integración en la UI de TUC TUC
-
-### Pestaña Soporte en `tienda_admin.html`
-
-El tab fue agregado al carrusel de pestañas del panel admin de tienda:
-
-**Botón tab:**
-```html
-<button onclick="cambiarTab('soporte')" id="tab-soporte" class="tab-btn">🖥️ Soporte</button>
-```
-
-**Array de tabs (en `cambiarTab()`):**
-```javascript
-['catalogo','pedidos','inventario','personalizar','acceso','ubicacion','soporte']
-```
-
-**Panel** (`panel-soporte`): muestra el flujo de 3 pasos con enlace de descarga del `.exe` y enlace al visor para técnicos.
-
-### Card en `admin_menu.html`
-
-La card de Asistencia Remota en el panel de admin principal (`/area_admin`) contiene un enlace al visor (`https://tuc-tuc-remote.onrender.com`).
-
-**Bug histórico resuelto (2026-03-14):** La card tenía un `<a>` anidado dentro de otro `<a>` (el botón de descarga del `.exe` era un `<a>` dentro del `<a>` de la card). HTML inválido — Chrome lo "arreglaba" cerrando el `<a>` externo antes de tiempo, lo que creaba una card vacía extra en el grid. **Fix:** reemplazar el `<a>` interior por un `<span onclick="window.open(...)">`  — HTML válido, comportamiento idéntico.
-
----
-
 ## Consideraciones de seguridad
 
-1. **Token único:** El `ACCESS_TOKEN` autentica tanto al agente como al visor. Si se compromete, cualquiera puede ver sesiones activas y conectarse como técnico. Rotar el token implica actualizar Render + recompilar el `.exe`.
-
-2. **Código de sesión temporal:** El código `XXX-XXX` existe solo mientras el proceso del agente está vivo. No se almacena en base de datos. No hay forma de conectarse a una sesión anterior.
-
-3. **Transmisión:** Los frames se transmiten como base64 sobre WebSocket. No hay cifrado adicional a nivel de aplicación (el cifrado TLS del WebSocket es suficiente para uso de soporte interno).
-
-4. **El relay no graba:** El servidor solo reenvía los frames. No los almacena en disco ni en memoria más allá del evento SocketIO.
-
-5. **Control total:** El técnico conectado tiene control completo del mouse y teclado. Solo iniciar una sesión con técnicos de confianza.
+1. **Token único** autentica agente y visor — rotar implica actualizar Render + recompilar exe
+2. **Terminal remota** (`exec`) da acceso shell completo — solo usar con clientes de confianza
+3. **merlin_remote.py** expone API en localhost:7777 sin autenticación — solo correr cuando se necesite
+4. El relay no graba frames ni comandos
+5. El código de sesión es temporal — muere al cerrar el exe

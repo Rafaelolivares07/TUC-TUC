@@ -422,10 +422,63 @@ INTO CURSOR CRTIPOVENTA READWRITE
 
 ---
 
-### Fuente de datos: Allegra
-- Allegra (empresa que vende el software) expone rutas/endpoints en su web para que aplicativos externos puedan consumir las facturas y notas contables/inventario de cada cliente.
-- **Las rutas exactas se perdieron** — pendiente recuperarlas desde el portal/web de Allegra.
-- Pilar Peralta es cliente de Allegra. Rafael accede como proveedor/integrador de Administrator.
+### Fuente de datos: Alegra (antes escrito "Allegra")
+- **Alegra** es el software SaaS de facturación que usa Pilar (alegra.com). Paga $90.000/mes.
+- **API:** `https://api.alegra.com/api/v1/` — Auth HTTP Basic `base64(email:token)`
+- **Token ubicación en Alegra:** app.alegra.com → Configuración → Integración manual → API
+
+#### Dos empresas de Pilar — credenciales completas (2026-03-28)
+
+| Empresa | Propietario | Email | Contraseña | Token API | Código Admin |
+|---|---|---|---|---|---|
+| ELECTRONICAS J&P | Jose Luis Chaparro Ninco | electronicajyp@hotmail.com | nataJUAN*0525 | aabde447e95a29efb773 | LP |
+| ELECTRONICAS TV & VIDEO | Maria del Pilar Peralta Mosquera | electronicastvyvideo@hotmail.com | NATAJUAn-0525 | ade8e319ce85985fb47c | 02 |
+
+- Token location en Alegra: `app.alegra.com → Configuración → Integración manual → API`
+- Tokens extraídos automáticamente con Selenium (2026-03-28) — no se los pedimos a Pilar
+
+#### Estructura API real (campos confirmados)
+- `invoices` endpoint: `GET /invoices?limit=30&date-start=YYYY-MM-DD` (máximo 30 por llamada)
+- Factura: `id`, `date`, `client.identification` (NIT), `numberTemplate.fullNumber` (num), `numberTemplate.documentType` (tipo Alegra), `payments[].paymentMethod`, `payments[].amount`
+- Ítem: `reference` (= cod_pro Administrator), `name` (contiene código al inicio cuando reference=None), `quantity`, `price` (sin IVA), `tax[0].percentage`, `tax[0].amount`, `discount`
+- Costo: NO disponible en Alegra — se deja en 0 en el DBF
+- Métodos de pago confirmados: `cash`, `transfer` (y presumiblemente `credit-card`/`debit-card`)
+
+#### Hallazgos importantes (2026-03-28 / 2026-03-31)
+- **La bolsa** (`0. impuesto al consumo bolsa plastica`, precio $73): referencia vacía en Alegra, nombre siempre contiene "bolsa". En Administrator NO es producto — es impuesto separado (`TXT_BOLSA_IMPUESTO`). Se detecta por `'BOLSA' $ UPPER(nombre)`, se acumula en `LN_BOLSA` y se contabiliza vía el slot `TXT_BOLSA_IMPUESTO` en `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR`, NO va a PROD_FACT ni inventario.
+- **Códigos en el nombre**: cuando `reference=None`, el código está al inicio del campo `name` antes de `...` o `…`. Función `_extraer_cod_pro()` lo resuelve. Algunos ítems S/REF reales (como la bolsa) no tienen código — se detectan por nombre.
+- **Tipos de documento**: 120 facturas recientes revisadas = todas `saleTicket`. Mapeo en `alegra_tiposdoc.dbf` (configurable).
+- **AYUDA table**: el campo `OBJETO` contiene el nombre del control VFP asociado a cada slot contable. `DOCUMENTO_` en `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR` referencia `AYUDA.CONSECUTIV`.
+
+#### Mapeo OBJETO → concepto (documento '013', empresa '02') — confirmado 2026-03-31
+| VAR_CON_PR | OBJETO | Cuenta | Concepto |
+|---|---|---|---|
+| 1 | TXT_SUBTOTAL | 413548 C | Subtotal sin IVA |
+| 2 | TXT_IVA_DEFINITIVO | 240801 C | IVA por pagar |
+| 3 | TXT_DESCUENTO_DEFINITIVO | 530535 D | Descuento |
+| 4 | TXT_BOLSA_IMPUESTO | 240807 C | Impuesto bolsa plástica |
+| 5 | TXT_TARJETA_RECIBIDO | 11100503 D | Recaudo tarjeta |
+| 6 | TXT_ABONA_EFECTIVO | 110505 D | Recaudo efectivo |
+| 7 | TXT_COBRAR_CLIENTE | 130505 D CRUZE=1 | Cartera/CxC saldo pendiente |
+| 8 | TXT_CONSIGNA_TRASFIERE | 111002 D | Recaudo transferencia |
+
+> **Principio**: los slots se asignan dinámicamente — `interfaz_allegra.prg` lee `CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR` + `AYUDA` y usa macro-sustitución. Ningún número de cuenta ni slot está hardcodeado en el PRG.
+
+#### allegra_sync.py — OPERATIVO y probado
+`C:\S.A.R\allegra_sync.py` — v3 2026-03-31:
+- `MODO_TEST = True` → escribe en `basedatosempresas_TEST\` (pruebas)
+- `MODO_TEST = False` → escribe en `basedatosempresas\` (producción)
+- Autentica en las dos empresas, trae facturas, extrae código del nombre cuando `reference=None`
+- **Nuevos campos en `allegra_pendientes.dbf`**: `nombre C(60)` (nombre ítem), `metodo_pago C(20)` (cash/transfer/credit-card), `val_pago N(12,2)` (total pagado en la factura)
+- Probado: 224 registros correctos, 0 S/REF, empresas LP y 02 correctas
+
+#### alegra_tiposdoc.dbf — NUEVA (2026-03-31)
+`C:\D\Pilar Peralta\basedatosempresas\alegra_tiposdoc.dbf`
+- Campos: `tip_alegra C(20)`, `tip_admin C(10)`, `empresa C(5)` (**máx 10 chars en DBF VFP**)
+- Mapea tipo de documento Alegra (`saleTicket`, `invoice`, `creditNote`) al código en Administrator (`013`, `FV`, `NC`, etc.)
+- `interfaz_allegra.prg` la lee en PASO 3B para resolver `PLNTIPODOC` — no hardcodeado
+- Rows por defecto: `saleTicket→013` para empresas 02 y LP; `invoice` y `creditNote` vacíos (completar según cliente)
+- Se crea con `instalar_allegra_bd.py` (PASO 4) o manualmente con Python dbf
 
 ---
 
@@ -472,13 +525,61 @@ Usuario → Allegra → "Ver pendientes"
 
 | Archivo | Ruta | Estado |
 |---|---|---|
-| `allegra_sync.py` | `C:\S.A.R\` | ✅ Listo — rellena credenciales/endpoints cuando se tenga acceso Allegra |
-| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — valores BD de Pilar CONFIRMADOS, lee/escribe config |
-| `configurar_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — formulario VFP completo |
-| `agregar_menu_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — integración al menú de Administrator |
+| `allegra_sync.py` | `C:\S.A.R\` | ✅ OPERATIVO — v3 2026-03-31 |
+| `interfaz_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — tipo_doc dinámico, PVAR dinámico, bolsa, pagos, modo auto |
+| `alegra_timer.prg` | `C:\S.A.R\PROYECTO\` | ✅ Nuevo — timer automático con guard re-entrada |
+| `alegra_forzar_sync.prg` | `C:\S.A.R\PROYECTO\` | ✅ Nuevo — sincronización manual desde menú |
+| `agregar_menu_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Actualizado — arranca ON TIMER al abrir Administrator |
+| `configurar_allegra.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — formulario VFP completo (SCX bloqueado, ver §3.4) |
 | `ver_allegra_pendientes.prg` | `C:\S.A.R\PROYECTO\` | ✅ Listo — BROWSE de pendientes |
-| `allegra_config.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | 🔲 Se crea solo al primer arranque del formulario |
-| `allegra_pendientes.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | 🔲 Se crea solo cuando Python ejecute por primera vez |
+| `instalar_allegra_bd.py` | `C:\S.A.R\` | ✅ Listo — crea config, tiposdoc, permisos (idempotente) |
+| `instalar_tarea_windows.bat` | `C:\S.A.R\` | ✅ Nuevo — registra allegra_sync.py en Task Scheduler (cada 5 min) |
+| `allegra_config.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | 🔲 Se crea al correr `instalar_allegra_bd.py` |
+| `allegra_pendientes.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | 🔲 Se crea al correr `allegra_sync.py` por primera vez |
+| `alegra_tiposdoc.dbf` | `C:\D\Pilar Peralta\basedatosempresas\` | ✅ Creada 2026-03-31 — `saleTicket→013` para 02 y LP |
+
+### Arquitectura de automatización (2026-03-31)
+
+```
+Windows Task Scheduler (cada 5 min — independiente de Administrator)
+  └─ allegra_sync.py
+       ├─ Consulta API Alegra (dos empresas)
+       └─ Escribe nuevas facturas en allegra_pendientes.dbf
+
+Administrator (abierto en el local del cliente)
+  └─ agregar_menu_allegra.prg  ← se llama al arrancar Administrator
+       ├─ Define menú Allegra (Configurar / Ver pendientes / Sincronizar ahora)
+       └─ Si allegra_config.intervalo > 0:
+            ON TIMER (intervalo * 60) DO alegra_timer.prg
+
+alegra_timer.prg  ← dispara cada N minutos
+  ├─ Guard GB_ALLEGRA_PROCESANDO (evita re-entrada)
+  ├─ Cuenta registros procesado=.F. en allegra_pendientes.dbf
+  └─ Si hay pendientes → DO interfaz_allegra.prg (modo auto, sin popup)
+
+Menú → Sincronizar ahora → alegra_forzar_sync.prg
+  ├─ RUN python allegra_sync.py (sincrónico)
+  └─ DO interfaz_allegra.prg (modo manual, con popup resultado)
+```
+
+**Variables de control:**
+- `GB_ALLEGRA_PROCESANDO` (PUBLIC L) — lock de re-entrada
+- `GB_ALLEGRA_MODO_AUTO` (PUBLIC L) — `.T.` = timer (sin popup), `.F.` = manual (con popup)
+
+**Campo `intervalo` en `allegra_config.dbf`**: en **minutos**. `0` = solo manual.
+
+**Mecanismo de ruta de BD — `C:\S.A.R\RutaBaseDatos\ruta.dbf`:**
+- Campo `RUTA` = ruta al `.DBC` activo en ese equipo (ej: `C:\D\Pilar Peralta\basedatosempresas\DATOS_SAR.DBC`)
+- En red: cada PC tiene su propio `ruta.dbf` apuntando a `\\SERVIDOR\...` o ruta local
+- Todos los PRGs leen esto via `alegra_get_bd.prg` → `PUBLIC LC_ALEGRA_BD` (carpeta con `\` final)
+- `allegra_sync.py` y `instalar_allegra_bd.py` también leen `ruta.dbf` dinámicamente
+- **NUNCA hardcodear rutas de BD** — siempre usar `LC_ALEGRA_BD` en PRGs y `_leer_ruta_bd()` en Python
+
+**Para instalar en un equipo nuevo:**
+1. Correr `instalar_allegra_bd.py` (crea tablas config en la BD del cliente)
+2. Correr `instalar_tarea_windows.bat` como Administrador (registra Task Scheduler)
+3. En VFP: agregar `DO C:\S.A.R\PROYECTO\agregar_menu_allegra.prg` al startup de Administrator
+4. En `allegra_config.dbf`: setear `intervalo = 5` (minutos) para modo automático
 
 **Backup BD Pilar**: `C:\D\Pilar Peralta\basedatosempresas_BAK_20260321` — punto de restauración seguro.
 

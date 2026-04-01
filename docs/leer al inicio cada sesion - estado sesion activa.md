@@ -38,6 +38,22 @@ El `Init` ya incluye checks automáticos:
 
 ---
 
+## Trabajo sesión 2026-04-01 (continuación)
+
+### Asistencia Remota — V1.1 y V1.2
+- **Transferencia de archivos por chunks (512KB)** — sin límite de tamaño
+- **Carpetas se zipean automáticamente** antes de transferir
+- **Terminal remota** en el visor (`⌨️ Terminal`) — ejecuta comandos en PC del cliente
+- **`exec` en el agente** — subprocess con timeout 60s, output a visor
+- **Código de sesión aleatorio** visible en la ventana del agente (V1.2)
+- **merlin_remote.py** en `C:\S.A.R\` — API local :7777 para que Merlin opere PCs remotas
+- **gh CLI instalado** — releases via `'C:\Program Files\GitHub CLI\gh.exe' release create`
+- Releases publicados: V1.1 y V1.2 en GitHub
+
+### Pendientes asistencia remota
+- Probar con PC de Pilar: Pilar descargó V1.2, pendiente prueba de conexión
+- Configurar exe para que arranque automáticamente con Windows en PC de Pilar
+
 ## Trabajo sesión 2026-04-01
 
 ### Chat / Merlin
@@ -64,9 +80,8 @@ El `Init` ya incluye checks automáticos:
 
 ## Pendientes Alegra (después del SCX)
 1. **Primera prueba real** con 1 factura sobre `basedatosempresas_TEST`
-2. **Confirmar TIPO_INVE del doc '013'**: `SELECT codigo, tipo_inve FROM TIPO_DOC WHERE ALLTRIM(codigo)='013'`
-3. **Verificar REG_CTAS** después de prueba (débitos = créditos)
-4. **Completar `tip_admin`** para invoice/creditNote en `alegra_tiposdoc.dbf` cuando aplique
+2. **Verificar REG_CTAS** después de prueba (débitos = créditos)
+3. **Completar `tip_admin`** para invoice/creditNote en `alegra_tiposdoc.dbf` cuando aplique
 
 ## Pendientes chat /chat
 - **Whisper tiny**: transcripción imprecisa en audios, considerar `small` para apuntes de Merlin

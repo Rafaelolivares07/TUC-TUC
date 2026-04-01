@@ -71,8 +71,21 @@ VIEWER_HTML = """<!DOCTYPE html>
   .sesion-btn { font-size: 11px; background: #1e3a5f; color: #93c5fd; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
   .sin-sesiones { font-size: 12px; color: #475569; text-align: center; padding: 12px; }
 
-  #btn-archivos { margin-left: 8px; background: #334155; border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; }
+  #btn-archivos, #btn-terminal { margin-left: 8px; background: #334155; border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; }
   #btn-archivos:hover, #btn-archivos.activo { background: #6366f1; color: white; }
+  #btn-terminal:hover, #btn-terminal.activo { background: #16a34a; color: white; }
+  #panel-terminal { position: fixed; bottom: 0; left: 0; right: 0; height: 260px; background: #0a0a0a; border-top: 1px solid #334155; display: none; z-index: 100; flex-direction: column; }
+  #panel-terminal.visible { display: flex; }
+  #term-header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #1e293b; border-bottom: 1px solid #334155; flex-shrink: 0; }
+  #term-header span { font-size: 12px; color: #64748b; font-family: monospace; }
+  #term-clear { margin-left: auto; background: none; border: none; color: #64748b; font-size: 11px; cursor: pointer; }
+  #term-clear:hover { color: #f87171; }
+  #term-output { flex: 1; overflow-y: auto; padding: 8px 12px; font-family: 'Courier New', monospace; font-size: 12px; color: #a3e635; white-space: pre-wrap; word-break: break-all; }
+  #term-input-row { display: flex; align-items: center; padding: 6px 12px; gap: 8px; border-top: 1px solid #1e293b; flex-shrink: 0; }
+  #term-prompt { color: #22c55e; font-family: monospace; font-size: 13px; flex-shrink: 0; }
+  #term-input { flex: 1; background: transparent; border: none; outline: none; color: #f1f5f9; font-family: 'Courier New', monospace; font-size: 13px; }
+  #term-run { background: #16a34a; border: none; color: white; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+  #term-run:hover { background: #15803d; }
   #panel-archivos { position: fixed; right: 0; top: 44px; width: 300px; height: calc(100vh - 44px); background: #1e293b; border-left: 1px solid #334155; padding: 16px; display: none; z-index: 100; overflow-y: auto; }
   #panel-archivos.visible { display: block; }
   .arc-seccion { margin-bottom: 20px; }
@@ -98,6 +111,20 @@ VIEWER_HTML = """<!DOCTYPE html>
   <span id="status">Desconectado</span>
   <span id="fps"></span>
   <button id="btn-archivos" onclick="toggleArchivos()" title="Transferencia de archivos">📁 Archivos</button>
+  <button id="btn-terminal" onclick="toggleTerminal()" title="Terminal remota">⌨️ Terminal</button>
+</div>
+
+<div id="panel-terminal">
+  <div id="term-header">
+    <span>● terminal remota</span>
+    <button id="term-clear" onclick="limpiarTerminal()">limpiar</button>
+  </div>
+  <div id="term-output"></div>
+  <div id="term-input-row">
+    <span id="term-prompt">❯</span>
+    <input id="term-input" type="text" placeholder="comando..." autocomplete="off" spellcheck="false">
+    <button id="term-run" onclick="ejecutarCmd()">Ejecutar</button>
+  </div>
 </div>
 
 <div id="panel-archivos">
@@ -190,6 +217,7 @@ function conectar() {
   });
   socket.on('disconnect', () => setStatus('red', 'Desconectado'));
   socket.on('file_chunk', onFileChunk);
+  socket.on('exec_result', onExecResult);
 }
 
 function formatCodigo(c) { return c.slice(0,3) + '-' + c.slice(3); }
@@ -303,6 +331,64 @@ function pedirArchivo() {
   socket.emit('file_request', { session_id: sessionId, ruta });
 }
 
+// ─── Terminal remota ─────────────────────────────────────────────────────────
+let _termHistory = [], _termHistIdx = -1;
+
+function toggleTerminal() {
+  const panel = document.getElementById('panel-terminal');
+  const btn = document.getElementById('btn-terminal');
+  panel.classList.toggle('visible');
+  btn.classList.toggle('activo');
+  if (panel.classList.contains('visible')) document.getElementById('term-input').focus();
+}
+
+function limpiarTerminal() {
+  document.getElementById('term-output').innerHTML = '';
+}
+
+function termPrint(html) {
+  const out = document.getElementById('term-output');
+  out.innerHTML += html;
+  out.scrollTop = out.scrollHeight;
+}
+
+function ejecutarCmd() {
+  if (!socket) { termPrint('<span style="color:#f87171">Sin conexión\n</span>'); return; }
+  const input = document.getElementById('term-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  _termHistory.unshift(cmd); _termHistIdx = -1;
+  termPrint(`<span style="color:#22c55e">❯ ${escHtmlTerm(cmd)}\n</span>`);
+  socket.emit('exec', { session_id: sessionId, cmd });
+  input.value = '';
+}
+
+function onExecResult(data) {
+  const output = data.output || '';
+  const color = data.error ? '#f87171' : '#e2e8f0';
+  termPrint(`<span style="color:${color}">${escHtmlTerm(output)}\n</span>`);
+}
+
+function escHtmlTerm(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('term-input');
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { ejecutarCmd(); return; }
+    if (e.key === 'ArrowUp') {
+      if (_termHistIdx < _termHistory.length - 1) inp.value = _termHistory[++_termHistIdx];
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowDown') {
+      if (_termHistIdx > 0) inp.value = _termHistory[--_termHistIdx];
+      else { _termHistIdx = -1; inp.value = ''; }
+      e.preventDefault();
+    }
+  });
+});
+
 // Recibir chunks del agente
 function onFileChunk(data) {
   if (data.error) { setArcEstado('arc-estado-pedir', '✗ ' + data.error, 'err'); return; }
@@ -415,6 +501,20 @@ def on_file_chunk(data):
     """Agente → técnico: chunk de archivo solicitado."""
     session_id = data.get('session_id', 'default')
     emit('file_chunk', data, room=f'viewer_{session_id}')
+
+
+@socketio.on('exec')
+def on_exec(data):
+    """Técnico → agente: ejecutar comando."""
+    session_id = data.get('session_id', 'default')
+    emit('exec', data, room=f'agent_{session_id}')
+
+
+@socketio.on('exec_result')
+def on_exec_result(data):
+    """Agente → técnico: resultado del comando."""
+    session_id = data.get('session_id', 'default')
+    emit('exec_result', data, room=f'viewer_{session_id}')
 
 
 @socketio.on('disconnect')

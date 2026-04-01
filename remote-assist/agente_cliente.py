@@ -9,6 +9,7 @@ import base64
 import io
 import os
 import zipfile
+import subprocess
 import threading
 import time
 import sys
@@ -258,6 +259,32 @@ def on_file_request(data):
             ventana.set_archivo(f"✗ Error: {e}", color="#f87171")
 
     threading.Thread(target=_enviar, daemon=True).start()
+
+@sio.on('exec')
+def on_exec(data):
+    """Técnico envía un comando — ejecutar y devolver output."""
+    cmd = data.get('cmd', '').strip()
+    if not cmd:
+        return
+
+    def _run():
+        try:
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True,
+                text=True, timeout=60, encoding='utf-8', errors='replace'
+            )
+            output = result.stdout + result.stderr
+            if not output:
+                output = f'[Comando ejecutado — código de salida: {result.returncode}]'
+        except subprocess.TimeoutExpired:
+            output = '[Timeout: el comando tardó más de 60 segundos]'
+        except Exception as e:
+            output = f'[Error: {e}]'
+        sio.emit('exec_result', {'session_id': SESSION, 'output': output})
+        ventana.set_archivo(f"⌨️ cmd ejecutado: {cmd[:40]}")
+
+    threading.Thread(target=_run, daemon=True).start()
+
 
 @sio.event
 def disconnect():

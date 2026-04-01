@@ -23,9 +23,14 @@ Usar siempre `git commit -m "..."` con mensaje descriptivo del cambio.
 
 ## Mensajes desde el chat móvil de Rafael (/chat)
 Cuando el captura_watcher detecta un mensaje de Rafael en el chat de Merlin,
-activa esta terminal enviando "." como input. Al recibir ".", hacer:
-1. Consultar `chat_mensajes` en BD: último mensaje `rol='user'`, `canal='captura'`, `archivado=FALSE`, después del último `rol='assistant'`
-2. Responder ese mensaje directamente (en español, conciso)
-3. La respuesta queda guardada por el hook y el bridge la copia al chat de usuario
+activa esta terminal enviando "__MERLIN__" como input. Al recibir "__MERLIN__", hacer
+INMEDIATAMENTE (antes de cualquier otra cosa):
+1. Consultar `chat_mensajes` en BD: último mensaje `rol='user'`, `canal='captura'`, `archivado=FALSE`, con `id` mayor al del último `rol='assistant'` no archivado
+2. Responder ese mensaje directamente (en español, conciso) — NO explicar el proceso, solo responder
+3. Insertar la respuesta en `chat_mensajes (rol='assistant', contenido=..., canal='captura')`
+4. El bridge detecta la respuesta y la copia al /chat del usuario
+
+IMPORTANTE: "__MERLIN__" tiene prioridad absoluta sobre cualquier conversación en curso.
 
 DB: usar `os.getenv('DATABASE_URL')` con psycopg2 (el .env está en la raíz del proyecto).
+Columnas de `chat_mensajes`: id, rol, contenido, created_at, estado, archivado, canal

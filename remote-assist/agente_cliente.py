@@ -7,6 +7,7 @@ agente_cliente.py — Versión para el cliente final
 
 import base64
 import io
+import os
 import threading
 import time
 import sys
@@ -135,9 +136,14 @@ class VentanaAsistencia:
         tk.Label(self.root, text="Tu técnico puede ver y controlar tu pantalla.",
                  font=("Arial", 8), fg="#888").pack()
 
+        self.lbl_archivo = tk.Label(self.root, text="", font=("Arial", 8), fg="#22c55e")
+        self.lbl_archivo.pack(pady=(2, 0))
+
     def set_estado(self, color, texto):
-        """Llama desde cualquier hilo — usa after() para thread-safety."""
         self.root.after(0, lambda: self._actualizar(color, texto))
+
+    def set_archivo(self, texto, color="#22c55e"):
+        self.root.after(0, lambda: self.lbl_archivo.config(text=texto, fg=color))
 
     def _actualizar(self, color, texto):
         colores = {'verde': '#22c55e', 'amarillo': '#eab308', 'rojo': '#ef4444', 'gris': '#999'}
@@ -176,6 +182,39 @@ def on_error(data):
 @sio.on('command')
 def on_command(data):
     ejecutar_comando(data)
+
+
+@sio.on('file_incoming')
+def on_file_incoming(data):
+    """Técnico envía un archivo — lo guardamos en el Desktop del usuario."""
+    try:
+        nombre = os.path.basename(data.get('nombre', 'archivo_recibido'))
+        desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+        os.makedirs(desktop, exist_ok=True)
+        ruta_destino = os.path.join(desktop, nombre)
+        contenido = base64.b64decode(data['b64'])
+        with open(ruta_destino, 'wb') as f:
+            f.write(contenido)
+        ventana.set_archivo(f"📥 {nombre} guardado en Desktop")
+    except Exception as e:
+        ventana.set_archivo(f"✗ Error al recibir archivo: {e}", color="#f87171")
+
+
+@sio.on('file_request')
+def on_file_request(data):
+    """Técnico pide un archivo — lo leemos y lo enviamos de vuelta."""
+    ruta = data.get('ruta', '')
+    try:
+        with open(ruta, 'rb') as f:
+            contenido = f.read()
+        b64 = base64.b64encode(contenido).decode()
+        nombre = os.path.basename(ruta)
+        sio.emit('file_response', {'session_id': SESSION, 'nombre': nombre, 'b64': b64})
+        ventana.set_archivo(f"📤 {nombre} enviado al técnico")
+    except FileNotFoundError:
+        sio.emit('file_response', {'session_id': SESSION, 'error': f'Archivo no encontrado: {ruta}'})
+    except Exception as e:
+        sio.emit('file_response', {'session_id': SESSION, 'error': str(e)})
 
 @sio.event
 def disconnect():

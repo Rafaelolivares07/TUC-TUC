@@ -12,11 +12,11 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'cambiar-en-produccion')
 
-# max_http_buffer_size: frames JPEG pueden pesar hasta ~300KB con SCALE=0.85/QUALITY=70
+# max_http_buffer_size: 50MB — soporta frames JPEG (~300KB) y transferencia de archivos (~20MB .exe)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    max_http_buffer_size=8 * 1024 * 1024,  # 8MB por frame
+    max_http_buffer_size=50 * 1024 * 1024,
     async_mode='gevent',
     ping_timeout=60,
     ping_interval=25,
@@ -70,6 +70,25 @@ VIEWER_HTML = """<!DOCTYPE html>
   .sesion-codigo { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700; color: #22c55e; letter-spacing: 0.1em; }
   .sesion-btn { font-size: 11px; background: #1e3a5f; color: #93c5fd; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
   .sin-sesiones { font-size: 12px; color: #475569; text-align: center; padding: 12px; }
+
+  #btn-archivos { margin-left: 8px; background: #334155; border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; }
+  #btn-archivos:hover, #btn-archivos.activo { background: #6366f1; color: white; }
+  #panel-archivos { position: fixed; right: 0; top: 44px; width: 300px; height: calc(100vh - 44px); background: #1e293b; border-left: 1px solid #334155; padding: 16px; display: none; z-index: 100; overflow-y: auto; }
+  #panel-archivos.visible { display: block; }
+  .arc-seccion { margin-bottom: 20px; }
+  .arc-seccion h3 { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .arc-input { width: 100%; background: #0f172a; border: 1.5px solid #334155; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #f1f5f9; outline: none; margin-bottom: 8px; }
+  .arc-input:focus { border-color: #6366f1; }
+  .arc-btn { width: 100%; border: none; border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+  .arc-btn-enviar { background: #6366f1; color: white; }
+  .arc-btn-enviar:hover { background: #4f46e5; }
+  .arc-btn-pedir { background: #0891b2; color: white; }
+  .arc-btn-pedir:hover { background: #0e7490; }
+  .arc-btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+  .arc-estado { font-size: 11px; color: #94a3b8; margin-top: 6px; min-height: 16px; }
+  .arc-estado.ok { color: #22c55e; }
+  .arc-estado.err { color: #f87171; }
+  .arc-divider { border: none; border-top: 1px solid #334155; margin: 16px 0; }
 </style>
 </head>
 <body>
@@ -78,6 +97,23 @@ VIEWER_HTML = """<!DOCTYPE html>
   <span class="dot" id="dot"></span>
   <span id="status">Desconectado</span>
   <span id="fps"></span>
+  <button id="btn-archivos" onclick="toggleArchivos()" title="Transferencia de archivos">📁 Archivos</button>
+</div>
+
+<div id="panel-archivos">
+  <div class="arc-seccion">
+    <h3>Enviar archivo al cliente</h3>
+    <input type="file" id="arc-file-input" class="arc-input" style="padding:4px">
+    <button class="arc-btn arc-btn-enviar" onclick="enviarArchivo()">Enviar →</button>
+    <div id="arc-estado-enviar" class="arc-estado"></div>
+  </div>
+  <hr class="arc-divider">
+  <div class="arc-seccion">
+    <h3>Pedir archivo del cliente</h3>
+    <input id="arc-ruta-input" class="arc-input" type="text" placeholder="Ej: C:\\S.A.R\\archivo.log">
+    <button class="arc-btn arc-btn-pedir" onclick="pedirArchivo()">Descargar ←</button>
+    <div id="arc-estado-pedir" class="arc-estado"></div>
+  </div>
 </div>
 <div id="screen-wrap">
   <img id="screen" src="" alt="">
@@ -153,6 +189,7 @@ function conectar() {
     }
   });
   socket.on('disconnect', () => setStatus('red', 'Desconectado'));
+  socket.on('file_response', onFileResponse);
 }
 
 function formatCodigo(c) { return c.slice(0,3) + '-' + c.slice(3); }
@@ -218,6 +255,62 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   socket.emit('command', { session_id: sessionId, type: 'key', key: e.key });
 });
+
+// ─── Transferencia de archivos ────────────────────────────────────────────────
+const MAX_FILE_MB = 20;
+
+function toggleArchivos() {
+  const panel = document.getElementById('panel-archivos');
+  const btn = document.getElementById('btn-archivos');
+  panel.classList.toggle('visible');
+  btn.classList.toggle('activo');
+}
+
+function setArcEstado(id, msg, tipo) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'arc-estado' + (tipo ? ' ' + tipo : '');
+}
+
+function enviarArchivo() {
+  if (!socket) { setArcEstado('arc-estado-enviar', 'Conéctate primero', 'err'); return; }
+  const fileInput = document.getElementById('arc-file-input');
+  const file = fileInput.files[0];
+  if (!file) { setArcEstado('arc-estado-enviar', 'Selecciona un archivo', 'err'); return; }
+  if (file.size > MAX_FILE_MB * 1024 * 1024) {
+    setArcEstado('arc-estado-enviar', `Máximo ${MAX_FILE_MB}MB`, 'err'); return;
+  }
+  setArcEstado('arc-estado-enviar', 'Leyendo archivo...');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const b64 = e.target.result.split(',')[1];
+    setArcEstado('arc-estado-enviar', 'Enviando...');
+    socket.emit('file_incoming', { session_id: sessionId, nombre: file.name, b64 });
+    setArcEstado('arc-estado-enviar', `✓ ${file.name} enviado`, 'ok');
+    fileInput.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function pedirArchivo() {
+  if (!socket) { setArcEstado('arc-estado-pedir', 'Conéctate primero', 'err'); return; }
+  const ruta = document.getElementById('arc-ruta-input').value.trim();
+  if (!ruta) { setArcEstado('arc-estado-pedir', 'Ingresa la ruta del archivo', 'err'); return; }
+  setArcEstado('arc-estado-pedir', 'Solicitando...');
+  socket.emit('file_request', { session_id: sessionId, ruta });
+}
+
+// Recibir archivo del agente
+function onFileResponse(data) {
+  if (data.error) { setArcEstado('arc-estado-pedir', '✗ ' + data.error, 'err'); return; }
+  const bytes = Uint8Array.from(atob(data.b64), c => c.charCodeAt(0));
+  const blob = new Blob([bytes]);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = data.nombre;
+  a.click();
+  setArcEstado('arc-estado-pedir', `✓ ${data.nombre} descargado`, 'ok');
+}
 </script>
 </body>
 </html>"""
@@ -286,6 +379,27 @@ def on_frame(data):
 def on_command(data):
     session_id = data.get('session_id', 'default')
     emit('command', data, room=f'agent_{session_id}')
+
+
+@socketio.on('file_incoming')
+def on_file_incoming(data):
+    """Técnico → agente: enviar archivo al cliente."""
+    session_id = data.get('session_id', 'default')
+    emit('file_incoming', data, room=f'agent_{session_id}')
+
+
+@socketio.on('file_request')
+def on_file_request(data):
+    """Técnico → agente: pedir un archivo del cliente."""
+    session_id = data.get('session_id', 'default')
+    emit('file_request', data, room=f'agent_{session_id}')
+
+
+@socketio.on('file_response')
+def on_file_response(data):
+    """Agente → técnico: responde con el archivo solicitado."""
+    session_id = data.get('session_id', 'default')
+    emit('file_response', data, room=f'viewer_{session_id}')
 
 
 @socketio.on('disconnect')

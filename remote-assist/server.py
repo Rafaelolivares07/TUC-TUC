@@ -447,6 +447,9 @@ def on_viewer_join(data):
     join_room(f'viewer_{session_id}')
     join_room(f'session_{session_id}')
     emit('viewer_ok')
+    # Si el agente ya está conectado, notificar al nuevo visor inmediatamente
+    if session_id in active_sessions:
+        emit('agent_connected')
     print(f'[visor] conectado → sesión {session_id}')
 
 

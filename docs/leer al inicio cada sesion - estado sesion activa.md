@@ -1,43 +1,83 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-03-31_
+_Actualizado: 2026-04-01_
 
 ## Módulo en trabajo
-**Chat /chat — features nuevos + Alegra/Pilar Peralta (pendiente)**
+**VFP / SAR — Construcción de `configurar_allegra.scx` (PRÓXIMA SESIÓN)**
 
-## Trabajo sesión 2026-03-31 (continuación tarde)
+---
 
-### /chat — features implementados
-- **Barra input rediseñada**: fila 1 = textarea + enviar, fila 2 = íconos secundarios
-- **Title dinámico**: pestaña muestra "Nombre — TUC TUC" al abrir un chat, "Chat — TUC TUC" en el listado
-- **Sistema apuntes**: tabla `apuntes`, modo apunte (toggle 📌), panel colapsable "📌 N apuntes" encima del hilo, botón ➤ por apunte para enviar al contacto cuando se decida
-- **TTS 🔊**: toggle en barra secundaria — activo (verde) lee mis mensajes en voz alta al llegar. Persiste en localStorage. Web Speech API, sin costo.
-- **Chulos ✓✓**: ✓ gris = llegó al servidor, ✓✓ azul = bridge/destinatario lo procesó (estado='leido'). Aplica a texto, audio e imagen. Polling actualiza en vivo cada 3s. Endpoint `/api/chat/mensajes/estados`.
+## PRÓXIMA SESIÓN — Construir `configurar_allegra.scx` en VFP IDE
 
-### Convenios actualizados
-- §7 timestamps en `convenios_desarrollo.md`
-- Reglas de trabajo actualizadas (timestamps corregidos, §6 y §7 en índice)
+### Spec completa en:
+`docs/SPEC_FORM_CONFIGURAR_ALLEGRA.md` — incluye:
+- Boceto ASCII del formulario al inicio
+- Tabla de controles con nombres, posiciones y tamaños exactos
+- Código completo de `Init` y `btn_guardar.Click` listo para copiar/pegar
+- Verificaciones de migración de BD en el Init
 
-### Commits de esta sesión (tarde)
-- `e28464e` — fix(chat): barra input rediseñada
-- `2c0274c` — fix(chat): title dinámico con nombre del contacto
-- `00396f4` — feat(chat): sistema de apuntes completo
-- `78114a2` — feat(apuntes): botón enviar al chat por apunte
-- `29885fd` — feat(chat): TTS toggle con Web Speech API
-- `37061c7` — feat(chat): chulos ✓✓ en burbujas propias
+### Lo que el formulario hace
+- Lee/escribe `allegra_config.dbf` — **un registro por empresa (02 y LP)**
+- Parámetros globales: `max_fact`, `intervalo`, `desde_ult` (aplican a ambas empresas)
+- Por empresa: `num_inicio` (ej: PTV21200 para 02, PJP15780 para LP)
+- Estado informativo (solo lectura): `ultima_sin`, `total_proc`, `ultimo_log` por empresa
 
-## Pendientes
-- **Alegra/Pilar:** identificar registro "bolsa" ($73) → manejarlo como impuesto separado en formulario VFP. Mapeo métodos de pago también pendiente.
-- **Whisper tiny**: transcripción de audios imprecisa — considerar `small` para apuntes de audio que Merlin debe leer
-- **Logs de presencia /domótica**: Rafael mencionó buen comportamiento — verificar si algo quedó pendiente
+### Pasos para construir el SCX en VFP IDE
+1. `File → New → Form`
+2. Poner propiedades del form (Caption, Width=500, Height=520, WindowType=1, AutoCenter=.T.)
+3. Agregar controles según spec (sección por sección)
+4. Pegar código en `Init` y `btn_guardar.Click` desde la spec
+5. Guardar → `COMPILE FORM C:\S.A.R\PROYECTO\configurar_allegra.scx`
+6. Probar: `DO FORM C:\S.A.R\PROYECTO\configurar_allegra`
 
-## Regla de timestamps (convenio §7)
-- **BD**: sesión PG en `America/Bogota` → `CURRENT_TIMESTAMP` guarda hora Colombia
-- **Python**: serializar con `ZoneInfo('America/Bogota')` → ISO con `-05:00`
-- **JS chat**: `toLocaleTimeString('es-CO')` sin `timeZone` forzado
-- **JS logs/domótica**: `toLocaleString('es-CO', { timeZone: 'America/Bogota' })`
+### Verificación post-construcción
+El `Init` ya incluye checks automáticos:
+- Si DBF no existe → mensaje claro
+- Si DBF sin campo `empresa` → mensaje: correr `allegra_sync.py` primero
+- Si faltan registros 02 o LP → mensaje: idem
+- Solo carga si todo está OK
 
-## Contexto técnico
+---
+
+## Trabajo sesión 2026-04-01
+
+### Chat / Merlin
+- `chat_bridge.py` y `git_bridge.py` **eliminados** — no se usan
+- Flujo Rafael↔Merlin: `captura_watcher.ps1` → `__MERLIN__` → esta terminal (sin bridge intermedio)
+- `chat_merlin_bridge.py` sigue vivo — para usuarios TUC TUC con Merlin como contacto
+- Chulos ✓✓: color cambiado de azul (`#93c5fd`) a blanco (`#ffffff`) — visibles sobre globos azules
+
+### Alegra — allegra_config.dbf ahora por empresa
+- **Campo nuevo**: `empresa C(5)` — un registro por empresa (02 y LP)
+- `num_inicio`, `ultima_sin`, `total_proc`, `ultimo_log` → por empresa
+- `max_fact`, `intervalo`, `desde_ult` → globales (mismo valor en ambos registros)
+- `allegra_sync.py` — `_migrar_config()` corre al inicio, migra automáticamente si estructura vieja
+- `allegra_sync.py` — `leer_config()` retorna `por_empresa: {02: {...}, LP: {...}}`
+- `allegra_sync.py` — `main()` usa `num_inicio` de cada empresa al filtrar facturas
+- `instalar_allegra_bd.py` — crea 2 registros (02 y LP) al crear desde cero
+- `docs/SPEC_FORM_CONFIGURAR_ALLEGRA.md` — actualizada con diseño por empresa + boceto + Init con verificaciones
+
+### Docs y manuales
+- Todos los manuales y specs van en `docs/` del proyecto TUC TUC (regla fija)
+- `SPEC_FORM_CONFIGURAR_ALLEGRA.md` movida de `C:\S.A.R\PROYECTO\` a `docs/`
+
+---
+
+## Pendientes Alegra (después del SCX)
+1. **Primera prueba real** con 1 factura sobre `basedatosempresas_TEST`
+2. **Confirmar TIPO_INVE del doc '013'**: `SELECT codigo, tipo_inve FROM TIPO_DOC WHERE ALLTRIM(codigo)='013'`
+3. **Verificar REG_CTAS** después de prueba (débitos = créditos)
+4. **Completar `tip_admin`** para invoice/creditNote en `alegra_tiposdoc.dbf` cuando aplique
+
+## Pendientes chat /chat
+- **Whisper tiny**: transcripción imprecisa en audios, considerar `small` para apuntes de Merlin
+
+---
+
+## Contexto técnico fijo
 - bypassPermissions activo en `~/.claude/settings.json` ✓
 - Rafael trabaja en Cali, Colombia — timezone America/Bogota
 - App en producción: `tuc-tuc.onrender.com`
-- Rafael trabaja principalmente desde el celular — responder siempre por /chat, no preguntar en terminal
+- BD Pilar: `C:\D\Pilar Peralta\basedatosempresas\`
+- BD Pilar TEST: `C:\D\Pilar Peralta\basedatosempresas_TEST\`
+- Flujo chat Rafael↔Merlin: `captura_watcher.ps1` → `__MERLIN__` → esta terminal
+- Archivos Alegra en: `C:\S.A.R\` (Python) y `C:\S.A.R\PROYECTO\` (PRGs y SCX)

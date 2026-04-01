@@ -353,12 +353,12 @@ function termPrint(html) {
 }
 
 function ejecutarCmd() {
-  if (!socket) { termPrint('<span style="color:#f87171">Sin conexión\n</span>'); return; }
+  if (!socket) { termPrint('<span style="color:#f87171">Sin conexi&oacute;n</span><br>'); return; }
   const input = document.getElementById('term-input');
   const cmd = input.value.trim();
   if (!cmd) return;
   _termHistory.unshift(cmd); _termHistIdx = -1;
-  termPrint(`<span style="color:#22c55e">❯ ${escHtmlTerm(cmd)}\n</span>`);
+  termPrint(`<span style="color:#22c55e">❯ ${escHtmlTerm(cmd)}</span><br>`);
   socket.emit('exec', { session_id: sessionId, cmd });
   input.value = '';
 }
@@ -366,7 +366,7 @@ function ejecutarCmd() {
 function onExecResult(data) {
   const output = data.output || '';
   const color = data.error ? '#f87171' : '#e2e8f0';
-  termPrint(`<span style="color:${color}">${escHtmlTerm(output)}\n</span>`);
+  termPrint(`<span style="color:${color}">${escHtmlTerm(output)}</span><br>`);
 }
 
 function escHtmlTerm(s) {

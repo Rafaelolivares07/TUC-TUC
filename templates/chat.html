@@ -330,7 +330,7 @@ function escHtml(s) {
 
 function chulito(estado, esMio) {
   if (!esMio) return '';
-  if (estado === 'leido') return ' <span style="color:#93c5fd;font-size:11px">✓✓</span>';
+  if (estado === 'leido') return ' <span style="color:#ffffff;font-size:11px">✓✓</span>';
   return ' <span style="opacity:.5;font-size:11px">✓</span>';
 }
 
@@ -342,7 +342,7 @@ async function actualizarEstados() {
   for (const [id, estado] of Object.entries(r.estados)) {
     if (estado === 'leido') {
       const el = document.getElementById(`est-${id}`);
-      if (el) el.outerHTML = '<span id="est-' + id + '" style="color:#93c5fd;font-size:11px">✓✓</span>';
+      if (el) el.outerHTML = '<span id="est-' + id + '" style="color:#ffffff;font-size:11px">✓✓</span>';
       _pendientesEstado.delete(Number(id));
     }
   }

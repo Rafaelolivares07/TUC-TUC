@@ -32,7 +32,7 @@ pyautogui.PAUSE    = 0
 # ─── Config (hardcodeado — el cliente no toca nada) ───────────────────────────
 SERVER   = "https://tuc-tuc-remote.onrender.com"
 TOKEN    = "tuctuc-remote-2026"
-SESSION  = "default"
+SESSION  = __import__('random').randint(100000, 999999).__str__()
 FPS      = 8
 QUALITY  = 70
 SCALE    = 0.85
@@ -119,6 +119,13 @@ class VentanaAsistencia:
                  fg="#2563eb").pack(pady=(20, 2))
         tk.Label(self.root, text="Asistencia Técnica Remota",
                  font=("Arial", 10), fg="#555").pack()
+
+        # Código de sesión
+        codigo = SESSION[:3] + "-" + SESSION[3:]
+        tk.Label(self.root, text="Tu código de sesión:",
+                 font=("Arial", 9), fg="#888").pack(pady=(10, 0))
+        tk.Label(self.root, text=codigo,
+                 font=("Courier New", 26, "bold"), fg="#16a34a").pack()
 
         # Estado
         self.frame_estado = tk.Frame(self.root)

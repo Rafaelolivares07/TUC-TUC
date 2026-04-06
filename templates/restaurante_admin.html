@@ -95,6 +95,11 @@
                 <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="tab-btn tab-active">
                     🍽️ Menú
                 </button>
+                {% if restaurante.tipo_restaurante == 'ambos' %}
+                <button onclick="cambiarTab('opcmenudia')" id="tab-opcmenudia" class="tab-btn">
+                    🥣 Opciones menú del día
+                </button>
+                {% endif %}
                 {% if restaurante.tipo_restaurante in ('menu_dia', 'ambos') %}
                 <button onclick="cambiarTab('menudia')" id="tab-menudia" class="tab-btn">
                     📋 Menú del día
@@ -160,6 +165,30 @@
                 <p class="text-gray-400 text-center py-8">Cargando...</p>
             </div>
         </div>
+
+        {% if restaurante.tipo_restaurante == 'ambos' %}
+        <!-- ====== TAB: OPCIONES MENÚ DEL DÍA (ambos) ====== -->
+        <div id="panel-opcmenudia" class="p-6 hidden">
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-3">Agregar opción</h3>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <select id="omd-tipo" class="border rounded-lg px-3 py-2 text-sm flex-shrink-0">
+                        <option value="sopa">Sopa / Caldo</option>
+                        <option value="proteina">Proteína</option>
+                        <option value="principio">Principio</option>
+                    </select>
+                    <input id="omd-nombre" type="text" placeholder="Nombre (ej: Sancocho)" class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
+                    <input id="omd-recargo" type="number" placeholder="Recargo $" value="0" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
+                    <button onclick="guardarOpcionMenuDia()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                        Agregar
+                    </button>
+                </div>
+            </div>
+            <div id="opcmenudia-lista" class="space-y-6">
+                <p class="text-gray-400 text-center py-8">Cargando...</p>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- ====== TAB: MENÚ DEL DÍA ====== -->
         <div id="panel-menudia" class="p-6 hidden">
@@ -703,7 +732,7 @@ async function verHistorial(slug) {
 
 // ===== TABS =====
 function cambiarTab(tab) {
-    ['catalogo', 'menudia', 'mesas', 'cuentas', 'personalizar', 'ubicacion'].forEach(t => {
+    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'personalizar', 'ubicacion'].forEach(t => {
         const panel = document.getElementById(`panel-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
@@ -712,6 +741,7 @@ function cambiarTab(tab) {
     const btnActivo = document.getElementById('tab-' + tab);
     if (btnActivo) btnActivo.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     if (tab === 'menudia') cargarMenuDia();
+    if (tab === 'opcmenudia') cargarOpcionesMenuDia();
     if (tab === 'mesas') cargarMesas();
     if (tab === 'cuentas') cargarCuentasAdmin();
     if (tab === 'ubicacion') iniciarMapaUbicacion();
@@ -811,6 +841,78 @@ async function crearRestaurante() {
     } catch(e) { toast('Error de conexión', false); }
 }
 
+// ===== OPCIONES MENÚ DEL DÍA (panel separado solo para 'ambos') =====
+async function cargarOpcionesMenuDia() {
+    if (TIPO_REST !== 'ambos') return;
+    if (!catalogoData.length) await cargarCatalogo();
+    renderOpcionesCatalogo();
+}
+
+function renderOpcionesCatalogo() {
+    const cont = document.getElementById('opcmenudia-lista');
+    if (!cont) return;
+    const items = catalogoData.filter(o => TIPOS_MENUDIA.includes(o.tipo));
+
+    if (items.length === 0) {
+        cont.innerHTML = '<p class="text-gray-400 text-center py-8">No hay opciones. Agrega la primera arriba.</p>';
+        return;
+    }
+
+    const grupos = {};
+    items.forEach(o => {
+        if (!grupos[o.tipo]) grupos[o.tipo] = [];
+        grupos[o.tipo].push(o);
+    });
+
+    cont.innerHTML = Object.keys(grupos).map(tipo => {
+        const color = tipo === 'sopa' ? 'yellow' : tipo === 'proteina' ? 'red' : 'green';
+        const label = tipo === 'sopa' ? 'Sopas y Caldos' : tipo === 'proteina' ? 'Proteínas' : 'Principios';
+        return `
+            <div>
+                <h4 class="font-bold text-${color}-700 mb-2 text-sm uppercase tracking-wide">${label}</h4>
+                <div class="space-y-2">
+                    ${grupos[tipo].map(i => `
+                        <div class="flex items-center justify-between bg-white border rounded-lg px-4 py-3">
+                            <span class="font-medium text-gray-800">${i.nombre}</span>
+                            <div class="flex items-center gap-3">
+                                ${i.recargo > 0 ? `<span class="text-sm text-amber-600 font-semibold">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
+                                <button onclick="eliminarOpcion(${i.id})" class="text-red-400 hover:text-red-600" title="Eliminar">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function guardarOpcionMenuDia() {
+    const tipo = document.getElementById('omd-tipo').value;
+    const nombre = document.getElementById('omd-nombre').value.trim();
+    if (!nombre) return toast('Escribe el nombre', false);
+    const recargo = parseFloat(document.getElementById('omd-recargo').value) || 0;
+
+    try {
+        const r = await fetch(`${BASE}/opcion`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tipo, nombre, recargo})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('omd-nombre').value = '';
+            document.getElementById('omd-recargo').value = '0';
+            toast('Agregado');
+            await cargarCatalogo();
+            renderOpcionesCatalogo();
+        } else {
+            toast(data.error, false);
+        }
+    } catch(e) { toast('Error de conexión', false); }
+}
+
 // ===== CATÁLOGO =====
 let catalogoData = [];
 
@@ -826,24 +928,31 @@ async function cargarCatalogo() {
     } catch(e) { console.error(e); }
 }
 
+const TIPOS_MENUDIA = ['sopa', 'proteina', 'principio'];
+
 function renderCatalogo() {
     const cont = document.getElementById('catalogo-lista');
 
-    if (catalogoData.length === 0) {
-        cont.innerHTML = '<p class="text-gray-400 text-center py-8">No hay opciones en el catálogo. Agrega la primera arriba.</p>';
+    // Para 'ambos': el panel catalogo solo muestra items de carta (excluye sopa/proteína/principio)
+    const items = TIPO_REST === 'ambos'
+        ? catalogoData.filter(o => !TIPOS_MENUDIA.includes(o.tipo))
+        : catalogoData;
+
+    if (items.length === 0) {
+        cont.innerHTML = '<p class="text-gray-400 text-center py-8">No hay platos en la carta. Agrega el primero arriba.</p>';
         return;
     }
 
     // Agrupar por tipo/categoría
     const grupos = {};
-    catalogoData.forEach(o => {
+    items.forEach(o => {
         if (!grupos[o.tipo]) grupos[o.tipo] = [];
         grupos[o.tipo].push(o);
     });
 
     const esCarta = TIPO_REST === 'carta' || TIPO_REST === 'ambos';
 
-    // Para carta/ambos: actualizar datalist de categorías
+    // Para carta/ambos: actualizar datalist de categorías (solo categorías de carta)
     if (esCarta) {
         const dl = document.getElementById('categorias-list');
         if (dl) dl.innerHTML = Object.keys(grupos).map(k => `<option value="${k}">`).join('');
@@ -1013,7 +1122,8 @@ async function eliminarOpcion(id) {
         const data = await r.json();
         if (data.ok) {
             toast('Opción eliminada');
-            cargarCatalogo();
+            await cargarCatalogo();
+            if (TIPO_REST === 'ambos') renderOpcionesCatalogo();
         } else {
             toast(data.error, false);
         }

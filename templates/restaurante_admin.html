@@ -95,16 +95,14 @@
                 <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="tab-btn tab-active">
                     🍽️ Menú
                 </button>
-                {% if restaurante.tipo_restaurante == 'ambos' %}
-                <button onclick="cambiarTab('opcmenudia')" id="tab-opcmenudia" class="tab-btn">
+                <button onclick="cambiarTab('opcmenudia')" id="tab-opcmenudia"
+                    class="tab-btn {{ '' if restaurante.tipo_restaurante == 'ambos' else 'hidden' }}">
                     🥣 Opciones menú del día
                 </button>
-                {% endif %}
-                {% if restaurante.tipo_restaurante in ('menu_dia', 'ambos') %}
-                <button onclick="cambiarTab('menudia')" id="tab-menudia" class="tab-btn">
+                <button onclick="cambiarTab('menudia')" id="tab-menudia"
+                    class="tab-btn {{ '' if restaurante.tipo_restaurante in ('menu_dia', 'ambos') else 'hidden' }}">
                     📋 Menú del día
                 </button>
-                {% endif %}
                 <button onclick="cambiarTab('mesas')" id="tab-mesas" class="tab-btn">
                     🪑 Mesas
                 </button>
@@ -131,27 +129,29 @@
         <div id="panel-catalogo" class="p-6">
             <!-- Formulario agregar -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                <h3 class="font-bold text-gray-700 mb-3">Agregar {% if restaurante.tipo_restaurante == 'menu_dia' %}opción{% else %}plato{% endif %}</h3>
+                <h3 class="font-bold text-gray-700 mb-3">Agregar plato</h3>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    {% if restaurante.tipo_restaurante == 'menu_dia' %}
-                    <select id="cat-tipo" class="border rounded-lg px-3 py-2 text-sm flex-shrink-0">
+                    <!-- tipo carta/ambos -->
+                    <input id="cat-tipo" type="text" placeholder="Categoría (ej: Entradas)"
+                        class="border rounded-lg px-3 py-2 text-sm flex-shrink-0 w-40 {{ 'hidden' if restaurante.tipo_restaurante == 'menu_dia' }}"
+                        list="categorias-list">
+                    <datalist id="categorias-list"></datalist>
+                    <!-- tipo menu_dia -->
+                    <select id="cat-tipo-md"
+                        class="border rounded-lg px-3 py-2 text-sm flex-shrink-0 {{ '' if restaurante.tipo_restaurante == 'menu_dia' else 'hidden' }}">
                         <option value="sopa">Sopa / Caldo</option>
                         <option value="proteina">Proteína</option>
                         <option value="principio">Principio</option>
                     </select>
-                    {% else %}
-                    <input id="cat-tipo" type="text" placeholder="Categoría (ej: Entradas)" class="border rounded-lg px-3 py-2 text-sm flex-shrink-0 w-40" list="categorias-list">
-                    <datalist id="categorias-list"></datalist>
-                    {% endif %}
                     <div class="relative flex-1">
-                        <input id="cat-nombre" type="text" placeholder="Nombre (ej: {% if restaurante.tipo_restaurante == 'menu_dia' %}Sancocho{% else %}Lomo en salsa{% endif %})" class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off">
+                        <input id="cat-nombre" type="text" placeholder="Nombre del plato"
+                            class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off">
                         <div id="autocomplete-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto"></div>
                     </div>
-                    {% if restaurante.tipo_restaurante == 'menu_dia' %}
-                    <input id="cat-recargo" type="number" placeholder="Recargo $" value="0" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
-                    {% else %}
-                    <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500" class="border rounded-lg px-3 py-2 text-sm w-28">
-                    {% endif %}
+                    <input id="cat-recargo" type="number" placeholder="Recargo $" value="0" min="0" step="500"
+                        class="border rounded-lg px-3 py-2 text-sm w-28 {{ '' if restaurante.tipo_restaurante == 'menu_dia' else 'hidden' }}">
+                    <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500"
+                        class="border rounded-lg px-3 py-2 text-sm w-28 {{ 'hidden' if restaurante.tipo_restaurante == 'menu_dia' }}">
                     <button onclick="guardarOpcion()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
                         Agregar
                     </button>
@@ -166,8 +166,7 @@
             </div>
         </div>
 
-        {% if restaurante.tipo_restaurante == 'ambos' %}
-        <!-- ====== TAB: OPCIONES MENÚ DEL DÍA (ambos) ====== -->
+        <!-- ====== TAB: OPCIONES MENÚ DEL DÍA ====== -->
         <div id="panel-opcmenudia" class="p-6 hidden">
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
                 <h3 class="font-bold text-gray-700 mb-3">Agregar opción</h3>
@@ -188,7 +187,6 @@
                 <p class="text-gray-400 text-center py-8">Cargando...</p>
             </div>
         </div>
-        {% endif %}
 
         <!-- ====== TAB: MENÚ DEL DÍA ====== -->
         <div id="panel-menudia" class="p-6 hidden">
@@ -1009,7 +1007,10 @@ function renderCatalogo() {
 }
 
 async function guardarOpcion() {
-    const tipo = document.getElementById('cat-tipo').value.trim();
+    const tipoEl = TIPO_REST === 'menu_dia'
+        ? document.getElementById('cat-tipo-md')
+        : document.getElementById('cat-tipo');
+    const tipo = tipoEl.value.trim();
     const nombre = document.getElementById('cat-nombre').value.trim();
     if (!tipo) return toast('Selecciona una categoría', false);
     if (!nombre) return toast('Escribe el nombre', false);
@@ -1066,10 +1067,10 @@ function limpiarFormCatalogo() {
     document.getElementById('cat-nombre').value = '';
     document.getElementById('cat-descripcion').value = '';
     productoSeleccionado = null;
-    if (TIPO_REST === 'carta' || TIPO_REST === 'ambos') {
-        document.getElementById('cat-precio').value = '';
-    } else {
+    if (TIPO_REST === 'menu_dia') {
         document.getElementById('cat-recargo').value = '0';
+    } else {
+        document.getElementById('cat-precio').value = '';
     }
 }
 
@@ -1910,7 +1911,12 @@ async function cambiarTipoRest() {
         });
         const data = await r.json();
         if (data.ok) {
-            toast('Tipo guardado — recarga para ver los cambios');
+            // Mostrar/ocultar pestañas sin recargar
+            const tabOpc = document.getElementById('tab-opcmenudia');
+            const tabMenudia = document.getElementById('tab-menudia');
+            if (tabOpc) tabOpc.classList.toggle('hidden', tipo !== 'ambos');
+            if (tabMenudia) tabMenudia.classList.toggle('hidden', tipo === 'carta');
+            toast('Tipo guardado');
         } else {
             toast(data.error || 'Error', false);
         }

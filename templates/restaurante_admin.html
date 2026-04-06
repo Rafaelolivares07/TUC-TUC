@@ -510,7 +510,7 @@
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
                 <h3 class="font-bold text-gray-700 mb-2">Tipo de carta</h3>
                 <p class="text-xs text-gray-400 mb-3">Define si tu restaurante ofrece menú del día, carta fija, o ambas opciones</p>
-                <select id="sel-tipo-rest" class="border rounded-lg px-3 py-2 text-sm w-full mb-3">
+                <select id="sel-tipo-rest" class="border rounded-lg px-3 py-2 text-sm w-full mb-3" onchange="previewTipoRest(this.value)">
                     <option value="menu_dia" {{ 'selected' if restaurante.tipo_restaurante == 'menu_dia' }}>Menú del día (completo, bandeja, sopa)</option>
                     <option value="carta" {{ 'selected' if restaurante.tipo_restaurante == 'carta' }}>Carta (platos individuales con precio)</option>
                     <option value="ambos" {{ 'selected' if restaurante.tipo_restaurante == 'ambos' }}>Ambos — carta + menú del día</option>
@@ -1901,6 +1901,15 @@ async function toggleNombre(mostrar) {
 }
 
 // ===== TIPO DE RESTAURANTE =====
+function previewTipoRest(tipo) {
+    const tabCatalogo = document.getElementById('tab-catalogo');
+    const tabOpc = document.getElementById('tab-opcmenudia');
+    const tabMenudia = document.getElementById('tab-menudia');
+    if (tabOpc)      tabOpc.classList.toggle('hidden', tipo !== 'ambos');
+    if (tabMenudia)  tabMenudia.classList.toggle('hidden', tipo === 'carta');
+    if (tabCatalogo) tabCatalogo.textContent = tipo === 'menu_dia' ? '🍽️ Menú' : '🍽️ Carta';
+}
+
 async function cambiarTipoRest() {
     const tipo = document.getElementById('sel-tipo-rest').value;
     try {

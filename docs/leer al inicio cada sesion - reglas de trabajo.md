@@ -76,3 +76,26 @@ Definidas tras feedback directo (algunas rechazadas 2+ veces):
 1. Leer este archivo
 2. Leer `leer al inicio cada sesion - estado sesion activa.md`
 3. Si hay cambios pendientes de commit mencionados ahí, tenerlos en cuenta antes de sugerir nuevos commits
+
+---
+
+## Regla de documentación — la memoria de Claude es del presente
+
+La memoria interna de Claude (auto-memory) es efímera y orientada al momento actual. **No es confiable entre sesiones.**
+
+**Los docs son la memoria permanente.** Todo lo que deba sobrevivir a un reinicio de sesión debe estar en `docs/`:
+
+- Decisiones de arquitectura → `docs/vfp_administrator_pilar.md` u otro manual técnico
+- Estado de trabajo → `docs/leer al inicio cada sesion - estado sesion activa.md`
+- Reglas y convenciones → `docs/convenios_desarrollo.md` o este archivo
+
+### Al terminar cualquier bloque de trabajo significativo:
+- Documentar en el archivo técnico correspondiente: qué se creó, por qué, cómo funciona
+- No asumir que "quedó en la memoria" — si no está en docs/, no existe para la próxima sesión
+- Las memorias internas (`memory/`) son punteros a docs/, no fuente de verdad
+
+### Qué documentar siempre:
+- Archivos nuevos creados: propósito, ubicación, cómo se invoca
+- Decisiones no obvias: por qué se hizo así y no de otra forma
+- Workarounds técnicos: el problema que resuelven (ej: lector binario por .fpt huérfano)
+- Comportamientos automáticos: qué crea/verifica/actualiza cada script al correr

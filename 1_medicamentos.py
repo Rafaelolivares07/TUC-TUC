@@ -27232,9 +27232,11 @@ def mi_restaurante(slug):
 
         usuario_id = session.get('usuario_id')
         es_admin_sistema = session.get('rol') == 'Administrador'
+        token_sesion = session.get('restaurante_token')
+        autenticado_por_token = token_sesion and token_sesion == restaurante['token_acceso']
 
-        # Verificar permisos: admin del sistema o dueño del restaurante
-        if usuario_id and (es_admin_sistema or usuario_id == restaurante['admin_id']):
+        # Verificar permisos: admin del sistema, dueño registrado, o autenticado por token mágico
+        if es_admin_sistema or (usuario_id and usuario_id == restaurante['admin_id']) or autenticado_por_token:
             conn.close()
             return render_template('restaurante_admin.html', restaurante=restaurante, restaurantes=None, es_dueno=True)
 
@@ -27258,18 +27260,24 @@ def restaurante_acceso_token(token):
             conn.close()
             return "Enlace inválido o expirado", 404
 
-        # Loguear al dueño
         admin_id = restaurante['admin_id']
-        tercero = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (admin_id,)).fetchone()
-        conn.close()
 
-        if not tercero:
-            return "Usuario no encontrado", 404
+        if admin_id:
+            tercero = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (admin_id,)).fetchone()
+            conn.close()
+            if not tercero:
+                return "Usuario no encontrado", 404
+            session['usuario_id'] = tercero['id']
+            session['nombre'] = tercero['nombre']
+            session['telefono'] = tercero['telefono'] if tercero['telefono'] else ''
+        else:
+            # Restaurante sin admin registrado — autenticar solo por token
+            conn.close()
+            session['nombre'] = restaurante['nombre']
+            session['telefono'] = ''
 
-        session['usuario_id'] = tercero['id']
-        session['nombre'] = tercero['nombre']
-        session['telefono'] = tercero['telefono'] if tercero['telefono'] else ''
         session['rol'] = 'Restaurante'
+        session['restaurante_token'] = token
         session.permanent = True
         session.modified = True
 

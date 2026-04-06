@@ -1,98 +1,82 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-01_
+_Actualizado: 2026-04-06_
 
 ## Módulo en trabajo
-**VFP / SAR — Construcción de `configurar_allegra.scx` (PRÓXIMA SESIÓN)**
+**VFP / SAR — Integración Alegra → Python directo a DBF**
 
 ---
 
-## PRÓXIMA SESIÓN — Construir `configurar_allegra.scx` en VFP IDE
+## PRÓXIMA SESIÓN — Estado actual
 
-### Spec completa en:
-`docs/SPEC_FORM_CONFIGURAR_ALLEGRA.md` — incluye:
-- Boceto ASCII del formulario al inicio
-- Tabla de controles con nombres, posiciones y tamaños exactos
-- Código completo de `Init` y `btn_guardar.Click` listo para copiar/pegar
-- Verificaciones de migración de BD en el Init
+### Versiones
+- `alegra_daemon.py` → **v2.6**
+- `configurar_allegra.py` → **v2.6**
+- `interfaz_allegra.py` → **4 fases código listo — f_standar stub**
 
-### Lo que el formulario hace
-- Lee/escribe `allegra_config.dbf` — **un registro por empresa (02 y LP)**
-- Parámetros globales: `max_fact`, `intervalo`, `desde_ult` (aplican a ambas empresas)
-- Por empresa: `num_inicio` (ej: PTV21200 para 02, PJP15780 para LP)
-- Estado informativo (solo lectura): `ultima_sin`, `total_proc`, `ultimo_log` por empresa
+### Lo que está funcionando / implementado
+- Daemon v2.6 corre cada N minutos: allegra_sync.py → allegra_pendientes.dbf → interfaz_allegra.py → PROD_FACT1
+- `FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']` — las 4 fases declaradas; f_standar es stub
+- f_costos + f_contab: código completo (sin probar en BD aún)
+- Tab Configuracion con scroll vertical (Canvas+Scrollbar, mousewheel al hover)
+- Combobox tipo doc muestra "013 — FACTURA VENTA POS" — filtra TIPO_DOC.ESTADO_INV=3 AND AUTO_EMP
+- Combobox met_pago: valores fijos Alegra (cash, credit-card, debit-card, transfer, credit, check, online, bank-remittance)
+- `leer_config()` nunca falla — devuelve defaults si tabla vacía o inexistente
+- `guardar_config()` hace APPEND si la fila de empresa no existe — seguro en PC virgen
+- `_met_coincide()` comparación exacta (ya no comma-split)
 
-### Pasos para construir el SCX en VFP IDE
-1. `File → New → Form`
-2. Poner propiedades del form (Caption, Width=500, Height=520, WindowType=1, AutoCenter=.T.)
-3. Agregar controles según spec (sección por sección)
-4. Pegar código en `Init` y `btn_guardar.Click` desde la spec
-5. Guardar → `COMPILE FORM C:\S.A.R\PROYECTO\configurar_allegra.scx`
-6. Probar: `DO FORM C:\S.A.R\PROYECTO\configurar_allegra`
+### Pendientes — próxima sesión
+1. **PRIORIDAD: Prueba en backup** (`basedatosempresas_TEST`) — apuntar ruta.dbf, correr ciclo completo
+2. Implementar `_standar()` real (REG_PROD + REG_PROD_SALDOS) — actualmente stub
+3. UI mapeo vendedores (tab Configuracion)
+4. Auto-refresh de grillas de Facturas y Terceros
+5. Corregir `_sugerir_num_inicio`: debe leer MAX de PROD_FACT1, no de allegra_pendientes
+6. `reiniciar_proceso` debe limpiar reg_costos_temporal + f_costos/f_contab
 
-### Verificación post-construcción
-El `Init` ya incluye checks automáticos:
-- Si DBF no existe → mensaje claro
-- Si DBF sin campo `empresa` → mensaje: correr `allegra_sync.py` primero
-- Si faltan registros 02 o LP → mensaje: idem
-- Solo carga si todo está OK
-
----
-
-## Trabajo sesión 2026-04-01 (continuación)
-
-### Asistencia Remota — V1.1 y V1.2
-- **Transferencia de archivos por chunks (512KB)** — sin límite de tamaño
-- **Carpetas se zipean automáticamente** antes de transferir
-- **Terminal remota** en el visor (`⌨️ Terminal`) — ejecuta comandos en PC del cliente
-- **`exec` en el agente** — subprocess con timeout 60s, output a visor
-- **Código de sesión aleatorio** visible en la ventana del agente (V1.2)
-- **merlin_remote.py** en `C:\S.A.R\` — API local :7777 para que Merlin opere PCs remotas
-- **gh CLI instalado** — releases via `'C:\Program Files\GitHub CLI\gh.exe' release create`
-- Releases publicados: V1.1 y V1.2 en GitHub
-
-### Pendientes asistencia remota
-- Probar con PC de Pilar: Pilar descargó V1.2, pendiente prueba de conexión
-- Configurar exe para que arranque automáticamente con Windows en PC de Pilar
-
-## Trabajo sesión 2026-04-01
-
-### Chat / Merlin
-- `chat_bridge.py` y `git_bridge.py` **eliminados** — no se usan
-- Flujo Rafael↔Merlin: `captura_watcher.ps1` → `__MERLIN__` → esta terminal (sin bridge intermedio)
-- `chat_merlin_bridge.py` sigue vivo — para usuarios TUC TUC con Merlin como contacto
-- Chulos ✓✓: color cambiado de azul (`#93c5fd`) a blanco (`#ffffff`) — visibles sobre globos azules
-
-### Alegra — allegra_config.dbf ahora por empresa
-- **Campo nuevo**: `empresa C(5)` — un registro por empresa (02 y LP)
-- `num_inicio`, `ultima_sin`, `total_proc`, `ultimo_log` → por empresa
-- `max_fact`, `intervalo`, `desde_ult` → globales (mismo valor en ambos registros)
-- `allegra_sync.py` — `_migrar_config()` corre al inicio, migra automáticamente si estructura vieja
-- `allegra_sync.py` — `leer_config()` retorna `por_empresa: {02: {...}, LP: {...}}`
-- `allegra_sync.py` — `main()` usa `num_inicio` de cada empresa al filtrar facturas
-- `instalar_allegra_bd.py` — crea 2 registros (02 y LP) al crear desde cero
-- `docs/SPEC_FORM_CONFIGURAR_ALLEGRA.md` — actualizada con diseño por empresa + boceto + Init con verificaciones
-
-### Docs y manuales
-- Todos los manuales y specs van en `docs/` del proyecto TUC TUC (regla fija)
-- `SPEC_FORM_CONFIGURAR_ALLEGRA.md` movida de `C:\S.A.R\PROYECTO\` a `docs/`
+### Pasos para prueba en backup
+1. En `ruta.dbf` → cambiar ruta al DBC de `basedatosempresas_TEST` (o via formulario si tiene opción)
+2. En formulario: definir BD esperada → guardar
+3. Verificar que allegra_config.dbf tiene los 5 campos nuevos (tip_doc_def, met_*)  — `_migrar_allegra_config` los crea
+4. Configurar tipo doc y met_pago en tab Configuracion
+5. Click "Sincronizar ahora" → revisar log completo
+6. Verificar PROD_FACT1, REG_CTAS, SAL_DOC en el backup
 
 ---
 
-## Pendientes Alegra (después del SCX)
-1. **Primera prueba real** con 1 factura sobre `basedatosempresas_TEST`
-2. **Verificar REG_CTAS** después de prueba (débitos = créditos)
-3. **Completar `tip_admin`** para invoice/creditNote en `alegra_tiposdoc.dbf` cuando aplique
+### Estado de archivos
 
-## Pendientes chat /chat
-- **Whisper tiny**: transcripción imprecisa en audios, considerar `small` para apuntes de Merlin
+| Archivo | Estado |
+|---|---|
+| `s.a.r.prg` | ✅ Limpio — sin batch mode |
+| `interfaz_allegra.prg` | ✅ Limpio — no se usa en automático |
+| `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
+| `fondo_menu_limpio.scx` | ✅ Sin cambios |
+| `alegra_daemon.py` | ✅ v2.6 |
+| `configurar_allegra.py` | ✅ v2.6 — UI contabilización por empresa |
+| `interfaz_allegra.py` | ✅ 4 fases código listo (f_standar stub) |
+| `allegra_sync.py` | ✅ Incluye nomb_cli desde Alegra API |
+
+**Administrator abre sin inconvenientes para usuarios normales.** ✅
 
 ---
 
-## Contexto técnico fijo
-- bypassPermissions activo en `~/.claude/settings.json` ✓
-- Rafael trabaja en Cali, Colombia — timezone America/Bogota
-- App en producción: `tuc-tuc.onrender.com`
-- BD Pilar: `C:\D\Pilar Peralta\basedatosempresas\`
-- BD Pilar TEST: `C:\D\Pilar Peralta\basedatosempresas_TEST\`
-- Flujo chat Rafael↔Merlin: `captura_watcher.ps1` → `__MERLIN__` → esta terminal
-- Archivos Alegra en: `C:\S.A.R\` (Python) y `C:\S.A.R\PROYECTO\` (PRGs y SCX)
+### Contexto técnico fijo
+
+- BD Pilar (PROD): `C:\D\Pilar Peralta\basedatosempresas\`
+- Scripts Python Alegra: `C:\S.A.R\`
+- PRGs VFP: `C:\S.A.R\PROYECTO\`
+- Referencia técnica completa: `docs/vfp_administrator_pilar.md`
+
+---
+
+## Planes futuros — domótica
+
+### Control de TV vía red (Android TV Remote API)
+- **TV**: Challenger 55" Smart TV (Android TV) — mantiene WiFi activo en standby
+- **Método**: `androidtvremote2` (Python puro, puerto 6466, protocolo Google) — sin ADB, sin config extra en el TV
+- **Funciones**: encender / apagar / (ampliable: volumen, fuente, etc.)
+- **Pendiente**: IP fija por DHCP reservado + integrar en módulo domótica de TUC TUC igual que los demás dispositivos Tuya
+
+---
+
+## Flujo chat Rafael↔Merlin
+`captura_watcher.ps1` → `__MERLIN__` → esta terminal

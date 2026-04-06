@@ -12,6 +12,13 @@ Actualizar `docs/leer al inicio cada sesion - estado sesion activa.md` con:
 - Módulo en trabajo
 - Próximos pasos
 
+Si se trabajó en VFP/SAR durante la sesión, actualizar también `docs/vfp_administrator_pilar.md`.
+
+## Fuente de verdad — docs/
+Toda la documentación, estado y manuales viven en `docs/` de este proyecto.
+Las memorias internas de Claude (auto-memory) son punteros a docs/ — NUNCA duplicar estado en ellas.
+Si algo cambia, actualizar el archivo en docs/, no la memoria interna.
+
 ## Git push — pre-autorizado siempre
 `git push` está pre-autorizado en este proyecto. No preguntar antes de ejecutarlo.
 Esto incluye cualquier combinación: `git push`, `cd ... && git push`, `git push origin main`.

@@ -1,7 +1,7 @@
 {
-  "commit": "d238aba",
+  "commit": "e5b47c4",
   "estado": "live",
-  "iniciado": "2026-03-21T17:25:37.552645",
-  "mensaje": "docs(vfp-pilar): menu integration completa \u2014 formularios.dbf + usuarios_perfiles_formularios",
-  "live_at": "2026-03-21T17:29:35.686711"
+  "iniciado": "2026-04-01T11:58:47.229394",
+  "mensaje": "fix(remote): syntax error JS \u2014 newline literal en string JS romp\u00eda parser, conectar undefined",
+  "live_at": "2026-04-01T12:03:19.569562"
 }

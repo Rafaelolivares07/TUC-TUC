@@ -1911,14 +1911,9 @@ async function cambiarTipoRest() {
         });
         const data = await r.json();
         if (data.ok) {
-            // Mostrar/ocultar pestañas sin recargar
-            const tabOpc = document.getElementById('tab-opcmenudia');
-            const tabMenudia = document.getElementById('tab-menudia');
-            if (tabOpc) tabOpc.classList.toggle('hidden', tipo !== 'ambos');
-            if (tabMenudia) tabMenudia.classList.toggle('hidden', tipo === 'carta');
-            toast('Tipo guardado');
+            window.location.reload();
         } else {
-            toast(data.error || 'Error', false);
+            toast(data.error || 'Error al guardar tipo', false);
         }
     } catch(e) { toast('Error de conexión', false); }
 }

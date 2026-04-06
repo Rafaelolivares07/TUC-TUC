@@ -27754,7 +27754,11 @@ def api_restaurante_tipo(slug):
                 return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         conn.execute("UPDATE restaurantes SET tipo_restaurante = %s WHERE id = %s", (tipo, rest['id']))
         conn.commit()
+        verificado = conn.execute("SELECT tipo_restaurante FROM restaurantes WHERE id = %s", (rest['id'],)).fetchone()
+        tipo_guardado = verificado['tipo_restaurante'] if verificado else None
         conn.close()
+        if tipo_guardado != tipo:
+            return jsonify({'ok': False, 'error': f'No se guardó: BD tiene {tipo_guardado}'}), 500
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

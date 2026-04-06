@@ -27402,7 +27402,7 @@ def api_restaurante_crear():
         return jsonify({'ok': False, 'error': 'Nombre del restaurante requerido'}), 400
     if not admin_nombre or not admin_telefono:
         return jsonify({'ok': False, 'error': 'Nombre y celular del administrador son requeridos'}), 400
-    if tipo_restaurante not in ('menu_dia', 'carta'):
+    if tipo_restaurante not in ('menu_dia', 'carta', 'ambos'):
         tipo_restaurante = 'menu_dia'
 
     # Limpiar teléfono
@@ -27725,6 +27725,29 @@ def api_restaurante_mostrar_nombre(slug):
             "UPDATE restaurantes SET mostrar_nombre = %s WHERE id = %s",
             (mostrar, rest['id'])
         )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/tipo-restaurante', methods=['POST'])
+def api_restaurante_tipo(slug):
+    """Cambiar tipo de restaurante: menu_dia, carta, ambos"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json()
+    tipo = data.get('tipo', 'menu_dia')
+    if tipo not in ('menu_dia', 'carta', 'ambos'):
+        return jsonify({'ok': False, 'error': 'Tipo inválido'}), 400
+    try:
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        conn.execute("UPDATE restaurantes SET tipo_restaurante = %s WHERE id = %s", (tipo, rest['id']))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -28407,7 +28430,10 @@ def api_restaurante_pedido_crear(slug):
 
         precio_total = 0
 
-        if rest['tipo_restaurante'] == 'carta':
+        es_carta = rest['tipo_restaurante'] == 'carta' or (rest['tipo_restaurante'] == 'ambos' and data.get('platos'))
+        es_menu_dia = rest['tipo_restaurante'] == 'menu_dia' or (rest['tipo_restaurante'] == 'ambos' and data.get('tipo'))
+
+        if es_carta:
             # CARTA: recibe lista de platos [{plato_id, cantidad}]
             platos = data.get('platos', [])
             if not platos:
@@ -28429,7 +28455,7 @@ def api_restaurante_pedido_crear(slug):
                     VALUES (%s, %s, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (rest['id'], mesa_num, mesa_nombre, opcion['id'], cant, precio_item, notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
 
-        else:
+        elif es_menu_dia:
             # MENU_DIA: flujo original
             tipo = data.get('tipo')
             sopa_id = data.get('sopa_id')
@@ -28468,6 +28494,10 @@ def api_restaurante_pedido_crear(slug):
                 INSERT INTO pedidos_restaurante (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (rest['id'], mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total, notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
+
+        else:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Indica platos (carta) o tipo (menú del día)'}), 400
 
         conn.commit()
         conn.close()

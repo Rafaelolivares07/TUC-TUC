@@ -156,6 +156,20 @@
             <p class="txt-secondary" id="saludo-menu">Hola <span id="nombre-display" class="font-bold text-amber-700"></span>, ¿qué vas a pedir?</p>
         </div>
 
+        <!-- Tabs modo (solo para 'ambos') -->
+        {% if restaurante.tipo_restaurante == 'ambos' %}
+        <div id="tabs-modo" class="flex gap-2 mb-5">
+            <button id="tab-carta" onclick="activarModo('carta')"
+                class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 border-amber-500 bg-amber-500 text-white transition">
+                Carta
+            </button>
+            <button id="tab-menudia" onclick="activarModo('menu_dia')"
+                class="flex-1 py-2.5 rounded-xl font-bold text-sm border-2 border-gray-200 text-gray-500 hover:border-amber-300 transition">
+                Menú del día
+            </button>
+        </div>
+        {% endif %}
+
         <!-- Sin menú -->
         <div id="sin-menu" class="hidden text-center py-12">
             <p class="txt-muted text-lg">No hay menú disponible hoy</p>
@@ -274,11 +288,36 @@ function guardarNombre() {
     mostrarMenu();
 }
 
+let modoActual = TIPO_REST === 'menu_dia' ? 'menu_dia' : 'carta';
+
+function activarModo(modo) {
+    modoActual = modo;
+    const btnCarta = document.getElementById('tab-carta');
+    const btnMenu = document.getElementById('tab-menudia');
+    if (btnCarta) {
+        btnCarta.className = `flex-1 py-2.5 rounded-xl font-bold text-sm border-2 transition ${modo === 'carta' ? 'border-amber-500 bg-amber-500 text-white' : 'border-gray-200 text-gray-500 hover:border-amber-300'}`;
+    }
+    if (btnMenu) {
+        btnMenu.className = `flex-1 py-2.5 rounded-xl font-bold text-sm border-2 transition ${modo === 'menu_dia' ? 'border-amber-500 bg-amber-500 text-white' : 'border-gray-200 text-gray-500 hover:border-amber-300'}`;
+    }
+    // Reset visuals
+    document.getElementById('sin-menu').classList.add('hidden');
+    document.getElementById('sec-tipos').innerHTML = '';
+    document.getElementById('sec-opciones').classList.add('hidden');
+    document.getElementById('sec-notas').classList.add('hidden');
+    document.getElementById('sec-pedir').classList.add('hidden');
+    if (modo === 'carta') {
+        cargarCartaCliente();
+    } else {
+        cargarMenuHoy();
+    }
+}
+
 function mostrarMenu() {
     document.getElementById('paso-nombre').classList.add('hidden');
     document.getElementById('seccion-menu').classList.remove('hidden');
     document.getElementById('nombre-display').textContent = nombreCliente;
-    if (TIPO_REST === 'carta') {
+    if (TIPO_REST === 'carta' || TIPO_REST === 'ambos') {
         cargarCartaCliente();
     } else {
         cargarMenuHoy();
@@ -609,7 +648,7 @@ enviarPedido = async function() {
         abrirModalRegistro();
         return;
     }
-    if (TIPO_REST === 'carta') {
+    if (TIPO_REST === 'carta' || (TIPO_REST === 'ambos' && modoActual === 'carta')) {
         const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
         if (platos.length === 0) return toast('Agrega al menos un plato', false);
         try {

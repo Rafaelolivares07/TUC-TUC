@@ -63,10 +63,31 @@
         </div>
     </div>
 
+    <!-- ====== PASO MODO (solo para 'ambos') ====== -->
+    <div id="paso-modo" class="hidden">
+        <div class="flex items-center justify-between mb-4">
+            <button onclick="volverAPaso('mesa')" class="text-gray-400 hover:text-white text-sm">&larr; Cambiar mesa</button>
+            <span id="label-mesa-modo" class="text-amber-400 font-bold text-lg">Mesa X</span>
+        </div>
+        <h2 class="text-lg font-bold mb-6 text-gray-300">¿Qué tipo de pedido?</h2>
+        <div class="space-y-4">
+            <button onclick="seleccionarModoOrden('carta')"
+                class="w-full bg-amber-700 hover:bg-amber-600 border-2 border-amber-500 rounded-xl p-6 text-left transition">
+                <div class="text-2xl font-extrabold">Carta</div>
+                <p class="text-amber-300 text-sm mt-1">Platos individuales con precio</p>
+            </button>
+            <button onclick="seleccionarModoOrden('menu_dia')"
+                class="w-full bg-green-800 hover:bg-green-700 border-2 border-green-600 rounded-xl p-6 text-left transition">
+                <div class="text-2xl font-extrabold">Menú del día</div>
+                <p class="text-green-400 text-sm mt-1">Completo, bandeja o sopa</p>
+            </button>
+        </div>
+    </div>
+
     <!-- ====== PASO 2: TIPO DE PEDIDO ====== -->
     <div id="paso-tipo" class="hidden">
         <div class="flex items-center justify-between mb-4">
-            <button onclick="volverAPaso('mesa')" class="text-gray-400 hover:text-white text-sm">&larr; Cambiar mesa</button>
+            <button onclick="volverAPaso(TIPO_REST === 'ambos' ? 'modo' : 'mesa')" class="text-gray-400 hover:text-white text-sm">&larr; Volver</button>
             <span id="label-mesa" class="text-amber-400 font-bold text-lg">Mesa X</span>
         </div>
         <h2 class="text-lg font-bold mb-4 text-gray-300">Tipo de pedido</h2>
@@ -120,7 +141,7 @@
     <!-- ====== PASO CARTA (solo para tipo carta) ====== -->
     <div id="paso-carta" class="hidden">
         <div class="flex items-center justify-between mb-4">
-            <button onclick="volverAPaso('mesa')" class="text-gray-400 hover:text-white text-sm">&larr; Cambiar mesa</button>
+            <button onclick="volverAPaso(TIPO_REST === 'ambos' ? 'modo' : 'mesa')" class="text-gray-400 hover:text-white text-sm">&larr; Volver</button>
             <span id="label-mesa-carta" class="text-amber-400 font-bold text-lg">Mesa X</span>
         </div>
         <div id="carta-categorias" class="space-y-4 mb-4"></div>
@@ -271,8 +292,56 @@ async function cargarMenuHoy() {
     opcionesHoy = data.opciones_activas || [];
 }
 
+function seleccionarModoOrden(modo) {
+    if (modo === 'carta') {
+        document.getElementById('label-mesa-carta').textContent = `Mesa ${mesaSeleccionada}`;
+        cargarCarta();
+        mostrarPaso('carta');
+    } else {
+        if (!menuHoy) {
+            toast('No hay menú configurado para hoy', false);
+            return;
+        }
+        document.getElementById('label-mesa').textContent = `Mesa ${mesaSeleccionada}`;
+        mostrarPaso('tipo');
+        const cont = document.getElementById('botones-tipo');
+        cont.innerHTML = `
+            <button onclick="seleccionarTipo('completo')"
+                class="w-full bg-green-800 hover:bg-green-700 border-2 border-green-600 rounded-xl p-5 text-left transition">
+                <div class="flex justify-between items-center">
+                    <span class="text-xl font-bold">Completo</span>
+                    <span class="text-xl font-bold text-green-300">$${Number(menuHoy.precio_completo).toLocaleString()}</span>
+                </div>
+                <p class="text-green-400 text-sm mt-1">Sopa + Bandeja</p>
+            </button>
+            <button onclick="seleccionarTipo('bandeja')"
+                class="w-full bg-blue-800 hover:bg-blue-700 border-2 border-blue-600 rounded-xl p-5 text-left transition">
+                <div class="flex justify-between items-center">
+                    <span class="text-xl font-bold">Bandeja</span>
+                    <span class="text-xl font-bold text-blue-300">$${Number(menuHoy.precio_bandeja).toLocaleString()}</span>
+                </div>
+                <p class="text-blue-400 text-sm mt-1">Proteína + Principio</p>
+            </button>
+            <button onclick="seleccionarTipo('sopa')"
+                class="w-full bg-yellow-800 hover:bg-yellow-700 border-2 border-yellow-600 rounded-xl p-5 text-left transition">
+                <div class="flex justify-between items-center">
+                    <span class="text-xl font-bold">Sopa</span>
+                    <span class="text-xl font-bold text-yellow-300">$${Number(menuHoy.precio_sopa).toLocaleString()}</span>
+                </div>
+                <p class="text-yellow-400 text-sm mt-1">Solo sopa o caldo</p>
+            </button>
+        `;
+    }
+}
+
 function seleccionarMesa(num) {
     mesaSeleccionada = num;
+
+    if (TIPO_REST === 'ambos') {
+        document.getElementById('label-mesa-modo').textContent = `Mesa ${num}`;
+        mostrarPaso('modo');
+        return;
+    }
 
     if (TIPO_REST === 'carta') {
         document.getElementById('label-mesa-carta').textContent = `Mesa ${num}`;
@@ -439,7 +508,7 @@ async function enviarPedido() {
 
 // ===== NAVEGACIÓN =====
 function mostrarPaso(paso) {
-    ['mesa', 'tipo', 'opciones', 'carta'].forEach(p => {
+    ['mesa', 'modo', 'tipo', 'opciones', 'carta'].forEach(p => {
         const el = document.getElementById(`paso-${p}`);
         if (el) el.classList.toggle('hidden', p !== paso);
     });
@@ -669,7 +738,7 @@ async function cobrarMesa(mesaId, total) {
 // ===== INIT =====
 function iniciarApp() {
     cargarMesas();
-    if (TIPO_REST !== 'carta') cargarMenuHoy();
+    if (TIPO_REST !== 'carta') cargarMenuHoy(); // también para 'ambos'
     cargarPedidos();
     cargarCuentas();
     setInterval(() => { cargarPedidos(); cargarCuentas(); }, 10000);

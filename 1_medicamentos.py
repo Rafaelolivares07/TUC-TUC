@@ -27735,7 +27735,8 @@ def api_restaurante_mostrar_nombre(slug):
 @app.route('/api/restaurante/<slug>/tipo-restaurante', methods=['POST'])
 def api_restaurante_tipo(slug):
     """Cambiar tipo de restaurante: menu_dia, carta, ambos"""
-    if 'usuario_id' not in session:
+    token_sesion = session.get('restaurante_token')
+    if 'usuario_id' not in session and not token_sesion:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     data = request.get_json()
     tipo = data.get('tipo', 'menu_dia')
@@ -27743,10 +27744,14 @@ def api_restaurante_tipo(slug):
         return jsonify({'ok': False, 'error': 'Tipo inválido'}), 400
     try:
         conn = get_db_connection()
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, token_acceso FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        if 'usuario_id' not in session:
+            if rest['token_acceso'] != token_sesion:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         conn.execute("UPDATE restaurantes SET tipo_restaurante = %s WHERE id = %s", (tipo, rest['id']))
         conn.commit()
         conn.close()

@@ -38132,11 +38132,12 @@ def _dom_controlar_tuya(device_id, encender):
             apiKey=os.getenv('TUYA_CLIENT_ID'),
             apiSecret=os.getenv('TUYA_CLIENT_SECRET')
         )
-        c.cloudrequest(
+        resp = c.cloudrequest(
             f'/v1.0/iot-03/devices/{device_id}/commands',
             action='POST',
             post={'commands': [{'code': 'switch_1', 'value': bool(encender)}]}
         )
+        print(f'[domotica] toggle device={device_id} encender={encender} resp={resp}')
         return True
     except Exception as e:
         print(f'[domotica] Error Tuya: {e}')

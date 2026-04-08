@@ -1,9 +1,9 @@
 # Proyecto VFP — Administrator (SAR) — Contexto y Pendientes
-_Actualizado: 2026-04-06 (sesión 2) — Robustez PC virgen, scroll tab Configuracion, Combobox doc con nombre, Combobox met_pago valores Alegra, bugs ESTADO_INV y self.carpeta corregidos._
+_Actualizado: 2026-04-08 (sesión 4) — configurar_allegra.py v2.7: splash screen, dynamic inputs (borde verde/gris por tipo_doc), kw_bolsa configurable, num_inicio sugerido desde PROD_FACT1, combobox tipo_doc expandido, fix crítico persistencia (recrear tabla en migración)._
 
 ---
 
-## ⚡ ESTADO ACTUAL — 2026-04-06
+## ⚡ ESTADO ACTUAL — 2026-04-08
 
 ### Arquitectura vigente
 Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es el motor de procesamiento. Daemon v2.6 orquesta todo.
@@ -17,7 +17,7 @@ Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es
 | `alegra_timer.prg` | ⏸️ DESACTIVADO | `RETURN` al inicio |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios | Timer presente pero retorna inmediatamente |
 | `alegra_daemon.py` | ✅ v2.6 | Orquesta ciclo, verifica BD, logs comprehensivos |
-| `configurar_allegra.py` | ✅ v2.6 | 4 tabs, Pausar mata proceso+hijos+refresh, Compactar DBF, Crear TERCERO, Revertir fases, UI contabilización por empresa |
+| `configurar_allegra.py` | ✅ **v2.7** | 4 tabs, splash screen, dynamic inputs (borde verde/gris), kw_bolsa, num_inicio sugerido, fix persistencia DBF |
 | `interfaz_allegra.py` | ✅ ACTIVO | 4 fases código listo: PROD_FACT1, costos, contab — standar pendiente implementación |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
@@ -69,7 +69,7 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
   - TXT_BOLSA_IMPUESTO → bolsas
   - TXT_DESCUENTO_DEFINITIVO → 0
   - TXT_ABONA_EFECTIVO → total si met_pago == met_efect (exacto)
-  - TXT_TARJETA_RECIBIDO → total si met_pago == met_tarjet (exacto)
+  - TXT_TARJETA_RECIBIDO → total si met_pago coincide con met_tdebito OR met_tcredit OR met_tarjet (legacy)
   - TXT_CONSIGNA_TRASFIERE → total si met_pago == met_transf (exacto)
   - TXT_COBRAR_CLIENTE → total si met_pago == met_cxc (exacto)
 - `_met_coincide(met_pago, config_met)`: comparación exacta case-insensitive — NO comma-split
@@ -84,8 +84,13 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
    - BD esperada, max_fact, intervalo, num_inicio por empresa
    - **Sección Contabilización** per empresa (LabelFrame "02 TV & Video" + "LP J&P"):
      - **Combobox tipo de documento** (readonly, width=40): muestra `"013 — FACTURA VENTA POS"`. Filtra `TIPO_DOC WHERE ESTADO_INV=3` (campo es `ESTADO_INV`, no `ESTADO_INVE`) AND `CONTABILIDAD_DOCUMENTOS_AUTOMATICOS_EMPRESA` para la empresa. Mismo criterio que `facturar_cancelar.scx verifica_tipos_venta`. Guarda solo el código en allegra_config.
-     - **Tabla emparejamiento met_pago**: 4 filas (TXT_ABONA_EFECTIVO, TXT_TARJETA_RECIBIDO, TXT_CONSIGNA_TRASFIERE, TXT_COBRAR_CLIENTE) ↔ Combobox readonly con valores fijos de Alegra: `cash`, `credit-card`, `debit-card`, `transfer`, `credit`, `check`, `online`, `bank-remittance`
-   - Campos en `allegra_config.dbf`: `tip_doc_def C(10)`, `met_efect C(30)`, `met_tarjet C(30)`, `met_transf C(30)`, `met_cxc C(30)` — `_migrar_allegra_config()` los agrega si no existen
+     - **Tabla emparejamiento met_pago**: 5 filas:
+       - Efectivo → `met_efect` (ej. `cash`)
+       - Tarjeta débito → `met_tdebito` (ej. `debit-card`) — cuotas=0 → F_PAGO_TDEBITO
+       - Tarjeta crédito → `met_tcredit` (ej. `credit-card`) — cuotas>0 → F_PAGO_TCREDITO
+       - Transferencia → `met_transf` (ej. `transfer`)
+       - Cobrar cliente → `met_cxc` (ej. `credit`)
+   - Campos en `allegra_config.dbf`: `tip_doc_def C(10)`, `met_efect C(30)`, `met_tarjet C(30)` (legacy), `met_tdebito C(30)`, `met_tcredit C(30)`, `met_transf C(30)`, `met_cxc C(30)` — `_migrar_allegra_config()` los agrega si no existen; migra `met_tarjet` → `met_tcredit` automáticamente
    - `guardar_config(cfg_path, max_fact, intervalo, num02, numLP, per_empresa={})` — UPDATE si fila existe, APPEND si no existe — nunca falla en PC virgen
    - `leer_config()` — devuelve defaults para empresas faltantes, nunca lanza excepción — formulario siempre abre
    - `_asegurar_filas_config()` — inserta filas para 02/LP si allegra_config.dbf está vacío
@@ -103,7 +108,7 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
 ### Tablas DBF del módulo (en carpeta BD activa)
 | Tabla | Descripción |
 |---|---|
-| `allegra_config.dbf` | Config por empresa: max_fact, intervalo, num_inicio, ultimo_log (memo), tip_doc_def, met_efect, met_tarjet, met_transf, met_cxc |
+| `allegra_config.dbf` | Config por empresa: max_fact, intervalo, num_inicio, ultimo_log (memo), tip_doc_def, met_efect, met_tarjet (legacy), met_tdebito, met_tcredit, met_transf, met_cxc |
 | `allegra_pendientes.dbf` | Items pendientes — campos fase: f_prod1, f_standar, f_costos, f_contab (L); motivo C(100); nomb_cli C(60) |
 | `alegra_tiposdoc.dbf` | Mapeo tipo_doc Alegra → TIP_ADMIN |
 | `alegra_nits_pend.dbf` | NITs no encontrados — nit, empresa, nombre C(60), num_docs, accion (pendiente/ignorar/creado) |
@@ -163,11 +168,11 @@ Usuario selecciona fila en grilla "Procesadas"
 ```
 
 ### Pendientes — próximas sesiones
-- **PRIORIDAD: Prueba en backup** (`basedatosempresas_TEST` o `_BAK_20260321`) — apuntar ruta.dbf al backup, correr ciclo completo
+- **PRIORIDAD 0: Verificar persistencia** — abrir form v2.7, configurar tipo_doc + met_pago + guardar + cerrar + reabrir → confirmar datos persisten (fix aplicado en v2.7)
+- **PRIORIDAD 1: Correr ciclo completo** — Click "Sincronizar ahora", revisar log, verificar PROD_FACT1/REG_CTAS/SAL_DOC
 - Implementar `_standar()` real (REG_PROD + REG_PROD_SALDOS) — actualmente stub
 - UI para mapear vendedores Alegra → Administrator (tab Configuracion)
-- Wiring: `_refrescar_facturas()` y `_refrescar_terceros()` en auto-refresh cada 30s
-- Verificar/corregir `_sugerir_num_inicio`: debe tomar MAX de PROD_FACT1, no de allegra_pendientes
+- `_refrescar_facturas()` y `_refrescar_terceros()` en auto-refresh cada 30s
 - `reiniciar_proceso` debe limpiar también reg_costos_temporal + marcar f_costos/f_contab
 
 ---

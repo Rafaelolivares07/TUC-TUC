@@ -59,6 +59,18 @@ Definidas tras feedback directo (algunas rechazadas 2+ veces):
 
 ---
 
+## Computer Use — MCP windows-mcp activo (desde 2026-04-09)
+
+Claude Code tiene control GUI del PC de Rafael:
+- **Screenshot**: capturar pantalla en cualquier momento
+- **Mouse + teclado**: hacer clic, escribir, scroll, abrir apps
+- **Implicación directa**: nunca pedir a Rafael que "abra la consola y diga qué ve", "copie el error", "describa el estado de la UI" — hacerlo directamente
+- Para depurar JS: abrir DevTools con F12 + screenshot
+- Para verificar un query: abrir pgAdmin/DBeaver y ver el resultado directamente
+- Si el MCP no responde → pedir a Rafael que verifique con `/mcp`
+
+---
+
 ## Reglas técnicas — Backend
 
 - **Tuya region**: usar `openapi.tuyaeu.com` (Europa), no `openapi.tuyaus.com`

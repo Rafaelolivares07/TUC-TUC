@@ -1,5 +1,5 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-07_
+_Actualizado: 2026-04-11_
 
 ## Módulos en trabajo esta sesión
 1. **TUC TUC — Restaurantes**: tipo `'ambos'` (carta + menú del día)
@@ -71,13 +71,17 @@ _Actualizado: 2026-04-07_
 - `leer_config()` nunca falla; `guardar_config()` APPEND si empresa no existe; PC virgen safe
 - `estado_proceso.json` captura estado completo del formulario (útil para diagnóstico por Merlin)
 
+### Cambios sesión 2026-04-11 — SAR
+- **Toggle auto_nit**: reemplazado Checkbutton por toggle Canvas (píldora verde/gris) en tab Configuracion
+- **Multi-pagos**: `allegra_sync` guarda todos los payments como JSON en campo `pagos C(200)`; `interfaz_allegra._contabilizar` genera línea contable por cada método de pago (cash+tarjeta+CxC correctamente)
+- **Migración automática**: `_migrar_pendientes()` agrega campo `pagos` a DBF existente preservando datos
+- **Reinicio + num_inicio**: tras reiniciar proceso, diálogo obligatorio sugiere MIN(borrado)-1 por empresa; Reanudar y Un ciclo bloqueados hasta confirmar
+
 ### Pendientes SAR — próxima sesión
-1. **PRIORIDAD 0: Verificar que datos persisten** — abrir form, configurar, guardar, cerrar, reabrir y confirmar que tip_doc_def + met_* se mantienen (fix v2.7 aplicado)
-2. **PRIORIDAD 1: Correr ciclo completo** — Click "Sincronizar ahora", revisar log
-3. Implementar `_standar()` real (REG_PROD + REG_PROD_SALDOS) — actualmente stub
-4. UI mapeo vendedores (tab Configuracion)
-5. Auto-refresh grillas Facturas y Terceros cada 30s
-6. `reiniciar_proceso` debe limpiar reg_costos_temporal + f_costos/f_contab
+1. Correr ciclo completo post-reinicio y verificar facturas con múltiples métodos de pago cuadradas
+2. Implementar `_standar()` real (REG_PROD + REG_PROD_SALDOS) — actualmente stub
+3. UI mapeo vendedores (tab Configuracion)
+4. Auto-refresh grillas Facturas y Terceros cada 30s
 
 ### Estado de archivos SAR
 
@@ -123,5 +127,36 @@ _Actualizado: 2026-04-07_
 
 ---
 
-## Flujo chat Rafael↔Merlin
-`captura_watcher.ps1` → `__MERLIN__` → esta terminal
+## Flujo chat Rafael↔Merlin — Merlin Daemon v1.0
+
+**2026-04-11**: `captura_watcher.ps1` + `chat_merlin_bridge.py` fusionados en un solo daemon.
+
+### Proceso único: `merlin_daemon.py`
+- Ruta: `C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos\merlin_daemon.py`
+- Startup: `TucTuc_MerlinDaemon.vbs` (vbHide=0, sin ventana)
+- Lock port: 47835
+- Log: `C:\Users\RAFAEL OLIVARES\merlin_daemon.log`
+
+### Tres responsabilidades en un loop:
+| Loop | Cada | Qué hace |
+|---|---|---|
+| A — Bridge usuarios | 2s | Atiende conversaciones de usuarios con Merlin (tabla `conversaciones`+`mensajes`) |
+| B — Captura watcher | 10s | Detecta mensajes de Rafael en `chat_mensajes canal='captura'`, activa Claude Code via SendKeys (pywin32) |
+| C — Heartbeat | 60s | Reporta idle/cursor/audio a `/api/domotica/heartbeat` |
+
+### Flujo Rafael → Merlin:
+1. Rafael escribe en `/chat` → `chat_mensajes` con `canal='captura'`
+2. Daemon detecta (cada 10s) → activa terminal Claude Code con `__MERLIN__` via pywin32 SendKeys
+3. Claude Code lee BD, responde, inserta en `chat_mensajes (rol='assistant')`
+4. Frontend polling muestra la respuesta
+
+### Archivos eliminados (2026-04-11):
+- `captura_watcher.ps1` — reemplazado por merlin_daemon.py
+- `TucTuc_CapturaWatcher.vbs` y `TucTuc_CapturaWatcher.bat` — del Startup
+- `tuctuc_merlin_bridge.bat` — del Startup
+(el archivo `chat_merlin_bridge.py` se conserva como referencia pero ya no corre)
+
+### Startup Windows activo:
+- `TucTuc_MerlinDaemon.vbs` — lanza `merlin_daemon.py` oculto
+- `monitor_tuctuc_b4e14ba7.vbs` — monitor heartbeat independiente
+- `AlegraDaemon.exe` — daemon Alegra VFP

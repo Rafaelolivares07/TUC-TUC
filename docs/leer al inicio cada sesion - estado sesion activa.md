@@ -49,39 +49,35 @@ _Actualizado: 2026-04-11_
 ## MÓDULO: VFP / SAR — Alegra
 
 ### Versiones
-- `alegra_daemon.py` → **v2.6**
-- `configurar_allegra.py` → **v2.7**
-- `interfaz_allegra.py` → **4 fases código listo — f_standar stub**
+- `alegra_daemon.py` → **v2.6** (timeout dinámico)
+- `configurar_allegra.py` → **v2.7** (toggle auto_nit, vendedores, validación ciclo)
+- `interfaz_allegra.py` → **4 fases ACTIVAS Y COMPLETAS**
+- `allegra_sync.py` → campo `pagos C(200)` multi-payment
 
-### Cambios sesión 2026-04-08 — configurar_allegra.py v2.7
-- **Splash screen** al abrir: ventana visible inmediata con mensajes de progreso, init diferido
-- **Dynamic input states**: bordes verde/gris según si el tipo_doc seleccionado tiene configurados los inputs contables en AYUDA + CONTABILIDAD_DOCUMENTOS_CONTABLES_CONFIGURAR
-- **kw_bolsa**: campo global C(40) en allegra_config.dbf — el usuario define la keyword que identifica el ítem bolsa (default "BOLSA") — configurable desde tab Configuracion
-- **num_inicio per-empresa**: auto-populated desde PROD_FACT1 — `_sugerir_num_inicio()` filtra por `tip_fac` = tipo_doc seleccionado, retorna MAX `cod_fac` por empresa; label "Sugerido: X" en verde
-- **Combobox tipo_doc expandido**: frame_top con pack layout (`fill="x", expand=True`) — ancho máximo del texto más largo
-- **Barra inferior fija** (fuera del scroll): botón "Guardar configuracion" + indicador "Hay cambios sin guardar"
-- **JSON monitoreo completo**: incluye `tip_doc_def`, `met_*`, `kw_bolsa`, estado ventana (`ventana.abierta`)
-- **Bug crítico corregido**: `_migrar_allegra_config` — descartado `add_fields` + backup/restore frágil; ahora RECREA la tabla completa desde cero cuando hay campos nuevos, preservando todos los datos con `os.replace` atómico
+### Lo que está funcionando (2026-04-11)
+- **4 fases completas**: f_prod1, f_standar, f_costos, f_contab — todas activas y probadas en ciclos reales
+- **f_standar**: `_standar()` lee TRANS_MAT (kits), inserta REG_PROD, actualiza REG_PROD_SALDOS — NO es stub
+- **Multi-pagos**: campo `pagos` JSON con todos los payments de Alegra — asientos contables cuadrados para facturas con mezcla de métodos (cash+tarjeta+CxC)
+- **NITs auto-creados**: toggle auto_nit (Canvas píldora) — si ON, crea tercero en TERCEROS.dbf automáticamente y marca como 'creado' en alegra_nits_pend
+- **Equivalencia vendedores**: sección en tab Configuracion — seller_id Alegra → vendedor Administrator (MESEROS.dbf internamente, nunca "mesero" en UI); guarda en alegra_vendedores.dbf
+- **Reinicio seguro**: diálogo post-reinicio sugiere MIN(borrado)-1 por empresa como nuevo num_inicio; bloquea Reanudar/Un ciclo hasta confirmar
+- **Timeout dinámico daemon**: `max(300, max_fact × 90)` — nunca corta ciclo válido
+- **Bloqueo configuración inválida**: no guarda si `max_fact × 90s > intervalo × 60s`
+- **Label estimado**: muestra duración estimada local/servidor/timeout en tiempo real
 
-### Lo que está funcionando
-- Daemon v2.6 corre cada N minutos: allegra_sync.py → allegra_pendientes.dbf → interfaz_allegra.py → PROD_FACT1
-- `FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']` — f_standar es stub
-- f_costos + f_contab: código completo (sin probar en BD real aún)
-- Tab Configuracion con scroll vertical; Combobox tipo doc expandido; bordes dinámicos por tipo_doc
-- `leer_config()` nunca falla; `guardar_config()` APPEND si empresa no existe; PC virgen safe
-- `estado_proceso.json` captura estado completo del formulario (útil para diagnóstico por Merlin)
-
-### Cambios sesión 2026-04-11 — SAR
-- **Toggle auto_nit**: reemplazado Checkbutton por toggle Canvas (píldora verde/gris) en tab Configuracion
-- **Multi-pagos**: `allegra_sync` guarda todos los payments como JSON en campo `pagos C(200)`; `interfaz_allegra._contabilizar` genera línea contable por cada método de pago (cash+tarjeta+CxC correctamente)
-- **Migración automática**: `_migrar_pendientes()` agrega campo `pagos` a DBF existente preservando datos
-- **Reinicio + num_inicio**: tras reiniciar proceso, diálogo obligatorio sugiere MIN(borrado)-1 por empresa; Reanudar y Un ciclo bloqueados hasta confirmar
+### Cambios sesión 2026-04-11
+- Toggle Canvas auto_nit (píldora verde/gris) reemplaza Checkbutton
+- `pagos C(200)` JSON en allegra_pendientes + `_migrar_pendientes()` automática
+- `_contabilizar(pagos: list)` — suma por método, no solo primer método
+- Diálogo post-reinicio obligatorio con num_inicio por empresa
+- Timeout dinámico en alegra_daemon.py
+- Validación bloqueo configuración fuera de rango
+- Sección "Equivalencia de vendedores" en tab Configuracion
 
 ### Pendientes SAR — próxima sesión
-1. Correr ciclo completo post-reinicio y verificar facturas con múltiples métodos de pago cuadradas
-2. Implementar `_standar()` real (REG_PROD + REG_PROD_SALDOS) — actualmente stub
-3. UI mapeo vendedores (tab Configuracion)
-4. Auto-refresh grillas Facturas y Terceros cada 30s
+1. **Correr ciclo post-reinicio** — verificar facturas multi-pago cuadradas en REG_CTAS
+2. **Probar equivalencia vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1 después de mapear
+3. **Auto-refresh grillas** Facturas y Terceros cada 30s
 
 ### Estado de archivos SAR
 
@@ -91,10 +87,10 @@ _Actualizado: 2026-04-11_
 | `interfaz_allegra.prg` | ✅ Limpio — no se usa en automático |
 | `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios |
-| `alegra_daemon.py` | ✅ v2.6 |
-| `configurar_allegra.py` | ✅ **v2.7** — splash, dynamic inputs, kw_bolsa, num_inicio sugerido, fix persistencia |
-| `interfaz_allegra.py` | ✅ 4 fases código listo (f_standar stub) |
-| `allegra_sync.py` | ✅ Incluye nomb_cli desde Alegra API |
+| `alegra_daemon.py` | ✅ v2.6 — timeout dinámico |
+| `configurar_allegra.py` | ✅ v2.7 — toggle, vendedores, validación ciclo, diálogo reinicio |
+| `interfaz_allegra.py` | ✅ 4 fases completas — multi-pagos, auto_nit, _standar() real |
+| `allegra_sync.py` | ✅ pagos C(200) JSON, _migrar_pendientes() |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
 

@@ -50,40 +50,38 @@ _Actualizado: 2026-04-11_
 
 ### Versiones
 - `alegra_daemon.py` → **v2.8** (timeout 1800s mínimo basado en intervalo)
-- `configurar_allegra.py` → **v2.8** (diagnóstico Alegra, scroll-block, timeout 3600s, refresh grillas en auto)
+- `configurar_allegra.py` → **v2.8** (branding ADMINISTRATOR INTERFASES, CDX fix VFP COM, diagnóstico error real)
 - `interfaz_allegra.py` → **4 fases ACTIVAS Y COMPLETAS** (fix ln_bolsa, fix ventas doble resta)
 - `allegra_sync.py` → fix punto y coma ESTRUCTURA_DBF (creación tabla post-reinicio)
 
-### Lo que está funcionando (2026-04-11)
+### Lo que está funcionando (2026-04-12)
 - **4 fases completas**: f_prod1, f_standar, f_costos, f_contab — todas activas y probadas en ciclos reales
 - **f_standar**: `_standar()` lee TRANS_MAT (kits), inserta REG_PROD, actualiza REG_PROD_SALDOS — NO es stub
 - **Multi-pagos**: campo `pagos` JSON con todos los payments de Alegra — asientos contables cuadrados para facturas con mezcla de métodos (cash+tarjeta+CxC)
 - **NITs auto-creados**: toggle auto_nit (Canvas píldora) — si ON, crea tercero en TERCEROS.dbf automáticamente y marca como 'creado' en alegra_nits_pend
 - **Equivalencia vendedores**: sección en tab Configuracion — seller_id Alegra → vendedor Administrator (MESEROS.dbf internamente, nunca "mesero" en UI); guarda en alegra_vendedores.dbf
 - **Reinicio seguro**: diálogo post-reinicio sugiere MIN(borrado)-1 por empresa como nuevo num_inicio; bloquea Reanudar/Un ciclo hasta confirmar
+- **CDX fix en reinicio**: `_reiniciar_trabajo()` usa VFP COM (`VisualFoxPro.Application.7`) para DELETE en tablas Administrator — VFP DELETE actualiza CDX; Python dbf.delete() no lo hace
 - **Timeout dinámico daemon**: `max(300, max_fact × 90)` — nunca corta ciclo válido
 - **Bloqueo configuración inválida**: no guarda si `max_fact × 90s > intervalo × 60s`
 - **Label estimado**: muestra duración estimada local/servidor/timeout en tiempo real
-- **Scroll bloqueado en todos los comboboxes**: met_pago, tipo_doc, vendedores — `<MouseWheel>` → `"break"` (causa raíz de la desconfiguración silenciosa)
-- **codepage cp1252** explícito en TODOS los `dbf.Table(allegra_config.dbf)` del daemon y formulario
-- **met_pago comboboxes siempre `state="readonly"`** — nunca `disabled` (disabled = blanco en Windows)
-- **guardar() valida tip_doc en cod_map** — no guarda si display no es un valor válido del combobox
+- **Scroll bloqueado en todos los comboboxes**: met_pago, tipo_doc, vendedores — `<MouseWheel>` → `"break"`
+- **codepage cp1252** explícito en TODOS los `dbf.Table()` del daemon y formulario
+- **met_pago comboboxes siempre `state="readonly"`** — nunca `disabled`
+- **guardar() valida tip_doc en cod_map** — no guarda si display inválido
 
-### Cambios sesión 2026-04-11 (segunda parte)
-- Root cause desconfiguración met_pago/tip_doc encontrado: scroll del mouse ciclaba comboboxes silenciosamente
-- Todos los comboboxes bloqueados contra scroll (`<MouseWheel>`, `<Button-4>`, `<Button-5>` → `"break"`)
-- codepage="cp1252" estandarizado en ambos archivos Python (daemon y formulario)
-- state="readonly" en met_pago (era "disabled" → mostraba blanco en Windows)
-- guardar() elimina fallback peligroso `display.split(" — ")[0]` → bloquea save si tip_doc inválido
-- DAEMON_VERSION="2.7" en ambos archivos (sincronizados para _asegurar_daemon())
-- _post_reiniciar: bug `btn_ciclo` → `btn_un_ciclo` corregido (causaba crash silencioso post-reinicio)
-- Sombreados verdes diferidos con after(200) para Canvas scrollable
-- Vendedores: lee alegra_vendedores.dbf primero (no depende de allegra_pendientes para renderizar)
-- Ventana posicionada en y=10 desde el inicio (no se desborda bajo el screen)
-- Botón "Corriendo..." usa `state="normal" + command=lambda: None` (legible, no clicable)
+### Cambios sesión 2026-04-12
+- **Branding**: UI renombrada a "ADMINISTRATOR INTERFASES" — título, splash, header, mensajes. Variables técnicas y mapeos sin cambio.
+- **Diagnóstico fuente**: `_consultar_alegra()` captura error real por empresa en `_alegra_error` dict — muestra "Error: ..." en lugar de "..." cuando falla API empresa 02
+- **CDX fix — root cause y solución**:
+  - Causa: Python `dbf.delete()` marca 0x2A en DBF pero NO actualiza el CDX estructural
+  - Consecuencia: al filtrar por fecha 10-abr en `contabilidad_resumen_por_documentos.scx`, VFP Rushmore encontraba registros borrados de 10-abr (con FECHAHORA del procesamiento = 11-abr) vía entradas obsoletas del CDX
+  - Solución: nuevo método `_vfp_delete_en_tabla()` — crea PRG temporal + ejecuta vía COM `VisualFoxPro.Application.7` en SHARED mode; VFP DELETE actualiza CDX correctamente
+  - Aplica a pasos 5-9 del reinicio: PROD_FACT1, REG_PROD, REG_CTAS, SAL_DOC, reg_ctas_notas_documentos
+  - Pasos 3-4 (allegra_pendientes, alegra_nits_pend) siguen con Python dbf.delete() — son tablas propias sin CDX estructural
 
 ### Pendientes SAR — próxima sesión
-1. **Pruebas de instalación** en equipo Pilar
+1. **Probar reinicio con VFP COM** — verificar que `_vfp_delete_en_tabla()` no genera error al correr con Administrator activo; confirmar CDX limpio post-reinicio
 2. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
 3. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
 4. **Diálogo post-reinicio** — probar que aparece centrado y operable
@@ -99,7 +97,7 @@ _Actualizado: 2026-04-11_
 | `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios |
 | `alegra_daemon.py` | ✅ v2.8 — timeout basado en intervalo (mín 1800s) |
-| `configurar_allegra.py` | ✅ v2.8 — diagnóstico Alegra, validación timeout, refresh grillas automático, scroll-block todos los comboboxes |
+| `configurar_allegra.py` | ✅ v2.8 — branding ADMINISTRATOR INTERFASES, CDX fix VFP COM en reinicio, diagnóstico error real |
 | `interfaz_allegra.py` | ✅ 4 fases ACTIVAS — fix bolsa (precio×cantidad), fix ventas (no doble resta), multi-pagos JSON |
 | `allegra_sync.py` | ✅ fix ESTRUCTURA_DBF punto y coma (todos los campos) |
 

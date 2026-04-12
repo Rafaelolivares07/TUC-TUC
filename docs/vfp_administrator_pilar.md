@@ -1,12 +1,12 @@
 # Proyecto VFP — Administrator (SAR) — Contexto y Pendientes
-_Actualizado: 2026-04-08 (sesión 4) — configurar_allegra.py v2.7: splash screen, dynamic inputs (borde verde/gris por tipo_doc), kw_bolsa configurable, num_inicio sugerido desde PROD_FACT1, combobox tipo_doc expandido, fix crítico persistencia (recrear tabla en migración)._
+_Actualizado: 2026-04-11 (sesión 5) — v2.8: bloqueo scroll comboboxes, timeout 3600s en formulario, spinboxes más grandes, validación en tiempo real, Diagnóstico Alegra, fix post-reinicio dialog, refresh grillas en auto, fix ln_bolsa (precio×cantidad), fix ventas doble resta, fix ESTRUCTURA_DBF punto y coma, multi-pagos JSON, 4 fases ACTIVAS._
 
 ---
 
-## ⚡ ESTADO ACTUAL — 2026-04-08
+## ⚡ ESTADO ACTUAL — 2026-04-11
 
 ### Arquitectura vigente
-Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es el motor de procesamiento. Daemon v2.6 orquesta todo.
+Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es el motor de procesamiento. Daemon v2.8 orquesta todo.
 
 ### Estado de archivos
 
@@ -16,9 +16,10 @@ Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es
 | `interfaz_allegra.prg` | ✅ LIMPIO | Solo referencia |
 | `alegra_timer.prg` | ⏸️ DESACTIVADO | `RETURN` al inicio |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios | Timer presente pero retorna inmediatamente |
-| `alegra_daemon.py` | ✅ v2.6 | Orquesta ciclo, verifica BD, logs comprehensivos |
-| `configurar_allegra.py` | ✅ **v2.7** | 4 tabs, splash screen, dynamic inputs (borde verde/gris), kw_bolsa, num_inicio sugerido, fix persistencia DBF |
-| `interfaz_allegra.py` | ✅ ACTIVO | 4 fases código listo: PROD_FACT1, costos, contab — standar pendiente implementación |
+| `alegra_daemon.py` | ✅ **v2.8** | Timeout `max(1800, intervalo×60)` — nunca corta ciclo válido |
+| `configurar_allegra.py` | ✅ **v2.8** | Diagnóstico Alegra, validación timeout en tiempo real, scroll-block, timeout 3600s, refresh grillas en auto, fix post-reinicio dialog |
+| `interfaz_allegra.py` | ✅ **4 fases ACTIVAS** | fix ln_bolsa (precio×cantidad), fix ventas (no doble resta), multi-pagos JSON |
+| `allegra_sync.py` | ✅ | fix ESTRUCTURA_DBF (punto y coma en todos los campos) |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
 
@@ -28,7 +29,7 @@ Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es
 
 ```python
 FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
-# NOTA: f_standar aún no tiene implementación real — su función existe pero está vacía/stub
+# Las 4 fases están ACTIVAS y completas — probadas en ciclos reales
 ```
 
 - `procesado=True` SOLO se setea cuando TODOS los campos en `FASES_ACTIVAS` están en True
@@ -44,9 +45,9 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
 | Fase | Función | Estado | Tablas escritas |
 |---|---|---|---|
 | f_prod1 | `_f_prod1()` | ✅ ACTIVO | PROD_FACT1 |
-| f_standar | `_standar()` | ⏳ STUB | REG_PROD, REG_PROD_SALDOS (pendiente) |
-| f_costos | `_reg_costos_temporal()` + `_costo_ventas_contabiliza()` | ✅ CÓDIGO LISTO | reg_costos_temporal, REG_CTAS (2 filas/producto) |
-| f_contab | `_contabilizar()` | ✅ CÓDIGO LISTO | REG_CTAS (asientos), SAL_DOC (cuentas DOC_CRUZE=1) |
+| f_standar | `_standar()` | ✅ ACTIVO | REG_PROD, REG_PROD_SALDOS — lee TRANS_MAT (kits), inserta REG_PROD, actualiza saldos |
+| f_costos | `_reg_costos_temporal()` + `_costo_ventas_contabiliza()` | ✅ ACTIVO | reg_costos_temporal, REG_CTAS (2 filas/producto) |
+| f_contab | `_contabilizar()` | ✅ ACTIVO | REG_CTAS (asientos), SAL_DOC (cuentas DOC_CRUZE=1) |
 
 ### Flujo f_costos — _costo_ventas_contabiliza()
 - Replica `costo_ventas_contabiliza.prg` de VFP
@@ -61,7 +62,7 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
 - Lee `met_efect/met_tarjet/met_transf/met_cxc` desde allegra_config.dbf para la empresa
 - Gate check: `CONTABILIDAD_DOCUMENTOS_AUTOMATICOS_EMPRESA` — si doc no configurado, aborta
 - Carga `AYUDA` → dict `{consecutivo → objeto}` (objeto = nombre input VFP: TXT_ABONA_EFECTIVO, etc.)
-- Calcula: `subtotal`, `iva`, `bolsas`, `ventas = subtotal - bolsas`, `total = val_pago`
+- Calcula: `subtotal`, `iva`, `bolsas`, `ventas = subtotal` (bolsas ya excluidas de `items_efectivos` — NO restar de nuevo), `total = val_pago`
 - `pvar[1]` = ventas (siempre; fila con DOCUMENTO_='' no tiene link AYUDA)
 - Para filas con `DOCUMENTO_ > 0`: `AYUDA[DOCUMENTO_].OBJETO` → `_val_por_objeto()` → `pvar[var_con_pr]`
 - `_val_por_objeto(objeto)`: mapea input VFP → valor según met_pago del usuario en allegra_config
@@ -81,10 +82,12 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
 ### configurar_allegra.py — 4 tabs
 
 1. **Configuracion** (con scroll vertical — Canvas+Scrollbar, mousewheel activo al hover):
-   - BD esperada, max_fact, intervalo, num_inicio por empresa
+   - BD esperada, max_fact, intervalo (spinboxes font 13, flechas visibles), num_inicio por empresa
+   - **Diagnóstico Alegra** (debajo del intervalo): tabla dinámica con última factura en Alegra por empresa, num_inicio configurado y facturas estimadas a bajar. Se calcula al abrir la tab y al cambiar num_inicio. Llama `GET /invoices?limit=1&start=0` (~1s por empresa).
+   - **Validación en tiempo real** (`_actualizar_estimado`): al cambiar max_fact o intervalo, muestra estimado local/servidor/timeout. Si `max_fact×90s ≥ 3600s` → label rojo "⚠ SUPERA EL TIMEOUT". Si `max_fact×90s > intervalo×60s` → naranja "⚠ supera el intervalo". `guardar()` bloquea si supera límites.
    - **Sección Contabilización** per empresa (LabelFrame "02 TV & Video" + "LP J&P"):
      - **Combobox tipo de documento** (readonly, width=40): muestra `"013 — FACTURA VENTA POS"`. Filtra `TIPO_DOC WHERE ESTADO_INV=3` (campo es `ESTADO_INV`, no `ESTADO_INVE`) AND `CONTABILIDAD_DOCUMENTOS_AUTOMATICOS_EMPRESA` para la empresa. Mismo criterio que `facturar_cancelar.scx verifica_tipos_venta`. Guarda solo el código en allegra_config.
-     - **Tabla emparejamiento met_pago**: 5 filas:
+     - **Tabla emparejamiento met_pago**: 5 filas (todos comboboxes con scroll bloqueado):
        - Efectivo → `met_efect` (ej. `cash`)
        - Tarjeta débito → `met_tdebito` (ej. `debit-card`) — cuotas=0 → F_PAGO_TDEBITO
        - Tarjeta crédito → `met_tcredit` (ej. `credit-card`) — cuotas>0 → F_PAGO_TCREDITO
@@ -94,6 +97,8 @@ FASES_ACTIVAS = ['f_prod1', 'f_standar', 'f_costos', 'f_contab']
    - `guardar_config(cfg_path, max_fact, intervalo, num02, numLP, per_empresa={})` — UPDATE si fila existe, APPEND si no existe — nunca falla en PC virgen
    - `leer_config()` — devuelve defaults para empresas faltantes, nunca lanza excepción — formulario siempre abre
    - `_asegurar_filas_config()` — inserta filas para 02/LP si allegra_config.dbf está vacío
+   - **Todos los comboboxes** bloqueados contra scroll (`<MouseWheel>` → `"break"`) — previene desconfiguración silenciosa
+   - **guardar()** valida que tip_doc sea un valor válido del combobox — bloquea save si valor inválido (eliminado fallback peligroso)
 
 2. **Facturas**: 3 grillas expandibles (PanedWindow) — Pendientes / Con inconsistencias / Procesadas (con fases)
    - Panel "Procesadas" muestra columnas: PROD_FACT1 | REG_PROD | Costos | Contabilidad (SI / -)
@@ -167,13 +172,29 @@ Usuario selecciona fila en grilla "Procesadas"
 → Si f_prod1 revertido: aviso manual en Administrator para eliminar PROD_FACT1
 ```
 
+### Detalles técnicos adicionales — sesión 2026-04-11
+
+**Multi-pagos**: campo `pagos` JSON en allegra_pendientes.dbf C(200) — almacena todos los payments de Alegra. `_contabilizar()` usa el payment correcto para cuadrar asientos (tarjeta débito vs crédito separados).
+
+**Bolsa plástica**: item en Alegra con `nombre` ⊃ keyword configurada. `val_iva = 0`, `precio` = valor del impuesto. `ln_bolsa = sum(precio × cantidad)`. `items_efectivos` excluye bolsa → `ventas = subtotal` (sin restar). Cuenta en Administrator: 240807.
+
+**NITs auto-creados**: toggle `auto_nit` (Canvas píldora) — si ON, crea tercero en TERCEROS.dbf automáticamente y marca como 'creado' en alegra_nits_pend. Escritura binaria (`.fpt` huérfano — ver técnica clave).
+
+**Equivalencia vendedores**: sección en tab Configuracion — seller_id Alegra → vendedor Administrator. Guardado en `alegra_vendedores.dbf`. Internamente usa tabla MESEROS.dbf pero la UI nunca dice "mesero".
+
+**Reinicio seguro**: diálogo post-reinicio sugiere `MIN(borrado)-1` por empresa como nuevo num_inicio. Bloquea Reanudar/Un ciclo hasta confirmar. Diálogo con `attributes("-topmost", True)` + `lift()` + `focus_force()` para que aparezca sobre otras ventanas.
+
+**_programar_refresh()**: en modo automático (Reanudar), llama `_refresh()` + `_refrescar_facturas()` + `_refrescar_terceros()` — las 3 juntas para que grillas se actualicen en tiempo real.
+
+---
+
 ### Pendientes — próximas sesiones
-- **PRIORIDAD 0: Verificar persistencia** — abrir form v2.7, configurar tipo_doc + met_pago + guardar + cerrar + reabrir → confirmar datos persisten (fix aplicado en v2.7)
-- **PRIORIDAD 1: Correr ciclo completo** — Click "Sincronizar ahora", revisar log, verificar PROD_FACT1/REG_CTAS/SAL_DOC
-- Implementar `_standar()` real (REG_PROD + REG_PROD_SALDOS) — actualmente stub
-- UI para mapear vendedores Alegra → Administrator (tab Configuracion)
-- `_refrescar_facturas()` y `_refrescar_terceros()` en auto-refresh cada 30s
-- `reiniciar_proceso` debe limpiar también reg_costos_temporal + marcar f_costos/f_contab
+- **Pruebas de instalación** en equipo Pilar
+- **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
+- **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
+- **Diálogo post-reinicio** — probar que aparece centrado y operable
+- **Label "Próximo ciclo"** — corregir para mostrar tiempo real (inicio_ciclo + duración + intervalo)
+- **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes durante primer sync
 
 ---
 

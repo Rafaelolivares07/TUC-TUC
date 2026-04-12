@@ -57,6 +57,40 @@ Definidas tras feedback directo (algunas rechazadas 2+ veces):
 - Para links secundarios dentro de una card-link usar `<span onclick>` o `<button onclick>` con `event.stopPropagation()`
 - Motivo: Chrome "arregla" el HTML inválido creando elementos fantasma en el grid
 
+### Scroll en `<select>` — bloquear siempre
+
+Los `<select>` enfocados responden al scroll del mouse y cambian valor **silenciosamente**. Aplica en browsers (HTML) y en tkinter (ttk.Combobox). Bloquear siempre:
+
+**HTML (Flask templates)** — en el template base o en cada página con selects:
+```javascript
+document.querySelectorAll('select').forEach(sel => {
+    sel.addEventListener('wheel', e => { e.preventDefault(); }, { passive: false });
+});
+```
+
+**Python / tkinter** — al crear cualquier `ttk.Combobox`:
+```python
+cmb.bind("<MouseWheel>", lambda e: "break")
+cmb.bind("<Button-4>",   lambda e: "break")   # Linux scroll up
+cmb.bind("<Button-5>",   lambda e: "break")   # Linux scroll down
+```
+
+Aplicar **siempre** al crear el widget/elemento, no como fix posterior. No dejar ningún Combobox o select sin este bloqueo.
+
+---
+
+## Reglas SAR — allegra_sync.py y configurar_allegra.py
+
+### max_fact e intervalo NO controlan la descarga de Alegra
+
+`max_fact` e `intervalo` son parámetros de `interfaz_allegra.py` — controlan cuántas facturas *procesa* Administrator por ciclo y cada cuánto corre el daemon.
+
+**No tienen nada que ver con cuántas facturas descarga `allegra_sync.py`.**
+
+`allegra_sync.py` siempre descarga **todas** las facturas nuevas (número > num_inicio de cada empresa) sin límite. El único freno del sync es `num_inicio` — cuando encuentra una factura con número ≤ num_inicio para de paginar.
+
+**Nunca agregar un límite de max_fact al loop de descarga de allegra_sync.** Si el sync tarda mucho, el problema es la cantidad de facturas nuevas o la velocidad de la API, no un límite a configurar.
+
 ---
 
 ## Computer Use — MCP windows-mcp activo (desde 2026-04-09)

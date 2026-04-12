@@ -49,10 +49,10 @@ _Actualizado: 2026-04-11_
 ## MÓDULO: VFP / SAR — Alegra
 
 ### Versiones
-- `alegra_daemon.py` → **v2.6** (timeout dinámico)
-- `configurar_allegra.py` → **v2.7** (toggle auto_nit, vendedores, validación ciclo)
-- `interfaz_allegra.py` → **4 fases ACTIVAS Y COMPLETAS**
-- `allegra_sync.py` → campo `pagos C(200)` multi-payment
+- `alegra_daemon.py` → **v2.8** (timeout 1800s mínimo basado en intervalo)
+- `configurar_allegra.py` → **v2.8** (diagnóstico Alegra, scroll-block, timeout 3600s, refresh grillas en auto)
+- `interfaz_allegra.py` → **4 fases ACTIVAS Y COMPLETAS** (fix ln_bolsa, fix ventas doble resta)
+- `allegra_sync.py` → fix punto y coma ESTRUCTURA_DBF (creación tabla post-reinicio)
 
 ### Lo que está funcionando (2026-04-11)
 - **4 fases completas**: f_prod1, f_standar, f_costos, f_contab — todas activas y probadas en ciclos reales
@@ -64,20 +64,31 @@ _Actualizado: 2026-04-11_
 - **Timeout dinámico daemon**: `max(300, max_fact × 90)` — nunca corta ciclo válido
 - **Bloqueo configuración inválida**: no guarda si `max_fact × 90s > intervalo × 60s`
 - **Label estimado**: muestra duración estimada local/servidor/timeout en tiempo real
+- **Scroll bloqueado en todos los comboboxes**: met_pago, tipo_doc, vendedores — `<MouseWheel>` → `"break"` (causa raíz de la desconfiguración silenciosa)
+- **codepage cp1252** explícito en TODOS los `dbf.Table(allegra_config.dbf)` del daemon y formulario
+- **met_pago comboboxes siempre `state="readonly"`** — nunca `disabled` (disabled = blanco en Windows)
+- **guardar() valida tip_doc en cod_map** — no guarda si display no es un valor válido del combobox
 
-### Cambios sesión 2026-04-11
-- Toggle Canvas auto_nit (píldora verde/gris) reemplaza Checkbutton
-- `pagos C(200)` JSON en allegra_pendientes + `_migrar_pendientes()` automática
-- `_contabilizar(pagos: list)` — suma por método, no solo primer método
-- Diálogo post-reinicio obligatorio con num_inicio por empresa
-- Timeout dinámico en alegra_daemon.py
-- Validación bloqueo configuración fuera de rango
-- Sección "Equivalencia de vendedores" en tab Configuracion
+### Cambios sesión 2026-04-11 (segunda parte)
+- Root cause desconfiguración met_pago/tip_doc encontrado: scroll del mouse ciclaba comboboxes silenciosamente
+- Todos los comboboxes bloqueados contra scroll (`<MouseWheel>`, `<Button-4>`, `<Button-5>` → `"break"`)
+- codepage="cp1252" estandarizado en ambos archivos Python (daemon y formulario)
+- state="readonly" en met_pago (era "disabled" → mostraba blanco en Windows)
+- guardar() elimina fallback peligroso `display.split(" — ")[0]` → bloquea save si tip_doc inválido
+- DAEMON_VERSION="2.7" en ambos archivos (sincronizados para _asegurar_daemon())
+- _post_reiniciar: bug `btn_ciclo` → `btn_un_ciclo` corregido (causaba crash silencioso post-reinicio)
+- Sombreados verdes diferidos con after(200) para Canvas scrollable
+- Vendedores: lee alegra_vendedores.dbf primero (no depende de allegra_pendientes para renderizar)
+- Ventana posicionada en y=10 desde el inicio (no se desborda bajo el screen)
+- Botón "Corriendo..." usa `state="normal" + command=lambda: None` (legible, no clicable)
 
 ### Pendientes SAR — próxima sesión
-1. **Correr ciclo post-reinicio** — verificar facturas multi-pago cuadradas en REG_CTAS
-2. **Probar equivalencia vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1 después de mapear
-3. **Auto-refresh grillas** Facturas y Terceros cada 30s
+1. **Pruebas de instalación** en equipo Pilar
+2. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
+3. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
+4. **Diálogo post-reinicio** — probar que aparece centrado y operable
+5. **Label "Próximo ciclo"** — corregir para mostrar tiempo real (inicio_ciclo + duración + intervalo)
+6. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes durante primer sync
 
 ### Estado de archivos SAR
 
@@ -87,10 +98,10 @@ _Actualizado: 2026-04-11_
 | `interfaz_allegra.prg` | ✅ Limpio — no se usa en automático |
 | `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios |
-| `alegra_daemon.py` | ✅ v2.6 — timeout dinámico |
-| `configurar_allegra.py` | ✅ v2.7 — toggle, vendedores, validación ciclo, diálogo reinicio |
-| `interfaz_allegra.py` | ✅ 4 fases completas — multi-pagos, auto_nit, _standar() real |
-| `allegra_sync.py` | ✅ pagos C(200) JSON, _migrar_pendientes() |
+| `alegra_daemon.py` | ✅ v2.8 — timeout basado en intervalo (mín 1800s) |
+| `configurar_allegra.py` | ✅ v2.8 — diagnóstico Alegra, validación timeout, refresh grillas automático, scroll-block todos los comboboxes |
+| `interfaz_allegra.py` | ✅ 4 fases ACTIVAS — fix bolsa (precio×cantidad), fix ventas (no doble resta), multi-pagos JSON |
+| `allegra_sync.py` | ✅ fix ESTRUCTURA_DBF punto y coma (todos los campos) |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
 

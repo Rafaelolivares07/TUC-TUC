@@ -151,3 +151,79 @@ RUN python "C:\S.A.R\script.py"      && espera a que termine
 ```
 
 No devuelve código de retorno accesible directamente. Para capturar output usar redirección a archivo.
+
+---
+
+## 11. ESTRUCTURA_DBF en allegra_sync.py — separador `;` obligatorio
+
+Al definir campos para crear tablas DBF con la librería `dbf` (Python), cada spec debe terminar en `;`:
+
+```python
+ESTRUCTURA_DBF = (
+    "num_doc     C(20);"
+    "empresa     C(5);"
+    "pagos       C(200);"   # ← sin ; concatena con el siguiente: "C(200)PROCESADO L" → FieldSpecError
+    "procesado   L;"
+    "nomb_cli    C(60);"
+    "seller_id   C(10);"    # ← igual
+)
+```
+
+**Regla**: en strings Python que se concatenan implícitamente (sin coma), el `;` final de cada línea es el separador de campos para la librería `dbf`. Olvidarlo une dos specs adyacentes y lanza `FieldSpecError` al crear/abrir la tabla.
+
+---
+
+## 12. Bolsa plástica — contabilización en Alegra
+
+En Alegra, la bolsa plástica se factura como **item de producto** (no como impuesto nativo). Esto implica:
+
+- El item tiene `nombre` que contiene "BOLSA" (o la keyword configurada en `kw_bolsa`)
+- `precio` = valor del impuesto (ej. $50 por bolsa)
+- `val_iva` = 0 (no tiene IVA porque es el impuesto mismo)
+- `cantidad` = número de bolsas vendidas
+
+**Cálculo correcto en interfaz_allegra.py:**
+```python
+ln_bolsa = sum(
+    float(it["cantidad"]) * float(it["precio"])
+    for it in fac["items"]
+    if kw_bolsa in str(it["nombre"]).upper()
+)
+```
+
+**NO usar `val_iva`** — siempre es 0 para este item. El valor real es `precio × cantidad`.
+
+`items_efectivos` ya excluye los items de bolsa → `ventas = subtotal` (sin restar bolsas nuevamente).  
+Si se resta dos veces: `ventas = subtotal - bolsas` cuando bolsas ya están excluidas → descuadre exactamente igual al valor de la bolsa en los asientos.
+
+---
+
+## 13. Arquitectura timeout — daemon vs formulario (módulo Alegra)
+
+Hay **dos timeouts independientes**:
+
+| Componente | Timeout | Dónde se define |
+|---|---|---|
+| `alegra_daemon.py` | `max(1800, intervalo_min × 60)` segundos | `leer_intervalo()` al inicio del ciclo |
+| `configurar_allegra.py` → `correr_un_ciclo` | `3600` segundos (fijo) | `subprocess.run(..., timeout=3600)` |
+| `configurar_allegra.py` → `sincronizar()` | `3600` segundos (fijo) | `subprocess.run(..., timeout=3600)` |
+
+El formulario lanza `interfaz_allegra.py` y `allegra_sync.py` directamente como subprocesos con su propio timeout. Si ese timeout era `300` (anterior), cortaba el ciclo después de 5 min aunque el daemon siguiera corriendo.
+
+**Regla**: si se ajusta el timeout del daemon, también revisar los `subprocess.run` en el formulario.
+
+---
+
+## 14. Diagnóstico Alegra — última factura por empresa
+
+`configurar_allegra.py` consulta `GET /invoices?limit=1&start=0` (Alegra API) al abrir la tab Configuración. Muestra una tabla:
+
+| Empresa | Última en Alegra | Num inicio configurado | Facturas a bajar (estimado) |
+|---|---|---|---|
+| 02 TV & Video | PTV21521 (21521) | 21500 | ~21 |
+| LP J&P | PJP16102 (16102) | 16080 | ~22 |
+
+- La llamada tarda ~1 segundo por empresa — seguro hacerla al abrir la tab
+- Se recalcula automáticamente al cambiar `num_inicio` en cualquiera de las empresas
+- El estimado de facturas a bajar es `último_num − num_inicio` (aproximado — no todas son consecutivas)
+- Útil para que el usuario sepa cuántas facturas quedan pendientes antes de correr el primer ciclo o tras un reinicio

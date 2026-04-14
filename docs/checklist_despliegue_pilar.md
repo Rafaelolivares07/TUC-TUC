@@ -7,12 +7,12 @@ _Sesión presencial/remota: 2026-04-14 ~3pm_
 
 ### A. Python
 
-- [ ] Python instalado: `python --version` ≥ 3.9
-- [ ] `pip` disponible: `pip --version`
-- [ ] Paquete `dbf`: `python -c "import dbf; print(dbf.__version__)"`
-- [ ] Paquete `requests`: `python -c "import requests; print(requests.__version__)"`
-- [ ] `tkinter` disponible: `python -c "import tkinter; print('ok')"`
-- [ ] Python en PATH (accesible desde cmd sin ruta completa)
+- [x] Python instalado: `python --version` ≥ 3.9 — **3.11.9** ✅
+- [x] `pip` disponible: `pip --version` — **24.0** ✅
+- [x] Paquete `dbf`: instalado ✅
+- [x] Paquete `requests`: **2.33.1** ✅
+- [x] `tkinter` disponible: ok ✅
+- [x] Python en PATH (accesible desde cmd sin ruta completa) ✅
 
 > Si falta algún paquete: `pip install dbf requests`
 
@@ -20,43 +20,42 @@ _Sesión presencial/remota: 2026-04-14 ~3pm_
 
 ### B. Estructura de carpetas y archivos en C:\S.A.R\
 
-- [ ] Carpeta `C:\S.A.R\` existe
-- [ ] `C:\S.A.R\RutaBaseDatos\ruta.dbf` existe y apunta a la BD correcta
-- [ ] `C:\S.A.R\bd_esperada.txt` existe con la ruta correcta
-- [ ] `C:\S.A.R\alegra_daemon.pid` — puede o no existir (no crítico)
-- [ ] `C:\S.A.R\alegra_daemon_pausa.txt` — NO debe existir (si existe, el daemon arranca pausado)
+- [x] Carpeta `C:\S.A.R\` existe ✅
+- [x] `C:\S.A.R\RutaBaseDatos\ruta.dbf` — apunta a `\\192.168.1.104\BASEDATOSEMPRESAS\DATOS_SAR.DBC` ✅
+- [x] `C:\S.A.R\bd_esperada.txt` — no existe, no crítico ✅
+- [x] `C:\S.A.R\alegra_daemon.pid` — no existe (daemon no corriendo) ✅
+- [x] `C:\S.A.R\alegra_daemon_pausa.txt` — no existe ✅
 
 **Scripts Python presentes:**
 
-- [ ] `C:\S.A.R\alegra_daemon.py`
-- [ ] `C:\S.A.R\configurar_allegra.py`
-- [ ] `C:\S.A.R\interfaz_allegra.py`
-- [ ] `C:\S.A.R\allegra_sync.py`
-- [ ] `C:\S.A.R\instalar_allegra_bd.py`
+- [x] `C:\S.A.R\alegra_daemon.py` ✅
+- [x] `C:\S.A.R\configurar_allegra.py` ✅
+- [x] `C:\S.A.R\interfaz_allegra.py` ✅
+- [x] `C:\S.A.R\allegra_sync.py` ✅
+- [x] `C:\S.A.R\instalar_allegra_bd.py` ✅
 
 **Ejecutable compilado:**
 
-- [ ] `C:\S.A.R\AlegraDaemon.exe` existe
+- [x] `C:\S.A.R\AlegraDaemon.exe` existe ✅
 - [ ] Versión del exe: al correrlo escribe en `alegra_daemon.log` la versión — confirmar `v2.8`
 
 ---
 
 ### C. Base de datos del cliente
 
-- [ ] Carpeta BD existe: `C:\D\Pilar Peralta\basedatosempresas\`
+- [x] Carpeta BD existe: `\\192.168.1.104\BASEDATOSEMPRESAS\` (share de red, no C:\D\) ✅
 - [ ] Abre Administrator sin errores — empresa 02 y empresa LP
-- [ ] `ruta.dbf` apunta a esa carpeta (verificar con `configurar_allegra.py` → campo "BD esperada")
-- [ ] `allegra_config.dbf` existe en la carpeta BD (si no, correr `instalar_allegra_bd.py`)
-- [ ] `alegra_tiposdoc.dbf` existe en la carpeta BD
-- [ ] `allegra_pendientes.dbf` existe en la carpeta BD (se crea al primer sync)
+- [x] `ruta.dbf` apunta a `\\192.168.1.104\BASEDATOSEMPRESAS\DATOS_SAR.DBC` ✅
+- [x] `allegra_config.dbf` — creado con instalar_allegra_bd.py (ver Paso 3)
+- [x] `alegra_tiposdoc.dbf` — creado con instalar_allegra_bd.py (ver Paso 3)
+- [ ] `allegra_pendientes.dbf` — se crea al primer sync
 
 ---
 
 ### D. Startup de Windows
 
-- [ ] `AlegraDaemon.exe` en `shell:startup` (o acceso directo a él)
-  - Verificar: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\`
-- [ ] El daemon arranca automáticamente al iniciar sesión Windows
+- [x] `AlegraDaemon.exe` en startup — `AlegraDaemon.bat` creado en `shell:startup` ✅
+- [ ] El daemon arranca automáticamente al iniciar sesión Windows — pendiente verificar en próximo reinicio
 
 ---
 
@@ -72,10 +71,10 @@ _Sesión presencial/remota: 2026-04-14 ~3pm_
 
 ### Paso 1 — Conectar y verificar
 
-1. [ ] Establecer conexión remota
-2. [ ] Abrir cmd como administrador
-3. [ ] Correr verificaciones del Checklist 1 de arriba
-4. [ ] Anotar cualquier diferencia vs. lo esperado antes de modificar
+1. [x] Establecer conexión remota ✅ (AsistenciaTucTuc + relay)
+2. [x] Abrir cmd como administrador ✅
+3. [x] Correr verificaciones del Checklist 1 de arriba ✅
+4. [x] Diferencias encontradas: BD en red `\\192.168.1.104\BASEDATOSEMPRESAS\`, no en C:\D\ ✅
 
 ---
 
@@ -83,14 +82,11 @@ _Sesión presencial/remota: 2026-04-14 ~3pm_
 
 Copiar desde el PC de Rafael (o desde el repositorio) a `C:\S.A.R\` en el PC de Pilar:
 
-- [ ] `alegra_daemon.py` (v2.8 — intervalo en segundos)
-- [ ] `AlegraDaemon.exe` (recompilado 2026-04-14)
-- [ ] `configurar_allegra.py` (v2.8 — 4 paneles, UI adaptativa)
-- [ ] `interfaz_allegra.py` (4 fases + alertas parciales)
-- [ ] `allegra_sync.py`
-
-> Si el daemon está corriendo: matar el proceso antes de sobrescribir el .exe
-> `taskkill /IM AlegraDaemon.exe /F`
+- [x] `alegra_daemon.py` — transferido vía relay ✅
+- [x] `AlegraDaemon.exe` — compilado 14/04/2026 04:23pm ✅
+- [x] `configurar_allegra.py` — transferido vía relay ✅
+- [x] `interfaz_allegra.py` — transferido vía relay ✅
+- [x] `allegra_sync.py` — transferido vía relay ✅
 
 ---
 
@@ -100,8 +96,8 @@ Copiar desde el PC de Rafael (o desde el repositorio) a `C:\S.A.R\` en el PC de 
 python C:\S.A.R\instalar_allegra_bd.py
 ```
 
-- [ ] Confirmar que crea/verifica `allegra_config.dbf` sin errores
-- [ ] Confirmar que crea/verifica `alegra_tiposdoc.dbf`
+- [x] Confirmar que crea/verifica `allegra_config.dbf` sin errores ✅
+- [x] Confirmar que crea/verifica `alegra_tiposdoc.dbf` ✅
 
 ---
 
@@ -111,37 +107,29 @@ Abrir: `python C:\S.A.R\configurar_allegra.py`
 
 **Tab Configuración — por empresa (02 y LP):**
 
-- [ ] **BD esperada** — apunta a `C:\D\PILAR PERALTA\BASEDATOSEMPRESAS\DATOS_SAR.DBC`
-- [ ] **Máximo de facturas por ciclo** — definir (recomendado: 5 para prueba, luego 20-50)
-- [ ] **Pausa entre ciclos (seg)** — definir (recomendado: 300 = 5 minutos en producción; para prueba: 30)
-- [ ] **Tipo de documento** — seleccionar `013` (FACTURA VENTA POS) para cada empresa
-- [ ] **Métodos de pago** — mapear para cada empresa:
-  - Efectivo → `cash`
-  - Tarjeta débito → `debit-card`
-  - Tarjeta crédito → `credit-card`
-  - Transferencia → `transfer`
-  - Cobrar cliente → `credit`
-- [ ] **Num inicio** — definir el número de factura desde donde arrancar (ej: última factura ya registrada en Administrator)
-- [ ] **Auto-crear NITs** — definir si ON o OFF según preferencia de Pilar
-- [ ] Guardar configuración — confirmar sin errores
+- [x] **BD esperada** — apunta a `\\192.168.1.104\BASEDATOSEMPRESAS\DATOS_SAR.DBC` ✅
+- [x] **Máximo de facturas por ciclo** — configurado ✅
+- [x] **Pausa entre ciclos (seg)** — configurado ✅
+- [x] **Tipo de documento** — `013` (FACTURA VENTA POS) para cada empresa ✅
+- [x] **Métodos de pago** — mapeados por Rafael junto a Pilar ✅
+- [x] **Num inicio** — definido por empresa ✅
+- [x] **Auto-crear NITs** — configurado según preferencia de Pilar ✅
+- [x] Guardar configuración — sin errores ✅
 
 **Tab Configuración — vendedores:**
 
-- [ ] Mapear seller_id Alegra → vendedor Administrator para cada empresa
-  - Empresa 02: sellers 1, 2, 3, 4, 6
-  - Empresa LP: sellers 1, 3, 4, 7
+- [x] Sellers mapeados por Rafael junto a Pilar ✅
 
 ---
 
 ### Paso 5 — Prueba con un ciclo manual
 
-- [ ] Tab Estado & Log → clic **"Un ciclo"**
-- [ ] Esperar a que termine (máx 2-3 min con pocos datos)
-- [ ] Revisar log en tab Estado & Log — sin errores críticos
-- [ ] Tab Facturas — verificar que aparecen facturas en alguna categoría
-- [ ] Si hay facturas en "Pendientes": esperado — el ciclo las procesará en la siguiente ejecución
-- [ ] Si hay facturas en "Con inconsistencias": revisar motivo — NIT no encontrado o producto sin mapeo
-- [ ] Si hay facturas en "Procesadas" o "Procesadas con alertas": verificar en Administrator que quedaron los registros
+- [x] Tab Estado & Log → clic **"Un ciclo"** ✅ (hecho por Rafael junto a Pilar)
+- [x] Revisar log — sin errores críticos ✅
+- [x] Tab Facturas — facturas en categorías ✅
+- [x] Verificar en Administrator que quedaron los registros ✅ — todas las fases procesaron correctamente
+
+> **Bug conocido (cosmético):** la UI solo muestra "hecho" en f_prod1, no en f_standar/f_costos/f_contab. Los registros SÍ se crean correctamente en Administrator. Fix pendiente.
 
 ---
 
@@ -149,19 +137,18 @@ Abrir: `python C:\S.A.R\configurar_allegra.py`
 
 Abrir Administrator con Pilar:
 
-- [ ] Módulo de movimientos de inventario — buscar por fecha hoy — aparecen los registros procesados
-- [ ] Módulo contabilidad — buscar asientos de hoy — cuadran débito=crédito
-- [ ] Sin duplicados (mismo num_doc aparece solo una vez)
+- [x] Módulo de movimientos de inventario — registros procesados confirmados ✅
+- [x] Módulo contabilidad — asientos de hoy correctos ✅
+- [x] Sin duplicados ✅
 
 ---
 
 ### Paso 7 — Activar modo automático
 
-- [ ] Ajustar intervalo a valor definitivo de producción (ej: 300 seg)
-- [ ] Guardar
-- [ ] Confirmar que `AlegraDaemon.exe` está en startup
-- [ ] Reiniciar el daemon desde el formulario (Reanudar) o desde startup
-- [ ] Dejar corriendo unos minutos y verificar que el log se actualiza solo
+- [x] Ajustar intervalo a valor definitivo de producción ✅
+- [x] Guardar ✅
+- [x] `AlegraDaemon.bat` en shell:startup ✅ (bat lanza AlegraDaemon.exe)
+- [ ] Reiniciar el daemon y verificar log — pendiente verificar próximo arranque Windows
 
 ---
 
@@ -181,11 +168,11 @@ Abrir Administrator con Pilar:
 
 ### Paso 8 — Checklist de cierre
 
-- [ ] Daemon corriendo — tab Estado muestra "Activo"
-- [ ] Log del último ciclo visible y limpio
-- [ ] Pilar sabe abrir el formulario desde el acceso directo del escritorio
-- [ ] Pilar sabe identificar las 4 categorías de facturas
-- [ ] Pilar sabe cuándo llamar a Rafael (inconsistencias que no se auto-resuelven)
+- [ ] Daemon corriendo en modo automático — pendiente verificar
+- [x] Log del último ciclo visible y limpio ✅
+- [x] Pilar sabe abrir el formulario — acceso directo "Alegra Config" en escritorio ✅
+- [x] Pilar sabe identificar las 4 categorías de facturas ✅
+- [x] Pilar sabe cuándo llamar a Rafael ✅
 
 ---
 
@@ -205,7 +192,7 @@ Abrir Administrator con Pilar:
 
 | Concepto | Valor |
 |---|---|
-| BD cliente | `C:\D\PILAR PERALTA\BASEDATOSEMPRESAS\` |
+| BD cliente | `\\192.168.1.104\BASEDATOSEMPRESAS\` (share de red) |
 | Scripts | `C:\S.A.R\` |
 | Log daemon | `C:\S.A.R\alegra_daemon.log` |
 | PID daemon | `C:\S.A.R\alegra_daemon.pid` |

@@ -68,6 +68,19 @@ _Actualizado: 2026-04-14_
 - **4 paneles en grilla facturas**: Pendientes / Con inconsistencias / Procesadas / Procesadas con alertas
 - **Intervalo en segundos**: campo `intervalo N(4,0)` — era minutos, ahora segundos
 
+### Despliegue PC Pilar — 2026-04-14 ✅
+
+- Scripts v2.8 instalados en `C:\S.A.R\` vía relay AsistenciaTucTuc
+- BD real: `\\192.168.1.104\BASEDATOSEMPRESAS\` (share de red, no C:\D\)
+- `instalar_allegra_bd.py` corrido — tablas Alegra creadas
+- Configurado por Rafael + Pilar: tip_doc, met_pago, num_inicio, vendedores, intervalo
+- Ciclo manual probado → todas las fases OK en Administrator
+- Startup: `AlegraDaemon.bat` en shell:startup
+- Acceso directo "Alegra Config" en escritorio Pilar
+- Bug cosmético pendiente: UI solo reporta "hecho" en f_prod1
+
+---
+
 ### Cambios sesión 2026-04-14
 
 #### Bugs corregidos en interfaz_allegra.py
@@ -103,11 +116,12 @@ _Actualizado: 2026-04-14_
 - **Solución pendiente**: PRG compilado (.fxp) que Administrator pueda llamar, o rutina interna REINDEX
 
 ### Pendientes SAR — próxima sesión
-1. **Despliegue PC Pilar** — sesión 2026-04-14 ~3pm — checklist en `docs/checklist_despliegue_pilar.md`
-2. **CDX APPEND fix** — solución sin VFP IDE en cliente
-3. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
-4. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
-5. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
+1. **Bug cosmético fases UI** — f_standar/f_costos/f_contab no reportan "hecho" en la interfaz (los datos sí se graban). Fix en `interfaz_allegra.py`.
+2. **Verificar startup Pilar** — confirmar que AlegraDaemon.bat arranca el exe en próximo reinicio Windows
+3. **CDX APPEND fix** — solución sin VFP IDE en cliente
+4. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
+5. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
+6. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
 
 ### Estado de archivos SAR
 

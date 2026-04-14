@@ -188,27 +188,25 @@ Usuario selecciona fila en grilla "Procesadas"
 
 ---
 
-### Despliegue en PC Pilar — sesión 2026-04-14 ~3pm
+### Despliegue en PC Pilar — sesión 2026-04-14 ~3pm — ✅ COMPLETADO
 
 Checklist completo en: `docs/checklist_despliegue_pilar.md`
 
-**Requisitos verificar remotamente:**
-- Python + paquetes `dbf` y `requests`
-- `C:\S.A.R\` con scripts y `AlegraDaemon.exe` v2.8
-- `C:\S.A.R\RutaBaseDatos\ruta.dbf` apuntando a BD Pilar
-- `C:\S.A.R\bd_esperada.txt` con ruta correcta
-- `AlegraDaemon.exe` en `shell:startup`
-- `allegra_config.dbf` y `alegra_tiposdoc.dbf` en carpeta BD
+**Datos reales del PC de Pilar (difieren de lo esperado):**
+- BD en share de red: `\\192.168.1.104\BASEDATOSEMPRESAS\DATOS_SAR.DBC` (no C:\D\)
+- Python 3.11.9 ✅ · dbf ✅ · requests 2.33.1 ✅ · tkinter ✅
+- Scripts transferidos vía relay (AsistenciaTucTuc) — NO via TeamViewer
+- Startup: `AlegraDaemon.bat` en shell:startup (lanza AlegraDaemon.exe)
+- Acceso directo "Alegra Config" en escritorio de Pilar
 
-**Procedimiento (8 pasos en checklist):**
-1. Verificar requisitos
-2. Copiar archivos actualizados
-3. `instalar_allegra_bd.py` si faltan tablas
-4. Configurar tip_doc, met_pago, num_inicio, vendedores por empresa
-5. Prueba con "Un ciclo" manual
-6. Verificar en Administrator (inventario + contabilidad)
-7. Activar modo automático
-8. Confirmar que Pilar sabe operar
+**Resultado ciclo de prueba:**
+- Todas las fases procesaron correctamente: PROD_FACT1, REG_PROD, REG_CTAS (costos + contab)
+- Administrator confirmó registros y asientos ✅
+- Bug cosmético: UI solo muestra "hecho" en f_prod1 al procesar — las otras 3 fases procesan pero no reportan "done" en la interfaz (fix pendiente)
+
+**Pendiente verificar:**
+- Daemon arranca automático en próximo reinicio Windows (AlegraDaemon.bat en startup)
+- Prueba Pausar/Reanudar no realizada en Pilar
 
 ### Pendientes — próximas sesiones
 - **CDX APPEND fix** — solución sin VFP IDE en cliente (registros no aparecen en filtros WHERE FECHAHORA)

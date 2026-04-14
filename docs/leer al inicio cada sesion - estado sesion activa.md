@@ -94,6 +94,7 @@ _Actualizado: 2026-04-14_
 - **Botón "Revertir fases seleccionada" eliminado** del panel Procesadas
 - **"Reiniciar proceso" movido** a pestaña Estado & Log (junto a Borrado DBF) — era demasiado peligroso en la barra principal
 - **"Borrado DBF" deshabilitado** cuando el daemon está activo; se habilita solo al pausar
+- **"Reiniciar proceso" también deshabilitado** cuando el daemon no está pausado — misma lógica que Borrado DBF; ambos botones comparten estado: `normal` si `PAUSA_FILE` existe, `disabled` si no
 
 ### CDX APPEND — análisis técnico (pendiente)
 - `SELECT * FROM PROD_FACT1` (sin WHERE) muestra todos los registros incluidos los de la interfaz ✅
@@ -117,7 +118,7 @@ _Actualizado: 2026-04-14_
 | `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios |
 | `alegra_daemon.py` | ✅ v2.8 — intervalo en segundos, recompilado 2026-04-14 |
-| `configurar_allegra.py` | ✅ v2.8 — 4 paneles, intervalo segundos, UI adaptativa |
+| `configurar_allegra.py` | ✅ v2.8 — 4 paneles, intervalo segundos, UI adaptativa, Borrado DBF + Reiniciar deshabilitados si no pausado |
 | `interfaz_allegra.py` | ✅ 4 fases + alertas parciales — 4 bugs corregidos 2026-04-14 |
 | `allegra_sync.py` | ✅ campo fecha_hora T — datetime exacto de Alegra |
 

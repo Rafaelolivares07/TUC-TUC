@@ -1,9 +1,9 @@
 # Proyecto VFP — Administrator (SAR) — Contexto y Pendientes
-_Actualizado: 2026-04-11 (sesión 5) — v2.8: bloqueo scroll comboboxes, timeout 3600s en formulario, spinboxes más grandes, validación en tiempo real, Diagnóstico Alegra, fix post-reinicio dialog, refresh grillas en auto, fix ln_bolsa (precio×cantidad), fix ventas doble resta, fix ESTRUCTURA_DBF punto y coma, multi-pagos JSON, 4 fases ACTIVAS._
+_Actualizado: 2026-04-14 (sesión 7) — v2.8: 4 bugs interfaz_allegra, alertas parciales, intervalo segundos, 4 paneles facturas, UI adaptativa, recompile daemon._
 
 ---
 
-## ⚡ ESTADO ACTUAL — 2026-04-11
+## ⚡ ESTADO ACTUAL — 2026-04-14
 
 ### Arquitectura vigente
 Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es el motor de procesamiento. Daemon v2.8 orquesta todo.
@@ -16,10 +16,10 @@ Python reemplaza VFP batch mode completamente. `interfaz_allegra.py` (Python) es
 | `interfaz_allegra.prg` | ✅ LIMPIO | Solo referencia |
 | `alegra_timer.prg` | ⏸️ DESACTIVADO | `RETURN` al inicio |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios | Timer presente pero retorna inmediatamente |
-| `alegra_daemon.py` | ✅ **v2.8** | Timeout `max(1800, intervalo×60)` — nunca corta ciclo válido |
-| `configurar_allegra.py` | ✅ **v2.8** | Diagnóstico Alegra, validación timeout en tiempo real, scroll-block, timeout 3600s, refresh grillas en auto, fix post-reinicio dialog |
-| `interfaz_allegra.py` | ✅ **4 fases ACTIVAS** | fix ln_bolsa (precio×cantidad), fix ventas (no doble resta), multi-pagos JSON |
-| `allegra_sync.py` | ✅ | fix ESTRUCTURA_DBF (punto y coma en todos los campos) |
+| `alegra_daemon.py` | ✅ **v2.8** | Intervalo en segundos; timeout `max(1800, intervalo_cfg)` — recompilado 2026-04-14 |
+| `configurar_allegra.py` | ✅ **v2.8** | 4 paneles facturas, intervalo segundos N(4,0), UI adaptativa sh-60, Reiniciar en tab Estado |
+| `interfaz_allegra.py` | ✅ **4 fases + alertas parciales** | 4 bugs corregidos 2026-04-14; _marcar_completo_con_alerta |
+| `allegra_sync.py` | ✅ | campo fecha_hora T — datetime exacto de Alegra |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
 

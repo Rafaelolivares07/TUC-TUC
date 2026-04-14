@@ -1,7 +1,7 @@
 # Manual de Usuario — Módulo Alegra
 ## Sistema Administrator SAR — Electronicas TV & Video / J&P
 
-_Versión 1.0 — Marzo 2026_
+_Versión 2.8 — Abril 2026_
 
 ---
 
@@ -23,7 +23,9 @@ moviendo inventario y generando los asientos contables correspondientes.
 Por cada factura que encuentra en Alegra:
 
 - ✅ Registra los productos vendidos en el inventario (salida de bodega)
-- ✅ Genera el asiento contable completo (ventas, IVA, efectivo/tarjeta/transferencia, etc.)
+- ✅ Actualiza los saldos de existencias por producto
+- ✅ Genera el asiento de costo de ventas (inventario → costo ventas)
+- ✅ Genera el asiento contable completo (ventas, IVA, efectivo/débito/crédito/transferencia/CxC, etc.)
 - ✅ Registra el impuesto a la bolsa plástica cuando aplica
 - ✅ Marca la factura como procesada para no repetirla
 
@@ -31,134 +33,150 @@ Por cada factura que encuentra en Alegra:
 
 ## ¿Qué necesita para usar el módulo?
 
-1. Tener **Administrator abierto**
+1. El programa **AlegraDaemon** corriendo en segundo plano (se inicia automáticamente con Windows)
 2. Tener **conexión a internet** (para consultar Alegra)
-3. El módulo aparece en el menú de Administrator bajo **"Allegra"**
+3. El formulario de control se abre desde el acceso directo **"ADMINISTRATOR INTERFASES"** en el escritorio
 
 ---
 
-## Paso a paso — Sincronizar facturas
+## El formulario de control
 
-### Paso 1 — Abrir el módulo
-En el menú de Administrator, haga clic en:
-**Allegra → Configurar / Sincronizar**
+Al abrir el formulario verá cuatro pestañas:
 
-Se abre la ventana de configuración.
+### Pestaña Configuración
+Parámetros por empresa:
+
+| Parámetro | ¿Qué hace? |
+|---|---|
+| **Máximo de facturas por ciclo** | Cuántas facturas procesa en cada vuelta automática |
+| **Pausa entre ciclos (seg)** | Tiempo de espera entre una vuelta y la siguiente. `0` = solo manual |
+| **Auto-crear NITs** | Si está marcado, crea el cliente automáticamente cuando no existe en Administrator |
+
+> **Intervalo en segundos**: el valor que ponga aquí son segundos de descanso entre ciclos. Si pone `10`, el sistema espera 10 segundos después de terminar cada ciclo antes de iniciar el siguiente.
 
 ---
 
-### Paso 2 — Revisar los parámetros
+### Pestaña Facturas
 
-| Parámetro | ¿Qué hace? | Valor recomendado |
+Muestra el estado de todas las facturas descargadas de Alegra. Tiene cuatro secciones:
+
+| Sección | Color | Qué contiene |
 |---|---|---|
-| **Máximo de facturas por lote** | Cuántas facturas procesa en cada ejecución | 50 |
-| **Solo desde última sincronización** | Trae solo las nuevas (desde la última vez) | ✅ Marcado |
-| **Intervalo automático** | 0 = solo manual | 0 (manual por ahora) |
+| **Pendientes** | Azul | Facturas que aún no se han procesado |
+| **Con inconsistencias** | Rojo | Facturas que fallaron — no se pudieron procesar |
+| **Procesadas** | Verde | Facturas procesadas correctamente |
+| **Procesadas con alertas** | Naranja | Facturas procesadas pero con alguna salvedad técnica |
 
-> La primera vez que sincronice, trae **todas** las facturas disponibles desde el número configurado en adelante.
+**¿Qué es una "Procesada con alerta"?**
+Son facturas que se registraron correctamente en Administrator, pero durante el proceso se detectó alguna situación que no impidió el registro pero que vale la pena conocer. Ejemplos:
+- Un producto cuyo saldo o valor de existencias era demasiado alto para el campo (overflow) — el costo del ítem se tomó como cero pero el inventario se movió
+- Productos sin cuenta contable asignada (grupo=0) — el asiento de costo de ventas no se generó para ese ítem
 
----
-
-### Paso 3 — Sincronizar
-
-Haga clic en el botón **"Sincronizar ahora"**.
-
-El sistema:
-1. Se conecta a Alegra y descarga las facturas nuevas
-2. Las procesa una por una en Administrator
-3. Al terminar muestra un mensaje con cuántas facturas procesó
-
-> **No cierre Administrator mientras sincroniza.**
+La factura queda registrada; la alerta aparece en la columna **"Motivo/Alerta"** de esa sección.
 
 ---
 
-### Paso 4 — Verificar
+### Pestaña Terceros
 
-Después de sincronizar puede revisar:
+Muestra los NITs de clientes que Alegra tiene pero que no existen en Administrator.
 
-**En la ventana de configuración:**
-- Fecha y hora de la última sincronización
-- Total de facturas procesadas (histórico acumulado)
+Desde aquí puede:
+- **Crear** el cliente en Administrator con los datos de Alegra
+- **Ignorar** el NIT (no volver a preguntar)
 
-**En contabilidad de Administrator:**
-Abra los movimientos contables y busque por el número de factura de Alegra.
+Si **Auto-crear NITs** está activado en Configuración, esto ocurre automáticamente.
 
 ---
 
-## Errores comunes
+### Pestaña Estado & Log
+
+Muestra:
+- Estado del daemon (corriendo / pausado / detenido)
+- El log del último ciclo ejecutado
+- Botones de control:
+
+| Botón | ¿Qué hace? |
+|---|---|
+| **Pausar** | Detiene los ciclos automáticos (el daemon sigue corriendo pero no ejecuta) |
+| **Reanudar** | Reactiva los ciclos automáticos |
+| **Un ciclo** | Ejecuta un solo ciclo ahora mismo (útil en modo manual) |
+| **Borrado DBF (DELETE)** | Limpia registros marcados como eliminados en las tablas locales. **Solo disponible cuando el daemon está pausado.** |
+| **Reiniciar proceso** | Borra todas las facturas pendientes y reinicia la sincronización desde el número configurado. **Use con precaución — es irreversible.** |
+
+---
+
+## Modo automático — sincronización sin hacer nada
+
+El sistema puede configurarse para sincronizar automáticamente cada cierto tiempo.
+
+### ¿Cómo funciona?
+
+Hay dos procesos que trabajan juntos en segundo plano:
+
+1. **AlegraDaemon** (siempre activo): ejecuta ciclos cada N segundos — descarga facturas nuevas de Alegra y las procesa en Administrator.
+
+2. Los ciclos son **secuenciales**: primero descarga (`allegra_sync`), luego procesa (`interfaz_allegra`). El siguiente ciclo no empieza hasta que el anterior termine por completo.
+
+Usted no ve nada — el proceso ocurre silenciosamente.
+
+### ¿Cómo activarlo?
+
+En la pestaña **Configuración**, ajuste:
+
+| Parámetro | Valor |
+|---|---|
+| **Pausa entre ciclos (seg)** | 300 (5 minutos recomendado) |
+
+Con `300`, el sistema espera 5 minutos después de cada ciclo antes de iniciar el siguiente.
+
+Con `0`, el modo automático está desactivado — solo procesa cuando usted hace clic en **Un ciclo**.
+
+---
+
+## Errores comunes — pestaña "Con inconsistencias"
 
 ### "NIT no encontrado en TERCEROS"
 **Qué significa:** El cliente de esa factura en Alegra no existe en el directorio de terceros de Administrator.
 
-**Qué hacer:** Busque el cliente en Administrator (módulo de terceros) y verifique que el NIT/cédula esté bien escrito. Si el cliente no existe, créelo en Administrator con el mismo NIT que tiene en Alegra.
+**Qué hacer:** Vaya a la pestaña **Terceros** y cree o vincule el cliente. O active **Auto-crear NITs** en Configuración.
 
 ---
 
 ### "Tipo de documento sin mapeo"
-**Qué significa:** Alegra tiene un tipo de factura nuevo que el sistema no reconoce.
+**Qué significa:** Alegra tiene un tipo de factura que el sistema no reconoce.
 
-**Qué hacer:** Llame a Rafael — es una configuración de 5 minutos.
+**Qué hacer:** Llame a Rafael — es una configuración rápida.
 
 ---
 
 ### "Producto no encontrado"
 **Qué significa:** Un producto que facturó en Alegra no existe en el inventario de Administrator.
 
-**Qué hacer:** Verifique que el código del producto en Alegra coincida exactamente con el código en Administrator. Si son distintos, corrija en Alegra.
+**Qué hacer:** Verifique que el código del producto en Alegra coincida exactamente con el código en Administrator.
 
 ---
 
 ### La ventana no abre o aparece vacía
-**Qué hacer:** Cierre y vuelva a abrir Administrator. Si persiste, llame a Rafael.
+**Qué hacer:** Cierre y vuelva a abrir el formulario desde el acceso directo del escritorio. Si persiste, llame a Rafael.
 
 ---
 
-## Modo automático — sincronización sin hacer nada
+## Alertas — pestaña "Procesadas con alertas"
 
-El módulo puede configurarse para sincronizar **automáticamente** cada cierto tiempo,
-sin que usted tenga que hacer nada.
+Estas facturas **ya quedaron registradas** en Administrator. La alerta es informativa.
 
-### ¿Cómo funciona?
-
-Hay dos procesos que trabajan juntos en segundo plano:
-
-1. **Cada 5 minutos** (aunque Administrator esté cerrado): el sistema consulta Alegra
-   y guarda las facturas nuevas en una lista de espera.
-
-2. **Mientras Administrator está abierto**: el sistema revisa esa lista cada N minutos
-   y procesa las facturas que encuentre, registrándolas en inventario y contabilidad.
-
-Usted no ve nada — el proceso ocurre silenciosamente.
-
-### ¿Cómo activarlo?
-
-En **Allegra → Configurar / Sincronizar**, ajuste el parámetro:
-
-| Parámetro | Valor |
+| Tipo de alerta | Qué significa |
 |---|---|
-| **Intervalo automático (minutos)** | 5 (recomendado) |
+| "Producto X: saldo/valor fuera de rango" | El saldo o valor de existencias del producto excede el límite del campo en Administrator. El inventario se movió pero el costo del ítem se tomó como cero. |
+| "Costo ventas sin contabilizar (grupo=0)" | Uno o más productos no tienen cuenta contable asignada (grupo=0). El asiento de costo de ventas no se generó para esos ítems. |
 
-Con `5`, el sistema revisa cada 5 minutos si llegaron facturas nuevas y las procesa de inmediato.
-
-Con `0`, el modo automático está desactivado — solo sincroniza cuando usted hace clic en **Sincronizar ahora**.
-
-### ¿Qué pasa si Administrator está cerrado?
-
-Las facturas se acumulan en la lista de espera. En cuanto abra Administrator, el sistema las procesa automáticamente.
-
----
-
-## ¿Con qué frecuencia sincronizar? (modo manual)
-
-Si prefiere el modo manual, **una vez al día al cierre de jornada** es suficiente.
-
-En el menú: **Allegra → Sincronizar ahora**
+**¿Qué hacer?** Notifique a Rafael para revisar la configuración contable o los saldos del producto en cuestión.
 
 ---
 
 ## Lo que el módulo NO hace (por ahora)
 
-- ❌ No crea clientes nuevos automáticamente — deben existir en Administrator
+- ❌ No crea productos nuevos automáticamente — deben existir en Administrator
 - ❌ No sincroniza devoluciones (notas crédito) — en desarrollo
 - ❌ No modifica las facturas en Alegra — solo las lee
 

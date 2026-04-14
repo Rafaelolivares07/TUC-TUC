@@ -1,5 +1,5 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-11_
+_Actualizado: 2026-04-14_
 
 ## Módulos en trabajo esta sesión
 1. **TUC TUC — Restaurantes**: tipo `'ambos'` (carta + menú del día)
@@ -49,44 +49,64 @@ _Actualizado: 2026-04-11_
 ## MÓDULO: VFP / SAR — Alegra
 
 ### Versiones
-- `alegra_daemon.py` → **v2.8** (timeout 1800s mínimo basado en intervalo)
-- `configurar_allegra.py` → **v2.8** (branding ADMINISTRATOR INTERFASES, CDX fix VFP COM, diagnóstico error real)
-- `interfaz_allegra.py` → **4 fases ACTIVAS Y COMPLETAS** (fix ln_bolsa, fix ventas doble resta)
-- `allegra_sync.py` → fix punto y coma ESTRUCTURA_DBF (creación tabla post-reinicio)
+- `alegra_daemon.py` → **v2.8** (intervalo en segundos, recompilado 2026-04-14)
+- `configurar_allegra.py` → **v2.8** (4 paneles facturas, intervalo segundos, UI mejorada)
+- `interfaz_allegra.py` → **4 fases ACTIVAS Y COMPLETAS** + procesamiento parcial con alertas
+- `allegra_sync.py` → campo `fecha_hora T` — datetime exacto de Alegra
 
-### Lo que está funcionando (2026-04-12)
+### Lo que está funcionando (2026-04-14)
 - **4 fases completas**: f_prod1, f_standar, f_costos, f_contab — todas activas y probadas en ciclos reales
 - **f_standar**: `_standar()` lee TRANS_MAT (kits), inserta REG_PROD, actualiza REG_PROD_SALDOS — NO es stub
-- **Multi-pagos**: campo `pagos` JSON con todos los payments de Alegra — asientos contables cuadrados para facturas con mezcla de métodos (cash+tarjeta+CxC)
-- **NITs auto-creados**: toggle auto_nit (Canvas píldora) — si ON, crea tercero en TERCEROS.dbf automáticamente y marca como 'creado' en alegra_nits_pend
-- **Equivalencia vendedores**: sección en tab Configuracion — seller_id Alegra → vendedor Administrator (MESEROS.dbf internamente, nunca "mesero" en UI); guarda en alegra_vendedores.dbf
-- **Reinicio seguro**: diálogo post-reinicio sugiere MIN(borrado)-1 por empresa como nuevo num_inicio; bloquea Reanudar/Un ciclo hasta confirmar
-- **CDX fix en reinicio**: `_reiniciar_trabajo()` usa VFP COM (`VisualFoxPro.Application.7`) para DELETE en tablas Administrator — VFP DELETE actualiza CDX; Python dbf.delete() no lo hace
-- **Timeout dinámico daemon**: `max(300, max_fact × 90)` — nunca corta ciclo válido
-- **Bloqueo configuración inválida**: no guarda si `max_fact × 90s > intervalo × 60s`
-- **Label estimado**: muestra duración estimada local/servidor/timeout en tiempo real
-- **Scroll bloqueado en todos los comboboxes**: met_pago, tipo_doc, vendedores — `<MouseWheel>` → `"break"`
-- **codepage cp1252** explícito en TODOS los `dbf.Table()` del daemon y formulario
-- **met_pago comboboxes siempre `state="readonly"`** — nunca `disabled`
-- **guardar() valida tip_doc en cod_map** — no guarda si display inválido
+- **Multi-pagos**: campo `pagos` JSON con todos los payments de Alegra — asientos contables cuadrados
+- **NITs auto-creados**: toggle auto_nit — crea tercero en TERCEROS.dbf automáticamente
+- **Equivalencia vendedores**: seller_id Alegra → vendedor Administrator (MESEROS.dbf); guarda en alegra_vendedores.dbf
+- **Reinicio seguro**: diálogo post-reinicio sugiere MIN(borrado)-1 por empresa; bloquea Reanudar/Un ciclo hasta confirmar
+- **CDX fix en reinicio**: `_vfp_delete_en_tabla()` usa VFP COM para DELETE — actualiza CDX
+- **fecha_hora en PROD_FACT1**: FECHAHORA toma el datetime exacto de Alegra (`factura["datetime"]`), no la medianoche
+- **_max_consecutivo()**: escanea todos los registros no borrados — correcto post-reinicio
+- **Procesamiento parcial con alertas**: overflow en `_standar()` o productos sin cuenta grupo=0 no bloquean la factura — se marca como "procesada con alerta"
+- **4 paneles en grilla facturas**: Pendientes / Con inconsistencias / Procesadas / Procesadas con alertas
+- **Intervalo en segundos**: campo `intervalo N(4,0)` — era minutos, ahora segundos
 
-### Cambios sesión 2026-04-12
-- **Branding**: UI renombrada a "ADMINISTRATOR INTERFASES" — título, splash, header, mensajes. Variables técnicas y mapeos sin cambio.
-- **Diagnóstico fuente**: `_consultar_alegra()` captura error real por empresa en `_alegra_error` dict — muestra "Error: ..." en lugar de "..." cuando falla API empresa 02
-- **CDX fix — root cause y solución**:
-  - Causa: Python `dbf.delete()` marca 0x2A en DBF pero NO actualiza el CDX estructural
-  - Consecuencia: al filtrar por fecha 10-abr en `contabilidad_resumen_por_documentos.scx`, VFP Rushmore encontraba registros borrados de 10-abr (con FECHAHORA del procesamiento = 11-abr) vía entradas obsoletas del CDX
-  - Solución: nuevo método `_vfp_delete_en_tabla()` — crea PRG temporal + ejecuta vía COM `VisualFoxPro.Application.7` en SHARED mode; VFP DELETE actualiza CDX correctamente
-  - Aplica a pasos 5-9 del reinicio: PROD_FACT1, REG_PROD, REG_CTAS, SAL_DOC, reg_ctas_notas_documentos
-  - Pasos 3-4 (allegra_pendientes, alegra_nits_pend) siguen con Python dbf.delete() — son tablas propias sin CDX estructural
+### Cambios sesión 2026-04-14
+
+#### Bugs corregidos en interfaz_allegra.py
+- **UnboundLocalError var_consecutivo**: variable inicializada antes del for loop (antes estaba dentro, skip por grupo=0 la dejaba sin definir)
+- **DataOverflowError _standar()**: productos con SAL_EXI/VAL_EXI_CO fuera de rango → wrapeado per-item en try/except → costo=0.0 + alerta; factura continúa procesándose
+- **_costo_ventas_contabiliza() retornaba None**: función era void → añadidos `return sin_cuentas` y `return []`; productos grupo=0 se reportan como alerta
+- **Except principal sin _marcar_motivo**: facturas que lanzaban excepción quedaban en pendientes sin motivo → añadido `_marcar_motivo(fid, f"FALLA: {e}")`
+
+#### Nueva categoría "Procesadas con alertas"
+- `_marcar_completo_con_alerta(factura_id, motivo)` — setea `procesado=True` con `motivo` no vacío
+- Clasificación en `_leer_facturas()`: `procesado=True AND motivo != ''` → `con_alerta`
+- 4to panel `tree_alerta` en pestaña Facturas (naranja `#996600`)
+- Barra estado: `f"Pendientes: {np} | Con inconsistencias: {ne} | Procesadas: {nr} | Con alertas: {na}"`
+
+#### Intervalo cambiado de minutos a segundos
+- `alegra_config.dbf`: campo `intervalo N(3,0)` migrado a `N(4,0)` — migración automática al abrir
+- Daemon: `time.sleep(intervalo)` (antes `intervalo * 60`); `timeout_ciclo = max(1800, intervalo_cfg)` (antes `* 60`)
+- UI: label "Pausa entre ciclos (seg, 0=manual)"; spinbox to=9999; textos actualizados
+- **Daemon recompilado** a `AlegraDaemon.exe` con PyInstaller --clean
+
+#### Mejoras UI configurar_allegra.py
+- **Tamaño ventana**: `alto_max = sh - 60` — se adapta a cualquier resolución de pantalla
+- **Título eliminado**: se quitó el label "ADMINISTRATOR INTERFASES" flotante sobre todos los elementos
+- **Botón "Revertir fases seleccionada" eliminado** del panel Procesadas
+- **"Reiniciar proceso" movido** a pestaña Estado & Log (junto a Borrado DBF) — era demasiado peligroso en la barra principal
+- **"Borrado DBF" deshabilitado** cuando el daemon está activo; se habilita solo al pausar
+
+### CDX APPEND — análisis técnico (pendiente)
+- `SELECT * FROM PROD_FACT1` (sin WHERE) muestra todos los registros incluidos los de la interfaz ✅
+- `SELECT ... WHERE FECHAHORA >= fecha` no los muestra ❌ — Rushmore usa CDX que Python no actualizó
+- VFP COM (`VisualFoxPro.Application.7`) requiere VFP IDE instalado — cliente solo tiene runtime
+- **Solución pendiente**: PRG compilado (.fxp) que Administrator pueda llamar, o rutina interna REINDEX
 
 ### Pendientes SAR — próxima sesión
-1. **Probar reinicio con VFP COM** — verificar que `_vfp_delete_en_tabla()` no genera error al correr con Administrator activo; confirmar CDX limpio post-reinicio
+1. **CDX APPEND fix** — solución sin VFP IDE en cliente
 2. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
 3. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
-4. **Diálogo post-reinicio** — probar que aparece centrado y operable
-5. **Label "Próximo ciclo"** — corregir para mostrar tiempo real (inicio_ciclo + duración + intervalo)
-6. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes durante primer sync
+4. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
+5. **Prueba en PC Pilar** — pendiente después de validar en PC Rafael
 
 ### Estado de archivos SAR
 
@@ -96,10 +116,10 @@ _Actualizado: 2026-04-11_
 | `interfaz_allegra.prg` | ✅ Limpio — no se usa en automático |
 | `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios |
-| `alegra_daemon.py` | ✅ v2.8 — timeout basado en intervalo (mín 1800s) |
-| `configurar_allegra.py` | ✅ v2.8 — branding ADMINISTRATOR INTERFASES, CDX fix VFP COM en reinicio, diagnóstico error real |
-| `interfaz_allegra.py` | ✅ 4 fases ACTIVAS — fix bolsa (precio×cantidad), fix ventas (no doble resta), multi-pagos JSON |
-| `allegra_sync.py` | ✅ fix ESTRUCTURA_DBF punto y coma (todos los campos) |
+| `alegra_daemon.py` | ✅ v2.8 — intervalo en segundos, recompilado 2026-04-14 |
+| `configurar_allegra.py` | ✅ v2.8 — 4 paneles, intervalo segundos, UI adaptativa |
+| `interfaz_allegra.py` | ✅ 4 fases + alertas parciales — 4 bugs corregidos 2026-04-14 |
+| `allegra_sync.py` | ✅ campo fecha_hora T — datetime exacto de Alegra |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
 

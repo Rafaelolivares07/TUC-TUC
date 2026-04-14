@@ -188,13 +188,33 @@ Usuario selecciona fila en grilla "Procesadas"
 
 ---
 
+### Despliegue en PC Pilar — sesión 2026-04-14 ~3pm
+
+Checklist completo en: `docs/checklist_despliegue_pilar.md`
+
+**Requisitos verificar remotamente:**
+- Python + paquetes `dbf` y `requests`
+- `C:\S.A.R\` con scripts y `AlegraDaemon.exe` v2.8
+- `C:\S.A.R\RutaBaseDatos\ruta.dbf` apuntando a BD Pilar
+- `C:\S.A.R\bd_esperada.txt` con ruta correcta
+- `AlegraDaemon.exe` en `shell:startup`
+- `allegra_config.dbf` y `alegra_tiposdoc.dbf` en carpeta BD
+
+**Procedimiento (8 pasos en checklist):**
+1. Verificar requisitos
+2. Copiar archivos actualizados
+3. `instalar_allegra_bd.py` si faltan tablas
+4. Configurar tip_doc, met_pago, num_inicio, vendedores por empresa
+5. Prueba con "Un ciclo" manual
+6. Verificar en Administrator (inventario + contabilidad)
+7. Activar modo automático
+8. Confirmar que Pilar sabe operar
+
 ### Pendientes — próximas sesiones
-- **Pruebas de instalación** en equipo Pilar
+- **CDX APPEND fix** — solución sin VFP IDE en cliente (registros no aparecen en filtros WHERE FECHAHORA)
 - **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
 - **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
-- **Diálogo post-reinicio** — probar que aparece centrado y operable
-- **Label "Próximo ciclo"** — corregir para mostrar tiempo real (inicio_ciclo + duración + intervalo)
-- **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes durante primer sync
+- **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
 
 ---
 

@@ -102,11 +102,11 @@ _Actualizado: 2026-04-14_
 - **Solución pendiente**: PRG compilado (.fxp) que Administrator pueda llamar, o rutina interna REINDEX
 
 ### Pendientes SAR — próxima sesión
-1. **CDX APPEND fix** — solución sin VFP IDE en cliente
-2. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
-3. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
-4. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
-5. **Prueba en PC Pilar** — pendiente después de validar en PC Rafael
+1. **Despliegue PC Pilar** — sesión 2026-04-14 ~3pm — checklist en `docs/checklist_despliegue_pilar.md`
+2. **CDX APPEND fix** — solución sin VFP IDE en cliente
+3. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
+4. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
+5. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
 
 ### Estado de archivos SAR
 

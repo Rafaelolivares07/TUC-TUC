@@ -165,6 +165,20 @@ Abrir Administrator con Pilar:
 
 ---
 
+### Paso 7b — Probar Pausar / Reanudar
+
+- [ ] Tab Estado & Log → clic **"Pausar"**
+  - Label daemon cambia a "Pausado"
+  - Botón cambia a "Reanudar"
+  - Botones **"Borrado DBF"** y **"Reiniciar proceso"** se habilitan
+- [ ] Clic **"Reanudar"**
+  - Label daemon vuelve a "Activo"
+  - Botón vuelve a "Pausar"
+  - Botones **"Borrado DBF"** y **"Reiniciar proceso"** se deshabilitan
+- [ ] Verificar que el daemon retoma ciclos automáticamente tras reanudar (log se actualiza)
+
+---
+
 ### Paso 8 — Checklist de cierre
 
 - [ ] Daemon corriendo — tab Estado muestra "Activo"

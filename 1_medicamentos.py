@@ -27461,10 +27461,10 @@ def api_restaurante_opciones(slug):
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
 
         opciones = conn.execute("""
-            SELECT id, tipo, nombre, recargo, precio, imagen, activo, descripcion
+            SELECT id, tipo, nombre, recargo, precio, imagen, activo, descripcion, orden
             FROM opciones_menu
             WHERE restaurante_id = %s
-            ORDER BY tipo, nombre
+            ORDER BY orden, id
         """, (rest['id'],)).fetchall()
         conn.close()
 
@@ -27472,6 +27472,30 @@ def api_restaurante_opciones(slug):
             'ok': True,
             'opciones': [dict(o) for o in opciones]
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/restaurante/<slug>/reordenar', methods=['POST'])
+def api_restaurante_reordenar(slug):
+    """Guarda nuevo orden de ítems del catálogo"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        data = request.get_json()
+        items = data.get('items', [])  # [{id, orden}, ...]
+        conn = get_db_connection()
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s AND admin_id = %s",
+                            (slug, session['usuario_id'])).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        for item in items:
+            conn.execute("UPDATE opciones_menu SET orden = %s WHERE id = %s AND restaurante_id = %s",
+                         (item['orden'], item['id'], rest['id']))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

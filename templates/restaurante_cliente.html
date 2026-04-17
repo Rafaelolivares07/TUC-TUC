@@ -580,39 +580,75 @@ async function cargarCartaCliente() {
             grupos[o.tipo].push(o);
         });
 
-        document.getElementById('sec-tipos').innerHTML = Object.keys(grupos).map(cat => `
-            <div class="mb-6">
-                <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-3">${cat}</h3>
-                <div class="grid grid-cols-2 gap-3">
-                    ${grupos[cat].map(p => `
-                        <div class="card rounded-2xl shadow overflow-hidden">
-                            ${p.imagen
-                                ? `<div class="plato-img-wrap" onclick="abrirZoom('${p.imagen}')">
-                                      <img src="${p.imagen}" alt="" class="img-bg-blur" onerror="this.style.display='none'">
-                                      <img src="${p.imagen}" alt="${p.nombre}" class="img-principal" onerror="this.src='https://placehold.co/400x300?text=Sin+imagen'">
-                                   </div>`
-                                : `<div class="w-full h-24 placeholder-sin-img bg-gray-100 flex items-center justify-center">
-                                    <svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                                  </div>`}
-                            <div class="p-3">
-                                <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
-                                ${p.descripcion ? `
-                                    <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
-                                    <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
-                                ` : ''}
-                                <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+        // Mantener orden de categorías según primer ítem
+        const catOrder = [];
+        Object.keys(grupos).forEach(c => { if (!catOrder.includes(c)) catOrder.push(c); });
+
+        document.getElementById('sec-tipos').innerHTML = catOrder.map(cat => {
+            const platoscat = grupos[cat];
+            const tieneImagenes = platoscat.some(p => p.imagen);
+            if (tieneImagenes) {
+                // Grid con cards — cada ítem decide si muestra imagen o placeholder
+                return `
+                <div class="mb-6">
+                    <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-3">${cat}</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        ${platoscat.map(p => `
+                            <div class="card rounded-2xl shadow overflow-hidden">
+                                ${p.imagen
+                                    ? `<div class="plato-img-wrap" onclick="abrirZoom('${p.imagen}')">
+                                          <img src="${p.imagen}" alt="" class="img-bg-blur" onerror="this.style.display='none'">
+                                          <img src="${p.imagen}" alt="${p.nombre}" class="img-principal">
+                                       </div>`
+                                    : `<div class="w-full h-24 placeholder-sin-img bg-gray-100 flex items-center justify-center">
+                                          <svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                       </div>`}
+                                <div class="p-3">
+                                    <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
+                                    ${p.descripcion ? `
+                                        <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
+                                        <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
+                                    ` : ''}
+                                    <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                                    ${!SOLO_CARTA ? `
+                                    <div class="flex items-center justify-center gap-3 mt-2">
+                                        <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
+                                        <span id="cli-cant-${p.id}" class="font-bold txt-primary w-6 text-center text-lg">0</span>
+                                        <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-9 h-9 rounded-full font-bold text-lg">+</button>
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            } else {
+                // Lista compacta — sin imagen, sin placeholder
+                return `
+                <div class="mb-6">
+                    <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-2">${cat}</h3>
+                    <div class="space-y-2">
+                        ${platoscat.map(p => `
+                            <div class="card rounded-xl shadow px-4 py-3 flex items-center justify-between gap-3">
+                                <div class="flex-1 min-w-0">
+                                    <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
+                                    ${p.descripcion ? `
+                                        <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
+                                        <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
+                                    ` : ''}
+                                    <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                                </div>
                                 ${!SOLO_CARTA ? `
-                                <div class="flex items-center justify-center gap-3 mt-2">
-                                    <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
-                                    <span id="cli-cant-${p.id}" class="font-bold txt-primary w-6 text-center text-lg">0</span>
-                                    <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-9 h-9 rounded-full font-bold text-lg">+</button>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-8 h-8 rounded-full font-bold text-lg">-</button>
+                                    <span id="cli-cant-${p.id}" class="font-bold txt-primary w-5 text-center">0</span>
+                                    <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-8 h-8 rounded-full font-bold text-lg">+</button>
                                 </div>` : ''}
                             </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `).join('');
+                        `).join('')}
+                    </div>
+                </div>`;
+            }
+        }).join('');
 
         // Mostrar notas y botón pedir (solo si no es solo_carta)
         if (!SOLO_CARTA) {

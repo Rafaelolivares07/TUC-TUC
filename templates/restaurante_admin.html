@@ -10,6 +10,13 @@
     <script src="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.css" rel="stylesheet"/>
     <script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <style>
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+        .sortable-ghost { opacity: 0.4; }
+        .sortable-chosen { background: #fef3c7 !important; }
+    </style>
     <script src="https://unpkg.com/@protomaps/basemaps@5/dist/basemaps.js" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -930,8 +937,6 @@ const TIPOS_MENUDIA = ['sopa', 'proteina', 'principio'];
 
 function renderCatalogo() {
     const cont = document.getElementById('catalogo-lista');
-
-    // Para 'ambos': el panel catalogo solo muestra items de carta (excluye sopa/proteína/principio)
     const items = TIPO_REST === 'ambos'
         ? catalogoData.filter(o => !TIPOS_MENUDIA.includes(o.tipo))
         : catalogoData;
@@ -941,40 +946,43 @@ function renderCatalogo() {
         return;
     }
 
-    // Agrupar por tipo/categoría
+    // Agrupar por tipo manteniendo orden (primer ítem de cada cat define posición)
+    const catOrder = [];
     const grupos = {};
     items.forEach(o => {
-        if (!grupos[o.tipo]) grupos[o.tipo] = [];
+        if (!grupos[o.tipo]) { grupos[o.tipo] = []; catOrder.push(o.tipo); }
         grupos[o.tipo].push(o);
     });
 
     const esCarta = TIPO_REST === 'carta' || TIPO_REST === 'ambos';
-
-    // Para carta/ambos: actualizar datalist de categorías (solo categorías de carta)
     if (esCarta) {
         const dl = document.getElementById('categorias-list');
-        if (dl) dl.innerHTML = Object.keys(grupos).map(k => `<option value="${k}">`).join('');
+        if (dl) dl.innerHTML = catOrder.map(k => `<option value="${k}">`).join('');
     }
 
     const colores = ['amber', 'red', 'green', 'blue', 'purple', 'teal', 'orange', 'cyan'];
     let ci = 0;
 
-    cont.innerHTML = Object.keys(grupos).map(tipo => {
-        const items = grupos[tipo];
+    cont.innerHTML = catOrder.map(tipo => {
+        const litems = grupos[tipo];
         const color = esCarta ? colores[ci++ % colores.length] :
             (tipo === 'sopa' ? 'yellow' : tipo === 'proteina' ? 'red' : 'green');
         const label = esCarta ? tipo :
             (tipo === 'sopa' ? 'Sopas y Caldos' : tipo === 'proteina' ? 'Proteínas' : 'Principios');
         return `
-            <div>
-                <h4 class="font-bold text-${color}-700 mb-2 text-sm uppercase tracking-wide">${label}</h4>
-                <div class="space-y-2">
-                    ${items.map(i => `
-                        <div class="flex items-center justify-between bg-white border rounded-lg px-4 py-3">
+            <div class="cat-block" data-cat="${tipo}">
+                <div class="flex items-center gap-2 mb-2">
+                    ${esCarta ? `<span class="drag-handle text-gray-300 select-none" title="Arrastrar categoría">⠿⠿</span>` : ''}
+                    <h4 class="font-bold text-${color}-700 text-sm uppercase tracking-wide">${label}</h4>
+                </div>
+                <div class="items-list space-y-2" data-cat="${tipo}">
+                    ${litems.map(i => `
+                        <div class="item-row flex items-center justify-between bg-white border rounded-lg px-3 py-3" data-id="${i.id}">
                             <div class="flex items-center gap-3">
+                                <span class="drag-handle text-gray-300 select-none text-lg" title="Arrastrar ítem">⠿</span>
                                 ${esCarta ? `
                                     <div class="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer border-2 ${i.imagen ? 'border-green-300' : 'border-dashed border-gray-300'}"
-                                         onclick="document.getElementById('img-input-${i.id}').click()" title="${i.imagen ? 'Cambiar imagen' : 'Agregar imagen'} · Recomendado: cuadrado 1:1 o vertical 3:4 · mínimo 600×600 px">
+                                         onclick="document.getElementById('img-input-${i.id}').click()" title="${i.imagen ? 'Cambiar imagen' : 'Agregar imagen'}">
                                         ${i.imagen
                                             ? `<img src="${i.imagen}" class="w-full h-full object-cover">`
                                             : `<svg class="w-6 h-6 text-gray-400 m-auto mt-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`}
@@ -982,19 +990,19 @@ function renderCatalogo() {
                                     </div>
                                 ` : ''}
                                 <div>
-                                    <span class="font-medium text-gray-800">${i.nombre}</span>
-                                    ${i.descripcion ? `<p class="text-xs text-gray-400 mt-0.5">${i.descripcion}</p>` : ''}
+                                    <span class="font-medium text-gray-800 text-sm">${i.nombre}</span>
+                                    ${i.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 leading-tight">${i.descripcion}</p>` : ''}
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2 flex-shrink-0">
                                 ${esCarta
                                     ? `<span class="text-sm text-amber-600 font-semibold">$${Number(i.precio).toLocaleString()}</span>`
                                     : (i.recargo > 0 ? `<span class="text-sm text-amber-600 font-semibold">+$${Number(i.recargo).toLocaleString()}</span>` : '')}
                                 ${esCarta ? `
-                                <button onclick="compartirOpcion(${i.id}, '${i.nombre.replace(/'/g, "\\'")}')" class="text-emerald-600 hover:text-emerald-700 text-sm" title="Compartir">
+                                <button onclick="compartirOpcion(${i.id}, '${i.nombre.replace(/'/g, "\\'")}')" class="text-emerald-500 hover:text-emerald-700" title="Compartir">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
                                 </button>` : ''}
-                                <button onclick="eliminarOpcion(${i.id})" class="text-red-400 hover:text-red-600 text-sm" title="Eliminar">
+                                <button onclick="eliminarOpcion(${i.id})" class="text-red-400 hover:text-red-600" title="Eliminar">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                 </button>
                             </div>
@@ -1004,6 +1012,51 @@ function renderCatalogo() {
             </div>
         `;
     }).join('');
+
+    if (esCarta) _initSortable();
+}
+
+let _sortableInited = false;
+function _initSortable() {
+    // Arrastre de categorías
+    Sortable.create(document.getElementById('catalogo-lista'), {
+        animation: 150,
+        handle: '.cat-block > div > .drag-handle',
+        draggable: '.cat-block',
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        onEnd: _guardarOrden
+    });
+    // Arrastre de ítems dentro de cada categoría
+    document.querySelectorAll('.items-list').forEach(list => {
+        Sortable.create(list, {
+            animation: 150,
+            handle: '.drag-handle',
+            draggable: '.item-row',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: _guardarOrden
+        });
+    });
+}
+
+async function _guardarOrden() {
+    // Recorre el DOM en orden actual y asigna orden secuencial
+    const items = [];
+    let orden = 1;
+    document.querySelectorAll('#catalogo-lista .cat-block').forEach(catEl => {
+        catEl.querySelectorAll('.item-row').forEach(row => {
+            items.push({ id: parseInt(row.dataset.id), orden });
+            orden++;
+        });
+    });
+    try {
+        await fetch(`${BASE}/reordenar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ items })
+        });
+    } catch(e) { console.error('Error guardando orden', e); }
 }
 
 async function guardarOpcion() {

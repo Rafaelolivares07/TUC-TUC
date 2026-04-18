@@ -27480,15 +27480,18 @@ def api_restaurante_opciones(slug):
 @app.route('/api/restaurante/<slug>/reordenar', methods=['POST'])
 def api_restaurante_reordenar(slug):
     """Guarda nuevo orden de ítems del catálogo"""
-    if 'usuario_id' not in session:
+    token_sesion = session.get('restaurante_token')
+    if 'usuario_id' not in session and not token_sesion:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
         data = request.get_json()
         items = data.get('items', [])  # [{id, orden}, ...]
         conn = get_db_connection()
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s AND admin_id = %s",
-                            (slug, session['usuario_id'])).fetchone()
+        rest = conn.execute("SELECT id, token_acceso FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        if 'usuario_id' not in session and rest['token_acceso'] != token_sesion:
             conn.close()
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         for item in items:

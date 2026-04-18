@@ -45,7 +45,7 @@ def leer_tabla(ruta_bd, nombre):
 
 
 def consulta_reg_ctas(ruta_bd, parametros):
-    rows_rc, _ = leer_tabla(ruta_bd, "REG_CTAS")
+    # Cargar tablas de referencia primero (pequeñas)
     rows_ter, _ = leer_tabla(ruta_bd, "TERCEROS")
     rows_tip, _ = leer_tabla(ruta_bd, "TIPO_DOC")
     rows_cta, _ = leer_tabla(ruta_bd, "CUENTA")
@@ -54,39 +54,48 @@ def consulta_reg_ctas(ruta_bd, parametros):
     tipo_docs = {r['CODIGO']: r['NOMBRE']  for r in rows_tip}
     cuentas   = {r['CODIGO']: r['NOMBRE']  for r in rows_cta}
 
-    lapso   = parametros.get('lapso')
-    empresa = parametros.get('empresa')
-    tercero = parametros.get('tercero')
+    lapso   = str(parametros.get('lapso',   '') or '').strip()
+    empresa = str(parametros.get('empresa', '') or '').strip()
+    tercero = str(parametros.get('tercero', '') or '').strip()
     limite  = int(parametros.get('limite', 200))
 
+    # Leer REG_CTAS con filtro inline — nunca carga todo en memoria
+    path = os.path.join(ruta_bd, "REG_CTAS.DBF")
+    t = dbf.Table(path, ignore_memos=True)
+    t.open(dbf.READ_ONLY)
     resultado = []
-    for r in rows_rc:
-        if lapso   and str(r.get('LAPSO',   '')).strip() != str(lapso):   continue
-        if empresa and str(r.get('EMPRESA', '')).strip() != str(empresa): continue
-        if tercero and str(r.get('TERCERO', '')).strip() != str(tercero): continue
+    try:
+        for r in t:
+            if dbf.is_deleted(r):
+                continue
+            if lapso   and str(r['LAPSO']   or '').strip() != lapso:   continue
+            if empresa and str(r['EMPRESA'] or '').strip() != empresa: continue
+            if tercero and str(r['TERCERO'] or '').strip() != tercero: continue
 
-        cod_ter  = str(r.get('TERCERO', '')).strip()
-        cod_tipo = str(r.get('TIPO',    '')).strip()
-        cod_cta  = str(r.get('CUENTA',  '')).strip()
+            cod_ter  = str(r['TERCERO'] or '').strip()
+            cod_tipo = str(r['TIPO']    or '').strip()
+            cod_cta  = str(r['CUENTA']  or '').strip()
 
-        resultado.append({
-            'consecutivo': r.get('CONSECUTIV'),
-            'cuenta':      cod_cta,
-            'cuenta_nom':  cuentas.get(cod_cta, ''),
-            'lapso':       r.get('LAPSO'),
-            'fecha':       str(r.get('FECHAHORA', '')),
-            'tercero':     cod_ter,
-            'tercero_nom': terceros.get(cod_ter, ''),
-            'tipo':        cod_tipo,
-            'tipo_nom':    tipo_docs.get(cod_tipo, ''),
-            'documento':   r.get('DOCUMENTO'),
-            'debito':      float(r.get('TOT_DEB') or 0),
-            'credito':     float(r.get('TOT_CRE') or 0),
-            'detalle':     str(r.get('DETALLE_CT', '')).strip(),
-            'anulado':     r.get('ANULADO'),
-        })
-        if len(resultado) >= limite:
-            break
+            resultado.append({
+                'consecutivo': r['CONSECUTIV'],
+                'cuenta':      cod_cta,
+                'cuenta_nom':  cuentas.get(cod_cta, ''),
+                'lapso':       r['LAPSO'],
+                'fecha':       str(r['FECHAHORA'] or ''),
+                'tercero':     cod_ter,
+                'tercero_nom': terceros.get(cod_ter, ''),
+                'tipo':        cod_tipo,
+                'tipo_nom':    tipo_docs.get(cod_tipo, ''),
+                'documento':   r['DOCUMENTO'],
+                'debito':      float(r['TOT_DEB'] or 0),
+                'credito':     float(r['TOT_CRE'] or 0),
+                'detalle':     str(r['DETALLE_CT'] or '').strip(),
+                'anulado':     r['ANULADO'],
+            })
+            if len(resultado) >= limite:
+                break
+    finally:
+        t.close()
 
     return resultado
 

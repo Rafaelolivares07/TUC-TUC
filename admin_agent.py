@@ -59,13 +59,16 @@ def consulta_reg_ctas(ruta_bd, parametros):
     tercero = str(parametros.get('tercero', '') or '').strip()
     limite  = int(parametros.get('limite', 200))
 
-    # Leer REG_CTAS con filtro inline — nunca carga todo en memoria
+    # Leer REG_CTAS en reversa — registros más nuevos están al final (VFP append)
+    # Así un filtro de lapso reciente termina en segundos sin escanear 1.3M registros
     path = os.path.join(ruta_bd, "REG_CTAS.DBF")
     t = dbf.Table(path, ignore_memos=True)
     t.open(dbf.READ_ONLY)
     resultado = []
     try:
-        for r in t:
+        n = len(t)
+        for i in range(n - 1, -1, -1):
+            r = t[i]
             if dbf.is_deleted(r):
                 continue
             if lapso   and str(r['LAPSO']   or '').strip() != lapso:   continue
@@ -97,6 +100,7 @@ def consulta_reg_ctas(ruta_bd, parametros):
     finally:
         t.close()
 
+    resultado.reverse()  # mostrar en orden cronológico
     return resultado
 
 

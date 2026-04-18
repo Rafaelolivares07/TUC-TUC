@@ -27662,22 +27662,29 @@ def api_restaurante_opcion_eliminar(slug, opcion_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@app.route('/api/restaurante/<slug>/opcion/<int:opcion_id>/imagen', methods=['POST'])
+@app.route('/api/restaurante/<slug>/opcion/<int:opcion_id>/imagen', methods=['POST', 'DELETE'])
 def api_restaurante_opcion_imagen(slug, opcion_id):
-    """Subir imagen a una opción (base64)"""
-    if 'usuario_id' not in session:
+    """Subir (POST) o eliminar (DELETE) imagen de una opción"""
+    token_sesion = session.get('restaurante_token')
+    if 'usuario_id' not in session and not token_sesion:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    data = request.get_json()
-    imagen = data.get('imagen', '')
     try:
         conn = get_db_connection()
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, token_acceso FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        if 'usuario_id' not in session and rest['token_acceso'] != token_sesion:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        if request.method == 'DELETE':
+            nueva_imagen = None
+        else:
+            data = request.get_json()
+            nueva_imagen = data.get('imagen') or None
         conn.execute(
             "UPDATE opciones_menu SET imagen = %s WHERE id = %s AND restaurante_id = %s",
-            (imagen if imagen else None, opcion_id, rest['id'])
+            (nueva_imagen, opcion_id, rest['id'])
         )
         conn.commit()
         conn.close()

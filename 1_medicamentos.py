@@ -28427,7 +28427,7 @@ def api_restaurante_pedido_crear(slug):
     """Crear pedido(s) — soporta menu_dia y carta"""
     try:
         data = request.get_json(force=True) or {}
-        mesa_nombre = (data.get('mesa_nombre') or '').strip() or None
+        mesa_nombre = str(data.get('mesa_nombre') or '').strip() or None
         mesa_num = 0  # legacy
         nombre_cliente = data.get('nombre_cliente', '').strip() or None
         notas = data.get('notas', '').strip()

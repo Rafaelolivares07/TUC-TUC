@@ -28425,17 +28425,16 @@ def api_restaurante_registrar_cliente(slug):
 @app.route('/api/restaurante/<slug>/pedido', methods=['POST'])
 def api_restaurante_pedido_crear(slug):
     """Crear pedido(s) — soporta menu_dia y carta"""
-    data = request.get_json()
-    mesa_nombre = (data.get('mesa_nombre') or '').strip() or None
-    mesa_num = 0  # legacy
-    nombre_cliente = data.get('nombre_cliente', '').strip() or None
-    notas = data.get('notas', '').strip()
-    tipo_entrega = data.get('tipo_entrega', 'mesa')
-    telefono_cliente = data.get('telefono_cliente', '').strip() or None if data.get('telefono_cliente') else None
-    direccion_cliente = data.get('direccion_cliente', '').strip() or None if data.get('direccion_cliente') else None
-    cliente_id = data.get('cliente_id')
-
     try:
+        data = request.get_json(force=True) or {}
+        mesa_nombre = (data.get('mesa_nombre') or '').strip() or None
+        mesa_num = 0  # legacy
+        nombre_cliente = data.get('nombre_cliente', '').strip() or None
+        notas = data.get('notas', '').strip()
+        tipo_entrega = data.get('tipo_entrega', 'mesa')
+        telefono_cliente = data.get('telefono_cliente', '').strip() or None if data.get('telefono_cliente') else None
+        direccion_cliente = data.get('direccion_cliente', '').strip() or None if data.get('direccion_cliente') else None
+        cliente_id = data.get('cliente_id')
         conn = get_db_connection()
         crear_tablas_restaurante(conn)
         rest = conn.execute("SELECT id, tipo_restaurante, dias_pagados FROM restaurantes WHERE slug = %s", (slug,)).fetchone()

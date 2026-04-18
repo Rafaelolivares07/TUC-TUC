@@ -1933,29 +1933,28 @@ def admin_login_post():
     try:
         admin = conn.execute("""
             SELECT * FROM usuarios
-            WHERE usuario = ? AND password = ? AND rol = 'Administrador'
+            WHERE usuario = ? AND password = ? AND rol IN ('Administrador','ClienteVFP')
         """, (usuario, password)).fetchone()
 
         if admin:
             # Login exitoso
             session.clear()
-            session['dispositivo_id'] = admin['dispositivo_id']
+            session['dispositivo_id'] = admin.get('dispositivo_id', '')
             session['usuario_id'] = admin['id']
             session['nombre'] = admin['nombre']
-            session['rol'] = 'Administrador'
+            session['rol'] = admin['rol']
             session.modified = True
 
-            # Configurar duracin de sesin segn checkbox
             if recordar:
                 session.permanent = True
                 app.permanent_session_lifetime = timedelta(days=30)
-                print(f" Login exitoso - Sesin de 30 das")
             else:
                 session.permanent = True
                 app.permanent_session_lifetime = timedelta(hours=24)
-                print(f" Login exitoso - Sesin de 24 horas")
 
-            flash('Bienvenido! Has iniciado sesin correctamente', 'success')
+            flash('Bienvenido! Has iniciado sesión correctamente', 'success')
+            if admin['rol'] == 'ClienteVFP':
+                return redirect(url_for('admin_consultas_page'))
             return redirect(url_for('admin_area'))
         else:
             # Login fallido
@@ -44456,6 +44455,12 @@ def crear_tablas_admin_agent(conn):
     for sql in sqls:
         conn.execute(sql)
     conn.commit()
+    # Columna que vincula un usuario TUC TUC con su cliente_id de Administrator
+    try:
+        conn.execute("ALTER TABLE \"USUARIOS\" ADD COLUMN IF NOT EXISTS admin_cliente_id VARCHAR(100)")
+        conn.commit()
+    except Exception:
+        pass
     _admin_agent_tablas_listas = True
 
 
@@ -44582,6 +44587,13 @@ def admin_agent_consultar():
     parametros = data.get('parametros', {})
     if not cliente_id or not tipo:
         return jsonify({'ok': False, 'error': 'cliente_id y tipo requeridos'}), 400
+    # ClienteVFP solo puede consultar su propio cliente_id
+    if session.get('rol') != 'Administrador':
+        conn2 = get_db_connection()
+        row2 = conn2.execute("SELECT admin_cliente_id FROM usuarios WHERE id=%s", (session['usuario_id'],)).fetchone()
+        conn2.close()
+        if not row2 or (row2['admin_cliente_id'] or '').strip() != cliente_id:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
         crear_tablas_admin_agent(conn)
@@ -44629,6 +44641,12 @@ def admin_agent_estado(cliente_id):
     """Browser verifica si el agente está conectado."""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if session.get('rol') != 'Administrador':
+        conn2 = get_db_connection()
+        row2 = conn2.execute("SELECT admin_cliente_id FROM usuarios WHERE id=%s", (session['usuario_id'],)).fetchone()
+        conn2.close()
+        if not row2 or (row2['admin_cliente_id'] or '').strip() != cliente_id:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
         crear_tablas_admin_agent(conn)
@@ -44651,8 +44669,20 @@ def admin_agent_estado(cliente_id):
 @app.route('/admin/consultas')
 def admin_consultas_page():
     if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-    cliente_id = request.args.get('cliente', 'pilar')
+        return redirect(url_for('admin_login'))
+    rol = session.get('rol', '')
+    if rol == 'Administrador':
+        # Admin puede ver cualquier cliente via ?cliente=
+        cliente_id = request.args.get('cliente', 'pilar')
+    else:
+        # ClienteVFP solo ve su propio cliente_id
+        conn = get_db_connection()
+        row = conn.execute("SELECT admin_cliente_id FROM usuarios WHERE id = %s",
+                           (session['usuario_id'],)).fetchone()
+        conn.close()
+        cliente_id = (row['admin_cliente_id'] or '').strip() if row else ''
+        if not cliente_id:
+            return "Tu cuenta no tiene un cliente Administrator asignado. Contacta al administrador.", 403
     return render_template('admin_consultas.html', cliente_id=cliente_id)
 
 # ── FIN MÓDULO: ADMIN AGENT ──────────────────────────────────────────────────

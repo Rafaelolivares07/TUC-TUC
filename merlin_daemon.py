@@ -52,6 +52,8 @@ MERLIN_TIPO    = 'merlin'
 RAFAEL_ID      = 16
 
 LOG_FILE       = r"C:\Users\RAFAEL OLIVARES\merlin_daemon.log"
+INBOX_FILE     = APP_DIR / 'merlin_inbox.json'
+OUTBOX_FILE    = APP_DIR / 'merlin_outbox.json'
 
 # ── Estado global (compartido entre loops) ───────────────────────────────────
 _lock_socket   = None
@@ -61,6 +63,7 @@ _last_sendkeys = None      # datetime último SendKeys (para calcular idle efect
 _last_hb       = None      # datetime último heartbeat
 _last_db_check = None      # datetime último check canal='captura'
 _cursor_prev   = (-1, -1)
+_relay_activo  = False     # True mientras relay_via_captura espera outbox
 
 MEDIA_PROCS = {'chrome','msedge','firefox','spotify','vlc','wmplayer',
                'groove','mpc-hc','mpc-be','itunes','winamp','potplayer','mpv','obs64','obs32'}
@@ -398,13 +401,47 @@ def llamar_claude(prompt):
 #  B) CAPTURA WATCHER — mensajes de Rafael → Claude Code
 # ══════════════════════════════════════════════════════════════
 
+def _escribir_inbox(contenido):
+    import json
+    INBOX_FILE.write_text(
+        json.dumps({'contenido': contenido}, ensure_ascii=False),
+        encoding='utf-8'
+    )
+
+def check_outbox():
+    """Si merlin_outbox.json existe, inserta respuesta en chat_mensajes y borra el archivo."""
+    if not OUTBOX_FILE.exists():
+        return False
+    try:
+        import json
+        data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
+        respuesta = data.get('contenido', '').strip()
+        OUTBOX_FILE.unlink()
+        if not respuesta:
+            return False
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO chat_mensajes (rol, contenido, canal) VALUES ('assistant',%s,'captura')",
+                (respuesta,)
+            )
+            conn.commit()
+            log(f"✓ Outbox → BD ({len(respuesta)} chars)")
+        finally:
+            conn.close()
+        return True
+    except Exception as e:
+        log(f"✗ Error procesando outbox: {e}")
+        return False
+
 def get_captura_pendiente():
-    """Retorna True si hay mensaje de Rafael sin responder en canal='captura'."""
+    """Retorna True si hay mensaje pendiente; escribe merlin_inbox.json con el contenido."""
     conn = get_conn()
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT COUNT(*) as n FROM chat_mensajes
+            SELECT id, contenido FROM chat_mensajes
             WHERE archivado = FALSE
               AND rol = 'user'
               AND canal = 'captura'
@@ -412,8 +449,13 @@ def get_captura_pendiente():
               AND id > COALESCE(
                     (SELECT MAX(id) FROM chat_mensajes
                      WHERE archivado = FALSE AND rol = 'assistant'), 0)
+            ORDER BY id DESC LIMIT 1
         """)
-        return cur.fetchone()['n'] > 0
+        row = cur.fetchone()
+        if row:
+            _escribir_inbox(row['contenido'])
+            return True
+        return False
     finally:
         conn.close()
 
@@ -483,9 +525,9 @@ def activar_claude():
 
 def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
     """
-    Para Rafael: inserta en chat_mensajes (canal='captura'), activa Claude
-    directamente, y espera la respuesta para copiarla a mensajes.
+    Para Rafael: escribe inbox, activa Claude y espera el outbox (sin polling a BD).
     """
+    global _relay_activo
     if len(msgs_nuevos) == 1:
         nuevo_texto = _contenido_msg(msgs_nuevos[0])
     else:
@@ -494,13 +536,10 @@ def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
             lineas.append(f'Mensaje {i}: {_contenido_msg(m)}')
         nuevo_texto = '\n'.join(lineas)
 
+    # Insertar en chat_mensajes para que el bridge lo archive correctamente
     conn = get_conn()
     try:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT COALESCE(MAX(id),0) AS max_id FROM chat_mensajes WHERE rol='assistant' AND archivado=FALSE"
-        )
-        max_asst_antes = cur.fetchone()['max_id']
         cur.execute(
             "INSERT INTO chat_mensajes (rol, contenido, canal) VALUES ('user',%s,'captura') RETURNING id",
             (nuevo_texto,)
@@ -511,28 +550,27 @@ def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
     finally:
         conn.close()
 
-    # Activar Claude directamente
+    _escribir_inbox(nuevo_texto)
+    _relay_activo = True
     activar_claude()
 
-    # Esperar respuesta hasta 3 minutos
+    # Esperar outbox hasta 3 minutos — sin tocar la BD
+    respuesta = None
     for _ in range(90):
         time.sleep(2)
-        conn = get_conn()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT contenido FROM chat_mensajes WHERE rol='assistant' AND archivado=FALSE AND id > %s ORDER BY id DESC LIMIT 1",
-                (max_asst_antes,)
-            )
-            row = cur.fetchone()
-            if row:
-                cur.execute("UPDATE chat_mensajes SET archivado=TRUE WHERE id=%s", (chat_id,))
-                conn.commit()
-                return row['contenido']
-        finally:
-            conn.close()
+        if OUTBOX_FILE.exists():
+            try:
+                import json
+                data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
+                respuesta = data.get('contenido', '').strip()
+                OUTBOX_FILE.unlink()
+            except Exception as e:
+                log(f'  ✗ Error leyendo outbox: {e}')
+            break
 
-    # Timeout
+    _relay_activo = False
+
+    # Archivar el mensaje de captura
     conn = get_conn()
     try:
         cur = conn.cursor()
@@ -540,7 +578,8 @@ def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
         conn.commit()
     finally:
         conn.close()
-    return '⚠️ Sin respuesta. Escríbeme de nuevo en un momento.'
+
+    return respuesta or '⚠️ Sin respuesta. Escríbeme de nuevo en un momento.'
 
 
 # ══════════════════════════════════════════════════════════════
@@ -628,9 +667,13 @@ def main():
                 send_heartbeat(effective_idle)
                 _last_hb = now
 
+            # ── B) Outbox (respuesta de Claude lista en archivo) ─────────────
+            if not _relay_activo:
+                check_outbox()
+
             # ── B) Check canal='captura' (throttled) ──────────────────────────
             db_elapsed = (now - _last_db_check).total_seconds() if _last_db_check else 9999
-            if db_elapsed >= DB_POLL_CADA:
+            if db_elapsed >= DB_POLL_CADA and not _relay_activo:
                 _last_db_check = now
                 trigger_elapsed = (now - _last_trigger).total_seconds() if _last_trigger else 9999
                 if get_captura_pendiente() and trigger_elapsed > COOLDOWN_SEC:

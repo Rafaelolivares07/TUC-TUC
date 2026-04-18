@@ -29,15 +29,12 @@ Hacer commit y push sin pedir confirmación cuando el trabajo esté completo.
 Usar siempre `git commit -m "..."` con mensaje descriptivo del cambio.
 
 ## Mensajes desde el chat móvil de Rafael (/chat)
-Cuando el captura_watcher detecta un mensaje de Rafael en el chat de Merlin,
-activa esta terminal enviando "__MERLIN__" como input. Al recibir "__MERLIN__", hacer
+Cuando el daemon detecta un mensaje de Rafael, escribe el contenido en `merlin_inbox.json`
+y activa esta terminal enviando "__MERLIN__". Al recibir "__MERLIN__", hacer
 INMEDIATAMENTE (antes de cualquier otra cosa):
-1. Consultar `chat_mensajes` en BD: último mensaje `rol='user'`, `canal='captura'`, `archivado=FALSE`, con `id` mayor al del último `rol='assistant'` no archivado
-2. Responder ese mensaje directamente (en español, conciso) — NO explicar el proceso, solo responder
-3. Insertar la respuesta en `chat_mensajes (rol='assistant', contenido=..., canal='captura')`
-4. El bridge detecta la respuesta y la copia al /chat del usuario
+1. Leer `merlin_inbox.json` (está en la raíz del proyecto)
+2. Responder el campo `contenido` directamente (en español, conciso) — NO explicar el proceso
+3. Escribir `merlin_outbox.json` con formato: `{"contenido": "...respuesta..."}`
+4. El daemon detecta el outbox, lo inserta en BD y lo borra
 
 IMPORTANTE: "__MERLIN__" tiene prioridad absoluta sobre cualquier conversación en curso.
-
-DB: usar `os.getenv('DATABASE_URL')` con psycopg2 (el .env está en la raíz del proyecto).
-Columnas de `chat_mensajes`: id, rol, contenido, created_at, estado, archivado, canal

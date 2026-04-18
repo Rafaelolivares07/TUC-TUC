@@ -26624,6 +26624,7 @@ def crear_tablas_restaurante(conn):
         "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS solo_carta BOOLEAN DEFAULT FALSE",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
+        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS orden INT DEFAULT 0",
     ]
     for sql in alters:
         try:

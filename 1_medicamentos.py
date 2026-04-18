@@ -44423,6 +44423,241 @@ def api_webhook_render_deploy():
 # ── FIN MÓDULO: DEPLOY MONITOR ───────────────────────────────────────────────
 
 
+# ═══════════════════════════════════════════════════════════════
+# MÓDULO: ADMIN AGENT — acceso remoto a Administrator VFP
+# ═══════════════════════════════════════════════════════════════
+
+_admin_agent_tablas_listas = False
+
+def crear_tablas_admin_agent(conn):
+    global _admin_agent_tablas_listas
+    if _admin_agent_tablas_listas:
+        return
+    sqls = [
+        """CREATE TABLE IF NOT EXISTS admin_agent_sesiones (
+            id SERIAL PRIMARY KEY,
+            cliente_id VARCHAR(100) NOT NULL,
+            token VARCHAR(100) NOT NULL UNIQUE,
+            activo BOOLEAN DEFAULT TRUE,
+            ultimo_ping TIMESTAMPTZ DEFAULT NOW(),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS admin_agent_consultas (
+            id SERIAL PRIMARY KEY,
+            sesion_id INTEGER REFERENCES admin_agent_sesiones(id),
+            tipo VARCHAR(50) NOT NULL,
+            parametros JSONB DEFAULT '{}',
+            respuesta JSONB,
+            estado VARCHAR(20) DEFAULT 'pendiente',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            respondida_at TIMESTAMPTZ
+        )""",
+    ]
+    for sql in sqls:
+        conn.execute(sql)
+    conn.commit()
+    _admin_agent_tablas_listas = True
+
+
+@app.route('/api/admin-agent/checkin', methods=['POST'])
+def admin_agent_checkin():
+    """Agente local se registra al arrancar."""
+    data = request.get_json() or {}
+    cliente_id = data.get('cliente_id', '').strip()
+    if not cliente_id:
+        return jsonify({'ok': False, 'error': 'cliente_id requerido'}), 400
+    import secrets
+    token = secrets.token_hex(24)
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        conn.execute("UPDATE admin_agent_sesiones SET activo=FALSE WHERE cliente_id=%s", (cliente_id,))
+        conn.execute(
+            "INSERT INTO admin_agent_sesiones (cliente_id, token) VALUES (%s,%s)",
+            (cliente_id, token)
+        )
+        conn.commit()
+        return jsonify({'ok': True, 'token': token})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/checkout', methods=['POST'])
+def admin_agent_checkout():
+    """Agente local se desconecta."""
+    data = request.get_json() or {}
+    token = data.get('token', '')
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        conn.execute("UPDATE admin_agent_sesiones SET activo=FALSE WHERE token=%s", (token,))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/ping', methods=['POST'])
+def admin_agent_ping():
+    """Agente hace ping y recibe consulta pendiente si hay."""
+    data = request.get_json() or {}
+    token = data.get('token', '')
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        sesion = conn.execute(
+            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW() WHERE token=%s AND activo=TRUE RETURNING id",
+            (token,)
+        ).fetchone()
+        if not sesion:
+            return jsonify({'ok': False, 'error': 'sesión inválida'}), 401
+        consulta = conn.execute(
+            """SELECT id, tipo, parametros FROM admin_agent_consultas
+               WHERE sesion_id=%s AND estado='pendiente'
+               ORDER BY id ASC LIMIT 1""",
+            (sesion['id'],)
+        ).fetchone()
+        if consulta:
+            conn.execute("UPDATE admin_agent_consultas SET estado='procesando' WHERE id=%s", (consulta['id'],))
+            conn.commit()
+            return jsonify({'ok': True, 'consulta': {
+                'id': consulta['id'],
+                'tipo': consulta['tipo'],
+                'parametros': consulta['parametros'],
+            }})
+        conn.commit()
+        return jsonify({'ok': True, 'consulta': None})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/respuesta', methods=['POST'])
+def admin_agent_respuesta():
+    """Agente entrega resultado de una consulta."""
+    data = request.get_json() or {}
+    token = data.get('token', '')
+    consulta_id = data.get('consulta_id')
+    respuesta = data.get('respuesta')
+    error = data.get('error')
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        sesion = conn.execute(
+            "SELECT id FROM admin_agent_sesiones WHERE token=%s AND activo=TRUE", (token,)
+        ).fetchone()
+        if not sesion:
+            return jsonify({'ok': False, 'error': 'sesión inválida'}), 401
+        conn.execute(
+            """UPDATE admin_agent_consultas
+               SET respuesta=%s, estado=%s, respondida_at=NOW()
+               WHERE id=%s AND sesion_id=%s""",
+            (
+                json.dumps(respuesta) if respuesta is not None else json.dumps({'error': error}),
+                'error' if error else 'lista',
+                consulta_id, sesion['id']
+            )
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/consultar', methods=['POST'])
+def admin_agent_consultar():
+    """Browser crea una consulta para el agente."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    cliente_id = data.get('cliente_id', '').strip()
+    tipo = data.get('tipo', '').strip()
+    parametros = data.get('parametros', {})
+    if not cliente_id or not tipo:
+        return jsonify({'ok': False, 'error': 'cliente_id y tipo requeridos'}), 400
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        sesion = conn.execute(
+            "SELECT id FROM admin_agent_sesiones WHERE cliente_id=%s AND activo=TRUE ORDER BY id DESC LIMIT 1",
+            (cliente_id,)
+        ).fetchone()
+        if not sesion:
+            return jsonify({'ok': False, 'error': 'Agente no conectado'}), 404
+        row = conn.execute(
+            "INSERT INTO admin_agent_consultas (sesion_id, tipo, parametros) VALUES (%s,%s,%s) RETURNING id",
+            (sesion['id'], tipo, json.dumps(parametros))
+        ).fetchone()
+        conn.commit()
+        return jsonify({'ok': True, 'consulta_id': row['id']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/resultado/<int:consulta_id>', methods=['GET'])
+def admin_agent_resultado(consulta_id):
+    """Browser polling: ¿ya llegó la respuesta?"""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        row = conn.execute(
+            "SELECT estado, respuesta FROM admin_agent_consultas WHERE id=%s",
+            (consulta_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'No encontrada'}), 404
+        return jsonify({'ok': True, 'estado': row['estado'], 'respuesta': row['respuesta']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/estado/<cliente_id>', methods=['GET'])
+def admin_agent_estado(cliente_id):
+    """Browser verifica si el agente está conectado."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        sesion = conn.execute(
+            """SELECT ultimo_ping FROM admin_agent_sesiones
+               WHERE cliente_id=%s AND activo=TRUE
+               ORDER BY id DESC LIMIT 1""",
+            (cliente_id,)
+        ).fetchone()
+        if not sesion:
+            return jsonify({'ok': True, 'conectado': False})
+        from datetime import timezone
+        lag = (datetime.now(timezone.utc) - sesion['ultimo_ping'].replace(tzinfo=timezone.utc)).total_seconds()
+        return jsonify({'ok': True, 'conectado': lag < 30})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/admin/consultas')
+def admin_consultas_page():
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+    cliente_id = request.args.get('cliente', 'pilar')
+    return render_template('admin_consultas.html', cliente_id=cliente_id)
+
+# ── FIN MÓDULO: ADMIN AGENT ──────────────────────────────────────────────────
+
+
 if __name__ == '__main__':
     #  LLAMADA AL INICIALIZADOR DE DATOS EXTERNO
     #initialize_full_db()#

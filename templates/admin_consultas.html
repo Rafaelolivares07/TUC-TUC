@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}Consultas Administrator — {{ cliente_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">
+      <i class="bi bi-database-fill text-primary me-2"></i>
+      Administrator VFP — <span class="text-muted fs-5">{{ cliente_id }}</span>
+    </h1>
+    <span id="estado-badge" class="badge fs-6 px-3 py-2">
+      <span class="spinner-border spinner-border-sm me-1" role="status"></span> verificando…
+    </span>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body py-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small fw-semibold">Lapso</label>
+          <input id="f-lapso" type="text" class="form-control form-control-sm" placeholder="ej. 202501">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small fw-semibold">Empresa</label>
+          <input id="f-empresa" type="text" class="form-control form-control-sm" placeholder="código empresa">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small fw-semibold">Tercero</label>
+          <input id="f-tercero" type="text" class="form-control form-control-sm" placeholder="código tercero">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small fw-semibold">Límite</label>
+          <input id="f-limite" type="number" class="form-control form-control-sm" value="200" min="1" max="5000">
+        </div>
+        <div class="col-sm-3 d-flex gap-2">
+          <button id="btn-consultar" class="btn btn-primary btn-sm flex-fill" onclick="lanzarConsulta()">
+            <i class="bi bi-search me-1"></i>Consultar REG_CTAS
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar filtros">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado consulta -->
+  <div id="consulta-estado" class="d-none mb-3">
+    <div class="alert alert-info py-2 mb-0 d-flex align-items-center gap-2">
+      <span class="spinner-border spinner-border-sm"></span>
+      <span id="consulta-msg">Enviando consulta al agente…</span>
+    </div>
+  </div>
+
+  <!-- Resumen -->
+  <div id="resumen-bar" class="d-none mb-2 text-muted small">
+    <span id="resumen-txt"></span>
+  </div>
+
+  <!-- Tabla resultados -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height:65vh; overflow-y:auto;">
+        <table class="table table-sm table-hover table-striped mb-0 align-middle" style="font-size:.82rem;">
+          <thead class="table-dark sticky-top">
+            <tr>
+              <th>#</th>
+              <th>Fecha</th>
+              <th>Lapso</th>
+              <th>Tipo</th>
+              <th>Documento</th>
+              <th>Cuenta</th>
+              <th>Tercero</th>
+              <th class="text-end">Débito</th>
+              <th class="text-end">Crédito</th>
+              <th>Detalle</th>
+              <th class="text-center">Anul.</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body">
+            <tr>
+              <td colspan="11" class="text-center text-muted py-4">
+                <i class="bi bi-arrow-up-circle me-1"></i>Aplica filtros y haz clic en Consultar
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const CLIENTE_ID = {{ cliente_id | tojson }};
+let _agente_ok = false;
+let _poll_timer = null;
+
+function fmt(n) {
+  if (n == null) return '';
+  return Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function fmtFecha(s) {
+  if (!s) return '';
+  return s.substring(0, 10);
+}
+
+async function verificarEstado() {
+  const badge = document.getElementById('estado-badge');
+  try {
+    const r = await fetch(`/api/admin-agent/estado/${CLIENTE_ID}`);
+    const d = await r.json();
+    if (d.ok && d.conectado) {
+      badge.className = 'badge bg-success fs-6 px-3 py-2';
+      badge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.6rem"></i>Agente conectado';
+      _agente_ok = true;
+    } else {
+      badge.className = 'badge bg-danger fs-6 px-3 py-2';
+      badge.innerHTML = '<i class="bi bi-circle me-1" style="font-size:.6rem"></i>Agente desconectado';
+      _agente_ok = false;
+    }
+  } catch {
+    badge.className = 'badge bg-secondary fs-6 px-3 py-2';
+    badge.textContent = 'Error de red';
+    _agente_ok = false;
+  }
+}
+
+async function lanzarConsulta() {
+  if (!_agente_ok) {
+    alert('El agente no está conectado en el PC del cliente.');
+    return;
+  }
+
+  const params = {};
+  const lapso   = document.getElementById('f-lapso').value.trim();
+  const empresa = document.getElementById('f-empresa').value.trim();
+  const tercero = document.getElementById('f-tercero').value.trim();
+  const limite  = parseInt(document.getElementById('f-limite').value) || 200;
+  if (lapso)   params.lapso   = lapso;
+  if (empresa) params.empresa = empresa;
+  if (tercero) params.tercero = tercero;
+  params.limite = limite;
+
+  document.getElementById('btn-consultar').disabled = true;
+  mostrarEstadoConsulta('Enviando consulta al agente…');
+
+  try {
+    const r = await fetch('/api/admin-agent/consultar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cliente_id: CLIENTE_ID, tipo: 'reg_ctas', parametros: params})
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      ocultarEstadoConsulta();
+      alert('Error: ' + (d.error || r.status));
+      document.getElementById('btn-consultar').disabled = false;
+      return;
+    }
+    mostrarEstadoConsulta('Esperando respuesta del agente…');
+    clearTimeout(_poll_timer);
+    _poll_timer = setTimeout(() => pollResultado(d.consulta_id), 1500);
+  } catch(e) {
+    ocultarEstadoConsulta();
+    alert('Error de red: ' + e.message);
+    document.getElementById('btn-consultar').disabled = false;
+  }
+}
+
+async function pollResultado(cid) {
+  try {
+    const r = await fetch(`/api/admin-agent/resultado/${cid}`);
+    const d = await r.json();
+    if (!d.ok) {
+      ocultarEstadoConsulta();
+      alert('Error al obtener resultado: ' + (d.error || ''));
+      document.getElementById('btn-consultar').disabled = false;
+      return;
+    }
+    if (d.estado === 'pendiente' || d.estado === 'procesando') {
+      _poll_timer = setTimeout(() => pollResultado(cid), 2000);
+      return;
+    }
+    // llegó respuesta
+    ocultarEstadoConsulta();
+    document.getElementById('btn-consultar').disabled = false;
+    if (d.estado === 'error') {
+      alert('El agente reportó error: ' + (d.error || ''));
+      return;
+    }
+    renderTabla(d.respuesta || []);
+  } catch(e) {
+    _poll_timer = setTimeout(() => pollResultado(cid), 3000);
+  }
+}
+
+function renderTabla(rows) {
+  const tbody = document.getElementById('tabla-body');
+  const resumen = document.getElementById('resumen-bar');
+  const resumenTxt = document.getElementById('resumen-txt');
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4">Sin resultados para los filtros aplicados</td></tr>';
+    resumen.classList.add('d-none');
+    return;
+  }
+
+  let totDeb = 0, totCre = 0;
+  const html = rows.map(r => {
+    totDeb += r.debito || 0;
+    totCre += r.credito || 0;
+    const anulBadge = r.anulado ? '<span class="badge bg-danger">Sí</span>' : '';
+    const tipNom = r.tipo_nom ? `<span class="text-muted">${r.tipo_nom}</span>` : '';
+    const cuentaNom = r.cuenta_nom ? `<br><small class="text-muted">${r.cuenta_nom}</small>` : '';
+    const terNom = r.tercero_nom ? `<br><small class="text-muted">${r.tercero_nom}</small>` : '';
+    return `<tr>
+      <td class="text-muted">${r.consecutivo || ''}</td>
+      <td>${fmtFecha(r.fecha)}</td>
+      <td>${r.lapso || ''}</td>
+      <td>${r.tipo || ''} ${tipNom}</td>
+      <td>${r.documento || ''}</td>
+      <td>${r.cuenta || ''}${cuentaNom}</td>
+      <td>${r.tercero || ''}${terNom}</td>
+      <td class="text-end text-success">${r.debito ? fmt(r.debito) : ''}</td>
+      <td class="text-end text-danger">${r.credito ? fmt(r.credito) : ''}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(r.detalle||'').replace(/"/g,'&quot;')}">${r.detalle || ''}</td>
+      <td class="text-center">${anulBadge}</td>
+    </tr>`;
+  }).join('');
+
+  // Totales
+  const totRow = `<tr class="table-secondary fw-bold">
+    <td colspan="7" class="text-end">Totales (${rows.length} registros)</td>
+    <td class="text-end text-success">${fmt(totDeb)}</td>
+    <td class="text-end text-danger">${fmt(totCre)}</td>
+    <td colspan="2"></td>
+  </tr>`;
+
+  tbody.innerHTML = html + totRow;
+
+  const saldo = totDeb - totCre;
+  resumenTxt.innerHTML = `<strong>${rows.length}</strong> registros &nbsp;|&nbsp; Débitos: <strong class="text-success">${fmt(totDeb)}</strong> &nbsp;|&nbsp; Créditos: <strong class="text-danger">${fmt(totCre)}</strong> &nbsp;|&nbsp; Saldo: <strong class="${saldo >= 0 ? 'text-success' : 'text-danger'}">${fmt(saldo)}</strong>`;
+  resumen.classList.remove('d-none');
+}
+
+function mostrarEstadoConsulta(msg) {
+  document.getElementById('consulta-msg').textContent = msg;
+  document.getElementById('consulta-estado').classList.remove('d-none');
+}
+
+function ocultarEstadoConsulta() {
+  document.getElementById('consulta-estado').classList.add('d-none');
+}
+
+function limpiarFiltros() {
+  ['f-lapso','f-empresa','f-tercero'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-limite').value = '200';
+}
+
+// Verificar estado al cargar y cada 15 s
+verificarEstado();
+setInterval(verificarEstado, 15000);
+</script>
+{% endblock %}

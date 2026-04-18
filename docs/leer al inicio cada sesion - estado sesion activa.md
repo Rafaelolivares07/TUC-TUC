@@ -1,9 +1,64 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-14_
+_Actualizado: 2026-04-18_
 
 ## Módulos en trabajo esta sesión
-1. **TUC TUC — Restaurantes**: tipo `'ambos'` (carta + menú del día)
-2. **VFP / SAR — Alegra**: separación met_tarjet en met_tdebito + met_tcredit
+1. **TUC TUC — Restaurantes**: drag-and-drop persistente ✅
+2. **VFP / SAR — Alegra**: staging upgrade COMPLETADO en PC Pilar ✅
+3. **Admin Agent — acceso remoto DBF desde browser** ✅ FUNCIONANDO
+
+---
+
+---
+
+## MÓDULO: TUC TUC — Restaurantes (sesión 2026-04-17)
+
+### Rancho Dapa — nuevo restaurante
+- Restaurante tipo carta, id=9, slug=`rancho-dapa`
+- **86 ítems de menú** insertados en `opciones_menu` con categorías y precios
+- **35 descripciones** cargadas para los ítems con descripción en la carta
+- Categorías: Cazuelas, Sopas, Sancochos, Bandeja, Platos del día, Jugos, Bebidas calientes, Gaseosas, Agua
+
+### Carta — orden drag-and-drop (admin)
+- Nueva columna `orden INT DEFAULT 0` en `opciones_menu` — se agrega vía ALTER en `crear_tablas_restaurante`
+- SortableJS 1.15.2 cargado desde CDN en `restaurante_admin.html`
+- Drag-and-drop en categorías (reordena bloques) y dentro de cada categoría (reordena ítems)
+- `_guardarOrden()`: recorre DOM, asigna ordinales secuenciales, POST a `/api/restaurante/<slug>/reordenar`
+- Endpoint `POST /api/restaurante/<slug>/reordenar` — actualiza `orden` en BD
+
+### Carta — auto-layout en vista cliente
+- `cargarCartaCliente()` detecta por categoría: si algún ítem tiene imagen → grid 2 columnas con foto
+- Si ningún ítem de la categoría tiene imagen → lista limpia (nombre + descripción + precio + controles cantidad), sin espacio para imagen
+- El orden de categorías e ítems respeta el campo `orden` de la BD
+
+### Mesero — fix error 500 en carta
+- **Bug**: `mesa_nombre` llegaba como INTEGER desde JS (`seleccionarMesa(${m.numero})`); backend hacía `int.strip()` → AttributeError 500
+- **Fix en `api_restaurante_pedido_crear`**: `str(data.get('mesa_nombre') or '').strip() or None` — convierte a string antes del strip
+- `request.get_json(force=True)` para evitar fallo cuando Content-Type no es JSON
+
+### Commits 2026-04-17
+- `06aa856` — Rancho Dapa: 86 ítems insertados
+- `68d5469` — Carta: orden drag-and-drop admin + auto-layout cliente
+- `28dc0b6` — ALTER orden en crear_tablas_restaurante (self-healing)
+- `5bf3e7a` — Fix mesero 500: str(mesa_nombre)
+
+### Quitar imagen de ítem — RESUELTO 2026-04-18
+- Botón "✕ quitar" debajo de miniatura cuando el ítem tiene imagen
+- Endpoint `DELETE /opcion/<id>/imagen` — pone imagen=NULL en BD
+- Fix auth en endpoint imagen (POST y DELETE): acepta restaurante_token además de usuario_id
+
+### Drag-and-drop persistente — RESUELTO 2026-04-18
+- Bug 1: `_initSortable()` creaba Sortables duplicados en cada `renderCatalogo()` → fix: destruir instancia previa
+- Bug 2: endpoint `/reordenar` solo aceptaba `usuario_id` → 403 para admins de restaurante → fix: acepta `restaurante_token` también (mismo patrón que otros endpoints admin)
+
+### Pendientes restaurantes
+- Landing page restaurantes — pendiente video Rafael con CapCut Android
+
+---
+
+## Pendiente futuro — Agentes locales Ollama
+- Idea: Ollama/Llama como agentes subordinados de Merlin (tareas paralelas, bridge usuarios, automatización)
+- **Bloqueante**: PC actual tiene solo 4GB RAM + Intel UHD 605 — insuficiente para modelos útiles (mínimo 16GB)
+- Retomar cuando haya hardware disponible (16GB RAM mínimo)
 
 ---
 
@@ -77,7 +132,16 @@ _Actualizado: 2026-04-14_
 - Ciclo manual probado → todas las fases OK en Administrator
 - Startup: `AlegraDaemon.bat` en shell:startup
 - Acceso directo "Alegra Config" en escritorio Pilar
-- Bug cosmético pendiente: UI solo reporta "hecho" en f_prod1
+
+### Upgrade Staging — 2026-04-17 ✅ COMPLETAMENTE OPERATIVO
+
+- Arquitectura staging desplegada en PC Pilar vía relay AsistenciaTucTuc (sesión 184576)
+- BD reindexada con REINDEXADOR.EXE antes del upgrade
+- 5 archivos transmitidos: `alegra_daemon.py`, `AlegraDaemon.exe` (v2.8), `interfaz_allegra.py`, `instalar_allegra_bd.py`, `PROCESADOR_STAGING.EXE`
+- 8 tablas `stg_*` creadas en `\\192.168.1.104\BASEDATOSEMPRESAS\`
+- Ciclo manual OK — 2 facturas procesadas, 0 errores
+- Administrator verificado — registros visibles, filtros por fecha funcionan
+- **AlegraDaemon.exe v2.8 corriendo en producción** — Python NO escribe directo en tablas productivas
 
 ---
 
@@ -109,19 +173,34 @@ _Actualizado: 2026-04-14_
 - **"Borrado DBF" deshabilitado** cuando el daemon está activo; se habilita solo al pausar
 - **"Reiniciar proceso" también deshabilitado** cuando el daemon no está pausado — misma lógica que Borrado DBF; ambos botones comparten estado: `normal` si `PAUSA_FILE` existe, `disabled` si no
 
-### CDX APPEND — análisis técnico (pendiente)
-- `SELECT * FROM PROD_FACT1` (sin WHERE) muestra todos los registros incluidos los de la interfaz ✅
-- `SELECT ... WHERE FECHAHORA >= fecha` no los muestra ❌ — Rushmore usa CDX que Python no actualizó
-- VFP COM (`VisualFoxPro.Application.7`) requiere VFP IDE instalado — cliente solo tiene runtime
-- **Solución pendiente**: PRG compilado (.fxp) que Administrator pueda llamar, o rutina interna REINDEX
+### CDX APPEND — RESUELTO 2026-04-16 (arquitectura staging)
+
+Python ya NO escribe en tablas productivas directamente. Nuevo flujo:
+1. `interfaz_allegra.py` calcula todo y escribe en tablas `stg_*` (sin CDX relevante)
+2. `PROCESADOR_STAGING.EXE` (VFP compilado) lee `stg_*` y hace APPEND en tablas reales — VFP actualiza CDX automáticamente
+
+**Tablas staging creadas** (en carpeta BD):
+- `stg_lotes.dbf` — control de lotes por factura
+- `stg_prod_fact1.dbf`, `stg_reg_prod.dbf`, `stg_reg_prod_sal.dbf`
+- `stg_reg_ctas.dbf`, `stg_sal_doc.dbf`, `stg_nota.dbf`
+
+**Archivos modificados**:
+- `C:\S.A.R\interfaz_allegra.py` — redirige APPENDs a staging, llama al procesador
+- `C:\S.A.R\alegra_daemon.py` — agrega paso procesador en correr_sync()
+- `C:\S.A.R\instalar_allegra_bd.py` — crea tablas staging en instalación
+- `C:\S.A.R\PROYECTO\procesador_staging.prg` — **NUEVO** — PRG VFP a compilar como EXE
+
+**Pendiente crítico**: compilar `procesador_staging.prg` → `C:\S.A.R\PROCESADOR_STAGING.EXE`
+```
+SET DEFAULT TO C:\S.A.R\PROYECTO
+BUILD EXE "C:\S.A.R\PROCESADOR_STAGING" FROM procesador_staging
+```
 
 ### Pendientes SAR — próxima sesión
-1. **Bug cosmético fases UI** — f_standar/f_costos/f_contab no reportan "hecho" en la interfaz (los datos sí se graban). Fix en `interfaz_allegra.py`.
-2. **Verificar startup Pilar** — confirmar que AlegraDaemon.bat arranca el exe en próximo reinicio Windows
-3. **CDX APPEND fix** — solución sin VFP IDE en cliente
-4. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa (precio×cantidad)
-5. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
-6. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
+1. **Auditar bolsa** — verificar cuenta 240807 cuadrada con fix ln_bolsa
+2. **Auditar vendedores** — verificar VENDEDOR ≠ 0 en PROD_FACT1
+3. **Bug cosmético fases UI** — f_standar/f_costos/f_contab no reportan "hecho" en la interfaz
+4. **Progreso sync en tiempo real** — mostrar facturas descargándose en grilla Pendientes
 
 ### Estado de archivos SAR
 
@@ -131,10 +210,12 @@ _Actualizado: 2026-04-14_
 | `interfaz_allegra.prg` | ✅ Limpio — no se usa en automático |
 | `alegra_timer.prg` | ⏸️ RETURN al inicio — desactivado |
 | `fondo_menu_limpio.scx` | ✅ Sin cambios |
-| `alegra_daemon.py` | ✅ v2.8 — intervalo en segundos, recompilado 2026-04-14 |
-| `configurar_allegra.py` | ✅ v2.8 — 4 paneles, intervalo segundos, UI adaptativa, Borrado DBF + Reiniciar deshabilitados si no pausado |
-| `interfaz_allegra.py` | ✅ 4 fases + alertas parciales — 4 bugs corregidos 2026-04-14 |
+| `alegra_daemon.py` | ✅ v2.8 — llama PROCESADOR_STAGING.EXE en cada ciclo |
+| `AlegraDaemon.exe` | ✅ v2.8 — corriendo en PC Pilar (shell:startup) |
+| `configurar_allegra.py` | ✅ v2.8 — 4 paneles, intervalo segundos, UI adaptativa |
+| `interfaz_allegra.py` | ✅ staging completo — escribe solo en stg_*, incluye stg_terceros |
 | `allegra_sync.py` | ✅ campo fecha_hora T — datetime exacto de Alegra |
+| `PROCESADOR_STAGING.EXE` | ✅ compilado 2026-04-16 — mueve stg_* a tablas reales, abre DBC para TERCEROS |
 
 **Administrator abre sin inconvenientes para usuarios normales.** ✅
 
@@ -164,6 +245,87 @@ _Actualizado: 2026-04-14_
 - **Método**: `androidtvremote2` (Python puro, puerto 6466, protocolo Google) — sin ADB, sin config extra en el TV
 - **Funciones**: encender / apagar / (ampliable: volumen, fuente, etc.)
 - **Pendiente**: IP fija por DHCP reservado + integrar en módulo domótica de TUC TUC
+
+---
+
+---
+
+## MÓDULO: Admin Agent — Acceso remoto DBF desde browser (2026-04-18) ✅
+
+### Arquitectura
+- `admin_agent.py` corre en el PC del cliente (donde está Administrator VFP)
+- Lee `C:\S.A.R\RutaBaseDatos\ruta.dbf` para auto-descubrir la BD activa
+- Hace check-in en Render y poll cada 5s buscando consultas pendientes
+- Consultas se procesan en **thread separado** — ping loop no se bloquea
+- Render actúa como relay entre el browser y el agente local
+
+### Flujo de uso
+1. PC cliente: `python admin_agent.py --cliente pilar`
+2. Browser: `https://tuc-tuc.onrender.com/admin/login` (usuario/clave TUC TUC)
+3. Template `admin_consultas.html` — badge estado agente, filtros, grid resultados
+4. Filtros: lapso `202604` (año+mes sin guión), empresa `LP`, tercero `4587`, límite
+
+### Rendimiento REG_CTAS (1.3M registros)
+- **Antes**: 30-217 segundos (dbf library iterando todo)
+- **Ahora**: 0.62 segundos con:
+  - numpy vectorizado: lee ~117MB, aplica máscara boolean en 0.09s
+  - Estimación de posición de inicio por lapso (evita escanear años viejos)
+  - TERCEROS: lectura binaria directa de campos COD_TER+NOMBRE (evita IMAGEN/DESCRIPCIO C(254))
+  - `_jd_to_datetime()`: convierte timestamps VFP (Julian Day + ms) sin usar dbf lib
+
+### Campos DBF clave — REG_CTAS
+| Campo | Tipo | Offset | Len |
+|---|---|---|---|
+| CONSECUTIV | N | 1 | 10 |
+| CUENTA | C | 11 | 15 |
+| LAPSO | D | 26 | 8 — "YYYYMMDD" |
+| FECHAHORA | T | 34 | 8 — Julian Day + ms |
+| TERCERO | N | 42 | 10 |
+| EMPRESA | C | 52 | 10 |
+| TOT_DEB | N | 108 | 10 |
+| TOT_CRE | N | 118 | 10 |
+| record_size = 345 | | | |
+
+### Campos DBF clave — TERCEROS
+- record_size=739, COD_TER offset=1 len=10, NOMBRE offset=11 len=50
+- IMAGEN C(254) y DESCRIPCIO C(254) → NO leer con dbf lib (tarda 16s por esto)
+
+### Autenticación
+- `rol='Administrador'`: accede a cualquier cliente vía `?cliente=pilar`
+- `rol='ClienteVFP'`: accede solo a su propio cliente_id (campo `admin_cliente_id` en tabla USUARIOS)
+- Login en `/admin/login` acepta ambos roles; ClienteVFP redirige a `/admin/consultas` directamente
+
+### Crear usuario ClienteVFP (SQL directo):
+```sql
+INSERT INTO "USUARIOS" (nombre, usuario, password, rol, admin_cliente_id)
+VALUES ('Pilar', 'pilar', 'clave123', 'ClienteVFP', 'pilar');
+```
+
+### Endpoints Render
+- `POST /api/admin-agent/checkin` — agente se registra
+- `POST /api/admin-agent/ping` — agente hace ping + recibe consulta pendiente
+- `POST /api/admin-agent/respuesta` — agente entrega resultado
+- `POST /api/admin-agent/consultar` — browser encola consulta
+- `GET /api/admin-agent/resultado/<id>` — browser polling
+- `GET /api/admin-agent/estado/<cliente_id>` — badge conexión (lag < 30s)
+
+### Tablas BD Render
+- `admin_agent_sesiones` — token, activo, ultimo_ping
+- `admin_agent_consultas` — tipo, parametros, respuesta, estado
+
+### Commits sesión 2026-04-18
+- `0e81391` — template admin_consultas.html + route /admin/consultas
+- `07152d2` — login ClienteVFP + admin_cliente_id en USUARIOS
+- `88cbf1e` — cleanup debug estado
+- `4ed2c27` — threading: consultas en thread separado
+- `5aa4620` — filtro inline REG_CTAS (sin cargar 1.3M en memoria)
+- `ac0e82e` — iteración reversa (primer intento)
+- `8c2f310` — numpy vectorizado + TERCEROS binario → 0.62s ✅
+
+### Pendientes Admin Agent
+- Crear usuario ClienteVFP para Pilar en BD Render (SQL directo)
+- Configurar `admin_agent.py` para arranque automático en PC Pilar (Task Scheduler o Startup)
+- Ampliar consultas: TERCEROS, PROD_FACT1, SAL_DOC, etc.
 
 ---
 

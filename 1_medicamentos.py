@@ -44657,19 +44657,13 @@ def admin_agent_estado(cliente_id):
             (cliente_id,)
         ).fetchone()
         if not sesion:
-            # debug: contar todas las sesiones para este cliente_id
-            todas = conn.execute(
-                "SELECT id, activo, ultimo_ping FROM admin_agent_sesiones WHERE cliente_id=%s ORDER BY id DESC LIMIT 5",
-                (cliente_id,)
-            ).fetchall()
-            return jsonify({'ok': True, 'conectado': False,
-                            'debug': [{'id': r['id'], 'activo': r['activo'], 'ping': str(r['ultimo_ping'])} for r in todas]})
+            return jsonify({'ok': True, 'conectado': False})
         from datetime import timezone
         ping = sesion['ultimo_ping']
         if ping.tzinfo is None:
             ping = ping.replace(tzinfo=timezone.utc)
         lag = (datetime.now(timezone.utc) - ping).total_seconds()
-        return jsonify({'ok': True, 'conectado': lag < 30, 'lag': lag})
+        return jsonify({'ok': True, 'conectado': lag < 30})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

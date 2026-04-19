@@ -1,17 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Consultas Administrator — {{ cliente_id }}{% endblock %}
+{% block title %}Consultas Administrator VFP{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
 
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h1 class="h3 mb-0">
-      <i class="bi bi-database-fill text-primary me-2"></i>
-      Administrator VFP — <span class="text-muted fs-5">{{ cliente_id }}</span>
+      <i class="bi bi-database-fill text-primary me-2"></i>Administrator VFP
     </h1>
-    <span id="estado-badge" class="badge fs-6 px-3 py-2">
-      <span class="spinner-border spinner-border-sm me-1" role="status"></span> verificando…
+    <span id="estado-badge" class="badge bg-secondary fs-6 px-3 py-2">
+      <span class="spinner-border spinner-border-sm me-1" role="status"></span> cargando…
     </span>
+  </div>
+
+  <!-- Selector de agente -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-center">
+        <div class="col-auto">
+          <label class="form-label mb-0 small fw-semibold">Agente</label>
+        </div>
+        <div class="col-sm-4">
+          <select id="sel-agente" class="form-select form-select-sm" onchange="onAgenteChange()">
+            <option value="">— cargando agentes —</option>
+          </select>
+        </div>
+        <div class="col">
+          <small id="agente-ruta" class="text-muted font-monospace"></small>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Filtros -->
@@ -82,7 +100,7 @@
           <tbody id="tabla-body">
             <tr>
               <td colspan="11" class="text-center text-muted py-4">
-                <i class="bi bi-arrow-up-circle me-1"></i>Aplica filtros y haz clic en Consultar
+                <i class="bi bi-arrow-up-circle me-1"></i>Selecciona un agente, aplica filtros y haz clic en Consultar
               </td>
             </tr>
           </tbody>
@@ -94,9 +112,84 @@
 </div>
 
 <script>
-const CLIENTE_ID = {{ cliente_id | tojson }};
+let _agentes = [];
 let _agente_ok = false;
 let _poll_timer = null;
+
+function clienteSeleccionado() {
+  return document.getElementById('sel-agente').value;
+}
+
+async function cargarAgentes() {
+  try {
+    const r = await fetch('/api/admin-agent/agentes');
+    const d = await r.json();
+    if (!d.ok) return;
+    _agentes = d.agentes;
+    _renderSelector(_agentes, clienteSeleccionado());
+    onAgenteChange();
+  } catch(e) {
+    console.error('Error cargando agentes:', e);
+  }
+}
+
+function _renderSelector(agentes, selected) {
+  const sel = document.getElementById('sel-agente');
+  const prev = selected || sel.value;
+  sel.innerHTML = '';
+  if (agentes.length === 0) {
+    sel.innerHTML = '<option value="">Sin agentes registrados</option>';
+    return;
+  }
+  agentes.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.cliente_id;
+    opt.textContent = (a.conectado ? '✅ ' : '❌ ') + a.nombre;
+    if (a.cliente_id === prev) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  if (!prev && agentes.length === 1) {
+    sel.value = agentes[0].cliente_id;
+  }
+}
+
+function onAgenteChange() {
+  const cid    = clienteSeleccionado();
+  const agente = _agentes.find(a => a.cliente_id === cid);
+  const badge  = document.getElementById('estado-badge');
+  const ruta   = document.getElementById('agente-ruta');
+
+  if (!agente) {
+    ruta.textContent = '';
+    badge.className = 'badge bg-secondary fs-6 px-3 py-2';
+    badge.textContent = 'Sin agente';
+    _agente_ok = false;
+    return;
+  }
+
+  ruta.textContent = agente.ruta_bd || '';
+
+  if (agente.conectado) {
+    badge.className = 'badge bg-success fs-6 px-3 py-2';
+    badge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.6rem"></i>Conectado';
+    _agente_ok = true;
+  } else {
+    badge.className = 'badge bg-danger fs-6 px-3 py-2';
+    badge.innerHTML = '<i class="bi bi-circle me-1" style="font-size:.6rem"></i>Desconectado';
+    _agente_ok = false;
+  }
+}
+
+async function refreshAgentes() {
+  try {
+    const r = await fetch('/api/admin-agent/agentes');
+    const d = await r.json();
+    if (!d.ok) return;
+    _agentes = d.agentes;
+    _renderSelector(_agentes, clienteSeleccionado());
+    onAgenteChange();
+  } catch {}
+}
 
 function fmt(n) {
   if (n == null) return '';
@@ -108,28 +201,12 @@ function fmtFecha(s) {
   return s.substring(0, 10);
 }
 
-async function verificarEstado() {
-  const badge = document.getElementById('estado-badge');
-  try {
-    const r = await fetch(`/api/admin-agent/estado/${CLIENTE_ID}`);
-    const d = await r.json();
-    if (d.ok && d.conectado) {
-      badge.className = 'badge bg-success fs-6 px-3 py-2';
-      badge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.6rem"></i>Agente conectado';
-      _agente_ok = true;
-    } else {
-      badge.className = 'badge bg-danger fs-6 px-3 py-2';
-      badge.innerHTML = '<i class="bi bi-circle me-1" style="font-size:.6rem"></i>Agente desconectado';
-      _agente_ok = false;
-    }
-  } catch {
-    badge.className = 'badge bg-secondary fs-6 px-3 py-2';
-    badge.textContent = 'Error de red';
-    _agente_ok = false;
-  }
-}
-
 async function lanzarConsulta() {
+  const cliente_id = clienteSeleccionado();
+  if (!cliente_id) {
+    alert('Selecciona un agente primero.');
+    return;
+  }
   if (!_agente_ok) {
     alert('El agente no está conectado en el PC del cliente.');
     return;
@@ -152,7 +229,7 @@ async function lanzarConsulta() {
     const r = await fetch('/api/admin-agent/consultar', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({cliente_id: CLIENTE_ID, tipo: 'reg_ctas', parametros: params})
+      body: JSON.stringify({cliente_id, tipo: 'reg_ctas', parametros: params})
     });
     const d = await r.json();
     if (!d.ok) {
@@ -185,7 +262,6 @@ async function pollResultado(cid) {
       _poll_timer = setTimeout(() => pollResultado(cid), 2000);
       return;
     }
-    // llegó respuesta
     ocultarEstadoConsulta();
     document.getElementById('btn-consultar').disabled = false;
     if (d.estado === 'error') {
@@ -232,7 +308,6 @@ function renderTabla(rows) {
     </tr>`;
   }).join('');
 
-  // Totales
   const totRow = `<tr class="table-secondary fw-bold">
     <td colspan="7" class="text-end">Totales (${rows.length} registros)</td>
     <td class="text-end text-success">${fmt(totDeb)}</td>
@@ -261,8 +336,7 @@ function limpiarFiltros() {
   document.getElementById('f-limite').value = '200';
 }
 
-// Verificar estado al cargar y cada 15 s
-verificarEstado();
-setInterval(verificarEstado, 15000);
+cargarAgentes();
+setInterval(refreshAgentes, 15000);
 </script>
 {% endblock %}

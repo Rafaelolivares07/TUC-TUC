@@ -7,7 +7,7 @@ Uso:
 """
 
 import os, sys, time, json, argparse, threading
-import datetime, struct, mmap
+import datetime, struct, mmap, socket, configparser
 import requests
 import dbf
 try:
@@ -19,9 +19,29 @@ except ImportError:
 POLL_INTERVALO = 5   # segundos entre pings
 RUTA_DBF_FILE  = r"C:\S.A.R\RutaBaseDatos\ruta.dbf"
 
-# Consultas en proceso (cid -> True) para no procesar dos veces la misma
 _en_proceso = set()
 _lock = threading.Lock()
+
+
+def leer_config():
+    cfg = configparser.ConfigParser()
+    ini = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'admin_agent.ini')
+    cfg.read(ini, encoding='utf-8')
+    return cfg.get('agent', 'nombre', fallback='').strip()
+
+
+def get_ip_local():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return ''
 
 
 def leer_ruta_bd():
@@ -301,7 +321,10 @@ def main():
     base = args.servidor.rstrip('/')
     cliente_id = args.cliente
 
-    print(f"=== Admin Agent — cliente: {cliente_id} ===")
+    nombre   = leer_config() or cliente_id
+    ip_local = get_ip_local()
+
+    print(f"=== Admin Agent — cliente: {cliente_id} | nombre: {nombre} | ip: {ip_local} ===")
     print(f"Servidor: {base}")
 
     try:
@@ -313,7 +336,8 @@ def main():
 
     try:
         r = requests.post(f"{base}/api/admin-agent/checkin",
-                          json={'cliente_id': cliente_id}, timeout=15)
+                          json={'cliente_id': cliente_id, 'nombre': nombre,
+                                'ip_local': ip_local, 'ruta_bd': ruta_bd}, timeout=15)
         data = r.json()
         if not data.get('ok'):
             print(f"ERROR checkin: {data.get('error')}")
@@ -330,7 +354,7 @@ def main():
         while True:
             try:
                 r = requests.post(f"{base}/api/admin-agent/ping",
-                                  json={'token': token}, timeout=15)
+                                  json={'token': token, 'ruta_bd': ruta_bd}, timeout=15)
                 data = r.json()
                 if not data.get('ok'):
                     print("Sesión inválida — reconectando...")

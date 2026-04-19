@@ -44438,6 +44438,9 @@ def crear_tablas_admin_agent(conn):
             cliente_id VARCHAR(100) NOT NULL,
             token VARCHAR(100) NOT NULL UNIQUE,
             activo BOOLEAN DEFAULT TRUE,
+            nombre VARCHAR(200),
+            ip_local VARCHAR(50),
+            ruta_bd VARCHAR(500),
             ultimo_ping TIMESTAMPTZ DEFAULT NOW(),
             created_at TIMESTAMPTZ DEFAULT NOW()
         )""",
@@ -44451,17 +44454,54 @@ def crear_tablas_admin_agent(conn):
             created_at TIMESTAMPTZ DEFAULT NOW(),
             respondida_at TIMESTAMPTZ
         )""",
+        """CREATE TABLE IF NOT EXISTS admin_agent_permisos (
+            id SERIAL PRIMARY KEY,
+            usuario_id INTEGER NOT NULL,
+            cliente_id VARCHAR(100) NOT NULL,
+            UNIQUE(usuario_id, cliente_id)
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
     conn.commit()
-    # Columna que vincula un usuario TUC TUC con su cliente_id de Administrator
+    for alter in [
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS nombre VARCHAR(200)',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ip_local VARCHAR(50)',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500)',
+        'ALTER TABLE "USUARIOS" ADD COLUMN IF NOT EXISTS admin_cliente_id VARCHAR(100)',
+    ]:
+        try:
+            conn.execute(alter)
+            conn.commit()
+        except Exception:
+            pass
+    # Auto-migrar admin_cliente_id existente → permisos
     try:
-        conn.execute("ALTER TABLE \"USUARIOS\" ADD COLUMN IF NOT EXISTS admin_cliente_id VARCHAR(100)")
+        conn.execute("""
+            INSERT INTO admin_agent_permisos (usuario_id, cliente_id)
+            SELECT id, admin_cliente_id FROM "USUARIOS"
+            WHERE admin_cliente_id IS NOT NULL AND admin_cliente_id != ''
+            ON CONFLICT DO NOTHING
+        """)
         conn.commit()
     except Exception:
         pass
     _admin_agent_tablas_listas = True
+
+
+def _admin_puede_ver(usuario_id, rol, cliente_id, conn):
+    if rol == 'Administrador':
+        return True
+    row = conn.execute(
+        "SELECT 1 FROM admin_agent_permisos WHERE usuario_id=%s AND cliente_id=%s",
+        (usuario_id, cliente_id)
+    ).fetchone()
+    if row:
+        return True
+    row2 = conn.execute(
+        'SELECT admin_cliente_id FROM "USUARIOS" WHERE id=%s', (usuario_id,)
+    ).fetchone()
+    return row2 and (row2['admin_cliente_id'] or '').strip() == cliente_id
 
 
 @app.route('/api/admin-agent/checkin', methods=['POST'])
@@ -44471,6 +44511,9 @@ def admin_agent_checkin():
     cliente_id = data.get('cliente_id', '').strip()
     if not cliente_id:
         return jsonify({'ok': False, 'error': 'cliente_id requerido'}), 400
+    nombre   = (data.get('nombre') or cliente_id).strip()
+    ip_local = (data.get('ip_local') or '').strip()
+    ruta_bd  = (data.get('ruta_bd') or '').strip()
     import secrets
     token = secrets.token_hex(24)
     conn = get_db_connection()
@@ -44478,8 +44521,9 @@ def admin_agent_checkin():
         crear_tablas_admin_agent(conn)
         conn.execute("UPDATE admin_agent_sesiones SET activo=FALSE WHERE cliente_id=%s", (cliente_id,))
         conn.execute(
-            "INSERT INTO admin_agent_sesiones (cliente_id, token) VALUES (%s,%s)",
-            (cliente_id, token)
+            """INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd)
+               VALUES (%s,%s,%s,%s,%s)""",
+            (cliente_id, token, nombre, ip_local, ruta_bd)
         )
         conn.commit()
         return jsonify({'ok': True, 'token': token})
@@ -44510,13 +44554,16 @@ def admin_agent_checkout():
 def admin_agent_ping():
     """Agente hace ping y recibe consulta pendiente si hay."""
     data = request.get_json() or {}
-    token = data.get('token', '')
+    token    = data.get('token', '')
+    ruta_bd  = (data.get('ruta_bd') or '').strip() or None
     conn = get_db_connection()
     try:
         crear_tablas_admin_agent(conn)
         sesion = conn.execute(
-            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW() WHERE token=%s AND activo=TRUE RETURNING id",
-            (token,)
+            """UPDATE admin_agent_sesiones
+               SET ultimo_ping=NOW(), ruta_bd=COALESCE(%s, ruta_bd)
+               WHERE token=%s AND activo=TRUE RETURNING id""",
+            (ruta_bd, token)
         ).fetchone()
         if not sesion:
             return jsonify({'ok': False, 'error': 'sesión inválida'}), 401
@@ -44587,16 +44634,11 @@ def admin_agent_consultar():
     parametros = data.get('parametros', {})
     if not cliente_id or not tipo:
         return jsonify({'ok': False, 'error': 'cliente_id y tipo requeridos'}), 400
-    # ClienteVFP solo puede consultar su propio cliente_id
-    if session.get('rol') != 'Administrador':
-        conn2 = get_db_connection()
-        row2 = conn2.execute("SELECT admin_cliente_id FROM usuarios WHERE id=%s", (session['usuario_id'],)).fetchone()
-        conn2.close()
-        if not row2 or (row2['admin_cliente_id'] or '').strip() != cliente_id:
-            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
         crear_tablas_admin_agent(conn)
+        if not _admin_puede_ver(session['usuario_id'], session.get('rol',''), cliente_id, conn):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         sesion = conn.execute(
             "SELECT id FROM admin_agent_sesiones WHERE cliente_id=%s AND activo=TRUE ORDER BY id DESC LIMIT 1",
             (cliente_id,)
@@ -44641,15 +44683,11 @@ def admin_agent_estado(cliente_id):
     """Browser verifica si el agente está conectado."""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    if session.get('rol') != 'Administrador':
-        conn2 = get_db_connection()
-        row2 = conn2.execute("SELECT admin_cliente_id FROM usuarios WHERE id=%s", (session['usuario_id'],)).fetchone()
-        conn2.close()
-        if not row2 or (row2['admin_cliente_id'] or '').strip() != cliente_id:
-            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
         crear_tablas_admin_agent(conn)
+        if not _admin_puede_ver(session['usuario_id'], session.get('rol',''), cliente_id, conn):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         sesion = conn.execute(
             """SELECT ultimo_ping FROM admin_agent_sesiones
                WHERE cliente_id=%s AND activo=TRUE
@@ -44669,24 +44707,118 @@ def admin_agent_estado(cliente_id):
     finally:
         conn.close()
 
+@app.route('/api/admin-agent/agentes', methods=['GET'])
+def admin_agent_agentes():
+    """Lista de agentes visibles para el usuario actual (con estado conectado/desconectado)."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        if session.get('rol') == 'Administrador':
+            rows = conn.execute("""
+                SELECT DISTINCT ON (cliente_id)
+                    cliente_id, nombre, ip_local, ruta_bd, activo, ultimo_ping
+                FROM admin_agent_sesiones
+                ORDER BY cliente_id, id DESC
+            """).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT DISTINCT ON (s.cliente_id)
+                    s.cliente_id, s.nombre, s.ip_local, s.ruta_bd, s.activo, s.ultimo_ping
+                FROM admin_agent_sesiones s
+                JOIN admin_agent_permisos p ON p.cliente_id = s.cliente_id
+                WHERE p.usuario_id = %s
+                ORDER BY s.cliente_id, s.id DESC
+            """, (session['usuario_id'],)).fetchall()
+        from datetime import timezone as tz
+        now = datetime.now(tz.utc)
+        agentes = []
+        for r in rows:
+            ping = r['ultimo_ping']
+            if ping and ping.tzinfo is None:
+                ping = ping.replace(tzinfo=tz.utc)
+            lag = int((now - ping).total_seconds()) if ping else 9999
+            agentes.append({
+                'cliente_id': r['cliente_id'],
+                'nombre':     r['nombre'] or r['cliente_id'],
+                'ip_local':   r['ip_local'] or '',
+                'ruta_bd':    r['ruta_bd'] or '',
+                'conectado':  bool(r['activo']) and lag < 30,
+                'lag':        lag,
+            })
+        return jsonify({'ok': True, 'agentes': agentes})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/permisos/usuario/<int:uid>', methods=['GET'])
+def admin_agent_permisos_get(uid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo administrador'}), 403
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        rows = conn.execute(
+            "SELECT cliente_id FROM admin_agent_permisos WHERE usuario_id=%s ORDER BY cliente_id", (uid,)
+        ).fetchall()
+        return jsonify({'ok': True, 'clientes': [r['cliente_id'] for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/admin-agent/permisos/usuario/<int:uid>', methods=['POST'])
+def admin_agent_permisos_set(uid):
+    if session.get('rol') != 'Administrador':
+        return jsonify({'ok': False, 'error': 'Solo administrador'}), 403
+    data = request.get_json() or {}
+    clientes = data.get('clientes', [])
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        conn.execute("DELETE FROM admin_agent_permisos WHERE usuario_id=%s", (uid,))
+        for cid in clientes:
+            conn.execute(
+                "INSERT INTO admin_agent_permisos (usuario_id, cliente_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                (uid, cid.strip())
+            )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/admin/agentes')
+def admin_agentes_page():
+    if session.get('rol') != 'Administrador':
+        return redirect(url_for('admin_login'))
+    conn = get_db_connection()
+    try:
+        crear_tablas_admin_agent(conn)
+        rows = conn.execute(
+            "SELECT id, nombre, usuario FROM \"USUARIOS\" WHERE rol='ClienteVFP' ORDER BY nombre"
+        ).fetchall()
+        usuarios = [{'id': r['id'], 'nombre': r['nombre'], 'usuario': r['usuario']} for r in rows]
+        return render_template('admin_agentes.html', usuarios=usuarios)
+    except Exception as e:
+        return str(e), 500
+    finally:
+        conn.close()
+
+
 @app.route('/admin/consultas')
 def admin_consultas_page():
     if 'usuario_id' not in session:
         return redirect(url_for('admin_login'))
-    rol = session.get('rol', '')
-    if rol == 'Administrador':
-        # Admin puede ver cualquier cliente via ?cliente=
-        cliente_id = request.args.get('cliente', 'pilar')
-    else:
-        # ClienteVFP solo ve su propio cliente_id
-        conn = get_db_connection()
-        row = conn.execute("SELECT admin_cliente_id FROM usuarios WHERE id = %s",
-                           (session['usuario_id'],)).fetchone()
-        conn.close()
-        cliente_id = (row['admin_cliente_id'] or '').strip() if row else ''
-        if not cliente_id:
-            return "Tu cuenta no tiene un cliente Administrator asignado. Contacta al administrador.", 403
-    return render_template('admin_consultas.html', cliente_id=cliente_id)
+    if session.get('rol') not in ('Administrador', 'ClienteVFP'):
+        return redirect(url_for('admin_login'))
+    return render_template('admin_consultas.html')
 
 # ── FIN MÓDULO: ADMIN AGENT ──────────────────────────────────────────────────
 

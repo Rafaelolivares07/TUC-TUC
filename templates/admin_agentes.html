@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Agentes Administrator{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <h1 class="h3 mb-4">
+    <i class="bi bi-hdd-network text-primary me-2"></i>Agentes Administrator
+  </h1>
+
+  <!-- Agentes registrados -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Agentes registrados</div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.85rem;">
+          <thead class="table-light">
+            <tr>
+              <th>Estado</th>
+              <th>Nombre</th>
+              <th>cliente_id</th>
+              <th>IP local</th>
+              <th>Ruta BD</th>
+              <th>Último ping</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-agentes">
+            <tr><td colspan="6" class="text-center text-muted py-3">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Usuarios ClienteVFP -->
+  <div class="card shadow-sm">
+    <div class="card-header fw-semibold">Acceso por usuario</div>
+    <div class="card-body">
+      {% if usuarios %}
+        <div id="lista-usuarios">
+          {% for u in usuarios %}
+          <div class="border rounded p-3 mb-3" id="user-{{ u.id }}">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <div>
+                <span class="fw-semibold">{{ u.nombre }}</span>
+                <span class="text-muted ms-2 small">{{ u.usuario }}</span>
+              </div>
+              <button class="btn btn-sm btn-primary" onclick="guardarPermisos({{ u.id }})">
+                <i class="bi bi-floppy me-1"></i>Guardar
+              </button>
+            </div>
+            <div id="checks-{{ u.id }}" class="d-flex flex-wrap gap-2">
+              <span class="text-muted small">Cargando agentes…</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No hay usuarios ClienteVFP registrados.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+const USUARIOS = {{ usuarios | tojson }};
+let _agentes = [];
+let _permisos = {};  // uid -> Set de cliente_ids asignados
+
+async function cargarTodo() {
+  const [ra, ...rp] = await Promise.all([
+    fetch('/api/admin-agent/agentes').then(r => r.json()),
+    ...USUARIOS.map(u => fetch(`/api/admin-agent/permisos/usuario/${u.id}`).then(r => r.json()))
+  ]);
+
+  if (ra.ok) {
+    _agentes = ra.agentes;
+    renderAgentes();
+  }
+
+  USUARIOS.forEach((u, i) => {
+    const d = rp[i];
+    _permisos[u.id] = new Set(d.ok ? d.clientes : []);
+    renderChecks(u.id);
+  });
+}
+
+function renderAgentes() {
+  const tbody = document.getElementById('tbl-agentes');
+  if (_agentes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Ningún agente se ha conectado aún</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _agentes.map(a => `
+    <tr>
+      <td><span class="badge ${a.conectado ? 'bg-success' : 'bg-danger'}">${a.conectado ? '✅ Conectado' : '❌ Desconectado'}</span></td>
+      <td class="fw-semibold">${a.nombre}</td>
+      <td class="font-monospace text-muted">${a.cliente_id}</td>
+      <td class="font-monospace">${a.ip_local || '—'}</td>
+      <td class="font-monospace small text-muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${a.ruta_bd}">${a.ruta_bd || '—'}</td>
+      <td class="text-muted small">${a.lag < 9999 ? a.lag + 's' : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function renderChecks(uid) {
+  const cont = document.getElementById(`checks-${uid}`);
+  if (_agentes.length === 0) {
+    cont.innerHTML = '<span class="text-muted small">Sin agentes registrados</span>';
+    return;
+  }
+  const asignados = _permisos[uid] || new Set();
+  cont.innerHTML = _agentes.map(a => {
+    const chk = asignados.has(a.cliente_id) ? 'checked' : '';
+    const dot = a.conectado ? '✅' : '❌';
+    return `<div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" id="chk-${uid}-${a.cliente_id}"
+             value="${a.cliente_id}" ${chk}>
+      <label class="form-check-label" for="chk-${uid}-${a.cliente_id}">
+        ${dot} ${a.nombre}
+      </label>
+    </div>`;
+  }).join('');
+}
+
+async function guardarPermisos(uid) {
+  const cont = document.getElementById(`checks-${uid}`);
+  const checks = cont.querySelectorAll('input[type=checkbox]:checked');
+  const clientes = Array.from(checks).map(c => c.value);
+
+  const btn = document.querySelector(`#user-${uid} button`);
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  try {
+    const r = await fetch(`/api/admin-agent/permisos/usuario/${uid}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({clientes})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      _permisos[uid] = new Set(clientes);
+      btn.className = 'btn btn-sm btn-success';
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardado';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.className = 'btn btn-sm btn-primary';
+        btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+      }, 2000);
+    } else {
+      alert('Error: ' + d.error);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+    }
+  } catch(e) {
+    alert('Error de red');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+  }
+}
+
+cargarTodo();
+setInterval(() => fetch('/api/admin-agent/agentes').then(r=>r.json()).then(d => {
+  if (d.ok) { _agentes = d.agentes; renderAgentes(); USUARIOS.forEach(u => renderChecks(u.id)); }
+}), 15000);
+</script>
+{% endblock %}

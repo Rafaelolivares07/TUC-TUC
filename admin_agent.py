@@ -333,12 +333,12 @@ def consulta_buscar_cuenta(ruta_bd, parametros):
     if not q:
         return []
     # CODIGO C(15) off=1, NOMBRE C(40) off=16, TIPO C(1) off=72  — record_size se lee del header
-    path = os.path.join(ruta_bd, "CUENTAS.DBF")
+    path = os.path.join(ruta_bd, "CUENTA.DBF")
     with open(path, 'rb') as f:
         f.seek(4)
         num_records = struct.unpack('<I', f.read(4))[0]
         header_size = struct.unpack('<H', f.read(2))[0]
-        f.seek(8); rec_size = struct.unpack('<H', f.read(2))[0]
+        rec_size    = struct.unpack('<H', f.read(2))[0]
         f.seek(header_size)
         raw = f.read(num_records * rec_size)
     ENC = 'cp1252'

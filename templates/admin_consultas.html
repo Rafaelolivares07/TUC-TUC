@@ -258,7 +258,7 @@ function onNitInput() {
   if (_nit_seleccionado) limpiarNit();
   document.getElementById('nit-resultado').classList.add('d-none');
   clearTimeout(_nit_timer);
-  if (val.length < 4) return;
+  if (val.length < 3) return;
   _nit_timer = setTimeout(() => _lookup('buscar_nit', {nit: val}, 'nit-resultado', _mostrarNitItems), 280);
 }
 
@@ -301,7 +301,7 @@ function onCuentaInput() {
   if (_cuenta_seleccionada) limpiarCuenta();
   document.getElementById('cuenta-resultado').classList.add('d-none');
   clearTimeout(_cuenta_timer);
-  if (val.length < 4) return;
+  if (val.length < 3) return;
   _cuenta_timer = setTimeout(() => _lookup('buscar_cuenta', {q: val}, 'cuenta-resultado', _mostrarCuentaItems), 280);
 }
 

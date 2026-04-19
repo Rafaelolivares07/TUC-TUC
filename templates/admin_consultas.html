@@ -259,10 +259,19 @@ function onNitInput() {
   document.getElementById('nit-resultado').classList.add('d-none');
   clearTimeout(_nit_timer);
   if (val.length < 3) return;
-  _nit_timer = setTimeout(() => _lookup('buscar_nit', {nit: val}, 'nit-resultado', _mostrarNitItems), 280);
+  _nit_timer = setTimeout(() => {
+    _mostrarBuscando('nit-resultado');
+    _lookup('buscar_nit', {nit: val}, 'nit-resultado', _mostrarNitItems);
+  }, 280);
 }
 
 function _esc(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+function _mostrarBuscando(contId) {
+  const cont = document.getElementById(contId);
+  cont.innerHTML = '<div class="px-2 py-2 text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Buscando en Administrator… puede tardar unos segundos</div>';
+  cont.classList.remove('d-none');
+}
 
 function _mostrarNitItems(items) {
   const cont = document.getElementById('nit-resultado');
@@ -304,7 +313,10 @@ function onCuentaInput() {
   document.getElementById('cuenta-resultado').classList.add('d-none');
   clearTimeout(_cuenta_timer);
   if (val.length < 3) return;
-  _cuenta_timer = setTimeout(() => _lookup('buscar_cuenta', {q: val}, 'cuenta-resultado', _mostrarCuentaItems), 280);
+  _cuenta_timer = setTimeout(() => {
+    _mostrarBuscando('cuenta-resultado');
+    _lookup('buscar_cuenta', {q: val}, 'cuenta-resultado', _mostrarCuentaItems);
+  }, 280);
 }
 
 function _mostrarCuentaItems(items) {

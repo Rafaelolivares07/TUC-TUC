@@ -258,7 +258,7 @@ function onNitInput() {
   if (_nit_seleccionado) limpiarNit();
   document.getElementById('nit-resultado').classList.add('d-none');
   clearTimeout(_nit_timer);
-  if (val.length < 3) return;
+  if (val.length < 4) return;
   _nit_timer = setTimeout(() => _lookup('buscar_nit', {nit: val}, 'nit-resultado', _mostrarNitItems), 280);
 }
 
@@ -271,7 +271,7 @@ function _mostrarNitItems(items) {
   }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
-          onmousedown="seleccionarNit(${JSON.stringify(t.nit)},${JSON.stringify(t.nombre)},${JSON.stringify(t.cod_ter)})">
+          onpointerdown="event.preventDefault(); seleccionarNit(${JSON.stringify(t.nit)},${JSON.stringify(t.nombre)},${JSON.stringify(t.cod_ter)})">
       <strong>${t.nit}</strong> — ${t.nombre}
     </div>`).join('');
   cont.classList.remove('d-none');
@@ -301,7 +301,7 @@ function onCuentaInput() {
   if (_cuenta_seleccionada) limpiarCuenta();
   document.getElementById('cuenta-resultado').classList.add('d-none');
   clearTimeout(_cuenta_timer);
-  if (val.length < 2) return;
+  if (val.length < 4) return;
   _cuenta_timer = setTimeout(() => _lookup('buscar_cuenta', {q: val}, 'cuenta-resultado', _mostrarCuentaItems), 280);
 }
 
@@ -314,7 +314,7 @@ function _mostrarCuentaItems(items) {
   }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
-          onmousedown="seleccionarCuenta(${JSON.stringify(t.codigo)},${JSON.stringify(t.nombre)})">
+          onpointerdown="event.preventDefault(); seleccionarCuenta(${JSON.stringify(t.codigo)},${JSON.stringify(t.nombre)})">
       <strong>${t.codigo}</strong> — ${t.nombre}
     </div>`).join('');
   cont.classList.remove('d-none');

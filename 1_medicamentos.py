@@ -44671,7 +44671,15 @@ def admin_agent_resultado(consulta_id):
         ).fetchone()
         if not row:
             return jsonify({'ok': False, 'error': 'No encontrada'}), 404
-        return jsonify({'ok': True, 'estado': row['estado'], 'respuesta': row['respuesta']})
+        resp = {'ok': True, 'estado': row['estado'], 'respuesta': row['respuesta']}
+        # Limpiar registro — cero acumulación en Render
+        if row['estado'] in ('lista', 'error'):
+            try:
+                conn.execute("DELETE FROM admin_agent_consultas WHERE id=%s", (consulta_id,))
+                conn.commit()
+            except Exception:
+                pass
+        return jsonify(resp)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

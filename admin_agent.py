@@ -114,22 +114,46 @@ def leer_tabla(ruta_bd, nombre):
     return rows, campos
 
 
+def buscar_tercero_por_nit(ruta_bd, nit):
+    """Busca en TERCEROS por campo identificacion — retorna lista de {cod_ter, nombre, nit}."""
+    # rec_size=739, COD_TER N(10) off=1, NOMBRE C(50) off=11, IDENTIFICACION C(15) off=61
+    rows = _leer_tabla_campos_binario(
+        os.path.join(ruta_bd, "TERCEROS.DBF"), 739,
+        [('COD_TER', 1, 10), ('NOMBRE', 11, 50), ('NIT', 61, 15)])
+    nit = nit.strip()
+    return [{'cod_ter': r['COD_TER'], 'nombre': r['NOMBRE'], 'nit': r['NIT']}
+            for r in rows if nit.lower() in r['NIT'].lower()]
+
+
 def consulta_reg_ctas(ruta_bd, parametros):
-    # TERCEROS: leer solo COD_TER+NOMBRE en binario (evita parsear campos de 254 chars)
-    # rec_size=739, COD_TER offset=1 len=10, NOMBRE offset=11 len=50
+    # TERCEROS: leer COD_TER+NOMBRE+IDENTIFICACION en binario
     rows_ter = _leer_tabla_campos_binario(
         os.path.join(ruta_bd, "TERCEROS.DBF"), 739,
-        [('COD_TER', 1, 10), ('NOMBRE', 11, 50)])
-    terceros = {r['COD_TER']: r['NOMBRE'] for r in rows_ter}
+        [('COD_TER', 1, 10), ('NOMBRE', 11, 50), ('NIT', 61, 15)])
+    terceros     = {r['COD_TER']: r['NOMBRE'] for r in rows_ter}
+    terceros_nit = {r['NIT'].strip(): r['COD_TER'] for r in rows_ter}
 
     rows_tip, _ = leer_tabla(ruta_bd, "TIPO_DOC")
     rows_cta, _ = leer_tabla(ruta_bd, "CUENTA")
-    tipo_docs = {r['CODIGO']: r['NOMBRE']  for r in rows_tip}
-    cuentas   = {r['CODIGO']: r['NOMBRE']  for r in rows_cta}
+    tipo_docs = {r['CODIGO']: r['NOMBRE'] for r in rows_tip}
+    cuentas   = {r['CODIGO']: r['NOMBRE'] for r in rows_cta}
 
     empresa = str(parametros.get('empresa', '') or '').strip()
-    tercero = str(parametros.get('tercero', '') or '').strip()
+    nit     = str(parametros.get('nit',     '') or '').strip()
+    cuenta  = str(parametros.get('cuenta',  '') or '').strip()
     limite  = int(parametros.get('limite', 200))
+
+    # Resolver NIT → COD_TER
+    tercero = ''
+    if nit:
+        cod = terceros_nit.get(nit)
+        if not cod:
+            # búsqueda parcial
+            for k, v in terceros_nit.items():
+                if nit in k:
+                    cod = v
+                    break
+        tercero = cod or nit  # si no encuentra, filtra por el valor crudo
 
     lapso_raw   = str(parametros.get('lapso', '') or '').strip().replace('-', '')
     lapso_year  = lapso_raw[:4].encode('ascii') if len(lapso_raw) >= 4 else None
@@ -209,6 +233,7 @@ def consulta_reg_ctas(ruta_bd, parametros):
             cod_ter = s(OFF_TERC, 10)
             cod_tip = s(OFF_TIPO, 6)
             cod_cta = s(OFF_CUENTA, 15)
+            nit_ter = next((r['NIT'] for r in rows_ter if r['COD_TER'] == cod_ter), '')
             return {
                 'consecutivo': int(cr) if cr.isdigit() else cr.decode(ENC, 'replace'),
                 'cuenta':      cod_cta,
@@ -217,6 +242,7 @@ def consulta_reg_ctas(ruta_bd, parametros):
                 'fecha':       dt.isoformat() if dt else '',
                 'tercero':     cod_ter,
                 'tercero_nom': terceros.get(cod_ter, ''),
+                'nit':         nit_ter,
                 'tipo':        cod_tip,
                 'tipo_nom':    tipo_docs.get(cod_tip, ''),
                 'documento':   s(OFF_DOC, 20),
@@ -231,6 +257,8 @@ def consulta_reg_ctas(ruta_bd, parametros):
             if empresa and b[OFF_EMP:OFF_EMP+10].rstrip(b' ').decode(ENC, 'replace') != empresa:
                 continue
             if tercero and b[OFF_TERC:OFF_TERC+10].strip(b' ').decode(ENC, 'replace') != tercero:
+                continue
+            if cuenta and not b[OFF_CUENTA:OFF_CUENTA+15].rstrip(b' ').decode(ENC, 'replace').startswith(cuenta):
                 continue
             resultado.append(_rec(int(idx)))
             if len(resultado) >= limite:
@@ -256,6 +284,8 @@ def consulta_reg_ctas(ruta_bd, parametros):
                     continue
                 if tercero and mm[base_off+OFF_TERC:base_off+OFF_TERC+10].strip(b' ').decode(ENC,'replace') != tercero:
                     continue
+                if cuenta and not mm[base_off+OFF_CUENTA:base_off+OFF_CUENTA+15].rstrip(b' ').decode(ENC,'replace').startswith(cuenta):
+                    continue
                 lap_s = f"{lap[:4].decode()}-{lap[4:6].decode()}-{lap[6:8].decode()}"
                 def _s(o,n): return mm[base_off+o:base_off+o+n].strip(b' ').decode(ENC,'replace')
                 def _f(o,n):
@@ -279,8 +309,16 @@ def consulta_reg_ctas(ruta_bd, parametros):
     return resultado
 
 
+def consulta_buscar_nit(ruta_bd, parametros):
+    nit = str(parametros.get('nit', '') or '').strip()
+    if not nit:
+        return []
+    return buscar_tercero_por_nit(ruta_bd, nit)
+
+
 CONSULTAS = {
-    'reg_ctas': consulta_reg_ctas,
+    'reg_ctas':    consulta_reg_ctas,
+    'buscar_nit':  consulta_buscar_nit,
 }
 
 

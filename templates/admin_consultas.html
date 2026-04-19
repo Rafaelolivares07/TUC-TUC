@@ -264,7 +264,11 @@ function onNitInput() {
 
 function _mostrarNitItems(items) {
   const cont = document.getElementById('nit-resultado');
-  if (!items.length) { cont.classList.add('d-none'); return; }
+  if (!items.length) {
+    cont.innerHTML = '<div class="px-2 py-2 text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Sin terceros con ese NIT o nombre</div>';
+    cont.classList.remove('d-none');
+    return;
+  }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
           onmousedown="seleccionarNit(${JSON.stringify(t.nit)},${JSON.stringify(t.nombre)},${JSON.stringify(t.cod_ter)})">
@@ -303,7 +307,11 @@ function onCuentaInput() {
 
 function _mostrarCuentaItems(items) {
   const cont = document.getElementById('cuenta-resultado');
-  if (!items.length) { cont.classList.add('d-none'); return; }
+  if (!items.length) {
+    cont.innerHTML = '<div class="px-2 py-2 text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Sin cuentas con ese código o nombre</div>';
+    cont.classList.remove('d-none');
+    return;
+  }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
           onmousedown="seleccionarCuenta(${JSON.stringify(t.codigo)},${JSON.stringify(t.nombre)})">
@@ -433,7 +441,14 @@ function renderTabla(rows) {
   const resumenTxt = document.getElementById('resumen-txt');
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">Sin resultados para los filtros aplicados</td></tr>';
+    const partes = [];
+    if (_nit_seleccionado)    partes.push(`tercero <strong>${document.getElementById('nit-nombre-txt').textContent}</strong>`);
+    if (_cuenta_seleccionada) partes.push(`cuenta <strong>${document.getElementById('cuenta-nombre-txt').textContent}</strong>`);
+    const filtroDesc = partes.length ? ' para ' + partes.join(' y ') : '';
+    tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4">
+      <i class="bi bi-inbox text-warning fs-4 d-block mb-2"></i>
+      <span class="text-muted">Sin movimientos en REG_CTAS${filtroDesc} con los filtros aplicados</span>
+    </td></tr>`;
     resumen.classList.add('d-none');
     return;
   }

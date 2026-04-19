@@ -328,31 +328,17 @@ def consulta_buscar_nit(ruta_bd, parametros):
 
 
 def consulta_buscar_cuenta(ruta_bd, parametros):
-    """Busca en CUENTAS por CODIGO o NOMBRE, solo TIPO='D'."""
+    """Busca en CUENTA por CODIGO o NOMBRE, solo TIPO='D'."""
     q = str(parametros.get('q', '') or '').strip().lower()
     if not q:
         return []
-    # CODIGO C(15) off=1, NOMBRE C(40) off=16, TIPO C(1) off=72  — record_size se lee del header
-    path = os.path.join(ruta_bd, "CUENTA.DBF")
-    with open(path, 'rb') as f:
-        f.seek(4)
-        num_records = struct.unpack('<I', f.read(4))[0]
-        header_size = struct.unpack('<H', f.read(2))[0]
-        rec_size    = struct.unpack('<H', f.read(2))[0]
-        f.seek(header_size)
-        raw = f.read(num_records * rec_size)
-    ENC = 'cp1252'
+    rows, _ = leer_tabla(ruta_bd, "CUENTA")
     resultado = []
-    actual = len(raw) // rec_size
-    for i in range(actual):
-        base = i * rec_size
-        if raw[base] == 0x2A:
+    for r in rows:
+        if str(r.get('TIPO', '') or '').strip() != 'D':
             continue
-        tipo = raw[base+72:base+73].decode(ENC, 'replace').strip()
-        if tipo != 'D':
-            continue
-        codigo = raw[base+1:base+16].strip(b' ').decode(ENC, 'replace')
-        nombre = raw[base+16:base+56].strip(b' ').decode(ENC, 'replace')
+        codigo = str(r.get('CODIGO', '') or '').strip()
+        nombre = str(r.get('NOMBRE', '') or '').strip()
         if q in codigo.lower() or q in nombre.lower():
             resultado.append({'codigo': codigo, 'nombre': nombre})
         if len(resultado) >= 30:

@@ -37,8 +37,12 @@
     <div class="card-body py-3">
       <div class="row g-2 align-items-end">
         <div class="col-sm-2">
-          <label class="form-label mb-1 small fw-semibold">Lapso</label>
-          <input id="f-lapso" type="text" class="form-control form-control-sm" placeholder="ej. 202501">
+          <label class="form-label mb-1 small fw-semibold">Desde</label>
+          <input id="f-lapso-desde" type="text" class="form-control form-control-sm" placeholder="ej. 202601">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small fw-semibold">Hasta</label>
+          <input id="f-lapso-hasta" type="text" class="form-control form-control-sm" placeholder="ej. 202604">
         </div>
         <div class="col-sm-2">
           <label class="form-label mb-1 small fw-semibold">Empresa</label>
@@ -280,12 +284,14 @@ async function lanzarConsulta() {
   }
 
   const params = {};
-  const lapso   = document.getElementById('f-lapso').value.trim();
+  const desde  = document.getElementById('f-lapso-desde').value.trim().replace('-','');
+  const hasta  = document.getElementById('f-lapso-hasta').value.trim().replace('-','');
   const empresa = document.getElementById('f-empresa').value.trim();
   const cuenta  = document.getElementById('f-cuenta').value.trim();
   const nit     = (_nit_seleccionado || document.getElementById('f-nit').value.trim());
   const limite  = parseInt(document.getElementById('f-limite').value) || 200;
-  if (lapso)   params.lapso   = lapso;
+  if (desde)   params.lapso_desde = desde;
+  if (hasta)   params.lapso_hasta = hasta;
   if (empresa) params.empresa = empresa;
   if (cuenta)  params.cuenta  = cuenta;
   if (nit)     params.nit     = nit;
@@ -402,7 +408,7 @@ function ocultarEstadoConsulta() {
 }
 
 function limpiarFiltros() {
-  ['f-lapso','f-empresa','f-cuenta','f-nit'].forEach(id => document.getElementById(id).value = '');
+  ['f-lapso-desde','f-lapso-hasta','f-empresa','f-cuenta','f-nit'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-limite').value = '200';
   _nit_seleccionado = '';
   document.getElementById('nit-nombre').classList.add('d-none');

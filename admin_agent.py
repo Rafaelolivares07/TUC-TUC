@@ -148,16 +148,22 @@ def consulta_reg_ctas(ruta_bd, parametros):
     if nit:
         cod = terceros_nit.get(nit)
         if not cod:
-            # búsqueda parcial
             for k, v in terceros_nit.items():
                 if nit in k:
                     cod = v
                     break
-        tercero = cod or nit  # si no encuentra, filtra por el valor crudo
+        tercero = cod or nit
 
-    lapso_raw   = str(parametros.get('lapso', '') or '').strip().replace('-', '')
-    lapso_year  = lapso_raw[:4].encode('ascii') if len(lapso_raw) >= 4 else None
-    lapso_month = lapso_raw[4:6].zfill(2).encode('ascii') if len(lapso_raw) >= 6 else None
+    # Rango de lapso YYYYMM
+    def _parse_lapso(s):
+        s = str(s or '').strip().replace('-', '')
+        return int(s[:6]) if len(s) >= 6 else None
+
+    lapso_desde = _parse_lapso(parametros.get('lapso_desde') or parametros.get('lapso'))
+    lapso_hasta = _parse_lapso(parametros.get('lapso_hasta') or parametros.get('lapso'))
+    # Para la estimación de inicio usamos lapso_desde
+    lapso_start_year  = str(lapso_desde)[:4].encode('ascii') if lapso_desde else None
+    lapso_start_month = str(lapso_desde)[4:6].encode('ascii') if lapso_desde else None
 
     # Offsets fijos de REG_CTAS (calculados de field_info)
     REC_SIZE   = 345
@@ -181,14 +187,14 @@ def consulta_reg_ctas(ruta_bd, parametros):
         num_records = struct.unpack('<I', f.read(4))[0]
         header_size = struct.unpack('<H', f.read(2))[0]
 
-        # Estimar posición de inicio
+        # Estimar posición de inicio por lapso_desde
         start = 0
-        if lapso_year:
+        if lapso_start_year:
             try:
-                yr = int(lapso_year)
+                yr = int(lapso_start_year)
                 base_yr = 2018
                 rango = (2029 - base_yr) * 12
-                meses = (yr - base_yr) * 12 + (int(lapso_month) if lapso_month else 6) - 3
+                meses = (yr - base_yr) * 12 + (int(lapso_start_month) if lapso_start_month else 6) - 3
                 start = int(num_records * max(0.0, min(0.92, meses / rango)))
             except Exception:
                 start = 0
@@ -206,13 +212,15 @@ def consulta_reg_ctas(ruta_bd, parametros):
         # Máscara: no borrados
         mask = data[:, 0] != 0x2A
 
-        # Filtro LAPSO vectorizado
-        if lapso_year:
-            yr_arr = np.frombuffer(lapso_year, dtype=np.uint8)
-            mask &= np.all(data[:, OFF_LAPSO:OFF_LAPSO+4] == yr_arr, axis=1)
-            if lapso_month:
-                mn_arr = np.frombuffer(lapso_month, dtype=np.uint8)
-                mask &= np.all(data[:, OFF_LAPSO+4:OFF_LAPSO+6] == mn_arr, axis=1)
+        # Filtro LAPSO vectorizado por rango YYYYMM
+        if lapso_desde or lapso_hasta:
+            yr = data[:, OFF_LAPSO:OFF_LAPSO+4] - 48
+            mn = data[:, OFF_LAPSO+4:OFF_LAPSO+6] - 48
+            lapso_int = (yr[:,0]*1000 + yr[:,1]*100 + yr[:,2]*10 + yr[:,3]) * 100 + (mn[:,0]*10 + mn[:,1])
+            if lapso_desde:
+                mask &= lapso_int >= lapso_desde
+            if lapso_hasta:
+                mask &= lapso_int <= lapso_hasta
 
         indices = np.where(mask)[0]
 
@@ -272,14 +280,13 @@ def consulta_reg_ctas(ruta_bd, parametros):
                 if mm[base_off] == 0x2A:
                     continue
                 lap = mm[base_off+OFF_LAPSO: base_off+OFF_LAPSO+8]
-                if lapso_year:
-                    yr4 = lap[:4]
-                    if yr4 > lapso_year: break
-                    if yr4 < lapso_year: continue
-                    if lapso_month:
-                        mn2 = lap[4:6]
-                        if mn2 > lapso_month: break
-                        if mn2 < lapso_month: continue
+                if lapso_desde or lapso_hasta:
+                    try:
+                        li = int(lap[:6].decode('ascii'))
+                        if lapso_desde and li < lapso_desde: continue
+                        if lapso_hasta and li > lapso_hasta: break
+                    except Exception:
+                        continue
                 if empresa and mm[base_off+OFF_EMP:base_off+OFF_EMP+10].rstrip(b' ').decode(ENC,'replace') != empresa:
                     continue
                 if tercero and mm[base_off+OFF_TERC:base_off+OFF_TERC+10].strip(b' ').decode(ENC,'replace') != tercero:
@@ -413,8 +420,8 @@ def main():
                         )
                         t.start()
 
-            except requests.RequestException as e:
-                print(f"Red: {e}")
+            except (requests.RequestException, ValueError):
+                pass  # Render cold start o red inestable — reintenta en el próximo ciclo
 
             time.sleep(POLL_INTERVALO)
 

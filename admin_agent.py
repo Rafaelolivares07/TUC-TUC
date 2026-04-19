@@ -333,7 +333,7 @@ def consulta_buscar_cuenta(ruta_bd, parametros):
     q = str(parametros.get('q', '') or '').strip().lower()
     if not q:
         return []
-    rows, _ = leer_tabla(ruta_bd, "CUENTA")
+    rows, _ = leer_tabla(ruta_bd, "CUENTAS")
     resultado = []
     for r in rows:
         if str(r.get('TIPO', '') or '').strip().upper() != 'D':

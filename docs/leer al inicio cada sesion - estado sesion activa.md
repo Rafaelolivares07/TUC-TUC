@@ -250,30 +250,60 @@ BUILD EXE "C:\S.A.R\PROCESADOR_STAGING" FROM procesador_staging
 
 ---
 
-## MÓDULO: Admin Agent — Acceso remoto DBF desde browser (2026-04-18) ✅
+## MÓDULO: Admin Agent — Acceso remoto DBF desde browser (2026-04-19) ✅
 
 ### Arquitectura
 - `admin_agent.py` corre en el PC del cliente (donde está Administrator VFP)
 - Lee `C:\S.A.R\RutaBaseDatos\ruta.dbf` para auto-descubrir la BD activa
-- Hace check-in en Render y poll cada 5s buscando consultas pendientes
+- Lee `admin_agent.ini` para nombre descriptivo del equipo (ej. "Oficina Rafael")
+- Detecta IP local automáticamente con `socket`
+- Hace check-in en Render con nombre + ip_local + ruta_bd
 - Consultas se procesan en **thread separado** — ping loop no se bloquea
-- Render actúa como relay entre el browser y el agente local
+- Render actúa como relay; consultas se borran de BD después de entregarse (cero acumulación)
+
+### Arranque agente
+```
+cd "C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos"
+python admin_agent.py --cliente rafael
+```
+El nombre visible viene de `admin_agent.ini`:
+```ini
+[agent]
+nombre = Oficina Rafael
+```
 
 ### Flujo de uso
-1. PC cliente: `python admin_agent.py --cliente pilar`
-2. Browser: `https://tuc-tuc.onrender.com/admin/login` (usuario/clave TUC TUC)
-3. Template `admin_consultas.html` — badge estado agente, filtros, grid resultados
-4. Filtros: lapso `202604` (año+mes sin guión), empresa `LP`, tercero `4587`, límite
+1. PC cliente: editar `admin_agent.ini` con nombre descriptivo, correr agente
+2. Browser: `https://tuc-tuc.onrender.com/admin/consultas`
+3. **Paso 1** — buscar tercero por NIT o nombre (autocomplete 3 chars, spinner mientras busca)
+4. **Paso 2** — buscar cuenta por código o nombre (solo TIPO='D')
+5. **Paso 3** — Desde/Hasta lapso, empresa, límite → Consultar
+
+### Selector de agente
+- Dropdown muestra todos los agentes visibles para el usuario logueado (✅/❌)
+- Muestra nombre del equipo + ruta BD activa
+- Administrador ve todos; ClienteVFP ve solo los asignados
+- Refresca cada 15s automáticamente
+
+### Gestión de permisos — `/admin/agentes`
+- Tabla de agentes registrados (nombre, ip, ruta_bd, estado)
+- Por cada usuario ClienteVFP: checkboxes de agentes autorizados
+- Guardar → escribe en tabla `admin_agent_permisos`
+
+### Consultas disponibles
+| tipo | descripción |
+|---|---|
+| `reg_ctas` | Movimientos contables con filtros Desde/Hasta/empresa/cuenta/tercero |
+| `buscar_nit` | Autocomplete tercero por NIT o nombre → devuelve cod_ter |
+| `buscar_cuenta` | Autocomplete cuenta por código o nombre (solo TIPO='D') |
 
 ### Rendimiento REG_CTAS (1.3M registros)
-- **Antes**: 30-217 segundos (dbf library iterando todo)
-- **Ahora**: 0.62 segundos con:
-  - numpy vectorizado: lee ~117MB, aplica máscara boolean en 0.09s
-  - Estimación de posición de inicio por lapso (evita escanear años viejos)
-  - TERCEROS: lectura binaria directa de campos COD_TER+NOMBRE (evita IMAGEN/DESCRIPCIO C(254))
-  - `_jd_to_datetime()`: convierte timestamps VFP (Julian Day + ms) sin usar dbf lib
+- numpy vectorizado: 0.62s total
+- Rango lapso YYYYMM vectorizado (yr_int*100+mn_int)
+- TERCEROS: binario directo (evita IMAGEN/DESCRIPCIO C(254))
+- CUENTA: dbf lib (sin campos grandes, más simple)
 
-### Campos DBF clave — REG_CTAS
+### Campos DBF clave — REG_CTAS (record_size=345)
 | Campo | Tipo | Offset | Len |
 |---|---|---|---|
 | CONSECUTIV | N | 1 | 10 |
@@ -284,48 +314,41 @@ BUILD EXE "C:\S.A.R\PROCESADOR_STAGING" FROM procesador_staging
 | EMPRESA | C | 52 | 10 |
 | TOT_DEB | N | 108 | 10 |
 | TOT_CRE | N | 118 | 10 |
-| record_size = 345 | | | |
 
-### Campos DBF clave — TERCEROS
-- record_size=739, COD_TER offset=1 len=10, NOMBRE offset=11 len=50
-- IMAGEN C(254) y DESCRIPCIO C(254) → NO leer con dbf lib (tarda 16s por esto)
+### Campos DBF clave — TERCEROS (record_size=739)
+- COD_TER N(10) offset=1, NOMBRE C(50) offset=11, IDENTIFICACION C(15) offset=61
+- NO leer con dbf lib (IMAGEN/DESCRIPCIO C(254) tardan 16s)
 
-### Autenticación
-- `rol='Administrador'`: accede a cualquier cliente vía `?cliente=pilar`
-- `rol='ClienteVFP'`: accede solo a su propio cliente_id (campo `admin_cliente_id` en tabla USUARIOS)
-- Login en `/admin/login` acepta ambos roles; ClienteVFP redirige a `/admin/consultas` directamente
-
-### Crear usuario ClienteVFP (SQL directo):
-```sql
-INSERT INTO "USUARIOS" (nombre, usuario, password, rol, admin_cliente_id)
-VALUES ('Pilar', 'pilar', 'clave123', 'ClienteVFP', 'pilar');
-```
-
-### Endpoints Render
-- `POST /api/admin-agent/checkin` — agente se registra
-- `POST /api/admin-agent/ping` — agente hace ping + recibe consulta pendiente
-- `POST /api/admin-agent/respuesta` — agente entrega resultado
-- `POST /api/admin-agent/consultar` — browser encola consulta
-- `GET /api/admin-agent/resultado/<id>` — browser polling
-- `GET /api/admin-agent/estado/<cliente_id>` — badge conexión (lag < 30s)
+### Campos DBF clave — CUENTA
+- CODIGO C(15), NOMBRE C(40), CUENTAPADRE C(15), NATURALEZA C(1), TIPO C(1)
+- Filtrar solo TIPO='D' para autocomplete
+- Leer con dbf lib (sin campos grandes)
 
 ### Tablas BD Render
-- `admin_agent_sesiones` — token, activo, ultimo_ping
-- `admin_agent_consultas` — tipo, parametros, respuesta, estado
+- `admin_agent_sesiones` — token, activo, nombre, ip_local, ruta_bd, ultimo_ping
+- `admin_agent_consultas` — tipo, parametros, respuesta, estado (se borra al entregar)
+- `admin_agent_permisos` — usuario_id, cliente_id (m-m)
 
-### Commits sesión 2026-04-18
-- `0e81391` — template admin_consultas.html + route /admin/consultas
-- `07152d2` — login ClienteVFP + admin_cliente_id en USUARIOS
-- `88cbf1e` — cleanup debug estado
-- `4ed2c27` — threading: consultas en thread separado
-- `5aa4620` — filtro inline REG_CTAS (sin cargar 1.3M en memoria)
-- `ac0e82e` — iteración reversa (primer intento)
-- `8c2f310` — numpy vectorizado + TERCEROS binario → 0.62s ✅
+### Endpoints Render
+- `POST /api/admin-agent/checkin` — agente se registra con nombre/ip/ruta_bd
+- `POST /api/admin-agent/ping` — ping + actualiza ruta_bd + recibe consulta pendiente
+- `POST /api/admin-agent/respuesta` — agente entrega resultado
+- `POST /api/admin-agent/consultar` — browser encola consulta
+- `GET /api/admin-agent/resultado/<id>` — browser polling (borra consulta al entregar)
+- `GET /api/admin-agent/agentes` — lista agentes visibles para usuario actual
+- `GET/POST /api/admin-agent/permisos/usuario/<uid>` — gestión permisos
+
+### Autenticación
+- `rol='Administrador'`: ve todos los agentes, accede a `/admin/agentes`
+- `rol='ClienteVFP'`: ve solo agentes en `admin_agent_permisos` para su usuario_id
+- Auto-migra `admin_cliente_id` existente → tabla permisos al primer arranque
 
 ### Pendientes Admin Agent
 - Crear usuario ClienteVFP para Pilar en BD Render (SQL directo)
-- Configurar `admin_agent.py` para arranque automático en PC Pilar (Task Scheduler o Startup)
-- Ampliar consultas: TERCEROS, PROD_FACT1, SAL_DOC, etc.
+- Configurar arranque automático en PC Pilar (Task Scheduler o Startup)
+- Empaquetar `admin_agent.py` como `.exe` con ícono en escritorio
+- Ampliar consultas: PROD_FACT1, SAL_DOC, etc.
+- WireGuard como alternativa directa (ver `docs/wireguard_setup.md`)
 
 ---
 

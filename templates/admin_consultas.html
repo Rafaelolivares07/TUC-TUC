@@ -32,9 +32,56 @@
     </div>
   </div>
 
-  <!-- Filtros -->
+  <!-- Bloque 1: Tercero por NIT -->
+  <div class="card shadow-sm mb-2">
+    <div class="card-header py-2 small fw-semibold text-muted">
+      <i class="bi bi-person me-1"></i>Paso 1 — Tercero <span class="fw-normal">(opcional — si no selecciona, consulta todos)</span>
+    </div>
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-center">
+        <div class="col-sm-4 position-relative">
+          <input id="f-nit" type="text" class="form-control form-control-sm" placeholder="Buscar por NIT o nombre…" oninput="onNitInput()" autocomplete="off">
+          <div id="nit-resultado" class="position-absolute w-100 bg-white border rounded shadow-sm d-none" style="top:100%;z-index:99;font-size:.8rem;max-height:140px;overflow-y:auto;"></div>
+        </div>
+        <div class="col">
+          <span id="nit-seleccionado" class="d-none badge bg-success fs-6 px-3">
+            <span id="nit-nombre-txt"></span>
+            <button type="button" class="btn-close btn-close-white ms-2" style="font-size:.6rem" onclick="limpiarNit()"></button>
+          </span>
+          <span id="nit-hint" class="text-muted small">Sin filtro de tercero — consultará todos</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bloque 2: Cuenta -->
+  <div class="card shadow-sm mb-2">
+    <div class="card-header py-2 small fw-semibold text-muted">
+      <i class="bi bi-journal-bookmark me-1"></i>Paso 2 — Cuenta <span class="fw-normal">(opcional — si no selecciona, consulta todas)</span>
+    </div>
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-center">
+        <div class="col-sm-4 position-relative">
+          <input id="f-cuenta" type="text" class="form-control form-control-sm" placeholder="Buscar por código o nombre…" oninput="onCuentaInput()" autocomplete="off">
+          <div id="cuenta-resultado" class="position-absolute w-100 bg-white border rounded shadow-sm d-none" style="top:100%;z-index:99;font-size:.8rem;max-height:140px;overflow-y:auto;"></div>
+        </div>
+        <div class="col">
+          <span id="cuenta-seleccionada" class="d-none badge bg-primary fs-6 px-3">
+            <span id="cuenta-nombre-txt"></span>
+            <button type="button" class="btn-close btn-close-white ms-2" style="font-size:.6rem" onclick="limpiarCuenta()"></button>
+          </span>
+          <span id="cuenta-hint" class="text-muted small">Sin filtro de cuenta — consultará todas</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bloque 3: Consulta -->
   <div class="card shadow-sm mb-3">
-    <div class="card-body py-3">
+    <div class="card-header py-2 small fw-semibold text-muted">
+      <i class="bi bi-search me-1"></i>Paso 3 — Consultar REG_CTAS
+    </div>
+    <div class="card-body py-2">
       <div class="row g-2 align-items-end">
         <div class="col-sm-2">
           <label class="form-label mb-1 small fw-semibold">Desde</label>
@@ -49,26 +96,14 @@
           <input id="f-empresa" type="text" class="form-control form-control-sm" placeholder="código empresa">
         </div>
         <div class="col-sm-2">
-          <label class="form-label mb-1 small fw-semibold">Cuenta</label>
-          <input id="f-cuenta" type="text" class="form-control form-control-sm" placeholder="ej. 1105">
-        </div>
-        <div class="col-sm-3">
-          <label class="form-label mb-1 small fw-semibold">NIT</label>
-          <div class="position-relative">
-            <input id="f-nit" type="text" class="form-control form-control-sm" placeholder="NIT del tercero" oninput="onNitInput()" autocomplete="off">
-            <div id="nit-resultado" class="position-absolute w-100 bg-white border rounded shadow-sm d-none" style="top:100%;z-index:99;font-size:.8rem;max-height:120px;overflow-y:auto;"></div>
-          </div>
-          <div id="nit-nombre" class="text-success small mt-1 d-none"></div>
-        </div>
-        <div class="col-sm-1">
           <label class="form-label mb-1 small fw-semibold">Límite</label>
           <input id="f-limite" type="number" class="form-control form-control-sm" value="200" min="1" max="5000">
         </div>
-        <div class="col-sm-2 d-flex gap-2">
+        <div class="col d-flex gap-2">
           <button id="btn-consultar" class="btn btn-primary btn-sm flex-fill" onclick="lanzarConsulta()">
-            <i class="bi bi-search me-1"></i>Consultar
+            <i class="bi bi-play-fill me-1"></i>Consultar
           </button>
-          <button class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar filtros">
+          <button class="btn btn-outline-secondary btn-sm" onclick="limpiarTodo()" title="Limpiar todo">
             <i class="bi bi-x-lg"></i>
           </button>
         </div>
@@ -214,62 +249,105 @@ function fmtFecha(s) {
   return s.substring(0, 10);
 }
 
-let _nit_timer = null;
-let _nit_seleccionado = '';
+let _nit_timer = null, _nit_seleccionado = '';
+let _cuenta_timer = null, _cuenta_seleccionada = '';
 
+// ── NIT ──────────────────────────────────────────────────────────
 function onNitInput() {
   const val = document.getElementById('f-nit').value.trim();
-  _nit_seleccionado = '';
-  document.getElementById('nit-nombre').classList.add('d-none');
+  if (_nit_seleccionado) limpiarNit();
   document.getElementById('nit-resultado').classList.add('d-none');
   clearTimeout(_nit_timer);
   if (val.length < 3) return;
-  _nit_timer = setTimeout(() => buscarNit(val), 280);
+  _nit_timer = setTimeout(() => _lookup('buscar_nit', {nit: val}, 'nit-resultado', _mostrarNitItems), 280);
 }
 
-async function buscarNit(nit) {
+function _mostrarNitItems(items) {
+  const cont = document.getElementById('nit-resultado');
+  if (!items.length) { cont.classList.add('d-none'); return; }
+  cont.innerHTML = items.map(t =>
+    `<div class="px-2 py-1" style="cursor:pointer"
+          onmousedown="seleccionarNit(${JSON.stringify(t.nit)},${JSON.stringify(t.nombre)})">
+      <strong>${t.nit}</strong> — ${t.nombre}
+    </div>`).join('');
+  cont.classList.remove('d-none');
+}
+
+function seleccionarNit(nit, nombre) {
+  _nit_seleccionado = nit;
+  document.getElementById('f-nit').value = '';
+  document.getElementById('nit-resultado').classList.add('d-none');
+  document.getElementById('nit-nombre-txt').textContent = nit + ' — ' + nombre;
+  document.getElementById('nit-seleccionado').classList.remove('d-none');
+  document.getElementById('nit-hint').classList.add('d-none');
+}
+
+function limpiarNit() {
+  _nit_seleccionado = '';
+  document.getElementById('f-nit').value = '';
+  document.getElementById('nit-seleccionado').classList.add('d-none');
+  document.getElementById('nit-hint').classList.remove('d-none');
+}
+
+// ── CUENTA ───────────────────────────────────────────────────────
+function onCuentaInput() {
+  const val = document.getElementById('f-cuenta').value.trim();
+  if (_cuenta_seleccionada) limpiarCuenta();
+  document.getElementById('cuenta-resultado').classList.add('d-none');
+  clearTimeout(_cuenta_timer);
+  if (val.length < 2) return;
+  _cuenta_timer = setTimeout(() => _lookup('buscar_cuenta', {q: val}, 'cuenta-resultado', _mostrarCuentaItems), 280);
+}
+
+function _mostrarCuentaItems(items) {
+  const cont = document.getElementById('cuenta-resultado');
+  if (!items.length) { cont.classList.add('d-none'); return; }
+  cont.innerHTML = items.map(t =>
+    `<div class="px-2 py-1" style="cursor:pointer"
+          onmousedown="seleccionarCuenta(${JSON.stringify(t.codigo)},${JSON.stringify(t.nombre)})">
+      <strong>${t.codigo}</strong> — ${t.nombre}
+    </div>`).join('');
+  cont.classList.remove('d-none');
+}
+
+function seleccionarCuenta(codigo, nombre) {
+  _cuenta_seleccionada = codigo;
+  document.getElementById('f-cuenta').value = '';
+  document.getElementById('cuenta-resultado').classList.add('d-none');
+  document.getElementById('cuenta-nombre-txt').textContent = codigo + ' — ' + nombre;
+  document.getElementById('cuenta-seleccionada').classList.remove('d-none');
+  document.getElementById('cuenta-hint').classList.add('d-none');
+}
+
+function limpiarCuenta() {
+  _cuenta_seleccionada = '';
+  document.getElementById('f-cuenta').value = '';
+  document.getElementById('cuenta-seleccionada').classList.add('d-none');
+  document.getElementById('cuenta-hint').classList.remove('d-none');
+}
+
+// ── Lookup genérico vía agente ────────────────────────────────────
+async function _lookup(tipo, parametros, contId, callback) {
   const cid = clienteSeleccionado();
   if (!cid || !_agente_ok) return;
   try {
     const r = await fetch('/api/admin-agent/consultar', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({cliente_id: cid, tipo: 'buscar_nit', parametros: {nit}})
+      body: JSON.stringify({cliente_id: cid, tipo, parametros})
     });
     const d = await r.json();
     if (!d.ok) return;
-    // poll resultado
     let intentos = 0;
     const poll = async () => {
-      if (intentos++ > 10) return;
+      if (intentos++ > 12) return;
       const r2 = await fetch(`/api/admin-agent/resultado/${d.consulta_id}`);
       const d2 = await r2.json();
-      if (d2.estado === 'pendiente' || d2.estado === 'procesando') {
-        setTimeout(poll, 800);
-        return;
-      }
-      const items = d2.respuesta || [];
-      const cont = document.getElementById('nit-resultado');
-      if (items.length === 0) { cont.classList.add('d-none'); return; }
-      cont.innerHTML = items.map(t =>
-        `<div class="px-2 py-1 cursor-pointer" style="cursor:pointer"
-              onmousedown="seleccionarNit('${t.nit}','${t.nombre.replace(/'/g,"\\'")}')">
-          <strong>${t.nit}</strong> — ${t.nombre}
-        </div>`
-      ).join('');
-      cont.classList.remove('d-none');
+      if (d2.estado === 'pendiente' || d2.estado === 'procesando') { setTimeout(poll, 500); return; }
+      callback(d2.respuesta || []);
     };
-    setTimeout(poll, 600);
+    setTimeout(poll, 400);
   } catch {}
-}
-
-function seleccionarNit(nit, nombre) {
-  _nit_seleccionado = nit;
-  document.getElementById('f-nit').value = nit;
-  document.getElementById('nit-resultado').classList.add('d-none');
-  const el = document.getElementById('nit-nombre');
-  el.textContent = nombre;
-  el.classList.remove('d-none');
 }
 
 async function lanzarConsulta() {
@@ -284,17 +362,15 @@ async function lanzarConsulta() {
   }
 
   const params = {};
-  const desde  = document.getElementById('f-lapso-desde').value.trim().replace('-','');
-  const hasta  = document.getElementById('f-lapso-hasta').value.trim().replace('-','');
+  const desde   = document.getElementById('f-lapso-desde').value.trim().replace('-','');
+  const hasta   = document.getElementById('f-lapso-hasta').value.trim().replace('-','');
   const empresa = document.getElementById('f-empresa').value.trim();
-  const cuenta  = document.getElementById('f-cuenta').value.trim();
-  const nit     = (_nit_seleccionado || document.getElementById('f-nit').value.trim());
   const limite  = parseInt(document.getElementById('f-limite').value) || 200;
-  if (desde)   params.lapso_desde = desde;
-  if (hasta)   params.lapso_hasta = hasta;
-  if (empresa) params.empresa = empresa;
-  if (cuenta)  params.cuenta  = cuenta;
-  if (nit)     params.nit     = nit;
+  if (desde)              params.lapso_desde = desde;
+  if (hasta)              params.lapso_hasta = hasta;
+  if (empresa)            params.empresa     = empresa;
+  if (_nit_seleccionado)  params.nit         = _nit_seleccionado;
+  if (_cuenta_seleccionada) params.cuenta    = _cuenta_seleccionada;
   params.limite = limite;
 
   document.getElementById('btn-consultar').disabled = true;
@@ -407,12 +483,11 @@ function ocultarEstadoConsulta() {
   document.getElementById('consulta-estado').classList.add('d-none');
 }
 
-function limpiarFiltros() {
-  ['f-lapso-desde','f-lapso-hasta','f-empresa','f-cuenta','f-nit'].forEach(id => document.getElementById(id).value = '');
+function limpiarTodo() {
+  ['f-lapso-desde','f-lapso-hasta','f-empresa'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-limite').value = '200';
-  _nit_seleccionado = '';
-  document.getElementById('nit-nombre').classList.add('d-none');
-  document.getElementById('nit-resultado').classList.add('d-none');
+  limpiarNit();
+  limpiarCuenta();
 }
 
 cargarAgentes();

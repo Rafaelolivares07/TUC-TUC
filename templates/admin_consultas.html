@@ -40,7 +40,7 @@
     <div class="card-body py-2">
       <div class="row g-2 align-items-center">
         <div class="col-sm-4 position-relative">
-          <input id="f-nit" type="text" class="form-control form-control-sm" placeholder="Buscar por NIT o nombre…" oninput="onNitInput()" autocomplete="off">
+          <input id="f-nit" type="text" class="form-control form-control-sm" placeholder="Escriba NIT o parte del nombre…" oninput="onNitInput()" autocomplete="off">
           <div id="nit-resultado" class="position-absolute w-100 bg-white border rounded shadow-sm d-none" style="top:100%;z-index:99;font-size:.8rem;max-height:140px;overflow-y:auto;"></div>
         </div>
         <div class="col">
@@ -249,7 +249,7 @@ function fmtFecha(s) {
   return s.substring(0, 10);
 }
 
-let _nit_timer = null, _nit_seleccionado = '';
+let _nit_timer = null, _nit_seleccionado = '', _cod_ter_seleccionado = '';
 let _cuenta_timer = null, _cuenta_seleccionada = '';
 
 // ── NIT ──────────────────────────────────────────────────────────
@@ -267,14 +267,15 @@ function _mostrarNitItems(items) {
   if (!items.length) { cont.classList.add('d-none'); return; }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
-          onmousedown="seleccionarNit(${JSON.stringify(t.nit)},${JSON.stringify(t.nombre)})">
+          onmousedown="seleccionarNit(${JSON.stringify(t.nit)},${JSON.stringify(t.nombre)},${JSON.stringify(t.cod_ter)})">
       <strong>${t.nit}</strong> — ${t.nombre}
     </div>`).join('');
   cont.classList.remove('d-none');
 }
 
-function seleccionarNit(nit, nombre) {
+function seleccionarNit(nit, nombre, cod_ter) {
   _nit_seleccionado = nit;
+  _cod_ter_seleccionado = cod_ter;
   document.getElementById('f-nit').value = '';
   document.getElementById('nit-resultado').classList.add('d-none');
   document.getElementById('nit-nombre-txt').textContent = nit + ' — ' + nombre;
@@ -284,6 +285,7 @@ function seleccionarNit(nit, nombre) {
 
 function limpiarNit() {
   _nit_seleccionado = '';
+  _cod_ter_seleccionado = '';
   document.getElementById('f-nit').value = '';
   document.getElementById('nit-seleccionado').classList.add('d-none');
   document.getElementById('nit-hint').classList.remove('d-none');
@@ -369,7 +371,7 @@ async function lanzarConsulta() {
   if (desde)              params.lapso_desde = desde;
   if (hasta)              params.lapso_hasta = hasta;
   if (empresa)            params.empresa     = empresa;
-  if (_nit_seleccionado)  params.nit         = _nit_seleccionado;
+  if (_cod_ter_seleccionado) params.tercero   = _cod_ter_seleccionado;
   if (_cuenta_seleccionada) params.cuenta    = _cuenta_seleccionada;
   params.limite = limite;
 

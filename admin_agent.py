@@ -114,15 +114,19 @@ def leer_tabla(ruta_bd, nombre):
     return rows, campos
 
 
-def buscar_tercero_por_nit(ruta_bd, nit):
-    """Busca en TERCEROS por campo identificacion — retorna lista de {cod_ter, nombre, nit}."""
-    # rec_size=739, COD_TER N(10) off=1, NOMBRE C(50) off=11, IDENTIFICACION C(15) off=61
+def buscar_tercero_por_nit(ruta_bd, q):
+    """Busca en TERCEROS por identificacion O nombre — retorna lista de {cod_ter, nombre, nit}."""
     rows = _leer_tabla_campos_binario(
         os.path.join(ruta_bd, "TERCEROS.DBF"), 739,
         [('COD_TER', 1, 10), ('NOMBRE', 11, 50), ('NIT', 61, 15)])
-    nit = nit.strip()
-    return [{'cod_ter': r['COD_TER'], 'nombre': r['NOMBRE'], 'nit': r['NIT']}
-            for r in rows if nit.lower() in r['NIT'].lower()]
+    q = q.strip().lower()
+    resultado = []
+    for r in rows:
+        if q in r['NIT'].lower() or q in r['NOMBRE'].lower():
+            resultado.append({'cod_ter': r['COD_TER'], 'nombre': r['NOMBRE'], 'nit': r['NIT']})
+        if len(resultado) >= 30:
+            break
+    return resultado
 
 
 def consulta_reg_ctas(ruta_bd, parametros):

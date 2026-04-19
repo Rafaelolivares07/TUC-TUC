@@ -329,18 +329,15 @@ def consulta_buscar_nit(ruta_bd, parametros):
 
 
 def consulta_buscar_cuenta(ruta_bd, parametros):
-    """Busca en CUENTA por CODIGO o NOMBRE. Filtra TIPO='D' solo si ese campo existe."""
+    """Busca en CUENTA por CODIGO o NOMBRE, solo TIPO='D'."""
     q = str(parametros.get('q', '') or '').strip().lower()
     if not q:
         return []
-    rows, campos = leer_tabla(ruta_bd, "CUENTA")
-    tiene_tipo = 'TIPO' in campos
+    rows, _ = leer_tabla(ruta_bd, "CUENTA")
     resultado = []
     for r in rows:
-        if tiene_tipo:
-            tipo = str(r.get('TIPO', '') or '').strip().upper()
-            if tipo != 'D':
-                continue
+        if str(r.get('TIPO', '') or '').strip().upper() != 'D':
+            continue
         codigo = str(r.get('CODIGO', '') or '').strip()
         nombre = str(r.get('NOMBRE', '') or '').strip()
         if q in codigo.lower() or q in nombre.lower():

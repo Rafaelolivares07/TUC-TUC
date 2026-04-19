@@ -105,11 +105,12 @@ def leer_tabla(ruta_bd, nombre):
     path = os.path.join(ruta_bd, nombre + ".DBF")
     t = dbf.Table(path, ignore_memos=True)
     t.open(dbf.READ_ONLY)
-    campos = list(t.field_names)
+    campos = [c.upper() for c in t.field_names]
+    raw_campos = list(t.field_names)
     rows = []
     for r in t:
         if not dbf.is_deleted(r):
-            rows.append({c: (r[c].strip() if isinstance(r[c], str) else r[c]) for c in campos})
+            rows.append({c.upper(): (r[c].strip() if isinstance(r[c], str) else r[c]) for c in raw_campos})
     t.close()
     return rows, campos
 
@@ -332,10 +333,14 @@ def consulta_buscar_cuenta(ruta_bd, parametros):
     q = str(parametros.get('q', '') or '').strip().lower()
     if not q:
         return []
-    rows, _ = leer_tabla(ruta_bd, "CUENTA")
+    rows, campos = leer_tabla(ruta_bd, "CUENTA")
+    # debug: devolver muestra de los primeros 3 registros para ver campos reales
+    if q == 'debug':
+        return [{'debug_campos': campos, 'muestra': rows[:3]}]
     resultado = []
     for r in rows:
-        if str(r.get('TIPO', '') or '').strip() != 'D':
+        tipo = str(r.get('TIPO', '') or '').strip().upper()
+        if tipo != 'D':
             continue
         codigo = str(r.get('CODIGO', '') or '').strip()
         nombre = str(r.get('NOMBRE', '') or '').strip()

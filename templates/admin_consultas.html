@@ -364,13 +364,21 @@ async function _lookup(tipo, parametros, contId, callback) {
     if (!d.ok) return;
     let intentos = 0;
     const poll = async () => {
-      if (intentos++ > 12) return;
-      const r2 = await fetch(`/api/admin-agent/resultado/${d.consulta_id}`);
-      const d2 = await r2.json();
-      if (d2.estado === 'pendiente' || d2.estado === 'procesando') { setTimeout(poll, 500); return; }
-      callback(d2.respuesta || []);
+      if (intentos++ > 30) {
+        const cont = document.getElementById(contId);
+        cont.innerHTML = '<div class="px-2 py-2 text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Sin respuesta del agente — intente de nuevo</div>';
+        cont.classList.remove('d-none');
+        return;
+      }
+      try {
+        const r2 = await fetch(`/api/admin-agent/resultado/${d.consulta_id}`);
+        const d2 = await r2.json();
+        if (!d2.ok) { callback([]); return; }
+        if (d2.estado === 'pendiente' || d2.estado === 'procesando') { setTimeout(poll, 600); return; }
+        callback(d2.respuesta || []);
+      } catch { setTimeout(poll, 600); }
     };
-    setTimeout(poll, 400);
+    setTimeout(poll, 600);
   } catch {}
 }
 

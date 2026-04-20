@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consulta de Cuentas — Administrator</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  body { background: #f4f7fb; font-size: 13px; }
+  .panel-filtros { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 14px; }
+  .panel-totales { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 12px 20px; margin-bottom: 14px; }
+  .total-box { text-align: center; }
+  .total-box .val { font-size: 17px; font-weight: 700; color: #003f7f; }
+  .total-box .val.deb { color: #1a7f5a; }
+  .total-box .val.cre { color: #b91c1c; }
+  .total-box .val.net { color: #003f7f; }
+  .total-box .lbl { font-size: 11px; color: #888; text-transform: uppercase; }
+  #tabla-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; overflow-x: auto; }
+  table { font-size: 12px; }
+  thead th { background: #003f7f; color: #fff; cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { background: #00539f; }
+  thead th .sort-ico { opacity: 0.5; font-size: 10px; }
+  thead th.sort-asc .sort-ico::after { content: ' ▲'; opacity: 1; }
+  thead th.sort-desc .sort-ico::after { content: ' ▼'; opacity: 1; }
+  tbody tr:nth-child(even) { background: #f0f6ff; }
+  tbody tr:hover { background: #d6eaff; }
+  .num { text-align: right; }
+  .deb { color: #1a7f5a; }
+  .cre { color: #b91c1c; }
+  .fila-total td { font-weight: 700; background: #e8f0ff !important; border-top: 2px solid #003f7f; }
+  .spinner-wrap { text-align: center; padding: 40px; color: #888; }
+
+  /* Autocomplete cuenta */
+  .autocomplete-wrap { position: relative; }
+  #cuenta-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff;
+    border: 1px solid #cdd5e0; border-radius: 6px; box-shadow: 0 4px 16px #0002;
+    max-height: 240px; overflow-y: auto; z-index: 1000; display: none; }
+  .ac-item { padding: 7px 12px; cursor: pointer; font-size: 12px; border-bottom: 1px solid #f0f4f8; }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover, .ac-item.activo { background: #e8f0ff; }
+  .ac-codigo { font-family: monospace; font-weight: 700; color: #003f7f; margin-right: 8px; }
+  .ac-nombre { color: #555; }
+</style>
+</head>
+<body>
+
+<div class="container-fluid py-3">
+
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <h5 class="mb-0 text-primary fw-bold"><i class="bi bi-journal-text me-2"></i>Consulta de Cuentas</h5>
+    <small class="text-muted">Administrator 9.0</small>
+  </div>
+
+  <!-- Filtros -->
+  <div class="panel-filtros">
+    <div class="row g-2 align-items-end">
+      <div class="col" style="max-width:260px">
+        <label class="form-label mb-1 small fw-semibold">Cuenta</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="f-cuenta" class="form-control form-control-sm"
+                 placeholder="Código o nombre..." autocomplete="off"
+                 oninput="buscarCuenta()" onkeydown="navAC(event)">
+          <div id="cuenta-dropdown"></div>
+        </div>
+        <input type="hidden" id="f-cuenta-cod">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Desde</label>
+        <input type="date" id="f-desde" class="form-control form-control-sm" value="{{ desde }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Hasta</label>
+        <input type="date" id="f-hasta" class="form-control form-control-sm" value="{{ hasta }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Empresa</label>
+        <select id="f-empresa" class="form-select form-select-sm" style="min-width:110px">
+          <option value="">Todas</option>
+          {% for emp in empresas %}
+          <option value="{{ emp }}">{{ emp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm" style="min-width:120px" onclick="consultar()">
+          <i class="bi bi-search me-1"></i>Consultar
+        </button>
+      </div>
+      <div class="col-auto" id="btn-excel-wrap" style="display:none">
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="col-auto ms-auto">
+        <small id="info-registros" class="text-muted"></small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Totales -->
+  <div class="panel-totales" id="panel-totales" style="display:none">
+    <div class="row g-3">
+      <div class="col total-box">
+        <div class="val" id="t-terceros">—</div>
+        <div class="lbl">Terceros</div>
+      </div>
+      <div class="col total-box">
+        <div class="val deb" id="t-deb">—</div>
+        <div class="lbl">Total Débito</div>
+      </div>
+      <div class="col total-box">
+        <div class="val cre" id="t-cre">—</div>
+        <div class="lbl">Total Crédito</div>
+      </div>
+      <div class="col total-box">
+        <div class="val net" id="t-neto">—</div>
+        <div class="lbl">Neto</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="tabla-wrap">
+    <div class="spinner-wrap" id="estado-inicial">
+      <i class="bi bi-arrow-up-circle text-primary fs-4"></i>
+      <div class="mt-2">Seleccione una cuenta y pulse Consultar</div>
+    </div>
+    <div class="spinner-wrap d-none" id="spinner">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2">Consultando...</div>
+    </div>
+    <table class="table table-bordered table-hover mb-0 d-none" id="tabla">
+      <thead>
+        <tr>
+          <th onclick="ordenar(0)" data-col="0">IDENTIFICACION<span class="sort-ico"></span></th>
+          <th onclick="ordenar(1)" data-col="1">NOMBRE<span class="sort-ico"></span></th>
+          <th onclick="ordenar(2)" data-col="2" class="num">DÉBITO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(3)" data-col="3" class="num">CRÉDITO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(4)" data-col="4" class="num">NETO<span class="sort-ico"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr class="fila-total">
+          <td colspan="2">TOTAL</td>
+          <td class="num" id="ft-deb"></td>
+          <td class="num" id="ft-cre"></td>
+          <td class="num" id="ft-neto"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div>
+
+<script>
+let _rows = [];
+let _sortCol = 1, _sortAsc = true;
+let _cuenta = '', _desde = '', _hasta = '', _empresa = '';
+let _acItems = [], _acIdx = -1, _acTimer = null;
+
+const fmt  = n => n.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtI = n => n.toLocaleString('es-CO');
+
+// ─── Autocomplete cuenta ─────────────────────────────────────────────────────
+function buscarCuenta() {
+  clearTimeout(_acTimer);
+  const q = document.getElementById('f-cuenta').value.trim();
+  document.getElementById('f-cuenta-cod').value = '';
+  if (q.length < 2) { cerrarAC(); return; }
+  _acTimer = setTimeout(() => {
+    fetch(`/api/cuentas_autocomplete?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok || !d.cuentas.length) { cerrarAC(); return; }
+        _acItems = d.cuentas;
+        _acIdx = -1;
+        const drop = document.getElementById('cuenta-dropdown');
+        drop.innerHTML = d.cuentas.map((c, i) =>
+          `<div class="ac-item" data-i="${i}"
+               ontouchstart="this._ty=event.touches[0].clientY"
+               ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarCuenta(${i})}"
+               onclick="seleccionarCuenta(${i})">
+             <span class="ac-codigo">${c.codigo}</span>
+             <span class="ac-nombre">${c.nombre}</span>
+           </div>`).join('');
+        drop.style.display = 'block';
+      }).catch(() => cerrarAC());
+  }, 280);
+}
+
+function seleccionarCuenta(i) {
+  const c = _acItems[i];
+  document.getElementById('f-cuenta').value    = c.codigo + (c.nombre ? '  ' + c.nombre : '');
+  document.getElementById('f-cuenta-cod').value = c.codigo;
+  cerrarAC();
+}
+
+function cerrarAC() {
+  document.getElementById('cuenta-dropdown').style.display = 'none';
+  _acItems = []; _acIdx = -1;
+}
+
+function navAC(e) {
+  const drop = document.getElementById('cuenta-dropdown');
+  if (drop.style.display === 'none') return;
+  const items = drop.querySelectorAll('.ac-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _acIdx = Math.min(_acIdx + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _acIdx = Math.max(_acIdx - 1, 0);
+  } else if (e.key === 'Enter' && _acIdx >= 0) {
+    e.preventDefault(); seleccionarCuenta(_acIdx); return;
+  } else if (e.key === 'Escape') {
+    cerrarAC(); return;
+  } else return;
+  items.forEach((el, i) => el.classList.toggle('activo', i === _acIdx));
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.autocomplete-wrap')) cerrarAC();
+});
+
+// ─── Consulta ────────────────────────────────────────────────────────────────
+function consultar() {
+  _cuenta  = document.getElementById('f-cuenta-cod').value.trim();
+  _desde   = document.getElementById('f-desde').value;
+  _hasta   = document.getElementById('f-hasta').value;
+  _empresa = document.getElementById('f-empresa').value;
+
+  if (!_cuenta) { alert('Seleccione una cuenta del listado'); return; }
+  if (!_desde || !_hasta) { alert('Seleccione rango de fechas'); return; }
+
+  document.getElementById('estado-inicial').classList.add('d-none');
+  document.getElementById('spinner').classList.remove('d-none');
+  document.getElementById('tabla').classList.add('d-none');
+  document.getElementById('panel-totales').style.display = 'none';
+  document.getElementById('btn-excel-wrap').style.display = 'none';
+  document.getElementById('info-registros').textContent = '';
+
+  fetch(`/api/consulta_cuentas?cuenta=${encodeURIComponent(_cuenta)}&desde=${_desde}&hasta=${_hasta}&empresa=${encodeURIComponent(_empresa)}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('spinner').classList.add('d-none');
+      if (!data.ok) { alert('Error: ' + data.error); return; }
+      _rows = data.rows;
+      mostrarTotales(data.totales);
+      renderTabla();
+      document.getElementById('btn-excel-wrap').style.display = '';
+      document.getElementById('info-registros').textContent = `${_rows.length} terceros`;
+    })
+    .catch(e => {
+      document.getElementById('spinner').classList.add('d-none');
+      alert('Error de conexión: ' + e);
+    });
+}
+
+function mostrarTotales(t) {
+  document.getElementById('t-terceros').textContent = fmtI(t.terceros);
+  document.getElementById('t-deb').textContent      = '$ ' + fmt(t.tot_deb);
+  document.getElementById('t-cre').textContent      = '$ ' + fmt(t.tot_cre);
+  document.getElementById('t-neto').textContent     = '$ ' + fmt(t.neto);
+  document.getElementById('panel-totales').style.display = '';
+  document.getElementById('ft-deb').textContent  = fmt(t.tot_deb);
+  document.getElementById('ft-cre').textContent  = fmt(t.tot_cre);
+  document.getElementById('ft-neto').textContent = fmt(t.neto);
+}
+
+function renderTabla() {
+  const cols = ['identificacion','nombre','tot_deb','tot_cre','neto'];
+  const sorted = [..._rows].sort((a, b) => {
+    let va = a[cols[_sortCol]], vb = b[cols[_sortCol]];
+    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    return _sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+
+  document.getElementById('tbody').innerHTML = sorted.map(r => `
+    <tr>
+      <td>${r.identificacion}</td>
+      <td>${r.nombre}</td>
+      <td class="num deb">${fmt(r.tot_deb)}</td>
+      <td class="num cre">${fmt(r.tot_cre)}</td>
+      <td class="num ${r.neto >= 0 ? 'deb' : 'cre'}">${fmt(r.neto)}</td>
+    </tr>`).join('');
+
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (parseInt(th.dataset.col) === _sortCol)
+      th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
+  });
+  document.getElementById('tabla').classList.remove('d-none');
+}
+
+function ordenar(col) {
+  if (_sortCol === col) _sortAsc = !_sortAsc;
+  else { _sortCol = col; _sortAsc = true; }
+  renderTabla();
+}
+
+function exportarExcel() {
+  window.location.href = `/api/consulta_cuentas/excel?cuenta=${encodeURIComponent(_cuenta)}&desde=${_desde}&hasta=${_hasta}&empresa=${encodeURIComponent(_empresa)}`;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement.id !== 'f-cuenta') consultar();
+});
+</script>
+</body>
+</html>

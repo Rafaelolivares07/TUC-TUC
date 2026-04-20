@@ -177,7 +177,7 @@ Estas facturas **ya quedaron registradas** en Administrator. La alerta es inform
 ## Lo que el módulo NO hace (por ahora)
 
 - ❌ No crea productos nuevos automáticamente — deben existir en Administrator
-- ❌ No sincroniza devoluciones (notas crédito) — en desarrollo
+- ❌ No sincroniza devoluciones (notas crédito)
 - ❌ No modifica las facturas en Alegra — solo las lee
 
 ---

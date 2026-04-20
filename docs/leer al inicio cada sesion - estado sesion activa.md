@@ -1,10 +1,72 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-18_
+_Actualizado: 2026-04-20_
 
 ## Módulos en trabajo esta sesión
-1. **TUC TUC — Restaurantes**: drag-and-drop persistente ✅
-2. **VFP / SAR — Alegra**: staging upgrade COMPLETADO en PC Pilar ✅
-3. **Admin Agent — acceso remoto DBF desde browser** ✅ FUNCIONANDO
+1. **Administrator Web** — servidor Flask local para formularios VFP ✅ FUNCIONANDO
+2. **Asistencia Remota** — calibración de puntero + sin token ✅ V1.3
+3. **Admin Agent** ✅ FUNCIONANDO (pendiente despliegue Pilar)
+
+---
+
+## MÓDULO: Administrator Web (2026-04-20) ✅
+
+### Concepto
+Servidor Flask local (`localhost:5002`) que reemplaza formularios VFP con HTML moderno.
+VFP abre el navegador vía menú (`formularios.dbf` → `RUN /N C:\S.A.R\abrir_web.bat <url>`).
+Estrategia de migración: hoy lee DBF local → futuro cambia solo la capa de datos a PostgreSQL.
+
+### Archivos
+| Archivo | Ubicación | Descripción |
+|---|---|---|
+| `administrator_web.py` | `MiAppMedicamentos/` | Servidor Flask, todas las rutas |
+| `adm_ventas_clientes.html` | `templates/` | Formulario ventas por clientes |
+| `adm_consulta_cuentas.html` | `templates/` | Formulario consulta de cuentas REG_CTAS |
+| `abrir_web.bat` | `C:\S.A.R\` | Lanzador: popup + python + browser |
+| `popup_web.py` | `C:\S.A.R\` | Popup Tkinter "Abriendo en el navegador..." |
+
+### Formularios disponibles
+| URL | Formulario | Comando VFP |
+|---|---|---|
+| `/ventas_clientes` | Ventas por Clientes (PROD_FACT1) | `RUN /N C:\S.A.R\abrir_web.bat http://localhost:5002/ventas_clientes` |
+| `/consulta_cuentas` | Consulta de Cuentas (REG_CTAS) | `RUN /N C:\S.A.R\abrir_web.bat http://localhost:5002/consulta_cuentas` |
+
+### Singleton y auto-reload
+- Lock en puerto 47836 — solo un proceso (no duplica)
+- `WERKZEUG_RUN_MAIN` check — lock solo en proceso padre del reloader
+- `debug=True, use_reloader=True` — recarga automática al guardar código
+
+### Offsets DBF usados
+**PROD_FACT1** (REC_SIZE=179): CANTIDAD@49, PRECIO@59, EMPRESA@91(C4), FECHAHORA@95(T→JulianDay), POR_IVA@103, CLIENTE@126
+**TERCEROS** (REC_SIZE=739): COD_TER@1, NOMBRE@11(C50), IDENTIFICACION@61(C15) — leer en binario (IMAGEN C254 tarda)
+**REG_CTAS** (REC_SIZE=345): CUENTA@11(C15), LAPSO@26(D→YYYYMMDD), TERCERO@42, EMPRESA@52(C10), TOT_DEB@108, TOT_CRE@118, ANULADO@344
+
+### Despliegue pendiente en PC Pilar
+Cuando Pilar avise (sesión remota):
+1. Transferir vía panel archivos: `administrator_web.py`, `templates/adm_ventas_clientes.html`, `templates/adm_consulta_cuentas.html`, `abrir_web.bat`, `popup_web.py`
+2. Terminal remota: `pip install flask openpyxl` (si no están)
+3. Pilar agrega registros en `formularios.dbf` con los comandos VFP de la tabla anterior
+
+---
+
+## MÓDULO: Asistencia Remota (2026-04-20) — V1.3
+
+### Cambios V1.3 (esta sesión)
+- **Sin token**: visor solo pide código de 6 dígitos — token eliminado del formulario
+- **Calibración de puntero**: botón 🎯 Calibrar en header del visor
+  - Agente muestra pantalla negra fullscreen con 4 cruces numeradas (verde/azul/naranja/rojo)
+  - Rafael hace clic en cada una desde el visor en orden 1→4
+  - Regresión lineal calcula corrección sx/ox/sy/oy y guarda en localStorage
+  - Se aplica a todos los clics/movimientos futuros
+  - Persiste entre sesiones (localStorage)
+
+### Release GitHub
+- V1.3 en `https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe`
+- Pilar descarga desde botón en `/empieza` o admin
+
+### Archivos modificados
+- `remote-assist/server.py` — token removido + UI calibración + JS calibración
+- `remote-assist/agente_cliente.py` — handlers `calibrate_show` / `calibrate_hide` (overlay Tkinter)
+- `remote-assist/dist/AsistenciaTucTuc.exe` — recompilado V1.3
 
 ---
 

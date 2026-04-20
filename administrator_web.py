@@ -53,6 +53,16 @@ TER_COD_TER  = 1    # N(10)
 TER_NOMBRE   = 11   # C(50)
 TER_IDENT    = 61   # C(15)
 
+# ── Offsets REG_CTAS (record_size=345) ────────────────────────────────────────
+RC_REC_SIZE = 345
+RC_CUENTA   = 11   # C(15)
+RC_LAPSO    = 26   # D(8)  YYYYMMDD ASCII
+RC_TERCERO  = 42   # N(10)
+RC_EMPRESA  = 52   # C(10)
+RC_TOTDEB   = 108  # N(10)
+RC_TOTCRE   = 118  # N(10)
+RC_ANULADO  = 344  # N(1)
+
 
 # ════════════════════════════════════════════════════════════════════════════════
 #  CAPA DE DATOS — reemplazar estas funciones al migrar a PostgreSQL
@@ -212,6 +222,122 @@ def calcular_puestos(clientes_dict, terceros):
     return rows
 
 
+def leer_cuentas(ruta_bd, q=''):
+    """Retorna lista [{codigo, nombre}] para autocomplete de cuentas."""
+    path = os.path.join(ruta_bd, 'CUENTAS.DBF')
+    t = dbf.Table(path, ignore_memos=True)
+    t.open(dbf.READ_ONLY)
+    fields = [f.upper() for f in t.field_names]
+    f_cod = 'CUENTA' if 'CUENTA' in fields else fields[0]
+    f_nom = 'NOMBRE' if 'NOMBRE' in fields else (fields[1] if len(fields) > 1 else fields[0])
+    results = []
+    q_low = q.lower().strip()
+    for r in t:
+        cod = str(r[f_cod]).strip()
+        nom = str(r[f_nom]).strip()
+        if not cod:
+            continue
+        if q_low and q_low not in cod.lower() and q_low not in nom.lower():
+            continue
+        results.append({'codigo': cod, 'nombre': nom})
+        if len(results) >= 20:
+            break
+    t.close()
+    return results
+
+
+def leer_reg_ctas(ruta_bd, cuenta, empresa, desde, hasta):
+    """Lee REG_CTAS y agrupa por TERCERO. Retorna dict {cod_ter: {tot_deb, tot_cre}}."""
+    path = os.path.join(ruta_bd, 'REG_CTAS.DBF')
+    desde_i = int(desde.strftime('%Y%m%d'))
+    hasta_i = int(hasta.strftime('%Y%m%d'))
+    cuenta_upper = cuenta.upper().strip()
+
+    with open(path, 'rb') as f:
+        hdr = f.read(32)
+        num = struct.unpack_from('<I', hdr, 4)[0]
+        hsz = struct.unpack_from('<H', hdr, 8)[0]
+        f.seek(hsz)
+        raw = f.read(num * RC_REC_SIZE)
+
+    if HAS_NUMPY:
+        data = np.frombuffer(raw[:len(raw)//RC_REC_SIZE*RC_REC_SIZE], dtype=np.uint8)
+        n    = len(data) // RC_REC_SIZE
+        data = data.reshape(n, RC_REC_SIZE)
+
+        mask = data[:, 0] != 0x2A
+
+        cta_b = cuenta_upper.encode(ENC)
+        mask &= np.all(data[:, RC_CUENTA:RC_CUENTA+len(cta_b)] ==
+                       np.frombuffer(cta_b, dtype=np.uint8), axis=1)
+
+        lapso = (
+            (data[:, RC_LAPSO  ].astype(np.int64) - 48) * 10000000 +
+            (data[:, RC_LAPSO+1].astype(np.int64) - 48) * 1000000  +
+            (data[:, RC_LAPSO+2].astype(np.int64) - 48) * 100000   +
+            (data[:, RC_LAPSO+3].astype(np.int64) - 48) * 10000    +
+            (data[:, RC_LAPSO+4].astype(np.int64) - 48) * 1000     +
+            (data[:, RC_LAPSO+5].astype(np.int64) - 48) * 100      +
+            (data[:, RC_LAPSO+6].astype(np.int64) - 48) * 10       +
+            (data[:, RC_LAPSO+7].astype(np.int64) - 48)
+        )
+        mask &= (lapso >= desde_i) & (lapso <= hasta_i)
+
+        emp = empresa.strip()
+        if emp:
+            emp_b = emp.encode(ENC)
+            mask &= np.all(data[:, RC_EMPRESA:RC_EMPRESA+len(emp_b)] ==
+                           np.frombuffer(emp_b, dtype=np.uint8), axis=1)
+
+        mask &= (data[:, RC_ANULADO] != ord('1'))
+        indices = np.where(mask)[0]
+    else:
+        indices = range(len(raw) // RC_REC_SIZE)
+
+    resultado = {}
+    emp = empresa.strip()
+    for idx in indices:
+        b = raw[int(idx)*RC_REC_SIZE:(int(idx)+1)*RC_REC_SIZE]
+        if not HAS_NUMPY:
+            if b[0] == 0x2A: continue
+            cta = b[RC_CUENTA:RC_CUENTA+len(cuenta_upper)].decode(ENC,'replace').upper()
+            if not cta.startswith(cuenta_upper): continue
+            try:
+                lapso_i = int(b[RC_LAPSO:RC_LAPSO+8].decode('ascii','replace'))
+            except: continue
+            if not (desde_i <= lapso_i <= hasta_i): continue
+            if emp and b[RC_EMPRESA:RC_EMPRESA+10].rstrip(b' ').decode(ENC,'replace').strip() != emp: continue
+            if b[RC_ANULADO:RC_ANULADO+1] == b'1': continue
+
+        ter = b[RC_TERCERO:RC_TERCERO+10].strip(b' ').decode(ENC,'replace').strip()
+        if not ter or ter == '0': continue
+        deb = _parse_n(b, RC_TOTDEB, 10)
+        cre = _parse_n(b, RC_TOTCRE, 10)
+        if ter not in resultado:
+            resultado[ter] = {'tot_deb': 0.0, 'tot_cre': 0.0}
+        resultado[ter]['tot_deb'] += deb
+        resultado[ter]['tot_cre'] += cre
+
+    return resultado
+
+
+def construir_filas_cuentas(reg_dict, terceros):
+    """Construye filas {identificacion, nombre, tot_deb, tot_cre, neto} ordenadas por nombre."""
+    rows = []
+    for cod, d in reg_dict.items():
+        ter = terceros.get(cod, {})
+        rows.append({
+            'identificacion': ter.get('identificacion', ''),
+            'nombre':         ter.get('nombre', cod),
+            'tot_deb':        round(d['tot_deb'], 2),
+            'tot_cre':        round(d['tot_cre'], 2),
+            'neto':           round(d['tot_deb'] - d['tot_cre'], 2),
+        })
+    rows = [r for r in rows if r['nombre']]
+    rows.sort(key=lambda r: r['nombre'])
+    return rows
+
+
 def leer_empresas(ruta_bd):
     """Retorna lista de empresas únicas de PROD_FACT1."""
     path = os.path.join(ruta_bd, 'PROD_FACT1.DBF')
@@ -239,7 +365,126 @@ def leer_empresas(ruta_bd):
 
 @app.route('/')
 def index():
-    return '<a href="/ventas_clientes">Ventas por Clientes</a>'
+    return '<a href="/ventas_clientes">Ventas por Clientes</a><br><a href="/consulta_cuentas">Consulta de Cuentas</a>'
+
+
+@app.route('/consulta_cuentas')
+def consulta_cuentas():
+    hoy   = datetime.date.today()
+    desde = hoy.replace(day=1).isoformat()
+    hasta = hoy.isoformat()
+    try:
+        ruta_bd  = leer_ruta_bd()
+        empresas = leer_empresas(ruta_bd)
+    except Exception:
+        empresas = []
+    return render_template('adm_consulta_cuentas.html', desde=desde, hasta=hasta, empresas=empresas)
+
+
+@app.route('/api/cuentas_autocomplete')
+def api_cuentas_autocomplete():
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'ok': True, 'cuentas': []})
+    try:
+        ruta_bd = leer_ruta_bd()
+        cuentas = leer_cuentas(ruta_bd, q)
+        return jsonify({'ok': True, 'cuentas': cuentas})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'cuentas': []})
+
+
+@app.route('/api/consulta_cuentas')
+def api_consulta_cuentas():
+    cuenta  = request.args.get('cuenta', '').strip()
+    empresa = request.args.get('empresa', '')
+    desde_s = request.args.get('desde', '')
+    hasta_s = request.args.get('hasta', '')
+    if not cuenta:
+        return jsonify({'ok': False, 'error': 'Seleccione una cuenta'})
+    try:
+        desde = datetime.date.fromisoformat(desde_s)
+        hasta = datetime.date.fromisoformat(hasta_s)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'Fecha inválida: {e}'})
+    try:
+        ruta_bd  = leer_ruta_bd()
+        terceros = leer_terceros(ruta_bd)
+        reg      = leer_reg_ctas(ruta_bd, cuenta, empresa, desde, hasta)
+        rows     = construir_filas_cuentas(reg, terceros)
+        total_deb = sum(r['tot_deb'] for r in rows)
+        total_cre = sum(r['tot_cre'] for r in rows)
+        return jsonify({
+            'ok': True,
+            'rows': rows,
+            'totales': {
+                'terceros': len(rows),
+                'tot_deb':  round(total_deb, 2),
+                'tot_cre':  round(total_cre, 2),
+                'neto':     round(total_deb - total_cre, 2),
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/consulta_cuentas/excel')
+def api_consulta_cuentas_excel():
+    if not HAS_OPENPYXL:
+        return 'openpyxl no instalado', 500
+    cuenta  = request.args.get('cuenta', '').strip()
+    empresa = request.args.get('empresa', '')
+    desde_s = request.args.get('desde', '')
+    hasta_s = request.args.get('hasta', '')
+    try:
+        desde    = datetime.date.fromisoformat(desde_s)
+        hasta    = datetime.date.fromisoformat(hasta_s)
+        ruta_bd  = leer_ruta_bd()
+        terceros = leer_terceros(ruta_bd)
+        reg      = leer_reg_ctas(ruta_bd, cuenta, empresa, desde, hasta)
+        rows     = construir_filas_cuentas(reg, terceros)
+        total_deb = sum(r['tot_deb'] for r in rows)
+        total_cre = sum(r['tot_cre'] for r in rows)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Consulta de Cuentas'
+        hdr_font = Font(bold=True, color='003F7F')
+        hdr_fill = PatternFill('solid', fgColor='DDEEFF')
+        tot_font = Font(bold=True)
+
+        ws.append([f'CONSULTA CUENTA: {cuenta}'])
+        ws['A1'].font = Font(bold=True, size=13)
+        ws.append([f'Desde: {desde}    Hasta: {hasta}    Empresa: {empresa or "Todas"}'])
+        ws.append([])
+        cabecera = ['IDENTIFICACION', 'NOMBRE', 'DÉBITO', 'CRÉDITO', 'NETO']
+        ws.append(cabecera)
+        for cell in ws[ws.max_row]:
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+
+        for r in rows:
+            ws.append([r['identificacion'], r['nombre'], r['tot_deb'], r['tot_cre'], r['neto']])
+            fila = ws[ws.max_row]
+            for ci in [2, 3, 4]:
+                fila[ci].number_format = '#,##0.00'
+
+        ws.append([])
+        ws.append(['', 'TOTALES', round(total_deb,2), round(total_cre,2), round(total_deb-total_cre,2)])
+        for c in ws[ws.max_row]: c.font = tot_font
+        ws.append(['', f'Generado: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'])
+
+        for i, w in enumerate([18, 42, 14, 14, 14], 1):
+            ws.column_dimensions[ws.cell(1, i).column_letter].width = w
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        fname = f'consulta_cuenta_{cuenta}_{desde}_{hasta}.xlsx'
+        return send_file(buf, as_attachment=True, download_name=fname,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    except Exception as e:
+        return str(e), 500
 
 
 @app.route('/ventas_clientes')

@@ -282,7 +282,9 @@ function _mostrarNitItems(items) {
   }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
-          onpointerdown="event.preventDefault(); seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')">
+          ontouchstart="this._ty=event.touches[0].clientY"
+          ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')}"
+          onclick="seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')">
       <strong>${t.nit}</strong> — ${t.nombre}
     </div>`).join('');
   cont.classList.remove('d-none');
@@ -328,7 +330,9 @@ function _mostrarCuentaItems(items) {
   }
   cont.innerHTML = items.map(t =>
     `<div class="px-2 py-1" style="cursor:pointer"
-          onpointerdown="event.preventDefault(); seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')">
+          ontouchstart="this._ty=event.touches[0].clientY"
+          ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')}"
+          onclick="seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')">
       <strong>${t.codigo}</strong> — ${t.nombre}
     </div>`).join('');
   cont.classList.remove('d-none');

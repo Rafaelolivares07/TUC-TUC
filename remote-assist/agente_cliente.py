@@ -94,6 +94,10 @@ def ejecutar_comando(data):
             mapped = key_map.get(key, key if len(key) == 1 else None)
             if mapped:
                 pyautogui.press(mapped)
+        elif tipo == 'calibrate_show':
+            ventana.root.after(0, _crear_overlay_calibracion)
+        elif tipo == 'calibrate_hide':
+            ventana.root.after(0, _ocultar_overlay_calibracion)
     except Exception:
         pass
 
@@ -175,6 +179,7 @@ class VentanaAsistencia:
 # ─── SocketIO events ──────────────────────────────────────────────────────────
 
 ventana: VentanaAsistencia = None
+_calib_win   = None
 
 @sio.event
 def connect():
@@ -297,6 +302,50 @@ def on_exec(data):
 def disconnect():
     if running:
         ventana.set_estado('gris', 'Reconectando...')
+
+
+# ─── Calibración overlay ─────────────────────────────────────────────────────
+
+def _crear_overlay_calibracion():
+    global _calib_win
+    if _calib_win:
+        try: _calib_win.destroy()
+        except Exception: pass
+    _calib_win = tk.Toplevel(ventana.root)
+    _calib_win.attributes('-fullscreen', True)
+    _calib_win.attributes('-topmost', True)
+    _calib_win.overrideredirect(True)
+    _calib_win.configure(bg='#0f172a')
+    canvas = tk.Canvas(_calib_win, bg='#0f172a', highlightthickness=0)
+    canvas.pack(fill='both', expand=True)
+    _calib_win.update()
+    w = _calib_win.winfo_screenwidth()
+    h = _calib_win.winfo_screenheight()
+    canvas.create_text(w//2, 55, text='CALIBRACIÓN DE PUNTERO',
+                       fill='white', font=('Arial', 20, 'bold'))
+    canvas.create_text(w//2, 92,
+                       text='El técnico está calibrando el cursor — por favor espere',
+                       fill='#94a3b8', font=('Arial', 13))
+    targets = [(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75)]
+    colors  = ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444']
+    r = 28
+    for i, (rx, ry) in enumerate(targets):
+        x, y = int(rx * w), int(ry * h)
+        col = colors[i]
+        canvas.create_oval(x-r, y-r, x+r, y+r, outline=col, width=3, fill='#0f172a')
+        canvas.create_line(x-r-20, y, x-5, y, fill=col, width=2)
+        canvas.create_line(x+5, y, x+r+20, y, fill=col, width=2)
+        canvas.create_line(x, y-r-20, x, y-5, fill=col, width=2)
+        canvas.create_line(x, y+5, x, y+r+20, fill=col, width=2)
+        canvas.create_text(x, y, text=str(i+1), fill=col, font=('Arial', 16, 'bold'))
+
+
+def _ocultar_overlay_calibracion():
+    global _calib_win
+    if _calib_win:
+        try: _calib_win.destroy()
+        except Exception: pass
+        _calib_win = None
 
 
 # ─── Hilo de conexión ─────────────────────────────────────────────────────────

@@ -102,6 +102,18 @@ VIEWER_HTML = """<!DOCTYPE html>
   .arc-estado.ok { color: #22c55e; }
   .arc-estado.err { color: #f87171; }
   .arc-divider { border: none; border-top: 1px solid #334155; margin: 16px 0; }
+  #btn-calibrar { margin-left: 8px; background: #334155; border: none; color: #94a3b8; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: background 0.2s; display: none; }
+  #btn-calibrar:hover { background: #f59e0b; color: #0f172a; }
+  #btn-calibrar.calibrado { background: #15803d; color: white; }
+  #calib-panel { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 2px solid #f59e0b; border-radius: 14px; padding: 16px 28px; z-index: 300; text-align: center; box-shadow: 0 4px 24px #0008; display: none; }
+  #calib-panel.visible { display: block; }
+  .calib-titulo { color: #f59e0b; font-weight: 700; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+  .calib-instruccion { color: #f1f5f9; font-size: 15px; margin-bottom: 12px; }
+  .calib-progress { display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; }
+  .calib-dot { width: 12px; height: 12px; border-radius: 50%; background: #334155; }
+  .calib-dot.activo { background: #f59e0b; }
+  .calib-dot.hecho { background: #22c55e; }
+  .btn-calib-cancel { background: #ef4444; border: none; color: white; border-radius: 6px; padding: 5px 14px; cursor: pointer; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -112,6 +124,7 @@ VIEWER_HTML = """<!DOCTYPE html>
   <span id="fps"></span>
   <button id="btn-archivos" onclick="toggleArchivos()" title="Transferencia de archivos">📁 Archivos</button>
   <button id="btn-terminal" onclick="toggleTerminal()" title="Terminal remota">⌨️ Terminal</button>
+  <button id="btn-calibrar" onclick="iniciarCalibracion()" title="Calibrar puntero remoto">🎯 Calibrar</button>
 </div>
 
 <div id="panel-terminal">
@@ -166,10 +179,83 @@ VIEWER_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
+<div id="calib-panel">
+  <div class="calib-titulo">🎯 Calibración de puntero</div>
+  <div class="calib-instruccion">Haz clic en el círculo <b id="calib-num" style="color:#f59e0b"></b></div>
+  <div class="calib-progress">
+    <div class="calib-dot" id="cd0"></div>
+    <div class="calib-dot" id="cd1"></div>
+    <div class="calib-dot" id="cd2"></div>
+    <div class="calib-dot" id="cd3"></div>
+  </div>
+  <button class="btn-calib-cancel" onclick="cancelarCalibracion()">Cancelar</button>
+</div>
+
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 let socket, sessionId;
 let frameCount = 0, lastFpsTime = Date.now();
+
+// ─── Calibración ─────────────────────────────────────────────────────────────
+// Orden: verde(1) top-left, azul(2) top-right, naranja(3) bottom-right, rojo(4) bottom-left
+const CALIB_TARGETS = [{rx:0.25,ry:0.25},{rx:0.75,ry:0.25},{rx:0.75,ry:0.75},{rx:0.25,ry:0.75}];
+const CALIB_NOMBRES = ['verde (1)','azul (2)','naranja (3)','rojo (4)'];
+let calibMode = false, calibClicks = [], calib = null;
+try { const c = localStorage.getItem('remote_calib'); if (c) calib = JSON.parse(c); } catch(e) {}
+
+function aplicarCalib(rx, ry) {
+  if (!calib) return {rx, ry};
+  return { rx: calib.sx * rx + calib.ox, ry: calib.sy * ry + calib.oy };
+}
+
+function iniciarCalibracion() {
+  if (!socket) return;
+  calibMode = true; calibClicks = [];
+  const btn = document.getElementById('btn-calibrar');
+  btn.classList.remove('calibrado');
+  btn.title = 'Calibrar puntero remoto';
+  socket.emit('command', {session_id: sessionId, type: 'calibrate_show'});
+  actualizarPanelCalib();
+  document.getElementById('calib-panel').classList.add('visible');
+}
+
+function cancelarCalibracion() {
+  calibMode = false; calibClicks = [];
+  document.getElementById('calib-panel').classList.remove('visible');
+  if (socket && socket.connected)
+    socket.emit('command', {session_id: sessionId, type: 'calibrate_hide'});
+}
+
+function actualizarPanelCalib() {
+  const idx = calibClicks.length;
+  document.getElementById('calib-num').textContent = CALIB_NOMBRES[idx];
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById('cd' + i);
+    d.className = 'calib-dot' + (i < idx ? ' hecho' : i === idx ? ' activo' : '');
+  }
+}
+
+function finalizarCalibracion() {
+  calibMode = false;
+  document.getElementById('calib-panel').classList.remove('visible');
+  if (socket) socket.emit('command', {session_id: sessionId, type: 'calibrate_hide'});
+  const n = 4;
+  function fitLinear(cs, ts) {
+    const sC = cs.reduce((a,b)=>a+b,0), sT = ts.reduce((a,b)=>a+b,0);
+    const sCT = cs.reduce((s,c,i)=>s+c*ts[i],0), sC2 = cs.reduce((s,c)=>s+c*c,0);
+    const den = n*sC2 - sC*sC;
+    if (Math.abs(den) < 1e-10) return {scale:1, offset:0};
+    const scale = (n*sCT - sC*sT) / den;
+    return {scale, offset: (sT - scale*sC) / n};
+  }
+  const fx = fitLinear(calibClicks.map(c=>c.rx), CALIB_TARGETS.map(t=>t.rx));
+  const fy = fitLinear(calibClicks.map(c=>c.ry), CALIB_TARGETS.map(t=>t.ry));
+  calib = {sx: fx.scale, ox: fx.offset, sy: fy.scale, oy: fy.offset};
+  localStorage.setItem('remote_calib', JSON.stringify(calib));
+  const btn = document.getElementById('btn-calibrar');
+  btn.classList.add('calibrado');
+  btn.title = 'Calibrado ✓ — Click para recalibrar';
+}
 
 function formatearCodigo(input) {
   let v = input.value.replace(/[^0-9]/g, '');
@@ -196,6 +282,12 @@ function conectar() {
     document.getElementById('overlay').style.display = 'none';
     document.getElementById('screen-wrap').style.display = 'block';
     setStatus('yellow', 'Esperando agente...');
+    const btn = document.getElementById('btn-calibrar');
+    btn.style.display = '';
+    if (localStorage.getItem('remote_calib')) {
+      btn.classList.add('calibrado');
+      btn.title = 'Calibrado ✓ — Click para recalibrar';
+    }
   });
   socket.on('agent_connected', () => setStatus('green', 'Agente conectado — ' + formatCodigo(sessionId)));
   socket.on('agent_disconnected', () => setStatus('yellow', 'Agente desconectado'));
@@ -208,7 +300,11 @@ function conectar() {
       frameCount = 0; lastFpsTime = now;
     }
   });
-  socket.on('disconnect', () => setStatus('red', 'Desconectado'));
+  socket.on('disconnect', () => {
+    setStatus('red', 'Desconectado');
+    document.getElementById('btn-calibrar').style.display = 'none';
+    if (calibMode) cancelarCalibracion();
+  });
   socket.on('file_chunk', onFileChunk);
   socket.on('exec_result', onExecResult);
 }
@@ -250,22 +346,33 @@ const screenEl = document.getElementById('screen');
 screenEl.addEventListener('click', (e) => {
   if (!socket) return;
   const rect = screenEl.getBoundingClientRect();
-  socket.emit('command', { session_id: sessionId, type: 'click', x: (e.clientX-rect.left)/rect.width, y: (e.clientY-rect.top)/rect.height, button: 'left' });
+  const rx = (e.clientX-rect.left)/rect.width, ry = (e.clientY-rect.top)/rect.height;
+  if (calibMode) {
+    calibClicks.push({rx, ry});
+    if (calibClicks.length < 4) actualizarPanelCalib();
+    else finalizarCalibracion();
+    return;
+  }
+  const c = aplicarCalib(rx, ry);
+  socket.emit('command', { session_id: sessionId, type: 'click', x: c.rx, y: c.ry, button: 'left' });
 });
 screenEl.addEventListener('contextmenu', (e) => {
-  e.preventDefault(); if (!socket) return;
+  e.preventDefault(); if (!socket || calibMode) return;
   const rect = screenEl.getBoundingClientRect();
-  socket.emit('command', { session_id: sessionId, type: 'click', x: (e.clientX-rect.left)/rect.width, y: (e.clientY-rect.top)/rect.height, button: 'right' });
+  const c = aplicarCalib((e.clientX-rect.left)/rect.width, (e.clientY-rect.top)/rect.height);
+  socket.emit('command', { session_id: sessionId, type: 'click', x: c.rx, y: c.ry, button: 'right' });
 });
 screenEl.addEventListener('dblclick', (e) => {
-  if (!socket) return;
+  if (!socket || calibMode) return;
   const rect = screenEl.getBoundingClientRect();
-  socket.emit('command', { session_id: sessionId, type: 'double_click', x: (e.clientX-rect.left)/rect.width, y: (e.clientY-rect.top)/rect.height });
+  const c = aplicarCalib((e.clientX-rect.left)/rect.width, (e.clientY-rect.top)/rect.height);
+  socket.emit('command', { session_id: sessionId, type: 'double_click', x: c.rx, y: c.ry });
 });
 screenEl.addEventListener('mousemove', (e) => {
-  if (!socket) return;
+  if (!socket || calibMode) return;
   const rect = screenEl.getBoundingClientRect();
-  socket.emit('command', { session_id: sessionId, type: 'move', x: (e.clientX-rect.left)/rect.width, y: (e.clientY-rect.top)/rect.height });
+  const c = aplicarCalib((e.clientX-rect.left)/rect.width, (e.clientY-rect.top)/rect.height);
+  socket.emit('command', { session_id: sessionId, type: 'move', x: c.rx, y: c.ry });
 });
 screenEl.addEventListener('wheel', (e) => {
   if (!socket) return;

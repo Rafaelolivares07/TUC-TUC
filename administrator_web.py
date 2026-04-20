@@ -337,10 +337,10 @@ def api_ventas_clientes_excel():
                 r['subtotal'],  r['por_val'] / 100,  r['puesto_val'],
             ])
             fila = ws[ws.max_row]
-            fila[3].number_format = '#,##0.00'
-            fila[4].number_format = '0.00%'
-            fila[6].number_format = '#,##0.00'
-            fila[7].number_format = '0.00%'
+            fila[2].number_format = '#,##0.00'   # cantidad
+            fila[3].number_format = '0.00%'       # % cant
+            fila[5].number_format = '#,##0.00'   # subtotal
+            fila[6].number_format = '0.00%'       # % val
 
         ws.append([])
         ws.append(['', 'TOTAL VENTAS', round(total_cant, 2), '', '', round(total_val, 2)])

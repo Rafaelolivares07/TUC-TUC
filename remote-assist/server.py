@@ -152,13 +152,9 @@ VIEWER_HTML = """<!DOCTYPE html>
     <p>Ingresa el código que el cliente ve en su pantalla</p>
 
     <div class="campo">
-      <label>Token de técnico</label>
-      <input id="token-input" type="password" placeholder="••••••••••••" autofocus>
-    </div>
-    <div class="campo">
       <label>Código del cliente</label>
       <input id="codigo-input" class="code-input" type="text" placeholder="000-000"
-             maxlength="7" oninput="formatearCodigo(this)">
+             maxlength="7" oninput="formatearCodigo(this)" autofocus>
     </div>
     <button class="btn-conectar" onclick="conectar()">Conectar</button>
     <div id="error-msg"></div>
@@ -186,9 +182,7 @@ function seleccionarSesion(codigo) {
 }
 
 function conectar() {
-  const token = document.getElementById('token-input').value.trim();
   const codigoRaw = document.getElementById('codigo-input').value.replace(/[^0-9]/g, '');
-  if (!token) { setError('Ingresa el token de técnico'); return; }
   if (codigoRaw.length !== 6) { setError('Ingresa un código de 6 dígitos'); return; }
   sessionId = codigoRaw;
   setError('');
@@ -196,14 +190,13 @@ function conectar() {
   socket = io({ transports: ['websocket'] });
 
   socket.on('connect', () => {
-    socket.emit('viewer_join', { token, session_id: sessionId });
+    socket.emit('viewer_join', { session_id: sessionId });
   });
   socket.on('viewer_ok', () => {
     document.getElementById('overlay').style.display = 'none';
     document.getElementById('screen-wrap').style.display = 'block';
     setStatus('yellow', 'Esperando agente...');
   });
-  socket.on('viewer_error', (d) => { setError(d.msg || 'Token incorrecto'); socket.disconnect(); });
   socket.on('agent_connected', () => setStatus('green', 'Agente conectado — ' + formatCodigo(sessionId)));
   socket.on('agent_disconnected', () => setStatus('yellow', 'Agente desconectado'));
   socket.on('frame', (data) => {
@@ -439,11 +432,7 @@ def api_sessions():
 
 @socketio.on('viewer_join')
 def on_viewer_join(data):
-    token = data.get('token', '')
     session_id = data.get('session_id', 'default')
-    if token != ACCESS_TOKEN:
-        emit('viewer_error', {'msg': 'Token incorrecto'})
-        return
     join_room(f'viewer_{session_id}')
     join_room(f'session_{session_id}')
     emit('viewer_ok')

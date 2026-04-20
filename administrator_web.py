@@ -359,8 +359,15 @@ def api_ventas_clientes_excel():
 
 
 if __name__ == '__main__':
+    import socket as _socket
+    _lock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    try:
+        _lock.bind(('127.0.0.1', 5002))
+        _lock.listen(1)
+    except OSError:
+        # Ya está corriendo — salir silencioso
+        sys.exit(0)
     print('=' * 55)
-    print('  Administrator Web — Ventas por Clientes')
-    print('  http://localhost:5002/ventas_clientes')
+    print('  Administrator Web — localhost:5002')
     print('=' * 55)
     app.run(host='127.0.0.1', port=5002, debug=False)

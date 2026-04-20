@@ -28,6 +28,12 @@ except ImportError:
 
 app = Flask(__name__)
 
+@app.before_request
+def _lowercase_url():
+    from flask import redirect, request
+    if request.path != request.path.lower():
+        return redirect(request.path.lower(), 301)
+
 RUTA_DBF_FILE = r"C:\S.A.R\RutaBaseDatos\ruta.dbf"
 ENC = 'cp1252'
 
@@ -362,10 +368,9 @@ if __name__ == '__main__':
     import socket as _socket
     _lock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
     try:
-        _lock.bind(('127.0.0.1', 5002))
+        _lock.bind(('127.0.0.1', 47836))
         _lock.listen(1)
     except OSError:
-        # Ya está corriendo — salir silencioso
         sys.exit(0)
     print('=' * 55)
     print('  Administrator Web — localhost:5002')

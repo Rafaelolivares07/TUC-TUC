@@ -139,7 +139,7 @@ def consulta_reg_ctas(ruta_bd, parametros):
     terceros_nit = {r['NIT'].strip(): r['COD_TER'] for r in rows_ter}
 
     rows_tip, _ = leer_tabla(ruta_bd, "TIPO_DOC")
-    rows_cta, _ = leer_tabla(ruta_bd, "CUENTA")
+    rows_cta, _ = leer_tabla(ruta_bd, "CUENTAS")
     tipo_docs = {r['CODIGO']: r['NOMBRE'] for r in rows_tip}
     cuentas   = {r['CODIGO']: r['NOMBRE'] for r in rows_cta}
 

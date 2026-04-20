@@ -148,9 +148,9 @@ def consulta_reg_ctas(ruta_bd, parametros):
     cuenta  = str(parametros.get('cuenta',  '') or '').strip()
     limite  = int(parametros.get('limite', 200))
 
-    # Resolver NIT → COD_TER
-    tercero = ''
-    if nit:
+    # tercero puede venir como COD_TER directo o como NIT a resolver
+    tercero = str(parametros.get('tercero', '') or '').strip()
+    if not tercero and nit:
         cod = terceros_nit.get(nit)
         if not cod:
             for k, v in terceros_nit.items():

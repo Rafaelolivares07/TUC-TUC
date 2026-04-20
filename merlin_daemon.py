@@ -55,6 +55,8 @@ LOG_FILE       = r"C:\Users\RAFAEL OLIVARES\merlin_daemon.log"
 INBOX_FILE     = APP_DIR / 'merlin_inbox.json'
 OUTBOX_FILE    = APP_DIR / 'merlin_outbox.json'
 
+BD_RETRY_SEG   = 15   # segundos entre intentos de reconexión cuando BD está caída
+
 # ── Estado global (compartido entre loops) ───────────────────────────────────
 _lock_socket   = None
 _merlin_id     = None
@@ -62,8 +64,11 @@ _last_trigger  = None      # datetime último trigger Claude
 _last_sendkeys = None      # datetime último SendKeys (para calcular idle efectivo)
 _last_hb       = None      # datetime último heartbeat
 _last_db_check = None      # datetime último check canal='captura'
+_last_reconectar = None    # datetime último intento de reconexión BD
 _cursor_prev   = (-1, -1)
 _relay_activo  = False     # True mientras relay_via_captura espera outbox
+_conn          = None      # conexión persistente a BD
+_bd_ok         = False     # True cuando la conexión está viva
 
 MEDIA_PROCS = {'chrome','msedge','firefox','spotify','vlc','wmplayer',
                'groove','mpc-hc','mpc-be','itunes','winamp','potplayer','mpv','obs64','obs32'}
@@ -129,17 +134,55 @@ def show_window(hwnd, cmd):
     ctypes.windll.user32.ShowWindow(hwnd, cmd)
 
 
-# ── DB ─────────────────────────────────────────────────────────────────────────
+# ── DB persistente ─────────────────────────────────────────────────────────────
+
+class _NoClose:
+    """Wrapper sobre psycopg2 connection que ignora close() — mantiene la conexión viva."""
+    def __init__(self, conn):
+        self._c = conn
+    def cursor(self):    return self._c.cursor()
+    def commit(self):    self._c.commit()
+    def rollback(self):  self._c.rollback()
+    def close(self):     pass
+    @property
+    def closed(self):    return self._c.closed
+
+
+def _reconectar():
+    global _conn, _bd_ok, _last_reconectar
+    _last_reconectar = datetime.now()
+    try:
+        if _conn:
+            try: _conn.close()
+            except Exception: pass
+        _conn = psycopg2.connect(
+            DB_URL,
+            cursor_factory=psycopg2.extras.RealDictCursor,
+            connect_timeout=10,
+        )
+        _conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
+        _conn.commit()
+        _bd_ok = True
+        log("✓ BD conectada")
+    except Exception as e:
+        _conn = None
+        _bd_ok = False
+        log(f"✗ BD no disponible: {e}")
+
 
 def get_conn():
-    conn = psycopg2.connect(
-        DB_URL,
-        cursor_factory=psycopg2.extras.RealDictCursor,
-        connect_timeout=10,
-    )
-    conn.cursor().execute("SET TIME ZONE 'America/Bogota'")
-    conn.commit()
-    return conn
+    global _conn, _bd_ok
+    if _conn and not _conn.closed:
+        try:
+            _conn.cursor().execute("SELECT 1")
+            _bd_ok = True
+            return _NoClose(_conn)
+        except Exception:
+            pass
+    _reconectar()
+    if not _bd_ok:
+        raise psycopg2.OperationalError("BD no disponible")
+    return _NoClose(_conn)
 
 
 # ── Merlin tercero ─────────────────────────────────────────────────────────────
@@ -464,6 +507,8 @@ def activar_claude():
     """Activa la terminal de Claude Code y envía __MERLIN__ via SendKeys."""
     global _last_trigger, _last_sendkeys
     try:
+        import pythoncom
+        pythoncom.CoInitialize()
         import win32com.client
         import win32gui
         import win32con
@@ -643,11 +688,16 @@ def main():
     print(f'  BD: {(DB_URL or "")[:40]}...')
     print()
 
-    _precargar_whisper()
-    merlin_id = get_or_create_merlin()
-    log(f'Merlin listo (id={merlin_id}). Iniciando loops...')
+    threading.Thread(target=_precargar_whisper, daemon=True).start()
 
-    error_wait = 5
+    # Conexión inicial — si falla, el loop reintenta cada BD_RETRY_SEG
+    _reconectar()
+    if _bd_ok:
+        merlin_id = get_or_create_merlin()
+        log(f'Merlin listo (id={merlin_id}). Iniciando loops...')
+    else:
+        merlin_id = None
+        log('BD no disponible al inicio — reintentando en background...')
 
     while True:
         try:
@@ -661,11 +711,23 @@ def main():
             else:
                 effective_idle = windows_idle
 
-            # ── C) Heartbeat ──────────────────────────────────────────────────
+            # ── C) Heartbeat — SIEMPRE, independiente de BD ───────────────────
             hb_elapsed = (now - _last_hb).total_seconds() if _last_hb else 9999
             if hb_elapsed >= HB_CADA:
                 send_heartbeat(effective_idle)
                 _last_hb = now
+
+            # ── Reconexión BD si está caída ───────────────────────────────────
+            if not _bd_ok:
+                retry_elapsed = (now - _last_reconectar).total_seconds() if _last_reconectar else 9999
+                if retry_elapsed >= BD_RETRY_SEG:
+                    _reconectar()
+                    if _bd_ok and merlin_id is None:
+                        merlin_id = get_or_create_merlin()
+                        log(f'Merlin listo (id={merlin_id})')
+                if not _bd_ok:
+                    time.sleep(POLL_SEC)
+                    continue
 
             # ── B) Outbox (respuesta de Claude lista en archivo) ─────────────
             if not _relay_activo:
@@ -689,7 +751,6 @@ def main():
                 msg_ids    = [m['id'] for m in msgs]
                 n          = len(msgs)
                 log(f"📨 Conv {conv_id}: {n} msg(s) de usuario {creador_id}")
-                marcar_leidos(msg_ids)
                 ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
                 if creador_id == RAFAEL_ID:
                     log(f"  Rafael → relay captura...")
@@ -698,11 +759,11 @@ def main():
                     prompt = construir_prompt(ctx, msgs)
                     log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
                     respuesta = llamar_claude(prompt)
+                marcar_leidos(msg_ids)
                 log(f"  💬 {respuesta[:80]}...")
                 guardar_respuesta(conv_id, merlin_id, creador_id, respuesta)
                 log("  ✅ Listo.")
 
-            error_wait = 5
             time.sleep(POLL_SEC)
 
         except KeyboardInterrupt:
@@ -710,12 +771,13 @@ def main():
             break
         except psycopg2.OperationalError as e:
             log(f'✗ BD perdida: {e}')
-            time.sleep(error_wait)
-            error_wait = min(error_wait * 2, 60)
+            global _bd_ok, _conn
+            _bd_ok = False
+            _conn  = None
+            time.sleep(POLL_SEC)
         except Exception as e:
             log(f'✗ Error: {e}')
-            time.sleep(error_wait)
-            error_wait = min(error_wait * 2, 60)
+            time.sleep(5)
 
 
 if __name__ == '__main__':

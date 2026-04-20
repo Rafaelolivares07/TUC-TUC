@@ -219,8 +219,8 @@ def consulta_reg_ctas(ruta_bd, parametros):
 
         # Filtro LAPSO vectorizado por rango YYYYMM
         if lapso_desde or lapso_hasta:
-            yr = data[:, OFF_LAPSO:OFF_LAPSO+4] - 48
-            mn = data[:, OFF_LAPSO+4:OFF_LAPSO+6] - 48
+            yr = data[:, OFF_LAPSO:OFF_LAPSO+4].astype(np.int32) - 48
+            mn = data[:, OFF_LAPSO+4:OFF_LAPSO+6].astype(np.int32) - 48
             lapso_int = (yr[:,0]*1000 + yr[:,1]*100 + yr[:,2]*10 + yr[:,3]) * 100 + (mn[:,0]*10 + mn[:,1])
             if lapso_desde:
                 mask &= lapso_int >= lapso_desde

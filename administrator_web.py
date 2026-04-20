@@ -366,13 +366,15 @@ def api_ventas_clientes_excel():
 
 if __name__ == '__main__':
     import socket as _socket
-    _lock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-    try:
-        _lock.bind(('127.0.0.1', 47836))
-        _lock.listen(1)
-    except OSError:
-        sys.exit(0)
-    print('=' * 55)
-    print('  Administrator Web — localhost:5002')
-    print('=' * 55)
-    app.run(host='127.0.0.1', port=5002, debug=False)
+    # El reloader de Flask arranca dos procesos; el lock solo aplica al padre
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        _lock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        try:
+            _lock.bind(('127.0.0.1', 47836))
+            _lock.listen(1)
+        except OSError:
+            sys.exit(0)
+        print('=' * 55)
+        print('  Administrator Web — localhost:5002')
+        print('=' * 55)
+    app.run(host='127.0.0.1', port=5002, debug=True, use_reloader=True)

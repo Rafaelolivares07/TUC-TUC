@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ventas por Clientes — Administrator</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  body { background: #f4f7fb; font-size: 13px; }
+  .panel-filtros { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 14px; }
+  .panel-totales { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 12px 20px; margin-bottom: 14px; }
+  .total-box { text-align: center; }
+  .total-box .val { font-size: 17px; font-weight: 700; color: #003f7f; }
+  .total-box .lbl { font-size: 11px; color: #888; text-transform: uppercase; }
+  #tabla-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 0; overflow-x: auto; }
+  table { font-size: 12px; }
+  thead th { background: #003f7f; color: #fff; cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { background: #00539f; }
+  thead th .sort-ico { opacity: 0.5; font-size: 10px; }
+  thead th.sort-asc .sort-ico::after { content: ' ▲'; opacity: 1; }
+  thead th.sort-desc .sort-ico::after { content: ' ▼'; opacity: 1; }
+  tbody tr:nth-child(even) { background: #f0f6ff; }
+  tbody tr:hover { background: #d6eaff; }
+  .num { text-align: right; }
+  .fila-total td { font-weight: 700; background: #e8f0ff !important; border-top: 2px solid #003f7f; }
+  .spinner-wrap { text-align: center; padding: 40px; color: #888; }
+  .badge-empresa { background: #e8f0ff; color: #003f7f; border-radius: 4px; padding: 2px 8px; font-size: 11px; }
+  .btn-consultar { min-width: 130px; }
+</style>
+</head>
+<body>
+
+<div class="container-fluid py-3">
+
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <h5 class="mb-0 text-primary fw-bold"><i class="bi bi-people me-2"></i>Ventas por Clientes</h5>
+    <small class="text-muted">Administrator 9.0</small>
+  </div>
+
+  <!-- Filtros -->
+  <div class="panel-filtros">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Desde</label>
+        <input type="date" id="f-desde" class="form-control form-control-sm" value="{{ desde }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Hasta</label>
+        <input type="date" id="f-hasta" class="form-control form-control-sm" value="{{ hasta }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Empresa</label>
+        <select id="f-empresa" class="form-select form-select-sm" style="min-width:120px">
+          <option value="">Todas</option>
+          {% for emp in empresas %}
+          <option value="{{ emp }}">{{ emp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm btn-consultar" onclick="consultar()">
+          <i class="bi bi-search me-1"></i>Consultar
+        </button>
+      </div>
+      <div class="col-auto" id="btn-excel-wrap" style="display:none">
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="col-auto ms-auto">
+        <small id="info-registros" class="text-muted"></small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Totales -->
+  <div class="panel-totales" id="panel-totales" style="display:none">
+    <div class="row g-3">
+      <div class="col total-box">
+        <div class="val" id="t-clientes">—</div>
+        <div class="lbl">Clientes</div>
+      </div>
+      <div class="col total-box">
+        <div class="val" id="t-cantidad">—</div>
+        <div class="lbl">Cant. Productos</div>
+      </div>
+      <div class="col total-box">
+        <div class="val" id="t-subtotal">—</div>
+        <div class="lbl">Total Ventas</div>
+      </div>
+      <div class="col total-box">
+        <div class="val" id="t-iva">—</div>
+        <div class="lbl">Total IVA</div>
+      </div>
+      <div class="col total-box">
+        <div class="val" id="t-prom-cliente">—</div>
+        <div class="lbl">Prom. por Cliente</div>
+      </div>
+      <div class="col total-box">
+        <div class="val" id="t-prom-prod">—</div>
+        <div class="lbl">Prom. por Producto</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="tabla-wrap">
+    <div class="spinner-wrap" id="estado-inicial">
+      <i class="bi bi-arrow-up-circle text-primary fs-4"></i>
+      <div class="mt-2">Seleccione un rango de fechas y pulse Consultar</div>
+    </div>
+    <div class="spinner-wrap d-none" id="spinner">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2">Consultando...</div>
+    </div>
+    <table class="table table-bordered table-hover mb-0 d-none" id="tabla">
+      <thead>
+        <tr>
+          <th onclick="ordenar(0)" data-col="0">IDENTIFICACION<span class="sort-ico"></span></th>
+          <th onclick="ordenar(1)" data-col="1">NOMBRE<span class="sort-ico"></span></th>
+          <th onclick="ordenar(2)" data-col="2" class="num">CANTIDAD<span class="sort-ico"></span></th>
+          <th onclick="ordenar(3)" data-col="3" class="num">% CANT<span class="sort-ico"></span></th>
+          <th onclick="ordenar(4)" data-col="4" class="num">PUESTO CANT<span class="sort-ico"></span></th>
+          <th onclick="ordenar(5)" data-col="5" class="num">SUBTOTAL<span class="sort-ico"></span></th>
+          <th onclick="ordenar(6)" data-col="6" class="num">% VAL<span class="sort-ico"></span></th>
+          <th onclick="ordenar(7)" data-col="7" class="num">PUESTO VAL<span class="sort-ico"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr class="fila-total">
+          <td colspan="2">TOTAL</td>
+          <td class="num" id="ft-cantidad"></td>
+          <td></td><td></td>
+          <td class="num" id="ft-subtotal"></td>
+          <td></td><td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div>
+
+<script>
+let _rows = [];
+let _sortCol = 1;
+let _sortAsc = true;
+let _desde = '', _hasta = '', _empresa = '';
+
+const fmt  = n => n.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtI = n => n.toLocaleString('es-CO');
+const fmtP = n => n.toFixed(2) + '%';
+
+function consultar() {
+  _desde   = document.getElementById('f-desde').value;
+  _hasta   = document.getElementById('f-hasta').value;
+  _empresa = document.getElementById('f-empresa').value;
+  if (!_desde || !_hasta) { alert('Seleccione rango de fechas'); return; }
+
+  document.getElementById('estado-inicial').classList.add('d-none');
+  document.getElementById('spinner').classList.remove('d-none');
+  document.getElementById('tabla').classList.add('d-none');
+  document.getElementById('panel-totales').style.display = 'none';
+  document.getElementById('btn-excel-wrap').style.display = 'none';
+  document.getElementById('info-registros').textContent = '';
+
+  fetch(`/api/ventas_clientes?desde=${_desde}&hasta=${_hasta}&empresa=${encodeURIComponent(_empresa)}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('spinner').classList.add('d-none');
+      if (!data.ok) { alert('Error: ' + data.error); return; }
+      _rows = data.rows;
+      mostrarTotales(data.totales);
+      renderTabla();
+      document.getElementById('btn-excel-wrap').style.display = '';
+      document.getElementById('info-registros').textContent = `${_rows.length} clientes`;
+    })
+    .catch(e => {
+      document.getElementById('spinner').classList.add('d-none');
+      alert('Error de conexión: ' + e);
+    });
+}
+
+function mostrarTotales(t) {
+  document.getElementById('t-clientes').textContent    = fmtI(t.clientes);
+  document.getElementById('t-cantidad').textContent    = fmt(t.cantidad);
+  document.getElementById('t-subtotal').textContent    = '$ ' + fmt(t.subtotal);
+  document.getElementById('t-iva').textContent         = '$ ' + fmt(t.iva);
+  document.getElementById('t-prom-cliente').textContent = '$ ' + fmt(t.prom_cliente);
+  document.getElementById('t-prom-prod').textContent   = '$ ' + fmt(t.prom_producto);
+  document.getElementById('panel-totales').style.display = '';
+  document.getElementById('ft-cantidad').textContent  = fmt(t.cantidad);
+  document.getElementById('ft-subtotal').textContent  = fmt(t.subtotal);
+}
+
+function renderTabla() {
+  const cols = ['identificacion','nombre','cantidad','por_cant','puesto_cant','subtotal','por_val','puesto_val'];
+  const sorted = [..._rows].sort((a, b) => {
+    let va = a[cols[_sortCol]], vb = b[cols[_sortCol]];
+    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    return _sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = sorted.map(r => `
+    <tr>
+      <td>${r.identificacion}</td>
+      <td>${r.nombre}</td>
+      <td class="num">${fmt(r.cantidad)}</td>
+      <td class="num">${fmtP(r.por_cant)}</td>
+      <td class="num">${fmtI(r.puesto_cant)}</td>
+      <td class="num">${fmt(r.subtotal)}</td>
+      <td class="num">${fmtP(r.por_val)}</td>
+      <td class="num">${fmtI(r.puesto_val)}</td>
+    </tr>`).join('');
+
+  // Actualizar iconos de ordenamiento
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (parseInt(th.dataset.col) === _sortCol)
+      th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
+  });
+
+  document.getElementById('tabla').classList.remove('d-none');
+}
+
+function ordenar(col) {
+  if (_sortCol === col) _sortAsc = !_sortAsc;
+  else { _sortCol = col; _sortAsc = true; }
+  renderTabla();
+}
+
+function exportarExcel() {
+  window.location.href = `/api/ventas_clientes/excel?desde=${_desde}&hasta=${_hasta}&empresa=${encodeURIComponent(_empresa)}`;
+}
+
+// Ejecutar al presionar Enter en cualquier filtro
+document.addEventListener('keydown', e => { if (e.key === 'Enter') consultar(); });
+</script>
+</body>
+</html>

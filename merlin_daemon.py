@@ -675,7 +675,7 @@ def send_heartbeat(idle_sec):
 # ══════════════════════════════════════════════════════════════
 
 def main():
-    global _last_hb, _last_db_check, _last_trigger, _last_sendkeys
+    global _last_hb, _last_db_check, _last_trigger, _last_sendkeys, _bd_ok, _conn
 
     if not adquirir_lock():
         print('⚠️  Merlin daemon ya está corriendo. Saliendo.')
@@ -771,7 +771,6 @@ def main():
             break
         except psycopg2.OperationalError as e:
             log(f'✗ BD perdida: {e}')
-            global _bd_ok, _conn
             _bd_ok = False
             _conn  = None
             time.sleep(POLL_SEC)

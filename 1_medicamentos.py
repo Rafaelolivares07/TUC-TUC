@@ -1945,12 +1945,7 @@ def admin_login_post():
             session['rol'] = admin['rol']
             session.modified = True
 
-            if recordar:
-                session.permanent = True
-                app.permanent_session_lifetime = timedelta(days=30)
-            else:
-                session.permanent = True
-                app.permanent_session_lifetime = timedelta(hours=24)
+            session.permanent = True  # usa PERMANENT_SESSION_LIFETIME del config (30 días)
 
             flash('Bienvenido! Has iniciado sesión correctamente', 'success')
             if admin['rol'] == 'ClienteVFP':

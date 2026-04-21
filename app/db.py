@@ -1,6 +1,7 @@
+import os
 import psycopg2
 import psycopg2.extras
-import os
+from psycopg2 import pool
 
 
 class PostgreSQLRow:
@@ -34,28 +35,6 @@ class PostgreSQLRow:
         return f'PostgreSQLRow({self._data})'
 
 
-class PostgreSQLConnection:
-    def __init__(self, conn):
-        self._conn = conn
-
-    def execute(self, query, params=None):
-        cur = self._conn.cursor()
-        cur.execute(query, params or ())
-        return PostgreSQLCursor(cur)
-
-    def commit(self):
-        self._conn.commit()
-
-    def close(self):
-        self._conn.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.close()
-
-
 class PostgreSQLCursor:
     def __init__(self, cursor):
         self._cur = cursor
@@ -83,11 +62,65 @@ class PostgreSQLCursor:
             yield PostgreSQLRow(self._cur, row)
 
 
-def get_db_connection():
-    database_url = os.environ.get('DATABASE_URL')
-    conn = psycopg2.connect(database_url)
-    return PostgreSQLConnection(conn)
+class PostgreSQLConnection:
+    def __init__(self, raw_conn, pool_ref):
+        self._conn = raw_conn
+        self._pool = pool_ref
+        self._returned = False
+
+    def execute(self, query, params=None):
+        cur = self._conn.cursor()
+        cur.execute(query, params or ())
+        return PostgreSQLCursor(cur)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        if not self._returned:
+            self._returned = True
+            try:
+                self._conn.rollback()  # limpiar transacción pendiente antes de devolver
+            except Exception:
+                pass
+            self._pool.putconn(self._conn)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *args):
+        if exc_type:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+        self.close()
+
+
+_pool = None
+_db_url = None
 
 
 def init_db(app):
-    pass
+    global _db_url
+    _db_url = os.environ.get('DATABASE_URL', '')
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        # minconn=1, maxconn=3 — conservador para plan free
+        _pool = pool.ThreadedConnectionPool(1, 3, _db_url)
+        print('[DB] Connection pool inicializado (min=1, max=3)')
+    return _pool
+
+
+def get_db_connection():
+    p = _get_pool()
+    raw = p.getconn()
+    return PostgreSQLConnection(raw, p)

@@ -64,7 +64,16 @@ def index():
 
 @bp.route('/api/version')
 def api_version():
-    return jsonify({'version': '2.0.0', 'ok': True})
+    import subprocess
+    try:
+        commit = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            cwd=os.path.dirname(__file__),
+            encoding='utf-8'
+        ).strip()
+    except Exception:
+        commit = ''
+    return jsonify({'version': '2.0.0', 'ok': True, 'commit': commit})
 
 
 @bp.route('/empieza')

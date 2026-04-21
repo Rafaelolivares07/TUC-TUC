@@ -37,7 +37,7 @@
             {% endwith %}
 
             <!-- Formulario -->
-            <form method="POST" action="{{ url_for('admin_login_post') }}">
+            <form method="POST" action="{{ url_for('auth.admin_login_post') }}">
                 <!-- Usuario -->
                 <div class="mb-5">
                     <label for="usuario" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -103,8 +103,8 @@
 
         <!-- Footer -->
         <div class="text-center mt-6">
-            <a href="{{ url_for('tienda_home') }}" class="text-indigo-100 hover:text-white text-sm transition duration-200">
-                ← Volver a la tienda
+            <a href="/" class="text-indigo-100 hover:text-white text-sm transition duration-200">
+                ← Volver al inicio
             </a>
         </div>
     </div>

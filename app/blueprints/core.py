@@ -60,7 +60,7 @@ def enviar_notificacion_telegram(mensaje):
     try:
         conn = get_db_connection()
         config = conn.execute(
-            'SELECT telegram_token, telegram_chat_id, notificaciones_activas FROM CONFIGURACION_SISTEMA WHERE id = 1'
+            'SELECT telegram_token, telegram_chat_id, notificaciones_activas FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
         ).fetchone()
         conn.close()
         if not config or not config['notificaciones_activas']:

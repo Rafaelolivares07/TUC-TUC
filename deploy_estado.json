@@ -1,6 +1,7 @@
 {
-  "commit": "3879fdb",
-  "estado": "pendiente",
-  "iniciado": "2026-04-21T13:18:43.929133",
-  "mensaje": "v2: endpoint render-deploy + Telegram notificaci\u00f3n en deploy"
+  "commit": "450ec97",
+  "estado": "live",
+  "iniciado": "2026-04-21T13:19:46.505497",
+  "mensaje": "v2: fix url_for sin prefijo en templates admin_negocios, categorias, parametros, sintomas",
+  "live_at": "2026-04-21T13:25:44.563266"
 }

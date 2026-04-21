@@ -4,6 +4,7 @@ import unicodedata
 import uuid
 from datetime import datetime
 
+import requests as http_requests
 from flask import (Blueprint, jsonify, redirect, render_template,
                    request, session, url_for)
 
@@ -51,6 +52,32 @@ def crear_tabla_config_tipologia(conn):
         )
     conn.commit()
     _config_tipologia_lista = True
+
+
+# ── Telegram ──────────────────────────────────────────────────────────────────
+
+def enviar_notificacion_telegram(mensaje):
+    try:
+        conn = get_db_connection()
+        config = conn.execute(
+            'SELECT telegram_token, telegram_chat_id, notificaciones_activas FROM CONFIGURACION_SISTEMA WHERE id = 1'
+        ).fetchone()
+        conn.close()
+        if not config or not config['notificaciones_activas']:
+            return False
+        token = config['telegram_token']
+        chat_id = config['telegram_chat_id']
+        if not token or not chat_id:
+            return False
+        r = http_requests.post(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            json={'chat_id': chat_id, 'text': mensaje, 'parse_mode': 'HTML'},
+            timeout=10
+        )
+        return r.status_code == 200
+    except Exception as e:
+        print(f'[Telegram] Error: {e}')
+        return False
 
 
 # ── Rutas principales ─────────────────────────────────────────────────────────
@@ -551,5 +578,26 @@ def api_admin_db_estructura(nombre):
             'columnas': [dict(c) for c in columnas],
             'total': count['total'] if count else 0,
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Deploy webhook ────────────────────────────────────────────────────────────
+
+@bp.route('/api/webhook/render-deploy', methods=['POST'])
+def api_webhook_render_deploy():
+    try:
+        data = request.get_json(silent=True) or {}
+        commit_data = data.get('commit', {})
+        commit = str(commit_data.get('id', 'desconocido'))[:7] if isinstance(commit_data, dict) else 'desconocido'
+        msg_commit = str(commit_data.get('message', '')) if isinstance(commit_data, dict) else ''
+        hora = datetime.now().strftime('%H:%M:%S')
+        detalle = f"\n<i>{msg_commit}</i>" if msg_commit else ''
+        enviar_notificacion_telegram(
+            f"✅ <b>Deploy confirmado (PC)</b>\n"
+            f"Commit: <code>{commit}</code>{detalle}\n"
+            f"Hora: {hora}"
+        )
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

@@ -92,7 +92,7 @@
         <!-- Botón de Cerrar Sesión (Salida) -->
         <div class="mt-8 text-center">
              <!-- Este botón eliminará la sesión actual -->
-            <a href="{{ url_for('logout') }}" class="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gray-600 hover:bg-gray-700 transition duration-150 ease-in-out shadow-md">
+            <a href="{{ url_for('auth.admin_logout') }}" class="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gray-600 hover:bg-gray-700 transition duration-150 ease-in-out shadow-md">
                 <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                 Cerrar Sesión (Reiniciar Dispositivo)
             </a>

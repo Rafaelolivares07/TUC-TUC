@@ -1,7 +1,6 @@
 {
-  "commit": "eb2c4bb",
-  "estado": "live",
-  "iniciado": "2026-04-21T13:06:23.574662",
-  "mensaje": "v2: pool de conexiones lazy (max=3), /api/version con commit hash, deploy_watcher",
-  "live_at": "2026-04-21T13:09:23.418499"
+  "commit": "3879fdb",
+  "estado": "pendiente",
+  "iniciado": "2026-04-21T13:18:43.929133",
+  "mensaje": "v2: endpoint render-deploy + Telegram notificaci\u00f3n en deploy"
 }

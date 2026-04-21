@@ -1,10 +1,60 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-20_
+_Actualizado: 2026-04-21_
 
 ## Módulos en trabajo esta sesión
-1. **Administrator Web** — servidor Flask local para formularios VFP ✅ FUNCIONANDO
-2. **Asistencia Remota** — calibración de puntero + sin token ✅ V1.3
+1. **TUC TUC V2** — refactorización en blueprints, desplegado en Render branch `v2` ✅ LIVE
+2. **Administrator Web** — pendiente despliegue en PC Pilar (próxima sesión remota)
 3. **Admin Agent** ✅ FUNCIONANDO (pendiente despliegue Pilar)
+
+---
+
+## MÓDULO: TUC TUC V2 (2026-04-21) ✅ EN PRODUCCIÓN
+
+### Contexto
+Render plan free (512MB) empezó a fallar por tamaño del monolito `1_medicamentos.py` (44.847 líneas).
+Solución: refactorizar en blueprints Flask con lazy imports. V1 queda intacto en branch `main` como respaldo.
+
+### Estructura
+- Repo: `https://github.com/Rafaelolivares07/TUC-TUC.git` — branch `v2`
+- Carpeta local: `C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\`
+- Es un **git worktree** del repo de V1 — comparten `.git`
+- Start command en Render: `gunicorn main:app --timeout 120 --workers 1 --preload`
+- Entrada: `main.py` → `app/__init__.py` (app factory)
+
+### Blueprints migrados
+| Blueprint | Estado | Rutas clave |
+|---|---|---|
+| `auth` | ✅ | login, logout, admin_area |
+| `core` | ✅ | index, empieza, negocios, backups, mantenimiento, switch-db, deploy webhook |
+| `restaurantes` | ✅ | ~500 líneas, todas las rutas |
+| `tiendas` | ✅ | CRUD productos, pedidos, cajeros, variantes |
+| `admin_agent` | ✅ | checkin, ping, consultar, permisos |
+| `crm` | ⏳ stub | chat, terceros, vendedores — pendiente |
+| `domotica` | ⏳ stub | switches, automatizaciones — pendiente |
+
+### Módulos NO migrados (intencional)
+- Transporte — no se migra a V2
+- Droguería/Medicamentos — no se migra a V2
+
+### Decisiones técnicas clave
+- **Lazy imports**: librerías pesadas (`tinytuya`, `anthropic`, `firebase`) se importan dentro de cada función, no al arranque
+- **Connection pool**: `psycopg2.pool.ThreadedConnectionPool(min=1, max=3)` — lazy, no conecta al arrancar
+- **`/api/version`** devuelve `commit` hash — permite al deploy_watcher detectar el live
+- **Templates**: `url_for` corregidos a `blueprint.endpoint` — pendiente revisar conforme se navega
+- **deploy_watcher.py** copiado a TucTucV2, hook post-commit heredado del worktree
+
+### Pendientes V2
+- Migrar `crm` — chat, terceros, vendedores, recordatorios (lazy import `anthropic`)
+- Migrar `domotica` — switches, automatizaciones (lazy import `tinytuya`)
+- Seguir corrigiendo `url_for` sin prefijo conforme se navega
+- Verificar Telegram deploy notification (fix `"CONFIGURACION_SISTEMA"` con comillas)
+
+### Commits clave sesión 2026-04-21
+- `c674687` — estructura inicial V2
+- `01d7cb4` — tiendas blueprint
+- `f62c463` — core blueprint completo
+- `eb2c4bb` — connection pool lazy + /api/version con commit
+- `2f24285` — fix CONFIGURACION_SISTEMA + deploy webhook Telegram
 
 ---
 

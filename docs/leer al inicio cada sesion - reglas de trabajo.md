@@ -1,7 +1,22 @@
 # Reglas de Trabajo — Claude + Rafael
-_Actualizado: 2026-03-31_
+_Actualizado: 2026-04-21_
 
 Estas reglas se han definido a lo largo de sesiones anteriores. Aplicar siempre sin necesidad de que Rafael las repita.
+
+---
+
+## ⚠️ CONTEXTO TÉCNICO — leer primero
+
+Este directorio es **TUC TUC V2** (`TucTucV2/`), branch `v2` del repo TUC-TUC.
+**NO es V1** (`MiAppMedicamentos/`). V1 queda como respaldo en branch `main`, no se toca.
+
+- Arquitectura: **blueprints Flask** — `app/blueprints/` (auth, core, restaurantes, tiendas, admin_agent, crm, domotica)
+- Entrada: `main.py` → `app/__init__.py` (app factory)
+- BD: PostgreSQL en Render — connection pool lazy max=3
+- Deploy: `tuc-tuc.onrender.com` — push a branch `v2` auto-deploya
+- Módulos NO migrados (intencional): transporte, droguería
+- Mapa completo: `docs/arquitectura_v2.md`
+- Estado actual: `docs/leer al inicio cada sesion - estado sesion activa.md`
 
 ---
 

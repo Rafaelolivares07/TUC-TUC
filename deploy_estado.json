@@ -1,7 +1,6 @@
 {
-  "commit": "450ec97",
-  "estado": "live",
-  "iniciado": "2026-04-21T13:19:46.505497",
-  "mensaje": "v2: fix url_for sin prefijo en templates admin_negocios, categorias, parametros, sintomas",
-  "live_at": "2026-04-21T13:25:44.563266"
+  "commit": "5e460db",
+  "estado": "pendiente",
+  "iniciado": "2026-04-21T13:35:05.161179",
+  "mensaje": "docs: arquitectura_v2.md \u2014 mapa completo de estructura y blueprints"
 }

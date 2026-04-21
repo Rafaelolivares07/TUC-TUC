@@ -769,8 +769,8 @@ function scrollNavTabs(delta) {
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────
 let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ (restaurante.lat if restaurante else None) | tojson }};
-let _lonUbic = {{ (restaurante.lon if restaurante else None) | tojson }};
+let _latUbic = {{ restaurante.lat | default(None) | tojson }};
+let _lonUbic = {{ restaurante.lon | default(None) | tojson }};
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }

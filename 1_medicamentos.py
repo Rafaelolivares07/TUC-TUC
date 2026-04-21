@@ -27975,7 +27975,9 @@ def api_restaurante_mesas(slug):
             SELECT id, numero, COALESCE(nombre, numero::text) as nombre, sector
             FROM mesas_restaurante
             WHERE restaurante_id = %s AND activo = TRUE
-            ORDER BY sector NULLS FIRST, nombre
+            ORDER BY sector NULLS FIRST,
+                     CASE WHEN nombre ~ '^[0-9]+$' THEN nombre::int ELSE NULL END NULLS LAST,
+                     nombre
         """, (rest['id'],)).fetchall()
         conn.close()
         return jsonify({'ok': True, 'mesas': [dict(m) for m in mesas]})

@@ -495,6 +495,17 @@
                     <p class="text-sm text-gray-400">Toca para subir tu imagen de portada</p>
                 </div>
                 <input type="file" id="header-file-input" accept="image/*" class="hidden" onchange="subirImagenHeader(this)">
+
+                <!-- Generar con ChatGPT -->
+                <button onclick="generarHeaderChatGPT()" class="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-semibold text-sm bg-rose-50 hover:bg-rose-100 transition">
+                    ✨ Generar con ChatGPT
+                </button>
+                <!-- Banner ¿Ya descargaste? -->
+                <div id="banner-asignar-header" class="hidden mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">
+                    <span class="text-sm text-green-700 flex-1">¿Ya descargaste tu imagen? Asignala como portada</span>
+                    <button onclick="document.getElementById('header-file-input').click()" class="text-sm font-bold text-white bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-lg transition">Asignar</button>
+                    <button onclick="document.getElementById('banner-asignar-header').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+                </div>
             </div>
 
             <!-- Mostrar/ocultar nombre -->
@@ -2090,6 +2101,31 @@ function compartirWhatsApp() {
     const texto = encodeURIComponent(`Pide desde tu celular en {{ restaurante.nombre }}: ${url}`);
     window.open(`https://wa.me/?text=${texto}`, '_blank');
 }
+
+// Generar imagen de portada con ChatGPT
+let _chatgptAbierto = false;
+function generarHeaderChatGPT() {
+    const nombre = {{ restaurante.nombre | tojson }};
+    const mostrarNombre = document.getElementById('toggle-nombre').checked;
+    const desc = {{ (restaurante.descripcion or '') | tojson }};
+    const parteDesc = desc ? ` El negocio se describe así: "${desc}".` : '';
+    const parteNombre = mostrarNombre
+        ? ` Incluye el nombre "${nombre}" en la imagen con total libertad creativa: tipografía, posición y estilo a criterio del diseñador.`
+        : ' Sin texto, letras ni nombres en la imagen — solo composición visual.';
+    const prompt = `Imagen de portada para un restaurante llamado "${nombre}".${parteDesc} Estilo fotorrealista y atractivo, formato horizontal 1792×1024px. Colores vibrantes, iluminación cálida, composición profesional que transmita la esencia del negocio.${parteNombre}`;
+    navigator.clipboard.writeText(prompt).then(() => {
+        toast('Prompt copiado — abriendo ChatGPT...');
+        window.open('https://chatgpt.com', '_blank');
+        _chatgptAbierto = true;
+    });
+}
+
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && _chatgptAbierto) {
+        _chatgptAbierto = false;
+        document.getElementById('banner-asignar-header').classList.remove('hidden');
+    }
+});
 </script>
 
 <!-- Powered by -->

@@ -247,34 +247,52 @@
 
         <!-- ====== TAB: MESAS ====== -->
         <div id="panel-mesas" class="p-6 hidden">
-            <!-- Crear mesas en lote -->
+
+            <!-- Agregar una mesa -->
             <div class="bg-gray-50 rounded-xl p-4 mb-4">
-                <h3 class="font-bold text-gray-700 mb-3">Crear mesas en lote</h3>
-                <div class="flex flex-col gap-2">
-                    <div class="flex gap-2">
-                        <input id="mesa-sector" type="text" placeholder="Sector (ej: Piscina, Comedor)" class="border rounded-lg px-3 py-2 text-sm flex-1">
-                        <input id="mesa-prefijo" type="text" placeholder="Prefijo (ej: P, T, vacío)" class="border rounded-lg px-3 py-2 text-sm w-28">
-                    </div>
-                    <div class="flex gap-2">
-                        <input id="mesa-cantidad" type="number" min="1" max="100" placeholder="Cantidad de mesas" class="border rounded-lg px-3 py-2 text-sm flex-1">
-                        <input id="mesa-desde" type="number" min="1" value="1" placeholder="Desde" class="border rounded-lg px-3 py-2 text-sm w-24">
-                        <button onclick="crearMesasLote()" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
-                            Crear
-                        </button>
-                    </div>
-                    <p class="text-xs text-gray-400">Ej: Sector "Piscina", Prefijo "P", Cantidad 10 → crea P1, P2... P10</p>
-                </div>
-            </div>
-            <!-- Agregar mesa individual -->
-            <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                <h3 class="font-bold text-gray-700 mb-3">Agregar mesa individual</h3>
-                <div class="flex gap-2">
-                    <input id="mesa-nombre-ind" type="text" placeholder="Nombre (ej: 5, Bar1, VIP)" class="border rounded-lg px-3 py-2 text-sm flex-1">
-                    <input id="mesa-sector-ind" type="text" placeholder="Sector (opcional)" class="border rounded-lg px-3 py-2 text-sm w-36">
+                <h3 class="font-bold text-gray-700 mb-3">➕ Agregar mesa</h3>
+                <div class="flex gap-2 flex-wrap">
+                    <input id="mesa-nombre-ind" type="text" placeholder="Nombre o número (ej: 1, Bar, VIP)"
+                           class="border rounded-lg px-3 py-2 text-sm flex-1 min-w-40"
+                           onkeydown="if(event.key==='Enter') agregarMesa()">
+                    <input id="mesa-sector-ind" type="text" placeholder="Zona (opcional: Interior, Terraza…)"
+                           class="border rounded-lg px-3 py-2 text-sm w-44"
+                           onkeydown="if(event.key==='Enter') agregarMesa()">
                     <button onclick="agregarMesa()" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">
                         Agregar
                     </button>
                 </div>
+            </div>
+
+            <!-- Crear varias a la vez -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-gray-700 mb-1">🗂 Crear varias de una vez</h3>
+                <p class="text-xs text-gray-400 mb-3">Útil para crear todas las mesas del salón en un solo paso.</p>
+                <div class="flex gap-2 flex-wrap items-end">
+                    <div class="flex flex-col gap-1 flex-1 min-w-28">
+                        <label class="text-xs text-gray-500 font-medium">Cantidad</label>
+                        <input id="mesa-cantidad" type="number" min="1" max="100" placeholder="Ej: 10"
+                               class="border rounded-lg px-3 py-2 text-sm"
+                               oninput="previsualizarMesas()">
+                    </div>
+                    <div class="flex flex-col gap-1 flex-1 min-w-28">
+                        <label class="text-xs text-gray-500 font-medium">Zona (opcional)</label>
+                        <input id="mesa-sector" type="text" placeholder="Ej: Terraza"
+                               class="border rounded-lg px-3 py-2 text-sm"
+                               oninput="previsualizarMesas()">
+                    </div>
+                    <div class="flex flex-col gap-1 w-24">
+                        <label class="text-xs text-gray-500 font-medium">Prefijo</label>
+                        <input id="mesa-prefijo" type="text" placeholder="Ej: T"
+                               class="border rounded-lg px-3 py-2 text-sm"
+                               oninput="previsualizarMesas()">
+                    </div>
+                    <input id="mesa-desde" type="hidden" value="1">
+                    <button onclick="crearMesasLote()" class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-semibold self-end">
+                        Crear
+                    </button>
+                </div>
+                <p id="preview-mesas" class="text-xs text-amber-700 font-medium mt-2 hidden"></p>
             </div>
 
             <!-- Lista de mesas -->
@@ -1378,6 +1396,18 @@ async function cargarMesas() {
         }
         cont.innerHTML = html;
     } catch(e) { console.error(e); }
+}
+
+function previsualizarMesas() {
+    const cantidad = parseInt(document.getElementById('mesa-cantidad').value) || 0;
+    const prefijo  = document.getElementById('mesa-prefijo').value.trim();
+    const p = document.getElementById('preview-mesas');
+    if (cantidad < 1) { p.classList.add('hidden'); return; }
+    const nombres = [];
+    for (let i = 1; i <= Math.min(cantidad, 5); i++) nombres.push(prefijo ? `${prefijo}${i}` : `${i}`);
+    const sufijo = cantidad > 5 ? `… ${prefijo ? prefijo : ''}${cantidad}` : '';
+    p.textContent = `Se crearán: ${nombres.join(', ')}${sufijo}`;
+    p.classList.remove('hidden');
 }
 
 async function crearMesasLote() {

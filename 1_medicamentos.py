@@ -917,6 +917,12 @@ class PostgreSQLRow:
         # Retornar iterator sobre las keys para que dict(row) funcione
         return iter(self.keys())
 
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except (KeyError, IndexError):
+            return default
+
     def __len__(self):
         return len(self._values)
 

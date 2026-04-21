@@ -9004,6 +9004,10 @@ def fusionar_sintomas():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/login')
+def login_redirect():
+    return redirect(url_for('admin_login'))
+
 @app.route('/logout')
 def logout():
     session.clear()

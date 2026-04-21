@@ -2105,9 +2105,9 @@ function compartirWhatsApp() {
 // Generar imagen de portada con ChatGPT
 let _chatgptAbierto = false;
 function generarHeaderChatGPT() {
-    const nombre = {{ restaurante.nombre | tojson }};
-    const mostrarNombre = document.getElementById('toggle-nombre').checked;
-    const desc = {{ (restaurante.descripcion or '') | tojson }};
+    const nombre = {{ (restaurante.nombre if restaurante else '') | tojson }};
+    const mostrarNombre = document.getElementById('toggle-nombre') ? document.getElementById('toggle-nombre').checked : true;
+    const desc = {{ (restaurante.descripcion if restaurante else '') | tojson }};
     const parteDesc = desc ? ` El negocio se describe así: "${desc}".` : '';
     const parteNombre = mostrarNombre
         ? ` Incluye el nombre "${nombre}" en la imagen con total libertad creativa: tipografía, posición y estilo a criterio del diseñador.`

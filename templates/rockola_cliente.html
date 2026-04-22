@@ -12,6 +12,8 @@
   button { background: #f0a500; color: #111; border: none; padding: 12px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; }
   button:disabled { opacity: 0.4; cursor: default; }
   #estado { margin-top: 20px; font-size: 14px; color: #aaa; }
+  #progreso { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 10px; display: none; }
+  #barra { height: 100%; background: #f0a500; border-radius: 3px; width: 0%; transition: width 0.2s; }
 </style>
 </head>
 <body>
@@ -20,12 +22,15 @@
 <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac">
 <br>
 <button id="btn" onclick="subir()">Poner en cola</button>
+<div id="progreso"><div id="barra"></div></div>
 <div id="estado"></div>
 
 <script>
 const socket = io();
 const estado = document.getElementById('estado');
 const btn = document.getElementById('btn');
+const progreso = document.getElementById('progreso');
+const barra = document.getElementById('barra');
 
 socket.on('connect', () => estado.textContent = 'Conectado al local ✓');
 socket.on('disconnect', () => estado.textContent = 'Sin conexión');
@@ -34,31 +39,53 @@ function subir() {
   const file = document.getElementById('archivo').files[0];
   if (!file) { estado.textContent = 'Selecciona un archivo primero'; return; }
 
-  const maxSegundos = 300;
   const audio = new Audio();
   const url = URL.createObjectURL(file);
   audio.src = url;
   audio.addEventListener('loadedmetadata', () => {
     URL.revokeObjectURL(url);
-    if (audio.duration > maxSegundos) {
+    if (audio.duration > 300) {
       estado.textContent = `La canción supera los 5 minutos (${Math.round(audio.duration)}s)`;
       return;
     }
-    leerYEnviar(file);
+    enviar(file);
   });
+  audio.addEventListener('error', () => enviar(file)); // si no puede leer metadata igual envía
 }
 
-function leerYEnviar(file) {
+function enviar(file) {
   btn.disabled = true;
-  estado.textContent = 'Enviando...';
-  const reader = new FileReader();
-  reader.onload = e => {
-    const base64 = e.target.result.split(',')[1];
-    socket.emit('subir_cancion', { nombre: file.name, tipo: file.type, datos: base64 });
-    estado.textContent = '¡Canción enviada! Espera tu turno 🎶';
+  progreso.style.display = 'block';
+  estado.textContent = 'Subiendo...';
+
+  const form = new FormData();
+  form.append('archivo', file);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/rockola/subir');
+
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) barra.style.width = (e.loaded / e.total * 100) + '%';
+  };
+
+  xhr.onload = () => {
+    const res = JSON.parse(xhr.responseText);
+    if (res.ok) {
+      socket.emit('cancion_lista', { id: res.id, nombre: res.nombre });
+      estado.textContent = '¡Canción enviada! Espera tu turno 🎶';
+    } else {
+      estado.textContent = 'Error al subir: ' + res.error;
+    }
+    btn.disabled = false;
+    progreso.style.display = 'none';
+  };
+
+  xhr.onerror = () => {
+    estado.textContent = 'Error de conexión';
     btn.disabled = false;
   };
-  reader.readAsDataURL(file);
+
+  xhr.send(form);
 }
 </script>
 </body>

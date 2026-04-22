@@ -13,7 +13,9 @@
   audio { width: 100%; margin-top: 10px; }
   #cola { margin-top: 20px; }
   .item-cola { background: #1e1e1e; padding: 10px 14px; border-radius: 6px; margin: 6px 0; font-size: 14px; color: #ccc; }
-  #estado-ws { text-align: center; font-size: 12px; color: #555; margin-top: 10px; }
+  #estado-ws { text-align: center; font-size: 12px; margin-top: 10px; }
+  .conectado { color: #4caf50; }
+  .desconectado { color: #f44336; }
 </style>
 </head>
 <body>
@@ -21,7 +23,7 @@
 
 <div id="cancion-actual">
   <div id="nombre">Esperando canciones...</div>
-  <audio id="player" controls autoplay></audio>
+  <audio id="player" controls></audio>
 </div>
 
 <div id="cola"></div>
@@ -37,8 +39,15 @@ const estadoWs = document.getElementById('estado-ws');
 let cola = [];
 let reproduciendo = false;
 
-socket.on('connect', () => estadoWs.textContent = 'Conectado ✓');
-socket.on('disconnect', () => estadoWs.textContent = 'Sin conexión');
+socket.on('connect', () => {
+  estadoWs.textContent = 'Conectado ✓';
+  estadoWs.className = 'conectado';
+});
+socket.on('disconnect', () => {
+  estadoWs.textContent = 'Sin conexión — recargando...';
+  estadoWs.className = 'desconectado';
+  setTimeout(() => location.reload(), 3000);
+});
 
 socket.on('nueva_cancion', data => {
   cola.push(data);
@@ -59,17 +68,18 @@ function siguienteCancion() {
   }
   const cancion = cola.shift();
   renderCola();
-  const blob = base64ABlob(cancion.datos, cancion.tipo);
-  const url = URL.createObjectURL(blob);
+  const url = '/rockola/archivo/' + cancion.id;
 
   // Descarga automática al dispositivo
   const a = document.createElement('a');
   a.href = url;
   a.download = cancion.nombre;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
 
   player.src = url;
-  player.play();
+  player.play().catch(() => {});
   nombreEl.textContent = cancion.nombre;
   reproduciendo = true;
 }
@@ -78,13 +88,6 @@ function renderCola() {
   colaEl.innerHTML = cola.length
     ? '<b>En cola:</b>' + cola.map(c => `<div class="item-cola">🎵 ${c.nombre}</div>`).join('')
     : '';
-}
-
-function base64ABlob(b64, tipo) {
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: tipo });
 }
 </script>
 </body>

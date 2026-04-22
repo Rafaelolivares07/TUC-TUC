@@ -3,60 +3,188 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rockola — Subir canción</title>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<title>Tuc Tuc Rockola</title>
 <style>
-  body { font-family: sans-serif; max-width: 400px; margin: 60px auto; padding: 20px; text-align: center; background: #111; color: #fff; }
-  h2 { color: #f0a500; }
-  input[type=file] { margin: 20px 0; }
-  button { background: #f0a500; color: #111; border: none; padding: 12px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; }
-  button:disabled { opacity: 0.4; cursor: default; }
-  #estado { margin-top: 20px; font-size: 14px; color: #aaa; }
-  #progreso { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 10px; display: none; }
-  #barra { height: 100%; background: #f0a500; border-radius: 3px; width: 0%; transition: width 0.2s; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a2a1a 100%);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 24px;
+    padding: 40px 30px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    backdrop-filter: blur(10px);
+  }
+  .logo { font-size: 48px; margin-bottom: 8px; }
+  h1 { color: #f0a500; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+  .subtitulo { color: #aaa; font-size: 14px; margin-top: 6px; margin-bottom: 32px; }
+
+  /* Zona de selección */
+  .zona-cancion {
+    border: 2px dashed rgba(240,165,0,0.4);
+    border-radius: 16px;
+    padding: 30px 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .zona-cancion:hover, .zona-cancion.activa {
+    border-color: #f0a500;
+    background: rgba(240,165,0,0.08);
+  }
+  .zona-cancion input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .zona-icono { font-size: 40px; margin-bottom: 10px; }
+  .zona-texto { color: #ccc; font-size: 15px; }
+  .zona-texto b { color: #f0a500; }
+
+  /* Canción seleccionada */
+  .cancion-info {
+    display: none;
+    background: rgba(240,165,0,0.1);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    text-align: left;
+    align-items: center;
+    gap: 12px;
+  }
+  .cancion-info.visible { display: flex; }
+  .cancion-info .icono { font-size: 28px; }
+  .cancion-info .detalle { flex: 1; overflow: hidden; }
+  .cancion-info .nombre { color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cancion-info .duracion { color: #aaa; font-size: 12px; margin-top: 2px; }
+
+  /* Barra de progreso */
+  #progreso { display: none; margin-bottom: 20px; }
+  #progreso-label { color: #aaa; font-size: 13px; margin-bottom: 6px; }
+  .barra-bg { background: rgba(255,255,255,0.1); border-radius: 8px; height: 8px; overflow: hidden; }
+  #barra { height: 100%; background: linear-gradient(90deg, #f0a500, #ff6b35); border-radius: 8px; width: 0%; transition: width 0.2s; }
+
+  /* Botón */
+  #btn {
+    width: 100%;
+    padding: 18px;
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #f0a500, #ff6b35);
+    color: #111;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  #btn:active { transform: scale(0.98); }
+  #btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+  #estado {
+    margin-top: 16px;
+    font-size: 14px;
+    color: #aaa;
+    min-height: 20px;
+  }
+  #estado.ok { color: #4caf50; font-weight: 600; }
+  #estado.error { color: #f44336; }
 </style>
 </head>
 <body>
-<h2>🎵 Tuc Tuc Rockola</h2>
-<p>Sube tu canción y suena en el local</p>
-<input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac">
-<br>
-<button id="btn" onclick="subir()">Poner en cola</button>
-<div id="progreso"><div id="barra"></div></div>
-<div id="estado"></div>
+<div class="card">
+  <div class="logo">🎵</div>
+  <h1>Tuc Tuc Rockola</h1>
+  <p class="subtitulo">Pon tu canción — suena en el local</p>
+
+  <div class="zona-cancion" id="zona">
+    <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" onchange="archivoSeleccionado()">
+    <div class="zona-icono">🎶</div>
+    <div class="zona-texto">Toca aquí para elegir<br><b>tu canción favorita</b></div>
+  </div>
+
+  <div class="cancion-info" id="cancion-info">
+    <div class="icono">🎸</div>
+    <div class="detalle">
+      <div class="nombre" id="cancion-nombre">—</div>
+      <div class="duracion" id="cancion-duracion">—</div>
+    </div>
+  </div>
+
+  <div id="progreso">
+    <div id="progreso-label">Subiendo tu canción...</div>
+    <div class="barra-bg"><div id="barra"></div></div>
+  </div>
+
+  <button id="btn" onclick="subir()" disabled>Selecciona una canción</button>
+  <div id="estado"></div>
+</div>
 
 <script>
-const socket = io();
-const estado = document.getElementById('estado');
 const btn = document.getElementById('btn');
+const estado = document.getElementById('estado');
 const progreso = document.getElementById('progreso');
 const barra = document.getElementById('barra');
+const cancionInfo = document.getElementById('cancion-info');
+const cancionNombre = document.getElementById('cancion-nombre');
+const cancionDuracion = document.getElementById('cancion-duracion');
+const zona = document.getElementById('zona');
 
-socket.on('connect', () => estado.textContent = 'Conectado al local ✓');
-socket.on('disconnect', () => estado.textContent = 'Sin conexión');
+let archivoValido = false;
 
-function subir() {
+function archivoSeleccionado() {
   const file = document.getElementById('archivo').files[0];
-  if (!file) { estado.textContent = 'Selecciona un archivo primero'; return; }
+  if (!file) return;
+
+  zona.classList.add('activa');
+  cancionNombre.textContent = file.name.replace(/\.[^.]+$/, '');
 
   const audio = new Audio();
   const url = URL.createObjectURL(file);
   audio.src = url;
   audio.addEventListener('loadedmetadata', () => {
     URL.revokeObjectURL(url);
+    const min = Math.floor(audio.duration / 60);
+    const seg = Math.floor(audio.duration % 60);
     if (audio.duration > 300) {
-      estado.textContent = `La canción supera los 5 minutos (${Math.round(audio.duration)}s)`;
-      return;
+      cancionDuracion.textContent = `${min}:${String(seg).padStart(2,'0')} — supera el límite de 5 min`;
+      estado.textContent = 'La canción no puede superar 5 minutos';
+      estado.className = 'error';
+      btn.disabled = true;
+      archivoValido = false;
+    } else {
+      cancionDuracion.textContent = `${min}:${String(seg).padStart(2,'0')} min`;
+      estado.textContent = '';
+      btn.textContent = '🎵 Poner en cola';
+      btn.disabled = false;
+      archivoValido = true;
     }
-    enviar(file);
   });
-  audio.addEventListener('error', () => enviar(file)); // si no puede leer metadata igual envía
+  audio.addEventListener('error', () => {
+    cancionDuracion.textContent = 'Audio válido';
+    btn.textContent = '🎵 Poner en cola';
+    btn.disabled = false;
+    archivoValido = true;
+  });
+
+  cancionInfo.classList.add('visible');
 }
 
-function enviar(file) {
+function subir() {
+  const file = document.getElementById('archivo').files[0];
+  if (!file || !archivoValido) return;
+
   btn.disabled = true;
   progreso.style.display = 'block';
-  estado.textContent = 'Subiendo...';
+  estado.textContent = '';
+  estado.className = '';
 
   const form = new FormData();
   form.append('archivo', file);
@@ -70,19 +198,29 @@ function enviar(file) {
 
   xhr.onload = () => {
     const res = JSON.parse(xhr.responseText);
-    if (res.ok) {
-      socket.emit('cancion_lista', { id: res.id, nombre: res.nombre });
-      estado.textContent = '¡Canción enviada! Espera tu turno 🎶';
-    } else {
-      estado.textContent = 'Error al subir: ' + res.error;
-    }
-    btn.disabled = false;
     progreso.style.display = 'none';
+    if (res.ok) {
+      estado.textContent = '¡Tu canción está en la cola! 🎉';
+      estado.className = 'ok';
+      btn.textContent = '+ Agregar otra';
+      btn.disabled = false;
+      // resetear
+      document.getElementById('archivo').value = '';
+      cancionInfo.classList.remove('visible');
+      zona.classList.remove('activa');
+      archivoValido = false;
+    } else {
+      estado.textContent = 'Error: ' + res.error;
+      estado.className = 'error';
+      btn.disabled = false;
+    }
   };
 
   xhr.onerror = () => {
     estado.textContent = 'Error de conexión';
+    estado.className = 'error';
     btn.disabled = false;
+    progreso.style.display = 'none';
   };
 
   xhr.send(form);

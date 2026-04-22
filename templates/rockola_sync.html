@@ -151,9 +151,13 @@ function activar() {
 }
 
 player.addEventListener('ended', () => {
+  const idTerminada = cancionActual;
   reproduciendo = false;
   cancionActual = null;
-  fetch(`/rockola/${SALA}/siguiente`, { method: 'POST' });
+  fetch(`/rockola/${SALA}/siguiente`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id: idTerminada })
+  });
 });
 
 function archivosSeleccionados() {

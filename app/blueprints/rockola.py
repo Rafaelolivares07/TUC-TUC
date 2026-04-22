@@ -97,10 +97,16 @@ def sync_control(sala_id):
 
 @bp.route('/<sala_id>/siguiente', methods=['POST'])
 def siguiente(sala_id):
+    data = request.get_json(silent=True) or {}
+    cancion_id = data.get('id')
     with _lock:
         sala = _get_sala(sala_id)
-        if sala['cola']:
+        # solo saca si la canción que terminó sigue siendo la primera
+        if sala['cola'] and (not cancion_id or sala['cola'][0]['id'] == cancion_id):
             sala['cola'].pop(0)
+            sala['sync_estado'] = 'play'
+            sala['sync_pos'] = 0.0
+            sala['sync_ts'] = 0.0
     return jsonify(ok=True)
 
 

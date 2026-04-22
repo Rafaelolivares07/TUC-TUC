@@ -13,7 +13,7 @@ _salas = {}
 
 def _get_sala(sala_id):
     if sala_id not in _salas:
-        _salas[sala_id] = {'cola': []}
+        _salas[sala_id] = {'cola': [], 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
     return _salas[sala_id]
 
 
@@ -74,7 +74,21 @@ def subir(sala_id):
 def cola(sala_id):
     with _lock:
         sala = _get_sala(sala_id)
-        return jsonify(ok=True, cola=list(sala['cola']))
+        return jsonify(ok=True, cola=list(sala['cola']),
+                       sync_estado=sala['sync_estado'],
+                       sync_pos=sala['sync_pos'],
+                       sync_ts=sala['sync_ts'])
+
+
+@bp.route('/<sala_id>/sync_control', methods=['POST'])
+def sync_control(sala_id):
+    data = request.get_json()
+    with _lock:
+        sala = _get_sala(sala_id)
+        sala['sync_estado'] = data.get('estado', 'play')
+        sala['sync_pos'] = data.get('pos', 0.0)
+        sala['sync_ts'] = data.get('ts', 0.0)
+    return jsonify(ok=True)
 
 
 @bp.route('/<sala_id>/siguiente', methods=['POST'])

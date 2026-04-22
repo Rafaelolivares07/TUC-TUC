@@ -105,7 +105,7 @@ const barraBg = document.getElementById('barra-bg');
 let reproduciendo = false;
 let cancionActual = null;
 let archivosValidos = [];
-let soyLider = false;  // quien pausa/reanuda envía al servidor
+let aplicandoSync = false;  // evita loop al aplicar estado remoto
 
 Sortable.create(listaCola, {
   animation: 150,
@@ -126,16 +126,16 @@ function activar() {
   player.play().catch(() => {});
   player.pause();
 
-  // cuando el usuario pausa/reanuda desde los controles, notifica al servidor
+  // cualquiera puede pausar/reanudar — notifica al servidor
   player.addEventListener('pause', () => {
-    if (!soyLider) return;
+    if (aplicandoSync) return;
     fetch(`/rockola/${SALA}/sync_control`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ estado: 'pause', pos: player.currentTime, ts: Date.now()/1000 })
     });
   });
   player.addEventListener('play', () => {
-    if (!soyLider) return;
+    if (aplicandoSync) return;
     fetch(`/rockola/${SALA}/sync_control`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ estado: 'play', pos: player.currentTime, ts: Date.now()/1000 })
@@ -208,7 +208,6 @@ async function verificarCola() {
       if (c.id !== cancionActual) {
         cancionActual = c.id;
         reproduciendo = true;
-        soyLider = true;
         nombreActual.textContent = c.nombre.replace(/\.[^.]+$/, '');
         player.src = `/rockola/${SALA}/archivo/${c.id}`;
         player.load();
@@ -217,22 +216,22 @@ async function verificarCola() {
     }
     if (cola.length === 0 && !reproduciendo) nombreActual.textContent = 'Esperando canciones...';
 
-    // sincronizar play/pause con el servidor (solo si no soy líder)
-    if (reproduciendo && !soyLider) {
+    // sincronizar play/pause — cualquiera manda, el último en tocar gana
+    if (reproduciendo) {
       const estado = data.sync_estado;
       const pos = data.sync_pos;
       const ts = data.sync_ts;
-      // calcular posición ajustada por el tiempo transcurrido desde que el líder reportó
       const posAjustada = estado === 'play' ? pos + (Date.now()/1000 - ts) : pos;
 
+      aplicandoSync = true;
       if (estado === 'pause' && !player.paused) {
-        soyLider = false;
         player.pause();
         player.currentTime = pos;
       } else if (estado === 'play' && player.paused) {
         player.currentTime = posAjustada;
         player.play().catch(() => {});
       }
+      setTimeout(() => { aplicandoSync = false; }, 200);
     }
   } catch(e) {}
 }

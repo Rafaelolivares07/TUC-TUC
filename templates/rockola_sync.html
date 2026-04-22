@@ -186,18 +186,25 @@ function subir() {
   xhr.onload = () => {
     barraBg.style.display = 'none';
     barraEl.style.width = '0%';
-    const res = JSON.parse(xhr.responseText);
-    if (res.ok) {
-      estadoSubir.textContent = res.agregadas.length === 1 ? '¡En cola! 🎉' : `¡${res.agregadas.length} canciones en cola! 🎉`;
-      estadoSubir.className = 'ok';
-      document.getElementById('archivo').value = '';
-      archivosValidos = [];
-      btnSubir.textContent = 'Selecciona canciones';
-    } else {
-      estadoSubir.textContent = 'Error: ' + res.error;
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (res.ok) {
+        estadoSubir.textContent = res.agregadas.length === 1 ? '¡En cola! 🎉' : `¡${res.agregadas.length} canciones en cola! 🎉`;
+        estadoSubir.className = 'ok';
+        document.getElementById('archivo').value = '';
+        archivosValidos = [];
+        btnSubir.textContent = 'Selecciona canciones';
+        btnSubir.disabled = true;
+      } else {
+        estadoSubir.textContent = 'Error: ' + res.error;
+        estadoSubir.className = 'error';
+        btnSubir.disabled = false;
+      }
+    } catch(e) {
+      estadoSubir.textContent = `Error HTTP ${xhr.status}: ${xhr.responseText.slice(0,80)}`;
       estadoSubir.className = 'error';
+      btnSubir.disabled = false;
     }
-    btnSubir.disabled = false;
   };
   xhr.onerror = () => { barraBg.style.display = 'none'; btnSubir.disabled = false; estadoSubir.textContent = 'Error de conexión'; estadoSubir.className = 'error'; };
   xhr.send(form);

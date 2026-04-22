@@ -5,26 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rockola — Reproductor</title>
 <style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #111; color: #fff; }
-  h2 { color: #f0a500; text-align: center; }
+  h2 { color: #f0a500; text-align: center; margin-bottom: 20px; }
   #cancion-actual { background: #222; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center; }
   #nombre { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
   audio { width: 100%; margin-top: 10px; }
   #cola { margin-top: 20px; }
   .item-cola { background: #1e1e1e; padding: 10px 14px; border-radius: 6px; margin: 6px 0; font-size: 14px; color: #ccc; }
   #estado { text-align: center; font-size: 12px; color: #555; margin-top: 10px; }
+  #btn-activar {
+    display: block; width: 100%; padding: 24px;
+    background: linear-gradient(135deg, #f0a500, #ff6b35);
+    color: #111; border: none; border-radius: 16px;
+    font-size: 22px; font-weight: 800; cursor: pointer;
+    margin: 60px 0 12px;
+  }
+  #hint-activar { text-align: center; color: #555; font-size: 13px; }
 </style>
 </head>
 <body>
 <h2>🎵 Tuc Tuc Rockola</h2>
 
-<div id="cancion-actual">
-  <div id="nombre">Esperando canciones...</div>
-  <audio id="player" controls></audio>
+<div id="pantalla-activar">
+  <button id="btn-activar" onclick="activar()">▶ Activar Rockola</button>
+  <p id="hint-activar">Toca para empezar a reproducir</p>
 </div>
 
-<div id="cola"></div>
-<div id="estado">Iniciando...</div>
+<div id="pantalla-principal" style="display:none">
+  <div id="cancion-actual">
+    <div id="nombre">Esperando canciones...</div>
+    <audio id="player" controls></audio>
+  </div>
+  <div id="cola"></div>
+  <div id="estado">Activo ✓</div>
+</div>
 
 <script>
 const player = document.getElementById('player');
@@ -34,6 +49,16 @@ const estadoEl = document.getElementById('estado');
 
 let reproduciendo = false;
 let cancionActual = null;
+
+function activar() {
+  document.getElementById('pantalla-activar').style.display = 'none';
+  document.getElementById('pantalla-principal').style.display = 'block';
+  // desbloquear autoplay con gesto de usuario
+  player.play().catch(() => {});
+  player.pause();
+  setInterval(verificarCola, 2000);
+  verificarCola();
+}
 
 player.addEventListener('ended', () => {
   reproduciendo = false;
@@ -48,7 +73,6 @@ async function verificarCola() {
     const cola = data.cola || [];
 
     renderCola(cola);
-    estadoEl.textContent = 'Activo ✓';
 
     if (!reproduciendo && cola.length > 0) {
       const cancion = cola[0];
@@ -57,15 +81,7 @@ async function verificarCola() {
         reproduciendo = true;
         nombreEl.textContent = cancion.nombre;
         player.src = '/rockola/archivo/' + cancion.id;
-
-        // descarga automática al dispositivo
-        const a = document.createElement('a');
-        a.href = player.src;
-        a.download = cancion.nombre;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
+        player.load();
         player.play().catch(() => {});
       }
     }
@@ -84,9 +100,6 @@ function renderCola(cola) {
     ? '<b>En cola:</b>' + resto.map(c => `<div class="item-cola">🎵 ${c.nombre}</div>`).join('')
     : '';
 }
-
-setInterval(verificarCola, 2000);
-verificarCola();
 </script>
 </body>
 </html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rockola — Reproductor</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #111; color: #fff; }
+  h2 { color: #f0a500; text-align: center; }
+  #cancion-actual { background: #222; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center; }
+  #nombre { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+  audio { width: 100%; margin-top: 10px; }
+  #cola { margin-top: 20px; }
+  .item-cola { background: #1e1e1e; padding: 10px 14px; border-radius: 6px; margin: 6px 0; font-size: 14px; color: #ccc; }
+  #estado-ws { text-align: center; font-size: 12px; color: #555; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h2>🎵 Tuc Tuc Rockola</h2>
+
+<div id="cancion-actual">
+  <div id="nombre">Esperando canciones...</div>
+  <audio id="player" controls autoplay></audio>
+</div>
+
+<div id="cola"></div>
+<div id="estado-ws"></div>
+
+<script>
+const socket = io();
+const player = document.getElementById('player');
+const nombreEl = document.getElementById('nombre');
+const colaEl = document.getElementById('cola');
+const estadoWs = document.getElementById('estado-ws');
+
+let cola = [];
+let reproduciendo = false;
+
+socket.on('connect', () => estadoWs.textContent = 'Conectado ✓');
+socket.on('disconnect', () => estadoWs.textContent = 'Sin conexión');
+
+socket.on('nueva_cancion', data => {
+  cola.push(data);
+  renderCola();
+  if (!reproduciendo) siguienteCancion();
+});
+
+player.addEventListener('ended', () => {
+  reproduciendo = false;
+  siguienteCancion();
+});
+
+function siguienteCancion() {
+  if (cola.length === 0) {
+    nombreEl.textContent = 'Esperando canciones...';
+    player.src = '';
+    return;
+  }
+  const cancion = cola.shift();
+  renderCola();
+  const blob = base64ABlob(cancion.datos, cancion.tipo);
+  const url = URL.createObjectURL(blob);
+
+  // Descarga automática al dispositivo
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cancion.nombre;
+  a.click();
+
+  player.src = url;
+  player.play();
+  nombreEl.textContent = cancion.nombre;
+  reproduciendo = true;
+}
+
+function renderCola() {
+  colaEl.innerHTML = cola.length
+    ? '<b>En cola:</b>' + cola.map(c => `<div class="item-cola">🎵 ${c.nombre}</div>`).join('')
+    : '';
+}
+
+function base64ABlob(b64, tipo) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: tipo });
+}
+</script>
+</body>
+</html>

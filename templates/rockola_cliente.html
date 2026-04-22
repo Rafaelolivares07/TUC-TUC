@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rockola — Subir canción</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 400px; margin: 60px auto; padding: 20px; text-align: center; background: #111; color: #fff; }
+  h2 { color: #f0a500; }
+  input[type=file] { margin: 20px 0; }
+  button { background: #f0a500; color: #111; border: none; padding: 12px 30px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  #estado { margin-top: 20px; font-size: 14px; color: #aaa; }
+</style>
+</head>
+<body>
+<h2>🎵 Tuc Tuc Rockola</h2>
+<p>Sube tu canción y suena en el local</p>
+<input type="file" id="archivo" accept="audio/*">
+<br>
+<button id="btn" onclick="subir()">Poner en cola</button>
+<div id="estado"></div>
+
+<script>
+const socket = io();
+const estado = document.getElementById('estado');
+const btn = document.getElementById('btn');
+
+socket.on('connect', () => estado.textContent = 'Conectado al local ✓');
+socket.on('disconnect', () => estado.textContent = 'Sin conexión');
+
+function subir() {
+  const file = document.getElementById('archivo').files[0];
+  if (!file) { estado.textContent = 'Selecciona un archivo primero'; return; }
+
+  const maxSegundos = 300;
+  const audio = new Audio();
+  const url = URL.createObjectURL(file);
+  audio.src = url;
+  audio.addEventListener('loadedmetadata', () => {
+    URL.revokeObjectURL(url);
+    if (audio.duration > maxSegundos) {
+      estado.textContent = `La canción supera los 5 minutos (${Math.round(audio.duration)}s)`;
+      return;
+    }
+    leerYEnviar(file);
+  });
+}
+
+function leerYEnviar(file) {
+  btn.disabled = true;
+  estado.textContent = 'Enviando...';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const base64 = e.target.result.split(',')[1];
+    socket.emit('subir_cancion', { nombre: file.name, tipo: file.type, datos: base64 });
+    estado.textContent = '¡Canción enviada! Espera tu turno 🎶';
+    btn.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+</script>
+</body>
+</html>

@@ -35,7 +35,7 @@ def create_app():
     app.register_blueprint(admin_agent_bp)
     app.register_blueprint(rockola_bp)
 
-    socketio.init_app(app, cors_allowed_origins='*', async_mode='eventlet')
+    socketio.init_app(app, cors_allowed_origins='*', async_mode='gevent')
     register_events(socketio)
 
     init_scheduler(app)

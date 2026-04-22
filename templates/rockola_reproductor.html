@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rockola — Reproductor</title>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
   body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #111; color: #fff; }
   h2 { color: #f0a500; text-align: center; }
@@ -13,9 +12,7 @@
   audio { width: 100%; margin-top: 10px; }
   #cola { margin-top: 20px; }
   .item-cola { background: #1e1e1e; padding: 10px 14px; border-radius: 6px; margin: 6px 0; font-size: 14px; color: #ccc; }
-  #estado-ws { text-align: center; font-size: 12px; margin-top: 10px; }
-  .conectado { color: #4caf50; }
-  .desconectado { color: #f44336; }
+  #estado { text-align: center; font-size: 12px; color: #555; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -27,68 +24,69 @@
 </div>
 
 <div id="cola"></div>
-<div id="estado-ws"></div>
+<div id="estado">Iniciando...</div>
 
 <script>
-const socket = io();
 const player = document.getElementById('player');
 const nombreEl = document.getElementById('nombre');
 const colaEl = document.getElementById('cola');
-const estadoWs = document.getElementById('estado-ws');
+const estadoEl = document.getElementById('estado');
 
-let cola = [];
 let reproduciendo = false;
-
-socket.on('connect', () => {
-  estadoWs.textContent = 'Conectado ✓';
-  estadoWs.className = 'conectado';
-});
-socket.on('disconnect', () => {
-  estadoWs.textContent = 'Sin conexión — recargando...';
-  estadoWs.className = 'desconectado';
-  setTimeout(() => location.reload(), 3000);
-});
-
-socket.on('nueva_cancion', data => {
-  cola.push(data);
-  renderCola();
-  if (!reproduciendo) siguienteCancion();
-});
+let cancionActual = null;
 
 player.addEventListener('ended', () => {
   reproduciendo = false;
-  siguienteCancion();
+  cancionActual = null;
+  fetch('/rockola/siguiente', { method: 'POST' });
 });
 
-function siguienteCancion() {
-  if (cola.length === 0) {
-    nombreEl.textContent = 'Esperando canciones...';
-    player.src = '';
-    return;
+async function verificarCola() {
+  try {
+    const res = await fetch('/rockola/cola');
+    const data = await res.json();
+    const cola = data.cola || [];
+
+    renderCola(cola);
+    estadoEl.textContent = 'Activo ✓';
+
+    if (!reproduciendo && cola.length > 0) {
+      const cancion = cola[0];
+      if (!cancionActual || cancionActual !== cancion.id) {
+        cancionActual = cancion.id;
+        reproduciendo = true;
+        nombreEl.textContent = cancion.nombre;
+        player.src = '/rockola/archivo/' + cancion.id;
+
+        // descarga automática al dispositivo
+        const a = document.createElement('a');
+        a.href = player.src;
+        a.download = cancion.nombre;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        player.play().catch(() => {});
+      }
+    }
+
+    if (cola.length === 0 && !reproduciendo) {
+      nombreEl.textContent = 'Esperando canciones...';
+    }
+  } catch(e) {
+    estadoEl.textContent = 'Sin conexión';
   }
-  const cancion = cola.shift();
-  renderCola();
-  const url = '/rockola/archivo/' + cancion.id;
-
-  // Descarga automática al dispositivo
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = cancion.nombre;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  player.src = url;
-  player.play().catch(() => {});
-  nombreEl.textContent = cancion.nombre;
-  reproduciendo = true;
 }
 
-function renderCola() {
-  colaEl.innerHTML = cola.length
-    ? '<b>En cola:</b>' + cola.map(c => `<div class="item-cola">🎵 ${c.nombre}</div>`).join('')
+function renderCola(cola) {
+  const resto = reproduciendo ? cola.slice(1) : cola;
+  colaEl.innerHTML = resto.length
+    ? '<b>En cola:</b>' + resto.map(c => `<div class="item-cola">🎵 ${c.nombre}</div>`).join('')
     : '';
 }
+
+setInterval(verificarCola, 2000);
+verificarCola();
 </script>
 </body>
 </html>

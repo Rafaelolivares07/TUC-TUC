@@ -6,22 +6,20 @@
 <title>Rockola — Reproductor</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; background: #111; color: #fff; }
-  h2 { color: #f0a500; text-align: center; margin-bottom: 20px; }
-  #cancion-actual { background: #222; border-radius: 10px; padding: 20px; margin: 20px 0; text-align: center; }
-  #nombre { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-  audio { width: 100%; margin-top: 10px; }
-  #cola { margin-top: 20px; }
-  .item-cola { background: #1e1e1e; padding: 10px 14px; border-radius: 6px; margin: 6px 0; font-size: 14px; color: #ccc; }
-  #estado { text-align: center; font-size: 12px; color: #555; margin-top: 10px; }
-  #btn-activar {
-    display: block; width: 100%; padding: 24px;
-    background: linear-gradient(135deg, #f0a500, #ff6b35);
-    color: #111; border: none; border-radius: 16px;
-    font-size: 22px; font-weight: 800; cursor: pointer;
-    margin: 60px 0 12px;
-  }
-  #hint-activar { text-align: center; color: #555; font-size: 13px; }
+  body { font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; background: #111; color: #fff; min-height: 100vh; }
+  h2 { color: #f0a500; text-align: center; margin-bottom: 20px; font-size: 22px; }
+  #cancion-actual { background: #1e1e1e; border-radius: 14px; padding: 20px; margin-bottom: 16px; text-align: center; }
+  #nombre { font-size: 17px; font-weight: 700; margin-bottom: 12px; color: #fff; }
+  audio { width: 100%; }
+  .cola-titulo { color: #666; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  #lista-cola { list-style: none; }
+  .item-cola { background: #1a1a1a; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .item-cola .num { color: #555; font-size: 11px; width: 18px; flex-shrink: 0; }
+  .item-cola .nombre-c { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty-cola { color: #333; font-size: 13px; text-align: center; padding: 16px 0; }
+  #estado { text-align: center; font-size: 11px; color: #333; margin-top: 12px; }
+  #btn-activar { display: block; width: 100%; padding: 22px; background: linear-gradient(135deg,#f0a500,#ff6b35); color: #111; border: none; border-radius: 14px; font-size: 20px; font-weight: 800; cursor: pointer; margin: 50px 0 10px; }
+  #hint { text-align: center; color: #444; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -29,7 +27,7 @@
 
 <div id="pantalla-activar">
   <button id="btn-activar" onclick="activar()">▶ Activar Rockola</button>
-  <p id="hint-activar">Toca para empezar a reproducir</p>
+  <p id="hint">Toca para empezar a reproducir</p>
 </div>
 
 <div id="pantalla-principal" style="display:none">
@@ -37,14 +35,16 @@
     <div id="nombre">Esperando canciones...</div>
     <audio id="player" controls></audio>
   </div>
-  <div id="cola"></div>
+  <div class="cola-titulo">Próximas canciones</div>
+  <ul id="lista-cola"><li class="empty-cola">Cola vacía</li></ul>
   <div id="estado">Activo ✓</div>
 </div>
 
 <script>
+const SALA = '{{ sala_id }}';
 const player = document.getElementById('player');
 const nombreEl = document.getElementById('nombre');
-const colaEl = document.getElementById('cola');
+const listaCola = document.getElementById('lista-cola');
 const estadoEl = document.getElementById('estado');
 
 let reproduciendo = false;
@@ -53,7 +53,6 @@ let cancionActual = null;
 function activar() {
   document.getElementById('pantalla-activar').style.display = 'none';
   document.getElementById('pantalla-principal').style.display = 'block';
-  // desbloquear autoplay con gesto de usuario
   player.play().catch(() => {});
   player.pause();
   setInterval(verificarCola, 2000);
@@ -63,42 +62,42 @@ function activar() {
 player.addEventListener('ended', () => {
   reproduciendo = false;
   cancionActual = null;
-  fetch('/rockola/siguiente', { method: 'POST' });
+  fetch(`/rockola/${SALA}/siguiente`, { method: 'POST' });
 });
 
 async function verificarCola() {
   try {
-    const res = await fetch('/rockola/cola');
+    const res = await fetch(`/rockola/${SALA}/cola`);
     const data = await res.json();
     const cola = data.cola || [];
-
     renderCola(cola);
 
     if (!reproduciendo && cola.length > 0) {
-      const cancion = cola[0];
-      if (!cancionActual || cancionActual !== cancion.id) {
-        cancionActual = cancion.id;
+      const c = cola[0];
+      if (c.id !== cancionActual) {
+        cancionActual = c.id;
         reproduciendo = true;
-        nombreEl.textContent = cancion.nombre;
-        player.src = '/rockola/archivo/' + cancion.id;
+        nombreEl.textContent = c.nombre.replace(/\.[^.]+$/, '');
+        player.src = `/rockola/${SALA}/archivo/${c.id}`;
         player.load();
         player.play().catch(() => {});
       }
     }
-
-    if (cola.length === 0 && !reproduciendo) {
-      nombreEl.textContent = 'Esperando canciones...';
-    }
+    if (!reproduciendo && cola.length === 0) nombreEl.textContent = 'Esperando canciones...';
   } catch(e) {
     estadoEl.textContent = 'Sin conexión';
   }
 }
 
 function renderCola(cola) {
-  const resto = reproduciendo ? cola.slice(1) : cola;
-  colaEl.innerHTML = resto.length
-    ? '<b>En cola:</b>' + resto.map(c => `<div class="item-cola">🎵 ${c.nombre}</div>`).join('')
-    : '';
+  const resto = cola.slice(reproduciendo ? 1 : 0);
+  if (resto.length === 0) { listaCola.innerHTML = '<li class="empty-cola">Cola vacía</li>'; return; }
+  listaCola.innerHTML = resto.map((c, i) =>
+    `<li class="item-cola">
+      <span class="num">#${i+2}</span>
+      <span class="nombre-c">${c.nombre.replace(/\.[^.]+$/,'')}</span>
+    </li>`
+  ).join('');
 }
 </script>
 </body>

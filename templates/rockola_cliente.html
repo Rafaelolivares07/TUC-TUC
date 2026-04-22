@@ -4,227 +4,158 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tuc Tuc Rockola</title>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: 'Segoe UI', sans-serif;
-    min-height: 100vh;
+    font-family: 'Segoe UI', sans-serif; min-height: 100vh;
     background: linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a2a1a 100%);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
+    display: flex; align-items: flex-start; justify-content: center; padding: 20px;
   }
-  .card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 24px;
-    padding: 40px 30px;
-    max-width: 420px;
-    width: 100%;
-    text-align: center;
-    backdrop-filter: blur(10px);
-  }
-  .logo { font-size: 48px; margin-bottom: 8px; }
-  h1 { color: #f0a500; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-  .subtitulo { color: #aaa; font-size: 14px; margin-top: 6px; margin-bottom: 32px; }
+  .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 32px 24px; max-width: 420px; width: 100%; backdrop-filter: blur(10px); }
+  h1 { color: #f0a500; font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 4px; }
+  .subtitulo { color: #888; font-size: 13px; text-align: center; margin-bottom: 24px; }
 
-  /* Zona de selección */
-  .zona-cancion {
-    border: 2px dashed rgba(240,165,0,0.4);
-    border-radius: 16px;
-    padding: 30px 20px;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 20px;
-    position: relative;
-  }
-  .zona-cancion:hover, .zona-cancion.activa {
-    border-color: #f0a500;
-    background: rgba(240,165,0,0.08);
-  }
-  .zona-cancion input[type=file] {
-    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-  }
-  .zona-icono { font-size: 40px; margin-bottom: 10px; }
-  .zona-texto { color: #ccc; font-size: 15px; }
+  .zona-cancion { border: 2px dashed rgba(240,165,0,0.4); border-radius: 16px; padding: 24px 16px; cursor: pointer; transition: all 0.2s; margin-bottom: 16px; position: relative; text-align: center; }
+  .zona-cancion:hover { border-color: #f0a500; background: rgba(240,165,0,0.06); }
+  .zona-cancion input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .zona-icono { font-size: 34px; margin-bottom: 8px; }
+  .zona-texto { color: #bbb; font-size: 14px; }
   .zona-texto b { color: #f0a500; }
 
-  /* Canción seleccionada */
-  .cancion-info {
-    display: none;
-    background: rgba(240,165,0,0.1);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 20px;
-    text-align: left;
-    align-items: center;
-    gap: 12px;
-  }
-  .cancion-info.visible { display: flex; }
-  .cancion-info .icono { font-size: 28px; }
-  .cancion-info .detalle { flex: 1; overflow: hidden; }
-  .cancion-info .nombre { color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cancion-info .duracion { color: #aaa; font-size: 12px; margin-top: 2px; }
-
-  /* Barra de progreso */
-  #progreso { display: none; margin-bottom: 20px; }
-  #progreso-label { color: #aaa; font-size: 13px; margin-bottom: 6px; }
-  .barra-bg { background: rgba(255,255,255,0.1); border-radius: 8px; height: 8px; overflow: hidden; }
-  #barra { height: 100%; background: linear-gradient(90deg, #f0a500, #ff6b35); border-radius: 8px; width: 0%; transition: width 0.2s; }
-
-  /* Botón */
-  #btn {
-    width: 100%;
-    padding: 18px;
-    font-size: 18px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #f0a500, #ff6b35);
-    color: #111;
-    border: none;
-    border-radius: 14px;
-    cursor: pointer;
-    letter-spacing: 0.3px;
-    transition: opacity 0.2s, transform 0.1s;
-  }
-  #btn:active { transform: scale(0.98); }
-  #btn:disabled { opacity: 0.4; cursor: default; transform: none; }
-
-  #estado {
-    margin-top: 16px;
-    font-size: 14px;
-    color: #aaa;
-    min-height: 20px;
-  }
+  #btn { width: 100%; padding: 16px; font-size: 17px; font-weight: 700; background: linear-gradient(135deg, #f0a500, #ff6b35); color: #111; border: none; border-radius: 12px; cursor: pointer; transition: opacity 0.2s; margin-bottom: 12px; }
+  #btn:disabled { opacity: 0.4; cursor: default; }
+  #estado { text-align: center; font-size: 13px; color: #888; min-height: 18px; margin-bottom: 16px; }
   #estado.ok { color: #4caf50; font-weight: 600; }
   #estado.error { color: #f44336; }
+
+  #progreso { display: none; margin-bottom: 14px; }
+  .barra-bg { background: rgba(255,255,255,0.1); border-radius: 8px; height: 6px; overflow: hidden; }
+  #barra { height: 100%; background: linear-gradient(90deg, #f0a500, #ff6b35); border-radius: 8px; width: 0%; transition: width 0.2s; }
+
+  .cola-titulo { color: #888; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  #lista-cola { list-style: none; }
+  .item-cola { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .item-cola.mia { border-left: 3px solid #f0a500; }
+  .item-cola .handle { cursor: grab; color: #555; font-size: 16px; flex-shrink: 0; }
+  .item-cola .handle.bloqueado { cursor: default; color: #333; }
+  .item-cola .cancion-nombre { flex: 1; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item-cola .pos { color: #555; font-size: 11px; flex-shrink: 0; }
+  .empty-cola { color: #444; font-size: 13px; text-align: center; padding: 16px 0; }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="logo">🎵</div>
+  <div style="font-size:36px; text-align:center; margin-bottom:6px;">🎵</div>
   <h1>Tuc Tuc Rockola</h1>
   <p class="subtitulo">Pon tu canción — suena en el local</p>
 
-  <div class="zona-cancion" id="zona">
-    <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" onchange="archivoSeleccionado()">
+  <div class="zona-cancion">
+    <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
     <div class="zona-icono">🎶</div>
-    <div class="zona-texto">Toca aquí para elegir<br><b>tu canción favorita</b></div>
+    <div class="zona-texto">Toca aquí para elegir<br><b>una o varias canciones</b></div>
   </div>
 
-  <div class="cancion-info" id="cancion-info">
-    <div class="icono">🎸</div>
-    <div class="detalle">
-      <div class="nombre" id="cancion-nombre">—</div>
-      <div class="duracion" id="cancion-duracion">—</div>
-    </div>
-  </div>
-
-  <div id="progreso">
-    <div id="progreso-label">Subiendo tu canción...</div>
-    <div class="barra-bg"><div id="barra"></div></div>
-  </div>
+  <div id="progreso"><div class="barra-bg"><div id="barra"></div></div></div>
 
   <button id="btn" onclick="subir()" disabled>Selecciona una canción</button>
   <div id="estado"></div>
+
+  <div class="cola-titulo">Cola actual</div>
+  <ul id="lista-cola"><li class="empty-cola">Sin canciones en cola</li></ul>
 </div>
 
 <script>
+const SALA = '{{ sala_id }}';
+const OWNER = localStorage.getItem('rockola_owner') || (() => { const id = Math.random().toString(36).slice(2,8); localStorage.setItem('rockola_owner', id); return id; })();
+
 const btn = document.getElementById('btn');
 const estado = document.getElementById('estado');
 const progreso = document.getElementById('progreso');
 const barra = document.getElementById('barra');
-const cancionInfo = document.getElementById('cancion-info');
-const cancionNombre = document.getElementById('cancion-nombre');
-const cancionDuracion = document.getElementById('cancion-duracion');
-const zona = document.getElementById('zona');
+const listaCola = document.getElementById('lista-cola');
 
-let archivoValido = false;
+let archivosValidos = [];
 
-function archivoSeleccionado() {
-  const file = document.getElementById('archivo').files[0];
-  if (!file) return;
+Sortable.create(listaCola, {
+  animation: 150,
+  handle: '.handle',
+  filter: '.handle.bloqueado',
+  onEnd: () => {
+    const orden = [...listaCola.querySelectorAll('.item-cola')].map(el => el.dataset.id);
+    fetch(`/rockola/${SALA}/reordenar`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ orden, owner: OWNER, modo: 'restaurante' })
+    });
+  }
+});
 
-  zona.classList.add('activa');
-  cancionNombre.textContent = file.name.replace(/\.[^.]+$/, '');
-
-  const audio = new Audio();
-  const url = URL.createObjectURL(file);
-  audio.src = url;
-  audio.addEventListener('loadedmetadata', () => {
-    URL.revokeObjectURL(url);
-    const min = Math.floor(audio.duration / 60);
-    const seg = Math.floor(audio.duration % 60);
-    if (audio.duration > 300) {
-      cancionDuracion.textContent = `${min}:${String(seg).padStart(2,'0')} — supera el límite de 5 min`;
-      estado.textContent = 'La canción no puede superar 5 minutos';
-      estado.className = 'error';
-      btn.disabled = true;
-      archivoValido = false;
-    } else {
-      cancionDuracion.textContent = `${min}:${String(seg).padStart(2,'0')} min`;
-      estado.textContent = '';
-      btn.textContent = '🎵 Poner en cola';
-      btn.disabled = false;
-      archivoValido = true;
-    }
-  });
-  audio.addEventListener('error', () => {
-    cancionDuracion.textContent = 'Audio válido';
-    btn.textContent = '🎵 Poner en cola';
-    btn.disabled = false;
-    archivoValido = true;
-  });
-
-  cancionInfo.classList.add('visible');
+function archivosSeleccionados() {
+  const files = [...document.getElementById('archivo').files];
+  archivosValidos = files;
+  if (files.length === 0) { btn.disabled = true; btn.textContent = 'Selecciona una canción'; return; }
+  btn.textContent = files.length === 1 ? `🎵 Poner "${files[0].name.replace(/\.[^.]+$/,'')}"`  : `🎵 Poner ${files.length} canciones`;
+  btn.disabled = false;
+  estado.textContent = '';
+  estado.className = '';
 }
 
 function subir() {
-  const file = document.getElementById('archivo').files[0];
-  if (!file || !archivoValido) return;
-
+  if (archivosValidos.length === 0) return;
   btn.disabled = true;
   progreso.style.display = 'block';
   estado.textContent = '';
-  estado.className = '';
 
   const form = new FormData();
-  form.append('archivo', file);
+  form.append('owner', OWNER);
+  archivosValidos.forEach(f => form.append('archivo', f));
 
   const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/rockola/subir');
-
-  xhr.upload.onprogress = e => {
-    if (e.lengthComputable) barra.style.width = (e.loaded / e.total * 100) + '%';
-  };
-
+  xhr.open('POST', `/rockola/${SALA}/subir`);
+  xhr.upload.onprogress = e => { if (e.lengthComputable) barra.style.width = (e.loaded/e.total*100)+'%'; };
   xhr.onload = () => {
-    const res = JSON.parse(xhr.responseText);
     progreso.style.display = 'none';
+    barra.style.width = '0%';
+    const res = JSON.parse(xhr.responseText);
     if (res.ok) {
-      estado.textContent = '¡Tu canción está en la cola! 🎉';
+      estado.textContent = res.agregadas.length === 1 ? '¡Canción en cola! 🎉' : `¡${res.agregadas.length} canciones en cola! 🎉`;
       estado.className = 'ok';
-      btn.textContent = '+ Agregar otra';
-      btn.disabled = false;
-      // resetear
+      btn.textContent = '+ Agregar más';
       document.getElementById('archivo').value = '';
-      cancionInfo.classList.remove('visible');
-      zona.classList.remove('activa');
-      archivoValido = false;
+      archivosValidos = [];
     } else {
       estado.textContent = 'Error: ' + res.error;
       estado.className = 'error';
-      btn.disabled = false;
     }
-  };
-
-  xhr.onerror = () => {
-    estado.textContent = 'Error de conexión';
-    estado.className = 'error';
     btn.disabled = false;
-    progreso.style.display = 'none';
   };
-
+  xhr.onerror = () => { estado.textContent = 'Error de conexión'; estado.className = 'error'; btn.disabled = false; progreso.style.display = 'none'; };
   xhr.send(form);
 }
+
+async function actualizarCola() {
+  try {
+    const res = await fetch(`/rockola/${SALA}/cola`);
+    const data = await res.json();
+    renderCola(data.cola || []);
+  } catch(e) {}
+}
+
+function renderCola(cola) {
+  if (cola.length === 0) { listaCola.innerHTML = '<li class="empty-cola">Sin canciones en cola</li>'; return; }
+  listaCola.innerHTML = cola.map((c, i) => {
+    const mia = c.owner === OWNER;
+    return `<li class="item-cola ${mia?'mia':''}" data-id="${c.id}">
+      <span class="handle ${mia?'':'bloqueado'}">⠿</span>
+      <span class="cancion-nombre">${c.nombre.replace(/\.[^.]+$/,'')}</span>
+      <span class="pos">#${i+1}</span>
+    </li>`;
+  }).join('');
+}
+
+setInterval(actualizarCola, 2000);
+actualizarCola();
 </script>
 </body>
 </html>

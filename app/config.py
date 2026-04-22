@@ -9,7 +9,7 @@ class Config:
     DATABASE_URL = os.environ.get('DATABASE_URL')
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB uploads
+    MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB — rockola multi-archivo
 
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
     FIREBASE_CREDENTIALS = os.environ.get('FIREBASE_CREDENTIALS')

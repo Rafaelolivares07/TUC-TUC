@@ -238,6 +238,16 @@ async function verificarCola() {
           if (estado !== 'pause') player.play().catch(() => {});
           setTimeout(() => { aplicandoSync = false; }, 300);
         });
+        player.addEventListener('error', function onError() {
+          player.removeEventListener('error', onError);
+          // archivo no existe — saltar al siguiente
+          reproduciendo = false;
+          fetch(`/rockola/${SALA}/siguiente`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ id: cancionActual })
+          });
+          cancionActual = null;
+        });
       }
     }
     if (cola.length === 0 && !reproduciendo) nombreActual.textContent = 'Esperando canciones...';

@@ -215,7 +215,18 @@ async function verificarCola() {
         nombreActual.textContent = c.nombre.replace(/\.[^.]+$/, '');
         player.src = `/rockola/${SALA}/archivo/${c.id}`;
         player.load();
-        player.play().catch(() => {});
+        // al poder reproducir, buscar la posición sincronizada antes de play
+        const estado = data.sync_estado;
+        const pos = data.sync_pos;
+        const ts = data.sync_ts;
+        const posAjustada = estado === 'play' ? pos + (Date.now()/1000 - ts) : pos;
+        player.addEventListener('canplay', function onCanPlay() {
+          player.removeEventListener('canplay', onCanPlay);
+          aplicandoSync = true;
+          player.currentTime = posAjustada > 0 ? posAjustada : 0;
+          if (estado !== 'pause') player.play().catch(() => {});
+          setTimeout(() => { aplicandoSync = false; }, 300);
+        });
       }
     }
     if (cola.length === 0 && !reproduciendo) nombreActual.textContent = 'Esperando canciones...';

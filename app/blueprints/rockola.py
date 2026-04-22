@@ -25,6 +25,10 @@ def _upload_dir(sala_id):
 
 # ── páginas ──────────────────────────────────────────────
 
+@bp.route('/')
+def entrada():
+    return render_template('rockola_entrada.html')
+
 @bp.route('/cliente')
 def cliente():
     return render_template('rockola_cliente.html', sala_id='default', modo='restaurante')

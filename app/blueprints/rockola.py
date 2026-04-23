@@ -145,59 +145,90 @@ def subir(sala_id):
 
 # ── API: YouTube → cola ───────────────────────────────────────────────────────
 
-@bp.route('/<sala_id>/youtube_resolve', methods=['POST'])
-def youtube_resolve(sala_id):
-    """
-    Resuelve la URL del stream de audio de YouTube sin descargar.
-    El cliente descarga desde su propia IP residencial para evitar bot-check.
-    """
-    try:
-        import yt_dlp
-    except ImportError:
-        return jsonify(ok=False, error='yt-dlp no instalado en el servidor'), 500
+COBALT_API = 'https://cobalt.tools/api/'
+COBALT_HEADERS = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; TucTucRockola/1.0)',
+}
 
-    data = request.get_json(silent=True) or {}
-    url  = data.get('url', '').strip()
+@bp.route('/<sala_id>/youtube', methods=['POST'])
+def youtube(sala_id):
+    """
+    Descarga audio de YouTube via cobalt.tools (evita bot-check de Render).
+    """
+    import urllib.request, urllib.error, json as _json, re
+
+    data  = request.get_json(silent=True) or {}
+    url   = data.get('url', '').strip()
+    owner = data.get('owner', 'anon')
 
     if not url or ('youtube.com' not in url and 'youtu.be' not in url):
         return jsonify(ok=False, error='URL de YouTube inválida'), 400
 
-    cookies_path = os.path.join(os.path.dirname(__file__), '..', '..', 'cookies.txt')
-    if not os.path.exists(cookies_path):
-        cookies_path = os.path.join(os.getcwd(), 'cookies.txt')
+    # 1. Pedir a cobalt la URL de descarga
+    try:
+        payload = _json.dumps({
+            'url': url,
+            'downloadMode': 'audio',
+            'audioFormat': 'mp3',
+            'audioBitrate': '128',
+        }).encode()
+        req = urllib.request.Request(COBALT_API, data=payload,
+                                     headers=COBALT_HEADERS, method='POST')
+        with urllib.request.urlopen(req, timeout=20) as r:
+            cobalt = _json.loads(r.read())
+    except Exception as e:
+        return jsonify(ok=False, error=f'Cobalt no respondió: {e}'), 502
 
-    ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'ios']}},
-    }
-    if os.path.exists(cookies_path):
-        ydl_opts['cookiefile'] = cookies_path
+    status = cobalt.get('status')
+    if status == 'error':
+        msg = cobalt.get('error', {}).get('code', 'error desconocido')
+        return jsonify(ok=False, error=f'Cobalt: {msg}'), 400
+    if status not in ('stream', 'tunnel', 'redirect'):
+        return jsonify(ok=False, error=f'Cobalt estado inesperado: {status}'), 502
+
+    dl_url  = cobalt.get('url') or cobalt.get('audio')
+    titulo  = cobalt.get('filename', 'audio').rsplit('.', 1)[0]
+
+    # 2. Descargar el audio desde cobalt
+    upload_dir = _upload_dir(sala_id)
+    nombre_id  = str(uuid.uuid4())
+    tmp_path   = os.path.join(upload_dir, nombre_id + '.mp3')
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            titulo   = info.get('title', 'audio')
-            duracion = info.get('duration', 0)
-            if duracion > 900:
-                return jsonify(ok=False, error='La canción es muy larga (máx. 15 min)'), 400
-
-            formats = info.get('formats', [])
-            audio_fmts = [f for f in formats
-                          if f.get('acodec') != 'none' and f.get('vcodec') in (None, 'none')]
-            if not audio_fmts:
-                audio_fmts = formats
-            audio_fmts.sort(key=lambda f: f.get('abr') or 0, reverse=True)
-            best = audio_fmts[0]
-
-            return jsonify(ok=True,
-                           stream_url=best.get('url'),
-                           titulo=titulo,
-                           ext=best.get('ext', 'webm'))
+        dl_req = urllib.request.Request(dl_url, headers={
+            'User-Agent': COBALT_HEADERS['User-Agent']
+        })
+        with urllib.request.urlopen(dl_req, timeout=120) as r, \
+             open(tmp_path, 'wb') as f:
+            while True:
+                chunk = r.read(65536)
+                if not chunk:
+                    break
+                f.write(chunk)
     except Exception as e:
-        return jsonify(ok=False, error=f'No se pudo resolver: {str(e)[:200]}'), 500
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        return jsonify(ok=False, error=f'Error descargando audio: {e}'), 502
+
+    archivo_final  = nombre_id + '.mp3'
+    nombre_display = titulo + '.mp3'
+
+    with _lock, engine.connect() as conn:
+        pos_actual = _max_pos(conn, sala_id) + 1
+        conn.execute(text("""
+            INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
+            VALUES (:id, :sala_id, :nombre, :owner, :pos)
+        """), {'id': archivo_final, 'sala_id': sala_id, 'nombre': nombre_display,
+               'owner': owner, 'pos': pos_actual})
+        conn.commit()
+
+    return jsonify(ok=True, agregadas=[{
+        'id': archivo_final,
+        'nombre': nombre_display,
+        'owner': owner
+    }])
 
 
 # ── API: cola, sync, siguiente, reordenar, archivo ───────────────────────────

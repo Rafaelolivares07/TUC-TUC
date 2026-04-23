@@ -179,7 +179,7 @@ def youtube(sala_id):
         cookies_path = os.path.join(os.getcwd(), 'cookies.txt')
 
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
         'outtmpl': out_path + '.%(ext)s',
         'noplaylist': True,
         'quiet': True,

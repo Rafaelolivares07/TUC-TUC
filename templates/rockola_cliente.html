@@ -214,6 +214,18 @@ function setTab(tab) {
   document.getElementById('sec-archivo').classList.toggle('visible', tab==='archivo');
   document.getElementById('sec-youtube').classList.toggle('visible', tab==='youtube');
   resetUI();
+  if (tab === 'youtube') {
+    const inp = document.getElementById('yt-url');
+    inp.focus();
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(txt => {
+        if (txt && (txt.includes('youtube.com') || txt.includes('youtu.be'))) {
+          inp.value = txt;
+          ytInputChange();
+        }
+      }).catch(() => {});
+    }
+  }
 }
 
 function resetUI() {

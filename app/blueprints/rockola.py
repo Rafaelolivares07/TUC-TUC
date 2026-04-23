@@ -1,29 +1,105 @@
+"""
+rockola.py — Blueprint con cola persistente en PostgreSQL
+Drop-in replacement del blueprint original.
+
+Requiere que en tu app principal tengas SQLAlchemy inicializado:
+    from flask_sqlalchemy import SQLAlchemy
+    db = SQLAlchemy(app)
+    
+Y que pases db al registrar el blueprint, o uses el patrón de app factory.
+Si ya tienes db global, solo importa db desde donde lo tengas.
+"""
+
 from flask import Blueprint, render_template, request, jsonify, send_from_directory
+from sqlalchemy import create_engine, text, Column, String, Float, Integer, JSON
+from sqlalchemy.orm import DeclarativeBase, Session
 import os, uuid, threading
 
 bp = Blueprint('rockola', __name__, url_prefix='/rockola')
 
-UPLOAD_BASE = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
-os.makedirs(UPLOAD_BASE, exist_ok=True)
+# ── Base de datos ─────────────────────────────────────────────────────────────
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
+# Render usa postgres:// pero SQLAlchemy necesita postgresql://
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,       # detecta conexiones muertas automáticamente
+    pool_recycle=300,          # recicla conexiones cada 5 min
+    connect_args={"connect_timeout": 10}
+)
+
+# ── Crear tablas si no existen ─────────────────────────────────────────────────
+INIT_SQL = """
+CREATE TABLE IF NOT EXISTS rockola_salas (
+    sala_id      TEXT PRIMARY KEY,
+    sync_estado  TEXT    NOT NULL DEFAULT 'play',
+    sync_pos     FLOAT   NOT NULL DEFAULT 0.0,
+    sync_ts      FLOAT   NOT NULL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS rockola_cola (
+    id           TEXT PRIMARY KEY,
+    sala_id      TEXT    NOT NULL,
+    nombre       TEXT    NOT NULL,
+    owner        TEXT    NOT NULL DEFAULT 'anon',
+    posicion     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_cola_sala ON rockola_cola(sala_id, posicion);
+"""
+
+def init_db():
+    with engine.connect() as conn:
+        conn.execute(text(INIT_SQL))
+        conn.commit()
+
+try:
+    init_db()
+except Exception as e:
+    print(f'[rockola] Aviso: no se pudo inicializar DB: {e}')
+
+# ── Helpers DB ────────────────────────────────────────────────────────────────
 _lock = threading.Lock()
-# _salas[sala_id] = { 'cola': [{ id, nombre, owner }] }
-_salas = {}
 
+def _get_sala(conn, sala_id):
+    row = conn.execute(
+        text("SELECT * FROM rockola_salas WHERE sala_id = :sid"),
+        {'sid': sala_id}
+    ).fetchone()
+    if not row:
+        conn.execute(
+            text("INSERT INTO rockola_salas (sala_id) VALUES (:sid) ON CONFLICT DO NOTHING"),
+            {'sid': sala_id}
+        )
+        conn.commit()
+        return {'sala_id': sala_id, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
+    return dict(row._mapping)
 
-def _get_sala(sala_id):
-    if sala_id not in _salas:
-        _salas[sala_id] = {'cola': [], 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
-    return _salas[sala_id]
+def _get_cola(conn, sala_id):
+    rows = conn.execute(
+        text("SELECT id, nombre, owner FROM rockola_cola WHERE sala_id = :sid ORDER BY posicion ASC"),
+        {'sid': sala_id}
+    ).fetchall()
+    return [dict(r._mapping) for r in rows]
 
+def _max_pos(conn, sala_id):
+    row = conn.execute(
+        text("SELECT COALESCE(MAX(posicion), -1) as m FROM rockola_cola WHERE sala_id = :sid"),
+        {'sid': sala_id}
+    ).fetchone()
+    return row.m if row else -1
 
 def _upload_dir(sala_id):
-    d = os.path.join(UPLOAD_BASE, sala_id)
+    base = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
+    d = os.path.join(base, sala_id)
     os.makedirs(d, exist_ok=True)
     return d
 
 
-# ── páginas ──────────────────────────────────────────────
+# ── Páginas ───────────────────────────────────────────────────────────────────
 
 @bp.route('/')
 def entrada():
@@ -50,7 +126,7 @@ def sync(sala_id):
     return render_template('rockola_sync.html', sala_id=sala_id)
 
 
-# ── API ──────────────────────────────────────────────────
+# ── API ───────────────────────────────────────────────────────────────────────
 
 @bp.route('/<sala_id>/subir', methods=['POST'])
 def subir(sala_id):
@@ -59,81 +135,112 @@ def subir(sala_id):
     if not files:
         return jsonify(ok=False, error='sin archivo'), 400
 
-    agregadas = []
-    upload_dir = _upload_dir(sala_id)
-    with _lock:
-        sala = _get_sala(sala_id)
+    agregadas    = []
+    upload_dir   = _upload_dir(sala_id)
+
+    with _lock, engine.connect() as conn:
+        pos_actual = _max_pos(conn, sala_id)
         for f in files:
-            ext = os.path.splitext(f.filename)[1].lower()
+            ext      = os.path.splitext(f.filename)[1].lower()
             nombre_id = str(uuid.uuid4()) + ext
             f.save(os.path.join(upload_dir, nombre_id))
-            item = {'id': nombre_id, 'nombre': f.filename, 'owner': owner}
-            sala['cola'].append(item)
-            agregadas.append(item)
+            pos_actual += 1
+            conn.execute(text("""
+                INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
+                VALUES (:id, :sala_id, :nombre, :owner, :pos)
+            """), {'id': nombre_id, 'sala_id': sala_id, 'nombre': f.filename,
+                   'owner': owner, 'pos': pos_actual})
+            agregadas.append({'id': nombre_id, 'nombre': f.filename, 'owner': owner})
+        conn.commit()
 
     return jsonify(ok=True, agregadas=agregadas)
 
 
 @bp.route('/<sala_id>/cola')
 def cola(sala_id):
-    with _lock:
-        sala = _get_sala(sala_id)
-        return jsonify(ok=True, cola=list(sala['cola']),
-                       sync_estado=sala['sync_estado'],
-                       sync_pos=sala['sync_pos'],
-                       sync_ts=sala['sync_ts'])
+    with engine.connect() as conn:
+        sala  = _get_sala(conn, sala_id)
+        items = _get_cola(conn, sala_id)
+    return jsonify(
+        ok=True,
+        cola=items,
+        sync_estado=sala['sync_estado'],
+        sync_pos=sala['sync_pos'],
+        sync_ts=sala['sync_ts']
+    )
 
 
 @bp.route('/<sala_id>/sync_control', methods=['POST'])
 def sync_control(sala_id):
     data = request.get_json()
-    with _lock:
-        sala = _get_sala(sala_id)
-        sala['sync_estado'] = data.get('estado', 'play')
-        sala['sync_pos'] = data.get('pos', 0.0)
-        sala['sync_ts'] = data.get('ts', 0.0)
+    with _lock, engine.connect() as conn:
+        _get_sala(conn, sala_id)  # asegura que existe
+        conn.execute(text("""
+            UPDATE rockola_salas
+            SET sync_estado = :estado, sync_pos = :pos, sync_ts = :ts
+            WHERE sala_id = :sid
+        """), {
+            'estado': data.get('estado', 'play'),
+            'pos':    data.get('pos', 0.0),
+            'ts':     data.get('ts', 0.0),
+            'sid':    sala_id
+        })
+        conn.commit()
     return jsonify(ok=True)
 
 
 @bp.route('/<sala_id>/siguiente', methods=['POST'])
 def siguiente(sala_id):
-    data = request.get_json(silent=True) or {}
+    data       = request.get_json(silent=True) or {}
     cancion_id = data.get('id')
-    with _lock:
-        sala = _get_sala(sala_id)
-        # solo saca si la canción que terminó sigue siendo la primera
-        if sala['cola'] and (not cancion_id or sala['cola'][0]['id'] == cancion_id):
-            sala['cola'].pop(0)
-            sala['sync_estado'] = 'play'
-            sala['sync_pos'] = 0.0
-            sala['sync_ts'] = 0.0
+    with _lock, engine.connect() as conn:
+        items = _get_cola(conn, sala_id)
+        if items and (not cancion_id or items[0]['id'] == cancion_id):
+            conn.execute(
+                text("DELETE FROM rockola_cola WHERE id = :id AND sala_id = :sid"),
+                {'id': items[0]['id'], 'sid': sala_id}
+            )
+            # Reset sync state para la siguiente canción
+            conn.execute(text("""
+                UPDATE rockola_salas
+                SET sync_estado = 'play', sync_pos = 0.0, sync_ts = 0.0
+                WHERE sala_id = :sid
+            """), {'sid': sala_id})
+            conn.commit()
     return jsonify(ok=True)
 
 
 @bp.route('/<sala_id>/reordenar', methods=['POST'])
 def reordenar(sala_id):
-    data = request.get_json()
-    nuevo_orden = data.get('orden', [])   # lista de ids
-    owner = data.get('owner')
-    modo = data.get('modo', 'restaurante')
+    data        = request.get_json()
+    nuevo_orden = data.get('orden', [])
+    owner       = data.get('owner')
+    modo        = data.get('modo', 'restaurante')
 
-    with _lock:
-        sala = _get_sala(sala_id)
-        cola = sala['cola']
-        por_id = {item['id']: item for item in cola}
+    with _lock, engine.connect() as conn:
+        items  = _get_cola(conn, sala_id)
+        por_id = {item['id']: item for item in items}
+
         nueva_cola = []
         for id_ in nuevo_orden:
             if id_ in por_id:
                 item = por_id[id_]
-                # en restaurante solo mueves las tuyas
                 if modo == 'sync' or item['owner'] == owner:
                     nueva_cola.append(item)
-        # agregar las que no vinieron en el orden (seguridad)
+
+        # Agregar las que no vinieron en el orden (seguridad)
         ids_nuevos = {i['id'] for i in nueva_cola}
-        for item in cola:
+        for item in items:
             if item['id'] not in ids_nuevos:
                 nueva_cola.append(item)
-        sala['cola'] = nueva_cola
+
+        # Reescribir posiciones
+        for i, item in enumerate(nueva_cola):
+            conn.execute(text("""
+                UPDATE rockola_cola SET posicion = :pos
+                WHERE id = :id AND sala_id = :sid
+            """), {'pos': i, 'id': item['id'], 'sid': sala_id})
+        conn.commit()
 
     return jsonify(ok=True)
 

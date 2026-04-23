@@ -3,49 +3,223 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rockola — Reproductor</title>
+<title>Tuc Tuc Rockola · Reproductor</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; background: #111; color: #fff; min-height: 100vh; }
-  h2 { color: #f0a500; text-align: center; margin-bottom: 20px; font-size: 22px; }
-  #cancion-actual { background: #1e1e1e; border-radius: 14px; padding: 20px; margin-bottom: 16px; text-align: center; }
-  #nombre { font-size: 17px; font-weight: 700; margin-bottom: 12px; color: #fff; }
-  audio { width: 100%; }
-  .cola-titulo { color: #666; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-  #lista-cola { list-style: none; }
-  .item-cola { background: #1a1a1a; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .item-cola .num { color: #555; font-size: 11px; width: 18px; flex-shrink: 0; }
-  .item-cola .nombre-c { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .empty-cola { color: #333; font-size: 13px; text-align: center; padding: 16px 0; }
-  #estado { text-align: center; font-size: 11px; color: #333; margin-top: 12px; }
-  #btn-activar { display: block; width: 100%; padding: 22px; background: linear-gradient(135deg,#f0a500,#ff6b35); color: #111; border: none; border-radius: 14px; font-size: 20px; font-weight: 800; cursor: pointer; margin: 50px 0 10px; }
-  #hint { text-align: center; color: #444; font-size: 12px; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ac1: #00d4ff;
+  --ac1-dim: rgba(0,212,255,0.15);
+  --ac1-bg: rgba(0,212,255,0.08);
+  --ac2: #0066ff;
+  --ac-grad: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+  --bg: #060c18;
+  --surface: #0d1a2e;
+  --surface2: #132440;
+  --border: rgba(0,212,255,0.15);
+  --text: #e2eeff;
+  --muted: #4a6480;
+  --muted2: #2a3d55;
+}
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 0 0 40px;
+}
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes spin   { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes glow   { 0%,100%{box-shadow:0 0 30px var(--ac1-dim)} 50%{box-shadow:0 0 60px var(--ac1-dim),0 0 100px rgba(0,212,255,.06)} }
+@keyframes wave   { 0%,100%{height:5px} 50%{height:22px} }
+@keyframes pulse  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.85)} }
+
+/* ── ACTIVAR ── */
+#pantalla-activar {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  animation: fadeUp .4s ease;
+}
+.activar-vinyl { margin-bottom: 32px; }
+.activar-tag { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.activar-titulo { font-size: 30px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+.activar-titulo span { color: var(--ac1); }
+.activar-sub { font-size: 13px; color: var(--muted); line-height: 1.7; max-width: 280px; margin: 0 auto 40px; }
+.btn-activar {
+  padding: 20px 64px;
+  font-size: 20px;
+  font-weight: 800;
+  background: var(--ac-grad);
+  color: #000;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif;
+  animation: glow 2.5s ease-in-out infinite;
+  transition: transform .15s;
+  letter-spacing: -.3px;
+}
+.btn-activar:active { transform: scale(.97); }
+.btn-back {
+  margin-top: 20px;
+  background: none; border: none;
+  color: var(--muted); font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; cursor: pointer;
+}
+
+/* ── PRINCIPAL ── */
+#pantalla-principal { display: none; animation: fadeUp .35s ease; }
+
+.inner { max-width: 440px; margin: 0 auto; padding: 20px 16px; }
+
+.header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+.header-back {
+  background: none; border: none;
+  color: var(--muted); cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; font-weight: 600;
+}
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: #22c55e;
+}
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s ease-in-out infinite; }
+.sala-badge {
+  font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  color: var(--ac1); background: var(--ac1-bg);
+  border: 1px solid var(--border);
+  padding: 6px 14px; border-radius: 8px;
+}
+
+/* Now playing — big card */
+.now-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 32px 24px 24px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.vinyl-wrap { display: flex; justify-content: center; margin-bottom: 28px; }
+.np-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.np-nombre { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 16px; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wave-viz { display: flex; align-items: center; justify-content: center; gap: 3px; height: 28px; margin-bottom: 20px; }
+.wave-bar { width: 3px; border-radius: 2px; background: var(--ac1); }
+audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
+
+/* Queue */
+.queue-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 16px;
+}
+.queue-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.queue-list { list-style: none; }
+.queue-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: var(--surface2);
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+.q-num { font-size: 12px; color: var(--muted); font-weight: 600; width: 24px; flex-shrink: 0; }
+.q-nombre { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
+
+#estado { text-align: center; font-size: 11px; color: var(--muted2); margin-top: 12px; }
 </style>
 </head>
 <body>
-<h2>🎵 Tuc Tuc Rockola</h2>
 
+<!-- ACTIVAR -->
 <div id="pantalla-activar">
-  <button id="btn-activar" onclick="activar()">▶ Activar Rockola</button>
-  <p id="hint">Toca para empezar a reproducir</p>
+  <div class="activar-vinyl">
+    <svg width="100" height="100" viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
+      <circle cx="20" cy="20" r="13" fill="#090f1c"/>
+      <circle cx="20" cy="20" r="8" fill="#0d1a2e" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.3"/>
+      <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
+      <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
+      <circle cx="20" cy="20" r="5"  fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+      <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+    </svg>
+  </div>
+  <div class="activar-tag">Reproductor del local</div>
+  <div class="activar-titulo">Sala <span>{{ sala_id | upper }}</span></div>
+  <div class="activar-sub">Los clientes suben canciones desde su celular. Activa la rockola para empezar.</div>
+  <button class="btn-activar" onclick="activar()">▶ Activar Rockola</button>
+  <button class="btn-back" onclick="window.location.href='/rockola/'">← Volver</button>
 </div>
 
-<div id="pantalla-principal" style="display:none">
-  <div id="cancion-actual">
-    <div id="nombre">Esperando canciones...</div>
-    <audio id="player" controls></audio>
+<!-- PRINCIPAL -->
+<div id="pantalla-principal">
+  <div class="inner">
+
+    <div class="header">
+      <button class="header-back" onclick="window.location.href='/rockola/'">← Salir</button>
+      <div class="sala-badge">{{ sala_id | upper }}</div>
+      <div class="live-badge"><div class="live-dot"></div> EN VIVO</div>
+    </div>
+
+    <div class="now-card">
+      <div class="vinyl-wrap">
+        <svg id="vinyl-spin" width="110" height="110" viewBox="0 0 40 40">
+          <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
+          <circle cx="20" cy="20" r="13" fill="#090f1c"/>
+          <circle cx="20" cy="20" r="8" fill="#0d1a2e" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.3"/>
+          <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
+          <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
+          <circle cx="20" cy="20" r="5"  fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+          <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+        </svg>
+      </div>
+      <div class="np-label">Sonando ahora</div>
+      <div class="np-nombre" id="nombre-actual">Esperando canciones...</div>
+      <div class="wave-viz" id="wave-viz">
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-bar" style="height:5px;opacity:.25"></div>
+      </div>
+      <audio id="player" controls></audio>
+    </div>
+
+    <div class="queue-box">
+      <div class="queue-label" id="queue-label">Próximas canciones</div>
+      <ul class="queue-list" id="lista-cola">
+        <li class="queue-empty">Cola vacía</li>
+      </ul>
+    </div>
+
+    <div id="estado">Activo ✓</div>
   </div>
-  <div class="cola-titulo">Próximas canciones</div>
-  <ul id="lista-cola"><li class="empty-cola">Cola vacía</li></ul>
-  <div id="estado">Activo ✓</div>
 </div>
 
 <script>
 const SALA = '{{ sala_id }}';
-const player = document.getElementById('player');
-const nombreEl = document.getElementById('nombre');
-const listaCola = document.getElementById('lista-cola');
-const estadoEl = document.getElementById('estado');
+const player      = document.getElementById('player');
+const nombreEl    = document.getElementById('nombre-actual');
+const listaCola   = document.getElementById('lista-cola');
+const estadoEl    = document.getElementById('estado');
+const vinylSpin   = document.getElementById('vinyl-spin');
+const waveViz     = document.getElementById('wave-viz');
+const queueLabel  = document.getElementById('queue-label');
 
 let reproduciendo = false;
 let cancionActual = null;
@@ -55,7 +229,7 @@ function activar() {
   document.getElementById('pantalla-principal').style.display = 'block';
   player.play().catch(() => {});
   player.pause();
-  setInterval(verificarCola, 2000);
+  setInterval(verificarCola, 2500);
   verificarCola();
 }
 
@@ -63,17 +237,21 @@ player.addEventListener('ended', () => {
   const idTerminada = cancionActual;
   reproduciendo = false;
   cancionActual = null;
+  setVinylSpinning(false);
+  setWaveActive(false);
   fetch(`/rockola/${SALA}/siguiente`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: idTerminada })
   });
 });
 
 async function verificarCola() {
   try {
-    const res = await fetch(`/rockola/${SALA}/cola`);
+    const res  = await fetch(`/rockola/${SALA}/cola`);
     const data = await res.json();
     const cola = data.cola || [];
+
     renderCola(cola);
 
     if (!reproduciendo && cola.length > 0) {
@@ -84,24 +262,55 @@ async function verificarCola() {
         nombreEl.textContent = c.nombre.replace(/\.[^.]+$/, '');
         player.src = `/rockola/${SALA}/archivo/${c.id}`;
         player.load();
-        player.play().catch(() => {});
+        player.play().then(() => {
+          setVinylSpinning(true);
+          setWaveActive(true);
+        }).catch(() => {});
       }
     }
-    if (!reproduciendo && cola.length === 0) nombreEl.textContent = 'Esperando canciones...';
+
+    if (!reproduciendo && cola.length === 0) {
+      nombreEl.textContent = 'Esperando canciones...';
+    }
+
+    estadoEl.textContent = 'Activo ✓ · ' + new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
   } catch(e) {
-    estadoEl.textContent = 'Sin conexión';
+    estadoEl.textContent = 'Sin conexión ✗';
   }
 }
 
 function renderCola(cola) {
   const resto = cola.slice(reproduciendo ? 1 : 0);
-  if (resto.length === 0) { listaCola.innerHTML = '<li class="empty-cola">Cola vacía</li>'; return; }
-  listaCola.innerHTML = resto.map((c, i) =>
-    `<li class="item-cola">
-      <span class="num">#${i+2}</span>
-      <span class="nombre-c">${c.nombre.replace(/\.[^.]+$/,'')}</span>
-    </li>`
-  ).join('');
+  queueLabel.textContent = 'Próximas · ' + resto.length + (resto.length === 1 ? ' canción' : ' canciones');
+  if (resto.length === 0) {
+    listaCola.innerHTML = '<li class="queue-empty">Cola vacía</li>';
+    return;
+  }
+  listaCola.innerHTML = resto.map((c, i) => `
+    <li class="queue-item">
+      <span class="q-num">#${i + 2}</span>
+      <span class="q-nombre">${c.nombre.replace(/\.[^.]+$/, '')}</span>
+    </li>
+  `).join('');
+}
+
+function setVinylSpinning(on) {
+  vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none';
+}
+
+function setWaveActive(on) {
+  const bars   = waveViz.querySelectorAll('.wave-bar');
+  const delays = [0, .12, .25, .38, .2, .08, .32];
+  bars.forEach((b, i) => {
+    if (on) {
+      b.style.animation = `wave .9s ease-in-out ${delays[i] || 0}s infinite`;
+      b.style.opacity   = '1';
+    } else {
+      b.style.animation = 'none';
+      b.style.height    = '5px';
+      b.style.opacity   = '.25';
+    }
+  });
 }
 </script>
 </body>

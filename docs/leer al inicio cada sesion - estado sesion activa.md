@@ -5,6 +5,25 @@ _Actualizado: 2026-04-21_
 1. **TUC TUC V2** — refactorización en blueprints, desplegado en Render branch `v2` ✅ LIVE
 2. **Administrator Web** — pendiente despliegue en PC Pilar (próxima sesión remota)
 3. **Admin Agent** ✅ FUNCIONANDO (pendiente despliegue Pilar)
+4. **Rockola** (2026-04-22 09:00) — núcleo técnico funcionando, salas + modo sync implementados ✅
+
+---
+
+## MÓDULO: Tuc Tuc Rockola (2026-04-22 09:00)
+
+Docs: `docs/rockola_concepto.md` (concepto) + `docs/rockola_desarrollo.md` (técnico)
+
+### Estado
+- ✅ Subida MP3, cola, reproducción automática en Android — probado
+- ✅ Salas independientes por `sala_id`
+- ✅ Modo sync `/rockola/sync/<sala_id>` — todos reproductores
+- ✅ Drag & drop cola, multi-archivo — implementado, pendiente prueba
+- ⬜ Dashboard dueño, créditos, QR, PIN reproductor
+
+### Commits clave 2026-04-22
+- `cdb2213` — polling HTTP reemplaza WebSocket
+- `deedbbb` — botón Activar fix autoplay móvil
+- `008ccca` — salas, drag&drop, multi-archivo, modo sync
 
 ---
 
@@ -164,6 +183,16 @@ Cuando Pilar avise (sesión remota):
 
 ### Pendientes restaurantes
 - Landing page restaurantes — pendiente video Rafael con CapCut Android
+
+---
+
+## Pendiente futuro — Migración a Oracle Cloud Free Tier
+
+- **Objetivo**: reemplazar Render por Oracle Cloud (Always Free) — 1GB RAM mínimo garantizado, sin sleep por inactividad
+- **Ventaja clave**: el doble de RAM que Render free (512MB) — resuelve los SIGKILL por memoria
+- **Opción ARM**: hasta 4 OCPU + 24GB RAM gratis en instancias Ampere
+- **Requiere**: configurar Ubuntu + nginx + gunicorn manualmente una vez
+- **Retomar cuando**: la rockola u otro módulo pague el tiempo de migración
 
 ---
 

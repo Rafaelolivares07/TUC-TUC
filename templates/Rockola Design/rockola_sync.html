@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tuc Tuc Rockola Sync</title>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; min-height: 100vh; background: linear-gradient(135deg, #1a0533 0%, #2a0a0a 100%); color: #fff; padding: 16px; }
+  .card { max-width: 460px; margin: 0 auto; }
+  h1 { color: #f0a500; font-size: 20px; font-weight: 800; text-align: center; margin-bottom: 4px; }
+  .sala-id { text-align: center; color: #555; font-size: 11px; margin-bottom: 16px; letter-spacing: 1px; }
+
+  /* Reproductor */
+  #sec-reproductor { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  #nombre-actual { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #fff; }
+  audio { width: 100%; }
+
+  /* Subir */
+  #sec-subir { background: rgba(255,255,255,0.04); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  .zona { border: 2px dashed rgba(240,165,0,0.35); border-radius: 12px; padding: 20px; text-align: center; position: relative; cursor: pointer; margin-bottom: 10px; }
+  .zona input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .zona-texto { color: #aaa; font-size: 13px; }
+  .zona-texto b { color: #f0a500; }
+  #btn-subir { width: 100%; padding: 14px; font-size: 16px; font-weight: 700; background: linear-gradient(135deg,#f0a500,#ff6b35); color: #111; border: none; border-radius: 10px; cursor: pointer; }
+  #btn-subir:disabled { opacity: 0.4; cursor: default; }
+  .barra-bg { background: rgba(255,255,255,0.08); border-radius: 6px; height: 5px; overflow: hidden; margin-bottom: 8px; display: none; }
+  #barra { height: 100%; background: linear-gradient(90deg,#f0a500,#ff6b35); width: 0%; transition: width 0.2s; }
+  #estado-subir { font-size: 12px; color: #888; text-align: center; min-height: 16px; }
+  #estado-subir.ok { color: #4caf50; }
+  #estado-subir.error { color: #f44336; }
+
+  /* Cola */
+  #sec-cola { background: rgba(255,255,255,0.04); border-radius: 16px; padding: 16px; }
+  .cola-titulo { color: #666; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  #lista-cola { list-style: none; }
+  .item-cola { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: grab; }
+  .item-cola .handle { color: #555; font-size: 15px; flex-shrink: 0; }
+  .item-cola .nombre-c { flex: 1; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item-cola .pos { color: #444; font-size: 11px; flex-shrink: 0; }
+  .item-cola.sonando { border-left: 3px solid #f0a500; }
+  .empty-cola { color: #333; font-size: 13px; text-align: center; padding: 16px 0; }
+
+  /* Activar */
+  #pantalla-activar { text-align: center; padding: 60px 0; }
+  #btn-activar { padding: 22px 50px; font-size: 22px; font-weight: 800; background: linear-gradient(135deg,#f0a500,#ff6b35); color: #111; border: none; border-radius: 16px; cursor: pointer; }
+  #pantalla-activar p { color: #444; font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div style="font-size:32px; text-align:center; margin-bottom:6px;">🎵</div>
+  <h1>Tuc Tuc Rockola</h1>
+  <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:16px;">
+    <div class="sala-id" style="margin:0;">SALA · {{ sala_id | upper }}</div>
+    <button onclick="compartir()" style="background:rgba(240,165,0,0.15);border:1px solid rgba(240,165,0,0.4);color:#f0a500;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Compartir</button>
+    <a href="/rockola/" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#666;border-radius:6px;padding:4px 10px;font-size:12px;text-decoration:none;">Nueva sala</a>
+  </div>
+
+  <div id="pantalla-activar">
+    <button id="btn-activar" onclick="activar()">▶ Entrar a la sala</button>
+    <p>Toca para activar el audio</p>
+  </div>
+
+  <div id="pantalla-principal" style="display:none">
+    <!-- Reproductor -->
+    <div id="sec-reproductor">
+      <div id="nombre-actual">Esperando canciones...</div>
+      <audio id="player" controls></audio>
+    </div>
+
+    <!-- Subir canciones -->
+    <div id="sec-subir">
+      <div class="zona">
+        <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
+        <div class="zona-icono" style="font-size:28px; margin-bottom:6px;">🎶</div>
+        <div class="zona-texto">Toca para elegir<br><b>una o varias canciones</b></div>
+      </div>
+      <div class="barra-bg" id="barra-bg"><div id="barra"></div></div>
+      <button id="btn-subir" onclick="subir()" disabled>Selecciona canciones</button>
+      <div id="estado-subir"></div>
+    </div>
+
+    <!-- Cola -->
+    <div id="sec-cola">
+      <div class="cola-titulo">Cola · arrastra para reordenar</div>
+      <ul id="lista-cola"><li class="empty-cola">Sin canciones aún</li></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const SALA = '{{ sala_id }}';
+const OWNER = localStorage.getItem('rockola_owner_' + SALA) || (() => {
+  const id = Math.random().toString(36).slice(2,8);
+  localStorage.setItem('rockola_owner_' + SALA, id);
+  return id;
+})();
+
+const player = document.getElementById('player');
+const nombreActual = document.getElementById('nombre-actual');
+const listaCola = document.getElementById('lista-cola');
+const estadoSubir = document.getElementById('estado-subir');
+const btnSubir = document.getElementById('btn-subir');
+const barraEl = document.getElementById('barra');
+const barraBg = document.getElementById('barra-bg');
+
+let reproduciendo = false;
+let cancionActual = null;
+let archivosValidos = [];
+let aplicandoSync = false;  // evita loop al aplicar estado remoto
+
+Sortable.create(listaCola, {
+  animation: 150,
+  handle: '.handle',
+  onEnd: () => {
+    const orden = [...listaCola.querySelectorAll('.item-cola')].map(el => el.dataset.id);
+    fetch(`/rockola/${SALA}/reordenar`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ orden, owner: OWNER, modo: 'sync' })
+    });
+  }
+});
+
+function activar() {
+  document.getElementById('pantalla-activar').style.display = 'none';
+  document.getElementById('pantalla-principal').style.display = 'block';
+  player.play().catch(() => {});
+  player.pause();
+
+  // cualquiera puede pausar/reanudar — notifica al servidor
+  player.addEventListener('pause', () => {
+    if (aplicandoSync) return;
+    fetch(`/rockola/${SALA}/sync_control`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ estado: 'pause', pos: player.currentTime, ts: Date.now()/1000 })
+    });
+  });
+  player.addEventListener('play', () => {
+    if (aplicandoSync) return;
+    fetch(`/rockola/${SALA}/sync_control`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ estado: 'play', pos: player.currentTime, ts: Date.now()/1000 })
+    });
+  });
+
+  setInterval(verificarCola, 2000);
+  verificarCola();
+}
+
+player.addEventListener('ended', () => {
+  const idTerminada = cancionActual;
+  reproduciendo = false;
+  cancionActual = null;
+  fetch(`/rockola/${SALA}/siguiente`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ id: idTerminada })
+  });
+});
+
+function archivosSeleccionados() {
+  archivosValidos = [...document.getElementById('archivo').files];
+  if (archivosValidos.length === 0) { btnSubir.disabled = true; return; }
+  btnSubir.textContent = archivosValidos.length === 1
+    ? `🎵 Poner en cola`
+    : `🎵 Poner ${archivosValidos.length} canciones`;
+  btnSubir.disabled = false;
+  estadoSubir.textContent = '';
+  estadoSubir.className = '';
+}
+
+function subir() {
+  if (archivosValidos.length === 0) return;
+  btnSubir.disabled = true;
+  barraBg.style.display = 'block';
+
+  const form = new FormData();
+  form.append('owner', OWNER);
+  archivosValidos.forEach(f => form.append('archivo', f));
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `/rockola/${SALA}/subir`);
+  xhr.upload.onprogress = e => { if (e.lengthComputable) barraEl.style.width = (e.loaded/e.total*100)+'%'; };
+  xhr.onload = () => {
+    barraBg.style.display = 'none';
+    barraEl.style.width = '0%';
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (res.ok) {
+        estadoSubir.textContent = res.agregadas.length === 1 ? '¡En cola! 🎉' : `¡${res.agregadas.length} canciones en cola! 🎉`;
+        estadoSubir.className = 'ok';
+        document.getElementById('archivo').value = '';
+        archivosValidos = [];
+        btnSubir.textContent = 'Selecciona canciones';
+        btnSubir.disabled = true;
+      } else {
+        estadoSubir.textContent = 'Error: ' + res.error;
+        estadoSubir.className = 'error';
+        btnSubir.disabled = false;
+      }
+    } catch(e) {
+      estadoSubir.textContent = `Error HTTP ${xhr.status}: ${xhr.responseText.slice(0,80)}`;
+      estadoSubir.className = 'error';
+      btnSubir.disabled = false;
+    }
+  };
+  xhr.onerror = () => { barraBg.style.display = 'none'; btnSubir.disabled = false; estadoSubir.textContent = 'Error de conexión'; estadoSubir.className = 'error'; };
+  xhr.send(form);
+}
+
+async function verificarCola() {
+  try {
+    const res = await fetch(`/rockola/${SALA}/cola`);
+    const data = await res.json();
+    const cola = data.cola || [];
+    renderCola(cola);
+
+    // canción nueva
+    if (cola.length > 0) {
+      const c = cola[0];
+      if (c.id !== cancionActual) {
+        cancionActual = c.id;
+        reproduciendo = true;
+        nombreActual.textContent = c.nombre.replace(/\.[^.]+$/, '');
+        player.src = `/rockola/${SALA}/archivo/${c.id}`;
+        player.load();
+        // al poder reproducir, buscar la posición sincronizada antes de play
+        const estado = data.sync_estado;
+        const pos = data.sync_pos;
+        const ts = data.sync_ts;
+        const posAjustada = estado === 'play' ? pos + (Date.now()/1000 - ts) : pos;
+        player.addEventListener('canplay', function onCanPlay() {
+          player.removeEventListener('canplay', onCanPlay);
+          aplicandoSync = true;
+          player.currentTime = posAjustada > 0 ? posAjustada : 0;
+          if (estado !== 'pause') player.play().catch(() => {});
+          setTimeout(() => { aplicandoSync = false; }, 300);
+        });
+        player.addEventListener('error', function onError() {
+          player.removeEventListener('error', onError);
+          // archivo no existe — saltar al siguiente
+          reproduciendo = false;
+          fetch(`/rockola/${SALA}/siguiente`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ id: cancionActual })
+          });
+          cancionActual = null;
+        });
+      }
+    }
+    if (cola.length === 0 && !reproduciendo) nombreActual.textContent = 'Esperando canciones...';
+
+    // sincronizar play/pause — cualquiera manda, el último en tocar gana
+    if (reproduciendo) {
+      const estado = data.sync_estado;
+      const pos = data.sync_pos;
+      const ts = data.sync_ts;
+      const posAjustada = estado === 'play' ? pos + (Date.now()/1000 - ts) : pos;
+
+      aplicandoSync = true;
+      if (estado === 'pause' && !player.paused) {
+        player.pause();
+        player.currentTime = pos;
+      } else if (estado === 'play' && player.paused) {
+        player.currentTime = posAjustada;
+        player.play().catch(() => {});
+      }
+      setTimeout(() => { aplicandoSync = false; }, 200);
+    }
+  } catch(e) {}
+}
+
+function compartir() {
+  const url = window.location.href;
+  if (navigator.share) {
+    navigator.share({ title: 'Tuc Tuc Rockola', text: 'Únete a mi sala', url });
+  } else {
+    navigator.clipboard.writeText(url).then(() => alert('URL copiada al portapapeles'));
+  }
+}
+
+function renderCola(cola) {
+  if (cola.length === 0) { listaCola.innerHTML = '<li class="empty-cola">Sin canciones aún</li>'; return; }
+  listaCola.innerHTML = cola.map((c, i) =>
+    `<li class="item-cola ${i===0&&reproduciendo?'sonando':''}" data-id="${c.id}">
+      <span class="handle">⠿</span>
+      <span class="nombre-c">${c.nombre.replace(/\.[^.]+$/,'')}</span>
+      <span class="pos">${i===0&&reproduciendo?'▶':'#'+(i+1)}</span>
+    </li>`
+  ).join('');
+}
+</script>
+</body>
+</html>

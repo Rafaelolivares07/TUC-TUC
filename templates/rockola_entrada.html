@@ -4,99 +4,223 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tuc Tuc Rockola</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Segoe UI', sans-serif; min-height: 100vh;
-    background: linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a2a1a 100%);
-    display: flex; align-items: center; justify-content: center; padding: 20px;
-  }
-  .card {
-    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 24px; padding: 36px 28px; max-width: 400px; width: 100%;
-    text-align: center; backdrop-filter: blur(10px);
-  }
-  .logo { font-size: 52px; margin-bottom: 8px; }
-  h1 { color: #f0a500; font-size: 26px; font-weight: 800; margin-bottom: 4px; }
-  .subtitulo { color: #666; font-size: 13px; margin-bottom: 32px; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .modo-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
-  .tab {
-    flex: 1; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
-    background: transparent; color: #888; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
-  }
-  .tab.activo { background: rgba(240,165,0,0.15); border-color: #f0a500; color: #f0a500; }
+:root {
+  --ac1: #00d4ff;
+  --ac1-dim: rgba(0,212,255,0.15);
+  --ac1-bg: rgba(0,212,255,0.08);
+  --ac2: #0066ff;
+  --ac-grad: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+  --bg: #060c18;
+  --surface: #0d1a2e;
+  --surface2: #132440;
+  --border: rgba(0,212,255,0.15);
+  --text: #e2eeff;
+  --muted: #4a6480;
+  --muted2: #2a3d55;
+}
 
-  .seccion { display: none; }
-  .seccion.visible { display: block; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
 
-  .descripcion { color: #888; font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
-  .descripcion b { color: #ccc; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+@keyframes slideIn { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:translateX(0); } }
 
-  label { display: block; color: #888; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; text-align: left; }
-  input[type=text] {
-    width: 100%; padding: 14px 16px; background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
-    color: #fff; font-size: 18px; font-weight: 700; letter-spacing: 2px;
-    text-align: center; margin-bottom: 12px; outline: none; text-transform: uppercase;
-  }
-  input[type=text]:focus { border-color: #f0a500; }
-  input[type=text]::placeholder { color: #333; font-weight: 400; letter-spacing: 0; font-size: 14px; text-transform: none; }
+.card {
+  width: 100%;
+  max-width: 380px;
+  animation: fadeUp 0.4s ease both;
+}
 
-  .btn-generar {
-    width: 100%; padding: 10px; background: transparent;
-    border: 1px dashed rgba(240,165,0,0.4); border-radius: 8px;
-    color: #f0a500; font-size: 13px; cursor: pointer; margin-bottom: 20px;
-    transition: all 0.2s;
-  }
-  .btn-generar:hover { background: rgba(240,165,0,0.08); }
+/* LOGO */
+.logo-wrap { text-align: center; margin-bottom: 40px; }
+.vinyl {
+  display: inline-block;
+  margin-bottom: 14px;
+}
+.logo-text { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+.logo-text span { color: var(--ac1); }
 
-  .btn-entrar {
-    width: 100%; padding: 16px; font-size: 17px; font-weight: 800;
-    background: linear-gradient(135deg, #f0a500, #ff6b35);
-    color: #111; border: none; border-radius: 12px; cursor: pointer;
-    transition: opacity 0.2s;
-  }
-  .btn-entrar:disabled { opacity: 0.3; cursor: default; }
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 28px;
+}
+.tab {
+  flex: 1;
+  padding: 11px 0;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab.activo {
+  background: var(--ac1-bg);
+  color: var(--ac1);
+  box-shadow: inset 0 0 0 1.5px var(--ac1);
+}
 
-  .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
-  .divider span { color: #333; font-size: 12px; }
-  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08); }
+/* SECCIONES */
+.seccion { display: none; }
+.seccion.visible { display: block; animation: slideIn 0.25s ease; }
+
+.desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+  margin-bottom: 22px;
+}
+.desc strong { color: var(--text); }
+
+label.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+input[type=text] {
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 3px;
+  text-align: center;
+  outline: none;
+  text-transform: uppercase;
+  transition: border-color 0.2s;
+  margin-bottom: 10px;
+}
+input[type=text]:focus { border-color: var(--ac1); }
+input[type=text]::placeholder { color: var(--muted2); font-weight: 400; font-size: 14px; letter-spacing: 0; text-transform: none; }
+
+.btn-gen {
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  color: var(--ac1);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: all 0.2s;
+}
+.btn-gen:hover { background: var(--ac1-bg); border-color: var(--ac1); }
+
+.btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: 12px;
+  border: none;
+  background: var(--ac-grad);
+  color: #000;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 24px var(--ac1-dim);
+  margin-bottom: 10px;
+}
+.btn:disabled { background: var(--surface2); color: var(--muted); box-shadow: none; cursor: default; }
+.btn.secondary {
+  background: var(--ac1-bg);
+  color: var(--ac1);
+  box-shadow: none;
+  border: 1.5px solid var(--border);
+}
+.btn.secondary:disabled { background: var(--surface2); color: var(--muted); border-color: transparent; }
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  color: var(--muted2);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="logo">🎵</div>
-  <h1>Tuc Tuc Rockola</h1>
-  <p class="subtitulo">Elige cómo quieres escuchar</p>
 
-  <div class="modo-tabs">
+  <!-- Logo -->
+  <div class="logo-wrap">
+    <div class="vinyl">
+      <svg width="56" height="56" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
+        <circle cx="20" cy="20" r="13" fill="#090f1c"/>
+        <circle cx="20" cy="20" r="8" fill="#0d1a2e" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.3"/>
+        <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
+        <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
+        <circle cx="20" cy="20" r="5" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+        <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+      </svg>
+    </div>
+    <div class="logo-text">Tuc Tuc <span>Rockola</span></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
     <button class="tab activo" onclick="setModo('sync')">🎶 Sync</button>
-    <button class="tab" onclick="setModo('restaurante')">🍽️ Restaurante</button>
+    <button class="tab" onclick="setModo('restaurante')">🍽 Restaurante</button>
   </div>
 
   <!-- SYNC -->
   <div class="seccion visible" id="sec-sync">
-    <p class="descripcion">Todos escuchan la misma canción al mismo tiempo.<br><b>Comparte el código con quien quieras.</b></p>
-
-    <label>Código de sala</label>
-    <input type="text" id="codigo-sync" placeholder="Escribe o genera un código" maxlength="20" oninput="validar()">
-    <button class="btn-generar" onclick="generarCodigo()">⚡ Generar código aleatorio</button>
-    <button class="btn-entrar" id="btn-sync" onclick="entrarSync()" disabled>Entrar a la sala →</button>
+    <p class="desc">Todos escuchan <strong>la misma canción</strong> al mismo tiempo. Comparte el código con quien quieras.</p>
+    <input type="text" id="codigo-sync" placeholder="Código de sala" maxlength="20" oninput="validar()">
+    <button class="btn-gen" onclick="generarCodigo()">⚡ Generar código aleatorio</button>
+    <button class="btn" id="btn-sync" onclick="entrarSync()" disabled>Entrar a la sala →</button>
   </div>
 
   <!-- RESTAURANTE -->
   <div class="seccion" id="sec-restaurante">
-    <p class="descripcion">Un reproductor en el local, los clientes suben canciones desde su celular.</p>
-
-    <label>Código de sala</label>
-    <input type="text" id="codigo-rest" placeholder="Ej: mi-bar, rancho-dapa..." maxlength="30" oninput="validar()">
-
+    <p class="desc">Un reproductor en el local. Los clientes suben canciones desde su celular.</p>
+    <label class="field-label">Código del local</label>
+    <input type="text" id="codigo-rest" placeholder="mi-bar, rancho..." maxlength="30" oninput="validar()">
     <div class="divider"><span>entrar como</span></div>
-
-    <button class="btn-entrar" style="margin-bottom:10px" onclick="entrarReproductor()">▶ Soy el reproductor del local</button>
-    <button class="btn-entrar" style="background:rgba(255,255,255,0.08); color:#fff;" onclick="entrarCliente()">🎵 Soy un cliente</button>
+    <button class="btn" onclick="entrarReproductor()">▶ Soy el reproductor del local</button>
+    <button class="btn secondary" onclick="entrarCliente()">🎵 Soy un cliente</button>
   </div>
+
 </div>
 
 <script>
@@ -104,9 +228,11 @@ let modoActual = 'sync';
 
 function setModo(modo) {
   modoActual = modo;
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('activo', (i===0&&modo==='sync')||(i===1&&modo==='restaurante')));
-  document.getElementById('sec-sync').classList.toggle('visible', modo === 'sync');
-  document.getElementById('sec-restaurante').classList.toggle('visible', modo === 'restaurante');
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('activo', (i===0&&modo==='sync')||(i===1&&modo==='restaurante'))
+  );
+  document.getElementById('sec-sync').classList.toggle('visible', modo==='sync');
+  document.getElementById('sec-restaurante').classList.toggle('visible', modo==='restaurante');
 }
 
 function validar() {
@@ -118,37 +244,35 @@ function validar() {
 }
 
 function generarCodigo() {
-  const palabras = ['luna','sol','rio','mar','viento','fuego','estrella','cielo','nube','lluvia'];
-  const num = Math.floor(Math.random() * 99) + 1;
-  const palabra = palabras[Math.floor(Math.random() * palabras.length)];
-  const codigo = palabra + num;
-  document.getElementById('codigo-sync').value = codigo.toUpperCase();
+  const ws = ['LUNA','SOL','RIO','MAR','FUEGO','CIELO','LLUVIA','VIENTO','NORTE','BRISA'];
+  const n = Math.floor(Math.random()*90)+10;
+  const codigo = ws[Math.floor(Math.random()*ws.length)] + n;
+  document.getElementById('codigo-sync').value = codigo;
   document.getElementById('btn-sync').disabled = false;
 }
 
-function limpiar(val) {
-  return val.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+function limpiar(v) {
+  return v.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');
 }
 
 function entrarSync() {
-  const codigo = limpiar(document.getElementById('codigo-sync').value);
-  if (!codigo) return;
-  window.location.href = `/rockola/sync/${codigo}`;
+  const c = limpiar(document.getElementById('codigo-sync').value);
+  if (c.length < 2) return;
+  window.location.href = `/rockola/sync/${c}`;
 }
 
 function entrarReproductor() {
-  const codigo = limpiar(document.getElementById('codigo-rest').value);
-  if (!codigo) return;
-  window.location.href = `/rockola/${codigo}/reproductor`;
+  const c = limpiar(document.getElementById('codigo-rest').value);
+  if (c.length < 2) return;
+  window.location.href = `/rockola/${c}/reproductor`;
 }
 
 function entrarCliente() {
-  const codigo = limpiar(document.getElementById('codigo-rest').value);
-  if (!codigo) return;
-  window.location.href = `/rockola/${codigo}/cliente`;
+  const c = limpiar(document.getElementById('codigo-rest').value);
+  if (c.length < 2) return;
+  window.location.href = `/rockola/${c}/cliente`;
 }
 
-// Enter para confirmar
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   if (modoActual === 'sync') entrarSync();

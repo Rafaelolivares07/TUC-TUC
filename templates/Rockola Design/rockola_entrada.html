@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tuc Tuc Rockola</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif; min-height: 100vh;
+    background: linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a2a1a 100%);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 24px; padding: 36px 28px; max-width: 400px; width: 100%;
+    text-align: center; backdrop-filter: blur(10px);
+  }
+  .logo { font-size: 52px; margin-bottom: 8px; }
+  h1 { color: #f0a500; font-size: 26px; font-weight: 800; margin-bottom: 4px; }
+  .subtitulo { color: #666; font-size: 13px; margin-bottom: 32px; }
+
+  .modo-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tab {
+    flex: 1; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+    background: transparent; color: #888; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .tab.activo { background: rgba(240,165,0,0.15); border-color: #f0a500; color: #f0a500; }
+
+  .seccion { display: none; }
+  .seccion.visible { display: block; }
+
+  .descripcion { color: #888; font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+  .descripcion b { color: #ccc; }
+
+  label { display: block; color: #888; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; text-align: left; }
+  input[type=text] {
+    width: 100%; padding: 14px 16px; background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+    color: #fff; font-size: 18px; font-weight: 700; letter-spacing: 2px;
+    text-align: center; margin-bottom: 12px; outline: none; text-transform: uppercase;
+  }
+  input[type=text]:focus { border-color: #f0a500; }
+  input[type=text]::placeholder { color: #333; font-weight: 400; letter-spacing: 0; font-size: 14px; text-transform: none; }
+
+  .btn-generar {
+    width: 100%; padding: 10px; background: transparent;
+    border: 1px dashed rgba(240,165,0,0.4); border-radius: 8px;
+    color: #f0a500; font-size: 13px; cursor: pointer; margin-bottom: 20px;
+    transition: all 0.2s;
+  }
+  .btn-generar:hover { background: rgba(240,165,0,0.08); }
+
+  .btn-entrar {
+    width: 100%; padding: 16px; font-size: 17px; font-weight: 800;
+    background: linear-gradient(135deg, #f0a500, #ff6b35);
+    color: #111; border: none; border-radius: 12px; cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-entrar:disabled { opacity: 0.3; cursor: default; }
+
+  .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; }
+  .divider span { color: #333; font-size: 12px; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🎵</div>
+  <h1>Tuc Tuc Rockola</h1>
+  <p class="subtitulo">Elige cómo quieres escuchar</p>
+
+  <div class="modo-tabs">
+    <button class="tab activo" onclick="setModo('sync')">🎶 Sync</button>
+    <button class="tab" onclick="setModo('restaurante')">🍽️ Restaurante</button>
+  </div>
+
+  <!-- SYNC -->
+  <div class="seccion visible" id="sec-sync">
+    <p class="descripcion">Todos escuchan la misma canción al mismo tiempo.<br><b>Comparte el código con quien quieras.</b></p>
+
+    <label>Código de sala</label>
+    <input type="text" id="codigo-sync" placeholder="Escribe o genera un código" maxlength="20" oninput="validar()">
+    <button class="btn-generar" onclick="generarCodigo()">⚡ Generar código aleatorio</button>
+    <button class="btn-entrar" id="btn-sync" onclick="entrarSync()" disabled>Entrar a la sala →</button>
+  </div>
+
+  <!-- RESTAURANTE -->
+  <div class="seccion" id="sec-restaurante">
+    <p class="descripcion">Un reproductor en el local, los clientes suben canciones desde su celular.</p>
+
+    <label>Código de sala</label>
+    <input type="text" id="codigo-rest" placeholder="Ej: mi-bar, rancho-dapa..." maxlength="30" oninput="validar()">
+
+    <div class="divider"><span>entrar como</span></div>
+
+    <button class="btn-entrar" style="margin-bottom:10px" onclick="entrarReproductor()">▶ Soy el reproductor del local</button>
+    <button class="btn-entrar" style="background:rgba(255,255,255,0.08); color:#fff;" onclick="entrarCliente()">🎵 Soy un cliente</button>
+  </div>
+</div>
+
+<script>
+let modoActual = 'sync';
+
+function setModo(modo) {
+  modoActual = modo;
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('activo', (i===0&&modo==='sync')||(i===1&&modo==='restaurante')));
+  document.getElementById('sec-sync').classList.toggle('visible', modo === 'sync');
+  document.getElementById('sec-restaurante').classList.toggle('visible', modo === 'restaurante');
+}
+
+function validar() {
+  const val = modoActual === 'sync'
+    ? document.getElementById('codigo-sync').value.trim()
+    : document.getElementById('codigo-rest').value.trim();
+  const btn = document.getElementById('btn-sync');
+  if (btn) btn.disabled = val.length < 2;
+}
+
+function generarCodigo() {
+  const palabras = ['luna','sol','rio','mar','viento','fuego','estrella','cielo','nube','lluvia'];
+  const num = Math.floor(Math.random() * 99) + 1;
+  const palabra = palabras[Math.floor(Math.random() * palabras.length)];
+  const codigo = palabra + num;
+  document.getElementById('codigo-sync').value = codigo.toUpperCase();
+  document.getElementById('btn-sync').disabled = false;
+}
+
+function limpiar(val) {
+  return val.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+}
+
+function entrarSync() {
+  const codigo = limpiar(document.getElementById('codigo-sync').value);
+  if (!codigo) return;
+  window.location.href = `/rockola/sync/${codigo}`;
+}
+
+function entrarReproductor() {
+  const codigo = limpiar(document.getElementById('codigo-rest').value);
+  if (!codigo) return;
+  window.location.href = `/rockola/${codigo}/reproductor`;
+}
+
+function entrarCliente() {
+  const codigo = limpiar(document.getElementById('codigo-rest').value);
+  if (!codigo) return;
+  window.location.href = `/rockola/${codigo}/cliente`;
+}
+
+// Enter para confirmar
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (modoActual === 'sync') entrarSync();
+});
+</script>
+</body>
+</html>

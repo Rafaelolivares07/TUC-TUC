@@ -1,6 +1,7 @@
 {
-  "commit": "5e460db",
-  "estado": "pendiente",
-  "iniciado": "2026-04-21T13:35:05.161179",
-  "mensaje": "docs: arquitectura_v2.md \u2014 mapa completo de estructura y blueprints"
+  "commit": "083e13c",
+  "estado": "live",
+  "iniciado": "2026-04-22T11:59:54.554776",
+  "mensaje": "crm: migrar rutas /chat y /api/chat completas desde V1",
+  "live_at": "2026-04-22T12:04:12.637917"
 }

@@ -3,109 +3,312 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tuc Tuc Rockola</title>
+<title>Tuc Tuc Rockola · {{ sala_id | upper }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Segoe UI', sans-serif; min-height: 100vh;
-    background: linear-gradient(135deg, #1a0533 0%, #0d1b4b 50%, #0a2a1a 100%);
-    display: flex; align-items: flex-start; justify-content: center; padding: 20px;
-  }
-  .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 32px 24px; max-width: 420px; width: 100%; backdrop-filter: blur(10px); }
-  h1 { color: #f0a500; font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 4px; }
-  .subtitulo { color: #888; font-size: 13px; text-align: center; margin-bottom: 24px; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .zona-cancion { border: 2px dashed rgba(240,165,0,0.4); border-radius: 16px; padding: 24px 16px; cursor: pointer; transition: all 0.2s; margin-bottom: 16px; position: relative; text-align: center; }
-  .zona-cancion:hover { border-color: #f0a500; background: rgba(240,165,0,0.06); }
-  .zona-cancion input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-  .zona-icono { font-size: 34px; margin-bottom: 8px; }
-  .zona-texto { color: #bbb; font-size: 14px; }
-  .zona-texto b { color: #f0a500; }
+:root {
+  --ac1: #00d4ff;
+  --ac1-dim: rgba(0,212,255,0.15);
+  --ac1-bg: rgba(0,212,255,0.08);
+  --ac2: #0066ff;
+  --ac-grad: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+  --bg: #060c18;
+  --surface: #0d1a2e;
+  --surface2: #132440;
+  --border: rgba(0,212,255,0.15);
+  --text: #e2eeff;
+  --muted: #4a6480;
+  --muted2: #2a3d55;
+}
 
-  #btn { width: 100%; padding: 16px; font-size: 17px; font-weight: 700; background: linear-gradient(135deg, #f0a500, #ff6b35); color: #111; border: none; border-radius: 12px; cursor: pointer; transition: opacity 0.2s; margin-bottom: 12px; }
-  #btn:disabled { opacity: 0.4; cursor: default; }
-  #estado { text-align: center; font-size: 13px; color: #888; min-height: 18px; margin-bottom: 16px; }
-  #estado.ok { color: #4caf50; font-weight: 600; }
-  #estado.error { color: #f44336; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px 48px;
+}
 
-  #progreso { display: none; margin-bottom: 14px; }
-  .barra-bg { background: rgba(255,255,255,0.1); border-radius: 8px; height: 6px; overflow: hidden; }
-  #barra { height: 100%; background: linear-gradient(90deg, #f0a500, #ff6b35); border-radius: 8px; width: 0%; transition: width 0.2s; }
+@keyframes fadeUp   { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes wave     { 0%,100%{height:5px} 50%{height:20px} }
+@keyframes successPop { 0%{transform:scale(.8);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
 
-  .cola-titulo { color: #888; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-  #lista-cola { list-style: none; }
-  .item-cola { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
-  .item-cola.mia { border-left: 3px solid #f0a500; }
-  .item-cola .handle { cursor: grab; color: #555; font-size: 16px; flex-shrink: 0; }
-  .item-cola .handle.bloqueado { cursor: default; color: #333; }
-  .item-cola .cancion-nombre { flex: 1; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item-cola .pos { color: #555; font-size: 11px; flex-shrink: 0; }
-  .empty-cola { color: #444; font-size: 13px; text-align: center; padding: 16px 0; }
+.card {
+  width: 100%;
+  max-width: 420px;
+  animation: fadeUp .4s ease;
+}
+
+/* Logo */
+.logo-wrap { text-align: center; margin-bottom: 24px; }
+.logo-text { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+.logo-text span { color: var(--ac1); }
+.sala-tag {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--ac1); background: var(--ac1-bg);
+  border: 1px solid var(--border);
+  padding: 5px 14px; border-radius: 8px;
+}
+
+.tagline { color: var(--muted); font-size: 13px; text-align: center; margin-bottom: 22px; line-height: 1.6; }
+
+/* Drop zone */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 20px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .25s;
+  margin-bottom: 14px;
+  position: relative;
+  background: var(--surface);
+}
+.drop-zone input[type=file] {
+  position: absolute; inset: 0;
+  opacity: 0; cursor: pointer;
+  width: 100%; height: 100%;
+}
+.drop-zone:hover, .drop-zone.over {
+  border-color: var(--ac1);
+  background: var(--ac1-bg);
+}
+.drop-zone.selected {
+  border-color: var(--ac1);
+  background: var(--ac1-bg);
+}
+.drop-zone.success {
+  border-color: #22c55e;
+  background: rgba(34,197,94,.07);
+}
+.drop-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+  display: block;
+  transition: transform .3s;
+}
+.drop-zone.selected .drop-icon { animation: successPop .4s ease; }
+.drop-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.drop-zone.selected .drop-title { color: var(--ac1); }
+.drop-zone.success .drop-title { color: #22c55e; }
+.drop-sub { font-size: 12px; color: var(--muted); }
+
+/* Progress */
+.prog-wrap { margin-bottom: 12px; display: none; }
+.prog-bg { background: var(--surface2); border-radius: 6px; height: 4px; overflow: hidden; }
+.prog-fill { height: 100%; background: var(--ac-grad); border-radius: 6px; width: 0%; transition: width .1s; }
+.prog-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 6px; }
+
+/* Buttons */
+.btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: 12px;
+  border: none;
+  background: var(--ac-grad);
+  color: #000;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all .2s;
+  box-shadow: 0 4px 24px var(--ac1-dim);
+  margin-bottom: 8px;
+  letter-spacing: -.2px;
+}
+.btn:disabled {
+  background: var(--surface2);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: default;
+}
+.upload-msg {
+  text-align: center;
+  font-size: 13px;
+  min-height: 18px;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+.upload-msg.ok    { color: #22c55e; }
+.upload-msg.error { color: #ef4444; }
+
+/* Queue */
+.queue-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 16px;
+}
+.queue-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 12px;
+}
+.queue-list { list-style: none; }
+.queue-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: var(--surface2);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  border-left: 3px solid transparent;
+  transition: all .2s;
+}
+.queue-item.playing { border-left-color: var(--ac1); background: var(--ac1-bg); }
+.queue-item.mia     { border-left-color: rgba(0,212,255,.4); }
+.handle { cursor: grab; color: var(--muted2); font-size: 15px; flex-shrink: 0; }
+.handle.locked { cursor: default; opacity: 0; pointer-events: none; }
+.q-info { flex: 1; overflow: hidden; }
+.q-nombre { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-item.playing .q-nombre { color: var(--ac1); }
+.q-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.q-pos { font-size: 11px; color: var(--muted); flex-shrink: 0; font-weight: 600; }
+.queue-item.playing .q-pos { color: var(--ac1); }
+.queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
+
+/* Wave for now playing */
+.wave-mini { display: inline-flex; align-items: center; gap: 2px; height: 14px; vertical-align: middle; margin-right: 4px; }
+.wave-mini span { display: inline-block; width: 2px; background: var(--ac1); border-radius: 2px; animation: wave .9s ease-in-out infinite; }
+
+.back-btn {
+  display: block; text-align: center; margin-top: 20px;
+  background: none; border: none; color: var(--muted);
+  font-family: 'Space Grotesk', sans-serif; font-size: 13px;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
 <div class="card">
-  <div style="font-size:36px; text-align:center; margin-bottom:6px;">🎵</div>
-  <h1>Tuc Tuc Rockola</h1>
-  <p class="subtitulo">Pon tu canción — suena en el local</p>
 
-  <div class="zona-cancion">
-    <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
-    <div class="zona-icono">🎶</div>
-    <div class="zona-texto">Toca aquí para elegir<br><b>una o varias canciones</b></div>
+  <!-- Logo -->
+  <div class="logo-wrap">
+    <svg width="36" height="36" viewBox="0 0 40 40" style="display:block;margin:0 auto 10px">
+      <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
+      <circle cx="20" cy="20" r="13" fill="#090f1c"/>
+      <circle cx="20" cy="20" r="8"  fill="#0d1a2e" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.3"/>
+      <circle cx="20" cy="20" r="3"  fill="#00d4ff"/>
+      <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
+      <circle cx="20" cy="20" r="5"  fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+      <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
+    </svg>
+    <div class="logo-text">Tuc Tuc <span>Rockola</span></div>
+    <div class="sala-tag">{{ sala_id | upper }}</div>
   </div>
 
-  <div id="progreso"><div class="barra-bg"><div id="barra"></div></div></div>
+  <p class="tagline">Pon tu canción — suena en el local 🔊</p>
 
-  <button id="btn" onclick="subir()" disabled>Selecciona una canción</button>
-  <div id="estado"></div>
+  <!-- Drop zone -->
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
+    <span class="drop-icon" id="drop-icon">🎶</span>
+    <div class="drop-title" id="drop-title">Toca para elegir canciones</div>
+    <div class="drop-sub" id="drop-sub">MP3 · AAC · WAV · FLAC</div>
+  </div>
 
-  <div class="cola-titulo">Cola actual</div>
-  <ul id="lista-cola"><li class="empty-cola">Sin canciones en cola</li></ul>
+  <!-- Progress -->
+  <div class="prog-wrap" id="prog-wrap">
+    <div class="prog-bg"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="prog-label" id="prog-label">Subiendo...</div>
+  </div>
+
+  <button class="btn" id="btn-subir" onclick="subir()" disabled>Selecciona una canción</button>
+  <div class="upload-msg" id="upload-msg"></div>
+
+  <!-- Queue -->
+  <div class="queue-box">
+    <div class="queue-label" id="queue-label">Cola del local</div>
+    <ul class="queue-list" id="lista-cola">
+      <li class="queue-empty">Sin canciones en cola</li>
+    </ul>
+  </div>
+
+  <button class="back-btn" onclick="window.location.href='/rockola/'">← Volver</button>
 </div>
 
 <script>
-const SALA = '{{ sala_id }}';
-const OWNER = localStorage.getItem('rockola_owner') || (() => { const id = Math.random().toString(36).slice(2,8); localStorage.setItem('rockola_owner', id); return id; })();
+const SALA  = '{{ sala_id }}';
+const OWNER = localStorage.getItem('rockola_owner') || (() => {
+  const id = Math.random().toString(36).slice(2, 8);
+  localStorage.setItem('rockola_owner', id);
+  return id;
+})();
 
-const btn = document.getElementById('btn');
-const estado = document.getElementById('estado');
-const progreso = document.getElementById('progreso');
-const barra = document.getElementById('barra');
-const listaCola = document.getElementById('lista-cola');
+const btn        = document.getElementById('btn-subir');
+const uploadMsg  = document.getElementById('upload-msg');
+const progWrap   = document.getElementById('prog-wrap');
+const progFill   = document.getElementById('prog-fill');
+const progLabel  = document.getElementById('prog-label');
+const listaCola  = document.getElementById('lista-cola');
+const queueLabel = document.getElementById('queue-label');
+const dropZone   = document.getElementById('drop-zone');
+const dropIcon   = document.getElementById('drop-icon');
+const dropTitle  = document.getElementById('drop-title');
+const dropSub    = document.getElementById('drop-sub');
 
 let archivosValidos = [];
+let reproduciendo = false;
 
+/* ── Sortable: cliente solo mueve las suyas ── */
 Sortable.create(listaCola, {
   animation: 150,
   handle: '.handle',
-  filter: '.handle.bloqueado',
+  filter: '.locked',
   onEnd: () => {
-    const orden = [...listaCola.querySelectorAll('.item-cola')].map(el => el.dataset.id);
+    const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
     fetch(`/rockola/${SALA}/reordenar`, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orden, owner: OWNER, modo: 'restaurante' })
     });
   }
 });
 
+/* ── Drag & drop visual ── */
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('over');
+  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('audio/'));
+  if (files.length) {
+    archivosValidos = files;
+    updateDropUI();
+  }
+});
+
 function archivosSeleccionados() {
-  const files = [...document.getElementById('archivo').files];
-  archivosValidos = files;
-  if (files.length === 0) { btn.disabled = true; btn.textContent = 'Selecciona una canción'; return; }
-  btn.textContent = files.length === 1 ? `🎵 Poner "${files[0].name.replace(/\.[^.]+$/,'')}"`  : `🎵 Poner ${files.length} canciones`;
+  archivosValidos = [...document.getElementById('archivo').files];
+  updateDropUI();
+}
+
+function updateDropUI() {
+  if (archivosValidos.length === 0) { btn.disabled = true; return; }
+  dropZone.className = 'drop-zone selected';
+  dropIcon.textContent = '🎵';
+  dropTitle.textContent = archivosValidos.length === 1
+    ? archivosValidos[0].name.replace(/\.[^.]+$/, '')
+    : `${archivosValidos.length} canciones`;
+  dropSub.textContent = 'Listo para subir';
+  btn.textContent = archivosValidos.length === 1 ? '🎵 Poner en cola' : `🎵 Poner ${archivosValidos.length} en cola`;
   btn.disabled = false;
-  estado.textContent = '';
-  estado.className = '';
+  uploadMsg.textContent = '';
+  uploadMsg.className = 'upload-msg';
 }
 
 function subir() {
   if (archivosValidos.length === 0) return;
   btn.disabled = true;
-  progreso.style.display = 'block';
-  estado.textContent = '';
+  progWrap.style.display = 'block';
+  uploadMsg.textContent = '';
 
   const form = new FormData();
   form.append('owner', OWNER);
@@ -113,48 +316,89 @@ function subir() {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', `/rockola/${SALA}/subir`);
-  xhr.upload.onprogress = e => { if (e.lengthComputable) barra.style.width = (e.loaded/e.total*100)+'%'; };
-  xhr.onload = () => {
-    progreso.style.display = 'none';
-    barra.style.width = '0%';
-    const res = JSON.parse(xhr.responseText);
-    if (res.ok) {
-      estado.textContent = res.agregadas.length === 1 ? '¡Canción en cola! 🎉' : `¡${res.agregadas.length} canciones en cola! 🎉`;
-      estado.className = 'ok';
-      btn.textContent = '+ Agregar más';
-      document.getElementById('archivo').value = '';
-      archivosValidos = [];
-    } else {
-      estado.textContent = 'Error: ' + res.error;
-      estado.className = 'error';
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) {
+      const pct = Math.round(e.loaded / e.total * 100);
+      progFill.style.width  = pct + '%';
+      progLabel.textContent = `Subiendo... ${pct}%`;
     }
+  };
+  xhr.onload = () => {
+    progWrap.style.display = 'none';
+    progFill.style.width   = '0%';
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (res.ok) {
+        uploadMsg.textContent = res.agregadas.length === 1
+          ? '¡Canción en cola! 🎉'
+          : `¡${res.agregadas.length} canciones en cola! 🎉`;
+        uploadMsg.className = 'upload-msg ok';
+        dropZone.className  = 'drop-zone success';
+        dropIcon.textContent = '🎉';
+        dropTitle.textContent = '¡En cola!';
+        dropSub.textContent = 'Toca para agregar más';
+        document.getElementById('archivo').value = '';
+        archivosValidos = [];
+        btn.textContent = '+ Agregar más';
+        btn.disabled    = false;
+      } else {
+        uploadMsg.textContent = 'Error: ' + res.error;
+        uploadMsg.className   = 'upload-msg error';
+        btn.disabled = false;
+      }
+    } catch(e) {
+      uploadMsg.textContent = `Error ${xhr.status}`;
+      uploadMsg.className   = 'upload-msg error';
+      btn.disabled = false;
+    }
+  };
+  xhr.onerror = () => {
+    progWrap.style.display = 'none';
+    uploadMsg.textContent  = 'Error de conexión';
+    uploadMsg.className    = 'upload-msg error';
     btn.disabled = false;
   };
-  xhr.onerror = () => { estado.textContent = 'Error de conexión'; estado.className = 'error'; btn.disabled = false; progreso.style.display = 'none'; };
   xhr.send(form);
+}
+
+/* ── Render cola ── */
+function renderCola(cola) {
+  reproduciendo = cola.length > 0;
+  queueLabel.textContent = `Cola · ${cola.length} canción${cola.length !== 1 ? 'es' : ''}`;
+
+  if (cola.length === 0) {
+    listaCola.innerHTML = '<li class="queue-empty">Sin canciones en cola</li>';
+    return;
+  }
+
+  listaCola.innerHTML = cola.map((c, i) => {
+    const mia     = c.owner === OWNER;
+    const playing = i === 0;
+    return `
+      <li class="queue-item ${playing ? 'playing' : ''} ${mia ? 'mia' : ''}" data-id="${c.id}">
+        <span class="handle ${mia ? '' : 'locked'}">⠿</span>
+        <div class="q-info">
+          <div class="q-nombre">${c.nombre.replace(/\.[^.]+$/, '')}</div>
+          ${mia ? `<div class="q-sub">Tu canción</div>` : ''}
+        </div>
+        <span class="q-pos">${playing
+          ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`
+          : '#' + (i + 1)
+        }</span>
+      </li>
+    `;
+  }).join('');
 }
 
 async function actualizarCola() {
   try {
-    const res = await fetch(`/rockola/${SALA}/cola`);
+    const res  = await fetch(`/rockola/${SALA}/cola`);
     const data = await res.json();
     renderCola(data.cola || []);
-  } catch(e) {}
+  } catch(e) { /* sin conexión */ }
 }
 
-function renderCola(cola) {
-  if (cola.length === 0) { listaCola.innerHTML = '<li class="empty-cola">Sin canciones en cola</li>'; return; }
-  listaCola.innerHTML = cola.map((c, i) => {
-    const mia = c.owner === OWNER;
-    return `<li class="item-cola ${mia?'mia':''}" data-id="${c.id}">
-      <span class="handle ${mia?'':'bloqueado'}">⠿</span>
-      <span class="cancion-nombre">${c.nombre.replace(/\.[^.]+$/,'')}</span>
-      <span class="pos">#${i+1}</span>
-    </li>`;
-  }).join('');
-}
-
-setInterval(actualizarCola, 2000);
+setInterval(actualizarCola, 2500);
 actualizarCola();
 </script>
 </body>

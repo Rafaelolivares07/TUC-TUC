@@ -25,7 +25,7 @@ def job_verificar_recordatorios():
 
 
 def get_chat_tercero_id():
-    return session.get('usuario_id') or session.get('chat_tercero_id') or None
+    return session.get('chat_tercero_id') or session.get('usuario_id') or None
 
 
 # ── Páginas ────────────────────────────────────────────────────────────────

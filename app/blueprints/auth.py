@@ -65,13 +65,27 @@ def admin_login_post():
         """, (usuario, password)).fetchone()
 
         if admin:
+            # Resolver tercero_id para el sistema de chat
+            tercero = conn.execute(
+                "SELECT id FROM terceros WHERE tipo_tercero = 'admin' AND nombre = %s LIMIT 1",
+                (admin['nombre'],)
+            ).fetchone()
+            if not tercero:
+                tercero = conn.execute(
+                    """INSERT INTO terceros (nombre, tipo_tercero)
+                       VALUES (%s, 'admin') RETURNING id""",
+                    (admin['nombre'],)
+                ).fetchone()
+                conn.commit()
+
             session.clear()
-            session['usuario_id']   = admin['id']
-            session['nombre']       = admin['nombre']
-            session['rol']          = admin['rol']
-            session['dispositivo_id'] = admin.get('dispositivo_id', '')
-            session.permanent       = True
-            session.modified        = True
+            session['usuario_id']      = admin['id']
+            session['chat_tercero_id'] = tercero['id']
+            session['nombre']          = admin['nombre']
+            session['rol']             = admin['rol']
+            session['dispositivo_id']  = admin.get('dispositivo_id', '')
+            session.permanent          = True
+            session.modified           = True
 
             if admin['rol'] == 'ClienteVFP':
                 return redirect(url_for('admin_agent.consultas_page'))

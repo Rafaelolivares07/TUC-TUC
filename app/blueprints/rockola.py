@@ -149,7 +149,9 @@ COBALT_API = 'https://api.cobalt.tools/'
 COBALT_HEADERS = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (compatible; TucTucRockola/1.0)',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Origin': 'https://cobalt.tools',
+    'Referer': 'https://cobalt.tools/',
 }
 
 @bp.route('/<sala_id>/youtube', methods=['POST'])
@@ -168,16 +170,15 @@ def youtube(sala_id):
 
     # 1. Pedir a cobalt la URL de descarga
     try:
-        payload = _json.dumps({
-            'url': url,
-            'downloadMode': 'audio',
-            'audioFormat': 'mp3',
-            'audioBitrate': '128',
-        }).encode()
+        payload = _json.dumps({'url': url, 'downloadMode': 'audio', 'audioFormat': 'mp3'}).encode()
         req = urllib.request.Request(COBALT_API, data=payload,
                                      headers=COBALT_HEADERS, method='POST')
-        with urllib.request.urlopen(req, timeout=20) as r:
-            cobalt = _json.loads(r.read())
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                cobalt = _json.loads(r.read())
+        except urllib.error.HTTPError as he:
+            body = he.read().decode('utf-8', errors='ignore')[:300]
+            return jsonify(ok=False, error=f'Cobalt HTTP {he.code}: {body}'), 502
     except Exception as e:
         return jsonify(ok=False, error=f'Cobalt no respondió: {e}'), 502
 

@@ -172,19 +172,28 @@ def youtube(sala_id):
     nombre_id  = str(uuid.uuid4())
     out_path   = os.path.join(upload_dir, nombre_id)  # yt-dlp añade la extensión
 
+    # Ruta al cookies.txt — en la raíz del proyecto
+    cookies_path = os.path.join(os.path.dirname(__file__), '..', '..', 'cookies.txt')
+    if not os.path.exists(cookies_path):
+        # Fallback: buscar en la raíz absoluta
+        cookies_path = os.path.join(os.getcwd(), 'cookies.txt')
+
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': out_path + '.%(ext)s',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
-        # Convertir a mp3 si ffmpeg está disponible
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
     }
+
+    # Usar cookies si el archivo existe
+    if os.path.exists(cookies_path):
+        ydl_opts['cookiefile'] = cookies_path
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

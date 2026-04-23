@@ -1,7 +1,7 @@
 {
-  "commit": "107c875",
+  "commit": "dbdb180",
   "estado": "live",
-  "iniciado": "2026-04-23T10:08:06.120405",
-  "mensaje": "rockola: cola persistente en DB + redise\u00f1o UI",
-  "live_at": "2026-04-23T10:13:34.916493"
+  "iniciado": "2026-04-23T10:52:12.818980",
+  "mensaje": "rockola: yt-dlp + ffmpeg",
+  "live_at": "2026-04-23T10:55:08.270569"
 }

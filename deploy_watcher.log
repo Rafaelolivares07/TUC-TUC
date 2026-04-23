@@ -1,17 +1,10 @@
-[watcher] Deploy pendiente — commit 107c875 | 2026-04-23T10:08:06.120405
-[watcher] #1 live=083e13c esperado=107c875
-[watcher] #2 live=083e13c esperado=107c875
-[watcher] #3 live=083e13c esperado=107c875
-[watcher] #4 live=083e13c esperado=107c875
-[watcher] #5 live=083e13c esperado=107c875
-[watcher] #6 live=083e13c esperado=107c875
-[watcher] #7 live=083e13c esperado=107c875
-[watcher] #8 live=083e13c esperado=107c875
-[watcher] #9 live=083e13c esperado=107c875
-[watcher] #10 live=083e13c esperado=107c875
-[watcher] #11 live=083e13c esperado=107c875
-[watcher] #12 live=083e13c esperado=107c875
-[watcher] #13 live=083e13c esperado=107c875
-[watcher] #14 live=083e13c esperado=107c875
-[watcher] #15 live=107c875 esperado=107c875
-[watcher] Deploy confirmado en intento #15. Terminando.
+[watcher] Deploy pendiente — commit dbdb180 | 2026-04-23T10:52:12.818980
+[watcher] #1 live=107c875 esperado=dbdb180
+[watcher] #2 live=107c875 esperado=dbdb180
+[watcher] #3 live=107c875 esperado=dbdb180
+[watcher] #4 live=107c875 esperado=dbdb180
+[watcher] #5 live=107c875 esperado=dbdb180
+[watcher] #6 live=107c875 esperado=dbdb180
+[watcher] #7 live=107c875 esperado=dbdb180
+[watcher] #8 live=dbdb180 esperado=dbdb180
+[watcher] Deploy confirmado en intento #8. Terminando.

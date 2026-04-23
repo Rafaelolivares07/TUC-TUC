@@ -145,90 +145,59 @@ def subir(sala_id):
 
 # ── API: YouTube → cola ───────────────────────────────────────────────────────
 
-@bp.route('/<sala_id>/youtube', methods=['POST'])
-def youtube(sala_id):
+@bp.route('/<sala_id>/youtube_resolve', methods=['POST'])
+def youtube_resolve(sala_id):
     """
-    Recibe { url, owner } — descarga el audio con yt-dlp y lo agrega a la cola.
-    yt-dlp debe estar instalado: pip install yt-dlp
-    ffmpeg debe estar disponible en el sistema para la conversión a mp3.
+    Resuelve la URL del stream de audio de YouTube sin descargar.
+    El cliente descarga desde su propia IP residencial para evitar bot-check.
     """
     try:
         import yt_dlp
     except ImportError:
         return jsonify(ok=False, error='yt-dlp no instalado en el servidor'), 500
 
-    data  = request.get_json(silent=True) or {}
-    url   = data.get('url', '').strip()
-    owner = data.get('owner', 'anon')
+    data = request.get_json(silent=True) or {}
+    url  = data.get('url', '').strip()
 
-    if not url:
-        return jsonify(ok=False, error='URL vacía'), 400
+    if not url or ('youtube.com' not in url and 'youtu.be' not in url):
+        return jsonify(ok=False, error='URL de YouTube inválida'), 400
 
-    # Validar que sea YouTube
-    if 'youtube.com' not in url and 'youtu.be' not in url:
-        return jsonify(ok=False, error='Solo se aceptan URLs de YouTube'), 400
-
-    upload_dir = _upload_dir(sala_id)
-    nombre_id  = str(uuid.uuid4())
-    out_path   = os.path.join(upload_dir, nombre_id)  # yt-dlp añade la extensión
-
-    # Ruta al cookies.txt — en la raíz del proyecto
     cookies_path = os.path.join(os.path.dirname(__file__), '..', '..', 'cookies.txt')
     if not os.path.exists(cookies_path):
-        # Fallback: buscar en la raíz absoluta
         cookies_path = os.path.join(os.getcwd(), 'cookies.txt')
 
     ydl_opts = {
         'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
-        'outtmpl': out_path + '.%(ext)s',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
         'extractor_args': {'youtube': {'player_client': ['tv_embedded', 'ios']}},
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
     }
-
-    # Usar cookies si el archivo existe
     if os.path.exists(cookies_path):
         ydl_opts['cookiefile'] = cookies_path
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            titulo = info.get('title', 'Canción de YouTube')
-            # Duración máxima: 15 minutos
+            info = ydl.extract_info(url, download=False)
+            titulo   = info.get('title', 'audio')
             duracion = info.get('duration', 0)
             if duracion > 900:
-                # Eliminar archivo si se descargó
-                mp3_path = out_path + '.mp3'
-                if os.path.exists(mp3_path):
-                    os.remove(mp3_path)
                 return jsonify(ok=False, error='La canción es muy larga (máx. 15 min)'), 400
 
+            formats = info.get('formats', [])
+            audio_fmts = [f for f in formats
+                          if f.get('acodec') != 'none' and f.get('vcodec') in (None, 'none')]
+            if not audio_fmts:
+                audio_fmts = formats
+            audio_fmts.sort(key=lambda f: f.get('abr') or 0, reverse=True)
+            best = audio_fmts[0]
+
+            return jsonify(ok=True,
+                           stream_url=best.get('url'),
+                           titulo=titulo,
+                           ext=best.get('ext', 'webm'))
     except Exception as e:
-        return jsonify(ok=False, error=f'No se pudo descargar: {str(e)[:120]}'), 500
-
-    archivo_final = nombre_id + '.mp3'
-    nombre_display = titulo + '.mp3'
-
-    with _lock, engine.connect() as conn:
-        pos_actual = _max_pos(conn, sala_id) + 1
-        conn.execute(text("""
-            INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
-            VALUES (:id, :sala_id, :nombre, :owner, :pos)
-        """), {'id': archivo_final, 'sala_id': sala_id, 'nombre': nombre_display,
-               'owner': owner, 'pos': pos_actual})
-        conn.commit()
-
-    return jsonify(ok=True, agregadas=[{
-        'id': archivo_final,
-        'nombre': nombre_display,
-        'owner': owner
-    }])
+        return jsonify(ok=False, error=f'No se pudo resolver: {str(e)[:200]}'), 500
 
 
 # ── API: cola, sync, siguiente, reordenar, archivo ───────────────────────────

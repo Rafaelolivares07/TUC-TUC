@@ -313,41 +313,71 @@ function subirArchivo() {
   xhr.send(form);
 }
 
-function subirYoutube() {
+async function subirYoutube() {
   const url = document.getElementById('yt-url').value.trim();
   if (!url) return;
   btnPoner.disabled      = true;
   progWrap.style.display = 'block';
-  progLabel.textContent  = 'Descargando audio... (puede tardar ~20s)';
-  // Simular progreso indeterminado
-  let pct = 0;
-  const iv = setInterval(() => {
-    pct = Math.min(pct + Math.random()*3, 85);
-    progFill.style.width = pct + '%';
-  }, 400);
 
-  fetch(`/rockola/${SALA}/youtube`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, owner: OWNER })
-  })
-  .then(r => r.json())
-  .then(res => {
-    clearInterval(iv);
-    progFill.style.width   = '100%';
-    setTimeout(() => {
-      progWrap.style.display = 'none';
-      progFill.style.width   = '0%';
-    }, 300);
-    if (res.ok) {
+  try {
+    // 1. Servidor resuelve la URL del stream (sin descargar)
+    progLabel.textContent = 'Resolviendo link...';
+    progFill.style.width  = '8%';
+    const res  = await fetch(`/rockola/${SALA}/youtube_resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (!data.ok) { onError(data.error); return; }
+
+    // 2. Este browser descarga el audio directamente (IP del usuario, no del servidor)
+    progLabel.textContent = 'Descargando audio...';
+    progFill.style.width  = '15%';
+    const audioRes = await fetch(data.stream_url);
+    if (!audioRes.ok) throw new Error('Error descargando stream');
+
+    const total  = parseInt(audioRes.headers.get('Content-Length') || '0');
+    const reader = audioRes.body.getReader();
+    const chunks = [];
+    let   loaded = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+      const pct = total ? Math.min(15 + Math.round(loaded / total * 70), 85) : 50;
+      progFill.style.width  = pct + '%';
+      progLabel.textContent = total
+        ? `Descargando... ${Math.round(loaded/total*100)}%`
+        : 'Descargando audio...';
+    }
+
+    // 3. Subir el blob al servidor como archivo normal
+    progLabel.textContent = 'Subiendo a la sala...';
+    progFill.style.width  = '90%';
+    const ext  = data.ext || 'webm';
+    const blob = new Blob(chunks, { type: `audio/${ext}` });
+    const form = new FormData();
+    form.append('owner', OWNER);
+    form.append('archivo', new File([blob], `${data.titulo}.${ext}`));
+    const up   = await fetch(`/rockola/${SALA}/subir`, { method: 'POST', body: form });
+    const upData = await up.json();
+
+    progFill.style.width = '100%';
+    setTimeout(() => { progWrap.style.display='none'; progFill.style.width='0%'; }, 300);
+
+    if (upData.ok) {
       onSuccess(1);
       document.getElementById('yt-url').value = '';
       document.getElementById('yt-preview').className = 'yt-preview';
     } else {
-      onError(res.error);
+      onError(upData.error);
     }
-  })
-  .catch(() => { clearInterval(iv); progWrap.style.display='none'; onError('Error de conexión'); });
+  } catch (e) {
+    progWrap.style.display = 'none';
+    onError('Error: ' + e.message);
+  }
 }
 
 function onSuccess(n) {

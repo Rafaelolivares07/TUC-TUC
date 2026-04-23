@@ -1,7 +1,7 @@
 {
-  "commit": "083e13c",
+  "commit": "107c875",
   "estado": "live",
-  "iniciado": "2026-04-22T11:59:54.554776",
-  "mensaje": "crm: migrar rutas /chat y /api/chat completas desde V1",
-  "live_at": "2026-04-22T12:04:12.637917"
+  "iniciado": "2026-04-23T10:08:06.120405",
+  "mensaje": "rockola: cola persistente en DB + redise\u00f1o UI",
+  "live_at": "2026-04-23T10:13:34.916493"
 }

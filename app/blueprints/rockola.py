@@ -145,7 +145,7 @@ def subir(sala_id):
 
 # ── API: YouTube → cola ───────────────────────────────────────────────────────
 
-COBALT_API = 'https://cobalt.tools/api/'
+COBALT_API = 'https://api.cobalt.tools/'
 COBALT_HEADERS = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',

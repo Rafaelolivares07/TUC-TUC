@@ -44,6 +44,15 @@ def _crear_tablas(conn):
             cliente_id VARCHAR(100) NOT NULL,
             UNIQUE(usuario_id, cliente_id)
         )""",
+        """CREATE TABLE IF NOT EXISTS admin_agent_reportes (
+            id SERIAL PRIMARY KEY,
+            cliente_id VARCHAR(100),
+            tipo VARCHAR(50),
+            estado VARCHAR(20),
+            detalle TEXT,
+            ip VARCHAR(50),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -93,6 +102,64 @@ def checkin():
         )
         conn.commit()
         return jsonify({'ok': True, 'token': token})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/reporte', methods=['POST'])
+def reporte():
+    """Recibe reportes de instalación y arranque desde PCs clientes."""
+    data = request.get_json() or {}
+    cliente_id = data.get('cliente_id', '')
+    tipo       = data.get('tipo', '')
+    estado     = data.get('estado', '')
+    detalle    = data.get('detalle', '')
+    ip         = data.get('ip', '')
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        conn.execute(
+            "INSERT INTO admin_agent_reportes (cliente_id, tipo, estado, detalle, ip) VALUES (%s,%s,%s,%s,%s)",
+            (cliente_id, tipo, estado, detalle, ip)
+        )
+        # Notificar a Merlin via chat_mensajes canal='captura':
+        # - instalacion: siempre (primera vez es crítico saberlo)
+        # - arranque_*: solo si hay error (arranques ok son rutinarios)
+        _notificar = tipo == 'instalacion' or (tipo.startswith('arranque') and estado != 'ok')
+        if _notificar:
+            resumen_detalle = detalle[-1500:] if len(detalle) > 1500 else detalle
+            texto = (
+                f"[REPORTE {cliente_id.upper()}] tipo={tipo} estado={estado} ip={ip}\n"
+                f"{resumen_detalle}"
+            )
+            try:
+                conn.execute(
+                    "INSERT INTO chat_mensajes (rol, contenido, canal) VALUES ('user',%s,'captura')",
+                    (texto,)
+                )
+            except Exception:
+                pass  # Si chat_mensajes no existe en este entorno, no bloquear
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/reportes', methods=['GET'])
+@admin_required
+def ver_reportes():
+    """Lista los últimos reportes para que Merlin pueda consultarlos."""
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        rows = conn.execute(
+            "SELECT cliente_id, tipo, estado, detalle, ip, created_at FROM admin_agent_reportes ORDER BY created_at DESC LIMIT 50"
+        ).fetchall()
+        return jsonify({'ok': True, 'reportes': [dict(r) for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

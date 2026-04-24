@@ -609,6 +609,29 @@ def api_ventas_clientes_excel():
         return str(e), 500
 
 
+def _reportar_arranque():
+    """POST al servidor Render cuando administrator_web arranca (solo proceso padre)."""
+    try:
+        import requests, socket as _s
+        try:
+            ip = _s.gethostbyname(_s.gethostname())
+        except Exception:
+            ip = ''
+        requests.post(
+            'https://tuc-tuc.onrender.com/api/admin-agent/reporte',
+            json={
+                'cliente_id': 'pilar',
+                'tipo':       'arranque_web',
+                'estado':     'ok',
+                'detalle':    'administrator_web.py arrancó en localhost:5002',
+                'ip':         ip,
+            },
+            timeout=10,
+        )
+    except Exception:
+        pass  # Sin red o servidor dormido — silencioso
+
+
 if __name__ == '__main__':
     import socket as _socket
     # El reloader de Flask arranca dos procesos; el lock solo aplica al padre
@@ -622,4 +645,5 @@ if __name__ == '__main__':
         print('=' * 55)
         print('  Administrator Web — localhost:5002')
         print('=' * 55)
+        _reportar_arranque()
     app.run(host='127.0.0.1', port=5002, debug=True, use_reloader=True)

@@ -418,6 +418,14 @@ def main():
         print(f"ERROR conectando a Render: {e}")
         sys.exit(1)
 
+    try:
+        requests.post(f"{base}/api/admin-agent/reporte",
+                      json={'cliente_id': cliente_id, 'tipo': 'arranque_agent',
+                            'estado': 'ok', 'detalle': f'admin_agent arrancó — BD: {ruta_bd}',
+                            'ip': ip_local}, timeout=10)
+    except Exception:
+        pass
+
     print("Esperando consultas... (Ctrl+C para salir)\n")
 
     try:

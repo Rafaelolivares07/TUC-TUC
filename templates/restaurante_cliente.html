@@ -11,7 +11,7 @@
         body.tema-claro { background: #faf7f2; color: #1f2937; }
         body.tema-oscuro { background: #111827; color: #f3f4f6; }
         .toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
             padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
             z-index: 9999; opacity: 0; transition: opacity 0.3s;
         }
@@ -57,6 +57,22 @@
             object-fit: contain;
             box-shadow: 0 20px 60px rgba(0,0,0,0.5);
         }
+
+        /* Sticky bottom bar */
+        #barra-pedir {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            z-index: 100;
+            background: #fff;
+            border-top: 2px solid #e5e7eb;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.10);
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+            display: none;
+        }
+        .tema-oscuro #barra-pedir {
+            background: #1f2937;
+            border-top-color: #374151;
+        }
+        .barra-pedir-visible { padding-bottom: 100px !important; }
 
         /* Descripción colapsable */
         .desc-plato {
@@ -195,19 +211,17 @@
             </div>
         </div>
 
-        <!-- Notas -->
-        <div id="sec-notas" class="hidden mb-4">
-            <input id="cli-notas" type="text" placeholder="Alguna nota? (sin cebolla, extra arroz...)" class="card-input w-full border rounded-xl px-4 py-3 text-sm">
-        </div>
-
-        <!-- Botón pedir -->
-        <div id="sec-pedir" class="hidden">
-            <div class="card rounded-2xl shadow p-4 flex items-center justify-between">
+        <!-- Barra inferior sticky (notas + pedir) — se activa cuando hay items -->
+        <div id="barra-pedir">
+            <input id="cli-notas" type="text" placeholder="¿Alguna nota? (sin cebolla, extra arroz…)"
+                   class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2">
+            <div class="flex items-center justify-between gap-3">
                 <div>
-                    <span class="txt-muted text-sm">Tu pedido:</span>
-                    <span id="cli-precio" class="text-2xl font-extrabold text-amber-600 ml-2">$0</span>
+                    <span class="txt-muted text-xs">Total</span>
+                    <div id="cli-precio" class="text-2xl font-extrabold text-amber-600 leading-tight">$0</div>
                 </div>
-                <button onclick="enviarPedido()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold text-lg">
+                <button id="btn-pedir" onclick="enviarPedido()"
+                        class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-8 py-3 rounded-2xl font-bold text-lg flex-shrink-0 transition-all">
                     Pedir
                 </button>
             </div>
@@ -253,6 +267,23 @@ let sopaSeleccionada = null;
 let proteinaSeleccionada = null;
 let principioSeleccionado = null;
 let nombreCliente = '';
+let pedidoEnviando = false;
+
+function mostrarBarraPedir() {
+    const barra = document.getElementById('barra-pedir');
+    if (!barra) return;
+    barra.style.display = 'block';
+    document.body.classList.add('barra-pedir-visible');
+}
+
+function ocultarBarraPedir() {
+    const barra = document.getElementById('barra-pedir');
+    if (!barra) return;
+    barra.style.display = 'none';
+    document.body.classList.remove('barra-pedir-visible');
+    const notas = document.getElementById('cli-notas');
+    if (notas) notas.value = '';
+}
 
 function toast(msg, ok = true) {
     const t = document.getElementById('toast');
@@ -304,8 +335,7 @@ function activarModo(modo) {
     document.getElementById('sin-menu').classList.add('hidden');
     document.getElementById('sec-tipos').innerHTML = '';
     document.getElementById('sec-opciones').classList.add('hidden');
-    document.getElementById('sec-notas').classList.add('hidden');
-    document.getElementById('sec-pedir').classList.add('hidden');
+    ocultarBarraPedir();
     if (modo === 'carta') {
         cargarCartaCliente();
     } else {
@@ -409,8 +439,7 @@ function seleccionarTipo(tipo) {
     if (tipo !== 'sopa') renderOpcionesCliente('grid-cli-proteinas', proteinas, 'proteina');
     if (tipo !== 'sopa') renderOpcionesCliente('grid-cli-principios', principios, 'principio');
 
-    document.getElementById('sec-notas').classList.remove('hidden');
-    document.getElementById('sec-pedir').classList.remove('hidden');
+    mostrarBarraPedir();
     calcularPrecio();
 }
 
@@ -459,6 +488,7 @@ function calcularPrecio() {
 
 // ===== ENVIAR PEDIDO =====
 async function enviarPedido() {
+    if (pedidoEnviando) return;
     if (!tipoSeleccionado) return toast('Selecciona un tipo', false);
     if (tipoSeleccionado === 'completo') {
         if (!sopaSeleccionada) return toast('Elige una sopa', false);
@@ -471,6 +501,9 @@ async function enviarPedido() {
         if (!sopaSeleccionada) return toast('Elige una sopa', false);
     }
 
+    pedidoEnviando = true;
+    const btn = document.getElementById('btn-pedir');
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
     try {
         const r = await fetch(`${BASE}/pedido`, {
             method: 'POST',
@@ -492,15 +525,12 @@ async function enviarPedido() {
         const data = await r.json();
         if (data.ok) {
             toast('Pedido enviado');
-            // Reset
             tipoSeleccionado = null;
             sopaSeleccionada = null;
             proteinaSeleccionada = null;
             principioSeleccionado = null;
-            document.getElementById('cli-notas').value = '';
             document.getElementById('sec-opciones').classList.add('hidden');
-            document.getElementById('sec-notas').classList.add('hidden');
-            document.getElementById('sec-pedir').classList.add('hidden');
+            ocultarBarraPedir();
             document.querySelectorAll('.tipo-btn').forEach(b => {
                 b.classList.remove('selected', 'border-amber-500', 'bg-amber-50');
                 b.classList.add('border-transparent');
@@ -514,6 +544,10 @@ async function enviarPedido() {
             }
         }
     } catch(e) { toast('Error de conexión', false); }
+    finally {
+        pedidoEnviando = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Pedir'; }
+    }
 }
 
 // ===== MIS PEDIDOS =====
@@ -650,11 +684,8 @@ async function cargarCartaCliente() {
             }
         }).join('');
 
-        // Mostrar notas y botón pedir (solo si no es solo_carta)
-        if (!SOLO_CARTA) {
-            document.getElementById('sec-notas').classList.remove('hidden');
-            document.getElementById('sec-pedir').classList.remove('hidden');
-        }
+        // Mostrar barra pedir (solo si no es solo_carta)
+        if (!SOLO_CARTA) mostrarBarraPedir();
         cartaClienteTotal();
     } catch(e) { console.error(e); }
 }
@@ -679,6 +710,7 @@ function cartaClienteTotal() {
 // Override enviarPedido for carta + remote check
 const _enviarPedidoOriginal = enviarPedido;
 enviarPedido = async function() {
+    if (pedidoEnviando) return;
     // Remoto: verificar registro y tipo de entrega antes de pedir
     if (!MESA && (!clienteId || !tipoEntrega)) {
         abrirModalRegistro();
@@ -687,6 +719,9 @@ enviarPedido = async function() {
     if (TIPO_REST === 'carta' || (TIPO_REST === 'ambos' && modoActual === 'carta')) {
         const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
         if (platos.length === 0) return toast('Agrega al menos un plato', false);
+        pedidoEnviando = true;
+        const btn = document.getElementById('btn-pedir');
+        if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
         try {
             const r = await fetch(`${BASE}/pedido`, {
                 method: 'POST',
@@ -706,12 +741,12 @@ enviarPedido = async function() {
             if (data.ok) {
                 toast('Pedido enviado');
                 carrito = {};
-                document.getElementById('cli-notas').value = '';
                 cartaCatalogo.forEach(p => {
                     const s = document.getElementById(`cli-cant-${p.id}`);
                     if (s) s.textContent = '0';
                 });
                 cartaClienteTotal();
+                ocultarBarraPedir();
                 cargarMisPedidos();
             } else {
                 if (data.error === 'suscripcion_agotada') {
@@ -721,6 +756,10 @@ enviarPedido = async function() {
                 }
             }
         } catch(e) { toast('Error de conexión', false); }
+        finally {
+            pedidoEnviando = false;
+            if (btn) { btn.disabled = false; btn.textContent = 'Pedir'; }
+        }
     } else {
         return _enviarPedidoOriginal();
     }

@@ -16,10 +16,6 @@
     <!-- Leaflet Routing Machine CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 
-    <!-- Firebase SDK para Push Notifications -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
-
     <style>
         .animate-bounce-in {
             animation: bounceIn 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
@@ -69,16 +65,6 @@
             <p id="conteo-destinos" class="text-xs text-gray-500">a más de <span id="num-destinos">...</span> destinos conocidos en tu ciudad</p>
             <div class="flex items-center justify-between mt-1">
                 <p id="saludo-usuario" class="text-sm text-gray-600">Solicita tu servicio de forma rápida y segura</p>
-                <button id="btn-notificaciones" onclick="activarNotificaciones()" class="hidden text-gray-400 hover:text-yellow-500 transition p-1" title="Activar notificaciones">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                    </svg>
-                </button>
-                <span id="notif-activa" class="hidden text-yellow-500 p-1 cursor-pointer" title="Notificaciones activas" onclick="registrarTokenPush()">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2a2 2 0 00-2 2v.341C7.67 5.165 6 7.388 6 10v4.159c0 .538-.214 1.055-.595 1.436L4 17h16l-1.405-1.405A2.032 2.032 0 0118 14.158V10a6.002 6.002 0 00-4-5.659V4a2 2 0 00-2-2zm-2 19a2 2 0 004 0h-4z"/>
-                    </svg>
-                </span>
             </div>
         </div>
 
@@ -3107,102 +3093,6 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/sw.js');
         }
-
-        // =====================================================
-        // PUSH NOTIFICATIONS - FIREBASE
-        // =====================================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyAWkFO0cnmsbM4-faqoVS-G7ecXjvOJN3A",
-            authDomain: "tuc-tuc-4f1e5.firebaseapp.com",
-            projectId: "tuc-tuc-4f1e5",
-            storageBucket: "tuc-tuc-4f1e5.firebasestorage.app",
-            messagingSenderId: "448460808766",
-            appId: "1:448460808766:web:831e7c76a99ed304e1a76f"
-        };
-
-        function mostrarBotonNotificaciones() {
-            // Mostrar campana solo si el navegador soporta notificaciones
-            if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
-            if (Notification.permission === 'granted') {
-                // Ya tiene permiso - mostrar campana amarilla inmediatamente
-                document.getElementById('btn-notificaciones').classList.add('hidden');
-                document.getElementById('notif-activa').classList.remove('hidden');
-                // Intentar registrar token en background
-                registrarTokenPush();
-            } else if (Notification.permission !== 'denied') {
-                // Puede pedir permiso, mostrar campana vacía
-                document.getElementById('btn-notificaciones').classList.remove('hidden');
-            }
-        }
-
-        async function activarNotificaciones() {
-            try {
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                    const guardado = await registrarTokenPush();
-                    if (guardado) {
-                        document.getElementById('btn-notificaciones').classList.add('hidden');
-                        document.getElementById('notif-activa').classList.remove('hidden');
-                        mostrarToast('Notificaciones activadas', 'success');
-                    } else {
-                        mostrarToast('Permiso concedido pero no se pudo registrar', 'error');
-                    }
-                } else {
-                    mostrarToast('Permiso de notificaciones denegado', 'error');
-                }
-            } catch (error) {
-                console.error('Error pidiendo permiso:', error);
-                mostrarToast('Error activando notificaciones', 'error');
-            }
-        }
-
-        async function registrarTokenPush() {
-            try {
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-                const messaging = firebase.messaging();
-                mostrarToast('Conectando con Firebase...', 'info');
-                const registration = await navigator.serviceWorker.ready;
-                const token = await messaging.getToken({
-                    vapidKey: 'BKc82ZvVuWGI2esN-Qr64xQsxlY2PM5MaVXZgF4Ke55uzwTKH93e3fiKABlLHeqhkcAFDEkkZUde-lqbGCWnIH0',
-                    serviceWorkerRegistration: registration
-                });
-                if (token) {
-                    mostrarToast('Token obtenido: ' + token.substring(0, 20) + '...', 'success');
-                    const tel = document.getElementById('input-telefono')?.value?.trim() || '';
-                    const r = await fetch('/api/guardar-push-token', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token, telefono: tel })
-                    });
-                    const data = await r.json();
-                    if (!data.ok) {
-                        mostrarToast('Error guardando: ' + (data.error || 'desconocido'), 'error');
-                        return false;
-                    }
-                    mostrarToast('Token guardado en BD (tercero: ' + (data.tercero ? 'si' : 'no') + ')', 'success');
-                } else {
-                    mostrarToast('Firebase no generó token', 'error');
-                }
-                // Manejar mensajes en primer plano
-                messaging.onMessage((payload) => {
-                    if (Notification.permission === 'granted') {
-                        new Notification(payload.notification?.title || 'TUC TUC', {
-                            body: payload.notification?.body || payload.data?.mensaje,
-                            icon: '/static/TUCTUC%20192X192.png'
-                        });
-                    }
-                });
-                return true;
-            } catch (error) {
-                mostrarToast('Error Firebase: ' + error.message, 'error');
-                return false;
-            }
-        }
-
-        // Mostrar botón de notificaciones al cargar
-        setTimeout(mostrarBotonNotificaciones, 2000);
 
         // =====================================================
         // FUNCIONES DE LUGARES FRECUENTES

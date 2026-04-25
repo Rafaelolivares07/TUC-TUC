@@ -12,7 +12,6 @@ class Config:
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB — rockola multi-archivo
 
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-    FIREBASE_CREDENTIALS = os.environ.get('FIREBASE_CREDENTIALS')
     TUYA_ACCESS_ID = os.environ.get('TUYA_ACCESS_ID')
     TUYA_ACCESS_SECRET = os.environ.get('TUYA_ACCESS_SECRET')
     ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')

@@ -8,10 +8,6 @@
     <meta name="theme-color" content="#EAB308">
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Firebase SDK para Push Notifications -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
-
     <style>
         .animate-bounce-in {
             animation: bounceIn 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
@@ -1095,69 +1091,6 @@
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/sw.js');
         }
-
-        // =====================================================
-        // PUSH NOTIFICATIONS - FIREBASE
-        // =====================================================
-        async function inicializarPushNotifications() {
-            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-                console.log('Push notifications no soportadas');
-                return;
-            }
-
-            try {
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') {
-                    console.log('Permiso de notificaciones denegado');
-                    return;
-                }
-
-                const firebaseConfig = {
-                    apiKey: "AIzaSyAWkFO0cnmsbM4-faqoVS-G7ecXjvOJN3A",
-                    authDomain: "tuc-tuc-4f1e5.firebaseapp.com",
-                    projectId: "tuc-tuc-4f1e5",
-                    storageBucket: "tuc-tuc-4f1e5.firebasestorage.app",
-                    messagingSenderId: "448460808766",
-                    appId: "1:448460808766:web:831e7c76a99ed304e1a76f"
-                };
-
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-
-                const messaging = firebase.messaging();
-                const registration = await navigator.serviceWorker.ready;
-
-                const token = await messaging.getToken({
-                    vapidKey: 'BKc82ZvVuWGI2esN-Qr64xQsxlY2PM5MaVXZgF4Ke55uzwTKH93e3fiKABlLHeqhkcAFDEkkZUde-lqbGCWnIH0',
-                    serviceWorkerRegistration: registration
-                });
-
-                if (token) {
-                    console.log('Push token obtenido:', token.substring(0, 20) + '...');
-                    await fetch('/api/guardar-push-token', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token })
-                    });
-                }
-
-                messaging.onMessage((payload) => {
-                    console.log('Mensaje recibido:', payload);
-                    if (Notification.permission === 'granted') {
-                        new Notification(payload.notification?.title || 'TUC TUC', {
-                            body: payload.notification?.body || payload.data?.mensaje,
-                            icon: '/static/TUCTUC%20DRIVER192X192.png'
-                        });
-                    }
-                });
-
-            } catch (error) {
-                console.error('Error inicializando push:', error);
-            }
-        }
-
-        setTimeout(inicializarPushNotifications, 3000);
 
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();

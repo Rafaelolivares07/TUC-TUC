@@ -34,8 +34,9 @@ def get_chat_tercero_id():
 def chat_panel():
     if 'usuario_id' not in session:
         return redirect('/login')
+    mi_id = session.get('chat_tercero_id') or session.get('usuario_id')
     return render_template('chat.html',
-                           mi_tercero_id=session['usuario_id'],
+                           mi_tercero_id=mi_id,
                            es_invitado=False,
                            token_inicial='')
 
@@ -74,6 +75,13 @@ def _asegurar_schema_chat(conn):
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS url_archivo TEXT",
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS conversacion_id INTEGER",
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS card_payload JSONB",
+        "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS foto_perfil TEXT",
+        "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS token_chat VARCHAR(100)",
+        "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS origen TEXT",
+        "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS activa BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS nombre_invitado VARCHAR(200)",
+        "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS invitacion_usada BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS invitacion_usada_en TIMESTAMP",
     ]:
         try:
             conn.execute(sql)
@@ -388,6 +396,7 @@ def api_chat_mis_conversaciones():
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
         conn = get_db_connection()
+        _asegurar_schema_chat(conn)
         convs = conn.execute('''
             SELECT c.id, c.token, c.origen, c.creador_id,
                    CASE WHEN c.creador_id = %(mid)s THEN c.invitado_id ELSE c.creador_id END AS otro_id,

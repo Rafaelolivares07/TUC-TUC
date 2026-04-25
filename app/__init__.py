@@ -25,6 +25,7 @@ def create_app():
     from .blueprints.crm import bp as crm_bp
     from .blueprints.admin_agent_bp import bp as admin_agent_bp
     from .blueprints.rockola import bp as rockola_bp, register_events
+    from .blueprints.vendedor import bp as vendedor_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -34,6 +35,7 @@ def create_app():
     app.register_blueprint(crm_bp)
     app.register_blueprint(admin_agent_bp)
     app.register_blueprint(rockola_bp)
+    app.register_blueprint(vendedor_bp)
 
     socketio.init_app(app, cors_allowed_origins='*', async_mode='gevent')
     register_events(socketio)

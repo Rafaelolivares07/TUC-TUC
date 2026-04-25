@@ -9,10 +9,18 @@
     <style>
         body { font-family: 'Inter', sans-serif; background: #111827; }
         .toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
             padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
             z-index: 9999; opacity: 0; transition: opacity 0.3s;
         }
+        #barra-enviar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+            background: #1f2937; border-top: 2px solid #374151;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+            display: none;
+        }
+        .barra-enviar-visible { padding-bottom: 100px !important; }
         .toast.show { opacity: 1; }
         .toast-ok { background: #059669; }
         .toast-err { background: #dc2626; }
@@ -145,15 +153,19 @@
             <span id="label-mesa-carta" class="text-amber-400 font-bold text-lg">Mesa X</span>
         </div>
         <div id="carta-categorias" class="space-y-4 mb-4"></div>
-        <div class="mb-4">
-            <input id="carta-notas" type="text" placeholder="Notas (opcional)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm">
-        </div>
-        <div class="bg-gray-800 rounded-xl p-4 flex items-center justify-between">
+    </div>
+
+    <!-- Barra inferior sticky — carta mesero -->
+    <div id="barra-enviar">
+        <input id="carta-notas" type="text" placeholder="Notas (opcional)"
+               class="w-full bg-gray-700 border border-gray-600 text-white rounded-xl px-3 py-2 text-sm mb-2">
+        <div class="flex items-center justify-between gap-3">
             <div>
-                <span class="text-gray-400 text-sm">Total:</span>
-                <span id="carta-total" class="text-2xl font-extrabold text-amber-400 ml-2">$0</span>
+                <span class="text-gray-400 text-xs">Total</span>
+                <div id="carta-total" class="text-2xl font-extrabold text-amber-400 leading-tight">$0</div>
             </div>
-            <button onclick="enviarPedidoCarta()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold text-lg">
+            <button id="btn-enviar-carta" onclick="enviarPedidoCarta()"
+                    class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-8 py-3 rounded-2xl font-bold text-lg flex-shrink-0 transition-all">
                 Enviar
             </button>
         </div>
@@ -512,6 +524,18 @@ function mostrarPaso(paso) {
         const el = document.getElementById(`paso-${p}`);
         if (el) el.classList.toggle('hidden', p !== paso);
     });
+    const barra = document.getElementById('barra-enviar');
+    if (paso === 'carta') {
+        // solo mostrar si hay items en el carrito
+        const total = Object.keys(carrito).reduce((s, id) => {
+            const p = cartaCatalogo.find(x => x.id === parseInt(id));
+            return s + (p ? p.precio * carrito[id] : 0);
+        }, 0);
+        if (total > 0) { barra.style.display = 'block'; document.body.classList.add('barra-enviar-visible'); }
+    } else {
+        barra.style.display = 'none';
+        document.body.classList.remove('barra-enviar-visible');
+    }
 }
 
 function volverAPaso(paso) {
@@ -601,7 +625,8 @@ async function marcarEntregado(id) {
 
 // ===== CARTA =====
 let cartaCatalogo = [];
-let carrito = {}; // {plato_id: cantidad}
+let carrito = {};
+let pedidoEnviando = false;
 
 async function cargarCarta() {
     try {
@@ -660,12 +685,18 @@ function calcularTotalCarta() {
         if (plato) total += plato.precio * carrito[id];
     });
     document.getElementById('carta-total').textContent = `$${Number(total).toLocaleString()}`;
+    const barra = document.getElementById('barra-enviar');
+    if (total > 0) { barra.style.display = 'block'; document.body.classList.add('barra-enviar-visible'); }
+    else { barra.style.display = 'none'; document.body.classList.remove('barra-enviar-visible'); }
 }
 
 async function enviarPedidoCarta() {
+    if (pedidoEnviando) return;
     const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
     if (platos.length === 0) return toast('Agrega al menos un plato', false);
-
+    pedidoEnviando = true;
+    const btn = document.getElementById('btn-enviar-carta');
+    if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
     try {
         const r = await fetch(`${BASE}/pedido`, {
             method: 'POST',
@@ -691,6 +722,10 @@ async function enviarPedidoCarta() {
             }
         }
     } catch(e) { toast('Error de conexión', false); }
+    finally {
+        pedidoEnviando = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+    }
 }
 
 // ===== CUENTAS =====

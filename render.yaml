@@ -3,4 +3,4 @@ services:
     name: TUC-TUC
     env: python
     buildCommand: apt-get install -y ffmpeg && pip install -r requirements.txt
-    startCommand: gunicorn main:app --timeout 120 --workers 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+    startCommand: gunicorn main:app --timeout 120 --workers 1 -k gevent

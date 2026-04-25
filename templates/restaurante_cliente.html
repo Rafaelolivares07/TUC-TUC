@@ -705,6 +705,10 @@ function cartaClienteTotal() {
         if (plato) total += plato.precio * carrito[id];
     });
     document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString()}`;
+    if (!SOLO_CARTA) {
+        if (total > 0) mostrarBarraPedir();
+        else ocultarBarraPedir();
+    }
 }
 
 // Override enviarPedido for carta + remote check

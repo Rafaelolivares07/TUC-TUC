@@ -72,6 +72,30 @@ def chat_invitado(token):
 
 def _asegurar_schema_chat(conn):
     for sql in [
+        """CREATE TABLE IF NOT EXISTS conversaciones (
+            id SERIAL PRIMARY KEY,
+            creador_id INTEGER NOT NULL,
+            invitado_id INTEGER NOT NULL,
+            token VARCHAR(100) UNIQUE NOT NULL,
+            nombre_invitado VARCHAR(200),
+            origen TEXT,
+            activa BOOLEAN DEFAULT TRUE,
+            creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            invitacion_usada BOOLEAN DEFAULT FALSE,
+            invitacion_usada_en TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS mensajes (
+            id SERIAL PRIMARY KEY,
+            remitente_id INTEGER NOT NULL,
+            destinatario_id INTEGER NOT NULL,
+            mensaje TEXT DEFAULT '',
+            tipo VARCHAR(20) DEFAULT 'texto',
+            url_archivo TEXT,
+            card_payload JSONB,
+            conversacion_id INTEGER,
+            estado VARCHAR(20) DEFAULT 'pendiente',
+            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS url_archivo TEXT",
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS conversacion_id INTEGER",
         "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS card_payload JSONB",

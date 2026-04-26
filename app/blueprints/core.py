@@ -82,6 +82,11 @@ def enviar_notificacion_telegram(mensaje):
 
 # ── Rutas principales ─────────────────────────────────────────────────────────
 
+@bp.route('/ping')
+def ping():
+    return 'pong', 200
+
+
 @bp.route('/')
 def index():
     if session.get('rol') == 'Administrador':

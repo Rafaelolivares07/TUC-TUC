@@ -114,13 +114,17 @@ def init_db(app):
 def _get_pool():
     global _pool
     if _pool is None:
-        # minconn=1, maxconn=3 — conservador para plan free
-        _pool = pool.ThreadedConnectionPool(1, 3, _db_url)
+        print(f'[DB] Creando pool — db_url starts: {_db_url[:30] if _db_url else "VACIO"}')
+        _pool = pool.ThreadedConnectionPool(1, 3, _db_url, connect_timeout=10)
         print('[DB] Connection pool inicializado (min=1, max=3)')
     return _pool
 
 
 def get_db_connection():
+    import time
+    t0 = time.time()
+    print(f'[DB] get_db_connection solicitada')
     p = _get_pool()
     raw = p.getconn()
+    print(f'[DB] conexion obtenida en {time.time()-t0:.2f}s')
     return PostgreSQLConnection(raw, p)

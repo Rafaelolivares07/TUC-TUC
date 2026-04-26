@@ -1176,6 +1176,9 @@ def restaurante_cocina(slug):
 
 @bp.route('/r/<slug>')
 def restaurante_publico(slug):
+    import sys
+    print(f'[REST] /r/{slug} recibido', flush=True)
+    sys.stdout.flush()
     try:
         conn = get_db_connection()
         _crear_tablas(conn)

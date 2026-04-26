@@ -1,7 +1,8 @@
 import os
 import psycopg2
 import psycopg2.extras
-from psycopg2 import pool
+
+_db_url = None
 
 
 class PostgreSQLRow:
@@ -63,10 +64,9 @@ class PostgreSQLCursor:
 
 
 class PostgreSQLConnection:
-    def __init__(self, raw_conn, pool_ref):
+    def __init__(self, raw_conn):
         self._conn = raw_conn
-        self._pool = pool_ref
-        self._returned = False
+        self._closed = False
 
     def execute(self, query, params=None):
         cur = self._conn.cursor()
@@ -80,28 +80,22 @@ class PostgreSQLConnection:
         self._conn.rollback()
 
     def close(self):
-        if not self._returned:
-            self._returned = True
+        if not self._closed:
+            self._closed = True
             try:
-                self._conn.rollback()  # limpiar transacción pendiente antes de devolver
+                self._conn.rollback()
             except Exception:
                 pass
-            self._pool.putconn(self._conn)
+            try:
+                self._conn.close()
+            except Exception:
+                pass
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, *args):
-        if exc_type:
-            try:
-                self._conn.rollback()
-            except Exception:
-                pass
         self.close()
-
-
-_pool = None
-_db_url = None
 
 
 def init_db(app):
@@ -111,20 +105,13 @@ def init_db(app):
         _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
 
 
-def _get_pool():
-    global _pool
-    if _pool is None:
-        print(f'[DB] Creando pool — db_url starts: {_db_url[:30] if _db_url else "VACIO"}')
-        _pool = pool.ThreadedConnectionPool(1, 3, _db_url, connect_timeout=10)
-        print('[DB] Connection pool inicializado (min=1, max=3)')
-    return _pool
-
-
 def get_db_connection():
-    import time
-    t0 = time.time()
-    print(f'[DB] get_db_connection solicitada')
-    p = _get_pool()
-    raw = p.getconn()
-    print(f'[DB] conexion obtenida en {time.time()-t0:.2f}s')
-    return PostgreSQLConnection(raw, p)
+    raw = psycopg2.connect(
+        _db_url,
+        connect_timeout=10,
+        keepalives=1,
+        keepalives_idle=20,
+        keepalives_interval=5,
+        keepalives_count=3,
+    )
+    return PostgreSQLConnection(raw)

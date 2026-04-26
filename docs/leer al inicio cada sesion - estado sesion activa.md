@@ -75,50 +75,43 @@ Docs: `docs/rockola_concepto.md` (concepto) + `docs/rockola_desarrollo.md` (téc
 
 ---
 
-## ⚠️ HISTORIAL CRÍTICO — Worker Timeout en Render (NO tocar sin leer esto)
+## ⚠️ HISTORIAL CRÍTICO — Worker Timeout en Render (NO tocar sin leer TODO esto)
 
-**Este problema nos costó 30+ deploys sin resultado. Leer antes de cualquier cambio a Gunicorn/SocketIO/scheduler.**
+**Este problema costó 30+ deploys y múltiples sesiones. Antes de tocar Gunicorn, SocketIO o scheduler, leer esta sección completa.**
 
-### Causa raíz identificada el 2026-04-26
+### Estado actual resuelto (2026-04-26) — commit `06fd13e`
 
-La app usa **Flask-SocketIO**. SocketIO con `async_mode='threading'` bloquea el worker sync de Gunicorn cuando hay una conexión de long-polling activa (chat, rockola). El único worker queda ocupado indefinidamente — el server vive pero no responde requests nuevas.
+**SocketIO fue eliminado completamente de la app.** El chat ya usaba polling HTTP, la rockola estaba deshabilitada. No había ningún módulo activo que necesitara WebSocket.
 
-### La combinación correcta (validada 2026-04-26)
-
+**Start command en Render Dashboard:**
 ```
-gunicorn main:app --timeout 120 --workers 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker
-```
-
-```python
-# app/__init__.py
-socketio.init_app(app, cors_allowed_origins='*', async_mode='gevent')
-
-# app/scheduler.py
-from apscheduler.schedulers.gevent import GeventScheduler
-_scheduler = GeventScheduler()
+gunicorn main:app --timeout 120 --workers 1 --preload
 ```
 
-Las tres piezas son inseparables:
-- **geventwebsocket worker** → para que SocketIO no bloquee
-- **async_mode='gevent'** → para que SocketIO use greenlets, no threads
-- **GeventScheduler** → para que APScheduler sea compatible con gevent (BackgroundScheduler usa threads reales que gevent rompe)
+**`app/__init__.py`** — sin SocketIO, sin flask_socketio, sin async_mode.
 
-### Por qué fallaron los intentos anteriores
+**`app/scheduler.py`** — `BackgroundScheduler` (funciona bien sin gevent).
 
-| Intento | Por qué falló |
-|---|---|
-| `--preload` sin gevent | SocketIO long-polling bloqueaba el worker sync |
-| `-k gevent` con `BackgroundScheduler` | gevent monkey-patches threads → scheduler se rompe |
-| cambios al `render.yaml` y `Procfile` | **Render ignoraba ambos archivos** — el start command real está en el Dashboard de Render, no en el repo |
+**Esta es la configuración estable. No cambiar.**
 
-### IMPORTANTE — Render Dashboard
-**El `render.yaml` y el `Procfile` son ignorados por Render** cuando el servicio ya existe y tiene un start command configurado en el Dashboard. Cualquier cambio de start command DEBE hacerse en:
-**Render Dashboard → TUC-TUC → Settings → Start Command**
+### Historial completo de intentos fallidos (cronológico)
 
-El start command actual configurado en el Dashboard (2026-04-26):
-```
-gunicorn main:app --timeout 120 --workers 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker
-```
+| Fecha | Intento | Por qué falló |
+|---|---|---|
+| Hace meses | `gunicorn main:app` (sin flags) en Dashboard | Timeout default 30s — worker moría a los 31s en cada deploy |
+| Múltiples sesiones | Cambios a `render.yaml` y `Procfile` | **Render los ignora** — cuando el servicio existe, el Dashboard tiene prioridad |
+| 2026-04-25 | `async_mode='threading'` + sync worker | SocketIO long-polling bloqueaba el único worker indefinidamente |
+| 2026-04-26 | `-k gevent` + `BackgroundScheduler` | gevent monkey-patches threads → scheduler se rompe |
+| 2026-04-26 | `-k geventwebsocket...` + `GeventScheduler` + `async_mode='gevent'` | Worker arrancaba pero URLs no respondían |
+| 2026-04-26 | **Solución real**: eliminar SocketIO | ✅ Sin SocketIO no hay conflicto. Chat usa polling, rockola deshabilitada |
+
+### Reglas permanentes
+
+1. **No reinstalar flask-socketio** mientras la rockola esté deshabilitada.
+2. **No cambiar el start command** sin actualizar este documento primero.
+3. **Todo cambio al start command va en el Dashboard de Render**, no en `render.yaml` ni `Procfile`.
+4. **No mezclar gevent con BackgroundScheduler** — incompatibles.
+5. **El chat CRM usa polling HTTP** — no necesita WebSocket.
 
 ---
 

@@ -85,6 +85,8 @@ def admin_login_post():
             session['dispositivo_id']  = admin.get('dispositivo_id', '')
             session.permanent          = True
             session.modified           = True
+            if admin['rol'] == 'ClienteVFP':
+                return redirect(url_for('admin_agent.consultas_page'))
             return redirect(url_for('auth.admin_area'))
         else:
             flash('Usuario o contraseña incorrectos', 'danger')

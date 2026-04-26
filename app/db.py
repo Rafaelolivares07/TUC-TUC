@@ -113,6 +113,9 @@ def get_db_connection():
         keepalives_idle=20,
         keepalives_interval=5,
         keepalives_count=3,
-        options='-c statement_timeout=10000',
     )
+    cur = raw.cursor()
+    cur.execute("SET statement_timeout = 10000")
+    cur.close()
+    raw.commit()
     return PostgreSQLConnection(raw)

@@ -133,6 +133,7 @@ def _crear_tablas(conn):
         "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS orden INT DEFAULT 0",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS descripcion TEXT",
     ]
+    conn.execute("SET statement_timeout = '3000'")
     for sql in alters:
         try:
             conn.execute(sql)
@@ -142,6 +143,7 @@ def _crear_tablas(conn):
                 conn.rollback()
             except Exception:
                 pass
+    conn.execute("SET statement_timeout = '0'")
     _tablas_listas = True
 
 

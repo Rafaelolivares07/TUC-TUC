@@ -28,5 +28,6 @@ def init_scheduler(app):
             id='crm_recordatorios'
         )
 
-    _scheduler.start()
+    if not _scheduler.running:
+        _scheduler.start()
     print('[SCHEDULER] APScheduler inicializado')

@@ -214,7 +214,7 @@
         <!-- Barra inferior sticky (notas + pedir) — se activa cuando hay items -->
         <div id="barra-pedir">
             <input id="cli-notas" type="text" placeholder="¿Alguna nota? (sin cebolla, extra arroz…)"
-                   class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2">
+                   class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2 cli-notas-menu">
             <div class="flex items-center justify-between gap-3">
                 <div>
                     <span class="txt-muted text-xs">Total</span>
@@ -269,11 +269,13 @@ let principioSeleccionado = null;
 let nombreCliente = '';
 let pedidoEnviando = false;
 
-function mostrarBarraPedir() {
+function mostrarBarraPedir(modoMenu = false) {
     const barra = document.getElementById('barra-pedir');
     if (!barra) return;
     barra.style.display = 'block';
     document.body.classList.add('barra-pedir-visible');
+    const notasGlobal = document.getElementById('cli-notas');
+    if (notasGlobal && modoMenu) notasGlobal.classList.remove('hidden');
 }
 
 function ocultarBarraPedir() {
@@ -439,7 +441,7 @@ function seleccionarTipo(tipo) {
     if (tipo !== 'sopa') renderOpcionesCliente('grid-cli-proteinas', proteinas, 'proteina');
     if (tipo !== 'sopa') renderOpcionesCliente('grid-cli-principios', principios, 'principio');
 
-    mostrarBarraPedir();
+    mostrarBarraPedir(true);
     calcularPrecio();
 }
 
@@ -649,7 +651,10 @@ async function cargarCartaCliente() {
                                         <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
                                         <span id="cli-cant-${p.id}" class="font-bold txt-primary w-6 text-center text-lg">0</span>
                                         <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-9 h-9 rounded-full font-bold text-lg">+</button>
-                                    </div>` : ''}
+                                    </div>
+                                    <input id="cli-nota-${p.id}" type="text" placeholder="Nota (ej: sin cebolla)"
+                                           class="hidden mt-2 w-full card-input border rounded-lg px-2 py-1 text-xs"
+                                           oninput="notaCarritoCliente(${p.id}, this.value)">` : ''}
                                 </div>
                             </div>
                         `).join('')}
@@ -662,21 +667,27 @@ async function cargarCartaCliente() {
                     <h3 class="font-bold txt-primary text-sm uppercase tracking-wide mb-2">${cat}</h3>
                     <div class="space-y-2">
                         ${platoscat.map(p => `
-                            <div class="card rounded-xl shadow px-4 py-3 flex items-center justify-between gap-3">
-                                <div class="flex-1 min-w-0">
-                                    <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
-                                    ${p.descripcion ? `
-                                        <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
-                                        <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
-                                    ` : ''}
-                                    <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                            <div class="card rounded-xl shadow px-4 py-3">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div class="flex-1 min-w-0">
+                                        <span class="font-semibold txt-primary text-sm block leading-tight">${p.nombre}</span>
+                                        ${p.descripcion ? `
+                                            <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
+                                            <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
+                                        ` : ''}
+                                        <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                                    </div>
+                                    ${!SOLO_CARTA ? `
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-8 h-8 rounded-full font-bold text-lg">-</button>
+                                        <span id="cli-cant-${p.id}" class="font-bold txt-primary w-5 text-center">0</span>
+                                        <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-8 h-8 rounded-full font-bold text-lg">+</button>
+                                    </div>` : ''}
                                 </div>
                                 ${!SOLO_CARTA ? `
-                                <div class="flex items-center gap-2 flex-shrink-0">
-                                    <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-8 h-8 rounded-full font-bold text-lg">-</button>
-                                    <span id="cli-cant-${p.id}" class="font-bold txt-primary w-5 text-center">0</span>
-                                    <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-8 h-8 rounded-full font-bold text-lg">+</button>
-                                </div>` : ''}
+                                <input id="cli-nota-${p.id}" type="text" placeholder="Nota (ej: sin cebolla)"
+                                       class="hidden mt-2 w-full card-input border rounded-lg px-3 py-1.5 text-xs"
+                                       oninput="notaCarritoCliente(${p.id}, this.value)">` : ''}
                             </div>
                         `).join('')}
                     </div>
@@ -684,25 +695,43 @@ async function cargarCartaCliente() {
             }
         }).join('');
 
-        // Mostrar barra pedir (solo si no es solo_carta)
-        if (!SOLO_CARTA) mostrarBarraPedir();
+        // Mostrar barra pedir (solo si no es solo_carta) y ocultar campo nota global
+        if (!SOLO_CARTA) {
+            mostrarBarraPedir();
+            const notasGlobal = document.getElementById('cli-notas');
+            if (notasGlobal) notasGlobal.classList.add('hidden');
+        }
         cartaClienteTotal();
     } catch(e) { console.error(e); }
 }
 
 function cartaClienteCant(id, delta) {
-    carrito[id] = (carrito[id] || 0) + delta;
-    if (carrito[id] <= 0) delete carrito[id];
+    const actual = carrito[id] ? carrito[id].cantidad : 0;
+    const nueva = actual + delta;
+    if (nueva <= 0) {
+        delete carrito[id];
+    } else {
+        carrito[id] = { cantidad: nueva, nota: carrito[id]?.nota || '' };
+    }
     const span = document.getElementById(`cli-cant-${id}`);
-    if (span) span.textContent = carrito[id] || 0;
+    if (span) span.textContent = nueva > 0 ? nueva : 0;
+    const inputNota = document.getElementById(`cli-nota-${id}`);
+    if (inputNota) {
+        if (nueva > 0) inputNota.classList.remove('hidden');
+        else { inputNota.classList.add('hidden'); inputNota.value = ''; }
+    }
     cartaClienteTotal();
+}
+
+function notaCarritoCliente(id, val) {
+    if (carrito[id]) carrito[id].nota = val;
 }
 
 function cartaClienteTotal() {
     let total = 0;
     Object.keys(carrito).forEach(id => {
         const plato = cartaCatalogo.find(p => p.id === parseInt(id));
-        if (plato) total += plato.precio * carrito[id];
+        if (plato) total += plato.precio * carrito[id].cantidad;
     });
     document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString()}`;
     if (!SOLO_CARTA) {
@@ -721,7 +750,11 @@ enviarPedido = async function() {
         return;
     }
     if (TIPO_REST === 'carta' || (TIPO_REST === 'ambos' && modoActual === 'carta')) {
-        const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
+        const platos = Object.keys(carrito).map(id => ({
+            plato_id: parseInt(id),
+            cantidad: carrito[id].cantidad,
+            nota: carrito[id].nota || ''
+        }));
         if (platos.length === 0) return toast('Agrega al menos un plato', false);
         pedidoEnviando = true;
         const btn = document.getElementById('btn-pedir');
@@ -733,7 +766,6 @@ enviarPedido = async function() {
                 body: JSON.stringify({
                     mesa_nombre: MESA,
                     platos,
-                    notas: document.getElementById('cli-notas').value.trim(),
                     nombre_cliente: nombreCliente,
                     tipo_entrega: MESA === '' ? tipoEntrega : 'mesa',
                     telefono_cliente: telefonoCliente || null,
@@ -748,6 +780,8 @@ enviarPedido = async function() {
                 cartaCatalogo.forEach(p => {
                     const s = document.getElementById(`cli-cant-${p.id}`);
                     if (s) s.textContent = '0';
+                    const n = document.getElementById(`cli-nota-${p.id}`);
+                    if (n) { n.value = ''; n.classList.add('hidden'); }
                 });
                 cartaClienteTotal();
                 ocultarBarraPedir();

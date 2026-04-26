@@ -1298,11 +1298,12 @@ def api_pedido_crear(slug):
                 cant = p.get('cantidad', 1)
                 precio_item = float(opcion['precio']) * cant
                 precio_total += precio_item
+                nota_item = p.get('nota', '').strip() or None
                 conn.execute("""
                     INSERT INTO pedidos_restaurante
                     (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id)
                     VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, notas or None,
+                """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
                       nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
         else:
             tipo = data.get('tipo')

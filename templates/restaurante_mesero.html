@@ -157,8 +157,6 @@
 
     <!-- Barra inferior sticky — carta mesero -->
     <div id="barra-enviar">
-        <input id="carta-notas" type="text" placeholder="Notas (opcional)"
-               class="w-full bg-gray-700 border border-gray-600 text-white rounded-xl px-3 py-2 text-sm mb-2">
         <div class="flex items-center justify-between gap-3">
             <div>
                 <span class="text-gray-400 text-xs">Total</span>
@@ -529,7 +527,7 @@ function mostrarPaso(paso) {
         // solo mostrar si hay items en el carrito
         const total = Object.keys(carrito).reduce((s, id) => {
             const p = cartaCatalogo.find(x => x.id === parseInt(id));
-            return s + (p ? p.precio * carrito[id] : 0);
+            return s + (p ? p.precio * (carrito[id]?.cantidad || 0) : 0);
         }, 0);
         if (total > 0) { barra.style.display = 'block'; document.body.classList.add('barra-enviar-visible'); }
     } else {
@@ -652,16 +650,22 @@ function renderCarta() {
             <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wide mb-2">${cat}</h3>
             <div class="space-y-2">
                 ${grupos[cat].map(p => `
-                    <div class="bg-gray-800 border border-gray-700 rounded-lg p-3 flex items-center justify-between">
-                        <div>
-                            <span class="font-semibold text-white">${p.nombre}</span>
-                            <span class="text-amber-400 text-sm ml-2">$${Number(p.precio).toLocaleString()}</span>
+                    <div class="bg-gray-800 border border-gray-700 rounded-lg p-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="font-semibold text-white">${p.nombre}</span>
+                                <span class="text-amber-400 text-sm ml-2">$${Number(p.precio).toLocaleString()}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="cambiarCantidad(${p.id}, -1)" class="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg font-bold">-</button>
+                                <span id="cant-${p.id}" class="text-white font-bold w-6 text-center">${carrito[p.id]?.cantidad || 0}</span>
+                                <button onclick="cambiarCantidad(${p.id}, 1)" class="bg-amber-600 hover:bg-amber-500 text-white w-8 h-8 rounded-lg font-bold">+</button>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="cambiarCantidad(${p.id}, -1)" class="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg font-bold">-</button>
-                            <span id="cant-${p.id}" class="text-white font-bold w-6 text-center">${carrito[p.id] || 0}</span>
-                            <button onclick="cambiarCantidad(${p.id}, 1)" class="bg-amber-600 hover:bg-amber-500 text-white w-8 h-8 rounded-lg font-bold">+</button>
-                        </div>
+                        <input id="nota-${p.id}" type="text" placeholder="Nota (ej: sin cebolla)"
+                               class="${(carrito[p.id]?.cantidad || 0) > 0 ? '' : 'hidden'} mt-2 w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-1.5 text-xs"
+                               oninput="notaCarrito(${p.id}, this.value)"
+                               value="${carrito[p.id]?.nota || ''}">
                     </div>
                 `).join('')}
             </div>
@@ -671,18 +675,32 @@ function renderCarta() {
 }
 
 function cambiarCantidad(id, delta) {
-    carrito[id] = (carrito[id] || 0) + delta;
-    if (carrito[id] <= 0) delete carrito[id];
+    const actual = carrito[id] ? carrito[id].cantidad : 0;
+    const nueva = actual + delta;
+    if (nueva <= 0) {
+        delete carrito[id];
+    } else {
+        carrito[id] = { cantidad: nueva, nota: carrito[id]?.nota || '' };
+    }
     const span = document.getElementById(`cant-${id}`);
-    if (span) span.textContent = carrito[id] || 0;
+    if (span) span.textContent = nueva > 0 ? nueva : 0;
+    const inputNota = document.getElementById(`nota-${id}`);
+    if (inputNota) {
+        if (nueva > 0) inputNota.classList.remove('hidden');
+        else { inputNota.classList.add('hidden'); inputNota.value = ''; }
+    }
     calcularTotalCarta();
+}
+
+function notaCarrito(id, val) {
+    if (carrito[id]) carrito[id].nota = val;
 }
 
 function calcularTotalCarta() {
     let total = 0;
     Object.keys(carrito).forEach(id => {
         const plato = cartaCatalogo.find(p => p.id === parseInt(id));
-        if (plato) total += plato.precio * carrito[id];
+        if (plato) total += plato.precio * carrito[id].cantidad;
     });
     document.getElementById('carta-total').textContent = `$${Number(total).toLocaleString()}`;
     const barra = document.getElementById('barra-enviar');
@@ -692,7 +710,11 @@ function calcularTotalCarta() {
 
 async function enviarPedidoCarta() {
     if (pedidoEnviando) return;
-    const platos = Object.keys(carrito).map(id => ({plato_id: parseInt(id), cantidad: carrito[id]}));
+    const platos = Object.keys(carrito).map(id => ({
+        plato_id: parseInt(id),
+        cantidad: carrito[id].cantidad,
+        nota: carrito[id].nota || ''
+    }));
     if (platos.length === 0) return toast('Agrega al menos un plato', false);
     pedidoEnviando = true;
     const btn = document.getElementById('btn-enviar-carta');
@@ -703,8 +725,7 @@ async function enviarPedidoCarta() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 mesa_nombre: mesaSeleccionada,
-                platos,
-                notas: document.getElementById('carta-notas').value.trim()
+                platos
             })
         });
         const data = await r.json();

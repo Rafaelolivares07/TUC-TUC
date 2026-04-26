@@ -37,7 +37,7 @@ def create_app():
     # app.register_blueprint(rockola_bp)  # DESHABILITADO
     app.register_blueprint(vendedor_bp)
 
-    socketio.init_app(app, cors_allowed_origins='*', async_mode='threading')
+    socketio.init_app(app, cors_allowed_origins='*', async_mode='gevent')
     # register_events(socketio)  # DESHABILITADO — rockola off
 
     init_scheduler(app)

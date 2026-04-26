@@ -1,4 +1,4 @@
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.gevent import GeventScheduler
 
 
 _scheduler = None
@@ -10,7 +10,7 @@ def get_scheduler():
 
 def init_scheduler(app):
     global _scheduler
-    _scheduler = BackgroundScheduler()
+    _scheduler = GeventScheduler()
 
     # Importaciones lazy — solo cuando el scheduler arranca
     with app.app_context():

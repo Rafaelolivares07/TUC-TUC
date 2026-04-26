@@ -621,15 +621,18 @@ async function cargarMisPedidos() {
             return;
         }
 
-        const ultimo = mios[0];
+        const resumenTodos = mios.map(p => p.tipo === 'carta'
+            ? (p.plato ? `${p.cantidad > 1 ? p.cantidad+'x ' : ''}${p.plato}` : '')
+            : [p.sopa, p.proteina, p.principio].filter(Boolean).join('+') || 'Menú'
+        ).filter(Boolean).join(' · ');
+        const estadoAgregado = mios.every(p => p.estado === 'listo') ? 'listo' : 'pendiente';
         if (pedidoActivoResumen) {
-            actualizarStickyEstado(ultimo.estado);
+            const el = document.getElementById('sticky-items');
+            if (el) el.textContent = resumenTodos;
+            actualizarStickyEstado(estadoAgregado);
         } else if (Object.keys(carrito).length === 0 && !tipoSeleccionado) {
-            const items = ultimo.tipo === 'carta'
-                ? (ultimo.plato ? `${ultimo.cantidad > 1 ? ultimo.cantidad+'x ' : ''}${ultimo.plato}` : 'Pedido carta')
-                : [ultimo.sopa, ultimo.proteina, ultimo.principio].filter(Boolean).join(' + ') || 'Menú del día';
-            mostrarPedidoActivo(items);
-            actualizarStickyEstado(ultimo.estado);
+            mostrarPedidoActivo(resumenTodos);
+            actualizarStickyEstado(estadoAgregado);
         }
 
         cont.innerHTML = mios.map(p => {

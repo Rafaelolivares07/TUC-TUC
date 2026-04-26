@@ -621,8 +621,14 @@ async function cargarMisPedidos() {
             return;
         }
 
+        const ultimo = mios[mios.length - 1];
         if (pedidoActivoResumen) {
-            const ultimo = mios[mios.length - 1];
+            actualizarStickyEstado(ultimo.estado);
+        } else if (Object.keys(carrito).length === 0 && !tipoSeleccionado) {
+            const items = ultimo.tipo === 'carta'
+                ? (ultimo.plato ? `${ultimo.cantidad > 1 ? ultimo.cantidad+'x ' : ''}${ultimo.plato}` : 'Pedido carta')
+                : [ultimo.sopa, ultimo.proteina, ultimo.principio].filter(Boolean).join(' + ') || 'Menú del día';
+            mostrarPedidoActivo(items);
             actualizarStickyEstado(ultimo.estado);
         }
 

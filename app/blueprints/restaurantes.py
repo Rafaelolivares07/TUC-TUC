@@ -1305,6 +1305,7 @@ def api_pedido_crear(slug):
             if not platos:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Selecciona al menos un plato'}), 400
+            insertados = 0
             for p in platos:
                 opcion = conn.execute(
                     "SELECT id, nombre, precio FROM opciones_menu WHERE id=%s AND restaurante_id=%s AND activo=TRUE",
@@ -1322,6 +1323,10 @@ def api_pedido_crear(slug):
                     VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
                       nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
+                insertados += 1
+            if insertados == 0:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Platos no encontrados en el menú'}), 400
         else:
             tipo = data.get('tipo')
             sopa_id = data.get('sopa_id')

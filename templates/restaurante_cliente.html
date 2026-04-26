@@ -213,17 +213,28 @@
 
         <!-- Barra inferior sticky (notas + pedir) — se activa cuando hay items -->
         <div id="barra-pedir">
-            <input id="cli-notas" type="text" placeholder="¿Alguna nota? (sin cebolla, extra arroz…)"
-                   class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2 cli-notas-menu">
-            <div class="flex items-center justify-between gap-3">
-                <div>
-                    <span class="txt-muted text-xs">Total</span>
-                    <div id="cli-precio" class="text-2xl font-extrabold text-amber-600 leading-tight">$0</div>
+            <div id="barra-carrito">
+                <input id="cli-notas" type="text" placeholder="¿Alguna nota? (sin cebolla, extra arroz…)"
+                       class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2 cli-notas-menu">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <span class="txt-muted text-xs">Total</span>
+                        <div id="cli-precio" class="text-2xl font-extrabold text-amber-600 leading-tight">$0</div>
+                    </div>
+                    <button id="btn-pedir" onclick="enviarPedido()"
+                            class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-8 py-3 rounded-2xl font-bold text-lg flex-shrink-0 transition-all">
+                        Pedir
+                    </button>
                 </div>
-                <button id="btn-pedir" onclick="enviarPedido()"
-                        class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-8 py-3 rounded-2xl font-bold text-lg flex-shrink-0 transition-all">
-                    Pedir
-                </button>
+            </div>
+            <div id="barra-pedido-activo" style="display:none">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="txt-muted text-xs mb-0.5">Tu pedido</div>
+                        <div id="sticky-items" class="font-semibold txt-primary text-sm leading-tight truncate"></div>
+                    </div>
+                    <span id="sticky-estado" class="text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0 bg-yellow-100 text-yellow-700">Preparando...</span>
+                </div>
             </div>
         </div>
 
@@ -268,8 +279,16 @@ let proteinaSeleccionada = null;
 let principioSeleccionado = null;
 let nombreCliente = '';
 let pedidoEnviando = false;
+let pedidoActivoResumen = null;
 
 function mostrarBarraPedir(modoMenu = false) {
+    if (pedidoActivoResumen) {
+        pedidoActivoResumen = null;
+        const bCarrito = document.getElementById('barra-carrito');
+        const bActivo = document.getElementById('barra-pedido-activo');
+        if (bCarrito) bCarrito.style.display = 'block';
+        if (bActivo) bActivo.style.display = 'none';
+    }
     const barra = document.getElementById('barra-pedir');
     if (!barra) return;
     barra.style.display = 'block';
@@ -279,12 +298,39 @@ function mostrarBarraPedir(modoMenu = false) {
 }
 
 function ocultarBarraPedir() {
+    if (pedidoActivoResumen) return;
     const barra = document.getElementById('barra-pedir');
     if (!barra) return;
     barra.style.display = 'none';
     document.body.classList.remove('barra-pedir-visible');
     const notas = document.getElementById('cli-notas');
     if (notas) notas.value = '';
+}
+
+function mostrarPedidoActivo(resumen) {
+    pedidoActivoResumen = resumen;
+    const bCarrito = document.getElementById('barra-carrito');
+    const bActivo = document.getElementById('barra-pedido-activo');
+    if (bCarrito) bCarrito.style.display = 'none';
+    if (bActivo) bActivo.style.display = 'block';
+    const el = document.getElementById('sticky-items');
+    if (el) el.textContent = resumen;
+    actualizarStickyEstado('pendiente');
+    const barra = document.getElementById('barra-pedir');
+    if (barra) barra.style.display = 'block';
+    document.body.classList.add('barra-pedir-visible');
+}
+
+function actualizarStickyEstado(estado) {
+    const el = document.getElementById('sticky-estado');
+    if (!el) return;
+    if (estado === 'listo') {
+        el.textContent = 'LISTO ✓';
+        el.className = 'text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0 bg-green-100 text-green-700';
+    } else {
+        el.textContent = 'Preparando...';
+        el.className = 'text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0 bg-yellow-100 text-yellow-700';
+    }
 }
 
 function toast(msg, ok = true) {
@@ -527,16 +573,21 @@ async function enviarPedido() {
         const data = await r.json();
         if (data.ok) {
             toast('Pedido enviado');
+            const partes = [];
+            if (sopaSeleccionada) { const o = opcionesHoy.find(x=>x.id==sopaSeleccionada); if(o) partes.push(o.nombre); }
+            if (proteinaSeleccionada) { const o = opcionesHoy.find(x=>x.id==proteinaSeleccionada); if(o) partes.push(o.nombre); }
+            if (principioSeleccionado) { const o = opcionesHoy.find(x=>x.id==principioSeleccionado); if(o) partes.push(o.nombre); }
+            const resumenMenu = partes.join(' + ') || 'Menú del día';
             tipoSeleccionado = null;
             sopaSeleccionada = null;
             proteinaSeleccionada = null;
             principioSeleccionado = null;
             document.getElementById('sec-opciones').classList.add('hidden');
-            ocultarBarraPedir();
             document.querySelectorAll('.tipo-btn').forEach(b => {
                 b.classList.remove('selected', 'border-amber-500', 'bg-amber-50');
                 b.classList.add('border-transparent');
             });
+            mostrarPedidoActivo(resumenMenu);
             cargarMisPedidos();
         } else {
             if (data.error === 'suscripcion_agotada') {
@@ -568,6 +619,11 @@ async function cargarMisPedidos() {
         if (mios.length === 0) {
             cont.innerHTML = '<p class="text-gray-400 text-center text-sm py-4">Aún no has pedido nada</p>';
             return;
+        }
+
+        if (pedidoActivoResumen) {
+            const ultimo = mios[mios.length - 1];
+            actualizarStickyEstado(ultimo.estado);
         }
 
         cont.innerHTML = mios.map(p => {
@@ -776,6 +832,10 @@ enviarPedido = async function() {
             const data = await r.json();
             if (data.ok) {
                 toast('Pedido enviado');
+                const resumenCarta = Object.keys(carrito).map(id => {
+                    const p = cartaCatalogo.find(x => x.id == id);
+                    return p ? `${carrito[id].cantidad > 1 ? carrito[id].cantidad+'x ' : ''}${p.nombre}` : '';
+                }).filter(Boolean).join(', ');
                 carrito = {};
                 cartaCatalogo.forEach(p => {
                     const s = document.getElementById(`cli-cant-${p.id}`);
@@ -784,7 +844,7 @@ enviarPedido = async function() {
                     if (n) { n.value = ''; n.classList.add('hidden'); }
                 });
                 cartaClienteTotal();
-                ocultarBarraPedir();
+                mostrarPedidoActivo(resumenCarta);
                 cargarMisPedidos();
             } else {
                 if (data.error === 'suscripcion_agotada') {

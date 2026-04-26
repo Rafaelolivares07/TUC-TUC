@@ -2,7 +2,7 @@ import os
 import re
 import unicodedata
 import uuid
-from datetime import datetime
+from datetime import datetime  # noqa
 
 import requests as http_requests
 from flask import (Blueprint, jsonify, redirect, render_template,

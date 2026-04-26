@@ -31,8 +31,4 @@ def create_app():
     app.register_blueprint(admin_agent_bp)
     app.register_blueprint(vendedor_bp)
 
-    from .blueprints.restaurantes import init_tablas_restaurante
-    with app.app_context():
-        init_tablas_restaurante()
-
     return app

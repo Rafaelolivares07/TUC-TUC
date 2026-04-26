@@ -1,7 +1,6 @@
 from flask import Flask
 from .config import Config
 from .db import init_db
-from .scheduler import init_scheduler
 
 
 def create_app():
@@ -31,7 +30,5 @@ def create_app():
     app.register_blueprint(crm_bp)
     app.register_blueprint(admin_agent_bp)
     app.register_blueprint(vendedor_bp)
-
-    init_scheduler(app)
 
     return app

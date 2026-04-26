@@ -1,15 +1,56 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-21_
+_Actualizado: 2026-04-26_
 
 ## Módulos en trabajo esta sesión
 1. **TUC TUC V2** — refactorización en blueprints, desplegado en Render branch `v2` ✅ LIVE
 2. **Administrator Web** — pendiente despliegue en PC Pilar (próxima sesión remota)
 3. **Admin Agent** ✅ FUNCIONANDO (pendiente despliegue Pilar)
-4. **Rockola** (2026-04-22 09:00) — núcleo técnico funcionando, salas + modo sync implementados ✅
+4. **Rockola** (2026-04-23) — YouTube via cobalt.tools ✅, auto-paste clipboard ✅
+5. **Chat /chat V2** (2026-04-23) — fix histórico y envío de mensajes ✅
+6. **Groq Agent** (2026-04-23) — Llama 3.3 70B ejecutor local, HTTP :7778, 6 herramientas ✅
 
 ---
 
-## MÓDULO: Tuc Tuc Rockola (2026-04-22 09:00)
+## MÓDULO: Groq Agent — Llama como ejecutor (2026-04-23)
+
+Doc completo: `docs/groq_agent_desarrollo.md`
+
+### Arquitectura
+- `groq_agent.py` en MiAppMedicamentos — modelo `llama-3.3-70b-versatile` via Groq API
+- Modo `--server`: HTTP en :7778 + daemon inbox en hilo de fondo
+- Claude delega con: `python groq_agent.py --call "tarea"`
+- Startup automático: `TucTuc_GroqAgent.vbs` en shell:startup
+
+### 6 herramientas disponibles
+LEER_ARCHIVO · ESCRIBIR_ARCHIVO · EJECUTAR · GIT · BUSCAR_WEB (DuckDuckGo) · LEER_URL
+
+### Estado 2026-04-23
+- ✅ HTTP server :7778 funcionando
+- ✅ `--call` mode con encoding correcto (Python, no curl)
+- ✅ BUSCAR_WEB funcionando (DuckDuckGo sin API key)
+- ✅ LEER_URL funcionando (extrae texto de páginas)
+- ✅ VBS en Startup folder creado
+- ✅ Probado: lee crm.py, busca Flask docs, lee doc oficial Flask
+
+---
+
+## MÓDULO: Chat /chat V2 — Fix histórico (2026-04-23)
+
+### Problema
+`session['usuario_id']` = ID de tabla `usuarios`, pero el chat hace JOIN con `terceros.id`. Mismatch → mensajes no aparecían y el historial no cargaba.
+
+### Fix en `auth.py` (login)
+Al hacer login, busca o crea un registro `tipo_tercero='admin'` en `terceros` con el mismo teléfono del usuario. Guarda el `terceros.id` como `session['chat_tercero_id']`.
+
+### Fix en `crm.py`
+`get_chat_tercero_id()` usa `session.get('chat_tercero_id') or session.get('usuario_id') or None`.
+
+### Para activar
+Requiere re-login para que la sesión incluya `chat_tercero_id`.
+
+---
+
+## MÓDULO: Tuc Tuc Rockola (2026-04-23)
 
 Docs: `docs/rockola_concepto.md` (concepto) + `docs/rockola_desarrollo.md` (técnico)
 
@@ -18,12 +59,66 @@ Docs: `docs/rockola_concepto.md` (concepto) + `docs/rockola_desarrollo.md` (téc
 - ✅ Salas independientes por `sala_id`
 - ✅ Modo sync `/rockola/sync/<sala_id>` — todos reproductores
 - ✅ Drag & drop cola, multi-archivo — implementado, pendiente prueba
+- ✅ YouTube via cobalt.tools (`POST /<sala_id>/youtube`) — server-side download
+- ✅ Auto-paste clipboard en tab YouTube del cliente
 - ⬜ Dashboard dueño, créditos, QR, PIN reproductor
 
-### Commits clave 2026-04-22
+### YouTube — cobalt.tools (2026-04-23)
+- NO usar yt-dlp en Render (IPs bloqueadas por YouTube, bot-check)
+- API: `POST https://api.cobalt.tools/` `{url, downloadMode:'audio', audioFormat:'mp3'}`
+- Headers obligatorios: `Origin: https://cobalt.tools` + `Referer: https://cobalt.tools/`
+
+### Commits clave
 - `cdb2213` — polling HTTP reemplaza WebSocket
 - `deedbbb` — botón Activar fix autoplay móvil
 - `008ccca` — salas, drag&drop, multi-archivo, modo sync
+
+---
+
+## ⚠️ HISTORIAL CRÍTICO — Worker Timeout en Render (NO tocar sin leer esto)
+
+**Este problema nos costó 30+ deploys sin resultado. Leer antes de cualquier cambio a Gunicorn/SocketIO/scheduler.**
+
+### Causa raíz identificada el 2026-04-26
+
+La app usa **Flask-SocketIO**. SocketIO con `async_mode='threading'` bloquea el worker sync de Gunicorn cuando hay una conexión de long-polling activa (chat, rockola). El único worker queda ocupado indefinidamente — el server vive pero no responde requests nuevas.
+
+### La combinación correcta (validada 2026-04-26)
+
+```
+gunicorn main:app --timeout 120 --workers 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+```
+
+```python
+# app/__init__.py
+socketio.init_app(app, cors_allowed_origins='*', async_mode='gevent')
+
+# app/scheduler.py
+from apscheduler.schedulers.gevent import GeventScheduler
+_scheduler = GeventScheduler()
+```
+
+Las tres piezas son inseparables:
+- **geventwebsocket worker** → para que SocketIO no bloquee
+- **async_mode='gevent'** → para que SocketIO use greenlets, no threads
+- **GeventScheduler** → para que APScheduler sea compatible con gevent (BackgroundScheduler usa threads reales que gevent rompe)
+
+### Por qué fallaron los intentos anteriores
+
+| Intento | Por qué falló |
+|---|---|
+| `--preload` sin gevent | SocketIO long-polling bloqueaba el worker sync |
+| `-k gevent` con `BackgroundScheduler` | gevent monkey-patches threads → scheduler se rompe |
+| cambios al `render.yaml` y `Procfile` | **Render ignoraba ambos archivos** — el start command real está en el Dashboard de Render, no en el repo |
+
+### IMPORTANTE — Render Dashboard
+**El `render.yaml` y el `Procfile` son ignorados por Render** cuando el servicio ya existe y tiene un start command configurado en el Dashboard. Cualquier cambio de start command DEBE hacerse en:
+**Render Dashboard → TUC-TUC → Settings → Start Command**
+
+El start command actual configurado en el Dashboard (2026-04-26):
+```
+gunicorn main:app --timeout 120 --workers 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+```
 
 ---
 
@@ -37,7 +132,7 @@ Solución: refactorizar en blueprints Flask con lazy imports. V1 queda intacto e
 - Repo: `https://github.com/Rafaelolivares07/TUC-TUC.git` — branch `v2`
 - Carpeta local: `C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\`
 - Es un **git worktree** del repo de V1 — comparten `.git`
-- Start command en Render: `gunicorn main:app --timeout 120 --workers 1 --preload`
+- Start command en Render Dashboard: `gunicorn main:app --timeout 120 --workers 1 -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker`
 - Entrada: `main.py` → `app/__init__.py` (app factory)
 
 ### Blueprints migrados

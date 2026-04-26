@@ -12,7 +12,7 @@ from .auth import admin_required
 
 bp = Blueprint('restaurantes', __name__)
 
-_tablas_listas = False
+_tablas_listas = True  # tablas ya existen en producción
 
 
 def init_tablas_restaurante():

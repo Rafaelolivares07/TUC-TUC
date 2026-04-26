@@ -1187,15 +1187,16 @@ def restaurante_publico(slug):
         if not rest:
             return "Restaurante no encontrado", 404
         cliente_data = None
-        if session.get('usuario_id'):
+        tercero_id = session.get('chat_tercero_id')
+        if tercero_id and session.get('rol') not in ('Administrador', 'ClienteVFP'):
             conn2 = get_db_connection()
             tercero = conn2.execute(
-                "SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (session['usuario_id'],)
+                "SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (tercero_id,)
             ).fetchone()
             conn2.close()
             if tercero:
                 cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '',
-                                'direccion': tercero['direccion'] or '', 'cliente_id': session['usuario_id']}
+                                'direccion': tercero['direccion'] or '', 'cliente_id': tercero_id}
         solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
         return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
                                cliente_data=cliente_data, solo_carta=solo_carta)

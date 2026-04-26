@@ -621,7 +621,7 @@ async function cargarMisPedidos() {
             return;
         }
 
-        const ultimo = mios[mios.length - 1];
+        const ultimo = mios[0];
         if (pedidoActivoResumen) {
             actualizarStickyEstado(ultimo.estado);
         } else if (Object.keys(carrito).length === 0 && !tipoSeleccionado) {

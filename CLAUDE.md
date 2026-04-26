@@ -1,23 +1,23 @@
 # Instrucciones para Claude — Proyecto TUC TUC
 
 ## AL INICIO DE CADA SESIÓN — leer obligatorio
-Antes de responder cualquier cosa, leer estos dos archivos:
-1. `docs/leer al inicio cada sesion - reglas de trabajo.md`
-2. `docs/leer al inicio cada sesion - estado sesion activa.md`
-3. `docs/convenios_desarrollo.md`
+Antes de responder cualquier cosa, leer estos archivos:
+1. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\reglas_trabajo.md`
+2. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\estado_activo.md`
+3. `C:\Users\RAFAEL OLIVARES\Documents\docs\tuctuc\convenios_desarrollo.md`
 
 ## AL FINAL DE CADA SESIÓN — actualizar obligatorio
-Actualizar `docs/leer al inicio cada sesion - estado sesion activa.md` con:
+Actualizar `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\estado_activo.md` con:
 - Cambios pendientes de commit
 - Módulo en trabajo
 - Próximos pasos
 
-Si se trabajó en VFP/SAR durante la sesión, actualizar también `docs/vfp_administrator_pilar.md`.
+Si se trabajó en VFP/SAR durante la sesión, actualizar también `C:\Users\RAFAEL OLIVARES\Documents\docs\sar_vfp\vfp_administrator_pilar.md`.
 
-## Fuente de verdad — docs/
-Toda la documentación, estado y manuales viven en `docs/` de este proyecto.
-Las memorias internas de Claude (auto-memory) son punteros a docs/ — NUNCA duplicar estado en ellas.
-Si algo cambia, actualizar el archivo en docs/, no la memoria interna.
+## Fuente de verdad — docs central
+Toda la documentación vive en `C:\Users\RAFAEL OLIVARES\Documents\docs\`.
+`TucTucV2/docs/` ya no existe — archivos movidos a `TucTucV2/docs/_archivo/` como respaldo.
+Las memorias internas de Claude (auto-memory) son punteros al docs central — NUNCA duplicar estado en ellas.
 
 ## Git push — pre-autorizado siempre
 `git push` está pre-autorizado en este proyecto. No preguntar antes de ejecutarlo.

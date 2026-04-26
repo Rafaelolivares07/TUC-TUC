@@ -1,7 +1,6 @@
 {
-  "commit": "6ae89e1",
-  "estado": "live",
-  "iniciado": "2026-04-23T11:02:36.723193",
-  "mensaje": "rockola: UI unificada + YouTube en cola",
-  "live_at": "2026-04-23T11:06:17.324403"
+  "commit": "808660b",
+  "estado": "pendiente",
+  "iniciado": "2026-04-26T10:04:59.227951",
+  "mensaje": "docs: historial worker timeout \u2014 reglas permanentes, todos los intentos fallidos documentados"
 }

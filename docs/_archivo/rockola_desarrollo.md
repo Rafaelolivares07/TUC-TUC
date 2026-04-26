@@ -42,6 +42,7 @@ _Actualizado: 2026-04-22 10:30_
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/<sala_id>/subir` | Sube uno o varios archivos de audio |
+| POST | `/<sala_id>/youtube` | Descarga audio de YouTube via cobalt.tools |
 | GET | `/<sala_id>/cola` | Retorna la cola actual |
 | POST | `/<sala_id>/siguiente` | Elimina primera canción (se llamó al terminar) |
 | POST | `/<sala_id>/reordenar` | Reordena cola — en restaurante solo las propias |
@@ -73,6 +74,49 @@ _Actualizado: 2026-04-22 10:30_
 ## Problema resuelto: autoplay en móvil
 
 Los browsers bloquean autoplay hasta que el usuario haga un gesto. Solución: botón "Activar Rockola" / "Entrar a la sala" que hace `player.play().catch()` + `player.pause()` — esto desbloquea el autoplay para toda la sesión.
+
+---
+
+## YouTube → Cola (2026-04-23)
+
+### Por qué no yt-dlp en Render
+Las IPs de Render son datacenter conocidas — YouTube las bloquea con "Sign in to confirm you're not a bot" independientemente de cookies o `player_client`.
+
+### Solución: cobalt.tools
+`https://api.cobalt.tools/` es un servicio público que descarga audio de YouTube sin bot-check.
+
+**Flujo en `rockola.py`:**
+1. `POST /<sala_id>/youtube` recibe `{url, owner}`
+2. Backend llama `POST api.cobalt.tools/` con `{url, downloadMode: 'audio', audioFormat: 'mp3'}`
+3. cobalt devuelve `{status: 'tunnel'|'stream'|'redirect', url: '...', filename: '...'}`
+4. Backend descarga el MP3 desde la URL de cobalt (stream de 65 KB)
+5. Guarda en `static/rockola_tmp/<sala_id>/` y agrega a cola en BD
+
+**Headers obligatorios para cobalt:**
+```python
+COBALT_HEADERS = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 ...',
+    'Origin': 'https://cobalt.tools',
+    'Referer': 'https://cobalt.tools/',
+}
+```
+
+### Auto-paste clipboard en tab YouTube (cliente)
+Cuando el usuario toca el tab "YouTube" en `rockola_cliente.html`, si el clipboard contiene una URL de YouTube, la pega automáticamente en el input.
+
+```js
+async function setTab(tab) {
+    if (tab === 'youtube') {
+        try {
+            const txt = await navigator.clipboard.readText();
+            if (txt.includes('youtube.com') || txt.includes('youtu.be'))
+                document.getElementById('yt-url').value = txt;
+        } catch {}
+    }
+}
+```
 
 ---
 

@@ -15,6 +15,17 @@ bp = Blueprint('restaurantes', __name__)
 _tablas_listas = False
 
 
+def init_tablas_restaurante():
+    """Llamar desde create_app() para ejecutar migraciones antes de atender requests."""
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _crear_tablas(conn)
+        conn.close()
+    except Exception as e:
+        print(f'[restaurantes] Error en init_tablas: {e}')
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _crear_tablas(conn):

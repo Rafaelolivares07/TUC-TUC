@@ -428,7 +428,7 @@ function renderTipos() {
                     <span class="text-xl font-bold txt-primary">Completo</span>
                     <p class="txt-muted text-sm">Sopa + Bandeja</p>
                 </div>
-                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_completo).toLocaleString()}</span>
+                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_completo).toLocaleString('es-CO')}</span>
             </div>
         </button>
         <button onclick="seleccionarTipo('bandeja')" id="tipo-bandeja"
@@ -438,7 +438,7 @@ function renderTipos() {
                     <span class="text-xl font-bold txt-primary">Bandeja</span>
                     <p class="txt-muted text-sm">Proteína + Principio</p>
                 </div>
-                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_bandeja).toLocaleString()}</span>
+                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_bandeja).toLocaleString('es-CO')}</span>
             </div>
         </button>
         <button onclick="seleccionarTipo('sopa')" id="tipo-sopa"
@@ -448,7 +448,7 @@ function renderTipos() {
                     <span class="text-xl font-bold txt-primary">Sopa</span>
                     <p class="txt-muted text-sm">Solo sopa o caldo</p>
                 </div>
-                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_sopa).toLocaleString()}</span>
+                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_sopa).toLocaleString('es-CO')}</span>
             </div>
         </button>
     `;
@@ -502,7 +502,7 @@ function renderOpcionesCliente(containerId, items, categoria) {
             class="opcion-btn opcion-${categoria} border-2 border-gray-200 rounded-xl p-3 text-left transition hover:border-amber-300">
             <span class="font-semibold txt-primary">${i.nombre}</span>
             ${i.descripcion ? `<span class="text-gray-400 text-xs block leading-tight mt-0.5">${i.descripcion}</span>` : ''}
-            ${i.recargo > 0 ? `<span class="text-amber-500 text-xs block">+$${Number(i.recargo).toLocaleString()}</span>` : ''}
+            ${i.recargo > 0 ? `<span class="text-amber-500 text-xs block">+$${Number(i.recargo).toLocaleString('es-CO')}</span>` : ''}
         </button>
     `).join('');
 }
@@ -531,7 +531,7 @@ function calcularPrecio() {
         const prot = opcionesHoy.find(o => o.opcion_id === proteinaSeleccionada);
         if (prot && prot.recargo > 0) precio += prot.recargo;
     }
-    document.getElementById('cli-precio').textContent = `$${Number(precio).toLocaleString()}`;
+    document.getElementById('cli-precio').textContent = `$${Number(precio).toLocaleString('es-CO')}`;
 }
 
 // ===== ENVIAR PEDIDO =====
@@ -710,7 +710,7 @@ async function cargarCartaCliente() {
                                         <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
                                         <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
                                     ` : ''}
-                                    <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                                    <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString('es-CO')}</span>
                                     ${!SOLO_CARTA ? `
                                     <div class="flex items-center justify-center gap-3 mt-2">
                                         <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
@@ -740,7 +740,7 @@ async function cargarCartaCliente() {
                                             <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
                                             <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
                                         ` : ''}
-                                        <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString()}</span>
+                                        <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString('es-CO')}</span>
                                     </div>
                                     ${!SOLO_CARTA ? `
                                     <div class="flex items-center gap-2 flex-shrink-0">
@@ -798,7 +798,7 @@ function cartaClienteTotal() {
         const plato = cartaCatalogo.find(p => p.id === parseInt(id));
         if (plato) total += plato.precio * carrito[id].cantidad;
     });
-    document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString()}`;
+    document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString('es-CO')}`;
     if (!SOLO_CARTA) {
         if (total > 0) mostrarBarraPedir();
         else ocultarBarraPedir();

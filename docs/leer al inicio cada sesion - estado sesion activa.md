@@ -33,7 +33,7 @@ _Actualizado: 2026-04-26 (sesión restaurantes + DB lock)_
 
 ### Infraestructura actual (sin Render)
 - **Servidor**: Flask local (TucTucV2, puerto 5000) + ngrok
-- **Dominio ngrok estático**: `https://outclass-zealous-secret.ngrok-free.dev` (permanente, cuenta `sar_colombia_valle@hotmail.com`)
+- **URL ngrok observada**: `https://outclass-zealous-secret.ngrok-free.dev` — ha sido estable pero no se garantiza que sea permanente
 - **BD**: PostgreSQL local `tuctuc_local` / `localhost:5432`
 
 ### tuctuc_links.pyw — arranque con un clic

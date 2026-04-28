@@ -610,15 +610,22 @@ def api_ventas_clientes_excel():
 
 
 def _reportar_arranque():
-    """POST al servidor Render cuando administrator_web arranca (solo proceso padre)."""
+    """POST al servidor (ngrok) cuando administrator_web arranca. Lee URL de admin_agent.ini."""
     try:
-        import requests, socket as _s
+        import configparser, requests, socket as _s
+        from pathlib import Path as _P
+        cfg = configparser.ConfigParser()
+        ini = _P(__file__).parent / 'admin_agent.ini'
+        cfg.read(str(ini), encoding='utf-8')
+        servidor = cfg.get('agent', 'servidor', fallback='').strip().rstrip('/')
+        if not servidor:
+            return
         try:
             ip = _s.gethostbyname(_s.gethostname())
         except Exception:
             ip = ''
         requests.post(
-            'https://tuc-tuc.onrender.com/api/admin-agent/reporte',
+            f'{servidor}/api/admin-agent/reporte',
             json={
                 'cliente_id': 'pilar',
                 'tipo':       'arranque_web',
@@ -629,7 +636,7 @@ def _reportar_arranque():
             timeout=10,
         )
     except Exception:
-        pass  # Sin red o servidor dormido — silencioso
+        pass
 
 
 if __name__ == '__main__':

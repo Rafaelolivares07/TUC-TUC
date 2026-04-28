@@ -8,9 +8,9 @@ Que hace:
   3. pip install flask openpyxl
   4. Crea VBS en Startup para administrator_web y admin_agent
   5. Agrega 2 registros en FORMULARIOS.DBF (ventas web + cuentas web)
-  6. Check-in en Render como "Oficina Pilar"
-  7. Reporte de instalacion al servidor
-  8. Messagebox de confirmacion
+  6. Messagebox de confirmacion
+
+Nota: el servidor (ngrok) se configura en admin_agent.ini despues de instalar.
 """
 
 import os, sys, shutil, subprocess, socket
@@ -20,7 +20,6 @@ from tkinter import messagebox
 
 SAR_DIR     = Path(r'C:\S.A.R')
 STARTUP_DIR = Path(os.environ.get('APPDATA', '')) / 'Microsoft/Windows/Start Menu/Programs/Startup'
-RENDER_URL  = 'https://tuc-tuc.onrender.com'
 CLIENTE_ID  = 'pilar'
 AGENT_NAME  = 'Oficina Pilar'
 
@@ -51,9 +50,9 @@ def paso1_copiar():
 # ── Paso 2: archivos de configuración ────────────────────────────────────────
 
 def paso2_configs():
-    # admin_agent.ini
+    # admin_agent.ini — servidor se configura desde la UI de Rafael antes de cada sesión
     (SAR_DIR / 'admin_agent.ini').write_text(
-        '[agent]\nnombre = Oficina Pilar\n', encoding='utf-8'
+        '[agent]\nnombre = Oficina Pilar\nservidor = \n', encoding='utf-8'
     )
 
     # abrir_web.prg con path actualizado para C:\S.A.R\
@@ -102,11 +101,11 @@ def paso4_startup():
         encoding='utf-8'
     )
 
-    # admin_agent.py — salida a log
+    # admin_agent.py — lee servidor desde admin_agent.ini
     (STARTUP_DIR / 'AdminAgent.vbs').write_text(
         'Set WshShell = CreateObject("WScript.Shell")\r\n'
         f'WshShell.Run "cmd /c python ""C:\\S.A.R\\admin_agent.py"" '
-        f'--servidor {RENDER_URL} --cliente {CLIENTE_ID} '
+        f'--cliente {CLIENTE_ID} '
         '>> ""C:\\S.A.R\\admin_agent.log"" 2>&1", 0, False\r\n',
         encoding='utf-8'
     )
@@ -205,32 +204,6 @@ def paso5_formularios():
     return None
 
 
-# ── Paso 6: check-in en Render ────────────────────────────────────────────────
-
-def paso6_checkin():
-    try:
-        import requests
-        try:
-            ip = socket.gethostbyname(socket.gethostname())
-        except Exception:
-            ip = ''
-
-        r = requests.post(
-            f'{RENDER_URL}/api/admin-agent/checkin',
-            json={
-                'cliente_id': CLIENTE_ID,
-                'nombre':     AGENT_NAME,
-                'ip_local':   ip,
-                'ruta_bd':    '',
-            },
-            timeout=15,
-        )
-        data = r.json()
-        if not data.get('ok'):
-            return f'Servidor respondió: {data.get("error", "error desconocido")}'
-        return None
-    except Exception as e:
-        return f'No se pudo conectar al servidor: {e}'
 
 
 # ── Log ──────────────────────────────────────────────────────────────────────
@@ -244,31 +217,6 @@ def _log(linea: str):
         f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] {linea}\n")
 
 
-# ── Reporte remoto ────────────────────────────────────────────────────────────
-
-def _enviar_reporte_instalacion(advertencias: list):
-    try:
-        import requests
-        log_content = LOG_FILE.read_text(encoding='utf-8') if LOG_FILE.exists() else ''
-        try:
-            ip = socket.gethostbyname(socket.gethostname())
-        except Exception:
-            ip = ''
-        estado  = 'ok' if not advertencias else 'advertencia'
-        detalle = log_content or '(log vacío)'
-        requests.post(
-            f'{RENDER_URL}/api/admin-agent/reporte',
-            json={
-                'cliente_id': CLIENTE_ID,
-                'tipo':       'instalacion',
-                'estado':     estado,
-                'detalle':    detalle,
-                'ip':         ip,
-            },
-            timeout=20,
-        )
-    except Exception as e:
-        _log(f'No se pudo enviar reporte remoto: {e}')
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -286,7 +234,6 @@ def main():
         ('Instalando dependencias Python',   paso3_pip),
         ('Configurando inicio automático',   paso4_startup),
         ('Configurando Administrator VFP',   paso5_formularios),
-        ('Conectando con servidor TUC TUC',  paso6_checkin),
     ]
 
     for desc, fn in pasos:
@@ -305,8 +252,6 @@ def main():
         _log('Instalación completada con advertencias.')
     else:
         _log('Instalación completada exitosamente.')
-
-    _enviar_reporte_instalacion(advertencias)
 
     if advertencias:
         messagebox.showwarning(

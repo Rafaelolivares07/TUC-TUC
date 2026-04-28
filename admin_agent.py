@@ -1,9 +1,11 @@
 """
 admin_agent.py — Agente local Administrator VFP
-Corre en el PC del cliente. Lee DBF locales y responde consultas desde Render.
+Corre en el PC del cliente. Lee DBF locales y responde consultas vía servidor relay.
 
 Uso:
-    python admin_agent.py --servidor https://tuc-tuc.onrender.com --cliente pilar
+    python admin_agent.py --cliente pilar
+    python admin_agent.py --cliente pilar --servidor https://xxxx.ngrok-free.app
+    (si no se pasa --servidor, se lee de admin_agent.ini → campo servidor)
 """
 
 import os, sys, time, json, argparse, threading
@@ -16,8 +18,9 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-POLL_INTERVALO = 5   # segundos entre pings
-RUTA_DBF_FILE  = r"C:\S.A.R\RutaBaseDatos\ruta.dbf"
+POLL_INTERVALO   = 5
+RUTA_DBF_FILE    = r"C:\S.A.R\RutaBaseDatos\ruta.dbf"
+NGROK_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/ngrok_url.txt"
 
 _en_proceso = set()
 _lock = threading.Lock()
@@ -27,7 +30,29 @@ def leer_config():
     cfg = configparser.ConfigParser()
     ini = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'admin_agent.ini')
     cfg.read(ini, encoding='utf-8')
-    return cfg.get('agent', 'nombre', fallback='').strip()
+    nombre   = cfg.get('agent', 'nombre',   fallback='').strip()
+    servidor = cfg.get('agent', 'servidor', fallback='').strip()
+    return nombre, servidor
+
+
+def guardar_servidor_ini(servidor):
+    ini = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'admin_agent.ini')
+    cfg = configparser.ConfigParser()
+    cfg.read(ini, encoding='utf-8')
+    if not cfg.has_section('agent'):
+        cfg.add_section('agent')
+    cfg.set('agent', 'servidor', servidor)
+    with open(ini, 'w', encoding='utf-8') as f:
+        cfg.write(f)
+
+
+def leer_servidor_github():
+    try:
+        import urllib.request
+        with urllib.request.urlopen(NGROK_URL_GITHUB, timeout=6) as r:
+            return r.read().decode().strip()
+    except Exception:
+        return None
 
 
 def get_ip_local():
@@ -384,15 +409,31 @@ def _procesar_consulta(base, token, ruta_bd, consulta):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--servidor', default='https://tuc-tuc.onrender.com')
+    parser.add_argument('--servidor', default='')
     parser.add_argument('--cliente',  required=True)
     args = parser.parse_args()
 
-    base = args.servidor.rstrip('/')
     cliente_id = args.cliente
-
-    nombre   = leer_config() or cliente_id
+    nombre, servidor_ini = leer_config()
+    nombre   = nombre or cliente_id
     ip_local = get_ip_local()
+
+    # Prioridad: argumento CLI > GitHub (siempre fresco) > ini (caché)
+    if args.servidor:
+        base = args.servidor.rstrip('/')
+    else:
+        print("Buscando servidor en GitHub...")
+        servidor_github = leer_servidor_github()
+        if servidor_github:
+            base = servidor_github.rstrip('/')
+            guardar_servidor_ini(base)
+            print(f"Servidor actualizado desde GitHub: {base}")
+        elif servidor_ini:
+            base = servidor_ini.rstrip('/')
+            print(f"Usando servidor en caché: {base}")
+        else:
+            print("ERROR: no hay servidor disponible. Asegúrate de que el sistema TUC TUC esté activo.")
+            sys.exit(1)
 
     print(f"=== Admin Agent — cliente: {cliente_id} | nombre: {nombre} | ip: {ip_local} ===")
     print(f"Servidor: {base}")

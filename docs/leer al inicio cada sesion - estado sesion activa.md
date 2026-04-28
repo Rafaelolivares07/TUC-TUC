@@ -1,10 +1,57 @@
 # Estado de Sesión Activa
-_Actualizado: 2026-04-20_
+_Actualizado: 2026-04-26 (sesión restaurantes + DB lock)_
+
+## MÓDULO: TUC TUC — Restaurantes (sesión 2026-04-26)
+
+### DB lock en tabla terceros — RESUELTO ✅
+- **Causa**: `idle in transaction` del daemon Merlin (PC local) tenía ShareLock sobre `terceros` + 63 conexiones de código viejo con `ALTER TABLE terceros` encoladas → todo timeout
+- **Fix**: killed 63 sesiones bloqueadas vía URL externa Render + `_tablas_listas = True` ya estaba en producción (commit `2cfb2ed`)
+- **Referencia**: `docs/_memoria/project_db_lock_terceros.md` + `docs/_memoria/reference_render_db_externa.md`
+
+### Sticky pedido activo — IMPLEMENTADO ✅
+- Después de confirmar pedido, `#barra-pedir` no desaparece — cambia a modo "Tu pedido"
+- Muestra TODOS los pedidos activos separados por `·` (ej: `Americana · Criolla`)
+- Badge: amarillo "Preparando..." / verde "LISTO ✓" — se actualiza con el polling cada 10s
+- Al recargar la página: si hay pedidos y carrito vacío, sticky se activa automáticamente
+- Al agregar nuevo ítem: sticky vuelve a modo carrito
+- Commits: `21bf5a4`, `cb212e8`, `23b3d2d`, `fcc1690`
+
+### Pendientes restaurantes
+- Landing page restaurantes — pendiente video Rafael con CapCut Android
+- Prueba real con restaurante tipo `ambos` en todas las URLs
+
+---
 
 ## Módulos en trabajo esta sesión
-1. **Administrator Web** — servidor Flask local para formularios VFP ✅ FUNCIONANDO
-2. **Asistencia Remota** — calibración de puntero + sin token ✅ V1.3
-3. **Admin Agent** ✅ FUNCIONANDO (pendiente despliegue Pilar)
+1. **Administrator Web** ✅ DEPLOYADO EN PILAR — reporte arranque_web automático
+2. **Admin Agent** ✅ DEPLOYADO EN PILAR — reporte arranque_agent automático
+3. **PilarSetup.exe** ✅ v2 en GitHub Releases — UAC automático + reportes remotos
+4. **Merlin Chat** ✅ — Wizard SYSTEM_PROMPT corto, errores silenciosos, ANTHROPIC_API_KEY eliminada del env subprocess
+5. **merlin_daemon + admin_agent_bp** ✅ — ciclo completo: Pilar reporta → servidor → chat_mensajes captura → Merlin se activa
+
+## Sesión 2026-04-28 — Migración sin Render + UI arranque
+
+### Infraestructura actual (sin Render)
+- **Servidor**: Flask local (TucTucV2, puerto 5000) + ngrok
+- **Dominio ngrok estático**: `https://outclass-zealous-secret.ngrok-free.dev` (permanente, cuenta `sar_colombia_valle@hotmail.com`)
+- **BD**: PostgreSQL local `tuctuc_local` / `localhost:5432`
+
+### tuctuc_links.pyw — arranque con un clic
+- Acceso directo "TucTuc Links" en escritorio
+- Arranca Flask + ngrok automáticamente
+- Muestra enlaces Pilar + Restaurantes listos para copiar
+- Publica URL en GitHub (`ngrok_url.txt`, branch main) como fallback
+
+### Cambios código Pilar (sin Render)
+- `pilar_setup.py` — sin checkin/reporte Render; ini con `servidor = ` vacío
+- `admin_agent.py` — auto-descubre URL desde GitHub; cachea en ini
+- `administrator_web.py` — `_reportar_arranque` lee ini; silencioso si vacío
+- `restaurantes.py` — fix `sys.stdout.flush()` NoneType (Flask sin consola)
+- `PilarSetup.exe` — reconstruido y subido a GitHub Releases `PilarSetup-v1.0`
+
+### Estado Pilar
+- EXE listo en GitHub Releases — pendiente que Pilar lo descargue y ejecute
+- Cuando lo ejecute: instalación local completa (sin notificación a Merlin — Render eliminado)
 
 ---
 
@@ -40,11 +87,10 @@ Estrategia de migración: hoy lee DBF local → futuro cambia solo la capa de da
 **TERCEROS** (REC_SIZE=739): COD_TER@1, NOMBRE@11(C50), IDENTIFICACION@61(C15) — leer en binario (IMAGEN C254 tarda)
 **REG_CTAS** (REC_SIZE=345): CUENTA@11(C15), LAPSO@26(D→YYYYMMDD), TERCERO@42, EMPRESA@52(C10), TOT_DEB@108, TOT_CRE@118, ANULADO@344
 
-### Despliegue pendiente en PC Pilar
-Cuando Pilar avise (sesión remota):
-1. Transferir vía panel archivos: `administrator_web.py`, `templates/adm_ventas_clientes.html`, `templates/adm_consulta_cuentas.html`, `abrir_web.bat`, `popup_web.py`
-2. Terminal remota: `pip install flask openpyxl` (si no están)
-3. Pilar agrega registros en `formularios.dbf` con los comandos VFP de la tabla anterior
+### Despliegue Pilar ✅ (2026-04-24) — VÍA PilarSetup.exe
+No requiere sesión remota. Pilar descarga y ejecuta `PilarSetup.exe` desde GitHub Releases (tag `PilarSetup-v1.0`).
+El EXE hace todo: copia archivos, pip install, startup VBS, FORMULARIOS.DBF + permisos, check-in + reporte remoto.
+Merlin recibe notificación automática via `__MERLIN__` cuando Pilar ejecuta el instalador.
 
 ---
 
@@ -405,12 +451,17 @@ nombre = Oficina Rafael
 - `rol='ClienteVFP'`: ve solo agentes en `admin_agent_permisos` para su usuario_id
 - Auto-migra `admin_cliente_id` existente → tabla permisos al primer arranque
 
+### Estado Admin Agent ✅ COMPLETO (2026-04-24)
+- Usuario Pilar `pilar/pilar2026 ClienteVFP` en BD V2 ✅
+- Arranque automático en PC Pilar: VBS en shell:startup via PilarSetup.exe ✅
+- `admin_agent.py` reporta arranque_agent al servidor después de checkin ✅
+- Tabla `admin_agent_reportes` en BD V2 ✅
+- Ciclo notificación Merlin: reporte → chat_mensajes captura → __MERLIN__ ✅
+
 ### Pendientes Admin Agent
-- Crear usuario ClienteVFP para Pilar en BD Render (SQL directo)
-- Configurar arranque automático en PC Pilar (Task Scheduler o Startup)
-- Empaquetar `admin_agent.py` como `.exe` con ícono en escritorio
-- Ampliar consultas: PROD_FACT1, SAL_DOC, etc.
+- Ampliar consultas: PROD_FACT1, SAL_DOC
 - WireGuard como alternativa directa (ver `docs/wireguard_setup.md`)
+- Otros clientes además de Pilar
 
 ---
 

@@ -81,7 +81,7 @@
         <input id="mp-nombre" type="text" placeholder="Nombre del producto">
       </div>
       <div>
-        <label>Categoría</label>
+        <label>Categoría *</label>
         <input id="mp-categoria" type="text" placeholder="Ej: bebida, proteina…">
       </div>
       <div>
@@ -487,11 +487,13 @@ function cerrarModalProducto() {
 }
 async function guardarProducto() {
   const id = document.getElementById('mp-id').value;
-  const nombre = document.getElementById('mp-nombre').value.trim();
-  if (!nombre) { toast('Nombre requerido', false); return; }
+  const nombre    = document.getElementById('mp-nombre').value.trim();
+  const categoria = document.getElementById('mp-categoria').value.trim();
+  if (!nombre)    { toast('Nombre requerido', false); return; }
+  if (!categoria) { toast('Categoría requerida', false); return; }
   const body = {
     nombre,
-    categoria:    document.getElementById('mp-categoria').value.trim() || null,
+    categoria,
     codigo_barra: document.getElementById('mp-codigo').value.trim() || null,
     precio:       parseFloat(document.getElementById('mp-precio').value) || 0,
     costo:        parseFloat(document.getElementById('mp-costo').value) || 0,

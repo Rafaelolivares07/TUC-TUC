@@ -849,6 +849,122 @@ def api_tipos_doc_patch(negocio_id, tid):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── API: Previsualizar asiento desde tipo_doc ─────────────────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/tipos-doc/<int:tid>/previsualizar', methods=['GET'])
+def api_tipos_doc_previsualizar_get(negocio_id, tid):
+    """Retorna las variables H que el usuario debe ingresar para este tipo de documento."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        param = conn.execute(
+            "SELECT id, descripcion_asiento FROM parametros_contables_negocio "
+            "WHERE negocio_id=%s AND tipo_doc_id=%s AND activo=TRUE",
+            (negocio_id, tid)
+        ).fetchone()
+        if not param:
+            conn.close()
+            return jsonify({'ok': True, 'tiene_parametrizacion': False, 'variables': []})
+        hvars = conn.execute("""
+            SELECT DISTINCT v.codigo, v.descripcion, v.modulo
+            FROM parametros_lineas_contables l
+            JOIN modulo_variables_contables v ON v.id = l.variable_id
+            WHERE l.parametro_id=%s AND l.origen='H' AND l.activo=TRUE
+            ORDER BY v.modulo, v.codigo
+        """, (param['id'],)).fetchall()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'tiene_parametrizacion': True,
+            'descripcion': param['descripcion_asiento'],
+            'variables': [dict(v) for v in hvars],
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/tipos-doc/<int:tid>/previsualizar', methods=['POST'])
+def api_tipos_doc_previsualizar_post(negocio_id, tid):
+    """Ejecuta el motor contable sin guardar y retorna las líneas calculadas."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data      = request.get_json() or {}
+    variables = data.get('variables', {})
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        tipo_doc = conn.execute(
+            "SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s",
+            (tid, negocio_id)
+        ).fetchone()
+        if not tipo_doc:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tipo de documento no encontrado'}), 404
+        param = conn.execute(
+            "SELECT id, descripcion_asiento FROM parametros_contables_negocio "
+            "WHERE negocio_id=%s AND tipo_doc_id=%s AND activo=TRUE",
+            (negocio_id, tid)
+        ).fetchone()
+        if not param:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin parametrización activa para este tipo de documento'}), 400
+        lineas_db = conn.execute("""
+            SELECT l.cuenta_puc_id, l.tipo_mov, l.origen,
+                   l.valor_fijo, l.formula, l.orden,
+                   c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
+                   v.codigo AS var_codigo
+            FROM parametros_lineas_contables l
+            JOIN cuentas_puc c ON c.id = l.cuenta_puc_id
+            LEFT JOIN modulo_variables_contables v ON v.id = l.variable_id
+            WHERE l.parametro_id = %s AND l.activo = TRUE
+            ORDER BY l.orden
+        """, (param['id'],)).fetchall()
+        conn.close()
+
+        pos_amounts = {}
+        mov_list = []
+        for idx, linea in enumerate(lineas_db, start=1):
+            origen = linea['origen']
+            monto = 0.0
+            if origen == 'F':
+                monto = float(linea['valor_fijo'] or 0)
+            elif origen == 'H':
+                monto = float(variables.get(linea['var_codigo'] or '', 0))
+            elif origen == 'C':
+                formula = linea['formula'] or '0'
+                def _repl(m, _pa=dict(pos_amounts)):
+                    return str(_pa.get(int(m.group(1)), 0.0))
+                formula_eval = re.sub(r'L(\d+)', _repl, formula)
+                try:
+                    monto = float(eval(formula_eval, {"__builtins__": {}}, {}))  # noqa: S307
+                except Exception:
+                    monto = 0.0
+            pos_amounts[idx] = monto
+            mov_list.append({
+                'cuenta_puc_id': linea['cuenta_puc_id'],
+                'cuenta_codigo': linea['cuenta_codigo'],
+                'cuenta_nombre': linea['cuenta_nombre'],
+                'tipo_mov':      linea['tipo_mov'],
+                'monto':         abs(monto),
+                'origen':        origen,
+            })
+
+        return jsonify({
+            'ok':         True,
+            'lineas':     mov_list,
+            'descripcion': param['descripcion_asiento'] or tipo_doc['codigo'],
+            'tipo_codigo': tipo_doc['codigo'],
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ── API: Parametrización ──────────────────────────────────────
 
 @bp.route('/api/contabilidad/<int:negocio_id>/parametros', methods=['GET'])
@@ -936,7 +1052,7 @@ def api_param_lineas_get(negocio_id, pid):
         lineas = conn.execute("""
             SELECT l.id, l.cuenta_puc_id, c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
                    l.tipo_mov, l.origen, l.valor_fijo, l.formula,
-                   l.variable_id, v.descripcion AS variable_desc, v.modulo AS variable_modulo,
+                   l.variable_id, v.codigo AS var_codigo, v.descripcion AS variable_desc, v.modulo AS variable_modulo,
                    l.orden, l.activo
             FROM parametros_lineas_contables l
             JOIN cuentas_puc c ON c.id = l.cuenta_puc_id
@@ -1052,14 +1168,13 @@ def api_comprobantes_get(negocio_id):
 def api_comprobante_post(negocio_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
-    data      = request.get_json() or {}
-    tipo_comp = (data.get('tipo') or '').strip()
-    fecha     = data.get('fecha') or None
+    data        = request.get_json() or {}
+    tipo_comp   = (data.get('tipo') or '').strip()
+    fecha       = data.get('fecha') or None
     descripcion = (data.get('descripcion') or '').strip() or None
-    notas     = (data.get('notas') or '').strip() or None
-    lineas    = data.get('lineas', [])
-    if not tipo_comp:
-        return jsonify({'ok': False, 'error': 'Tipo de comprobante requerido'}), 400
+    notas       = (data.get('notas') or '').strip() or None
+    lineas      = data.get('lineas', [])
+    tipo_doc_id = data.get('tipo_doc_id')          # Type-3: parametrized manual
     if not lineas:
         return jsonify({'ok': False, 'error': 'Debe agregar al menos una línea'}), 400
     total_deb  = sum(float(l.get('debito') or 0) for l in lineas)
@@ -1069,11 +1184,32 @@ def api_comprobante_post(negocio_id):
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
+        num_doc      = None
+        numero_comp  = None
+        if tipo_doc_id:
+            td = conn.execute(
+                "SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio "
+                "WHERE id=%s AND negocio_id=%s",
+                (tipo_doc_id, negocio_id)
+            ).fetchone()
+            if td:
+                tipo_comp = td['codigo']
+                num_doc   = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+                conn.execute(
+                    "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
+                    (num_doc, td['id'])
+                )
+                numero_comp = f"{td['codigo']}-{num_doc:04d}"
+        if not tipo_comp:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Tipo de comprobante requerido'}), 400
         comp_id = conn.execute("""
             INSERT INTO comprobantes_contables
-                (negocio_id, tipo, fecha, descripcion, total_debitos, total_creditos, registrado_por, notas)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-        """, (negocio_id, tipo_comp, fecha, descripcion, total_deb, total_cred, uid, notas)).fetchone()['id']
+                (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
+                 total_debitos, total_creditos, registrado_por, notas)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+        """, (negocio_id, numero_comp, num_doc, tipo_comp, fecha, descripcion,
+              total_deb, total_cred, uid, notas)).fetchone()['id']
         for l in lineas:
             debito  = float(l.get('debito')  or 0)
             credito = float(l.get('credito') or 0)

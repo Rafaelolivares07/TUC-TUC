@@ -152,13 +152,45 @@
 
     <!-- ═══ TAB: COMPROBANTE MANUAL ═══ -->
     <div id="panel-manual" class="p-5 hidden">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <input id="man-tipo" type="text" placeholder="Tipo (ej: NOTA_CONT)"
-               class="border rounded-lg px-3 py-2 text-sm">
-        <input id="man-fecha" type="date" class="border rounded-lg px-3 py-2 text-sm">
-        <input id="man-desc" type="text" placeholder="Descripción"
-               class="border rounded-lg px-3 py-2 text-sm">
+
+      <!-- Selector de modo -->
+      <div class="flex gap-2 mb-4 pb-3 border-b">
+        <button id="btn-modo-libre" onclick="setModoComp('libre')"
+                class="px-4 py-1.5 rounded-full text-sm font-semibold bg-blue-600 text-white">✏️ Libre</button>
+        <button id="btn-modo-param" onclick="setModoComp('param')"
+                class="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-700">⚙️ Desde parametrización</button>
       </div>
+
+      <!-- Modo libre -->
+      <div id="sect-libre">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <input id="man-tipo" type="text" placeholder="Tipo (ej: NOTA_CONT)"
+                 class="border rounded-lg px-3 py-2 text-sm">
+          <input id="man-fecha" type="date" class="border rounded-lg px-3 py-2 text-sm">
+          <input id="man-desc" type="text" placeholder="Descripción"
+                 class="border rounded-lg px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <!-- Modo desde parametrización -->
+      <div id="sect-param" class="hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <select id="param-tipodoc" onchange="cargarVariablesH()"
+                  class="border rounded-lg px-3 py-2 text-sm">
+            <option value="">— Selecciona tipo de documento —</option>
+          </select>
+          <input id="man-fecha-p" type="date" class="border rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div id="param-vars" class="mb-3 space-y-2 pl-1"></div>
+        <div class="flex gap-3 items-center mb-4">
+          <button onclick="previsualizarAsiento()"
+                  class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg">Previsualizar</button>
+          <input id="man-desc-p" type="text" placeholder="Descripción (opcional)"
+                 class="border rounded-lg px-3 py-2 text-sm flex-1">
+        </div>
+      </div>
+
+      <!-- Líneas (compartidas ambos modos) -->
       <div id="man-lineas" class="mb-3 space-y-2"></div>
       <button onclick="addLineaManual()" class="text-blue-600 text-sm font-semibold mb-4">+ Agregar línea</button>
       <div class="flex gap-3 justify-end items-center">
@@ -290,7 +322,7 @@ function cambiarTab(t) {
   if (t === 'params')  { cargarTiposDocs(); cargarParametros(); }
   if (t === 'grupos')  cargarGrupos();
   if (t === 'comps')   cargarComprobantes();
-  if (t === 'manual' && !document.querySelectorAll('.linea-manual').length) addLineaManual();
+  if (t === 'manual') { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
 }
 
 function toast(msg, ok=true) {
@@ -638,7 +670,85 @@ async function eliminarGrupo(id) {
 
 // ── TAB: COMPROBANTE MANUAL ───────────────────────────────────
 let manTimers = {};
-function addLineaManual() {
+let modoComprobante = 'libre';
+
+function setModoComp(modo) {
+  modoComprobante = modo;
+  const esParam = modo === 'param';
+  document.getElementById('sect-libre').classList.toggle('hidden', esParam);
+  document.getElementById('sect-param').classList.toggle('hidden', !esParam);
+  document.getElementById('btn-modo-libre').className =
+    `px-4 py-1.5 rounded-full text-sm font-semibold ${!esParam ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`;
+  document.getElementById('btn-modo-param').className =
+    `px-4 py-1.5 rounded-full text-sm font-semibold ${esParam ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'}`;
+  if (esParam) cargarTiposConParams();
+}
+
+async function cargarTiposConParams() {
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+  const data = await resp.json();
+  if (!data.ok) return;
+  const sel = document.getElementById('param-tipodoc');
+  sel.innerHTML = '<option value="">— Selecciona tipo de documento —</option>';
+  for (const t of (data.tipos || [])) {
+    if (!t.activo) continue;
+    sel.innerHTML += `<option value="${t.id}" data-codigo="${t.codigo}">${t.codigo} — ${t.nombre}</option>`;
+  }
+}
+
+async function cargarVariablesH() {
+  const tid = document.getElementById('param-tipodoc').value;
+  const cont = document.getElementById('param-vars');
+  cont.innerHTML = '';
+  if (!tid) return;
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${tid}/previsualizar`);
+  const data = await resp.json();
+  if (!data.ok) { cont.innerHTML = `<p class="text-sm text-red-500">${data.error}</p>`; return; }
+  if (!data.tiene_parametrizacion) {
+    cont.innerHTML = '<p class="text-sm text-gray-400">Este tipo no tiene parametrización activa</p>';
+    return;
+  }
+  if (!data.variables.length) {
+    cont.innerHTML = '<p class="text-sm text-gray-400">Sin variables de entrada requeridas — haz clic en Previsualizar</p>';
+    return;
+  }
+  let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">';
+  for (const v of data.variables) {
+    html += `<div class="flex flex-col gap-1">
+      <label class="text-xs text-gray-500 font-medium">${v.descripcion}</label>
+      <input type="number" step="0.01" id="hvar-${v.codigo}"
+             class="border rounded-lg px-3 py-2 text-sm" placeholder="0.00">
+    </div>`;
+  }
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+async function previsualizarAsiento() {
+  const tid = document.getElementById('param-tipodoc').value;
+  if (!tid) { toast('Selecciona un tipo de documento', false); return; }
+  const vars = {};
+  for (const inp of document.querySelectorAll('#param-vars input[id^="hvar-"]')) {
+    vars[inp.id.replace('hvar-', '')] = parseFloat(inp.value || 0);
+  }
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${tid}/previsualizar`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({variables: vars})
+  });
+  const data = await resp.json();
+  if (!data.ok) { toast(data.error, false); return; }
+  // Rellenar descripción si está vacía
+  const descEl = document.getElementById('man-desc-p');
+  if (!descEl.value && data.descripcion) descEl.value = data.descripcion;
+  // Poblar líneas
+  document.getElementById('man-lineas').innerHTML = '';
+  for (const l of data.lineas) addLineaManual(l);
+  if (!data.lineas.length) addLineaManual();
+  calcBalance();
+  toast('Asiento precargado — revisa y ajusta si es necesario');
+}
+
+function addLineaManual(prefill = null) {
   const cont = document.getElementById('man-lineas');
   const idx  = cont.querySelectorAll('.linea-manual').length;
   const div  = document.createElement('div');
@@ -656,6 +766,16 @@ function addLineaManual() {
     <input type="number" step="0.01" placeholder="Débito"  class="border rounded-lg px-3 py-2 text-sm man-deb"  oninput="calcBalance()">
     <input type="number" step="0.01" placeholder="Crédito" class="border rounded-lg px-3 py-2 text-sm man-cred" oninput="calcBalance()">`;
   cont.appendChild(div);
+  if (prefill) {
+    div.querySelector('.man-cta-q').value   = `${prefill.cuenta_codigo} — ${prefill.cuenta_nombre}`;
+    div.querySelector('.man-cta-id').value  = prefill.cuenta_puc_id || '';
+    div.querySelector('.man-cta-cod').value = prefill.cuenta_codigo || '';
+    div.querySelector('.man-concepto').value = prefill.cuenta_nombre || '';
+    if (prefill.monto > 0) {
+      if (prefill.tipo_mov === 'D') div.querySelector('.man-deb').value  = prefill.monto.toFixed(2);
+      else                          div.querySelector('.man-cred').value = prefill.monto.toFixed(2);
+    }
+  }
 }
 
 function acManual(input, idx) {
@@ -685,16 +805,19 @@ function calcBalance() {
     el.className = 'text-sm text-green-600 font-semibold';
   } else {
     const falta = Math.abs(diff).toLocaleString();
-    const col   = diff > 0 ? `Crédito` : `Débito`;
+    const col   = diff > 0 ? 'Crédito' : 'Débito';
     el.textContent = `Déb $${deb.toLocaleString()} | Cré $${cred.toLocaleString()} — Falta $${falta} en ${col}`;
     el.className = 'text-sm text-amber-600 font-semibold';
   }
 }
 
 async function guardarComprobante() {
-  const tipo = document.getElementById('man-tipo').value.trim().toUpperCase();
-  const fecha = document.getElementById('man-fecha').value || null;
-  const descripcion = document.getElementById('man-desc').value.trim() || null;
+  const esParam = modoComprobante === 'param';
+  const selOpt  = esParam ? document.getElementById('param-tipodoc').selectedOptions[0] : null;
+  const tipo       = esParam ? (selOpt?.dataset.codigo || '') : document.getElementById('man-tipo').value.trim().toUpperCase();
+  const fecha      = document.getElementById(esParam ? 'man-fecha-p' : 'man-fecha').value || null;
+  const descripcion= document.getElementById(esParam ? 'man-desc-p' : 'man-desc').value.trim() || null;
+  const tipo_doc_id= esParam ? (parseInt(document.getElementById('param-tipodoc').value) || null) : null;
   const lineas = [];
   for (const f of document.querySelectorAll('.linea-manual')) {
     const debito  = parseFloat(f.querySelector('.man-deb').value||0);
@@ -706,11 +829,22 @@ async function guardarComprobante() {
       debito, credito
     });
   }
-  if (!tipo || !lineas.length) { toast('Tipo y al menos una línea son requeridos', false); return; }
-  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tipo,fecha,descripcion,lineas})});
+  if (!tipo && !tipo_doc_id) { toast('Selecciona un tipo de documento', false); return; }
+  if (!lineas.length) { toast('Agrega al menos una línea con monto', false); return; }
+  const body = {tipo, fecha, descripcion, lineas};
+  if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
   const data = await resp.json();
-  if (data.ok) { toast('Comprobante guardado'); document.getElementById('man-lineas').innerHTML=''; addLineaManual(); }
-  else toast(data.error, false);
+  if (data.ok) {
+    toast('Comprobante guardado');
+    document.getElementById('man-lineas').innerHTML = '';
+    addLineaManual();
+    if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
+    else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
+    calcBalance();
+  } else toast(data.error, false);
 }
 
 // ── TAB: COMPROBANTES ─────────────────────────────────────────

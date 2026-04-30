@@ -9,6 +9,7 @@ from flask import (Blueprint, jsonify, redirect, render_template,
 
 from ..db import get_db_connection
 from .auth import admin_required
+from .inventarios import _aplicar_tarjeta
 
 bp = Blueprint('restaurantes', __name__)
 
@@ -44,14 +45,6 @@ def _crear_tablas(conn):
             id SERIAL PRIMARY KEY,
             restaurante_id INTEGER NOT NULL,
             numero INTEGER NOT NULL,
-            activo BOOLEAN DEFAULT TRUE
-        )""",
-        """CREATE TABLE IF NOT EXISTS opciones_menu (
-            id SERIAL PRIMARY KEY,
-            restaurante_id INTEGER NOT NULL,
-            tipo VARCHAR(20) NOT NULL,
-            nombre VARCHAR(255) NOT NULL,
-            recargo DECIMAL(10,2) DEFAULT 0,
             activo BOOLEAN DEFAULT TRUE
         )""",
         """CREATE TABLE IF NOT EXISTS menu_dia (
@@ -97,10 +90,8 @@ def _crear_tablas(conn):
     alters = [
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tipo_restaurante VARCHAR(20) DEFAULT 'menu_dia'",
-        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS precio DECIMAL(10,2) DEFAULT 0",
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS plato_id INTEGER",
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1",
-        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS imagen TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_id INTEGER",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(255)",
@@ -116,7 +107,6 @@ def _crear_tablas(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS requerir_pin_cocina BOOLEAN DEFAULT TRUE",
@@ -127,10 +117,8 @@ def _crear_tablas(conn):
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS mesa_nombre VARCHAR(20)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "UPDATE restaurantes SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
-        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS solo_carta BOOLEAN DEFAULT FALSE",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
-        "ALTER TABLE opciones_menu ADD COLUMN IF NOT EXISTS orden INT DEFAULT 0",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS descripcion TEXT",
     ]
     conn.execute("SET statement_timeout = '3000'")
@@ -416,14 +404,14 @@ def api_opciones(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
         opciones = conn.execute(
-            "SELECT id, tipo, nombre, recargo, precio, imagen, activo, descripcion, orden "
-            "FROM opciones_menu WHERE restaurante_id = %s ORDER BY orden, id",
-            (rest['id'],)
+            "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, descripcion, orden "
+            "FROM productos WHERE negocio_id = %s ORDER BY orden, id",
+            (rest['tercero_id'],)
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'opciones': [dict(o) for o in opciones]})
@@ -446,8 +434,8 @@ def api_reordenar(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         for item in items:
-            conn.execute("UPDATE opciones_menu SET orden = %s WHERE id = %s AND restaurante_id = %s",
-                         (item['orden'], item['id'], rest['id']))
+            conn.execute("UPDATE productos SET orden = %s WHERE id = %s AND negocio_id = %s",
+                         (item['orden'], item['id'], rest['tercero_id']))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -462,17 +450,17 @@ def api_buscar_productos(slug):
         return jsonify({'ok': True, 'productos': []})
     try:
         conn = get_db_connection()
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         productos = conn.execute("""
-            SELECT DISTINCT ON (LOWER(om.nombre), LOWER(om.tipo))
-                om.nombre, om.tipo, om.precio, om.recargo
-            FROM opciones_menu om
-            WHERE om.restaurante_id != %s AND om.activo = TRUE AND LOWER(om.nombre) LIKE %s
-            ORDER BY LOWER(om.nombre), LOWER(om.tipo), om.id DESC LIMIT 15
-        """, (rest['id'], f'%{q.lower()}%')).fetchall()
+            SELECT DISTINCT ON (LOWER(p.nombre), LOWER(p.categoria))
+                p.nombre, p.categoria AS tipo, p.precio, p.recargo
+            FROM productos p
+            WHERE p.negocio_id != %s AND p.disponible = TRUE AND LOWER(p.nombre) LIKE %s
+            ORDER BY LOWER(p.nombre), LOWER(p.categoria), p.id DESC LIMIT 15
+        """, (rest['tercero_id'], f'%{q.lower()}%')).fetchall()
         conn.close()
         return jsonify({'ok': True, 'productos': [
             {'nombre': p['nombre'], 'tipo': p['tipo'],
@@ -495,28 +483,28 @@ def api_adoptar_producto(slug):
         return jsonify({'ok': False, 'error': 'Nombre y tipo requeridos'}), 400
     try:
         conn = get_db_connection()
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         existente = conn.execute(
-            "SELECT id FROM opciones_menu WHERE restaurante_id = %s AND LOWER(nombre) = %s AND LOWER(tipo) = %s AND activo = TRUE",
-            (rest['id'], nombre.lower(), tipo.lower())
+            "SELECT id FROM productos WHERE negocio_id = %s AND LOWER(nombre) = %s AND LOWER(categoria) = %s AND disponible = TRUE",
+            (rest['tercero_id'], nombre.lower(), tipo.lower())
         ).fetchone()
         if existente:
             conn.close()
             return jsonify({'ok': False, 'error': f'{nombre} ya existe en tu catálogo'}), 400
         original = conn.execute(
-            "SELECT nombre, tipo, precio, recargo, imagen FROM opciones_menu "
-            "WHERE LOWER(nombre) = %s AND LOWER(tipo) = %s AND activo = TRUE ORDER BY id DESC LIMIT 1",
+            "SELECT nombre, categoria AS tipo, precio, recargo, imagen FROM productos "
+            "WHERE LOWER(nombre) = %s AND LOWER(categoria) = %s AND disponible = TRUE ORDER BY id DESC LIMIT 1",
             (nombre.lower(), tipo.lower())
         ).fetchone()
         if not original:
             conn.close()
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
         conn.execute(
-            "INSERT INTO opciones_menu (restaurante_id, tipo, nombre, precio, recargo, imagen) VALUES (%s,%s,%s,%s,%s,%s)",
-            (rest['id'], original['tipo'], original['nombre'], original['precio'], original['recargo'], original['imagen'])
+            "INSERT INTO productos (negocio_id, categoria, nombre, precio, recargo, imagen) VALUES (%s,%s,%s,%s,%s,%s)",
+            (rest['tercero_id'], original['tipo'], original['nombre'], original['precio'], original['recargo'], original['imagen'])
         )
         conn.commit()
         conn.close()
@@ -542,7 +530,7 @@ def api_opcion_crear(slug):
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     try:
         conn = get_db_connection()
-        rest = conn.execute("SELECT id, tipo_restaurante FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tipo_restaurante, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
@@ -551,15 +539,15 @@ def api_opcion_crear(slug):
             return jsonify({'ok': False, 'error': 'Tipo debe ser sopa, proteina o principio'}), 400
         if opcion_id:
             conn.execute(
-                "UPDATE opciones_menu SET tipo=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s "
-                "WHERE id=%s AND restaurante_id=%s",
-                (tipo, nombre, recargo, precio, descripcion or None, opcion_id, rest['id'])
+                "UPDATE productos SET categoria=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s "
+                "WHERE id=%s AND negocio_id=%s",
+                (tipo, nombre, recargo, precio, descripcion or None, opcion_id, rest['tercero_id'])
             )
         else:
             conn.execute(
-                "INSERT INTO opciones_menu (restaurante_id, tipo, nombre, recargo, precio, descripcion) "
+                "INSERT INTO productos (negocio_id, categoria, nombre, recargo, precio, descripcion) "
                 "VALUES (%s,%s,%s,%s,%s,%s)",
-                (rest['id'], tipo, nombre, recargo, precio, descripcion or None)
+                (rest['tercero_id'], tipo, nombre, recargo, precio, descripcion or None)
             )
         conn.commit()
         conn.close()
@@ -574,12 +562,12 @@ def api_opcion_eliminar(slug, opcion_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
         conn = get_db_connection()
-        rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
-        conn.execute("UPDATE opciones_menu SET activo = FALSE WHERE id = %s AND restaurante_id = %s",
-                     (opcion_id, rest['id']))
+        conn.execute("UPDATE productos SET disponible = FALSE WHERE id = %s AND negocio_id = %s",
+                     (opcion_id, rest['tercero_id']))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -601,8 +589,8 @@ def api_opcion_imagen(slug, opcion_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         imagen = None if request.method == 'DELETE' else (request.get_json() or {}).get('imagen')
-        conn.execute("UPDATE opciones_menu SET imagen = %s WHERE id = %s AND restaurante_id = %s",
-                     (imagen, opcion_id, rest['id']))
+        conn.execute("UPDATE productos SET imagen = %s WHERE id = %s AND negocio_id = %s",
+                     (imagen, opcion_id, rest['tercero_id']))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -755,10 +743,10 @@ def api_menu_dia(slug):
                                                    'precio_sopa': float(ultimo['precio_sopa'])} if ultimo else None})
         opciones = conn.execute("""
             SELECT mdo.id as mdo_id, mdo.opcion_id, mdo.agotado,
-                   om.tipo, om.nombre, om.recargo
+                   om.categoria AS tipo, om.nombre, om.recargo
             FROM menu_dia_opciones mdo
-            JOIN opciones_menu om ON om.id = mdo.opcion_id
-            WHERE mdo.menu_dia_id = %s ORDER BY om.tipo, om.nombre
+            JOIN productos om ON om.id = mdo.opcion_id
+            WHERE mdo.menu_dia_id = %s ORDER BY om.categoria, om.nombre
         """, (menu['id'],)).fetchall()
         conn.close()
         return jsonify({'ok': True,
@@ -1276,7 +1264,7 @@ def api_pedido_crear(slug):
         cliente_id = data.get('cliente_id')
         conn = get_db_connection()
         _crear_tablas(conn)
-        rest = conn.execute("SELECT id, tipo_restaurante, dias_pagados FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute("SELECT id, tipo_restaurante, dias_pagados, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
@@ -1308,8 +1296,8 @@ def api_pedido_crear(slug):
             insertados = 0
             for p in platos:
                 opcion = conn.execute(
-                    "SELECT id, nombre, precio FROM opciones_menu WHERE id=%s AND restaurante_id=%s AND activo=TRUE",
-                    (p['plato_id'], rest['id'])
+                    "SELECT id, nombre, precio FROM productos WHERE id=%s AND negocio_id=%s AND disponible=TRUE",
+                    (p['plato_id'], rest['tercero_id'])
                 ).fetchone()
                 if not opcion:
                     continue
@@ -1323,6 +1311,16 @@ def api_pedido_crear(slug):
                     VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
                       nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
+                if rest['tercero_id']:
+                    _aplicar_tarjeta(
+                        conn, rest['tercero_id'],
+                        producto_id=opcion['id'],
+                        cantidad=cant,
+                        tipo='salida',
+                        motivo='venta',
+                        registrado_por=session.get('usuario_id'),
+                        referencia_tipo='pedido_restaurante',
+                    )
                 insertados += 1
             if insertados == 0:
                 conn.close()
@@ -1345,7 +1343,7 @@ def api_pedido_crear(slug):
                 return jsonify({'ok': False, 'error': 'No hay menú configurado para hoy'}), 400
             precio_total = float(menu[f'precio_{tipo}'])
             if proteina_id and tipo in ('completo', 'bandeja'):
-                recargo = conn.execute("SELECT recargo FROM opciones_menu WHERE id = %s", (proteina_id,)).fetchone()
+                recargo = conn.execute("SELECT recargo FROM productos WHERE id = %s", (proteina_id,)).fetchone()
                 if recargo and recargo['recargo']:
                     precio_total += float(recargo['recargo'])
             conn.execute("""
@@ -1354,6 +1352,17 @@ def api_pedido_crear(slug):
                 VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (rest['id'], mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total,
                   notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
+            if rest['tercero_id']:
+                for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
+                    _aplicar_tarjeta(
+                        conn, rest['tercero_id'],
+                        producto_id=prod_id,
+                        cantidad=1,
+                        tipo='salida',
+                        motivo='venta',
+                        registrado_por=session.get('usuario_id'),
+                        referencia_tipo='pedido_restaurante',
+                    )
 
         conn.commit()
         conn.close()
@@ -1380,10 +1389,10 @@ def api_pedidos(slug):
                    s.nombre as sopa_nombre, pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
                    pi.nombre as principio_nombre, pl.nombre as plato_nombre
             FROM pedidos_restaurante p
-            LEFT JOIN opciones_menu s ON s.id = p.sopa_id
-            LEFT JOIN opciones_menu pr ON pr.id = p.proteina_id
-            LEFT JOIN opciones_menu pi ON pi.id = p.principio_id
-            LEFT JOIN opciones_menu pl ON pl.id = p.plato_id
+            LEFT JOIN productos s ON s.id = p.sopa_id
+            LEFT JOIN productos pr ON pr.id = p.proteina_id
+            LEFT JOIN productos pi ON pi.id = p.principio_id
+            LEFT JOIN productos pl ON pl.id = p.plato_id
             WHERE p.restaurante_id = %s AND p.estado IN ({placeholders})
             AND p.created_at::date = CURRENT_DATE
             ORDER BY p.created_at DESC
@@ -1555,10 +1564,10 @@ def api_ventas(slug):
                    s.nombre as sopa_nombre, pr.nombre as proteina_nombre,
                    pi.nombre as principio_nombre, pl.nombre as plato_nombre
             FROM pedidos_restaurante p
-            LEFT JOIN opciones_menu s ON s.id = p.sopa_id
-            LEFT JOIN opciones_menu pr ON pr.id = p.proteina_id
-            LEFT JOIN opciones_menu pi ON pi.id = p.principio_id
-            LEFT JOIN opciones_menu pl ON pl.id = p.plato_id
+            LEFT JOIN productos s ON s.id = p.sopa_id
+            LEFT JOIN productos pr ON pr.id = p.proteina_id
+            LEFT JOIN productos pi ON pi.id = p.principio_id
+            LEFT JOIN productos pl ON pl.id = p.plato_id
             WHERE p.restaurante_id = %s AND p.created_at::date >= %s AND p.created_at::date <= %s
             ORDER BY p.created_at DESC
         """, (rest['id'], desde, hasta)).fetchall()

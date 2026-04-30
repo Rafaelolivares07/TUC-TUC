@@ -21,6 +21,7 @@ def create_app():
     from .blueprints.crm import bp as crm_bp
     from .blueprints.admin_agent_bp import bp as admin_agent_bp
     from .blueprints.vendedor import bp as vendedor_bp
+    from .blueprints.inventarios import bp as inventarios_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -30,5 +31,6 @@ def create_app():
     app.register_blueprint(crm_bp)
     app.register_blueprint(admin_agent_bp)
     app.register_blueprint(vendedor_bp)
+    app.register_blueprint(inventarios_bp)
 
     return app

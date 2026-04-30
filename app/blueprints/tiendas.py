@@ -7,6 +7,7 @@ from flask import (Blueprint, jsonify, redirect, render_template,
                    request, session)
 
 from ..db import get_db_connection
+from .inventarios import _aplicar_tarjeta, _es_ensamble
 
 bp = Blueprint('tiendas', __name__)
 
@@ -31,17 +32,6 @@ def _crear_tablas(conn):
             tema VARCHAR(10) DEFAULT 'claro',
             mostrar_nombre BOOLEAN DEFAULT TRUE,
             activo BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS productos_tienda (
-            id SERIAL PRIMARY KEY,
-            tienda_id INTEGER NOT NULL,
-            nombre VARCHAR(255) NOT NULL,
-            categoria VARCHAR(100),
-            precio DECIMAL(10,2) NOT NULL,
-            imagen TEXT,
-            disponible BOOLEAN DEFAULT TRUE,
-            orden INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS pedidos_tienda (
@@ -145,43 +135,6 @@ def _crear_tablas(conn):
             monto NUMERIC(12,2) NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         )""",
-        """CREATE TABLE IF NOT EXISTS movimientos_inventario (
-            id              SERIAL PRIMARY KEY,
-            negocio_id      INTEGER NOT NULL,
-            producto_id     INTEGER NOT NULL,
-            producto_tipo   VARCHAR(20) NOT NULL DEFAULT 'tienda',
-            nombre_producto VARCHAR(255),
-            tipo            VARCHAR(10) NOT NULL,
-            motivo          VARCHAR(20) NOT NULL,
-            cantidad        NUMERIC(10,3) NOT NULL,
-            stock_anterior  NUMERIC(10,3),
-            stock_nuevo     NUMERIC(10,3),
-            id_tercero      INTEGER,
-            registrado_por  INTEGER,
-            referencia_id   INTEGER,
-            referencia_tipo VARCHAR(30),
-            documento_id    INTEGER,
-            valor_unitario  NUMERIC(12,2),
-            valor_total     NUMERIC(12,2),
-            notas           TEXT,
-            created_at      TIMESTAMP DEFAULT NOW()
-        )""",
-        """CREATE TABLE IF NOT EXISTS documentos_inventario (
-            id               SERIAL PRIMARY KEY,
-            negocio_id       INTEGER NOT NULL,
-            tipo_negocio     VARCHAR(20) DEFAULT 'tienda',
-            numero_documento VARCHAR(100),
-            tipo_documento   VARCHAR(30),
-            fecha_documento  DATE,
-            id_tercero       INTEGER,
-            subtotal         NUMERIC(12,2) DEFAULT 0,
-            descuento        NUMERIC(12,2) DEFAULT 0,
-            iva              NUMERIC(12,2) DEFAULT 0,
-            total            NUMERIC(12,2) DEFAULT 0,
-            registrado_por   INTEGER,
-            notas            TEXT,
-            created_at       TIMESTAMP DEFAULT NOW()
-        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -196,21 +149,13 @@ def _crear_tablas(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
-        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS descripcion TEXT",
-        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
-        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS codigo_barra VARCHAR(50)",
-        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT 0",
-        "ALTER TABLE productos_tienda ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo'",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_cajero INTEGER",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS nombre_cajero VARCHAR(100)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_tercero_cajero INTEGER REFERENCES terceros(id)",
         "ALTER TABLE tienda_cajeros ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
-        "CREATE INDEX IF NOT EXISTS idx_productos_tienda_catalogo ON productos_tienda(catalogo_id)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
-        "CREATE INDEX IF NOT EXISTS idx_movinv_negocio ON movimientos_inventario(negocio_id)",
-        "CREATE INDEX IF NOT EXISTS idx_movinv_producto ON movimientos_inventario(producto_id, producto_tipo)",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN nombre DROP NOT NULL",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
@@ -498,9 +443,9 @@ def promo_tienda_imagen(slug, producto_id):
     conn = get_db_connection()
     try:
         row = conn.execute(
-            """SELECT pt.imagen FROM productos_tienda pt
-               JOIN tiendas t ON t.id = pt.tienda_id
-               WHERE t.slug = %s AND pt.id = %s""",
+            """SELECT p.imagen FROM productos p
+               JOIN tiendas t ON t.tercero_id = p.negocio_id
+               WHERE t.slug = %s AND p.id = %s""",
             (slug, producto_id)
         ).fetchone()
         if not row or not row['imagen']:
@@ -556,7 +501,7 @@ def promo_tienda_producto(slug, producto_id):
         if not tienda:
             return "Tienda no encontrada", 404
         producto = conn.execute(
-            "SELECT id, nombre, descripcion, precio, imagen FROM productos_tienda WHERE id = %s AND tienda_id = %s AND disponible = TRUE",
+            "SELECT id, nombre, descripcion, precio, imagen FROM productos WHERE id = %s AND negocio_id = (SELECT tercero_id FROM tiendas WHERE id = %s) AND disponible = TRUE",
             (producto_id, tienda['id'])
         ).fetchone()
         if not producto:
@@ -729,12 +674,12 @@ def api_tienda_productos(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, orden, nombre",
-            (tienda['id'],)
+            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos WHERE negocio_id = %s ORDER BY categoria, orden, nombre",
+            (tienda['tercero_id'],)
         ).fetchall()
         resultado = []
         for p in productos:
@@ -776,7 +721,7 @@ def api_tienda_producto_crear(slug):
         if not nombre:
             return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
         conn = get_db_connection()
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         if codigo_barra and not catalogo_id:
@@ -792,14 +737,14 @@ def api_tienda_producto_crear(slug):
                 conn.commit()
         if producto_id:
             conn.execute(
-                "UPDATE productos_tienda SET nombre=%s, categoria=%s, precio=%s, descripcion=%s, catalogo_id=%s, codigo_barra=%s, iva_pct=%s WHERE id=%s AND tienda_id=%s",
-                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, producto_id, tienda['id'])
+                "UPDATE productos SET nombre=%s, categoria=%s, precio=%s, descripcion=%s, catalogo_id=%s, codigo_barra=%s, iva_pct=%s WHERE id=%s AND negocio_id=%s",
+                (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, producto_id, tienda['tercero_id'])
             )
             nuevo_id = producto_id
         else:
             row = conn.execute(
-                "INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra, iva_pct) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                (tienda['id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct)
+                "INSERT INTO productos (negocio_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra, iva_pct) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (tienda['tercero_id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct)
             ).fetchone()
             nuevo_id = row['id']
         conn.commit()
@@ -838,10 +783,10 @@ def api_tienda_producto_eliminar(slug, producto_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        conn.execute("DELETE FROM productos_tienda WHERE id = %s AND tienda_id = %s", (producto_id, tienda['id']))
+        conn.execute("DELETE FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, tienda['tercero_id']))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -857,10 +802,10 @@ def api_tienda_producto_imagen(slug, producto_id):
     imagen = (request.get_json() or {}).get('imagen', '')
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        conn.execute("UPDATE productos_tienda SET imagen = %s WHERE id = %s AND tienda_id = %s", (imagen, producto_id, tienda['id']))
+        conn.execute("UPDATE productos SET imagen = %s WHERE id = %s AND negocio_id = %s", (imagen, producto_id, tienda['tercero_id']))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -876,10 +821,10 @@ def api_tienda_producto_disponible(slug, producto_id):
     disponible = (request.get_json() or {}).get('disponible', True)
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        conn.execute("UPDATE productos_tienda SET disponible = %s WHERE id = %s AND tienda_id = %s", (disponible, producto_id, tienda['id']))
+        conn.execute("UPDATE productos SET disponible = %s WHERE id = %s AND negocio_id = %s", (disponible, producto_id, tienda['tercero_id']))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -895,13 +840,13 @@ def api_tienda_buscar_productos(slug):
         return jsonify({'ok': True, 'productos': []})
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         productos = conn.execute("""
-            SELECT DISTINCT nombre, categoria FROM productos_tienda
-            WHERE tienda_id != %s AND LOWER(nombre) LIKE %s LIMIT 20
-        """, (tienda['id'], f'%{q.lower()}%')).fetchall()
+            SELECT DISTINCT nombre, categoria FROM productos
+            WHERE negocio_id != %s AND LOWER(nombre) LIKE %s LIMIT 20
+        """, (tienda['tercero_id'], f'%{q.lower()}%')).fetchall()
         return jsonify({'ok': True, 'productos': [{'nombre': p['nombre'], 'categoria': p['categoria'] or ''} for p in productos]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -920,143 +865,15 @@ def api_tienda_adoptar_producto(slug):
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        if conn.execute("SELECT id FROM productos_tienda WHERE tienda_id = %s AND LOWER(nombre) = %s", (tienda['id'], nombre.lower())).fetchone():
+        if conn.execute("SELECT id FROM productos WHERE negocio_id = %s AND LOWER(nombre) = %s", (tienda['tercero_id'], nombre.lower())).fetchone():
             return jsonify({'ok': False, 'error': 'Ya tienes este producto'}), 400
-        conn.execute("INSERT INTO productos_tienda (tienda_id, nombre, categoria, precio) VALUES (%s,%s,%s,0)", (tienda['id'], nombre, categoria))
+        conn.execute("INSERT INTO productos (negocio_id, nombre, categoria, precio) VALUES (%s,%s,%s,0)", (tienda['tercero_id'], nombre, categoria))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-    finally:
-        conn.close()
-
-
-# ── API inventario ─────────────────────────────────────────────────────────────
-
-@bp.route('/api/tienda/<slug>/inventario/stock')
-def api_tienda_inventario_stock(slug):
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    conn = get_db_connection()
-    try:
-        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        rows = conn.execute(
-            "SELECT id, nombre, categoria, stock FROM productos_tienda WHERE tienda_id = %s ORDER BY categoria, nombre",
-            (tienda['id'],)
-        ).fetchall()
-        return jsonify({'ok': True, 'productos': [
-            {'id': r['id'], 'nombre': r['nombre'], 'categoria': r['categoria'] or '', 'stock': r['stock'] or 0}
-            for r in rows
-        ]})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-    finally:
-        conn.close()
-
-
-@bp.route('/api/tienda/<slug>/inventario/kardex')
-def api_tienda_inventario_kardex(slug):
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    producto_id = request.args.get('producto_id')
-    if not producto_id:
-        return jsonify({'ok': False, 'error': 'producto_id requerido'}), 400
-    conn = get_db_connection()
-    try:
-        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        rows = conn.execute("""
-            SELECT m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
-                   m.notas, m.valor_unitario, m.valor_total,
-                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') as fecha,
-                   di.numero_documento as num_doc
-            FROM movimientos_inventario m
-            LEFT JOIN documentos_inventario di ON di.id = m.documento_id
-            WHERE m.negocio_id = %s AND m.producto_id = %s AND m.producto_tipo = 'tienda'
-            ORDER BY m.created_at DESC LIMIT 200
-        """, (tienda['tercero_id'], int(producto_id))).fetchall()
-        return jsonify({'ok': True, 'movimientos': [
-            {'tipo': r['tipo'], 'motivo': r['motivo'], 'cantidad': float(r['cantidad']),
-             'stock_anterior': float(r['stock_anterior'] or 0), 'stock_nuevo': float(r['stock_nuevo'] or 0),
-             'notas': r['notas'] or '', 'fecha': r['fecha'],
-             'num_doc': r['num_doc'], 'valor_unitario': float(r['valor_unitario']) if r['valor_unitario'] else None}
-            for r in rows
-        ]})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-    finally:
-        conn.close()
-
-
-@bp.route('/api/tienda/<slug>/inventario/entrada', methods=['POST'])
-def api_tienda_inventario_entrada(slug):
-    if 'usuario_id' not in session:
-        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    data            = request.get_json() or {}
-    lineas          = data.get('lineas', [])
-    motivo          = data.get('motivo', 'compra')
-    numero_documento = data.get('numero_documento', '').strip()
-    tipo_documento  = data.get('tipo_documento', 'factura')
-    fecha_documento = data.get('fecha_documento') or None
-    id_tercero_prov = data.get('id_tercero') or None
-    notas           = data.get('notas', '') or None
-    iva             = float(data.get('iva', 0) or 0)
-    if not lineas:
-        return jsonify({'ok': False, 'error': 'Debe agregar al menos una línea'}), 400
-    conn = get_db_connection()
-    try:
-        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        negocio_id    = tienda['tercero_id']
-        registrado_por = session['usuario_id']
-        subtotal      = sum(float(ln.get('valor_unitario', 0) or 0) * int(ln.get('cantidad', 0)) for ln in lineas)
-        total         = subtotal + iva
-        doc = conn.execute("""
-            INSERT INTO documentos_inventario
-                (negocio_id, tipo_negocio, numero_documento, tipo_documento,
-                 fecha_documento, id_tercero, subtotal, descuento, iva, total, registrado_por, notas)
-            VALUES (%s, 'tienda', %s, %s, %s, %s, %s, 0, %s, %s, %s, %s)
-            RETURNING id
-        """, (negocio_id, numero_documento or None, tipo_documento, fecha_documento, id_tercero_prov,
-              subtotal, iva, total, registrado_por, notas)).fetchone()
-        documento_id = doc[0]
-        for ln in lineas:
-            prod_id      = int(ln['producto_id'])
-            cantidad     = int(ln['cantidad'])
-            valor_unitario = float(ln.get('valor_unitario', 0) or 0)
-            valor_total  = valor_unitario * cantidad
-            producto = conn.execute(
-                "SELECT id, nombre, stock FROM productos_tienda WHERE id = %s AND tienda_id = %s",
-                (prod_id, tienda['id'])
-            ).fetchone()
-            if not producto:
-                conn.rollback()
-                return jsonify({'ok': False, 'error': f'Producto {prod_id} no encontrado'}), 404
-            stock_anterior = producto['stock'] or 0
-            stock_nuevo    = stock_anterior + cantidad
-            conn.execute("UPDATE productos_tienda SET stock = %s WHERE id = %s", (stock_nuevo, prod_id))
-            conn.execute("""
-                INSERT INTO movimientos_inventario
-                    (negocio_id, producto_id, producto_tipo, nombre_producto, tipo, motivo,
-                     cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
-                     documento_id, valor_unitario, valor_total)
-                VALUES (%s, %s, 'tienda', %s, 'entrada', %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (negocio_id, prod_id, producto['nombre'], motivo, cantidad, stock_anterior, stock_nuevo,
-                  registrado_por, notas, documento_id, valor_unitario, valor_total))
-        conn.commit()
-        return jsonify({'ok': True, 'documento_id': documento_id, 'lineas': len(lineas)})
-    except Exception as e:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
@@ -1302,8 +1119,8 @@ def api_tienda_pedido_crear(slug):
         items_validos = []
         for item in items:
             producto = conn.execute(
-                "SELECT id, nombre, precio, disponible, iva_pct FROM productos_tienda WHERE id = %s AND tienda_id = %s",
-                (item.get('producto_id'), tienda['id'])
+                "SELECT id, nombre, precio, disponible, iva_pct FROM productos WHERE id = %s AND negocio_id = %s",
+                (item.get('producto_id'), tienda['tercero_id'])
             ).fetchone()
             if not producto or not producto['disponible']:
                 continue
@@ -1334,17 +1151,16 @@ def api_tienda_pedido_crear(slug):
                 VALUES (%s,%s,%s,%s,%s)
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
             if tienda['tercero_id']:
-                stock_row  = conn.execute("SELECT stock FROM productos_tienda WHERE id = %s", (it['producto_id'],)).fetchone()
-                stock_ant  = (stock_row['stock'] or 0) if stock_row else 0
-                stock_nvo  = max(0, stock_ant - it['cantidad'])
-                conn.execute("UPDATE productos_tienda SET stock = %s WHERE id = %s", (stock_nvo, it['producto_id']))
-                conn.execute("""
-                    INSERT INTO movimientos_inventario
-                        (negocio_id, producto_id, producto_tipo, nombre_producto, tipo, motivo,
-                         cantidad, stock_anterior, stock_nuevo, id_tercero, referencia_id, referencia_tipo)
-                    VALUES (%s,%s,'tienda',%s,'salida','venta',%s,%s,%s,%s,%s,'pedido_tienda')
-                """, (tienda['tercero_id'], it['producto_id'], it['nombre_producto'],
-                      it['cantidad'], stock_ant, stock_nvo, cliente_id, pedido_id))
+                _aplicar_tarjeta(
+                    conn, tienda['tercero_id'],
+                    producto_id    = it['producto_id'],
+                    cantidad       = it['cantidad'],
+                    tipo           = 'salida',
+                    motivo         = 'venta',
+                    registrado_por = session.get('usuario_id'),
+                    referencia_id  = pedido_id,
+                    referencia_tipo= 'pedido_tienda',
+                )
         pagos_validos = [p for p in pagos if float(p.get('monto') or 0) > 0]
         if pagos_validos:
             for p in pagos_validos:
@@ -1706,12 +1522,12 @@ def api_tienda_atributos(slug, producto_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         producto = conn.execute(
-            "SELECT id, precio FROM productos_tienda WHERE id = %s AND tienda_id = %s",
-            (producto_id, tienda['id'])
+            "SELECT id, precio FROM productos WHERE id = %s AND negocio_id = %s",
+            (producto_id, tienda['tercero_id'])
         ).fetchone()
         if not producto:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
@@ -1798,12 +1614,12 @@ def api_tienda_generar_variantes(slug, producto_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         producto = conn.execute(
-            "SELECT id, precio FROM productos_tienda WHERE id = %s AND tienda_id = %s",
-            (producto_id, tienda['id'])
+            "SELECT id, precio FROM productos WHERE id = %s AND negocio_id = %s",
+            (producto_id, tienda['tercero_id'])
         ).fetchone()
         if not producto:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404

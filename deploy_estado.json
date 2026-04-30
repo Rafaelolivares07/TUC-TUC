@@ -1,6 +1,6 @@
 {
-  "commit": "808660b",
-  "estado": "pendiente",
-  "iniciado": "2026-04-26T10:04:59.227951",
-  "mensaje": "docs: historial worker timeout \u2014 reglas permanentes, todos los intentos fallidos documentados"
+  "commit": "f413340",
+  "estado": "timeout",
+  "iniciado": "2026-04-28T09:44:32.784405",
+  "mensaje": "restaurantes: fix sys.stdout NoneType cuando Flask corre sin consola"
 }

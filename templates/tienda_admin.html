@@ -102,7 +102,7 @@
             <div id="nav-tabs" class="flex gap-2 px-3 md:px-10 py-3 overflow-x-auto">
                 <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="tab-btn tab-active">📦 Catálogo</button>
                 <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">🛒 Pedidos</button>
-                <button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📊 Inventario</button>
+                {% if tienda.tercero_id %}<a href="/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Tienda</button>
                 <button onclick="cambiarTab('acceso')" id="tab-acceso" class="tab-btn">🔑 Acceso</button>
                 <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">📍 Ubicación</button>

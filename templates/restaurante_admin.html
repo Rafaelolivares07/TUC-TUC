@@ -125,6 +125,11 @@
                 <a href="/contabilidad/restaurante/{{ restaurante.slug if restaurante else '' }}" class="tab-btn flex items-center gap-1">
                     📒 Contabilidad
                 </a>
+                {% if restaurante.tercero_id %}
+                <a href="/admin/inventario/{{ restaurante.tercero_id }}" class="tab-btn flex items-center gap-1">
+                    📦 Inventario
+                </a>
+                {% endif %}
                 <a href="/admin/contactos" class="tab-btn flex items-center gap-1">
                     👥 Contactos
                 </a>

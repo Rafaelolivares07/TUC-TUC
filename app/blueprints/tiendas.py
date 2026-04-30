@@ -1159,16 +1159,21 @@ def api_tienda_pedido_crear(slug):
                 VALUES (%s,%s,%s,%s,%s)
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
             if tienda['tercero_id']:
-                _aplicar_tarjeta(
-                    conn, tienda['tercero_id'],
-                    producto_id    = it['producto_id'],
-                    cantidad       = it['cantidad'],
-                    tipo           = 'salida',
-                    motivo         = 'venta',
-                    registrado_por = session.get('usuario_id'),
-                    referencia_id  = pedido_id,
-                    referencia_tipo= 'pedido_tienda',
-                )
+                try:
+                    _aplicar_tarjeta(
+                        conn, tienda['tercero_id'],
+                        producto_id    = it['producto_id'],
+                        cantidad       = it['cantidad'],
+                        tipo           = 'salida',
+                        motivo         = 'venta',
+                        registrado_por = session.get('usuario_id'),
+                        referencia_id  = pedido_id,
+                        referencia_tipo= 'pedido_tienda',
+                    )
+                except Exception as _e:
+                    print(f'[inv] salida tienda {it["producto_id"]}: {_e}')
+                    try: conn.rollback()
+                    except: pass
         pagos_validos = [p for p in pagos if float(p.get('monto') or 0) > 0]
         if pagos_validos:
             for p in pagos_validos:

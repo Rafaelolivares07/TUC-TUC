@@ -1318,15 +1318,20 @@ def api_pedido_crear(slug):
                 """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
                       nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
                 if rest['tercero_id']:
-                    _aplicar_tarjeta(
-                        conn, rest['tercero_id'],
-                        producto_id=opcion['id'],
-                        cantidad=cant,
-                        tipo='salida',
-                        motivo='venta',
-                        registrado_por=session.get('usuario_id'),
-                        referencia_tipo='pedido_restaurante',
-                    )
+                    try:
+                        _aplicar_tarjeta(
+                            conn, rest['tercero_id'],
+                            producto_id=opcion['id'],
+                            cantidad=cant,
+                            tipo='salida',
+                            motivo='venta',
+                            registrado_por=session.get('usuario_id'),
+                            referencia_tipo='pedido_restaurante',
+                        )
+                    except Exception as _e:
+                        print(f'[inv] salida carta {opcion["id"]}: {_e}')
+                        try: conn.rollback()
+                        except: pass
                 insertados += 1
             if insertados == 0:
                 conn.close()
@@ -1360,15 +1365,20 @@ def api_pedido_crear(slug):
                   notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
-                    _aplicar_tarjeta(
-                        conn, rest['tercero_id'],
-                        producto_id=prod_id,
-                        cantidad=1,
-                        tipo='salida',
-                        motivo='venta',
-                        registrado_por=session.get('usuario_id'),
-                        referencia_tipo='pedido_restaurante',
-                    )
+                    try:
+                        _aplicar_tarjeta(
+                            conn, rest['tercero_id'],
+                            producto_id=prod_id,
+                            cantidad=1,
+                            tipo='salida',
+                            motivo='venta',
+                            registrado_por=session.get('usuario_id'),
+                            referencia_tipo='pedido_restaurante',
+                        )
+                    except Exception as _e:
+                        print(f'[inv] salida menu {prod_id}: {_e}')
+                        try: conn.rollback()
+                        except: pass
 
         conn.commit()
         conn.close()

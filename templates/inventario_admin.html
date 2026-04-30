@@ -164,6 +164,7 @@
     <div id="nav-tabs" class="flex gap-1 overflow-x-auto">
       <button class="tab-btn tab-active" onclick="mostrarTab('productos')">Productos</button>
       <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
+      <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
       <button class="tab-btn" onclick="mostrarTab('stock')">Stock</button>
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
     </div>
@@ -236,6 +237,54 @@
       <button onclick="registrarEntrada()"
               class="px-6 py-2.5 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600">
         Registrar entrada
+      </button>
+    </div>
+  </div>
+
+  <!-- ── TAB PRODUCCIÓN ───────────────────────────────────────────── -->
+  <div id="tab-produccion" class="hidden bg-white rounded-2xl shadow p-5">
+    <h2 class="font-bold text-gray-700 mb-4">Registrar producción</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+      <div class="sm:col-span-2 relative">
+        <label>Producto a producir</label>
+        <input id="prod-ac-input" type="text" placeholder="Buscar producto con tarjeta estándar…" autocomplete="off">
+        <div id="prod-ac-list" class="ac-list hidden"></div>
+        <input type="hidden" id="prod-ac-id">
+      </div>
+      <div>
+        <label>Cantidad a producir</label>
+        <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="limpiarPreview()">
+      </div>
+    </div>
+    <div class="mb-4">
+      <label>Notas (opcional)</label>
+      <input id="prod-notas" type="text" placeholder="" style="max-width:400px">
+    </div>
+    <button onclick="previsualizarProduccion()"
+            class="px-5 py-2 rounded-xl border-2 border-rose-400 text-rose-500 font-bold text-sm hover:bg-rose-50 mb-5">
+      Vista previa
+    </button>
+    <div id="prod-preview" class="hidden mb-5">
+      <p id="prod-preview-titulo" class="text-sm font-semibold text-gray-600 mb-3"></p>
+      <div class="overflow-x-auto rounded-xl border border-gray-100">
+        <table>
+          <thead>
+            <tr>
+              <th>Componente</th>
+              <th class="num">A consumir</th>
+              <th class="num">Stock actual</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="prod-preview-tabla"></tbody>
+        </table>
+      </div>
+      <div id="prod-alerta" class="hidden mt-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold"></div>
+    </div>
+    <div class="flex justify-end">
+      <button id="prod-btn-registrar" onclick="registrarProduccion()" disabled
+              class="px-6 py-2.5 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed">
+        Registrar producción
       </button>
     </div>
   </div>
@@ -313,7 +362,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'entradas', 'stock', 'kardex'];
+const TABS = ['productos', 'entradas', 'produccion', 'stock', 'kardex'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== t);
@@ -646,6 +695,78 @@ async function cargarKardex(productoId) {
   `).join('');
 }
 
+// ── Producción ────────────────────────────────────────────────────────────────
+let prodPuedeRegistrar = false;
+
+function limpiarPreview() {
+  document.getElementById('prod-preview').classList.add('hidden');
+  document.getElementById('prod-btn-registrar').disabled = true;
+  prodPuedeRegistrar = false;
+}
+
+async function previsualizarProduccion() {
+  const id  = document.getElementById('prod-ac-id').value;
+  const qty = parseFloat(document.getElementById('prod-cantidad').value);
+  if (!id) { toast('Selecciona un producto', false); return; }
+  if (!qty || qty <= 0) { toast('Cantidad inválida', false); return; }
+
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+
+  document.getElementById('prod-preview-titulo').textContent =
+    `Para producir ${qty} × ${d.producto} se consumirá:`;
+
+  const tb = document.getElementById('prod-preview-tabla');
+  tb.innerHTML = d.lineas.map(l => `
+    <tr>
+      <td class="font-semibold">${l.nombre}</td>
+      <td class="num">${fmt(l.a_consumir)}</td>
+      <td class="num ${l.suficiente ? 'text-green-600' : 'text-red-500 font-bold'}">${fmt(l.stock_actual)}</td>
+      <td>
+        ${l.suficiente
+          ? '<span class="badge" style="background:#d1fae5;color:#065f46">✓ OK</span>'
+          : '<span class="badge" style="background:#fee2e2;color:#991b1b">✗ Insuficiente</span>'}
+      </td>
+    </tr>
+  `).join('');
+
+  const alerta = document.getElementById('prod-alerta');
+  if (!d.puede_producir) {
+    alerta.textContent = 'Stock insuficiente en uno o más componentes. No se puede registrar la producción.';
+    alerta.classList.remove('hidden');
+  } else {
+    alerta.classList.add('hidden');
+  }
+
+  document.getElementById('prod-preview').classList.remove('hidden');
+  prodPuedeRegistrar = d.puede_producir;
+  document.getElementById('prod-btn-registrar').disabled = !d.puede_producir;
+}
+
+async function registrarProduccion() {
+  if (!prodPuedeRegistrar) return;
+  const id    = parseInt(document.getElementById('prod-ac-id').value);
+  const qty   = parseFloat(document.getElementById('prod-cantidad').value);
+  const notas = document.getElementById('prod-notas').value.trim() || null;
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({producto_id: id, cantidad: qty, notas})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast(`Producción registrada: ${d.producido} × ${d.producto}`);
+    document.getElementById('prod-ac-input').value = '';
+    document.getElementById('prod-ac-id').value = '';
+    document.getElementById('prod-cantidad').value = '1';
+    document.getElementById('prod-notas').value = '';
+    limpiarPreview();
+    cargarProductos();
+  } else {
+    toast(d.error, false);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   cargarProductos();
@@ -657,6 +778,9 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAC('kardex-ac-input', 'kardex-ac-list', 'kardex-ac-id', () => productos, ({id, nombre}) => {
     cargarKardex(id);
   });
+
+  // AC producción (limpia preview al cambiar producto)
+  setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => limpiarPreview());
 
   // Enter en modal producto
   document.getElementById('mp-nombre').addEventListener('keydown', e => {

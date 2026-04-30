@@ -120,15 +120,72 @@ def _componentes_de(conn, producto_id):
     """, (producto_id,)).fetchall()
 
 
+def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
+                 registrado_por, valor_unitario=None, notas=None, bodega=1,
+                 referencia_id=None, referencia_tipo=None):
+    """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
+    signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
+    cantidad = Decimal(str(cantidad))
+
+    saldo = conn.execute(
+        "SELECT stock, costo_und, valor_existencia FROM saldos_inventario "
+        "WHERE negocio_id=%s AND producto_id=%s AND bodega=%s",
+        (negocio_id, producto_id, bodega)
+    ).fetchone()
+
+    stock_ant   = Decimal(str(saldo['stock']))            if saldo else Decimal('0')
+    costo_ant   = Decimal(str(saldo['costo_und']))        if saldo else Decimal('0')
+    val_exi_ant = Decimal(str(saldo['valor_existencia'])) if saldo else Decimal('0')
+
+    stock_nuevo = stock_ant + cantidad * signo
+
+    if tipo == 'entrada' and valor_unitario is not None:
+        vu = Decimal(str(valor_unitario))
+        costo_nuevo   = (val_exi_ant + cantidad * vu) / stock_nuevo if stock_nuevo > 0 else vu
+        val_exi_nuevo = stock_nuevo * costo_nuevo if stock_nuevo > 0 else Decimal('0')
+    else:
+        costo_nuevo   = costo_ant if stock_nuevo > 0 else Decimal('0')
+        val_exi_nuevo = stock_nuevo * costo_nuevo if stock_nuevo > 0 else Decimal('0')
+
+    nombre_prod = conn.execute("SELECT nombre FROM productos WHERE id=%s", (producto_id,)).fetchone()
+
+    conn.execute("""
+        INSERT INTO movimientos_inventario
+            (negocio_id, producto_id, nombre_producto, tipo, motivo,
+             cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
+             valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        negocio_id, producto_id,
+        nombre_prod['nombre'] if nombre_prod else '',
+        tipo, motivo,
+        float(cantidad), float(stock_ant), float(stock_nuevo),
+        registrado_por, notas,
+        float(valor_unitario) if valor_unitario else None,
+        float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None,
+        float(costo_nuevo),
+        referencia_id, referencia_tipo
+    ))
+
+    if saldo:
+        conn.execute("""
+            UPDATE saldos_inventario
+            SET stock=%s, costo_und=%s, valor_existencia=%s, updated_at=NOW()
+            WHERE negocio_id=%s AND producto_id=%s AND bodega=%s
+        """, (float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo),
+              negocio_id, producto_id, bodega))
+    else:
+        conn.execute("""
+            INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia)
+            VALUES (%s,%s,%s,%s,%s,%s)
+        """, (negocio_id, producto_id, bodega,
+              float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo)))
+
+
 def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      registrado_por, valor_unitario=None, notas=None, bodega=1,
                      referencia_id=None, referencia_tipo=None):
-    """
-    Aplica entrada o salida según tarjeta estándar.
-    tipo: 'entrada' | 'salida'
-    valor_unitario: costo unitario del componente — requerido en entradas para calcular costo ponderado.
-    Si el producto no tiene tarjeta, se trata como componente de sí mismo (1:1).
-    """
+    """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
         (producto_id,)
@@ -137,69 +194,12 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
     if not componentes:
         componentes = [{'componente_id': producto_id, 'cantidad': Decimal('1')}]
 
-    signo = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
-
     for comp in componentes:
-        comp_id = comp['componente_id']
         cant_comp = Decimal(str(comp['cantidad'])) * cantidad
-
-        saldo = conn.execute(
-            """SELECT stock, costo_und, valor_existencia
-               FROM saldos_inventario
-               WHERE negocio_id = %s AND producto_id = %s AND bodega = %s""",
-            (negocio_id, comp_id, bodega)
-        ).fetchone()
-
-        stock_ant   = Decimal(str(saldo['stock']))           if saldo else Decimal('0')
-        costo_ant   = Decimal(str(saldo['costo_und']))       if saldo else Decimal('0')
-        val_exi_ant = Decimal(str(saldo['valor_existencia'])) if saldo else Decimal('0')
-
-        stock_nuevo = stock_ant + cant_comp * signo
-
-        if tipo == 'entrada' and valor_unitario is not None:
-            vu = Decimal(str(valor_unitario))
-            costo_nuevo = (val_exi_ant + cant_comp * vu) / stock_nuevo if stock_nuevo > 0 else vu
-            val_exi_nuevo = stock_nuevo * costo_nuevo if stock_nuevo > 0 else Decimal('0')
-        else:
-            costo_nuevo   = costo_ant if stock_nuevo > 0 else Decimal('0')
-            val_exi_nuevo = stock_nuevo * costo_nuevo if stock_nuevo > 0 else Decimal('0')
-
-        nombre_prod = conn.execute(
-            "SELECT nombre FROM productos WHERE id = %s", (comp_id,)
-        ).fetchone()
-
-        conn.execute("""
-            INSERT INTO movimientos_inventario
-                (negocio_id, producto_id, nombre_producto, tipo, motivo,
-                 cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
-                 valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (
-            negocio_id, comp_id,
-            nombre_prod['nombre'] if nombre_prod else '',
-            tipo, motivo,
-            float(cant_comp), float(stock_ant), float(stock_nuevo),
-            registrado_por, notas,
-            float(valor_unitario) if valor_unitario else None,
-            float(cant_comp * Decimal(str(valor_unitario))) if valor_unitario else None,
-            float(costo_nuevo),
-            referencia_id, referencia_tipo
-        ))
-
-        if saldo:
-            conn.execute("""
-                UPDATE saldos_inventario
-                SET stock=%s, costo_und=%s, valor_existencia=%s, updated_at=NOW()
-                WHERE negocio_id=%s AND producto_id=%s AND bodega=%s
-            """, (float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo),
-                  negocio_id, comp_id, bodega))
-        else:
-            conn.execute("""
-                INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia)
-                VALUES (%s,%s,%s,%s,%s,%s)
-            """, (negocio_id, comp_id, bodega,
-                  float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo)))
+        _mov_directo(conn, negocio_id, comp['componente_id'], cant_comp, tipo, motivo,
+                     registrado_por, valor_unitario, notas, bodega,
+                     referencia_id, referencia_tipo)
 
 
 # ── Productos ──────────────────────────────────────────────────────────────────
@@ -434,6 +434,130 @@ def api_inventario_producto_editar(producto_id):
         ))
         conn.commit()
         return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ── Producción ────────────────────────────────────────────────────────────────
+
+@bp.route('/api/inventario/<int:negocio_id>/produccion/preview')
+def api_produccion_preview(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    producto_id = request.args.get('producto_id', type=int)
+    cantidad    = request.args.get('cantidad', type=float, default=1)
+    if not producto_id or cantidad <= 0:
+        return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        producto = conn.execute(
+            "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
+            (producto_id, negocio_id)
+        ).fetchone()
+        if not producto:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        componentes = conn.execute("""
+            SELECT te.componente_id AS id, p.nombre,
+                   te.cantidad AS cant_tarjeta,
+                   COALESCE(s.stock, 0) AS stock_actual
+            FROM tarjeta_estandar te
+            JOIN productos p ON p.id = te.componente_id
+            LEFT JOIN saldos_inventario s
+                   ON s.producto_id = te.componente_id
+                  AND s.negocio_id  = %s AND s.bodega = 1
+            WHERE te.producto_id = %s
+        """, (negocio_id, producto_id)).fetchall()
+        if not componentes:
+            return jsonify({'ok': False, 'error': 'Este producto no tiene tarjeta estándar definida'}), 400
+        qty = Decimal(str(cantidad))
+        lineas = []
+        puede_producir = True
+        for c in componentes:
+            a_consumir  = Decimal(str(c['cant_tarjeta'])) * qty
+            stock_actual = Decimal(str(c['stock_actual']))
+            suficiente  = stock_actual >= a_consumir
+            if not suficiente:
+                puede_producir = False
+            lineas.append({
+                'id':           c['id'],
+                'nombre':       c['nombre'],
+                'a_consumir':   float(a_consumir),
+                'stock_actual': float(stock_actual),
+                'suficiente':   suficiente,
+            })
+        return jsonify({
+            'ok': True,
+            'producto': producto['nombre'],
+            'cantidad': cantidad,
+            'puede_producir': puede_producir,
+            'lineas': lineas,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/produccion', methods=['POST'])
+def api_produccion_registrar(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data        = request.get_json() or {}
+    producto_id = data.get('producto_id', type=int) if hasattr(data.get('producto_id'), '__class__') else int(data.get('producto_id', 0))
+    cantidad    = Decimal(str(data.get('cantidad', 1)))
+    notas       = data.get('notas') or None
+    if not producto_id or cantidad <= 0:
+        return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        producto = conn.execute(
+            "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
+            (producto_id, negocio_id)
+        ).fetchone()
+        if not producto:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        componentes = conn.execute(
+            "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id=%s",
+            (producto_id,)
+        ).fetchall()
+        if not componentes:
+            return jsonify({'ok': False, 'error': 'Sin tarjeta estándar'}), 400
+
+        # Verificar stock suficiente
+        faltantes = []
+        for c in componentes:
+            a_consumir = Decimal(str(c['cantidad'])) * cantidad
+            saldo = conn.execute(
+                "SELECT COALESCE(stock,0) AS stock FROM saldos_inventario "
+                "WHERE negocio_id=%s AND producto_id=%s AND bodega=1",
+                (negocio_id, c['componente_id'])
+            ).fetchone()
+            stock_actual = Decimal(str(saldo['stock'])) if saldo else Decimal('0')
+            if stock_actual < a_consumir:
+                nombre = conn.execute("SELECT nombre FROM productos WHERE id=%s", (c['componente_id'],)).fetchone()
+                faltantes.append(f"{nombre['nombre'] if nombre else c['componente_id']}: necesita {float(a_consumir)}, tiene {float(stock_actual)}")
+        if faltantes:
+            return jsonify({'ok': False, 'error': 'Stock insuficiente:\n' + '\n'.join(faltantes)}), 400
+
+        # Salida de cada componente
+        for c in componentes:
+            cant_comp = Decimal(str(c['cantidad'])) * cantidad
+            _mov_directo(conn, negocio_id, c['componente_id'], cant_comp,
+                         'salida', 'produccion', session['usuario_id'],
+                         notas=notas, referencia_tipo='produccion')
+
+        # Entrada del producto terminado (directo, sin pasar por tarjeta)
+        _mov_directo(conn, negocio_id, producto_id, cantidad,
+                     'entrada', 'produccion', session['usuario_id'],
+                     notas=notas, referencia_tipo='produccion')
+
+        conn.commit()
+        return jsonify({'ok': True, 'producido': float(cantidad), 'producto': producto['nombre']})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

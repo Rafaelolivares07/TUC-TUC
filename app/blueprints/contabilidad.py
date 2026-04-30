@@ -540,6 +540,98 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     return comp_id
 
 
+def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_total,
+                                  componentes, registrado_por=None, descripcion=None):
+    """
+    Asiento de producción — reclasificación dentro del 14x:
+      Débito  cuenta_inve del producto terminado  × costo_total
+      Crédito cuenta_inve de cada componente       × cant × costo_und
+    componentes: lista de dicts {producto_id, cantidad, costo_und}
+    Retorna comprobante_id o None si falta algún grupo configurado.
+    """
+    def _cuenta_inve(prod_id, categ):
+        if not categ:
+            return None
+        return conn.execute(
+            "SELECT gi.cuenta_inve_id, pi.codigo AS cod, pi.nombre AS nom "
+            "FROM grupos_inventario gi "
+            "JOIN cuentas_puc pi ON pi.id = gi.cuenta_inve_id "
+            "WHERE gi.negocio_id=%s AND gi.nombre=%s",
+            (negocio_id, categ)
+        ).fetchone()
+
+    terminado = conn.execute(
+        "SELECT nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s",
+        (producto_terminado_id, negocio_id)
+    ).fetchone()
+    if not terminado:
+        return None
+    grp_term = _cuenta_inve(producto_terminado_id, terminado['categoria'])
+    if not grp_term:
+        return None
+
+    monto_total = float(Decimal(str(costo_total)))
+    if monto_total <= 0:
+        return None
+
+    lineas_cred = []
+    for c in componentes:
+        prod = conn.execute(
+            "SELECT nombre, categoria FROM productos WHERE id=%s", (c['producto_id'],)
+        ).fetchone()
+        if not prod:
+            return None
+        grp = _cuenta_inve(c['producto_id'], prod['categoria'])
+        if not grp:
+            return None
+        monto_c = float(Decimal(str(c['cantidad'])) * Decimal(str(c['costo_und'])))
+        if monto_c > 0:
+            lineas_cred.append({
+                'cuenta_id': grp['cuenta_inve_id'],
+                'cod':       grp['cod'],
+                'nom_prod':  prod['nombre'],
+                'monto':     monto_c,
+            })
+
+    if not lineas_cred:
+        return None
+
+    fecha_uso = _date.today()
+    desc = descripcion or f'Producción: {terminado["nombre"]}'
+    cnt = conn.execute(
+        "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='PRODUCCION'",
+        (negocio_id,)
+    ).fetchone()['n']
+    numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1:04d}"
+    total_cred = sum(l['monto'] for l in lineas_cred)
+
+    comp_id = conn.execute("""
+        INSERT INTO comprobantes_contables
+            (negocio_id, numero_comprobante, tipo, fecha, descripcion,
+             total_debitos, total_creditos, registrado_por, notas)
+        VALUES (%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,'Producción automática')
+        RETURNING id
+    """, (negocio_id, numero, fecha_uso, desc,
+          monto_total, total_cred, registrado_por)).fetchone()['id']
+
+    conn.execute("""
+        INSERT INTO movimientos_contables
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
+        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s)
+    """, (negocio_id, comp_id, grp_term['cuenta_inve_id'], grp_term['cod'],
+          terminado['nombre'], monto_total, registrado_por))
+
+    for l in lineas_cred:
+        conn.execute("""
+            INSERT INTO movimientos_contables
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
+            VALUES (%s,%s,%s,%s,%s,'credito',%s,%s)
+        """, (negocio_id, comp_id, l['cuenta_id'], l['cod'],
+              l['nom_prod'], l['monto'], registrado_por))
+
+    return comp_id
+
+
 # ── UI ────────────────────────────────────────────────────────
 
 @bp.route('/admin/contabilidad/<int:negocio_id>')

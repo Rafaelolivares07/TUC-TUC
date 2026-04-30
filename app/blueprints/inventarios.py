@@ -4,8 +4,10 @@ from decimal import Decimal
 
 try:
     from .contabilidad import _ejecutar_asiento_costo_mov as _asiento_costo_mov
+    from .contabilidad import _ejecutar_asiento_produccion as _asiento_produccion
 except ImportError:
     _asiento_costo_mov = None
+    _asiento_produccion = None
 
 bp = Blueprint('inventarios', __name__)
 
@@ -545,6 +547,7 @@ def api_produccion_registrar(negocio_id):
         # Verificar stock suficiente y leer costos ANTES de aplicar salidas
         faltantes    = []
         costo_total  = Decimal('0')
+        comps_cont   = []
         for c in componentes:
             a_consumir = Decimal(str(c['cantidad'])) * cantidad
             saldo = conn.execute(
@@ -553,7 +556,7 @@ def api_produccion_registrar(negocio_id):
                 "WHERE negocio_id=%s AND producto_id=%s AND bodega=1",
                 (negocio_id, c['componente_id'])
             ).fetchone()
-            stock_actual = Decimal(str(saldo['stock']))    if saldo else Decimal('0')
+            stock_actual = Decimal(str(saldo['stock']))     if saldo else Decimal('0')
             costo_und    = Decimal(str(saldo['costo_und'])) if saldo else Decimal('0')
             if stock_actual < a_consumir:
                 nombre = conn.execute("SELECT nombre FROM productos WHERE id=%s",
@@ -563,6 +566,11 @@ def api_produccion_registrar(negocio_id):
                     f"necesita {float(a_consumir)}, tiene {float(stock_actual)}"
                 )
             costo_total += a_consumir * costo_und
+            comps_cont.append({
+                'producto_id': c['componente_id'],
+                'cantidad':    float(a_consumir),
+                'costo_und':   float(costo_und),
+            })
 
         if faltantes:
             return jsonify({'ok': False, 'error': 'Stock insuficiente:\n' + '\n'.join(faltantes)}), 400
@@ -582,6 +590,17 @@ def api_produccion_registrar(negocio_id):
                      'entrada', 'produccion', session['usuario_id'],
                      valor_unitario=costo_unitario,
                      notas=notas, referencia_tipo='produccion')
+
+        # Asiento contable de producción (best-effort, no bloquea)
+        if _asiento_produccion:
+            try:
+                _asiento_produccion(
+                    conn, negocio_id, producto_id, float(costo_total), comps_cont,
+                    registrado_por=session['usuario_id'],
+                    descripcion=f'Producción {producto["nombre"]} x{float(cantidad)}'
+                )
+            except Exception as _e:
+                print(f'[cont] produccion prod={producto_id}: {_e}')
 
         conn.commit()
         return jsonify({

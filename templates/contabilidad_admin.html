@@ -640,9 +640,17 @@ function acManual(input, idx) {
 function calcBalance() {
   const deb  = Array.from(document.querySelectorAll('.man-deb')).reduce((a,e)  => a + parseFloat(e.value||0), 0);
   const cred = Array.from(document.querySelectorAll('.man-cred')).reduce((a,e) => a + parseFloat(e.value||0), 0);
-  const diff = Math.abs(deb - cred);
-  document.getElementById('man-balance').textContent =
-    `Déb $${deb.toLocaleString()} | Cré $${cred.toLocaleString()}${diff > 0.01 ? ' ⚠️ Descuadrado' : ' ✅'}`;
+  const diff = deb - cred;
+  const el = document.getElementById('man-balance');
+  if (Math.abs(diff) <= 0.01) {
+    el.textContent = `Déb $${deb.toLocaleString()} | Cré $${cred.toLocaleString()} ✅`;
+    el.className = 'text-sm text-green-600 font-semibold';
+  } else {
+    const falta = Math.abs(diff).toLocaleString();
+    const col   = diff > 0 ? `Crédito` : `Débito`;
+    el.textContent = `Déb $${deb.toLocaleString()} | Cré $${cred.toLocaleString()} — Falta $${falta} en ${col}`;
+    el.className = 'text-sm text-amber-600 font-semibold';
+  }
 }
 
 async function guardarComprobante() {

@@ -1019,9 +1019,6 @@ def api_comprobante_post(negocio_id):
         return jsonify({'ok': False, 'error': 'Debe agregar al menos una línea'}), 400
     total_deb  = sum(float(l.get('debito') or 0) for l in lineas)
     total_cred = sum(float(l.get('credito') or 0) for l in lineas)
-    if abs(total_deb - total_cred) > 0.01:
-        return jsonify({'ok': False,
-                        'error': f'Débitos ({total_deb:,.2f}) ≠ Créditos ({total_cred:,.2f})'}), 400
     from ..db import get_db_connection
     uid = session['usuario_id']
     try:

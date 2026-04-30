@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario — {{ negocio_nombre }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+    #nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
+    #nav-tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      flex-shrink: 0; min-width: 90px; padding: 10px 16px;
+      font-size: 0.82rem; font-weight: 600; border-radius: 999px;
+      transition: background .2s, color .2s; white-space: nowrap;
+      color: #6b7280; background: transparent;
+    }
+    .tab-btn.tab-active { background: #e11d48; color: #fff; }
+    .tab-btn:not(.tab-active):hover { background: #f3f4f6; color: #374151; }
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+      z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .toast-ok { background: #059669; }
+    .toast-err { background: #dc2626; }
+    .ac-list {
+      position: absolute; background: white; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 4px 12px #0001;
+      max-height: 220px; overflow-y: auto; z-index: 100; width: 100%;
+    }
+    .ac-item { padding: 8px 12px; cursor: pointer; font-size: .85rem; }
+    .ac-item:hover, .ac-item.ac-focus { background: #fef2f2; color: #e11d48; }
+    .overlay {
+      position: fixed; inset: 0; background: #000a;
+      z-index: 50; display: flex; align-items: flex-start; justify-content: center;
+      padding: 40px 16px; overflow-y: auto;
+    }
+    .modal {
+      background: white; border-radius: 16px; padding: 24px;
+      width: 100%; max-width: 520px; position: relative;
+    }
+    input, select, textarea {
+      border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 8px 12px; width: 100%; font-size: .875rem;
+      outline: none; transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #e11d48; }
+    label { font-size: .75rem; font-weight: 600; color: #6b7280; margin-bottom: 2px; display: block; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: .72rem; font-weight: 700; color: #9ca3af;
+         text-transform: uppercase; padding: 8px 10px; border-bottom: 2px solid #f3f4f6; }
+    td { padding: 9px 10px; font-size: .83rem; border-bottom: 1px solid #f3f4f6; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fef9fa; }
+    .badge-entrada { background: #d1fae5; color: #065f46; }
+    .badge-salida  { background: #fee2e2; color: #991b1b; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+    .pill-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #f3f4f6; border-radius: 999px;
+      padding: 4px 10px; font-size: .78rem; font-weight: 600; color: #374151;
+    }
+    .num { text-align: right; }
+  </style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+
+<div id="toast" class="toast"></div>
+
+<!-- ── OVERLAY MODAL PRODUCTO ───────────────────────────────────────── -->
+<div id="overlay-producto" class="overlay hidden" onclick="if(event.target===this)cerrarModalProducto()">
+  <div class="modal">
+    <h3 class="text-lg font-bold mb-5" id="modal-producto-titulo">Nuevo producto</h3>
+    <input type="hidden" id="mp-id">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div class="sm:col-span-2">
+        <label>Nombre *</label>
+        <input id="mp-nombre" type="text" placeholder="Nombre del producto">
+      </div>
+      <div>
+        <label>Categoría</label>
+        <input id="mp-categoria" type="text" placeholder="Ej: bebida, proteina…">
+      </div>
+      <div>
+        <label>Código de barras</label>
+        <input id="mp-codigo" type="text" placeholder="">
+      </div>
+      <div>
+        <label>Precio de venta</label>
+        <input id="mp-precio" type="number" min="0" step="0.01" placeholder="0">
+      </div>
+      <div>
+        <label>Costo</label>
+        <input id="mp-costo" type="number" min="0" step="0.01" placeholder="0">
+      </div>
+      <div>
+        <label>IVA %</label>
+        <input id="mp-iva" type="number" min="0" step="0.01" placeholder="0">
+      </div>
+      <div class="flex items-end gap-2">
+        <input type="checkbox" id="mp-disponible" class="w-4 h-4 accent-rose-500" style="width:16px">
+        <label for="mp-disponible" style="margin:0;font-size:.85rem;color:#374151;">Disponible</label>
+      </div>
+      <div class="sm:col-span-2">
+        <label>Descripción</label>
+        <textarea id="mp-descripcion" rows="2" placeholder="Opcional"></textarea>
+      </div>
+    </div>
+    <div class="flex gap-3 justify-end">
+      <button onclick="cerrarModalProducto()" class="px-4 py-2 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+      <button onclick="guardarProducto()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY MODAL TARJETA ESTÁNDAR ──────────────────────────────── -->
+<div id="overlay-tarjeta" class="overlay hidden" onclick="if(event.target===this)cerrarModalTarjeta()">
+  <div class="modal" style="max-width:480px">
+    <h3 class="text-lg font-bold mb-1">Tarjeta estándar</h3>
+    <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 mb-4"></p>
+    <input type="hidden" id="tarjeta-prod-id">
+
+    <div id="tarjeta-lineas" class="space-y-2 mb-3"></div>
+
+    <!-- Agregar componente -->
+    <div class="flex gap-2 items-end mb-5">
+      <div class="flex-1 relative">
+        <label>Componente</label>
+        <input id="tarjeta-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off">
+        <div id="tarjeta-ac-list" class="ac-list hidden"></div>
+        <input type="hidden" id="tarjeta-ac-id">
+      </div>
+      <div style="width:80px">
+        <label>Cant.</label>
+        <input id="tarjeta-ac-cant" type="number" min="0.0001" step="0.0001" value="1">
+      </div>
+      <button onclick="agregarLineaTarjeta()" class="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 font-bold text-lg mb-0.5">+</button>
+    </div>
+
+    <div class="flex gap-3 justify-end">
+      <button onclick="cerrarModalTarjeta()" class="px-4 py-2 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+      <button onclick="guardarTarjeta()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600">Guardar tarjeta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── HEADER ───────────────────────────────────────────────────────── -->
+<div class="max-w-5xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Inventario</p>
+        <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+      </div>
+      <a href="/admin" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">← Admin</a>
+    </div>
+  </div>
+
+  <!-- ── TABS ─────────────────────────────────────────────────────── -->
+  <div class="bg-white rounded-2xl shadow mb-5 px-4 py-2">
+    <div id="nav-tabs" class="flex gap-1 overflow-x-auto">
+      <button class="tab-btn tab-active" onclick="mostrarTab('productos')">Productos</button>
+      <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
+      <button class="tab-btn" onclick="mostrarTab('stock')">Stock</button>
+      <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
+    </div>
+  </div>
+
+  <!-- ── TAB PRODUCTOS ─────────────────────────────────────────────── -->
+  <div id="tab-productos" class="bg-white rounded-2xl shadow p-5">
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <input id="filtro-productos" type="text" placeholder="Filtrar por nombre o categoría…"
+             oninput="filtrarTablaProductos()" style="max-width:260px">
+      <button onclick="abrirModalProducto()"
+              class="ml-auto px-4 py-2 bg-rose-500 text-white text-sm font-bold rounded-xl hover:bg-rose-600">
+        + Producto
+      </button>
+    </div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Categoría</th>
+            <th class="num">Precio</th>
+            <th class="num">Costo</th>
+            <th class="num">Stock</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tabla-productos">
+          <tr><td colspan="6" class="text-center text-gray-400 py-8">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── TAB ENTRADAS ──────────────────────────────────────────────── -->
+  <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
+    <h2 class="font-bold text-gray-700 mb-4">Registrar entrada de mercancía</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label>Motivo</label>
+        <select id="entrada-motivo">
+          <option value="compra">Compra</option>
+          <option value="ajuste">Ajuste</option>
+          <option value="devolucion">Devolución</option>
+          <option value="inicial">Inventario inicial</option>
+        </select>
+      </div>
+      <div>
+        <label>Notas (opcional)</label>
+        <input id="entrada-notas" type="text" placeholder="">
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="grid grid-cols-12 gap-2 mb-1 px-1">
+        <span class="col-span-5 text-xs font-bold text-gray-400 uppercase">Producto</span>
+        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Cantidad</span>
+        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Costo unit.</span>
+        <span class="col-span-1"></span>
+      </div>
+      <div id="entrada-lineas" class="space-y-2"></div>
+    </div>
+
+    <button onclick="agregarLineaEntrada()"
+            class="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-400 hover:border-rose-400 hover:text-rose-500 mb-5">
+      + Agregar línea
+    </button>
+
+    <div class="flex justify-end">
+      <button onclick="registrarEntrada()"
+              class="px-6 py-2.5 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600">
+        Registrar entrada
+      </button>
+    </div>
+  </div>
+
+  <!-- ── TAB STOCK ─────────────────────────────────────────────────── -->
+  <div id="tab-stock" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold text-gray-700">Saldos actuales</h2>
+      <button onclick="cargarStock()" class="text-xs text-rose-500 font-semibold hover:underline">↺ Actualizar</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th class="num">Stock</th>
+            <th class="num">Costo und</th>
+            <th class="num">Valor exist.</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-stock">
+          <tr><td colspan="6" class="text-center text-gray-400 py-8">Selecciona esta pestaña para cargar</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── TAB KARDEX ────────────────────────────────────────────────── -->
+  <div id="tab-kardex" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="mb-4 relative" style="max-width:360px">
+      <label>Producto</label>
+      <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
+             oninput="filtrarACKardex()">
+      <div id="kardex-ac-list" class="ac-list hidden"></div>
+      <input type="hidden" id="kardex-ac-id">
+    </div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Motivo</th>
+            <th class="num">Cant.</th>
+            <th class="num">Ant.</th>
+            <th class="num">Nuevo</th>
+            <th class="num">Costo und</th>
+            <th>Notas</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-kardex">
+          <tr><td colspan="8" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /max-w-5xl -->
+
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+let productos = [];
+let tarjetaLineas = []; // {componente_id, nombre, cantidad}
+let entradaLineas = []; // {el: HTMLElement}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, ok = true) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+const TABS = ['productos', 'entradas', 'stock', 'kardex'];
+function mostrarTab(t) {
+  TABS.forEach(id => {
+    document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== t);
+  });
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('tab-active', TABS[i] === t);
+  });
+  if (t === 'stock') cargarStock();
+}
+
+// ── Formateo ──────────────────────────────────────────────────────────────────
+const fmt = n => (n == null ? '—' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 2}));
+const fmtMon = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}));
+
+// ── Autocomplete genérico ─────────────────────────────────────────────────────
+function setupAC(inputId, listId, hiddenId, data, onSelect) {
+  const inp = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  let idx = -1, timer = null;
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => renderAC(), 280);
+  });
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'Enter' && idx >= 0) { items[idx]?.click(); e.preventDefault(); }
+    else if (e.key === 'Escape') { list.classList.add('hidden'); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 200));
+
+  function renderAC() {
+    const q = inp.value.toLowerCase().trim();
+    if (q.length < 2) { list.classList.add('hidden'); return; }
+    const matches = data().filter(p => p.nombre.toLowerCase().includes(q)).slice(0, 15);
+    if (!matches.length) { list.classList.add('hidden'); return; }
+    idx = -1;
+    list.innerHTML = matches.map(p =>
+      `<div class="ac-item" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+        ${p.nombre}${p.categoria ? ` <span class="text-gray-400">(${p.categoria})</span>` : ''}
+       </div>`
+    ).join('');
+    list.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', () => {
+        document.getElementById(hiddenId).value = el.dataset.id;
+        inp.value = el.dataset.nombre;
+        list.classList.add('hidden');
+        if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+      });
+    });
+    list.classList.remove('hidden');
+  }
+  function highlightAC(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+  }
+}
+
+// ── Cargar productos ──────────────────────────────────────────────────────────
+async function cargarProductos() {
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+  productos = d.productos;
+  renderTablaProductos(productos);
+}
+
+function renderTablaProductos(lista) {
+  const tb = document.getElementById('tabla-productos');
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Sin productos</td></tr>';
+    return;
+  }
+  tb.innerHTML = lista.map(p => `
+    <tr>
+      <td class="font-semibold">${p.nombre}${!p.disponible ? ' <span class="text-xs text-gray-400">(inactivo)</span>' : ''}</td>
+      <td class="text-gray-500 text-xs">${p.categoria || '—'}</td>
+      <td class="num">${fmtMon(p.precio)}</td>
+      <td class="num">${fmtMon(p.costo)}</td>
+      <td class="num font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
+      <td>
+        <div class="flex gap-2 justify-end">
+          <button onclick='abrirModalProducto(${JSON.stringify(p)})' title="Editar"
+                  class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold">✏️</button>
+          <button onclick='abrirModalTarjeta(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Tarjeta estándar"
+                  class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600">🧩</button>
+          <button onclick='verKardex(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Kardex"
+                  class="text-xs px-2 py-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 font-semibold text-yellow-600">📊</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filtrarTablaProductos() {
+  const q = document.getElementById('filtro-productos').value.toLowerCase();
+  if (!q) { renderTablaProductos(productos); return; }
+  renderTablaProductos(productos.filter(p =>
+    p.nombre.toLowerCase().includes(q) || (p.categoria || '').toLowerCase().includes(q)
+  ));
+}
+
+// ── Modal producto ────────────────────────────────────────────────────────────
+function abrirModalProducto(p = null) {
+  document.getElementById('modal-producto-titulo').textContent = p ? 'Editar producto' : 'Nuevo producto';
+  document.getElementById('mp-id').value       = p ? p.id : '';
+  document.getElementById('mp-nombre').value   = p ? p.nombre : '';
+  document.getElementById('mp-categoria').value = p ? (p.categoria || '') : '';
+  document.getElementById('mp-codigo').value   = p ? (p.codigo_barra || '') : '';
+  document.getElementById('mp-precio').value   = p ? p.precio : '0';
+  document.getElementById('mp-costo').value    = p ? p.costo : '0';
+  document.getElementById('mp-iva').value      = p ? (p.iva_pct || '0') : '0';
+  document.getElementById('mp-disponible').checked = p ? !!p.disponible : true;
+  document.getElementById('mp-descripcion').value  = p ? (p.descripcion || '') : '';
+  document.getElementById('overlay-producto').classList.remove('hidden');
+  setTimeout(() => document.getElementById('mp-nombre').focus(), 50);
+}
+function cerrarModalProducto() {
+  document.getElementById('overlay-producto').classList.add('hidden');
+}
+async function guardarProducto() {
+  const id = document.getElementById('mp-id').value;
+  const nombre = document.getElementById('mp-nombre').value.trim();
+  if (!nombre) { toast('Nombre requerido', false); return; }
+  const body = {
+    nombre,
+    categoria:    document.getElementById('mp-categoria').value.trim() || null,
+    codigo_barra: document.getElementById('mp-codigo').value.trim() || null,
+    precio:       parseFloat(document.getElementById('mp-precio').value) || 0,
+    costo:        parseFloat(document.getElementById('mp-costo').value) || 0,
+    iva_pct:      parseFloat(document.getElementById('mp-iva').value) || 0,
+    disponible:   document.getElementById('mp-disponible').checked,
+    descripcion:  document.getElementById('mp-descripcion').value.trim() || null,
+  };
+  let url, method;
+  if (id) {
+    url = `/api/inventario/producto/${id}`;
+  } else {
+    body.negocio_id = NEGOCIO_ID;
+    url = '/api/inventario/producto';
+  }
+  const r = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (d.ok) {
+    toast(id ? 'Producto actualizado' : 'Producto creado');
+    cerrarModalProducto();
+    cargarProductos();
+  } else {
+    toast(d.error, false);
+  }
+}
+
+// ── Modal tarjeta estándar ────────────────────────────────────────────────────
+function abrirModalTarjeta(productoId, nombre) {
+  tarjetaLineas = [];
+  document.getElementById('tarjeta-prod-id').value = productoId;
+  document.getElementById('tarjeta-nombre-prod').textContent = nombre;
+  document.getElementById('tarjeta-ac-input').value = '';
+  document.getElementById('tarjeta-ac-id').value = '';
+  document.getElementById('tarjeta-ac-cant').value = '1';
+  document.getElementById('tarjeta-ac-list').classList.add('hidden');
+  document.getElementById('overlay-tarjeta').classList.remove('hidden');
+  cargarTarjeta(productoId);
+}
+function cerrarModalTarjeta() {
+  document.getElementById('overlay-tarjeta').classList.add('hidden');
+}
+async function cargarTarjeta(productoId) {
+  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
+  const d = await r.json();
+  if (!d.ok) return;
+  tarjetaLineas = d.componentes.map(c => ({componente_id: c.componente_id, nombre: c.nombre, cantidad: c.cantidad}));
+  renderLineasTarjeta();
+}
+function renderLineasTarjeta() {
+  const cont = document.getElementById('tarjeta-lineas');
+  if (!tarjetaLineas.length) {
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">Sin componentes (se tratará como producto simple)</p>';
+    return;
+  }
+  cont.innerHTML = tarjetaLineas.map((ln, i) => `
+    <div class="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+      <span class="flex-1 text-sm font-semibold">${ln.nombre}</span>
+      <input type="number" value="${ln.cantidad}" min="0.0001" step="0.0001"
+             onchange="tarjetaLineas[${i}].cantidad=parseFloat(this.value)||1"
+             style="width:80px">
+      <button onclick="tarjetaLineas.splice(${i},1);renderLineasTarjeta()"
+              class="text-red-400 hover:text-red-600 font-bold text-lg leading-none">×</button>
+    </div>
+  `).join('');
+}
+function agregarLineaTarjeta() {
+  const id = parseInt(document.getElementById('tarjeta-ac-id').value);
+  const nombre = document.getElementById('tarjeta-ac-input').value.trim();
+  const cant = parseFloat(document.getElementById('tarjeta-ac-cant').value) || 1;
+  if (!id || !nombre) { toast('Selecciona un producto del buscador', false); return; }
+  if (tarjetaLineas.find(l => l.componente_id === id)) { toast('Ya está en la tarjeta', false); return; }
+  tarjetaLineas.push({componente_id: id, nombre, cantidad: cant});
+  renderLineasTarjeta();
+  document.getElementById('tarjeta-ac-input').value = '';
+  document.getElementById('tarjeta-ac-id').value = '';
+  document.getElementById('tarjeta-ac-cant').value = '1';
+}
+async function guardarTarjeta() {
+  const productoId = document.getElementById('tarjeta-prod-id').value;
+  const lineas = tarjetaLineas.map(l => ({componente_id: l.componente_id, cantidad: l.cantidad}));
+  if (!lineas.length) { toast('Agrega al menos un componente', false); return; }
+  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lineas})
+  });
+  const d = await r.json();
+  if (d.ok) { toast('Tarjeta guardada'); cerrarModalTarjeta(); }
+  else toast(d.error, false);
+}
+
+// ── Entradas ──────────────────────────────────────────────────────────────────
+function agregarLineaEntrada() {
+  const cont = document.getElementById('entrada-lineas');
+  const idx = entradaLineas.length;
+  const div = document.createElement('div');
+  div.className = 'grid grid-cols-12 gap-2 items-end';
+  div.innerHTML = `
+    <div class="col-span-5 relative">
+      <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
+      <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
+      <input type="hidden" id="ent-id-${idx}">
+    </div>
+    <div class="col-span-3">
+      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0.0001" step="0.0001" value="1">
+    </div>
+    <div class="col-span-3">
+      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.01" value="">
+    </div>
+    <div class="col-span-1 flex justify-center">
+      <button onclick="this.closest('.grid').remove()"
+              class="text-red-400 hover:text-red-600 font-bold text-lg">×</button>
+    </div>
+  `;
+  cont.appendChild(div);
+  entradaLineas.push(div);
+  setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, null);
+}
+async function registrarEntrada() {
+  const motivo = document.getElementById('entrada-motivo').value;
+  const notas  = document.getElementById('entrada-notas').value.trim() || null;
+  const cont   = document.getElementById('entrada-lineas');
+  const divs   = [...cont.querySelectorAll('.grid')];
+  const lineas = [];
+  for (const [i, div] of divs.entries()) {
+    const inputs = div.querySelectorAll('input[type=hidden], input[type=number]');
+    const id = div.querySelector('input[type=hidden]').value;
+    const cant = parseFloat(div.querySelectorAll('input[type=number]')[0].value);
+    const vu   = parseFloat(div.querySelectorAll('input[type=number]')[1].value) || null;
+    if (!id || !cant) { toast(`Línea ${i+1}: producto y cantidad requeridos`, false); return; }
+    lineas.push({producto_id: parseInt(id), cantidad: cant, valor_unitario: vu});
+  }
+  if (!lineas.length) { toast('Agrega al menos una línea', false); return; }
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lineas, motivo, notas})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    toast('Entrada registrada');
+    cont.innerHTML = '';
+    entradaLineas = [];
+    cargarProductos();
+  } else {
+    toast(d.error, false);
+  }
+}
+
+// ── Stock ─────────────────────────────────────────────────────────────────────
+async function cargarStock() {
+  const tb = document.getElementById('tabla-stock');
+  tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/stock`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+  if (!d.saldos.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Sin saldos registrados</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.saldos.map(s => `
+    <tr>
+      <td class="font-semibold">${s.nombre}</td>
+      <td class="text-gray-400 text-xs">${s.categoria || '—'}</td>
+      <td class="num font-bold ${Number(s.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(s.stock)}</td>
+      <td class="num">${fmtMon(s.costo_und)}</td>
+      <td class="num">${fmtMon(s.valor_existencia)}</td>
+      <td class="text-xs text-gray-400">${s.updated_at ? s.updated_at.slice(0,16).replace('T',' ') : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Kardex ────────────────────────────────────────────────────────────────────
+function filtrarACKardex() {
+  // Handled by setupAC with 280ms debounce
+}
+function verKardex(id, nombre) {
+  mostrarTab('kardex');
+  document.getElementById('kardex-ac-input').value = nombre;
+  document.getElementById('kardex-ac-id').value = id;
+  cargarKardex(id);
+}
+async function cargarKardex(productoId) {
+  const tb = document.getElementById('tabla-kardex');
+  tb.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+  if (!d.movimientos.length) {
+    tb.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    return;
+  }
+  tb.innerHTML = d.movimientos.map(m => `
+    <tr>
+      <td class="text-xs text-gray-500 whitespace-nowrap">${m.fecha}</td>
+      <td><span class="badge ${m.tipo === 'entrada' ? 'badge-entrada' : 'badge-salida'}">${m.tipo}</span></td>
+      <td class="text-xs text-gray-500">${m.motivo}</td>
+      <td class="num">${fmt(m.cantidad)}</td>
+      <td class="num text-gray-400">${fmt(m.stock_anterior)}</td>
+      <td class="num font-semibold">${fmt(m.stock_nuevo)}</td>
+      <td class="num text-xs">${m.costo_und != null ? fmtMon(m.costo_und) : '—'}</td>
+      <td class="text-xs text-gray-400">${m.notas || ''}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  cargarProductos();
+
+  // AC tarjeta (usa productos cargados)
+  setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, null);
+
+  // AC kardex
+  setupAC('kardex-ac-input', 'kardex-ac-list', 'kardex-ac-id', () => productos, ({id, nombre}) => {
+    cargarKardex(id);
+  });
+
+  // Enter en modal producto
+  document.getElementById('mp-nombre').addEventListener('keydown', e => {
+    if (e.key === 'Enter') guardarProducto();
+  });
+});
+</script>
+</body>
+</html>

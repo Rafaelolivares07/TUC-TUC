@@ -1,11 +1,16 @@
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
 from decimal import Decimal
 
 bp = Blueprint('inventarios', __name__)
 
+_tablas_listas = False
+
 
 def _crear_tablas(conn):
+    global _tablas_listas
+    if _tablas_listas:
+        return
     sqls = [
         """CREATE TABLE IF NOT EXISTS productos (
             id          SERIAL PRIMARY KEY,
@@ -42,13 +47,21 @@ def _crear_tablas(conn):
         )""",
     ]
     for sql in sqls:
-        conn.execute(sql)
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
     alters = [
         "CREATE INDEX IF NOT EXISTS idx_productos_negocio ON productos(negocio_id)",
         "CREATE INDEX IF NOT EXISTS idx_tarjeta_producto ON tarjeta_estandar(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_saldos_negocio_producto ON saldos_inventario(negocio_id, producto_id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS costo_und NUMERIC(12,4)",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS recargo DECIMAL(10,2) DEFAULT 0",
     ]
     for sql in alters:
         try:
@@ -83,6 +96,7 @@ def _crear_tablas(conn):
         pass
 
     conn.commit()
+    _tablas_listas = True
 
 
 def _es_ensamble(conn, producto_id):
@@ -188,20 +202,6 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                   float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo)))
 
 
-# ── Inicialización ─────────────────────────────────────────────────────────────
-
-@bp.before_app_request
-def _init_tablas():
-    conn = get_db_connection()
-    try:
-        _crear_tablas(conn)
-    finally:
-        conn.close()
-    _init_tablas.__func__._done = True  # type: ignore
-    # Solo correr una vez
-    bp.before_app_request_funcs[None].remove(_init_tablas)  # type: ignore
-
-
 # ── Productos ──────────────────────────────────────────────────────────────────
 
 @bp.route('/api/inventario/producto', methods=['POST'])
@@ -215,6 +215,7 @@ def api_inventario_producto_crear():
         return jsonify({'ok': False, 'error': 'negocio_id y nombre requeridos'}), 400
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden)
@@ -244,6 +245,7 @@ def api_inventario_productos(negocio_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         rows = conn.execute("""
             SELECT p.id, p.nombre, p.categoria, p.precio, p.costo,
                    p.codigo_barra, p.iva_pct, p.disponible, p.orden,
@@ -269,6 +271,7 @@ def api_inventario_tarjeta_ver(producto_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         rows = conn.execute("""
             SELECT te.componente_id, te.cantidad, p.nombre
             FROM tarjeta_estandar te
@@ -292,6 +295,7 @@ def api_inventario_tarjeta_guardar(producto_id):
         return jsonify({'ok': False, 'error': 'Debe agregar al menos un componente'}), 400
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         conn.execute("DELETE FROM tarjeta_estandar WHERE producto_id = %s", (producto_id,))
         for ln in lineas:
             conn.execute("""
@@ -322,6 +326,7 @@ def api_inventario_entrada(negocio_id):
         return jsonify({'ok': False, 'error': 'Debe agregar al menos una línea'}), 400
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         advertencias = []
         for ln in lineas:
             prod_id = int(ln['producto_id'])
@@ -365,6 +370,7 @@ def api_inventario_stock(negocio_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         rows = conn.execute("""
             SELECT p.id, p.nombre, p.categoria, s.bodega,
                    s.stock, s.costo_und, s.valor_existencia, s.updated_at
@@ -386,6 +392,7 @@ def api_inventario_kardex(producto_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        _crear_tablas(conn)
         rows = conn.execute("""
             SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
                    valor_unitario, costo_und, notas,
@@ -399,3 +406,58 @@ def api_inventario_kardex(producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/producto/<int:producto_id>', methods=['POST'])
+def api_inventario_producto_editar(producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        conn.execute("""
+            UPDATE productos SET
+                nombre=%s, categoria=%s, precio=%s, costo=%s,
+                descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s
+            WHERE id=%s
+        """, (
+            (data.get('nombre') or '').strip(),
+            data.get('categoria') or None,
+            float(data.get('precio') or 0),
+            float(data.get('costo') or 0),
+            data.get('descripcion') or None,
+            data.get('codigo_barra') or None,
+            float(data.get('iva_pct') or 0),
+            bool(data.get('disponible', True)),
+            producto_id,
+        ))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ── UI ─────────────────────────────────────────────────────────────────────────
+
+@bp.route('/admin/inventario/<int:negocio_id>')
+def admin_inventario(negocio_id):
+    if 'usuario_id' not in session:
+        return redirect(url_for('auth.admin_login'))
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio = conn.execute(
+            "SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)
+        ).fetchone()
+        conn.close()
+        if not negocio:
+            return "Negocio no encontrado", 404
+        return render_template('inventario_admin.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=negocio['nombre'])
+    except Exception as e:
+        return f"Error: {e}", 500

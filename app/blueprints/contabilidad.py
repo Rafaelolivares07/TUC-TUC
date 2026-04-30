@@ -1012,15 +1012,22 @@ def api_grupos_get(negocio_id):
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
+        # Categorías reales de productos + su grupo si ya está configurado
         rows = conn.execute("""
-            SELECT g.id, g.nombre,
+            SELECT p.categoria AS nombre,
+                   g.id,
                    g.cuenta_inve_id, pi.codigo AS cod_inve, pi.nombre AS nom_inve,
                    g.cuenta_cos_id,  pc.codigo AS cod_cos,  pc.nombre AS nom_cos
-            FROM grupos_inventario g
+            FROM (
+                SELECT DISTINCT categoria FROM productos
+                WHERE negocio_id = %s AND categoria IS NOT NULL AND categoria <> ''
+            ) p
+            LEFT JOIN grupos_inventario g
+                ON g.negocio_id = %s AND g.nombre = p.categoria
             LEFT JOIN cuentas_puc pi ON pi.id = g.cuenta_inve_id
             LEFT JOIN cuentas_puc pc ON pc.id = g.cuenta_cos_id
-            WHERE g.negocio_id = %s ORDER BY g.nombre
-        """, (negocio_id,)).fetchall()
+            ORDER BY p.categoria
+        """, (negocio_id, negocio_id)).fetchall()
         conn.close()
         return jsonify({'ok': True, 'grupos': [dict(r) for r in rows]})
     except Exception as e:

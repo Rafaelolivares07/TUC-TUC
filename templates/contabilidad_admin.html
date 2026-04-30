@@ -129,35 +129,15 @@
     <!-- ═══ TAB: GRUPOS INVENTARIO ═══ -->
     <div id="panel-grupos" class="p-5 hidden">
       <p class="text-sm text-gray-500 mb-4">
-        Asocia cada categoría de productos a sus cuentas PUC de inventario (14x) y costo de ventas (6x).
-        Al vender, el motor genera el asiento COGS automáticamente si el grupo está configurado.
+        Categorías de productos de este negocio. Asigna las cuentas PUC de inventario (14x) y
+        costo de ventas (6x) a cada una para que el motor genere asientos COGS automáticamente al vender.
       </p>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <input id="grp-nombre" type="text" placeholder="Nombre de categoría (ej: Bebidas)"
-               class="border rounded-lg px-3 py-2 text-sm">
-        <div class="relative">
-          <input id="grp-inve-q" type="text" placeholder="Cuenta inventario (14x)"
-                 class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off"
-                 oninput="acGrp('inve')">
-          <div id="ac-grp-inve" class="ac-drop hidden"></div>
-          <input type="hidden" id="grp-inve-id">
-        </div>
-        <div class="relative">
-          <input id="grp-cos-q" type="text" placeholder="Cuenta costo ventas (6x)"
-                 class="border rounded-lg px-3 py-2 text-sm w-full" autocomplete="off"
-                 oninput="acGrp('cos')">
-          <div id="ac-grp-cos" class="ac-drop hidden"></div>
-          <input type="hidden" id="grp-cos-id">
-        </div>
-      </div>
-      <button onclick="guardarGrupo()"
-              class="bg-blue-600 text-white text-sm font-bold px-5 py-2 rounded-lg mb-5">Guardar grupo</button>
       <table class="w-full text-sm">
         <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
           <th class="px-3 py-2 text-left">Categoría</th>
-          <th class="px-3 py-2 text-left">Cuenta Inventario</th>
-          <th class="px-3 py-2 text-left">Cuenta Costo Ventas</th>
-          <th class="px-3 py-2 text-center"></th>
+          <th class="px-3 py-2 text-left">Cuenta Inventario (14x)</th>
+          <th class="px-3 py-2 text-left">Cuenta Costo Ventas (6x)</th>
+          <th class="px-3 py-2 text-center">Acción</th>
         </tr></thead>
         <tbody id="grupos-body"></tbody>
       </table>
@@ -538,18 +518,21 @@ async function eliminarLinea(lid) {
 function cerrarModalLineas() { document.getElementById('modal-lineas').classList.add('hidden'); paramActivo = null; }
 
 // ── TAB: GRUPOS INVENTARIO ────────────────────────────────────
+let grpData = [];
 let grpTimers = {};
-function acGrp(tipo) {
-  clearTimeout(grpTimers[tipo]);
-  grpTimers[tipo] = setTimeout(async () => {
-    const q = document.getElementById(`grp-${tipo}-q`).value.trim();
-    const listEl = document.getElementById(`ac-grp-${tipo}`);
+
+function acGrp(tipo, idx) {
+  const key = `${tipo}_${idx}`;
+  clearTimeout(grpTimers[key]);
+  grpTimers[key] = setTimeout(async () => {
+    const q = document.getElementById(`gi-${tipo}-q-${idx}`).value.trim();
+    const listEl = document.getElementById(`ac-gi-${tipo}-${idx}`);
     if (q.length < 2) { listEl.classList.add('hidden'); return; }
     const filtro = tipo === 'inve' ? '14' : '6';
     const cuentas = await fetchPUC(q, filtro);
     renderAC(listEl, cuentas, c => {
-      document.getElementById(`grp-${tipo}-q`).value = `${c.codigo} — ${c.nombre}`;
-      document.getElementById(`grp-${tipo}-id`).value = c.id;
+      document.getElementById(`gi-${tipo}-q-${idx}`).value = `${c.codigo} — ${c.nombre}`;
+      document.getElementById(`gi-${tipo}-id-${idx}`).value = c.id;
       listEl.classList.add('hidden');
     });
   }, 280);
@@ -559,34 +542,58 @@ async function cargarGrupos() {
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario`);
   const data = await resp.json();
   if (!data.ok) return;
-  document.getElementById('grupos-body').innerHTML = data.grupos.map(g => `
-    <tr class="border-b border-gray-100 hover:bg-blue-50">
-      <td class="px-3 py-2 font-semibold">${g.nombre}</td>
-      <td class="px-3 py-2 text-sm"><span class="font-mono text-blue-600">${g.cod_inve||'—'}</span> <span class="text-gray-500 text-xs">${g.nom_inve||''}</span></td>
-      <td class="px-3 py-2 text-sm"><span class="font-mono text-purple-600">${g.cod_cos||'—'}</span> <span class="text-gray-500 text-xs">${g.nom_cos||''}</span></td>
-      <td class="px-3 py-2 text-center">
-        <button onclick="eliminarGrupo(${g.id})" class="text-red-400 hover:text-red-600 text-xs font-bold">✕</button>
-      </td>
-    </tr>`).join('') || '<tr><td colspan="4" class="text-center text-gray-400 py-4 text-sm">Sin grupos configurados.</td></tr>';
+  grpData = data.grupos;
+  document.getElementById('grupos-body').innerHTML = grpData.length
+    ? grpData.map((g, i) => `
+      <tr class="border-b border-gray-100">
+        <td class="px-3 py-2 font-semibold text-gray-700">${g.nombre}</td>
+        <td class="px-3 py-2">
+          <div class="relative">
+            <input type="text" id="gi-inve-q-${i}" autocomplete="off"
+                   placeholder="Cuenta 14x (inventario)..."
+                   value="${g.cod_inve ? g.cod_inve+' — '+g.nom_inve : ''}"
+                   class="border rounded-lg px-2 py-1 text-xs w-full"
+                   oninput="acGrp('inve',${i})">
+            <div id="ac-gi-inve-${i}" class="ac-drop hidden"></div>
+            <input type="hidden" id="gi-inve-id-${i}" value="${g.cuenta_inve_id||''}">
+          </div>
+        </td>
+        <td class="px-3 py-2">
+          <div class="relative">
+            <input type="text" id="gi-cos-q-${i}" autocomplete="off"
+                   placeholder="Cuenta 6x (costo ventas)..."
+                   value="${g.cod_cos ? g.cod_cos+' — '+g.nom_cos : ''}"
+                   class="border rounded-lg px-2 py-1 text-xs w-full"
+                   oninput="acGrp('cos',${i})">
+            <div id="ac-gi-cos-${i}" class="ac-drop hidden"></div>
+            <input type="hidden" id="gi-cos-id-${i}" value="${g.cuenta_cos_id||''}">
+          </div>
+        </td>
+        <td class="px-3 py-2 text-center whitespace-nowrap">
+          <button onclick="guardarGrupo(${i})"
+                  class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-lg">Guardar</button>
+          ${g.id ? `<button onclick="eliminarGrupo(${g.id})" class="text-red-400 hover:text-red-600 text-xs ml-1" title="Quitar cuentas">✕</button>` : ''}
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="text-center text-gray-400 py-4 text-sm">Sin categorías de productos registradas.</td></tr>';
 }
 
-async function guardarGrupo() {
-  const nombre = document.getElementById('grp-nombre').value.trim();
-  const cuenta_inve_id = parseInt(document.getElementById('grp-inve-id').value)||null;
-  const cuenta_cos_id  = parseInt(document.getElementById('grp-cos-id').value)||null;
-  if (!nombre) { toast('Nombre de categoría requerido', false); return; }
-  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({nombre,cuenta_inve_id,cuenta_cos_id})});
+async function guardarGrupo(idx) {
+  const nombre = grpData[idx].nombre;
+  const cuenta_inve_id = parseInt(document.getElementById(`gi-inve-id-${idx}`).value)||null;
+  const cuenta_cos_id  = parseInt(document.getElementById(`gi-cos-id-${idx}`).value)||null;
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({nombre, cuenta_inve_id, cuenta_cos_id})
+  });
   const data = await resp.json();
-  if (data.ok) {
-    toast('Grupo guardado');
-    ['nombre','inve-q','cos-q'].forEach(f => document.getElementById(`grp-${f}`).value='');
-    ['inve-id','cos-id'].forEach(f => document.getElementById(`grp-${f}`).value='');
-    cargarGrupos();
-  } else toast(data.error, false);
+  if (data.ok) { toast('Guardado'); cargarGrupos(); }
+  else toast(data.error, false);
 }
 
 async function eliminarGrupo(id) {
-  if (!confirm('¿Eliminar este grupo?')) return;
+  if (!confirm('¿Quitar las cuentas asignadas a esta categoría?')) return;
   await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario/${id}`, {method:'DELETE'});
   cargarGrupos();
 }

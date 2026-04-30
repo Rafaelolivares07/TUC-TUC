@@ -143,6 +143,24 @@ def _asegurar_tablas(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_grpinv_neg ON grupos_inventario(negocio_id)")
     conn.commit()
 
+    # Columnas nuevas en tipos_documento_negocio
+    for sql in [
+        "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS consecutivo    INTEGER DEFAULT 0",
+        "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS numero_inicio  INTEGER DEFAULT 1",
+        "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS predeterminado BOOLEAN DEFAULT FALSE",
+        # numero_documento en comprobantes_contables para cruce con inventario
+        "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
+        # tipo_documento y numero_documento en movimientos_inventario
+        "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS tipo_documento   VARCHAR(50)",
+        "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
     _seed_puc(conn)
     _seed_puc_subcuentas(conn)
     conn.execute("""
@@ -380,7 +398,8 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     conn: abierta, el llamador hace commit/rollback.
     """
     tipo_doc = conn.execute(
-        "SELECT id, nombre FROM tipos_documento_negocio WHERE negocio_id=%s AND codigo=%s",
+        "SELECT id, nombre, consecutivo, numero_inicio FROM tipos_documento_negocio "
+        "WHERE negocio_id=%s AND codigo=%s",
         (negocio_id, tipo_doc_codigo)
     ).fetchone()
     if not tipo_doc:
@@ -445,19 +464,21 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     desc       = descripcion_override or param['descripcion_asiento'] or tipo_doc_codigo
     fecha_uso  = fecha or _date.today()
 
-    cnt = conn.execute(
-        "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo=%s",
-        (negocio_id, tipo_doc_codigo)
-    ).fetchone()['n']
-    numero = f"AUTO-{tipo_doc_codigo}-{(cnt or 0) + 1:04d}"
+    # Consecutivo: incrementa atomicamente respetando numero_inicio
+    num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
+    conn.execute(
+        "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
+        (num_doc, tipo_doc['id'])
+    )
+    numero = f"{tipo_doc_codigo}-{num_doc:04d}"
 
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
-            (negocio_id, numero_comprobante, tipo, fecha, descripcion,
+            (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
              total_debitos, total_creditos, registrado_por, notas)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente')
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente')
         RETURNING id
-    """, (negocio_id, numero, tipo_doc_codigo, fecha_uso, desc,
+    """, (negocio_id, numero, num_doc, tipo_doc_codigo, fecha_uso, desc,
           total_deb, total_cred, registrado_por)).fetchone()['id']
 
     for m in mov_list:
@@ -470,6 +491,20 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
               m['monto'], registrado_por))
 
     return comp_id
+
+
+def _tipo_doc_para_modulo(conn, negocio_id, modulo):
+    """Retorna el tipo_doc predeterminado (o el primero) vinculado a un módulo por sus variables H."""
+    return conn.execute("""
+        SELECT DISTINCT t.id, t.codigo, t.consecutivo, t.numero_inicio
+        FROM tipos_documento_negocio t
+        JOIN parametros_contables_negocio p ON p.tipo_doc_id = t.id AND p.negocio_id = t.negocio_id
+        JOIN parametros_lineas_contables l  ON l.parametro_id = p.id AND l.origen = 'H'
+        JOIN modulo_variables_contables v   ON v.id = l.variable_id
+        WHERE t.negocio_id = %s AND p.activo = TRUE AND v.modulo = %s
+        ORDER BY t.predeterminado DESC, t.id
+        LIMIT 1
+    """, (negocio_id, modulo)).fetchone()
 
 
 def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_und,
@@ -740,8 +775,8 @@ def api_tipos_doc_get(negocio_id):
     try:
         conn = get_db_connection()
         rows = conn.execute(
-            "SELECT id, codigo, nombre, activo FROM tipos_documento_negocio "
-            "WHERE negocio_id=%s ORDER BY codigo", (negocio_id,)
+            "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado "
+            "FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY codigo", (negocio_id,)
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'tipos': [dict(r) for r in rows]})
@@ -755,9 +790,11 @@ def api_tipos_doc_get(negocio_id):
 def api_tipos_doc_post(negocio_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
-    data   = request.get_json() or {}
-    codigo = (data.get('codigo') or '').strip().upper()
-    nombre = (data.get('nombre') or '').strip()
+    data          = request.get_json() or {}
+    codigo        = (data.get('codigo') or '').strip().upper()
+    nombre        = (data.get('nombre') or '').strip()
+    numero_inicio = int(data.get('numero_inicio') or 1)
+    predeterminado = bool(data.get('predeterminado', False))
     if not codigo or not nombre:
         return jsonify({'ok': False, 'error': 'Código y nombre son requeridos'}), 400
     from ..db import get_db_connection
@@ -765,11 +802,11 @@ def api_tipos_doc_post(negocio_id):
         conn = get_db_connection()
         _asegurar_tablas(conn)
         nuevo = conn.execute("""
-            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre)
-            VALUES (%s,%s,%s)
+            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, predeterminado)
+            VALUES (%s,%s,%s,%s,%s)
             ON CONFLICT (negocio_id, codigo) DO NOTHING
-            RETURNING id, codigo, nombre, activo
-        """, (negocio_id, codigo, nombre)).fetchone()
+            RETURNING id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado
+        """, (negocio_id, codigo, nombre, numero_inicio, predeterminado)).fetchone()
         conn.commit(); conn.close()
         if not nuevo:
             return jsonify({'ok': False, 'error': f'El código {codigo} ya existe'}), 409
@@ -796,6 +833,14 @@ def api_tipos_doc_patch(negocio_id, tid):
             conn.execute(
                 "UPDATE tipos_documento_negocio SET nombre=%s WHERE id=%s AND negocio_id=%s",
                 (data['nombre'].strip(), tid, negocio_id))
+        if 'numero_inicio' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET numero_inicio=%s WHERE id=%s AND negocio_id=%s",
+                (int(data['numero_inicio'] or 1), tid, negocio_id))
+        if 'predeterminado' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET predeterminado=%s WHERE id=%s AND negocio_id=%s",
+                (bool(data['predeterminado']), tid, negocio_id))
         conn.commit(); conn.close()
         return jsonify({'ok': True})
     except Exception as e:

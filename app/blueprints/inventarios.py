@@ -528,21 +528,33 @@ def api_produccion_registrar(negocio_id):
         if not componentes:
             return jsonify({'ok': False, 'error': 'Sin tarjeta estándar'}), 400
 
-        # Verificar stock suficiente
-        faltantes = []
+        # Verificar stock suficiente y leer costos ANTES de aplicar salidas
+        faltantes    = []
+        costo_total  = Decimal('0')
         for c in componentes:
             a_consumir = Decimal(str(c['cantidad'])) * cantidad
             saldo = conn.execute(
-                "SELECT COALESCE(stock,0) AS stock FROM saldos_inventario "
+                "SELECT COALESCE(stock,0) AS stock, COALESCE(costo_und,0) AS costo_und "
+                "FROM saldos_inventario "
                 "WHERE negocio_id=%s AND producto_id=%s AND bodega=1",
                 (negocio_id, c['componente_id'])
             ).fetchone()
-            stock_actual = Decimal(str(saldo['stock'])) if saldo else Decimal('0')
+            stock_actual = Decimal(str(saldo['stock']))    if saldo else Decimal('0')
+            costo_und    = Decimal(str(saldo['costo_und'])) if saldo else Decimal('0')
             if stock_actual < a_consumir:
-                nombre = conn.execute("SELECT nombre FROM productos WHERE id=%s", (c['componente_id'],)).fetchone()
-                faltantes.append(f"{nombre['nombre'] if nombre else c['componente_id']}: necesita {float(a_consumir)}, tiene {float(stock_actual)}")
+                nombre = conn.execute("SELECT nombre FROM productos WHERE id=%s",
+                                      (c['componente_id'],)).fetchone()
+                faltantes.append(
+                    f"{nombre['nombre'] if nombre else c['componente_id']}: "
+                    f"necesita {float(a_consumir)}, tiene {float(stock_actual)}"
+                )
+            costo_total += a_consumir * costo_und
+
         if faltantes:
             return jsonify({'ok': False, 'error': 'Stock insuficiente:\n' + '\n'.join(faltantes)}), 400
+
+        # Costo unitario del terminado = total componentes / cantidad producida
+        costo_unitario = costo_total / cantidad if cantidad > 0 else Decimal('0')
 
         # Salida de cada componente
         for c in componentes:
@@ -551,13 +563,20 @@ def api_produccion_registrar(negocio_id):
                          'salida', 'produccion', session['usuario_id'],
                          notas=notas, referencia_tipo='produccion')
 
-        # Entrada del producto terminado (directo, sin pasar por tarjeta)
+        # Entrada del terminado con costo calculado desde componentes
         _mov_directo(conn, negocio_id, producto_id, cantidad,
                      'entrada', 'produccion', session['usuario_id'],
+                     valor_unitario=costo_unitario,
                      notas=notas, referencia_tipo='produccion')
 
         conn.commit()
-        return jsonify({'ok': True, 'producido': float(cantidad), 'producto': producto['nombre']})
+        return jsonify({
+            'ok': True,
+            'producido':      float(cantidad),
+            'producto':       producto['nombre'],
+            'costo_unitario': float(costo_unitario),
+            'costo_total':    float(costo_total),
+        })
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

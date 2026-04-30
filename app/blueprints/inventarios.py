@@ -2,6 +2,11 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 from ..db import get_db_connection
 from decimal import Decimal
 
+try:
+    from .contabilidad import _ejecutar_asiento_costo_mov as _asiento_costo_mov
+except ImportError:
+    _asiento_costo_mov = None
+
 bp = Blueprint('inventarios', __name__)
 
 _tablas_listas = False
@@ -180,6 +185,15 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
             VALUES (%s,%s,%s,%s,%s,%s)
         """, (negocio_id, producto_id, bodega,
               float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo)))
+
+    # Asiento COGS automático en salidas por venta (best-effort, no bloquea)
+    if tipo == 'salida' and motivo == 'venta' and _asiento_costo_mov:
+        try:
+            _asiento_costo_mov(conn, negocio_id, producto_id,
+                               float(cantidad), float(costo_ant),
+                               registrado_por=registrado_por)
+        except Exception as _e:
+            print(f'[cont] costo_mov prod={producto_id}: {_e}')
 
 
 def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,

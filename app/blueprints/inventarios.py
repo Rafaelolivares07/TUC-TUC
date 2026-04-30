@@ -5,9 +5,11 @@ from decimal import Decimal
 try:
     from .contabilidad import _ejecutar_asiento_costo_mov as _asiento_costo_mov
     from .contabilidad import _ejecutar_asiento_produccion as _asiento_produccion
+    from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
 except ImportError:
     _asiento_costo_mov = None
     _asiento_produccion = None
+    _asiento_auto = None
 
 bp = Blueprint('inventarios', __name__)
 
@@ -369,6 +371,20 @@ def api_inventario_entrada(negocio_id):
                 referencia_id  = data.get('referencia_id'),
                 referencia_tipo= data.get('referencia_tipo'),
             )
+        if _asiento_auto:
+            try:
+                total_compra = sum(
+                    float(ln['cantidad']) * float(ln.get('valor_unitario') or 0)
+                    for ln in lineas if ln.get('valor_unitario')
+                )
+                if total_compra > 0:
+                    _asiento_auto(conn, negocio_id, 'COMPRA',
+                                  {'subtotal_compra': total_compra,
+                                   'iva_compra': 0,
+                                   'total_compra': total_compra},
+                                  registrado_por=session['usuario_id'])
+            except Exception as _e:
+                print(f'[cont] compra negocio={negocio_id}: {_e}')
         conn.commit()
         return jsonify({'ok': True, 'advertencias': advertencias})
     except Exception as e:

@@ -10,6 +10,10 @@ from flask import (Blueprint, jsonify, redirect, render_template,
 from ..db import get_db_connection
 from .auth import admin_required
 from .inventarios import _aplicar_tarjeta
+try:
+    from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
+except ImportError:
+    _asiento_auto = None
 
 bp = Blueprint('restaurantes', __name__)
 
@@ -1380,6 +1384,15 @@ def api_pedido_crear(slug):
                         try: conn.rollback()
                         except: pass
 
+        if rest['tercero_id'] and _asiento_auto:
+            try:
+                _asiento_auto(conn, rest['tercero_id'], 'VENTA',
+                              {'subtotal_venta': precio_total,
+                               'iva_venta': 0,
+                               'total_venta': precio_total},
+                              registrado_por=session.get('usuario_id'))
+            except Exception as _e:
+                print(f'[cont] venta rest {slug}: {_e}')
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'precio': precio_total})

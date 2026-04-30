@@ -8,6 +8,10 @@ from flask import (Blueprint, jsonify, redirect, render_template,
 
 from ..db import get_db_connection
 from .inventarios import _aplicar_tarjeta, _es_ensamble
+try:
+    from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
+except ImportError:
+    _asiento_auto = None
 
 bp = Blueprint('tiendas', __name__)
 
@@ -1186,6 +1190,20 @@ def api_tienda_pedido_crear(slug):
                 INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
                 VALUES (%s,%s,%s,%s)
             """, (pedido_id, metodo_pago, metodo_pago, total))
+        if tienda['tercero_id'] and _asiento_auto:
+            try:
+                iva_total = sum(
+                    it['precio_unitario'] * it['cantidad'] * it['iva_pct'] / 100
+                    for it in items_validos
+                )
+                tipo_doc = 'VENTA_POS' if tipo_entrega == 'caja' else 'VENTA_DOM'
+                _asiento_auto(conn, tienda['tercero_id'], tipo_doc,
+                              {'subtotal_venta': total - iva_total,
+                               'iva_venta': iva_total,
+                               'total_venta': total},
+                              registrado_por=session.get('usuario_id'))
+            except Exception as _e:
+                print(f'[cont] venta tienda {slug}: {_e}')
         conn.commit()
         # Notificación Telegram
         chat_id = tienda['telegram_chat_id']

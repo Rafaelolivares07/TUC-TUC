@@ -373,6 +373,7 @@ def api_crear():
         if conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone():
             conn.close()
             return jsonify({'ok': False, 'error': 'Ya existe un restaurante con ese nombre'}), 400
+        # Tercero del dueño (persona)
         tercero = conn.execute(
             "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (admin_telefono,)
         ).fetchone()
@@ -380,14 +381,19 @@ def api_crear():
             admin_id = tercero['id']
             conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (admin_nombre, admin_id))
         else:
-            conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)", (admin_nombre, admin_telefono))
             admin_id = conn.execute(
-                "SELECT id FROM terceros WHERE telefono = %s", (admin_telefono,)
-            ).fetchone()['id']
+                "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'persona') RETURNING id",
+                (admin_nombre, admin_telefono)
+            ).fetchone()[0]
+        # Tercero del negocio (entidad propia)
+        negocio_tercero_id = conn.execute(
+            "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id",
+            (nombre,)
+        ).fetchone()[0]
         conn.execute(
-            "INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token)
+            "INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, tercero_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (nombre, slug, tipo, admin_id, admin_nombre, admin_telefono, token, negocio_tercero_id)
         )
         conn.commit()
         conn.close()

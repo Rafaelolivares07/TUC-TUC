@@ -205,19 +205,19 @@ def api_registro_rapido():
 
     try:
         conn = get_db_connection()
+        # Tercero del dueño (persona)
         tercero = conn.execute(
             "SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)
         ).fetchone()
         if tercero:
-            tercero_id = tercero['id']
-            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre_due, tercero_id))
+            admin_id = tercero['id']
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre_due, admin_id))
             conn.commit()
         else:
-            cur = conn.execute(
-                "INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id",
+            admin_id = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'persona') RETURNING id",
                 (nombre_due, telefono)
-            )
-            tercero_id = cur.fetchone()[0]
+            ).fetchone()[0]
             conn.commit()
 
         crear_tabla_config_tipologia(conn)
@@ -231,13 +231,16 @@ def api_registro_rapido():
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Ya existe un restaurante con ese nombre'}), 400
             token_acceso = uuid.uuid4().hex
+            negocio_tercero_id = conn.execute(
+                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id", (nombre_neg,)
+            ).fetchone()[0]
             conn.execute("""
                 INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)
-            """, (nombre_neg, slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id, ref_vendedor or None))
+            """, (nombre_neg, slug, subtipo, admin_id, nombre_due, telefono, token_acceso, dias_gratis, negocio_tercero_id, ref_vendedor or None))
             conn.commit()
             conn.close()
-            session.update({'usuario_id': tercero_id, 'nombre': nombre_due,
+            session.update({'usuario_id': admin_id, 'nombre': nombre_due,
                             'telefono': telefono, 'rol': 'Restaurante'})
             session.permanent = True
             return jsonify({'ok': True, 'redirect': f'/mi-restaurante/{slug}'})
@@ -249,13 +252,16 @@ def api_registro_rapido():
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Ya existe una tienda con ese nombre'}), 400
             token_acceso = uuid.uuid4().hex
+            negocio_tercero_id = conn.execute(
+                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id", (nombre_neg,)
+            ).fetchone()[0]
             conn.execute("""
                 INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)
-            """, (nombre_neg, slug, tercero_id, nombre_due, telefono, token_acceso, dias_gratis, tercero_id, ref_vendedor or None))
+            """, (nombre_neg, slug, admin_id, nombre_due, telefono, token_acceso, dias_gratis, negocio_tercero_id, ref_vendedor or None))
             conn.commit()
             conn.close()
-            session.update({'usuario_id': tercero_id, 'nombre': nombre_due,
+            session.update({'usuario_id': admin_id, 'nombre': nombre_due,
                             'telefono': telefono, 'rol': 'Tienda'})
             session.permanent = True
             return jsonify({'ok': True, 'redirect': f'/mi-tienda/{slug}'})

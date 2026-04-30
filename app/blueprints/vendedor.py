@@ -180,34 +180,43 @@ def api_vendedor_cita_post():
             return jsonify({'ok': False, 'error': f'Horario ocupado: tienes cita con {choque["nombre_negocio"]} a las {hora_ocup}. Deja al menos 1h 30min.'}), 400
 
         token_acceso = uuid.uuid4().hex
+        # Tercero del dueño (persona)
         t = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
         if t:
-            tercero_id = t['id']
-            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre_due, tercero_id))
+            admin_id = t['id']
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre_due, admin_id))
         else:
-            cur = conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id", (nombre_due, telefono))
-            tercero_id = cur.fetchone()[0]
+            admin_id = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'persona') RETURNING id",
+                (nombre_due, telefono)
+            ).fetchone()[0]
         conn.commit()
 
         if tipo == 'restaurante':
             existente = conn.execute("SELECT slug FROM restaurantes WHERE slug = %s", (negocio_slug,)).fetchone()
             if existente:
                 negocio_slug = negocio_slug + '-' + uuid.uuid4().hex[:4]
+            negocio_tercero_id = conn.execute(
+                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id", (nombre_neg,)
+            ).fetchone()[0]
             conn.execute("""
                 INSERT INTO restaurantes (nombre, slug, tipo_restaurante, admin_id, admin_nombre,
                     admin_telefono, token_acceso, dias_pagados, activo, tercero_id, ref_vendedor)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, 0, TRUE, %s, %s)
-            """, (nombre_neg, negocio_slug, subtipo, tercero_id, nombre_due, telefono, token_acceso, tercero_id, vendedor_cod))
+            """, (nombre_neg, negocio_slug, subtipo, admin_id, nombre_due, telefono, token_acceso, negocio_tercero_id, vendedor_cod))
         elif tipo == 'tienda':
             from datetime import date
             existente = conn.execute("SELECT slug FROM tiendas WHERE slug = %s", (negocio_slug,)).fetchone()
             if existente:
                 negocio_slug = negocio_slug + '-' + uuid.uuid4().hex[:4]
+            negocio_tercero_id = conn.execute(
+                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id", (nombre_neg,)
+            ).fetchone()[0]
             conn.execute("""
                 INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono,
                     token_acceso, dias_pagados, fecha_vence, activo, tercero_id, ref_vendedor)
                 VALUES (%s, %s, %s, %s, %s, %s, 0, %s, TRUE, %s, %s)
-            """, (nombre_neg, negocio_slug, tercero_id, nombre_due, telefono, token_acceso, date.today(), tercero_id, vendedor_cod))
+            """, (nombre_neg, negocio_slug, admin_id, nombre_due, telefono, token_acceso, date.today(), negocio_tercero_id, vendedor_cod))
         conn.commit()
 
         conn.execute("""

@@ -622,16 +622,24 @@ def api_tienda_crear():
         _crear_tablas(conn)
         if conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone():
             return jsonify({'ok': False, 'error': 'Ya existe una tienda con ese nombre'}), 400
+        # Tercero del dueño (persona)
         tercero = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (admin_telefono,)).fetchone()
         if tercero:
             admin_id = tercero['id']
             conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (admin_nombre, admin_id))
         else:
-            conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s)", (admin_nombre, admin_telefono))
-            admin_id = conn.execute("SELECT id FROM terceros WHERE telefono = %s", (admin_telefono,)).fetchone()['id']
+            admin_id = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'persona') RETURNING id",
+                (admin_nombre, admin_telefono)
+            ).fetchone()[0]
+        # Tercero del negocio (entidad propia)
+        negocio_tercero_id = conn.execute(
+            "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id",
+            (nombre,)
+        ).fetchone()[0]
         conn.execute(
             "INSERT INTO tiendas (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, tercero_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, admin_id)
+            (nombre, slug, admin_id, admin_nombre, admin_telefono, token_acceso, negocio_tercero_id)
         )
         conn.commit()
         link = f"{request.host_url}t/acceso/{token_acceso}"

@@ -766,6 +766,37 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
 
 # ── UI ────────────────────────────────────────────────────────
 
+_TIPO_TABLA = {
+    'restaurante': 'restaurantes',
+    'tienda':      'tiendas',
+}
+
+@bp.route('/contabilidad/<tipo>/<slug>')
+def contabilidad_por_slug(tipo, slug):
+    if not session.get('usuario_id'):
+        return __import__('flask').redirect('/login')
+    tabla = _TIPO_TABLA.get(tipo)
+    if not tabla:
+        return "Tipo de negocio no soportado", 404
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        row = conn.execute(
+            f"SELECT tercero_id, nombre FROM {tabla} WHERE slug=%s", (slug,)
+        ).fetchone()
+        conn.close()
+        if not row or not row['tercero_id']:
+            return "Negocio no encontrado", 404
+        return render_template('contabilidad_admin.html',
+                               negocio_id=row['tercero_id'],
+                               negocio_nombre=row['nombre'])
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
 @bp.route('/admin/contabilidad/<int:negocio_id>')
 def admin_contabilidad(negocio_id):
     if not session.get('usuario_id'):

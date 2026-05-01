@@ -66,7 +66,6 @@ _last_hb       = None      # datetime último heartbeat
 _last_db_check = None      # datetime último check canal='captura'
 _last_reconectar = None    # datetime último intento de reconexión BD
 _cursor_prev   = (-1, -1)
-_relay_activo  = False     # True mientras relay_via_captura espera outbox
 _conn          = None      # conexión persistente a BD
 _bd_ok         = False     # True cuando la conexión está viva
 
@@ -568,64 +567,6 @@ def activar_claude():
         return False
 
 
-def relay_via_captura(conv_id, merlin_id, creador_id, msgs_nuevos):
-    """
-    Para Rafael: escribe inbox, activa Claude y espera el outbox (sin polling a BD).
-    """
-    global _relay_activo
-    if len(msgs_nuevos) == 1:
-        nuevo_texto = _contenido_msg(msgs_nuevos[0])
-    else:
-        lineas = [f'[Rafael envió {len(msgs_nuevos)} mensajes seguidos]']
-        for i, m in enumerate(msgs_nuevos, 1):
-            lineas.append(f'Mensaje {i}: {_contenido_msg(m)}')
-        nuevo_texto = '\n'.join(lineas)
-
-    # Insertar en chat_mensajes para que el bridge lo archive correctamente
-    conn = get_conn()
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO chat_mensajes (rol, contenido, canal) VALUES ('user',%s,'captura') RETURNING id",
-            (nuevo_texto,)
-        )
-        chat_id = cur.fetchone()['id']
-        conn.commit()
-        log(f'  Relay captura id={chat_id}. Activando Claude...')
-    finally:
-        conn.close()
-
-    _escribir_inbox(nuevo_texto)
-    _relay_activo = True
-    activar_claude()
-
-    # Esperar outbox hasta 3 minutos — sin tocar la BD
-    respuesta = None
-    for _ in range(90):
-        time.sleep(2)
-        if OUTBOX_FILE.exists():
-            try:
-                import json
-                data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
-                respuesta = data.get('contenido', '').strip()
-                OUTBOX_FILE.unlink()
-            except Exception as e:
-                log(f'  ✗ Error leyendo outbox: {e}')
-            break
-
-    _relay_activo = False
-
-    # Archivar el mensaje de captura
-    conn = get_conn()
-    try:
-        cur = conn.cursor()
-        cur.execute("UPDATE chat_mensajes SET archivado=TRUE WHERE id=%s", (chat_id,))
-        conn.commit()
-    finally:
-        conn.close()
-
-    return respuesta or '⚠️ Sin respuesta. Escríbeme de nuevo en un momento.'
-
 
 # ══════════════════════════════════════════════════════════════
 #  C) HEARTBEAT — presencia domótica
@@ -730,12 +671,11 @@ def main():
                     continue
 
             # ── B) Outbox (respuesta de Claude lista en archivo) ─────────────
-            if not _relay_activo:
-                check_outbox()
+            check_outbox()
 
             # ── B) Check canal='captura' (throttled) ──────────────────────────
             db_elapsed = (now - _last_db_check).total_seconds() if _last_db_check else 9999
-            if db_elapsed >= DB_POLL_CADA and not _relay_activo:
+            if db_elapsed >= DB_POLL_CADA:
                 _last_db_check = now
                 trigger_elapsed = (now - _last_trigger).total_seconds() if _last_trigger else 9999
                 if get_captura_pendiente() and trigger_elapsed > COOLDOWN_SEC:
@@ -752,13 +692,9 @@ def main():
                 n          = len(msgs)
                 log(f"📨 Conv {conv_id}: {n} msg(s) de usuario {creador_id}")
                 ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
-                if creador_id == RAFAEL_ID:
-                    log(f"  Rafael → relay captura...")
-                    respuesta = relay_via_captura(conv_id, merlin_id, creador_id, msgs)
-                else:
-                    prompt = construir_prompt(ctx, msgs)
-                    log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
-                    respuesta = llamar_claude(prompt)
+                prompt = construir_prompt(ctx, msgs)
+                log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
+                respuesta = llamar_claude(prompt)
                 marcar_leidos(msg_ids)
                 log(f"  💬 {respuesta[:80]}...")
                 guardar_respuesta(conv_id, merlin_id, creador_id, respuesta)

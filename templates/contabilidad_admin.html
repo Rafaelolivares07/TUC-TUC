@@ -62,6 +62,7 @@
       <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
+      <button onclick="cambiarTab('progs')"  id="tab-progs"  class="tab-btn">⏱️ Programaciones</button>
     </div>
 
     <!-- ═══ TAB: PUC ═══ -->
@@ -147,6 +148,81 @@
           <th class="px-3 py-2 text-center">Acción</th>
         </tr></thead>
         <tbody id="grupos-body"></tbody>
+      </table>
+    </div>
+
+    <!-- ═══ TAB: PROGRAMACIONES CONTABLES ═══ -->
+    <div id="panel-progs" class="p-5 hidden">
+      <p class="text-sm text-gray-500 mb-4">
+        Asientos automáticos por fecha/frecuencia. El scheduler los ejecuta cada minuto según la próxima ejecución programada.
+      </p>
+
+      <!-- Formulario nueva programación -->
+      <details class="border rounded-lg mb-5">
+        <summary class="px-4 py-3 text-sm font-semibold cursor-pointer text-blue-700">+ Nueva programación</summary>
+        <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Tipo de documento</label>
+            <select id="prog-tipo" class="border rounded-lg px-3 py-2 w-full text-sm">
+              <option value="">-- seleccionar --</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Descripción (opcional)</label>
+            <input id="prog-desc" type="text" placeholder="Ej: Depreciación mensual equipos"
+                   class="border rounded-lg px-3 py-2 w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Frecuencia</label>
+            <select id="prog-freq" onchange="progMostrarCampo()" class="border rounded-lg px-3 py-2 w-full text-sm">
+              <option value="diario">Diario</option>
+              <option value="semanal">Semanal</option>
+              <option value="mensual" selected>Mensual</option>
+            </select>
+          </div>
+          <div id="prog-campo-semanal" class="hidden">
+            <label class="block text-xs text-gray-500 mb-1">Día de la semana</label>
+            <select id="prog-dia-semana" class="border rounded-lg px-3 py-2 w-full text-sm">
+              <option value="0">Lunes</option><option value="1">Martes</option>
+              <option value="2">Miércoles</option><option value="3">Jueves</option>
+              <option value="4">Viernes</option><option value="5">Sábado</option><option value="6">Domingo</option>
+            </select>
+          </div>
+          <div id="prog-campo-mensual">
+            <label class="block text-xs text-gray-500 mb-1">Día del mes (1-28)</label>
+            <input id="prog-dia-mes" type="number" min="1" max="28" value="1"
+                   class="border rounded-lg px-3 py-2 w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Hora de ejecución</label>
+            <input id="prog-hora" type="time" value="08:00" class="border rounded-lg px-3 py-2 w-full text-sm">
+          </div>
+          <!-- Variables H dinámicas -->
+          <div class="sm:col-span-2">
+            <label class="block text-xs text-gray-500 mb-1">Variables H (valores fijos para líneas tipo H)</label>
+            <div id="prog-vars-h" class="space-y-2 text-xs text-gray-400 italic">
+              Selecciona un tipo de documento para ver las variables disponibles.
+            </div>
+          </div>
+          <div class="sm:col-span-2 text-right">
+            <button onclick="progGuardar()"
+                    class="bg-blue-600 text-white text-sm font-bold px-5 py-2 rounded-lg">Guardar</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Lista -->
+      <table class="w-full text-sm">
+        <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
+          <th class="px-3 py-2 text-left">Tipo Doc</th>
+          <th class="px-3 py-2 text-left">Descripción</th>
+          <th class="px-3 py-2 text-center">Frecuencia</th>
+          <th class="px-3 py-2 text-center">Próxima</th>
+          <th class="px-3 py-2 text-center">Última</th>
+          <th class="px-3 py-2 text-center">Estado</th>
+          <th class="px-3 py-2 text-center">Acciones</th>
+        </tr></thead>
+        <tbody id="progs-body"></tbody>
       </table>
     </div>
 
@@ -305,7 +381,7 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','grupos','manual','comps'];
+const TABS = ['puc','tipos','params','grupos','progs','manual','comps'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -321,6 +397,7 @@ function cambiarTab(t) {
   if (t === 'tipos')   cargarTiposDocs();
   if (t === 'params')  { cargarTiposDocs(); cargarParametros(); }
   if (t === 'grupos')  cargarGrupos();
+  if (t === 'progs')   { progCargarTipos(); progCargarLista(); }
   if (t === 'comps')   cargarComprobantes();
   if (t === 'manual') { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
 }
@@ -876,6 +953,154 @@ async function verLineas(compId) {
   const data = await resp.json();
   if (!data.ok) return;
   alert(data.lineas.map(l => `${l.tipo.toUpperCase().padEnd(7)} ${l.cuenta||''} ${l.cuenta_nombre||''}\n         $${parseFloat(l.monto).toLocaleString()}`).join('\n'));
+}
+
+// ── TAB: PROGRAMACIONES ────────────────────────────────────────
+let _progVarsH = {};
+
+async function progCargarTipos() {
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+  const data = await resp.json();
+  if (!data.ok) return;
+  const sel = document.getElementById('prog-tipo');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- seleccionar --</option>' +
+    data.tipos.map(t => `<option value="${t.id}" data-codigo="${t.codigo}">${t.codigo} — ${t.nombre}</option>`).join('');
+  if (cur) sel.value = cur;
+  sel.onchange = () => progCargarVarsH();
+}
+
+async function progCargarVarsH() {
+  const sel = document.getElementById('prog-tipo');
+  const opt = sel.selectedOptions[0];
+  const cont = document.getElementById('prog-vars-h');
+  _progVarsH = {};
+  if (!opt || !opt.value) {
+    cont.innerHTML = '<span class="text-xs text-gray-400 italic">Selecciona un tipo de documento para ver las variables.</span>';
+    return;
+  }
+  // Buscar el parámetro que corresponde a este tipo_doc_id
+  const rp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/parametros`);
+  const dp = await rp.json();
+  if (!dp.ok) return;
+  const param = (dp.parametros || []).find(p => p.tipo_doc_id === parseInt(opt.value));
+  if (!param) {
+    cont.innerHTML = '<span class="text-xs text-gray-400 italic">Este tipo de documento no tiene parámetro configurado.</span>';
+    return;
+  }
+  // Obtener líneas tipo H
+  const rl = await fetch(`/api/contabilidad/${NEGOCIO_ID}/parametros/${param.id}/lineas`);
+  const dl = await rl.json();
+  if (!dl.ok) return;
+  const lineasH = (dl.lineas || []).filter(l => l.origen === 'H' && l.var_codigo);
+  if (!lineasH.length) {
+    cont.innerHTML = '<span class="text-xs text-gray-400 italic">Sin líneas tipo H en este parámetro.</span>';
+    return;
+  }
+  cont.innerHTML = lineasH.map(l =>
+    `<div class="flex gap-2 items-center">
+       <label class="w-56 text-gray-600">${l.variable_desc || l.var_codigo}</label>
+       <input type="number" step="0.01" data-var="${l.var_codigo}"
+              class="prog-var-h border rounded px-2 py-1 w-36 text-sm" placeholder="0.00">
+     </div>`
+  ).join('');
+}
+
+function progMostrarCampo() {
+  const f = document.getElementById('prog-freq').value;
+  document.getElementById('prog-campo-semanal').classList.toggle('hidden', f !== 'semanal');
+  document.getElementById('prog-campo-mensual').classList.toggle('hidden', f !== 'mensual');
+}
+
+async function progCargarLista() {
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/programaciones`);
+  const data = await resp.json();
+  const tb = document.getElementById('progs-body');
+  if (!data.ok) { tb.innerHTML = `<tr><td colspan="7" class="text-red-500 p-3">${data.error}</td></tr>`; return; }
+  if (!data.programaciones.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-6">Sin programaciones</td></tr>';
+    return;
+  }
+  const fmtDt = iso => iso ? new Date(iso).toLocaleString('es-CO', {dateStyle:'short',timeStyle:'short'}) : '—';
+  const fmtFreq = (p) => {
+    if (p.frecuencia === 'diario') return `Diario ${p.hora.slice(0,5)}`;
+    if (p.frecuencia === 'semanal') return `Sem. día ${p.dia_semana} ${p.hora.slice(0,5)}`;
+    return `Mens. día ${p.dia_mes} ${p.hora.slice(0,5)}`;
+  };
+  tb.innerHTML = data.programaciones.map(p => `
+    <tr class="border-b hover:bg-gray-50">
+      <td class="px-3 py-2 font-mono text-xs">${p.tipo_doc_codigo}</td>
+      <td class="px-3 py-2 text-gray-700">${p.descripcion || '<span class="text-gray-400">—</span>'}</td>
+      <td class="px-3 py-2 text-center text-xs">${fmtFreq(p)}</td>
+      <td class="px-3 py-2 text-center text-xs">${fmtDt(p.proximo_ejecutado)}</td>
+      <td class="px-3 py-2 text-center text-xs">
+        ${fmtDt(p.ultimo_ejecutado)}
+        ${p.ultimo_resultado ? `<div class="text-gray-400 text-xs">${p.ultimo_resultado}</div>` : ''}
+      </td>
+      <td class="px-3 py-2 text-center">
+        <button onclick="progToggle(${p.id},${!p.activo})"
+                class="text-xs px-2 py-1 rounded font-semibold ${p.activo ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}">
+          ${p.activo ? 'Activo' : 'Inactivo'}
+        </button>
+      </td>
+      <td class="px-3 py-2 text-center flex gap-1 justify-center">
+        <button onclick="progEjecutar(${p.id})" title="Ejecutar ahora"
+                class="text-xs bg-blue-600 text-white px-2 py-1 rounded">▶</button>
+        <button onclick="progEliminar(${p.id})" title="Eliminar"
+                class="text-xs bg-red-500 text-white px-2 py-1 rounded">✕</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function progGuardar() {
+  const tipoDocId = document.getElementById('prog-tipo').value;
+  if (!tipoDocId) { toast('Selecciona un tipo de documento', false); return; }
+  const frecuencia = document.getElementById('prog-freq').value;
+  const varsH = {};
+  document.querySelectorAll('.prog-var-h').forEach(inp => {
+    if (inp.value) varsH[inp.dataset.var] = parseFloat(inp.value);
+  });
+  const body = {
+    tipo_doc_id: parseInt(tipoDocId),
+    descripcion: document.getElementById('prog-desc').value.trim() || null,
+    frecuencia,
+    dia_semana: frecuencia === 'semanal' ? parseInt(document.getElementById('prog-dia-semana').value) : null,
+    dia_mes: frecuencia === 'mensual' ? parseInt(document.getElementById('prog-dia-mes').value) : null,
+    hora: document.getElementById('prog-hora').value,
+    variables_h: varsH,
+  };
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/programaciones`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const data = await resp.json();
+  if (data.ok) { toast('Programación guardada'); progCargarLista(); }
+  else toast(data.error, false);
+}
+
+async function progToggle(pid, activo) {
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/programaciones/${pid}`,
+    { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({activo}) });
+  const data = await resp.json();
+  if (data.ok) progCargarLista();
+  else toast(data.error, false);
+}
+
+async function progEjecutar(pid) {
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/programaciones/${pid}/ejecutar`, { method: 'POST' });
+  const data = await resp.json();
+  if (data.ok) {
+    const r = data.resultado;
+    toast(`Ejecutado — ${r.mensaje || 'OK'}`);
+    progCargarLista();
+  } else toast(data.error, false);
+}
+
+async function progEliminar(pid) {
+  if (!confirm('¿Eliminar esta programación?')) return;
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/programaciones/${pid}`, { method: 'DELETE' });
+  const data = await resp.json();
+  if (data.ok) { toast('Eliminada'); progCargarLista(); }
+  else toast(data.error, false);
 }
 
 // Cerrar dropdowns al click fuera

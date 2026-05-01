@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, session, render_template
 from decimal import Decimal
 import re
-from datetime import date as _date
+from datetime import date as _date, datetime as _dt, timedelta as _td
 
 bp = Blueprint('contabilidad', __name__)
 
@@ -141,6 +141,27 @@ def _asegurar_tablas(conn):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_grpinv_neg ON grupos_inventario(negocio_id)")
+    conn.commit()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS programaciones_contables (
+            id                SERIAL PRIMARY KEY,
+            negocio_id        INTEGER NOT NULL,
+            tipo_doc_id       INTEGER NOT NULL REFERENCES tipos_documento_negocio(id) ON DELETE CASCADE,
+            descripcion       VARCHAR(255),
+            frecuencia        VARCHAR(20) NOT NULL DEFAULT 'mensual',
+            dia_semana        SMALLINT,
+            dia_mes           SMALLINT DEFAULT 1,
+            hora              TIME NOT NULL DEFAULT '08:00',
+            variables_h       JSONB DEFAULT '{}',
+            activo            BOOLEAN DEFAULT TRUE,
+            ultimo_ejecutado  TIMESTAMP,
+            proximo_ejecutado TIMESTAMP,
+            ultimo_resultado  VARCHAR(150),
+            created_at        TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_prog_neg ON programaciones_contables(negocio_id)")
     conn.commit()
 
     # Columnas nuevas en tipos_documento_negocio
@@ -386,6 +407,82 @@ def _seed_puc_subcuentas(conn):
         except Exception:
             conn.rollback()
     conn.commit()
+
+
+# ── Scheduler: Tipo 4 ────────────────────────────────────────
+
+def _calcular_proximo(frecuencia, dia_semana, dia_mes, hora_val, desde=None):
+    base = desde or _dt.now()
+    if hasattr(hora_val, 'hour'):
+        h, m = hora_val.hour, hora_val.minute
+    else:
+        partes = str(hora_val)[:5].split(':')
+        h, m = int(partes[0]), int(partes[1]) if len(partes) > 1 else 0
+    if frecuencia == 'diario':
+        p = base.replace(hour=h, minute=m, second=0, microsecond=0)
+        if p <= base:
+            p += _td(days=1)
+    elif frecuencia == 'semanal':
+        dias = (int(dia_semana or 0) - base.weekday()) % 7
+        p = (base + _td(days=dias)).replace(hour=h, minute=m, second=0, microsecond=0)
+        if p <= base:
+            p += _td(weeks=1)
+    else:  # mensual
+        dia = int(dia_mes or 1)
+        try:
+            p = base.replace(day=dia, hour=h, minute=m, second=0, microsecond=0)
+        except ValueError:
+            p = base.replace(day=28, hour=h, minute=m, second=0, microsecond=0)
+        if p <= base:
+            mes, ano = base.month + 1, base.year
+            if mes > 12:
+                mes, ano = 1, ano + 1
+            try:
+                p = p.replace(year=ano, month=mes)
+            except ValueError:
+                p = p.replace(year=ano, month=mes, day=28)
+    return p
+
+
+def ejecutar_programaciones_job(app):
+    with app.app_context():
+        from .db import get_db_connection
+        try:
+            conn = get_db_connection()
+            _asegurar_tablas(conn)
+            ahora = _dt.now()
+            progs = conn.execute("""
+                SELECT p.*, t.codigo AS tipo_codigo
+                FROM programaciones_contables p
+                JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+                WHERE p.activo = TRUE
+                  AND (p.proximo_ejecutado IS NULL OR p.proximo_ejecutado <= %s)
+            """, (ahora,)).fetchall()
+            for p in progs:
+                resultado = 'ok'
+                try:
+                    comp_id = _ejecutar_asiento_automatico(
+                        conn, p['negocio_id'], p['tipo_codigo'],
+                        dict(p['variables_h'] or {}),
+                        descripcion_override=p['descripcion']
+                    )
+                    conn.commit()
+                    resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
+                except Exception as e:
+                    try: conn.rollback()
+                    except Exception: pass
+                    resultado = f'error: {str(e)[:80]}'
+                proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+                conn.execute(
+                    "UPDATE programaciones_contables "
+                    "SET ultimo_ejecutado=%s, proximo_ejecutado=%s, ultimo_resultado=%s WHERE id=%s",
+                    (ahora, proximo, resultado, p['id'])
+                )
+                conn.commit()
+            conn.close()
+        except Exception:
+            try: conn.close()
+            except Exception: pass
 
 
 # ── Motor contable ────────────────────────────────────────────
@@ -1357,6 +1454,154 @@ def api_grupo_item(negocio_id, gid):
                              (data['nombre'].strip(), gid, negocio_id))
         conn.commit(); conn.close()
         return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Programaciones contables (Tipo 4) ─────────────────────────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/programaciones', methods=['GET'])
+def api_programaciones_list(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        rows = conn.execute("""
+            SELECT p.id, p.tipo_doc_id, t.codigo AS tipo_doc_codigo, t.nombre AS tipo_doc_nombre,
+                   p.descripcion, p.frecuencia, p.dia_semana, p.dia_mes,
+                   p.hora::text AS hora, p.variables_h, p.activo,
+                   p.ultimo_ejecutado, p.proximo_ejecutado, p.ultimo_resultado
+            FROM programaciones_contables p
+            JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            WHERE p.negocio_id = %s
+            ORDER BY p.id
+        """, (negocio_id,)).fetchall()
+        conn.close()
+        def _row(r):
+            d = dict(r)
+            for k in ('ultimo_ejecutado', 'proximo_ejecutado'):
+                if d[k]:
+                    d[k] = d[k].isoformat()
+            if d['variables_h'] is None:
+                d['variables_h'] = {}
+            return d
+        return jsonify({'ok': True, 'programaciones': [_row(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/programaciones', methods=['POST'])
+def api_programaciones_create(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    import json as _json
+    data = request.get_json() or {}
+    tipo_doc_id  = data.get('tipo_doc_id')
+    descripcion  = (data.get('descripcion') or '').strip() or None
+    frecuencia   = data.get('frecuencia', 'mensual')
+    dia_semana   = data.get('dia_semana')
+    dia_mes      = data.get('dia_mes', 1)
+    hora_str     = data.get('hora', '08:00')
+    variables_h  = data.get('variables_h', {})
+    if not tipo_doc_id:
+        return jsonify({'ok': False, 'error': 'tipo_doc_id requerido'}), 400
+    from ..db import get_db_connection
+    import datetime as _datetime
+    try:
+        hora_val = _datetime.time.fromisoformat(hora_str)
+    except Exception:
+        hora_val = _datetime.time(8, 0)
+    proximo = _calcular_proximo(frecuencia, dia_semana, dia_mes, hora_val)
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        row = conn.execute("""
+            INSERT INTO programaciones_contables
+                (negocio_id, tipo_doc_id, descripcion, frecuencia, dia_semana, dia_mes,
+                 hora, variables_h, activo, proximo_ejecutado)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,TRUE,%s)
+            RETURNING id
+        """, (negocio_id, tipo_doc_id, descripcion, frecuencia, dia_semana, dia_mes,
+              hora_str, _json.dumps(variables_h), proximo)).fetchone()
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'id': row['id'], 'proximo_ejecutado': proximo.isoformat()})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/programaciones/<int:pid>', methods=['PATCH', 'DELETE'])
+def api_programaciones_item(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    import json as _json
+    try:
+        conn = get_db_connection()
+        if request.method == 'DELETE':
+            conn.execute("DELETE FROM programaciones_contables WHERE id=%s AND negocio_id=%s",
+                         (pid, negocio_id))
+        else:
+            data = request.get_json() or {}
+            sets, vals = [], []
+            for campo in ('descripcion', 'frecuencia', 'dia_semana', 'dia_mes', 'hora', 'activo'):
+                if campo in data:
+                    sets.append(f"{campo}=%s"); vals.append(data[campo])
+            if 'variables_h' in data:
+                sets.append("variables_h=%s"); vals.append(_json.dumps(data['variables_h']))
+            if sets:
+                vals += [pid, negocio_id]
+                conn.execute(f"UPDATE programaciones_contables SET {','.join(sets)} "
+                             f"WHERE id=%s AND negocio_id=%s", vals)
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/programaciones/<int:pid>/ejecutar', methods=['POST'])
+def api_programaciones_ejecutar(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        prog = conn.execute("""
+            SELECT p.*, t.codigo AS tipo_doc_codigo
+            FROM programaciones_contables p
+            JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            WHERE p.id=%s AND p.negocio_id=%s
+        """, (pid, negocio_id)).fetchone()
+        if not prog:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Programación no encontrada'}), 404
+        variables_h = prog['variables_h'] or {}
+        resultado = _ejecutar_asiento_automatico(
+            conn, negocio_id, prog['tipo_doc_codigo'], variables_h,
+            registrado_por=session.get('usuario_id'),
+            descripcion_override=prog['descripcion']
+        )
+        ahora = _dt.now()
+        proximo = _calcular_proximo(prog['frecuencia'], prog['dia_semana'], prog['dia_mes'],
+                                    prog['hora'], desde=ahora)
+        conn.execute("""
+            UPDATE programaciones_contables
+            SET ultimo_ejecutado=%s, proximo_ejecutado=%s, ultimo_resultado=%s
+            WHERE id=%s
+        """, (ahora, proximo, str(resultado.get('mensaje', ''))[:150], pid))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True, 'resultado': resultado,
+                        'proximo_ejecutado': proximo.isoformat()})
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

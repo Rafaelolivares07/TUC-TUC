@@ -1,8 +1,8 @@
 import tkinter as tk
-import json, urllib.request, threading, subprocess, sys, os, time
+import json, urllib.request, threading, subprocess, sys, os, time, re
 
 TUCTUC_DIR        = r"C:\Users\RAFAEL OLIVARES\Documents\TucTucV2"
-TUNNEL_EXE        = r"C:\ngrok\ngrok.exe"
+TUNNEL_EXE        = r"C:\cloudflared\cloudflared.exe"
 FLASK_PORT        = 5000
 GITHUB_PILAR      = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/PilarSetup.exe"
 GITHUB_ASISTENCIA = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
@@ -29,19 +29,7 @@ BTN_BG = "#44475a"
 BTN_ACT= "#6272a4"
 
 
-def get_tunnel_url():
-    try:
-        with urllib.request.urlopen("http://localhost:4040/api/tunnels", timeout=3) as r:
-            data = json.loads(r.read())
-            for t in data.get("tunnels", []):
-                if t.get("proto") == "https":
-                    return t["public_url"].rstrip("/")
-            ts = data.get("tunnels", [])
-            if ts:
-                return ts[0]["public_url"].rstrip("/")
-    except Exception:
-        pass
-    return None
+_URL_RE = re.compile(r'https://[a-z0-9-]+\.trycloudflare\.com')
 
 
 def flask_ya_corre():
@@ -156,26 +144,28 @@ class App(tk.Tk):
                 self.after(0, lambda: self._set_estado("Flask no respondió — revisar main.py", ROJO))
                 return
 
-        # 2. Tunnel
-        if get_tunnel_url():
-            self.after(0, lambda: self._set_estado("Tunnel ya estaba corriendo", AMAR))
-        else:
-            self.after(0, lambda: self._set_estado("Arrancando tunnel...", AMAR))
-            self._proc_tunnel = subprocess.Popen(
-                [TUNNEL_EXE, "http", str(FLASK_PORT)],
-                creationflags=subprocess.CREATE_NO_WINDOW
-            )
-            for _ in range(15):
-                time.sleep(1)
-                url = get_tunnel_url()
-                if url:
-                    break
-            else:
-                self.after(0, lambda: self._set_estado("Tunnel no respondio", ROJO))
-                return
+        # 2. Tunnel (cloudflared — URL viene por stderr)
+        self.after(0, lambda: self._set_estado("Arrancando tunnel...", AMAR))
+        self._proc_tunnel = subprocess.Popen(
+            [TUNNEL_EXE, "tunnel", "--url", f"http://localhost:{FLASK_PORT}"],
+            stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        url = None
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            line = self._proc_tunnel.stderr.readline().decode("utf-8", errors="replace")
+            m = _URL_RE.search(line)
+            if m:
+                url = m.group(0).rstrip("/")
+                break
+        if not url:
+            self.after(0, lambda: self._set_estado("Tunnel no respondio", ROJO))
+            return
+        threading.Thread(target=lambda: [self._proc_tunnel.stderr.readline() for _ in iter(int, 1)],
+                         daemon=True).start()
 
-        # 3. Leer URL y activar UI
-        url = get_tunnel_url()
+        # 3. Activar UI
         self.after(0, lambda: self._on_listo(url))
 
     def _on_listo(self, url):

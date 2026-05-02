@@ -2,7 +2,7 @@ import tkinter as tk
 import json, urllib.request, threading, subprocess, sys, os, time
 
 TUCTUC_DIR        = r"C:\Users\RAFAEL OLIVARES\Documents\TucTucV2"
-NGROK_EXE         = r"C:\ngrok\ngrok.exe"
+TUNNEL_EXE        = r"C:\ngrok\ngrok.exe"
 FLASK_PORT        = 5000
 GITHUB_PILAR      = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/PilarSetup.exe"
 GITHUB_ASISTENCIA = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
@@ -29,7 +29,7 @@ BTN_BG = "#44475a"
 BTN_ACT= "#6272a4"
 
 
-def get_ngrok():
+def get_tunnel_url():
     try:
         with urllib.request.urlopen("http://localhost:4040/api/tunnels", timeout=3) as r:
             data = json.loads(r.read())
@@ -58,9 +58,9 @@ class App(tk.Tk):
         self.title("TUC TUC")
         self.configure(bg=BG)
         self.resizable(False, False)
-        self._ngrok    = None
+        self._tunnel_url = None
         self._proc_flask = None
-        self._proc_ngrok = None
+        self._proc_tunnel = None
         self._rows_din  = []
         self._build()
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
@@ -85,9 +85,8 @@ class App(tk.Tk):
                                    state="disabled", command=self._detener)
         self._btn_stop.pack(side="right", padx=18)
 
-        # Sublabel ngrok URL
-        self._ngrok_lbl = tk.Label(self, text="", bg=BG, fg=GRIS, font=("Segoe UI", 8))
-        self._ngrok_lbl.pack(anchor="w", padx=18, pady=(4, 0))
+        self._url_lbl = tk.Label(self, text="", bg=BG, fg=GRIS, font=("Segoe UI", 8))
+        self._url_lbl.pack(anchor="w", padx=18, pady=(4, 0))
 
         # Sección Pilar
         self._seccion("Para Pilar")
@@ -157,41 +156,41 @@ class App(tk.Tk):
                 self.after(0, lambda: self._set_estado("Flask no respondió — revisar main.py", ROJO))
                 return
 
-        # 2. ngrok
-        if get_ngrok():
-            self.after(0, lambda: self._set_estado("ngrok ya estaba corriendo", AMAR))
+        # 2. Tunnel
+        if get_tunnel_url():
+            self.after(0, lambda: self._set_estado("Tunnel ya estaba corriendo", AMAR))
         else:
-            self.after(0, lambda: self._set_estado("Arrancando ngrok...", AMAR))
-            self._proc_ngrok = subprocess.Popen(
-                [NGROK_EXE, "http", str(FLASK_PORT)],
+            self.after(0, lambda: self._set_estado("Arrancando tunnel...", AMAR))
+            self._proc_tunnel = subprocess.Popen(
+                [TUNNEL_EXE, "http", str(FLASK_PORT)],
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
             for _ in range(15):
                 time.sleep(1)
-                url = get_ngrok()
+                url = get_tunnel_url()
                 if url:
                     break
             else:
-                self.after(0, lambda: self._set_estado("ngrok no respondió", ROJO))
+                self.after(0, lambda: self._set_estado("Tunnel no respondio", ROJO))
                 return
 
         # 3. Leer URL y activar UI
-        url = get_ngrok()
+        url = get_tunnel_url()
         self.after(0, lambda: self._on_listo(url))
 
     def _on_listo(self, url):
-        self._ngrok = url
+        self._tunnel_url = url
         self._set_estado("Sistema activo ●", VERDE)
-        self._ngrok_lbl.config(text=url or "", fg=VERDE)
+        self._url_lbl.config(text=url or "", fg=VERDE)
         self._btn_stop.config(state="normal")
         for ruta, lbl, btn in self._rows_din:
             full = (url or "") + ruta
             lbl.config(text=self._cortar(full), fg=VERDE)
             btn.config(state="normal", fg=TEXTO,
                        command=lambda u=full: self._copiar(u))
-        threading.Thread(target=self._publicar_ngrok, args=(url,), daemon=True).start()
+        threading.Thread(target=self._publicar_url, args=(url,), daemon=True).start()
 
-    def _publicar_ngrok(self, url):
+    def _publicar_url(self, url):
         try:
             relay_file = os.path.join(TUCTUC_DIR, "..", "MiAppMedicamentos", "relay_url.txt")
             relay_file = os.path.normpath(relay_file)
@@ -202,7 +201,7 @@ class App(tk.Tk):
                 f.write(url)
             subprocess.run(["git", "add", "relay_url.txt"], cwd=repo_dir,
                            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            subprocess.run(["git", "commit", "-m", f"ngrok: actualizar URL"],
+            subprocess.run(["git", "commit", "-m", f"relay: actualizar URL"],
                            cwd=repo_dir, capture_output=True,
                            creationflags=subprocess.CREATE_NO_WINDOW)
             subprocess.run(["git", "push"], cwd=repo_dir, capture_output=True,
@@ -217,12 +216,12 @@ class App(tk.Tk):
     # ── Acciones ──────────────────────────────────────────────────────────
 
     def _detener(self):
-        if self._proc_ngrok:
-            self._proc_ngrok.terminate()
+        if self._proc_tunnel:
+            self._proc_tunnel.terminate()
         if self._proc_flask:
             self._proc_flask.terminate()
         self._set_estado("Sistema detenido", GRIS)
-        self._ngrok_lbl.config(text="")
+        self._url_lbl.config(text="")
         self._btn_stop.config(state="disabled")
         for _, lbl, btn in self._rows_din:
             lbl.config(text="—", fg=GRIS)

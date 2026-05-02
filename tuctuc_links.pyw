@@ -193,14 +193,14 @@ class App(tk.Tk):
 
     def _publicar_ngrok(self, url):
         try:
-            ngrok_file = os.path.join(TUCTUC_DIR, "..", "MiAppMedicamentos", "ngrok_url.txt")
-            ngrok_file = os.path.normpath(ngrok_file)
+            relay_file = os.path.join(TUCTUC_DIR, "..", "MiAppMedicamentos", "relay_url.txt")
+            relay_file = os.path.normpath(relay_file)
             # Escribir en MiAppMedicamentos (branch main)
             repo_dir = os.path.normpath(os.path.join(TUCTUC_DIR, "..","MiAppMedicamentos"))
-            dest = os.path.join(repo_dir, "ngrok_url.txt")
+            dest = os.path.join(repo_dir, "relay_url.txt")
             with open(dest, "w", encoding="utf-8") as f:
                 f.write(url)
-            subprocess.run(["git", "add", "ngrok_url.txt"], cwd=repo_dir,
+            subprocess.run(["git", "add", "relay_url.txt"], cwd=repo_dir,
                            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             subprocess.run(["git", "commit", "-m", f"ngrok: actualizar URL"],
                            cwd=repo_dir, capture_output=True,

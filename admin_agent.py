@@ -20,7 +20,7 @@ except ImportError:
 
 POLL_INTERVALO   = 5
 RUTA_DBF_FILE    = r"C:\S.A.R\RutaBaseDatos\ruta.dbf"
-NGROK_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/ngrok_url.txt"
+RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/relay_url.txt"
 
 _en_proceso = set()
 _lock = threading.Lock()
@@ -49,7 +49,7 @@ def guardar_servidor_ini(servidor):
 def leer_servidor_github():
     try:
         import urllib.request
-        with urllib.request.urlopen(NGROK_URL_GITHUB, timeout=6) as r:
+        with urllib.request.urlopen(RELAY_URL_GITHUB, timeout=6) as r:
             return r.read().decode().strip()
     except Exception:
         return None

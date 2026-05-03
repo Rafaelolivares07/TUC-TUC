@@ -88,6 +88,41 @@ class App(tk.Tk):
         for et, ruta in RUTAS_REST:
             self._fila_din(et, ruta)
 
+        # Sección Tracking
+        self._seccion("Tracking GPS")
+        f_inp = tk.Frame(self, bg=BG)
+        f_inp.pack(fill="x", padx=18, pady=(4, 6))
+        tk.Label(f_inp, text="Nombre corredor:", bg=BG, fg=TEXTO,
+                 font=("Segoe UI", 9)).pack(side="left")
+        self._entry_nombre = tk.Entry(f_inp, bg=BG2, fg=VERDE, insertbackground=VERDE,
+                                      font=("Segoe UI", 10), relief="flat", width=14)
+        self._entry_nombre.insert(0, "david")
+        self._entry_nombre.pack(side="left", padx=(8, 6))
+        tk.Button(f_inp, text="Generar", bg=BTN_BG, fg=TEXTO, relief="flat",
+                  cursor="hand2", font=("Segoe UI", 8),
+                  activebackground=BTN_ACT, activeforeground=TEXTO,
+                  command=self._actualizar_tracking).pack(side="left")
+
+        self._lbl_track_corredor = tk.Label(self, text="—", bg=BG, fg=GRIS,
+                                            font=("Segoe UI", 8), anchor="w")
+        self._lbl_track_corredor.pack(fill="x", padx=18)
+        self._btn_track_corredor = tk.Button(self, text="Copiar link corredor",
+                                             bg=BTN_BG, fg=GRIS, relief="flat",
+                                             cursor="hand2", font=("Segoe UI", 8),
+                                             activebackground=BTN_ACT,
+                                             activeforeground=TEXTO, state="disabled")
+        self._btn_track_corredor.pack(anchor="e", padx=18, pady=(0, 4))
+
+        self._lbl_track_mapa = tk.Label(self, text="—", bg=BG, fg=GRIS,
+                                        font=("Segoe UI", 8), anchor="w")
+        self._lbl_track_mapa.pack(fill="x", padx=18)
+        self._btn_track_mapa = tk.Button(self, text="Copiar link mapa",
+                                         bg=BTN_BG, fg=GRIS, relief="flat",
+                                         cursor="hand2", font=("Segoe UI", 8),
+                                         activebackground=BTN_ACT,
+                                         activeforeground=TEXTO, state="disabled")
+        self._btn_track_mapa.pack(anchor="e", padx=18, pady=(0, 4))
+
         tk.Label(self, text="Copiar → portapapeles listo para WhatsApp",
                  bg=BG, fg=GRIS, font=("Segoe UI", 8)).pack(pady=(6, 12))
 
@@ -178,7 +213,22 @@ class App(tk.Tk):
             lbl.config(text=self._cortar(full), fg=VERDE)
             btn.config(state="normal", fg=TEXTO,
                        command=lambda u=full: self._copiar(u))
+        self._actualizar_tracking()
         threading.Thread(target=self._publicar_url, args=(url,), daemon=True).start()
+
+    def _actualizar_tracking(self):
+        base = self._tunnel_url or ""
+        nombre = self._entry_nombre.get().strip() or "corredor"
+        u_send = f"{base}/t/{nombre}"
+        u_mapa = f"{base}/t/{nombre}/seguir"
+        col = VERDE if base else GRIS
+        st  = "normal" if base else "disabled"
+        self._lbl_track_corredor.config(text=u_send, fg=col)
+        self._btn_track_corredor.config(state=st, fg=TEXTO if base else GRIS,
+                                        command=lambda: self._copiar(u_send))
+        self._lbl_track_mapa.config(text=u_mapa, fg=col)
+        self._btn_track_mapa.config(state=st, fg=TEXTO if base else GRIS,
+                                    command=lambda: self._copiar(u_mapa))
 
     def _publicar_url(self, url):
         try:
@@ -210,12 +260,17 @@ class App(tk.Tk):
             self._proc_tunnel.terminate()
         if self._proc_flask:
             self._proc_flask.terminate()
+        self._tunnel_url = None
         self._set_estado("Sistema detenido", GRIS)
         self._url_lbl.config(text="")
         self._btn_stop.config(state="disabled")
         for _, lbl, btn in self._rows_din:
             lbl.config(text="—", fg=GRIS)
             btn.config(state="disabled", fg=GRIS, command=None)
+        self._lbl_track_corredor.config(text="—", fg=GRIS)
+        self._btn_track_corredor.config(state="disabled", fg=GRIS)
+        self._lbl_track_mapa.config(text="—", fg=GRIS)
+        self._btn_track_mapa.config(state="disabled", fg=GRIS)
 
     def _cerrar(self):
         self._detener()

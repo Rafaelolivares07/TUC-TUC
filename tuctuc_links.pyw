@@ -219,8 +219,8 @@ class App(tk.Tk):
     def _actualizar_tracking(self):
         base = self._tunnel_url or ""
         nombre = self._entry_nombre.get().strip() or "corredor"
-        u_send = f"{base}/t/{nombre}"
-        u_mapa = f"{base}/t/{nombre}/seguir"
+        u_send = f"{base}/gps/{nombre}"
+        u_mapa = f"{base}/gps/{nombre}/seguir"
         col = VERDE if base else GRIS
         st  = "normal" if base else "disabled"
         self._lbl_track_corredor.config(text=u_send, fg=col)

@@ -1,5 +1,13 @@
 import tkinter as tk
-import json, urllib.request, threading, subprocess, sys, os, time, re
+import json, urllib.request, threading, subprocess, sys, os, time, re, socket as _socket
+
+# ── Singleton: una sola instancia ────────────────────────────────────────────
+_LOCK_SOCK = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+_LOCK_SOCK.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 0)
+try:
+    _LOCK_SOCK.bind(("127.0.0.1", 47840))
+except OSError:
+    sys.exit(0)  # ya hay una instancia corriendo
 
 TUCTUC_DIR        = r"C:\Users\RAFAEL OLIVARES\Documents\TucTucV2"
 TUNNEL_EXE        = r"C:\cloudflared\cloudflared.exe"
@@ -10,9 +18,11 @@ GITHUB_ASISTENCIA = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest
 RUTAS_PILAR = [
     ("Admin consultas DBF", "/admin/consultas"),
 ]
-RUTAS_REST = [
-    ("Rancho Dapa — cliente",  "/r/rancho-dapa"),
-    ("Jacobs Food — cliente",  "/r/jacobs-food"),
+RUTAS_REST_FIJAS = [
+    ("Rancho Dapa — cliente",  "https://rancho-dapa.bistro.tuc-tuc.co"),
+    ("Jacobs Food — cliente",  "https://jacobs-food.bistro.tuc-tuc.co"),
+]
+RUTAS_REST_DIN = [
     ("Admin restaurantes",     "/admin/restaurante"),
     ("Login admin",            "/admin/login"),
 ]
@@ -49,6 +59,7 @@ class App(tk.Tk):
         self._tunnel_url = None
         self._proc_flask = None
         self._proc_tunnel = None
+        self._proc_named_tunnel = None
         self._rows_din  = []
         self._build()
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
@@ -85,7 +96,9 @@ class App(tk.Tk):
 
         # Sección Restaurantes
         self._seccion("Restaurantes")
-        for et, ruta in RUTAS_REST:
+        for et, url in RUTAS_REST_FIJAS:
+            self._fila_fija(et, url)
+        for et, ruta in RUTAS_REST_DIN:
             self._fila_din(et, ruta)
 
         # Sección Tracking
@@ -200,7 +213,14 @@ class App(tk.Tk):
         threading.Thread(target=lambda: [self._proc_tunnel.stderr.readline() for _ in iter(int, 1)],
                          daemon=True).start()
 
-        # 3. Activar UI
+        # 3. Named Tunnel (bistro-restaurantes — URLs fijas)
+        self._proc_named_tunnel = subprocess.Popen(
+            [TUNNEL_EXE, "tunnel", "run", "bistro-restaurantes"],
+            stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+
+        # 4. Activar UI
         self.after(0, lambda: self._on_listo(url))
 
     def _on_listo(self, url):
@@ -256,6 +276,8 @@ class App(tk.Tk):
     # ── Acciones ──────────────────────────────────────────────────────────
 
     def _detener(self):
+        if self._proc_named_tunnel:
+            self._proc_named_tunnel.terminate()
         if self._proc_tunnel:
             self._proc_tunnel.terminate()
         if self._proc_flask:

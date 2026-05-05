@@ -1,7 +1,9 @@
 import os
-from flask import Flask
+from flask import Flask, redirect, url_for, request
 from .config import Config
 from .db import init_db
+
+_BISTRO_SUFFIX = '.bistro.tuc-tuc.co'
 
 
 def create_app():
@@ -24,6 +26,7 @@ def create_app():
     from .blueprints.vendedor import bp as vendedor_bp
     from .blueprints.inventarios import bp as inventarios_bp
     from .blueprints.contabilidad import bp as contabilidad_bp, ejecutar_programaciones_job
+    from .blueprints.tracking import bp as tracking_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -35,6 +38,15 @@ def create_app():
     app.register_blueprint(vendedor_bp)
     app.register_blueprint(inventarios_bp)
     app.register_blueprint(contabilidad_bp)
+    app.register_blueprint(tracking_bp)
+
+    @app.before_request
+    def _bistro_subdominio():
+        host = request.host.split(':')[0]
+        if host.endswith(_BISTRO_SUFFIX):
+            slug = host[:-len(_BISTRO_SUFFIX)]
+            if request.path in ('', '/'):
+                return redirect(url_for('restaurantes.restaurante_publico', slug=slug))
 
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         from apscheduler.schedulers.background import BackgroundScheduler

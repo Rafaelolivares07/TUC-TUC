@@ -19,16 +19,6 @@ bp = Blueprint('restaurantes', __name__)
 
 _tablas_listas = True  # tablas ya existen en producción
 
-# Subdominios Bistró: rancho-dapa.bistro.tuc-tuc.co → /r/rancho-dapa
-_BISTRO_SUBDOMAIN_SUFFIX = '.bistro.tuc-tuc.co'
-
-@bp.before_request
-def _handle_bistro_subdominio():
-    host = request.host.split(':')[0]
-    if host.endswith(_BISTRO_SUBDOMAIN_SUFFIX):
-        slug = host[:-len(_BISTRO_SUBDOMAIN_SUFFIX)]
-        if request.path in ('', '/'):
-            return redirect(url_for('restaurantes.restaurante_publico', slug=slug))
 
 
 def init_tablas_restaurante():

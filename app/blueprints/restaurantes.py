@@ -19,6 +19,17 @@ bp = Blueprint('restaurantes', __name__)
 
 _tablas_listas = True  # tablas ya existen en producción
 
+# Subdominios Bistró: rancho-dapa.bistro.tuc-tuc.co → /r/rancho-dapa
+_BISTRO_SUBDOMAIN_SUFFIX = '.bistro.tuc-tuc.co'
+
+@bp.before_request
+def _handle_bistro_subdominio():
+    host = request.host.split(':')[0]
+    if host.endswith(_BISTRO_SUBDOMAIN_SUFFIX):
+        slug = host[:-len(_BISTRO_SUBDOMAIN_SUFFIX)]
+        if request.path in ('', '/'):
+            return redirect(url_for('restaurantes.restaurante_publico', slug=slug))
+
 
 def init_tablas_restaurante():
     """Llamar desde create_app() para ejecutar migraciones antes de atender requests."""
@@ -1323,6 +1334,7 @@ def api_pedido_crear(slug):
                       nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
                 if rest['tercero_id']:
                     try:
+                        conn.execute("SAVEPOINT sp_inv")
                         _aplicar_tarjeta(
                             conn, rest['tercero_id'],
                             producto_id=opcion['id'],
@@ -1332,9 +1344,10 @@ def api_pedido_crear(slug):
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
                         )
+                        conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:
                         print(f'[inv] salida carta {opcion["id"]}: {_e}')
-                        try: conn.rollback()
+                        try: conn.execute("ROLLBACK TO SAVEPOINT sp_inv")
                         except: pass
                 insertados += 1
             if insertados == 0:
@@ -1370,6 +1383,7 @@ def api_pedido_crear(slug):
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
                     try:
+                        conn.execute("SAVEPOINT sp_inv")
                         _aplicar_tarjeta(
                             conn, rest['tercero_id'],
                             producto_id=prod_id,
@@ -1379,9 +1393,10 @@ def api_pedido_crear(slug):
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
                         )
+                        conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:
                         print(f'[inv] salida menu {prod_id}: {_e}')
-                        try: conn.rollback()
+                        try: conn.execute("ROLLBACK TO SAVEPOINT sp_inv")
                         except: pass
 
         if rest['tercero_id'] and _asiento_auto:

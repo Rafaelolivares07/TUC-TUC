@@ -231,7 +231,8 @@ function consultar() {
   _hasta   = document.getElementById('f-hasta').value;
   _empresa = document.getElementById('f-empresa').value;
 
-  if (!_cuenta) { alert('Seleccione una cuenta del listado'); return; }
+  if (!_cuenta) _cuenta = document.getElementById('f-cuenta').value.trim().split(' ')[0];
+  if (!_cuenta) { alert('Ingrese un código de cuenta'); return; }
   if (!_desde || !_hasta) { alert('Seleccione rango de fechas'); return; }
 
   document.getElementById('estado-inicial').classList.add('d-none');

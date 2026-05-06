@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos\\remote-assist\\agente.py'],
+    ['agente_cliente.py'],
     pathex=[],
     binaries=[],
     datas=[],

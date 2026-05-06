@@ -17,7 +17,7 @@ socketio = SocketIO(
     app,
     cors_allowed_origins="*",
     max_http_buffer_size=50 * 1024 * 1024,
-    async_mode='gevent',
+    async_mode='threading',
     ping_timeout=60,
     ping_interval=25,
 )
@@ -630,4 +630,4 @@ def on_disconnect():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     print(f'RemoteAssist relay corriendo en :{port}')
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)

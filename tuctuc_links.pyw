@@ -82,6 +82,7 @@ class App(tk.Tk):
         self._proc_flask = None
         self._proc_tunnel = None
         self._proc_named_tunnel = None
+        self._proc_remote = None
         self._rows_din  = []
         self._build()
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
@@ -243,7 +244,16 @@ class App(tk.Tk):
             creationflags=subprocess.CREATE_NO_WINDOW
         )
 
-        # 4. Activar UI
+        # 4. Servidor asistencia remota (puerto 5001)
+        remote_server = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "remote-assist", "server.py"
+        )
+        self._proc_remote = subprocess.Popen(
+            [sys.executable, remote_server],
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+
+        # 5. Activar UI
         self.after(0, lambda: self._on_listo(url))
 
     def _on_listo(self, url):
@@ -298,6 +308,8 @@ class App(tk.Tk):
     # ── Acciones ──────────────────────────────────────────────────────────
 
     def _detener(self):
+        if self._proc_remote:
+            self._proc_remote.terminate()
         if self._proc_named_tunnel:
             self._proc_named_tunnel.terminate()
         if self._proc_tunnel:

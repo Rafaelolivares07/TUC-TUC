@@ -240,7 +240,7 @@ def leer_cuentas(ruta_bd, q=''):
         if q_low and q_low not in cod.lower() and q_low not in nom.lower():
             continue
         results.append({'codigo': cod, 'nombre': nom})
-        if len(results) >= 20:
+        if len(results) >= 50:
             break
     t.close()
     return results

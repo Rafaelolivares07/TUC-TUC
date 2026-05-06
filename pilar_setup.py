@@ -101,11 +101,11 @@ def paso4_startup():
         encoding='utf-8'
     )
 
-    # admin_agent.py — lee servidor desde admin_agent.ini
+    # admin_agent.py — conecta siempre a admin.tuc-tuc.co
     (STARTUP_DIR / 'AdminAgent.vbs').write_text(
         'Set WshShell = CreateObject("WScript.Shell")\r\n'
         f'WshShell.Run "cmd /c python ""C:\\S.A.R\\admin_agent.py"" '
-        f'--cliente {CLIENTE_ID} '
+        f'--servidor https://admin.tuc-tuc.co --cliente {CLIENTE_ID} '
         '>> ""C:\\S.A.R\\admin_agent.log"" 2>&1", 0, False\r\n',
         encoding='utf-8'
     )

@@ -1,5 +1,5 @@
 import os
-from flask import Flask, redirect, url_for, request
+from flask import Flask, request
 from .config import Config
 from .db import init_db
 
@@ -46,7 +46,8 @@ def create_app():
         if host.endswith(_BISTRO_SUFFIX):
             slug = host[:-len(_BISTRO_SUFFIX)]
             if request.path in ('', '/'):
-                return redirect(url_for('restaurantes.restaurante_publico', slug=slug))
+                from .blueprints.restaurantes import restaurante_publico
+                return restaurante_publico(slug)
 
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         from apscheduler.schedulers.background import BackgroundScheduler

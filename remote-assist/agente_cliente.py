@@ -29,10 +29,11 @@ except ImportError as e:
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
-# ─── Config (hardcodeado — el cliente no toca nada) ───────────────────────────
-SERVER   = "https://tuc-tuc-remote.onrender.com"
+# ─── Config ───────────────────────────────────────────────────────────────────
+SERVER   = "https://remote.tuc-tuc.co"
 TOKEN    = "tuctuc-remote-2026"
 SESSION  = __import__('random').randint(100000, 999999).__str__()
+VERSION  = "V1.5"
 FPS      = 8
 QUALITY  = 70
 SCALE    = 0.85
@@ -123,6 +124,8 @@ class VentanaAsistencia:
                  fg="#2563eb").pack(pady=(20, 2))
         tk.Label(self.root, text="Asistencia Técnica Remota",
                  font=("Arial", 10), fg="#555").pack()
+        tk.Label(self.root, text=VERSION,
+                 font=("Arial", 8), fg="#aaa").pack()
 
         # Código de sesión
         codigo = SESSION[:3] + "-" + SESSION[3:]

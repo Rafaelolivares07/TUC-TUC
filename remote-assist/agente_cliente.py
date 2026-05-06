@@ -222,12 +222,15 @@ def on_file_chunk_in(data):
     if recibidos == total:
         try:
             contenido = b''.join(_chunks_entrantes[nombre]['chunks'][i] for i in range(total))
-            desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
-            os.makedirs(desktop, exist_ok=True)
-            with open(os.path.join(desktop, nombre), 'wb') as f:
+            import subprocess as _sp
+            _r = _sp.run(['powershell','-Command','[Environment]::GetFolderPath("Desktop")'],
+                         capture_output=True, text=True)
+            destino = _r.stdout.strip() if _r.stdout.strip() else os.path.join(os.path.expanduser('~'), 'Desktop')
+            os.makedirs(destino, exist_ok=True)
+            with open(os.path.join(destino, nombre), 'wb') as f:
                 f.write(contenido)
             del _chunks_entrantes[nombre]
-            ventana.set_archivo(f"📥 {nombre} guardado en Desktop")
+            ventana.set_archivo(f"📥 {nombre} guardado en {destino}")
         except Exception as e:
             ventana.set_archivo(f"✗ Error al guardar: {e}", color="#f87171")
 

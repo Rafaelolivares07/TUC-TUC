@@ -50,6 +50,28 @@ def flask_ya_corre():
         return False
 
 
+def limpiar_puerto(port):
+    """Mata cualquier proceso colgado en el puerto antes de arrancar Flask."""
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        pids = set()
+        for line in result.stdout.splitlines():
+            if f":{port} " in line and "LISTENING" in line:
+                parts = line.split()
+                if parts:
+                    pids.add(parts[-1])
+        for pid in pids:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", pid],
+                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
+            )
+    except Exception:
+        pass
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -178,6 +200,7 @@ class App(tk.Tk):
         if flask_ya_corre():
             self.after(0, lambda: self._set_estado("Flask ya estaba corriendo", AMAR))
         else:
+            limpiar_puerto(FLASK_PORT)
             self.after(0, lambda: self._set_estado("Arrancando Flask...", AMAR))
             self._proc_flask = subprocess.Popen(
                 [sys.executable, "main.py"],
@@ -252,13 +275,12 @@ class App(tk.Tk):
 
     def _publicar_url(self, url):
         try:
-            relay_file = os.path.join(TUCTUC_DIR, "..", "MiAppMedicamentos", "relay_url.txt")
-            relay_file = os.path.normpath(relay_file)
-            # Escribir en MiAppMedicamentos (branch main)
+            # Publicar siempre la URL fija del Named Tunnel — no la URL volátil del Quick Tunnel
+            url_publica = "https://admin.tuc-tuc.co"
             repo_dir = os.path.normpath(os.path.join(TUCTUC_DIR, "..","MiAppMedicamentos"))
             dest = os.path.join(repo_dir, "relay_url.txt")
             with open(dest, "w", encoding="utf-8") as f:
-                f.write(url)
+                f.write(url_publica)
             subprocess.run(["git", "add", "relay_url.txt"], cwd=repo_dir,
                            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             subprocess.run(["git", "commit", "-m", f"relay: actualizar URL"],

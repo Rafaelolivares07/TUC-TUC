@@ -3,7 +3,9 @@ from flask import Flask, request
 from .config import Config
 from .db import init_db
 
-_BISTRO_SUFFIX = '.bistro.tuc-tuc.co'
+_CLIENTE_SUFFIXES = ('.tuc-tuc.co',)
+_EXCLUIR_SUBDOMINIOS = {'www', 'bistro', 'api', 'admin', 'mail'}
+
 
 
 def create_app():
@@ -41,11 +43,17 @@ def create_app():
     app.register_blueprint(tracking_bp)
 
     @app.before_request
-    def _bistro_subdominio():
+    def _cliente_subdominio():
         host = request.host.split(':')[0]
-        if not host.endswith(_BISTRO_SUFFIX):
+        slug = None
+        for suffix in _CLIENTE_SUFFIXES:
+            if host.endswith(suffix):
+                sub = host[:-len(suffix)]
+                if sub and sub not in _EXCLUIR_SUBDOMINIOS and '.' not in sub:
+                    slug = sub
+                break
+        if not slug:
             return
-        slug = host[:-len(_BISTRO_SUFFIX)]
         from .blueprints.restaurantes import (
             restaurante_publico, restaurante_mesero, restaurante_cocina,
             admin_restaurante_detalle

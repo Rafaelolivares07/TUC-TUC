@@ -43,11 +43,23 @@ def create_app():
     @app.before_request
     def _bistro_subdominio():
         host = request.host.split(':')[0]
-        if host.endswith(_BISTRO_SUFFIX):
-            slug = host[:-len(_BISTRO_SUFFIX)]
-            if request.path in ('', '/'):
-                from .blueprints.restaurantes import restaurante_publico
-                return restaurante_publico(slug)
+        if not host.endswith(_BISTRO_SUFFIX):
+            return
+        slug = host[:-len(_BISTRO_SUFFIX)]
+        from .blueprints.restaurantes import (
+            restaurante_publico, restaurante_mesero, restaurante_cocina,
+            admin_restaurante_detalle
+        )
+        _MAP = {
+            '':        restaurante_publico,
+            '/':       restaurante_publico,
+            '/mesero': restaurante_mesero,
+            '/cocina': restaurante_cocina,
+            '/admin':  admin_restaurante_detalle,
+        }
+        fn = _MAP.get(request.path)
+        if fn:
+            return fn(slug)
 
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         from apscheduler.schedulers.background import BackgroundScheduler

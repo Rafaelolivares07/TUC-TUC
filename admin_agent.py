@@ -384,7 +384,7 @@ def _procesar_consulta(base, token, ruta_bd, consulta):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--servidor', default='https://tuc-tuc.onrender.com')
+    parser.add_argument('--servidor', default='https://admin.tuc-tuc.co')
     parser.add_argument('--cliente',  required=True)
     args = parser.parse_args()
 

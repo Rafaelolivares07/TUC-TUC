@@ -19,8 +19,8 @@ RUTAS_PILAR = [
     ("Admin consultas DBF", "/admin/consultas"),
 ]
 RUTAS_REST_FIJAS = [
-    ("Rancho Dapa — cliente",  "https://rancho-dapa.bistro.tuc-tuc.co"),
-    ("Jacobs Food — cliente",  "https://jacobs-food.bistro.tuc-tuc.co"),
+    ("Rancho Dapa — cliente",  "https://rancho-dapa.tuc-tuc.co"),
+    ("Jacobs Food — cliente",  "https://jacobs-food.tuc-tuc.co"),
 ]
 RUTAS_REST_DIN = [
     ("Admin restaurantes",     "/admin/restaurante"),

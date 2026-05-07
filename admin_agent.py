@@ -356,28 +356,29 @@ def consulta_buscar_cuenta(ruta_bd, parametros):
 
 
 def consulta_buscar_empresas(ruta_bd, parametros):
-    """Lee PROD_FACT1 y retorna empresas únicas."""
-    import struct as _struct
-    PF_REC_SIZE = 179
-    PF_EMPRESA  = 91
+    """Muestrea REG_CTAS y retorna códigos de empresa únicos (campo EMPRESA C10 @52)."""
+    REC_SIZE = 345
+    OFF_EMP  = 52
+    EMP_LEN  = 10
     ENC = 'cp1252'
-    path = os.path.join(ruta_bd, 'PROD_FACT1.DBF')
+    path = os.path.join(ruta_bd, 'REG_CTAS.DBF')
     empresas = set()
     try:
         with open(path, 'rb') as f:
-            hdr = f.read(32)
-            num = _struct.unpack_from('<I', hdr, 4)[0]
-            hsz = _struct.unpack_from('<H', hdr, 8)[0]
-            f.seek(hsz)
-            raw = f.read(num * PF_REC_SIZE)
-        n = len(raw) // PF_REC_SIZE
-        for i in range(0, n, 30):
-            b = raw[i*PF_REC_SIZE:(i+1)*PF_REC_SIZE]
-            if b[0] == 0x2A: continue
-            emp = b[PF_EMPRESA:PF_EMPRESA+4].rstrip(b' ').decode(ENC, 'replace').strip()
-            if emp: empresas.add(emp)
-    except Exception:
-        pass
+            f.seek(4)
+            num = struct.unpack('<I', f.read(4))[0]
+            hsz = struct.unpack('<H', f.read(2))[0]
+            paso = max(1, num // 500)  # hasta 500 muestras distribuidas
+            for i in range(0, num, paso):
+                f.seek(hsz + i * REC_SIZE)
+                b = f.read(REC_SIZE)
+                if len(b) < REC_SIZE or b[0] == 0x2A:
+                    continue
+                emp = b[OFF_EMP:OFF_EMP+EMP_LEN].rstrip(b' ').decode(ENC, 'replace').strip()
+                if emp:
+                    empresas.add(emp)
+    except Exception as e:
+        print(f'buscar_empresas error: {e}')
     return sorted(empresas)
 
 

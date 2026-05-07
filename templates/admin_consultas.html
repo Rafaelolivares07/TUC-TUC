@@ -2,190 +2,233 @@
 {% block title %}Consultas Administrator VFP{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<style>
+  body { background: #f4f7fb !important; font-size: 13px; }
+  .panel-filtros { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 12px; }
+  .panel-totales { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 12px 20px; margin-bottom: 12px; }
+  .total-box { text-align: center; }
+  .total-box .val { font-size: 17px; font-weight: 700; }
+  .total-box .val.deb { color: #1a7f5a; }
+  .total-box .val.cre { color: #b91c1c; }
+  .total-box .val.net { color: #003f7f; }
+  .total-box .val.cnt { color: #555; }
+  .total-box .lbl { font-size: 11px; color: #888; text-transform: uppercase; }
+  #tabla-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; overflow: hidden; }
+  #tabla-wrap table { font-size: 12px; }
+  #tabla-wrap thead th { background: #003f7f; color: #fff; cursor: pointer; user-select: none; white-space: nowrap; }
+  #tabla-wrap thead th:hover { background: #00539f; }
+  #tabla-wrap thead th .sort-ico { opacity: 0.5; font-size: 10px; }
+  #tabla-wrap thead th.sort-asc .sort-ico::after { content: ' ▲'; opacity: 1; }
+  #tabla-wrap thead th.sort-desc .sort-ico::after { content: ' ▼'; opacity: 1; }
+  #tabla-wrap tbody tr:nth-child(even) { background: #f0f6ff; }
+  #tabla-wrap tbody tr:hover { background: #d6eaff; }
+  .fila-total td { font-weight: 700; background: #e8f0ff !important; border-top: 2px solid #003f7f; }
+  .spinner-msg { text-align: center; padding: 40px; color: #888; }
+  .ac-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff;
+    border: 1px solid #cdd5e0; border-radius: 6px; box-shadow: 0 4px 16px #0002;
+    max-height: 220px; overflow-y: auto; z-index: 1000; display: none; min-width: 320px; }
+  .ac-item { padding: 7px 12px; cursor: pointer; font-size: 12px; border-bottom: 1px solid #f0f4f8; }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover { background: #e8f0ff; }
+  .ac-buscando { padding: 10px 12px; color: #888; font-size: 12px; }
+  .ac-error { padding: 10px 12px; color: #b91c1c; font-size: 12px; }
+</style>
 
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h3 mb-0">
-      <i class="bi bi-database-fill text-primary me-2"></i>Administrator VFP
-    </h1>
-    <span id="estado-badge" class="badge bg-secondary fs-6 px-3 py-2">
+<div class="container-fluid py-3">
+
+  <!-- Encabezado -->
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <h5 class="mb-0 fw-bold" style="color:#003f7f">
+      <i class="bi bi-database-fill me-2"></i>Administrator VFP — REG_CTAS
+    </h5>
+    <span id="estado-badge" class="badge bg-secondary px-3 py-2">
       <span class="spinner-border spinner-border-sm me-1" role="status"></span> cargando…
     </span>
   </div>
 
-  <!-- Selector de agente -->
-  <div class="card shadow-sm mb-3">
-    <div class="card-body py-2">
-      <div class="row g-2 align-items-center">
-        <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Agente</label>
-        </div>
-        <div class="col-sm-4">
-          <select id="sel-agente" class="form-select form-select-sm" onchange="onAgenteChange()">
-            <option value="">— cargando agentes —</option>
-          </select>
-        </div>
-        <div class="col">
-          <small id="agente-ruta" class="text-muted font-monospace"></small>
-        </div>
+  <!-- Agente -->
+  <div class="panel-filtros">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Agente</label>
+        <select id="sel-agente" class="form-select form-select-sm" style="min-width:200px" onchange="onAgenteChange()">
+          <option value="">— cargando agentes —</option>
+        </select>
+      </div>
+      <div class="col">
+        <small id="agente-ruta" class="text-muted font-monospace"></small>
       </div>
     </div>
   </div>
 
-  <!-- Bloque 1: Tercero por NIT -->
-  <div class="card shadow-sm mb-2">
-    <div class="card-header py-2 small fw-semibold text-muted">
-      <i class="bi bi-person me-1"></i>Paso 1 — Tercero <span class="fw-normal">(opcional — si no selecciona, consulta todos)</span>
+  <!-- Filtros -->
+  <div class="panel-filtros">
+    <!-- Fila 1: Tercero y Cuenta -->
+    <div class="row g-2 align-items-end mb-2">
+      <div class="col-sm-4" style="position:relative">
+        <label class="form-label mb-1 small fw-semibold">Tercero <span class="fw-normal text-muted">(NIT o nombre — opcional)</span></label>
+        <input id="f-nit" type="text" class="form-control form-control-sm" placeholder="Escriba NIT o nombre…" oninput="onNitInput()" autocomplete="off">
+        <div id="nit-dropdown" class="ac-dropdown"></div>
+        <span id="nit-badge" class="badge bg-success mt-1 d-none">
+          <span id="nit-badge-txt"></span>
+          <button type="button" class="btn-close btn-close-white ms-2" style="font-size:.55rem" onclick="limpiarNit()"></button>
+        </span>
+      </div>
+      <div class="col-sm-4" style="position:relative">
+        <label class="form-label mb-1 small fw-semibold">Cuenta <span class="fw-normal text-muted">(código o nombre — opcional)</span></label>
+        <input id="f-cuenta" type="text" class="form-control form-control-sm" placeholder="Buscar por código o nombre…" oninput="onCuentaInput()" autocomplete="off">
+        <div id="cuenta-dropdown" class="ac-dropdown"></div>
+        <span id="cuenta-badge" class="badge bg-primary mt-1 d-none">
+          <span id="cuenta-badge-txt"></span>
+          <button type="button" class="btn-close btn-close-white ms-2" style="font-size:.55rem" onclick="limpiarCuenta()"></button>
+        </span>
+      </div>
     </div>
-    <div class="card-body py-2">
-      <div class="row g-2 align-items-center">
-        <div class="col-sm-4 position-relative">
-          <input id="f-nit" type="text" class="form-control form-control-sm" placeholder="Escriba NIT o parte del nombre…" oninput="onNitInput()" autocomplete="off">
-          <div id="nit-resultado" class="position-absolute w-100 bg-white border rounded shadow-sm d-none" style="top:100%;z-index:99;font-size:.8rem;max-height:140px;overflow-y:auto;"></div>
-        </div>
-        <div class="col">
-          <span id="nit-seleccionado" class="d-none badge bg-success fs-6 px-3">
-            <span id="nit-nombre-txt"></span>
-            <button type="button" class="btn-close btn-close-white ms-2" style="font-size:.6rem" onclick="limpiarNit()"></button>
-          </span>
-          <span id="nit-hint" class="text-muted small">Sin filtro de tercero — consultará todos</span>
-        </div>
+    <!-- Fila 2: Fechas, Empresa, Límite, Botones -->
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Desde</label>
+        <input type="date" id="f-desde" class="form-control form-control-sm">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Hasta</label>
+        <input type="date" id="f-hasta" class="form-control form-control-sm">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Empresa</label>
+        <select id="f-empresa" class="form-select form-select-sm" style="min-width:110px">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Límite</label>
+        <input id="f-limite" type="number" class="form-control form-control-sm" value="500" min="1" max="5000" style="width:80px">
+      </div>
+      <div class="col-auto">
+        <button id="btn-consultar" class="btn btn-primary btn-sm" style="min-width:120px" onclick="lanzarConsulta()">
+          <i class="bi bi-search me-1"></i>Consultar
+        </button>
+      </div>
+      <div class="col-auto" id="btn-excel-wrap" style="display:none">
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="col-auto ms-auto">
+        <small id="info-registros" class="text-muted"></small>
       </div>
     </div>
   </div>
 
-  <!-- Bloque 2: Cuenta -->
-  <div class="card shadow-sm mb-2">
-    <div class="card-header py-2 small fw-semibold text-muted">
-      <i class="bi bi-journal-bookmark me-1"></i>Paso 2 — Cuenta <span class="fw-normal">(opcional — si no selecciona, consulta todas)</span>
+  <!-- Spinner consulta -->
+  <div id="consulta-estado" class="d-none mb-2">
+    <div class="panel-filtros py-2 d-flex align-items-center gap-2">
+      <span class="spinner-border spinner-border-sm text-primary"></span>
+      <span id="consulta-msg" class="text-muted small">Consultando…</span>
     </div>
-    <div class="card-body py-2">
-      <div class="row g-2 align-items-center">
-        <div class="col-sm-4 position-relative">
-          <input id="f-cuenta" type="text" class="form-control form-control-sm" placeholder="Buscar por código o nombre…" oninput="onCuentaInput()" autocomplete="off">
-          <div id="cuenta-resultado" class="position-absolute w-100 bg-white border rounded shadow-sm d-none" style="top:100%;z-index:99;font-size:.8rem;max-height:140px;overflow-y:auto;"></div>
-        </div>
-        <div class="col">
-          <span id="cuenta-seleccionada" class="d-none badge bg-primary fs-6 px-3">
-            <span id="cuenta-nombre-txt"></span>
-            <button type="button" class="btn-close btn-close-white ms-2" style="font-size:.6rem" onclick="limpiarCuenta()"></button>
-          </span>
-          <span id="cuenta-hint" class="text-muted small">Sin filtro de cuenta — consultará todas</span>
-        </div>
+  </div>
+
+  <!-- Totales -->
+  <div class="panel-totales d-none" id="panel-totales">
+    <div class="row g-3">
+      <div class="col total-box">
+        <div class="val cnt" id="t-registros">—</div>
+        <div class="lbl">Registros</div>
+      </div>
+      <div class="col total-box">
+        <div class="val deb" id="t-deb">—</div>
+        <div class="lbl">Total Débito</div>
+      </div>
+      <div class="col total-box">
+        <div class="val cre" id="t-cre">—</div>
+        <div class="lbl">Total Crédito</div>
+      </div>
+      <div class="col total-box">
+        <div class="val net" id="t-neto">—</div>
+        <div class="lbl">Saldo (Déb−Cré)</div>
       </div>
     </div>
   </div>
 
-  <!-- Bloque 3: Consulta -->
-  <div class="card shadow-sm mb-3">
-    <div class="card-header py-2 small fw-semibold text-muted">
-      <i class="bi bi-search me-1"></i>Paso 3 — Consultar REG_CTAS
+  <!-- Tabla -->
+  <div id="tabla-wrap">
+    <div class="spinner-msg" id="estado-inicial">
+      <i class="bi bi-arrow-up-circle text-primary fs-4"></i>
+      <div class="mt-2">Seleccione un agente, aplique filtros y haga clic en Consultar</div>
     </div>
-    <div class="card-body py-2">
-      <div class="row g-2 align-items-end">
-        <div class="col-sm-2">
-          <label class="form-label mb-1 small fw-semibold">Desde</label>
-          <input id="f-lapso-desde" type="text" class="form-control form-control-sm" placeholder="ej. 202601">
-        </div>
-        <div class="col-sm-2">
-          <label class="form-label mb-1 small fw-semibold">Hasta</label>
-          <input id="f-lapso-hasta" type="text" class="form-control form-control-sm" placeholder="ej. 202604">
-        </div>
-        <div class="col-sm-2">
-          <label class="form-label mb-1 small fw-semibold">Empresa</label>
-          <input id="f-empresa" type="text" class="form-control form-control-sm" placeholder="código empresa">
-        </div>
-        <div class="col-sm-2">
-          <label class="form-label mb-1 small fw-semibold">Límite</label>
-          <input id="f-limite" type="number" class="form-control form-control-sm" value="200" min="1" max="5000">
-        </div>
-        <div class="col d-flex gap-2">
-          <button id="btn-consultar" class="btn btn-primary btn-sm flex-fill" onclick="lanzarConsulta()">
-            <i class="bi bi-play-fill me-1"></i>Consultar
-          </button>
-          <button class="btn btn-outline-secondary btn-sm" onclick="limpiarTodo()" title="Limpiar todo">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-      </div>
+    <div class="spinner-msg d-none" id="spinner">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2">Consultando en Administrator VFP…</div>
     </div>
-  </div>
-
-  <!-- Estado consulta -->
-  <div id="consulta-estado" class="d-none mb-3">
-    <div class="alert alert-info py-2 mb-0 d-flex align-items-center gap-2">
-      <span class="spinner-border spinner-border-sm"></span>
-      <span id="consulta-msg">Enviando consulta al agente…</span>
-    </div>
-  </div>
-
-  <!-- Resumen -->
-  <div id="resumen-bar" class="d-none mb-2 text-muted small">
-    <span id="resumen-txt"></span>
-  </div>
-
-  <!-- Tabla resultados -->
-  <div class="card shadow-sm">
-    <div class="card-body p-0">
-      <div class="table-responsive" style="max-height:65vh; overflow-y:auto;">
-        <table class="table table-sm table-hover table-striped mb-0 align-middle" style="font-size:.82rem;">
-          <thead class="table-dark sticky-top">
-            <tr>
-              <th>#</th>
-              <th>Fecha</th>
-              <th>Lapso</th>
-              <th>Tipo</th>
-              <th>Documento</th>
-              <th>Cuenta</th>
-              <th>NIT</th>
-              <th>Tercero</th>
-              <th class="text-end">Débito</th>
-              <th class="text-end">Crédito</th>
-              <th>Detalle</th>
-              <th class="text-center">Anul.</th>
-            </tr>
-          </thead>
-          <tbody id="tabla-body">
-            <tr>
-              <td colspan="12" class="text-center text-muted py-4">
-                <i class="bi bi-arrow-up-circle me-1"></i>Selecciona un agente, aplica filtros y haz clic en Consultar
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="table-responsive d-none" style="max-height:60vh;overflow-y:auto" id="tabla-contenedor">
+      <table class="table table-bordered table-hover mb-0" id="tabla">
+        <thead>
+          <tr>
+            <th onclick="ordenar(0)" data-col="0">#<span class="sort-ico"></span></th>
+            <th onclick="ordenar(1)" data-col="1">Fecha<span class="sort-ico"></span></th>
+            <th onclick="ordenar(2)" data-col="2">Lapso<span class="sort-ico"></span></th>
+            <th onclick="ordenar(3)" data-col="3">Tipo<span class="sort-ico"></span></th>
+            <th onclick="ordenar(4)" data-col="4">Documento<span class="sort-ico"></span></th>
+            <th onclick="ordenar(5)" data-col="5">Cuenta<span class="sort-ico"></span></th>
+            <th onclick="ordenar(6)" data-col="6">NIT<span class="sort-ico"></span></th>
+            <th onclick="ordenar(7)" data-col="7">Tercero<span class="sort-ico"></span></th>
+            <th onclick="ordenar(8)" data-col="8" class="text-end">Débito<span class="sort-ico"></span></th>
+            <th onclick="ordenar(9)" data-col="9" class="text-end">Crédito<span class="sort-ico"></span></th>
+            <th>Detalle</th>
+            <th class="text-center">Anul.</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-body"></tbody>
+        <tfoot>
+          <tr class="fila-total">
+            <td colspan="8" class="text-end">TOTAL</td>
+            <td class="text-end" id="ft-deb"></td>
+            <td class="text-end" id="ft-cre"></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   </div>
 
 </div>
 
 <script>
+const SORT_FIELDS = ['consecutivo','fecha','lapso','tipo','documento','cuenta','nit','tercero_nom','debito','credito'];
+
 let _agentes = [];
 let _agente_ok = false;
 let _poll_timer = null;
+let _ultimaRespuesta = [];
+let _sortCol = 1, _sortAsc = true;
+let _nit_seleccionado = '', _cod_ter_seleccionado = '';
+let _cuenta_seleccionada = '';
+let _nit_timer = null, _cuenta_timer = null;
 
-function clienteSeleccionado() {
-  return document.getElementById('sel-agente').value;
-}
+function clienteId() { return document.getElementById('sel-agente').value; }
 
+// ── Formato ───────────────────────────────────────────────────────────────────
+const fmt  = n => Number(n).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtI = n => Number(n).toLocaleString('es-CO');
+function _esc(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+// ── Agentes ───────────────────────────────────────────────────────────────────
 async function cargarAgentes() {
   try {
     const r = await fetch('/api/admin-agent/agentes');
     const d = await r.json();
     if (!d.ok) return;
     _agentes = d.agentes;
-    _renderSelector(_agentes, clienteSeleccionado());
+    _renderSelector(_agentes, clienteId());
     onAgenteChange();
-  } catch(e) {
-    console.error('Error cargando agentes:', e);
-  }
+  } catch(e) {}
 }
 
 function _renderSelector(agentes, selected) {
   const sel = document.getElementById('sel-agente');
   const prev = selected || sel.value;
   sel.innerHTML = '';
-  if (agentes.length === 0) {
+  if (!agentes.length) {
     sel.innerHTML = '<option value="">Sin agentes registrados</option>';
     return;
   }
@@ -196,168 +239,36 @@ function _renderSelector(agentes, selected) {
     if (a.cliente_id === prev) opt.selected = true;
     sel.appendChild(opt);
   });
-  if (!prev && agentes.length === 1) {
-    sel.value = agentes[0].cliente_id;
-  }
+  if (!prev && agentes.length === 1) sel.value = agentes[0].cliente_id;
 }
 
 function onAgenteChange() {
-  const cid    = clienteSeleccionado();
+  const cid    = clienteId();
   const agente = _agentes.find(a => a.cliente_id === cid);
   const badge  = document.getElementById('estado-badge');
-  const ruta   = document.getElementById('agente-ruta');
+  document.getElementById('agente-ruta').textContent = agente ? (agente.ruta_bd || '') : '';
 
   if (!agente) {
-    ruta.textContent = '';
-    badge.className = 'badge bg-secondary fs-6 px-3 py-2';
+    badge.className = 'badge bg-secondary px-3 py-2';
     badge.textContent = 'Sin agente';
     _agente_ok = false;
     return;
   }
-
-  ruta.textContent = agente.ruta_bd || '';
-
   if (agente.conectado) {
-    badge.className = 'badge bg-success fs-6 px-3 py-2';
+    badge.className = 'badge bg-success px-3 py-2';
     badge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.6rem"></i>Conectado';
     _agente_ok = true;
+    cargarEmpresas(cid);
   } else {
-    badge.className = 'badge bg-danger fs-6 px-3 py-2';
+    badge.className = 'badge bg-danger px-3 py-2';
     badge.innerHTML = '<i class="bi bi-circle me-1" style="font-size:.6rem"></i>Desconectado';
     _agente_ok = false;
   }
 }
 
-async function refreshAgentes() {
-  try {
-    const r = await fetch('/api/admin-agent/agentes');
-    const d = await r.json();
-    if (!d.ok) return;
-    _agentes = d.agentes;
-    _renderSelector(_agentes, clienteSeleccionado());
-    onAgenteChange();
-  } catch {}
-}
-
-function fmt(n) {
-  if (n == null) return '';
-  return Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-
-function fmtFecha(s) {
-  if (!s) return '';
-  return s.substring(0, 10);
-}
-
-let _nit_timer = null, _nit_seleccionado = '', _cod_ter_seleccionado = '';
-let _cuenta_timer = null, _cuenta_seleccionada = '';
-
-// ── NIT ──────────────────────────────────────────────────────────
-function onNitInput() {
-  const val = document.getElementById('f-nit').value.trim();
-  if (_nit_seleccionado) limpiarNit();
-  document.getElementById('nit-resultado').classList.add('d-none');
-  clearTimeout(_nit_timer);
-  if (val.length < 3) return;
-  _nit_timer = setTimeout(() => {
-    _mostrarBuscando('nit-resultado');
-    _lookup('buscar_nit', {nit: val}, 'nit-resultado', _mostrarNitItems);
-  }, 280);
-}
-
-function _esc(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-
-function _mostrarBuscando(contId) {
-  const cont = document.getElementById(contId);
-  cont.innerHTML = '<div class="px-2 py-2 text-muted small"><span class="spinner-border spinner-border-sm me-2"></span>Buscando en Administrator… puede tardar unos segundos</div>';
-  cont.classList.remove('d-none');
-}
-
-function _mostrarNitItems(items) {
-  const cont = document.getElementById('nit-resultado');
-  if (!items.length) {
-    cont.innerHTML = '<div class="px-2 py-2 text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Sin terceros con ese NIT o nombre</div>';
-    cont.classList.remove('d-none');
-    return;
-  }
-  cont.innerHTML = items.map(t =>
-    `<div class="px-2 py-1" style="cursor:pointer"
-          ontouchstart="this._ty=event.touches[0].clientY"
-          ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')}"
-          onclick="seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')">
-      <strong>${t.nit}</strong> — ${t.nombre}
-    </div>`).join('');
-  cont.classList.remove('d-none');
-}
-
-function seleccionarNit(nit, nombre, cod_ter) {
-  _nit_seleccionado = nit;
-  _cod_ter_seleccionado = cod_ter;
-  document.getElementById('f-nit').value = '';
-  document.getElementById('nit-resultado').classList.add('d-none');
-  document.getElementById('nit-nombre-txt').textContent = nit + ' — ' + nombre;
-  document.getElementById('nit-seleccionado').classList.remove('d-none');
-  document.getElementById('nit-hint').classList.add('d-none');
-}
-
-function limpiarNit() {
-  _nit_seleccionado = '';
-  _cod_ter_seleccionado = '';
-  document.getElementById('f-nit').value = '';
-  document.getElementById('nit-seleccionado').classList.add('d-none');
-  document.getElementById('nit-hint').classList.remove('d-none');
-}
-
-// ── CUENTA ───────────────────────────────────────────────────────
-function onCuentaInput() {
-  const val = document.getElementById('f-cuenta').value.trim();
-  if (_cuenta_seleccionada) limpiarCuenta();
-  document.getElementById('cuenta-resultado').classList.add('d-none');
-  clearTimeout(_cuenta_timer);
-  if (val.length < 3) return;
-  _cuenta_timer = setTimeout(() => {
-    _mostrarBuscando('cuenta-resultado');
-    _lookup('buscar_cuenta', {q: val}, 'cuenta-resultado', _mostrarCuentaItems);
-  }, 280);
-}
-
-function _mostrarCuentaItems(items) {
-  const cont = document.getElementById('cuenta-resultado');
-  if (!items.length) {
-    cont.innerHTML = '<div class="px-2 py-2 text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Sin cuentas con ese código o nombre</div>';
-    cont.classList.remove('d-none');
-    return;
-  }
-  cont.innerHTML = items.map(t =>
-    `<div class="px-2 py-1" style="cursor:pointer"
-          ontouchstart="this._ty=event.touches[0].clientY"
-          ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')}"
-          onclick="seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')">
-      <strong>${t.codigo}</strong> — ${t.nombre}
-    </div>`).join('');
-  cont.classList.remove('d-none');
-}
-
-function seleccionarCuenta(codigo, nombre) {
-  _cuenta_seleccionada = codigo;
-  document.getElementById('f-cuenta').value = '';
-  document.getElementById('cuenta-resultado').classList.add('d-none');
-  document.getElementById('cuenta-nombre-txt').textContent = codigo + ' — ' + nombre;
-  document.getElementById('cuenta-seleccionada').classList.remove('d-none');
-  document.getElementById('cuenta-hint').classList.add('d-none');
-}
-
-function limpiarCuenta() {
-  _cuenta_seleccionada = '';
-  document.getElementById('f-cuenta').value = '';
-  document.getElementById('cuenta-seleccionada').classList.add('d-none');
-  document.getElementById('cuenta-hint').classList.remove('d-none');
-}
-
-// ── Lookup genérico vía agente ────────────────────────────────────
-async function _lookup(tipo, parametros, contId, callback) {
-  const cid = clienteSeleccionado();
-  if (!cid || !_agente_ok) return;
+// ── Helper genérico: consulta vía agente ──────────────────────────────────────
+async function _consultaAgente(cid, tipo, parametros, maxSegundos) {
+  maxSegundos = maxSegundos || 20;
   try {
     const r = await fetch('/api/admin-agent/consultar', {
       method: 'POST',
@@ -365,64 +276,185 @@ async function _lookup(tipo, parametros, contId, callback) {
       body: JSON.stringify({cliente_id: cid, tipo, parametros})
     });
     const d = await r.json();
-    if (!d.ok) return;
-    let intentos = 0;
-    const poll = async () => {
-      if (intentos++ > 30) {
-        const cont = document.getElementById(contId);
-        cont.innerHTML = '<div class="px-2 py-2 text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Sin respuesta del agente — intente de nuevo</div>';
-        cont.classList.remove('d-none');
-        return;
-      }
-      try {
-        const r2 = await fetch(`/api/admin-agent/resultado/${d.consulta_id}`);
-        const d2 = await r2.json();
-        if (!d2.ok) { callback([]); return; }
-        if (d2.estado === 'pendiente' || d2.estado === 'procesando') { setTimeout(poll, 600); return; }
-        callback(d2.respuesta || []);
-      } catch { setTimeout(poll, 600); }
-    };
-    setTimeout(poll, 600);
+    if (!d.ok) return null;
+    const intentos = maxSegundos * 2;
+    for (let i = 0; i < intentos; i++) {
+      await new Promise(res => setTimeout(res, 500));
+      const r2 = await fetch(`/api/admin-agent/resultado/${d.consulta_id}`);
+      const d2 = await r2.json();
+      if (!d2.ok) return null;
+      if (d2.estado === 'lista') return d2.respuesta;
+      if (d2.estado === 'error') return null;
+    }
   } catch {}
+  return null;
 }
 
-async function lanzarConsulta() {
-  const cliente_id = clienteSeleccionado();
-  if (!cliente_id) {
-    alert('Selecciona un agente primero.');
-    return;
+// ── Empresas ──────────────────────────────────────────────────────────────────
+async function cargarEmpresas(cid) {
+  const sel = document.getElementById('f-empresa');
+  sel.innerHTML = '<option value="">Cargando…</option>';
+  const empresas = await _consultaAgente(cid, 'buscar_empresas', {}, 60);
+  sel.innerHTML = '<option value="">Todas</option>';
+  if (Array.isArray(empresas)) {
+    empresas.forEach(e => {
+      const o = document.createElement('option');
+      o.value = e; o.textContent = e;
+      sel.appendChild(o);
+    });
   }
-  if (!_agente_ok) {
-    alert('El agente no está conectado en el PC del cliente.');
-    return;
-  }
+}
 
-  const params = {};
-  const desde   = document.getElementById('f-lapso-desde').value.trim().replace('-','');
-  const hasta   = document.getElementById('f-lapso-hasta').value.trim().replace('-','');
-  const empresa = document.getElementById('f-empresa').value.trim();
-  const limite  = parseInt(document.getElementById('f-limite').value) || 200;
-  if (desde)              params.lapso_desde = desde;
-  if (hasta)              params.lapso_hasta = hasta;
-  if (empresa)            params.empresa     = empresa;
-  if (_cod_ter_seleccionado) params.tercero   = _cod_ter_seleccionado;
-  if (_cuenta_seleccionada) params.cuenta    = _cuenta_seleccionada;
-  params.limite = limite;
+// ── Autocomplete NIT ──────────────────────────────────────────────────────────
+function onNitInput() {
+  if (_nit_seleccionado) limpiarNit();
+  cerrarDropdown('nit-dropdown');
+  clearTimeout(_nit_timer);
+  const val = document.getElementById('f-nit').value.trim();
+  if (val.length < 3) return;
+  _nit_timer = setTimeout(() => buscarNit(val), 280);
+}
+
+async function buscarNit(val) {
+  const cid = clienteId();
+  if (!cid || !_agente_ok) return;
+  mostrarDropdownSpinner('nit-dropdown');
+  const items = await _consultaAgente(cid, 'buscar_nit', {nit: val}, 15);
+  const drop = document.getElementById('nit-dropdown');
+  if (!items || !items.length) {
+    drop.innerHTML = '<div class="ac-error"><i class="bi bi-exclamation-circle me-1"></i>Sin resultados</div>';
+    drop.style.display = 'block';
+    return;
+  }
+  drop.innerHTML = items.map(t =>
+    `<div class="ac-item"
+          ontouchstart="this._ty=event.touches[0].clientY"
+          ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')}"
+          onclick="seleccionarNit('${_esc(t.nit)}','${_esc(t.nombre)}','${_esc(t.cod_ter)}')">
+      <strong class="me-2" style="font-family:monospace;color:#003f7f">${t.nit}</strong>${t.nombre}
+    </div>`).join('');
+  drop.style.display = 'block';
+}
+
+function seleccionarNit(nit, nombre, cod_ter) {
+  _nit_seleccionado    = nit;
+  _cod_ter_seleccionado = cod_ter;
+  document.getElementById('f-nit').value = '';
+  cerrarDropdown('nit-dropdown');
+  document.getElementById('nit-badge-txt').textContent = nit + ' — ' + nombre;
+  document.getElementById('nit-badge').classList.remove('d-none');
+}
+
+function limpiarNit() {
+  _nit_seleccionado = '';
+  _cod_ter_seleccionado = '';
+  document.getElementById('f-nit').value = '';
+  document.getElementById('nit-badge').classList.add('d-none');
+}
+
+// ── Autocomplete Cuenta ───────────────────────────────────────────────────────
+function onCuentaInput() {
+  if (_cuenta_seleccionada) limpiarCuenta();
+  cerrarDropdown('cuenta-dropdown');
+  clearTimeout(_cuenta_timer);
+  const val = document.getElementById('f-cuenta').value.trim();
+  if (val.length < 3) return;
+  _cuenta_timer = setTimeout(() => buscarCuenta(val), 280);
+}
+
+async function buscarCuenta(val) {
+  const cid = clienteId();
+  if (!cid || !_agente_ok) return;
+  mostrarDropdownSpinner('cuenta-dropdown');
+  const items = await _consultaAgente(cid, 'buscar_cuenta', {q: val}, 15);
+  const drop = document.getElementById('cuenta-dropdown');
+  if (!items || !items.length) {
+    drop.innerHTML = '<div class="ac-error"><i class="bi bi-exclamation-circle me-1"></i>Sin cuentas con ese código o nombre</div>';
+    drop.style.display = 'block';
+    return;
+  }
+  drop.innerHTML = items.map(t =>
+    `<div class="ac-item"
+          ontouchstart="this._ty=event.touches[0].clientY"
+          ontouchend="if(Math.abs(event.changedTouches[0].clientY-this._ty)<10){event.preventDefault();seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')}"
+          onclick="seleccionarCuenta('${_esc(t.codigo)}','${_esc(t.nombre)}')">
+      <strong class="me-2" style="font-family:monospace;color:#003f7f">${t.codigo}</strong>${t.nombre}
+    </div>`).join('');
+  drop.style.display = 'block';
+}
+
+function seleccionarCuenta(codigo, nombre) {
+  _cuenta_seleccionada = codigo;
+  document.getElementById('f-cuenta').value = '';
+  cerrarDropdown('cuenta-dropdown');
+  document.getElementById('cuenta-badge-txt').textContent = codigo + ' — ' + nombre;
+  document.getElementById('cuenta-badge').classList.remove('d-none');
+}
+
+function limpiarCuenta() {
+  _cuenta_seleccionada = '';
+  document.getElementById('f-cuenta').value = '';
+  document.getElementById('cuenta-badge').classList.add('d-none');
+}
+
+function cerrarDropdown(id) {
+  const d = document.getElementById(id);
+  d.style.display = 'none';
+  d.innerHTML = '';
+}
+
+function mostrarDropdownSpinner(id) {
+  const d = document.getElementById(id);
+  d.innerHTML = '<div class="ac-buscando"><span class="spinner-border spinner-border-sm me-2"></span>Buscando en Administrator…</div>';
+  d.style.display = 'block';
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('[style*="relative"]')) {
+    cerrarDropdown('nit-dropdown');
+    cerrarDropdown('cuenta-dropdown');
+  }
+});
+
+// ── Consulta REG_CTAS ─────────────────────────────────────────────────────────
+async function lanzarConsulta() {
+  const cid = clienteId();
+  if (!cid)        { alert('Selecciona un agente primero.'); return; }
+  if (!_agente_ok) { alert('El agente no está conectado en el PC del cliente.'); return; }
+
+  const desde   = document.getElementById('f-desde').value;
+  const hasta   = document.getElementById('f-hasta').value;
+  const empresa = document.getElementById('f-empresa').value;
+  const limite  = parseInt(document.getElementById('f-limite').value) || 500;
+
+  const params = {limite};
+  if (desde) params.lapso_desde = desde.replace(/-/g, '');
+  if (hasta) params.lapso_hasta = hasta.replace(/-/g, '');
+  if (empresa) params.empresa = empresa;
+  if (_cod_ter_seleccionado) params.tercero = _cod_ter_seleccionado;
+  if (_cuenta_seleccionada)  params.cuenta  = _cuenta_seleccionada;
 
   document.getElementById('btn-consultar').disabled = true;
+  document.getElementById('btn-excel-wrap').style.display = 'none';
+  document.getElementById('panel-totales').classList.add('d-none');
+  document.getElementById('estado-inicial').classList.add('d-none');
+  document.getElementById('tabla-contenedor').classList.add('d-none');
+  document.getElementById('spinner').classList.remove('d-none');
   mostrarEstadoConsulta('Enviando consulta al agente…');
 
   try {
     const r = await fetch('/api/admin-agent/consultar', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({cliente_id, tipo: 'reg_ctas', parametros: params})
+      body: JSON.stringify({cliente_id: cid, tipo: 'reg_ctas', parametros: params})
     });
     const d = await r.json();
     if (!d.ok) {
       ocultarEstadoConsulta();
-      alert('Error: ' + (d.error || r.status));
+      document.getElementById('spinner').classList.add('d-none');
+      document.getElementById('estado-inicial').classList.remove('d-none');
       document.getElementById('btn-consultar').disabled = false;
+      alert('Error: ' + (d.error || r.status));
       return;
     }
     mostrarEstadoConsulta('Esperando respuesta del agente…');
@@ -430,107 +462,170 @@ async function lanzarConsulta() {
     _poll_timer = setTimeout(() => pollResultado(d.consulta_id), 1500);
   } catch(e) {
     ocultarEstadoConsulta();
-    alert('Error de red: ' + e.message);
+    document.getElementById('spinner').classList.add('d-none');
+    document.getElementById('estado-inicial').classList.remove('d-none');
     document.getElementById('btn-consultar').disabled = false;
+    alert('Error de red: ' + e.message);
   }
 }
 
-async function pollResultado(cid) {
+async function pollResultado(consulta_id) {
   try {
-    const r = await fetch(`/api/admin-agent/resultado/${cid}`);
+    const r = await fetch(`/api/admin-agent/resultado/${consulta_id}`);
     const d = await r.json();
     if (!d.ok) {
       ocultarEstadoConsulta();
-      alert('Error al obtener resultado: ' + (d.error || ''));
+      document.getElementById('spinner').classList.add('d-none');
+      document.getElementById('estado-inicial').classList.remove('d-none');
       document.getElementById('btn-consultar').disabled = false;
+      alert('Error al obtener resultado: ' + (d.error || ''));
       return;
     }
     if (d.estado === 'pendiente' || d.estado === 'procesando') {
-      _poll_timer = setTimeout(() => pollResultado(cid), 2000);
+      _poll_timer = setTimeout(() => pollResultado(consulta_id), 2000);
       return;
     }
     ocultarEstadoConsulta();
+    document.getElementById('spinner').classList.add('d-none');
     document.getElementById('btn-consultar').disabled = false;
     if (d.estado === 'error') {
+      document.getElementById('estado-inicial').classList.remove('d-none');
       alert('El agente reportó error: ' + (d.error || ''));
       return;
     }
     renderTabla(d.respuesta || []);
   } catch(e) {
-    _poll_timer = setTimeout(() => pollResultado(cid), 3000);
+    _poll_timer = setTimeout(() => pollResultado(consulta_id), 3000);
   }
 }
 
+// ── Tabla con sort ────────────────────────────────────────────────────────────
 function renderTabla(rows) {
-  const tbody = document.getElementById('tabla-body');
-  const resumen = document.getElementById('resumen-bar');
-  const resumenTxt = document.getElementById('resumen-txt');
+  _ultimaRespuesta = rows;
+  document.getElementById('info-registros').textContent = `${rows.length} registros`;
 
-  if (rows.length === 0) {
-    const partes = [];
-    if (_nit_seleccionado)    partes.push(`tercero <strong>${document.getElementById('nit-nombre-txt').textContent}</strong>`);
-    if (_cuenta_seleccionada) partes.push(`cuenta <strong>${document.getElementById('cuenta-nombre-txt').textContent}</strong>`);
-    const filtroDesc = partes.length ? ' para ' + partes.join(' y ') : '';
-    tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4">
-      <i class="bi bi-inbox text-warning fs-4 d-block mb-2"></i>
-      <span class="text-muted">Sin movimientos en REG_CTAS${filtroDesc} con los filtros aplicados</span>
-    </td></tr>`;
-    resumen.classList.add('d-none');
+  if (!rows.length) {
+    document.getElementById('tabla-contenedor').classList.add('d-none');
+    document.getElementById('estado-inicial').classList.remove('d-none');
+    document.getElementById('estado-inicial').innerHTML = '<i class="bi bi-inbox text-warning fs-4"></i><div class="mt-2">Sin movimientos con los filtros aplicados</div>';
+    document.getElementById('panel-totales').classList.add('d-none');
+    document.getElementById('btn-excel-wrap').style.display = 'none';
     return;
   }
 
   let totDeb = 0, totCre = 0;
-  const html = rows.map(r => {
-    totDeb += r.debito || 0;
-    totCre += r.credito || 0;
-    const anulBadge = r.anulado ? '<span class="badge bg-danger">Sí</span>' : '';
-    const tipNom = r.tipo_nom ? `<span class="text-muted">${r.tipo_nom}</span>` : '';
+  rows.forEach(r => { totDeb += r.debito || 0; totCre += r.credito || 0; });
+  const saldo = totDeb - totCre;
+
+  document.getElementById('t-registros').textContent = fmtI(rows.length);
+  document.getElementById('t-deb').textContent  = '$ ' + fmt(totDeb);
+  document.getElementById('t-cre').textContent  = '$ ' + fmt(totCre);
+  document.getElementById('t-neto').textContent = '$ ' + fmt(saldo);
+  document.getElementById('t-neto').className   = 'val ' + (saldo >= 0 ? 'deb' : 'cre');
+  document.getElementById('ft-deb').textContent = fmt(totDeb);
+  document.getElementById('ft-cre').textContent = fmt(totCre);
+  document.getElementById('panel-totales').classList.remove('d-none');
+
+  _renderFilas(rows);
+  document.getElementById('tabla-contenedor').classList.remove('d-none');
+  document.getElementById('estado-inicial').classList.add('d-none');
+  document.getElementById('btn-excel-wrap').style.display = '';
+}
+
+function _renderFilas(rows) {
+  const field = SORT_FIELDS[_sortCol];
+  const sorted = [...rows].sort((a, b) => {
+    let va = a[field] ?? '', vb = b[field] ?? '';
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if (va < vb) return _sortAsc ? -1 : 1;
+    if (va > vb) return _sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  document.getElementById('tabla-body').innerHTML = sorted.map(r => {
+    const tipTxt = r.tipo_nom ? `<br><small class="text-muted">${r.tipo_nom}</small>` : '';
     const cuentaNom = r.cuenta_nom ? `<br><small class="text-muted">${r.cuenta_nom}</small>` : '';
     const terNom = r.tercero_nom ? `<br><small class="text-muted">${r.tercero_nom}</small>` : '';
+    const anulBadge = r.anulado ? '<span class="badge bg-danger">Sí</span>' : '';
     return `<tr>
       <td class="text-muted">${r.consecutivo || ''}</td>
-      <td>${fmtFecha(r.fecha)}</td>
+      <td>${(r.fecha||'').substring(0,10)}</td>
       <td>${r.lapso || ''}</td>
-      <td>${r.tipo || ''} ${tipNom}</td>
+      <td>${r.tipo || ''}${tipTxt}</td>
       <td>${r.documento || ''}</td>
       <td>${r.cuenta || ''}${cuentaNom}</td>
       <td class="text-muted">${r.nit || ''}</td>
       <td>${r.tercero || ''}${terNom}</td>
-      <td class="text-end text-success">${r.debito ? fmt(r.debito) : ''}</td>
-      <td class="text-end text-danger">${r.credito ? fmt(r.credito) : ''}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(r.detalle||'').replace(/"/g,'&quot;')}">${r.detalle || ''}</td>
+      <td class="text-end" style="color:#1a7f5a">${r.debito ? fmt(r.debito) : ''}</td>
+      <td class="text-end" style="color:#b91c1c">${r.credito ? fmt(r.credito) : ''}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.detalle||'').replace(/"/g,'&quot;')}">${r.detalle || ''}</td>
       <td class="text-center">${anulBadge}</td>
     </tr>`;
   }).join('');
 
-  const totRow = `<tr class="table-secondary fw-bold">
-    <td colspan="8" class="text-end">Totales (${rows.length} registros)</td>
-    <td class="text-end text-success">${fmt(totDeb)}</td>
-    <td class="text-end text-danger">${fmt(totCre)}</td>
-    <td colspan="2"></td>
-  </tr>`;
-
-  tbody.innerHTML = html + totRow;
-
-  const saldo = totDeb - totCre;
-  resumenTxt.innerHTML = `<strong>${rows.length}</strong> registros &nbsp;|&nbsp; Débitos: <strong class="text-success">${fmt(totDeb)}</strong> &nbsp;|&nbsp; Créditos: <strong class="text-danger">${fmt(totCre)}</strong> &nbsp;|&nbsp; Saldo: <strong class="${saldo >= 0 ? 'text-success' : 'text-danger'}">${fmt(saldo)}</strong>`;
-  resumen.classList.remove('d-none');
+  document.querySelectorAll('#tabla thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (parseInt(th.dataset.col) === _sortCol)
+      th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
+  });
 }
 
+function ordenar(col) {
+  if (_sortCol === col) _sortAsc = !_sortAsc;
+  else { _sortCol = col; _sortAsc = true; }
+  if (_ultimaRespuesta.length) _renderFilas(_ultimaRespuesta);
+}
+
+// ── Excel vía servidor ────────────────────────────────────────────────────────
+async function exportarExcel() {
+  if (!_ultimaRespuesta.length) return;
+  const desde   = document.getElementById('f-desde').value;
+  const hasta   = document.getElementById('f-hasta').value;
+  const empresa = document.getElementById('f-empresa').value;
+  const agente  = _agentes.find(a => a.cliente_id === clienteId());
+  try {
+    const r = await fetch('/api/admin-agent/excel', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        rows: _ultimaRespuesta,
+        titulo: 'REG_CTAS — ' + (agente ? agente.nombre : ''),
+        desde, hasta, empresa,
+        agente: agente ? agente.nombre : ''
+      })
+    });
+    if (!r.ok) { alert('Error generando Excel'); return; }
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `REG_CTAS_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// ── Spinner / estado ──────────────────────────────────────────────────────────
 function mostrarEstadoConsulta(msg) {
   document.getElementById('consulta-msg').textContent = msg;
   document.getElementById('consulta-estado').classList.remove('d-none');
 }
-
 function ocultarEstadoConsulta() {
   document.getElementById('consulta-estado').classList.add('d-none');
 }
 
-function limpiarTodo() {
-  ['f-lapso-desde','f-lapso-hasta','f-empresa'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-limite').value = '200';
-  limpiarNit();
-  limpiarCuenta();
+// ── Refresh periódico agentes ─────────────────────────────────────────────────
+async function refreshAgentes() {
+  try {
+    const r = await fetch('/api/admin-agent/agentes');
+    const d = await r.json();
+    if (!d.ok) return;
+    _agentes = d.agentes;
+    _renderSelector(_agentes, clienteId());
+    onAgenteChange();
+  } catch {}
 }
 
 cargarAgentes();

@@ -159,13 +159,20 @@ def consulta_reg_ctas(ruta_bd, parametros):
                     break
         tercero = cod or nit
 
-    # Rango de lapso YYYYMM
+    # Rango de lapso YYYYMMDD (acepta YYYY-MM-DD, YYYYMMDD o YYYYMM)
     def _parse_lapso(s):
         s = str(s or '').strip().replace('-', '')
-        return int(s[:6]) if len(s) >= 6 else None
+        if len(s) >= 8:
+            return int(s[:8])
+        if len(s) == 6:
+            return int(s) * 100 + 1  # YYYYMM → YYYYMM01
+        return None
 
     lapso_desde = _parse_lapso(parametros.get('lapso_desde') or parametros.get('lapso'))
     lapso_hasta = _parse_lapso(parametros.get('lapso_hasta') or parametros.get('lapso'))
+    # Si hasta es inicio de mes (YYYYMM01), llevar al fin del mes
+    if lapso_hasta and str(lapso_hasta).endswith('01') and not (parametros.get('lapso_hasta') or '').replace('-','').endswith('01'):
+        lapso_hasta = lapso_hasta - 1 + 99  # aproximar al 99 del mes = fin seguro
     # Para la estimación de inicio usamos lapso_desde
     lapso_start_year  = str(lapso_desde)[:4].encode('ascii') if lapso_desde else None
     lapso_start_month = str(lapso_desde)[4:6].encode('ascii') if lapso_desde else None
@@ -217,11 +224,12 @@ def consulta_reg_ctas(ruta_bd, parametros):
         # Máscara: no borrados
         mask = data[:, 0] != 0x2A
 
-        # Filtro LAPSO vectorizado por rango YYYYMM
+        # Filtro LAPSO vectorizado por rango YYYYMMDD
         if lapso_desde or lapso_hasta:
             yr = data[:, OFF_LAPSO:OFF_LAPSO+4].astype(np.int32) - 48
             mn = data[:, OFF_LAPSO+4:OFF_LAPSO+6].astype(np.int32) - 48
-            lapso_int = (yr[:,0]*1000 + yr[:,1]*100 + yr[:,2]*10 + yr[:,3]) * 100 + (mn[:,0]*10 + mn[:,1])
+            dy = data[:, OFF_LAPSO+6:OFF_LAPSO+8].astype(np.int32) - 48
+            lapso_int = ((yr[:,0]*1000 + yr[:,1]*100 + yr[:,2]*10 + yr[:,3]) * 100 + (mn[:,0]*10 + mn[:,1])) * 100 + (dy[:,0]*10 + dy[:,1])
             if lapso_desde:
                 mask &= lapso_int >= lapso_desde
             if lapso_hasta:
@@ -287,7 +295,7 @@ def consulta_reg_ctas(ruta_bd, parametros):
                 lap = mm[base_off+OFF_LAPSO: base_off+OFF_LAPSO+8]
                 if lapso_desde or lapso_hasta:
                     try:
-                        li = int(lap[:6].decode('ascii'))
+                        li = int(lap[:8].decode('ascii'))
                         if lapso_desde and li < lapso_desde: continue
                         if lapso_hasta and li > lapso_hasta: break
                     except Exception:
@@ -347,10 +355,37 @@ def consulta_buscar_cuenta(ruta_bd, parametros):
     return resultado
 
 
+def consulta_buscar_empresas(ruta_bd, parametros):
+    """Lee PROD_FACT1 y retorna empresas únicas."""
+    import struct as _struct
+    PF_REC_SIZE = 179
+    PF_EMPRESA  = 91
+    ENC = 'cp1252'
+    path = os.path.join(ruta_bd, 'PROD_FACT1.DBF')
+    empresas = set()
+    try:
+        with open(path, 'rb') as f:
+            hdr = f.read(32)
+            num = _struct.unpack_from('<I', hdr, 4)[0]
+            hsz = _struct.unpack_from('<H', hdr, 8)[0]
+            f.seek(hsz)
+            raw = f.read(num * PF_REC_SIZE)
+        n = len(raw) // PF_REC_SIZE
+        for i in range(0, n, 30):
+            b = raw[i*PF_REC_SIZE:(i+1)*PF_REC_SIZE]
+            if b[0] == 0x2A: continue
+            emp = b[PF_EMPRESA:PF_EMPRESA+4].rstrip(b' ').decode(ENC, 'replace').strip()
+            if emp: empresas.add(emp)
+    except Exception:
+        pass
+    return sorted(empresas)
+
+
 CONSULTAS = {
-    'reg_ctas':       consulta_reg_ctas,
-    'buscar_nit':     consulta_buscar_nit,
-    'buscar_cuenta':  consulta_buscar_cuenta,
+    'reg_ctas':          consulta_reg_ctas,
+    'buscar_nit':        consulta_buscar_nit,
+    'buscar_cuenta':     consulta_buscar_cuenta,
+    'buscar_empresas':   consulta_buscar_empresas,
 }
 
 

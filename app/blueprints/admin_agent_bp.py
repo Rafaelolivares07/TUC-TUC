@@ -1,8 +1,9 @@
+import io
 import json
 import secrets
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, jsonify, redirect, render_template, request, send_file, session, url_for
 
 from ..db import get_db_connection
 from .auth import admin_required, solo_admin
@@ -295,6 +296,11 @@ def resultado(consulta_id):
         if not row:
             return jsonify({'ok': False, 'error': 'No encontrada'}), 404
         resp = {'ok': True, 'estado': row['estado'], 'respuesta': row['respuesta']}
+        if row['estado'] == 'error':
+            try:
+                resp['error'] = json.loads(row['respuesta']).get('error', row['respuesta'])
+            except Exception:
+                resp['error'] = row['respuesta']
         if row['estado'] in ('lista', 'error'):
             try:
                 conn.execute("DELETE FROM admin_agent_consultas WHERE id=%s", (consulta_id,))
@@ -306,6 +312,87 @@ def resultado(consulta_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/admin-agent/excel', methods=['POST'])
+def excel():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+    except ImportError:
+        return jsonify({'ok': False, 'error': 'openpyxl no instalado'}), 500
+
+    data    = request.get_json() or {}
+    rows    = data.get('rows', [])
+    titulo  = data.get('titulo', 'REG_CTAS')
+    desde   = data.get('desde', '')
+    hasta   = data.get('hasta', '')
+    empresa = data.get('empresa', '')
+    agente  = data.get('agente', '')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'REG_CTAS'
+
+    hdr_font = Font(bold=True, color='003F7F')
+    hdr_fill = PatternFill('solid', fgColor='DDEEFF')
+    tot_font = Font(bold=True)
+
+    ws.append([titulo])
+    ws['A1'].font = Font(bold=True, size=13)
+    filtro = f'Desde: {desde}    Hasta: {hasta}'
+    if empresa:
+        filtro += f'    Empresa: {empresa}'
+    if agente:
+        filtro += f'    Agente: {agente}'
+    ws.append([filtro])
+    ws.append([])
+
+    cabecera = ['CONSEC', 'FECHA', 'LAPSO', 'TIPO', 'DOCUMENTO',
+                'CUENTA', 'NIT', 'TERCERO', 'DÉBITO', 'CRÉDITO', 'DETALLE', 'ANULADO']
+    ws.append(cabecera)
+    hdr_row = ws.max_row
+    for cell in ws[hdr_row]:
+        cell.font = hdr_font
+        cell.fill = hdr_fill
+
+    for r in rows:
+        tipo_txt = str(r.get('tipo') or '')
+        if r.get('tipo_nom'):
+            tipo_txt += ' ' + r['tipo_nom']
+        ws.append([
+            r.get('consecutivo', ''),
+            (r.get('fecha') or '')[:10],
+            r.get('lapso', ''),
+            tipo_txt.strip(),
+            r.get('documento', ''),
+            r.get('cuenta', ''),
+            r.get('nit', ''),
+            r.get('tercero_nom') or r.get('tercero', ''),
+            r.get('debito') or 0,
+            r.get('credito') or 0,
+            r.get('detalle', ''),
+            'Sí' if r.get('anulado') else '',
+        ])
+
+    tot_deb = sum((r.get('debito') or 0) for r in rows)
+    tot_cre = sum((r.get('credito') or 0) for r in rows)
+    ws.append([f'TOTAL ({len(rows)} registros)', '', '', '', '', '', '', '', tot_deb, tot_cre, '', ''])
+    for cell in ws[ws.max_row]:
+        cell.font = tot_font
+
+    for col, width in zip('ABCDEFGHIJKL', [10, 12, 10, 16, 14, 16, 14, 32, 14, 14, 32, 7]):
+        ws.column_dimensions[col].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    import datetime as _dt
+    fname = f'REG_CTAS_{_dt.date.today().isoformat()}.xlsx'
+    return send_file(buf, as_attachment=True, download_name=fname,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @bp.route('/api/admin-agent/estado/<cliente_id>', methods=['GET'])

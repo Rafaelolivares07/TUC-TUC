@@ -469,10 +469,11 @@ def main():
                 if consulta:
                     cid = consulta['id']
                     with _lock:
-                        ya = cid in _en_proceso
-                        if not ya:
+                        ya    = cid in _en_proceso
+                        puede = not ya and not _en_proceso  # serializar: 1 sola consulta a la vez
+                        if puede:
                             _en_proceso.add(cid)
-                    if not ya:
+                    if puede:
                         t = threading.Thread(
                             target=_procesar_consulta,
                             args=(base, token, ruta_bd, consulta),

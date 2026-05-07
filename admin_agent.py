@@ -430,7 +430,7 @@ def main():
     nombre   = leer_config() or cliente_id
     ip_local = get_ip_local()
 
-    print(f"=== Admin Agent — cliente: {cliente_id} | nombre: {nombre} | ip: {ip_local} ===")
+    print(f"=== Admin Agent - cliente: {cliente_id} | nombre: {nombre} | ip: {ip_local} ===")
     print(f"Servidor: {base}")
 
     try:
@@ -440,52 +440,74 @@ def main():
         print(f"ERROR leyendo ruta BD: {e}")
         sys.exit(1)
 
-    try:
-        r = requests.post(f"{base}/api/admin-agent/checkin",
-                          json={'cliente_id': cliente_id, 'nombre': nombre,
-                                'ip_local': ip_local, 'ruta_bd': ruta_bd}, timeout=15)
-        data = r.json()
-        if not data.get('ok'):
-            print(f"ERROR checkin: {data.get('error')}")
-            sys.exit(1)
-        token = data['token']
-        print(f"Conectado. Token: {token[:12]}...")
-    except Exception as e:
-        print(f"ERROR conectando a Render: {e}")
-        sys.exit(1)
+    token = None
+    while not token:
+        try:
+            r = requests.post(f"{base}/api/admin-agent/checkin",
+                              json={'cliente_id': cliente_id, 'nombre': nombre,
+                                    'ip_local': ip_local, 'ruta_bd': ruta_bd}, timeout=15)
+            data = r.json()
+            if data.get('ok'):
+                token = data['token']
+                print(f"Conectado. Token: {token[:12]}...")
+            else:
+                print(f"ERROR checkin: {data.get('error')} - reintentando en 15s...")
+                time.sleep(15)
+        except Exception as e:
+            print(f"ERROR conectando: {e} - reintentando en 15s...")
+            time.sleep(15)
 
     print("Esperando consultas... (Ctrl+C para salir)\n")
 
     try:
         while True:
-            try:
-                r = requests.post(f"{base}/api/admin-agent/ping",
-                                  json={'token': token, 'ruta_bd': ruta_bd}, timeout=15)
-                data = r.json()
-                if not data.get('ok'):
-                    print("Sesión inválida — reconectando...")
-                    break
+            # ping loop — sale con break para reconectar
+            while True:
+                try:
+                    r = requests.post(f"{base}/api/admin-agent/ping",
+                                      json={'token': token, 'ruta_bd': ruta_bd}, timeout=15)
+                    data = r.json()
+                    if not data.get('ok'):
+                        print(f"Sesion perdida ({data.get('error','?')}) - reconectando en 5s...")
+                        break
 
-                consulta = data.get('consulta')
-                if consulta:
-                    cid = consulta['id']
-                    with _lock:
-                        ya    = cid in _en_proceso
-                        puede = not ya and not _en_proceso  # serializar: 1 sola consulta a la vez
+                    consulta = data.get('consulta')
+                    if consulta:
+                        cid = consulta['id']
+                        with _lock:
+                            ya    = cid in _en_proceso
+                            puede = not ya and not _en_proceso  # serializar: 1 sola consulta a la vez
+                            if puede:
+                                _en_proceso.add(cid)
                         if puede:
-                            _en_proceso.add(cid)
-                    if puede:
-                        t = threading.Thread(
-                            target=_procesar_consulta,
-                            args=(base, token, ruta_bd, consulta),
-                            daemon=True
-                        )
-                        t.start()
+                            t = threading.Thread(
+                                target=_procesar_consulta,
+                                args=(base, token, ruta_bd, consulta),
+                                daemon=True
+                            )
+                            t.start()
 
-            except (requests.RequestException, ValueError):
-                pass  # Render cold start o red inestable — reintenta en el próximo ciclo
+                except (requests.RequestException, ValueError):
+                    pass  # red inestable — reintenta en el próximo ciclo
 
-            time.sleep(POLL_INTERVALO)
+                time.sleep(POLL_INTERVALO)
+
+            # reconexión
+            time.sleep(5)
+            try:
+                r = requests.post(f"{base}/api/admin-agent/checkin",
+                                  json={'cliente_id': cliente_id, 'nombre': nombre,
+                                        'ip_local': ip_local, 'ruta_bd': ruta_bd}, timeout=15)
+                data = r.json()
+                if data.get('ok'):
+                    token = data['token']
+                    print(f"Reconectado. Token: {token[:12]}...")
+                else:
+                    print(f"ERROR checkin: {data.get('error')} — reintentando en 30s...")
+                    time.sleep(30)
+            except Exception as e:
+                print(f"ERROR reconectando: {e} — reintentando en 30s...")
+                time.sleep(30)
 
     except KeyboardInterrupt:
         print("\nDesconectando...")

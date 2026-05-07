@@ -438,6 +438,7 @@ def agentes():
                 SELECT DISTINCT ON (cliente_id)
                     cliente_id, nombre, ip_local, ruta_bd, activo, ultimo_ping
                 FROM admin_agent_sesiones
+                WHERE ultimo_ping > NOW() - INTERVAL '2 hours'
                 ORDER BY cliente_id, id DESC
             """).fetchall()
         else:
@@ -447,6 +448,7 @@ def agentes():
                 FROM admin_agent_sesiones s
                 JOIN admin_agent_permisos p ON p.cliente_id = s.cliente_id
                 WHERE p.usuario_id = %s
+                  AND s.ultimo_ping > NOW() - INTERVAL '2 hours'
                 ORDER BY s.cliente_id, s.id DESC
             """, (session['usuario_id'],)).fetchall()
         now = datetime.now(timezone.utc)

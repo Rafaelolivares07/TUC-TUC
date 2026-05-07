@@ -297,10 +297,14 @@ def resultado(consulta_id):
             return jsonify({'ok': False, 'error': 'No encontrada'}), 404
         resp = {'ok': True, 'estado': row['estado'], 'respuesta': row['respuesta']}
         if row['estado'] == 'error':
-            try:
-                resp['error'] = json.loads(row['respuesta']).get('error', row['respuesta'])
-            except Exception:
-                resp['error'] = row['respuesta']
+            r = row['respuesta']
+            if isinstance(r, dict):
+                resp['error'] = r.get('error', str(r))
+            else:
+                try:
+                    resp['error'] = json.loads(r).get('error', r)
+                except Exception:
+                    resp['error'] = str(r)
         if row['estado'] in ('lista', 'error'):
             try:
                 conn.execute("DELETE FROM admin_agent_consultas WHERE id=%s", (consulta_id,))

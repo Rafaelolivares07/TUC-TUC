@@ -90,6 +90,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_saldos_negocio_producto ON saldos_inventario(negocio_id, producto_id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS costo_und NUMERIC(12,4)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS recargo DECIMAL(10,2) DEFAULT 0",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
     ]
     for sql in alters:
         try:

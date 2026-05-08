@@ -60,20 +60,36 @@ def create_app():
             restaurante_publico, restaurante_mesero, restaurante_cocina,
             mi_restaurante, restaurante_cliente
         )
-        _MAP = {
-            '':        restaurante_publico,
-            '/':       restaurante_publico,
+        from .blueprints.tiendas import tienda_publica
+        from .db import get_db_connection
+
+        # Rutas exclusivas de restaurante (mesero/cocina/admin)
+        _MAP_REST = {
             '/mesero': restaurante_mesero,
             '/cocina': restaurante_cocina,
             '/admin':  mi_restaurante,
         }
-        fn = _MAP.get(request.path)
+        fn = _MAP_REST.get(request.path)
         if fn:
             return fn(slug)
         if request.path.startswith('/mesa/'):
             mesa_nombre = request.path[len('/mesa/'):]
             if mesa_nombre:
                 return restaurante_cliente(slug, mesa_nombre)
+
+        # Raíz ('/') o cualquier otra ruta: detectar tipo de negocio
+        if request.path in ('', '/'):
+            try:
+                conn = get_db_connection()
+                es_tienda = conn.execute(
+                    "SELECT 1 FROM tiendas WHERE slug = %s LIMIT 1", (slug,)
+                ).fetchone()
+                conn.close()
+            except Exception:
+                es_tienda = None
+            if es_tienda:
+                return tienda_publica(slug)
+            return restaurante_publico(slug)
 
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         from apscheduler.schedulers.background import BackgroundScheduler

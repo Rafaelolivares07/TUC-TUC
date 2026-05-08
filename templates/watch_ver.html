@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Party</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; color: #f0f0f0; font-family: system-ui, sans-serif;
+         height: 100vh; display: flex; flex-direction: column; }
+  #player { flex: 1; width: 100%; border: none; display: none; }
+  .waiting { flex: 1; display: flex; flex-direction: column; align-items: center;
+             justify-content: center; gap: 16px; color: #555; }
+  .waiting .dot { width: 10px; height: 10px; background: #6c63ff; border-radius: 50%;
+                  animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1.2)} }
+  .waiting p { font-size: .95rem; }
+  .sala-badge { position: fixed; top: 10px; right: 12px; background: rgba(0,0,0,.6);
+                color: #888; font-size: .7rem; padding: 4px 10px; border-radius: 20px; z-index: 10; }
+</style>
+</head>
+<body>
+<div class="sala-badge">Sala {{ sala }}</div>
+<div class="waiting" id="waiting">
+  <div class="dot"></div>
+  <p>Esperando que compartan un video...</p>
+</div>
+<iframe id="player" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+
+<script>
+const SALA = '{{ sala }}';
+let lastTs = null;
+
+function ytId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1);
+    return u.searchParams.get('v') || null;
+  } catch { return null; }
+}
+
+async function poll() {
+  try {
+    const res = await fetch(`/api/watch/${SALA}/estado`);
+    const data = await res.json();
+    if (data.ok && data.url && data.ts !== lastTs) {
+      lastTs = data.ts;
+      const id = ytId(data.url);
+      const player = document.getElementById('player');
+      if (id) {
+        player.src = `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1`;
+        player.style.display = 'block';
+        document.getElementById('waiting').style.display = 'none';
+      }
+    }
+  } catch {}
+}
+
+poll();
+setInterval(poll, 4000);
+</script>
+</body>
+</html>

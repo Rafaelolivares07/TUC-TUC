@@ -29,6 +29,7 @@ def create_app():
     from .blueprints.inventarios import bp as inventarios_bp
     from .blueprints.contabilidad import bp as contabilidad_bp, ejecutar_programaciones_job
     from .blueprints.tracking import bp as tracking_bp
+    from .blueprints.watch import bp as watch_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -41,6 +42,7 @@ def create_app():
     app.register_blueprint(inventarios_bp)
     app.register_blueprint(contabilidad_bp)
     app.register_blueprint(tracking_bp)
+    app.register_blueprint(watch_bp)
 
     @app.before_request
     def _cliente_subdominio():
@@ -56,18 +58,22 @@ def create_app():
             return
         from .blueprints.restaurantes import (
             restaurante_publico, restaurante_mesero, restaurante_cocina,
-            admin_restaurante_detalle
+            mi_restaurante, restaurante_cliente
         )
         _MAP = {
             '':        restaurante_publico,
             '/':       restaurante_publico,
             '/mesero': restaurante_mesero,
             '/cocina': restaurante_cocina,
-            '/admin':  admin_restaurante_detalle,
+            '/admin':  mi_restaurante,
         }
         fn = _MAP.get(request.path)
         if fn:
             return fn(slug)
+        if request.path.startswith('/mesa/'):
+            mesa_nombre = request.path[len('/mesa/'):]
+            if mesa_nombre:
+                return restaurante_cliente(slug, mesa_nombre)
 
     if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         from apscheduler.schedulers.background import BackgroundScheduler

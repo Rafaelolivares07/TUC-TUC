@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracking activo</title>
+<style>
+  body { font-family: sans-serif; display: flex; flex-direction: column;
+         align-items: center; justify-content: center; height: 100vh;
+         margin: 0; background: #0f172a; color: #f8f8f2; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; background: #22c55e;
+         animation: pulse 1.5s infinite; margin-bottom: 12px; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  p { color: #94a3b8; font-size: 14px; margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="dot" id="dot" style="background:#64748b"></div>
+<h3>Tracking GPS</h3>
+<p id="estado">Toca el botón para compartir tu ubicación</p>
+<p id="coords"></p>
+<button id="btn" onclick="iniciar()" style="
+  margin-top:20px; padding:14px 32px; font-size:16px; font-weight:bold;
+  background:#22c55e; color:#0f172a; border:none; border-radius:12px;
+  cursor:pointer;">
+  📍 Iniciar tracking
+</button>
+<p id="ayuda" style="font-size:12px;color:#64748b;max-width:280px;text-align:center;margin-top:16px;display:none">
+  Si el iPhone bloquea la ubicación:<br>
+  <b>Ajustes → Safari → Ubicación → Permitir</b>
+</p>
+
+<script>
+const nombre = "{{ nombre }}";
+let activo = false;
+
+function enviar(pos) {
+  const { latitude: lat, longitude: lng } = pos.coords;
+  document.getElementById('estado').textContent = 'Enviando...';
+  document.getElementById('coords').textContent = lat.toFixed(5) + ', ' + lng.toFixed(5);
+  fetch('/gps/' + nombre + '/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lat, lng, t: Date.now() })
+  }).then(() => {
+    document.getElementById('estado').textContent = 'Ubicación enviada ✓';
+  });
+}
+
+function errorGPS(e) {
+  document.getElementById('dot').style.background = '#ef4444';
+  if (e.code === 1) {
+    document.getElementById('estado').textContent = 'Permiso denegado';
+    document.getElementById('ayuda').style.display = 'block';
+  } else {
+    document.getElementById('estado').textContent = 'Error GPS: ' + e.message;
+  }
+}
+
+function iniciar() {
+  if (!navigator.geolocation) {
+    document.getElementById('estado').textContent = 'GPS no disponible en este dispositivo';
+    return;
+  }
+  document.getElementById('btn').style.display = 'none';
+  document.getElementById('dot').style.background = '#22c55e';
+  document.getElementById('estado').textContent = 'Esperando GPS...';
+  activo = true;
+  navigator.geolocation.getCurrentPosition(enviar, errorGPS, { enableHighAccuracy: true });
+  setInterval(() => {
+    if (activo) navigator.geolocation.getCurrentPosition(enviar, errorGPS, { enableHighAccuracy: true });
+  }, 5000);
+}
+</script>
+</body>
+</html>

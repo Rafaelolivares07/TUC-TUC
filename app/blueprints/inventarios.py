@@ -54,6 +54,25 @@ def _crear_tablas(conn):
             updated_at        TIMESTAMP DEFAULT NOW(),
             UNIQUE(negocio_id, producto_id, bodega)
         )""",
+        """CREATE TABLE IF NOT EXISTS movimientos_inventario (
+            id               SERIAL PRIMARY KEY,
+            negocio_id       INTEGER NOT NULL,
+            producto_id      INTEGER NOT NULL,
+            nombre_producto  VARCHAR(255),
+            tipo             VARCHAR(20) NOT NULL,
+            motivo           VARCHAR(50),
+            cantidad         NUMERIC(12,4) NOT NULL,
+            stock_anterior   NUMERIC(12,4),
+            stock_nuevo      NUMERIC(12,4),
+            registrado_por   INTEGER,
+            notas            TEXT,
+            valor_unitario   NUMERIC(14,4),
+            valor_total      NUMERIC(14,4),
+            costo_und        NUMERIC(12,4),
+            referencia_id    INTEGER,
+            referencia_tipo  VARCHAR(50),
+            created_at       TIMESTAMP DEFAULT NOW()
+        )""",
     ]
     for sql in sqls:
         try:

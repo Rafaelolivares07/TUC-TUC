@@ -9,6 +9,7 @@ class Config:
     DATABASE_URL = os.environ.get('DATABASE_URL')
     SESSION_PERMANENT = True
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
+    SESSION_COOKIE_DOMAIN = os.environ.get('SESSION_COOKIE_DOMAIN')  # .tuc-tuc.co en producción
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB — rockola multi-archivo
 
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seguimiento</title>
+<script src="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@5.17.0/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/pmtiles@3.2.0/dist/pmtiles.js"></script>
+<script src="https://unpkg.com/@protomaps/basemaps@5/dist/basemaps.js" crossorigin="anonymous"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { height: 100vh; display: flex; flex-direction: column; background: #0f172a; }
+  #barra { background: #1e293b; color: #f8f8f2; padding: 10px 16px;
+           font-family: sans-serif; font-size: 13px; display: flex;
+           align-items: center; gap: 12px; }
+  #barra strong { color: #22c55e; }
+  #estado { color: #94a3b8; }
+  #mapa { flex: 1; }
+</style>
+</head>
+<body>
+<div id="barra">
+  Siguiendo a <strong>{{ nombre }}</strong>
+  &nbsp;|&nbsp;
+  <span id="estado">Esperando posición...</span>
+</div>
+<div id="mapa"></div>
+
+<script>
+const nombre = "{{ nombre }}";
+
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles', protocol.tile);
+
+const map = new maplibregl.Map({
+  container: 'mapa',
+  style: {
+    version: 8,
+    glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+    sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
+    sources: {
+      protomaps: {
+        type: 'vector',
+        url: 'pmtiles:///static/maps/cali.pmtiles',
+        attribution: '&copy; OpenStreetMap'
+      }
+    },
+    layers: basemaps.layers('protomaps', basemaps.namedFlavor('light'), { lang: 'es' })
+  },
+  center: [-76.5320, 3.4516],
+  zoom: 14,
+  attributionControl: false
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+let marcador = null;
+let primera = true;
+
+async function actualizar() {
+  try {
+    const res = await fetch(`/gps/${nombre}/last`);
+    const data = await res.json();
+    if (!data) return;
+
+    const lngLat = [data.lng, data.lat];
+    const ts = data.t ? new Date(data.t).toLocaleTimeString() : '';
+    document.getElementById('estado').textContent =
+      `${data.lat.toFixed(5)}, ${data.lng.toFixed(5)}  ${ts}`;
+
+    if (!marcador) {
+      marcador = new maplibregl.Marker({ color: '#22c55e' })
+        .setLngLat(lngLat)
+        .addTo(map);
+    } else {
+      marcador.setLngLat(lngLat);
+    }
+
+    if (primera) {
+      map.flyTo({ center: lngLat, zoom: 16, duration: 1000 });
+      primera = false;
+    } else {
+      map.easeTo({ center: lngLat, duration: 800 });
+    }
+  } catch (e) {
+    document.getElementById('estado').textContent = 'Sin datos';
+  }
+}
+
+actualizar();
+setInterval(actualizar, 3000);
+</script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Party — Control</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f13; color: #f0f0f0; font-family: system-ui, sans-serif;
+         min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+         justify-content: center; padding: 24px; }
+  h1 { font-size: 1.2rem; color: #aaa; margin-bottom: 24px; }
+  .card { background: #1a1a24; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; }
+  label { font-size: .85rem; color: #888; display: block; margin-bottom: 6px; }
+  input { width: 100%; background: #0f0f13; border: 1px solid #333; border-radius: 10px;
+          color: #fff; font-size: .95rem; padding: 12px 14px; outline: none; }
+  input:focus { border-color: #6c63ff; }
+  .btn { margin-top: 14px; width: 100%; background: #6c63ff; color: #fff; border: none;
+         border-radius: 10px; padding: 13px; font-size: 1rem; font-weight: 600;
+         cursor: pointer; transition: background .2s; }
+  .btn:hover { background: #5a52e0; }
+  .preview { margin-top: 20px; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; display: none; }
+  .preview iframe { width: 100%; height: 100%; border: none; }
+  .share-box { margin-top: 20px; background: #0f0f13; border-radius: 10px; padding: 14px; }
+  .share-box p { font-size: .8rem; color: #888; margin-bottom: 8px; }
+  .share-row { display: flex; gap: 8px; }
+  .share-row input { flex: 1; font-size: .8rem; }
+  .share-row button { background: #333; color: #fff; border: none; border-radius: 8px;
+                      padding: 8px 14px; cursor: pointer; font-size: .8rem; white-space: nowrap; }
+  .share-row button:hover { background: #444; }
+  .status { margin-top: 12px; font-size: .8rem; color: #6c63ff; min-height: 18px; text-align: center; }
+</style>
+</head>
+<body>
+<h1>Watch Party · Sala <strong style="color:#fff">{{ sala }}</strong></h1>
+<div class="card">
+  <label>URL de YouTube (video o live)</label>
+  <input id="inp-url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+  <button class="btn" onclick="compartir()">▶ Compartir con sala</button>
+
+  <div class="preview" id="preview">
+    <iframe id="frame" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+  </div>
+
+  <div class="share-box">
+    <p>Comparte este enlace con los espectadores:</p>
+    <div class="share-row">
+      <input id="viewer-url" readonly value="{{ request.host_url }}watch/{{ sala }}/ver">
+      <button onclick="copiar()">Copiar</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const SALA = '{{ sala }}';
+
+function ytId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1);
+    return u.searchParams.get('v') || null;
+  } catch { return null; }
+}
+
+async function compartir() {
+  const url = document.getElementById('inp-url').value.trim();
+  if (!url) return;
+  const id = ytId(url);
+  const status = document.getElementById('status');
+  const res = await fetch(`/api/watch/${SALA}/set`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({url})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    status.textContent = '✓ Compartido — los espectadores ya ven el video';
+    if (id) {
+      document.getElementById('frame').src = `https://www.youtube.com/embed/${id}?autoplay=1&rel=0`;
+      document.getElementById('preview').style.display = 'block';
+    }
+  } else {
+    status.textContent = 'Error: ' + data.error;
+  }
+}
+
+function copiar() {
+  const inp = document.getElementById('viewer-url');
+  navigator.clipboard.writeText(inp.value).catch(() => { inp.select(); document.execCommand('copy'); });
+  const btn = document.querySelector('.share-row button');
+  btn.textContent = '✓ Copiado';
+  setTimeout(() => btn.textContent = 'Copiar', 2000);
+}
+</script>
+</body>
+</html>

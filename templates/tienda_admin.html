@@ -438,7 +438,13 @@
     </div>
 
     <!-- ====== TAB: PAUTA ====== -->
-    <div id="panel-pauta" class="p-5 hidden bg-white rounded-2xl shadow-lg mb-6">
+    <div id="panel-pauta" class="hidden bg-white rounded-2xl shadow-lg mb-6">
+
+        <!-- Stepper puntitos (mobile) -->
+        <div class="flex justify-center gap-2 pt-4 pb-2 md:hidden" id="pauta-puntitos"></div>
+
+        <!-- PANTALLA 1: HOME / KPIs -->
+        <div id="pauta-pantalla-home" class="p-5">
 
         <!-- KPIs -->
         <div class="mb-6">
@@ -468,8 +474,30 @@
             </div>
         </div>
 
-        <!-- Crear pauta -->
-        <div class="border border-gray-100 rounded-xl p-5 mb-6">
+        <!-- Botón crear pauta (mobile: va a composer) -->
+        <button onclick="_irPantallaPauta('composer')"
+                class="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-xl text-sm transition mb-4 md:hidden">
+            + Crear nueva pauta
+        </button>
+
+        <!-- Atribución resumida (mobile home) -->
+        <div id="pauta-ventas-lista" class="space-y-3 mb-4"></div>
+        <div id="pauta-mix-canales" class="space-y-2 mb-4"></div>
+
+        <!-- Calendario semanal -->
+        <div class="border border-gray-100 rounded-xl p-4 mb-4">
+            <h2 class="font-bold text-gray-800 text-sm mb-3">Esta semana</h2>
+            <div id="pauta-calendario" class="grid grid-cols-7 gap-1 text-center text-xs mb-3"></div>
+            <div id="pauta-agenda" class="space-y-2"></div>
+        </div>
+
+        </div><!-- fin pantalla home -->
+
+        <!-- PANTALLA 2: COMPOSER -->
+        <div id="pauta-pantalla-composer" class="p-5 hidden">
+
+        <!-- Crear pauta (desktop siempre visible, mobile es pantalla 2) -->
+        <div class="border border-gray-100 rounded-xl p-5 mb-6 md:border-0 md:p-0">
             <h2 class="font-bold text-gray-800 text-base mb-1">Crear pauta</h2>
             <p class="text-xs text-gray-400 mb-5">Una publicación → múltiples plataformas. El sistema adapta el contenido por canal.</p>
 
@@ -554,40 +582,68 @@
                 </div>
             </div>
 
-            <!-- Acciones -->
-            <div class="flex gap-3">
+            <!-- Acciones sticky mobile -->
+            <div class="flex gap-3 md:mt-0 mt-4">
                 <button onclick="publicarPauta()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-xl text-sm transition">
                     Publicar en redes
                 </button>
                 <button onclick="guardarBorrador()" class="flex-1 border-2 border-rose-500 text-rose-600 font-bold py-3 rounded-xl text-sm hover:bg-rose-50 transition">
-                    Guardar borrador
+                    Borrador
                 </button>
             </div>
+            <!-- Volver (mobile) -->
+            <button onclick="_irPantallaPauta('home')" class="w-full text-xs text-gray-400 mt-3 md:hidden">← Volver al inicio</button>
+        </div>
+        </div><!-- fin pantalla composer -->
+
+        <!-- PANTALLA 3: PUBLICADO -->
+        <div id="pauta-pantalla-publicado" class="p-5 hidden">
+            <div class="text-center mb-6">
+                <p class="text-3xl mb-2">🎉</p>
+                <h2 class="font-bold text-gray-800 text-lg">¡Publicado!</h2>
+                <p class="text-xs text-gray-400 mt-1">Tu pauta está corriendo en las redes seleccionadas</p>
+            </div>
+            <div id="pauta-estado-plataformas" class="space-y-3 mb-6"></div>
+            <div class="bg-rose-50 rounded-xl p-4 mb-4">
+                <p class="text-xs font-bold text-rose-600 mb-3">En vivo ahora</p>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div><p class="text-xl font-bold text-gray-800" id="pub-vistas">0</p><p class="text-xs text-gray-400">Vistas</p></div>
+                    <div><p class="text-xl font-bold text-gray-800" id="pub-clics">0</p><p class="text-xs text-gray-400">Clics</p></div>
+                    <div><p class="text-xl font-bold text-gray-800" id="pub-pedidos">0</p><p class="text-xs text-gray-400">Pedidos</p></div>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="_irPantallaPauta('home')" class="flex-1 border-2 border-rose-500 text-rose-600 font-bold py-3 rounded-xl text-sm hover:bg-rose-50 transition">
+                    Ver dashboard
+                </button>
+                <button onclick="_irPantallaPauta('composer')" class="flex-1 bg-rose-500 text-white font-bold py-3 rounded-xl text-sm hover:bg-rose-600 transition">
+                    Nueva pauta
+                </button>
+            </div>
+        </div><!-- fin pantalla publicado -->
+
+        <!-- Desktop: atribución y calendario siempre visibles debajo del composer -->
+        <div class="hidden md:block p-5 pt-0">
+            <div class="border border-gray-100 rounded-xl p-5 mb-6">
+                <h2 class="font-bold text-gray-800 text-base mb-1">¿De dónde vienen tus ventas?</h2>
+                <p class="text-xs text-gray-400 mb-4">Cada pedido enlazado a la pauta que lo originó — últ. 30 días</p>
+                <div class="flex gap-2 mb-4 flex-wrap">
+                    <button onclick="filtrarAtribucion(30, this)" class="text-xs px-3 py-1.5 rounded-full bg-rose-500 text-white pauta-filtro">30 días</button>
+                    <button onclick="filtrarAtribucion(7, this)" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro">7 días</button>
+                    <button onclick="filtrarAtribucion(0, this)" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro">Este mes</button>
+                </div>
+                <div id="pauta-ventas-lista-desktop" class="space-y-3 mb-5">
+                    <p class="text-xs text-gray-400 text-center py-4">Cargando ventas atribuidas...</p>
+                </div>
+                <div id="pauta-mix-canales-desktop" class="space-y-2"></div>
+            </div>
+            <div class="border border-gray-100 rounded-xl p-5">
+                <h2 class="font-bold text-gray-800 text-base mb-1">Esta semana</h2>
+                <div id="pauta-calendario-desktop" class="grid grid-cols-7 gap-1 text-center text-xs mb-4"></div>
+                <div id="pauta-agenda-desktop" class="space-y-2"></div>
+            </div>
         </div>
 
-        <!-- Atribución de ventas -->
-        <div class="border border-gray-100 rounded-xl p-5 mb-6">
-            <h2 class="font-bold text-gray-800 text-base mb-1">¿De dónde vienen tus ventas?</h2>
-            <p class="text-xs text-gray-400 mb-4">Cada pedido enlazado a la pauta que lo originó — últ. 30 días</p>
-            <div class="flex gap-2 mb-4 flex-wrap">
-                <button onclick="filtrarAtribucion(30, this)" class="text-xs px-3 py-1.5 rounded-full bg-rose-500 text-white pauta-filtro">30 días</button>
-                <button onclick="filtrarAtribucion(7, this)" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro">7 días</button>
-                <button onclick="filtrarAtribucion(0, this)" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro">Este mes</button>
-            </div>
-            <div id="pauta-ventas-lista" class="space-y-3 mb-5">
-                <p class="text-xs text-gray-400 text-center py-4">Cargando ventas atribuidas...</p>
-            </div>
-            <!-- Mix por canal -->
-            <div id="pauta-mix-canales" class="space-y-2"></div>
-        </div>
-
-        <!-- Calendario semanal -->
-        <div class="border border-gray-100 rounded-xl p-5">
-            <h2 class="font-bold text-gray-800 text-base mb-1">Esta semana</h2>
-            <p class="text-xs text-gray-400 mb-4">Programadas y en vivo</p>
-            <div id="pauta-calendario" class="grid grid-cols-7 gap-1 text-center text-xs mb-4"></div>
-            <div id="pauta-agenda" class="space-y-2"></div>
-        </div>
     </div>
 
     <!-- ====== TAB: SOPORTE ====== -->
@@ -1082,6 +1138,7 @@ function renderProductos() {
                     <button onclick="abrirFotos(${p.id})" class="flex-1 text-xs text-rose-500 font-semibold py-1 border border-rose-200 rounded-lg hover:bg-rose-50 transition">${p.imagen ? 'Cambiar Fotos' : 'Agregar Fotos'}</button>
                     <button onclick="abrirVariantes(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="flex-1 text-xs text-purple-600 font-semibold py-1 border border-purple-200 rounded-lg hover:bg-purple-50 transition">Variantes</button>
                     <button onclick="compartirProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', '${(p.imagen||'').replace(/'/g, "\\'")}', ${p.precio}, '${(p.descripcion||'').replace(/'/g, "\\'").replace(/\n/g, ' ')}')" class="flex-1 text-xs text-emerald-600 font-semibold py-1 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition">Compartir</button>
+                    <button onclick="pautarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="flex-1 text-xs text-rose-600 font-semibold py-1 border border-rose-400 rounded-lg hover:bg-rose-50 transition">📣 Pautar</button>
                 </div>
             </div>`;
         }
@@ -1684,6 +1741,7 @@ async function cargarSuscripcion() {
 
 // === PAUTA ===
 const PAUTA_BASE = `/api/tienda/${SLUG}/pauta`;
+let _pautaPantalla = 'home';
 let _pautaProductosSel = [];
 let _pautaHora = 'recomendado';
 let _pautaVariantes = {};
@@ -1812,8 +1870,18 @@ async function publicarPauta() {
             body: JSON.stringify({ producto_ids: _pautaProductosSel.map(p => p.id), mensaje_base: mensaje, plataformas, hora: _pautaHora, scheduled_at, variantes: _pautaVariantes })
         });
         const d = await r.json();
-        if (d.ok) { toast('Pauta guardada'); cargarCalendarioPauta(); }
-        else toast(d.error || 'Error', true);
+        if (d.ok) {
+            _irPantallaPauta('publicado');
+            document.getElementById('pauta-estado-plataformas').innerHTML =
+                plataformas.map(p => {
+                    const icons = {instagram:'📸',tiktok:'🎵',marketplace:'🛒',whatsapp:'💬'};
+                    return `<div class="flex items-center justify-between border border-gray-100 rounded-xl px-4 py-3">
+                        <span class="text-sm">${icons[p]||''} ${p}</span>
+                        <span class="text-xs text-green-600 font-bold">✓ Publicado</span>
+                    </div>`;
+                }).join('');
+            cargarCalendarioPauta();
+        } else toast(d.error || 'Error', true);
     } catch(e) { toast('Error de conexión', true); }
 }
 
@@ -1901,11 +1969,36 @@ async function cargarCalendarioPauta() {
     } catch(e) {}
 }
 
+function pautarProducto(id, nombre) {
+    cambiarTab('pauta');
+    selProductoPauta(id, nombre);
+    document.getElementById('pauta-pantalla-home').classList.add('hidden');
+    document.getElementById('pauta-pantalla-composer').classList.remove('hidden');
+    document.getElementById('pauta-pantalla-publicado').classList.add('hidden');
+    _pautaPantalla = 'composer';
+    renderPuntitos();
+    cargarKPIsPauta();
+}
+
+function _irPantallaPauta(pantalla) {
+    _pautaPantalla = pantalla;
+    ['home','composer','publicado'].forEach(p => {
+        document.getElementById('pauta-pantalla-' + p).classList.toggle('hidden', p !== pantalla);
+    });
+    renderPuntitos();
+    if (pantalla === 'home') { cargarKPIsPauta(); cargarAtribucion(30); cargarCalendarioPauta(); }
+}
+
+function renderPuntitos() {
+    const pantallas = ['home','composer','publicado'];
+    document.getElementById('pauta-puntitos').innerHTML = pantallas.map(p =>
+        `<span class="w-2 h-2 rounded-full ${_pautaPantalla === p ? 'bg-rose-500' : 'bg-gray-300'}"></span>`
+    ).join('');
+}
+
 // Cargar pauta cuando se activa el tab
 document.getElementById('tab-pauta').addEventListener('click', () => {
-    cargarKPIsPauta();
-    cargarAtribucion(30);
-    cargarCalendarioPauta();
+    _irPantallaPauta('home');
 });
 
 // === Init ===

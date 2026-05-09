@@ -2726,6 +2726,7 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], {type: mime});
 }
 function _abrirMarketplace() {
+    window.open('https://www.facebook.com/marketplace/create', '_blank');
     if (_compartirImagen) {
         const sw = screen.availWidth, sh = screen.availHeight;
         const win = window.open('', '_blank', `width=${Math.floor(sw/2)},height=${sh},left=${Math.floor(sw/2)},top=0`);
@@ -2738,7 +2739,6 @@ img{max-width:100%;max-height:70vh;border-radius:12px;cursor:grab;box-shadow:0 8
 <p class="label">↖ Arrastra esta imagen a Marketplace</p>
 <p class="sub">${_compartirNombre || ''}</p></body></html>`);
     }
-    window.open('https://www.facebook.com/marketplace/create', '_blank');
 }
 </script>
 

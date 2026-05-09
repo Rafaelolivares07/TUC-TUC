@@ -2726,44 +2726,21 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], {type: mime});
 }
 function _abrirMarketplace() {
-    if (!_compartirImagen) {
-        window.open('https://www.facebook.com/marketplace/create', '_blank');
-        return;
-    }
     const sw = screen.availWidth, sh = screen.availHeight;
     const half = Math.floor(sw / 2);
-    const win = window.open('', '_blank', `width=${half},height=${sh},left=0,top=0`);
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${_compartirNombre || 'Producto'}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;gap:16px;padding:24px;user-select:none;}
-img{max-width:100%;max-height:72vh;border-radius:12px;cursor:grab;box-shadow:0 8px 32px #0008;}
-p{color:#fff;font-size:18px;font-weight:700;text-align:center;}
-small{color:#888;font-size:13px;}</style></head>
-<body>
-<img id="img" src="${_compartirImagen}" draggable="true">
-<p>Arrastra la imagen a Marketplace</p>
-<small>${_compartirNombre || ''}</small>
-<script>
-(function() {
-    var img = document.getElementById('img');
-    var imageFile = null;
-    fetch(img.src)
-        .then(function(r) { return r.blob(); })
-        .then(function(blob) {
-            imageFile = new File([blob], 'producto.jpg', {type: blob.type || 'image/jpeg'});
-        });
-    img.addEventListener('mousedown', function() {
-        window.open('https://www.facebook.com/marketplace/create', '_blank', 'width=${half},height=${sh},left=${half},top=0');
-    }, {once: true});
-    img.addEventListener('dragstart', function(e) {
-        if (imageFile) {
-            e.dataTransfer.clearData();
-            try { e.dataTransfer.items.add(imageFile); } catch(ex) {}
-        }
-    });
-})();
-<\/script>
-</body></html>`);
+    if (_compartirImagen) {
+        const a = document.createElement('a');
+        a.href = _compartirImagen;
+        a.download = (_compartirNombre || 'producto').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.jpg';
+        a.click();
+    }
+    window.open('https://www.facebook.com/marketplace/create', '_blank', `width=${half},height=${sh},left=${half},top=0`);
+    document.getElementById('modal-compartir').classList.add('hidden');
+    document.getElementById('modal-marketplace-img').classList.remove('hidden');
+    document.getElementById('mkt-img').src = _compartirImagen || '';
+    document.getElementById('mkt-nombre').textContent = _compartirNombre || '';
+    document.getElementById('mkt-precio').textContent = _compartirPrecio ? '$' + Number(_compartirPrecio).toLocaleString('es-CO') : '';
+    document.getElementById('mkt-desc').textContent = _compartirDesc || '';
 }
 </script>
 
@@ -2890,12 +2867,34 @@ small{color:#888;font-size:13px;}</style></head>
     </div>
 </div>
 
-<!-- Modal imagen grande para arrastrar a Marketplace -->
-<div id="modal-marketplace-img" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center" style="background:#111;">
-    <button onclick="document.getElementById('modal-marketplace-img').classList.add('hidden')" class="absolute top-4 right-4 text-white text-3xl leading-none opacity-60 hover:opacity-100">&times;</button>
-    <img id="mkt-img" src="" draggable="true" class="max-w-full max-h-[75vh] rounded-xl shadow-2xl cursor-grab select-none">
-    <p class="text-white text-xl font-bold mt-6">Arrastra esta imagen a Marketplace</p>
-    <p id="mkt-nombre" class="text-gray-400 text-sm mt-2"></p>
+<!-- Modal kit Marketplace -->
+<div id="modal-marketplace-img" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6" style="background:#111;">
+    <button onclick="document.getElementById('modal-marketplace-img').classList.add('hidden');document.getElementById('modal-compartir').classList.remove('hidden')" class="absolute top-4 right-4 text-white text-3xl leading-none opacity-60 hover:opacity-100">&times;</button>
+    <img id="mkt-img" src="" class="max-h-[40vh] rounded-xl shadow-2xl object-contain">
+    <p class="text-gray-400 text-sm">Imagen descargada — arrástrala desde Descargas a Marketplace</p>
+    <div class="w-full max-w-sm space-y-2">
+        <div class="bg-gray-800 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div>
+                <p class="text-gray-400 text-xs">Título</p>
+                <p id="mkt-nombre" class="text-white font-semibold text-sm"></p>
+            </div>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('mkt-nombre').textContent);this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)" class="text-xs text-blue-400 font-bold shrink-0">Copiar</button>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div>
+                <p class="text-gray-400 text-xs">Precio</p>
+                <p id="mkt-precio" class="text-white font-semibold text-sm"></p>
+            </div>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('mkt-precio').textContent);this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)" class="text-xs text-blue-400 font-bold shrink-0">Copiar</button>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+                <p class="text-gray-400 text-xs">Descripción</p>
+                <p id="mkt-desc" class="text-white text-sm line-clamp-3"></p>
+            </div>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('mkt-desc').textContent);this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)" class="text-xs text-blue-400 font-bold shrink-0">Copiar</button>
+        </div>
+    </div>
 </div>
 
 <script>

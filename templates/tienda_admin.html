@@ -1711,7 +1711,7 @@ function buscarProductoPauta(q) {
     if (q.length < 2) { lista.classList.add('hidden'); return; }
     _buscarPautaTimer = setTimeout(async () => {
         try {
-            const r = await fetch(BASE + `/buscar-producto?q=${encodeURIComponent(q)}`);
+            const r = await fetch(BASE + `/buscar-productos?q=${encodeURIComponent(q)}`);
             const d = await r.json();
             if (!d.ok || !d.productos.length) { lista.classList.add('hidden'); return; }
             lista.innerHTML = d.productos.map(p =>

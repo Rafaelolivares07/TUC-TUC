@@ -2727,34 +2727,7 @@ function _dataUrlToBlob(dataUrl) {
 }
 function _abrirMarketplace() {
     navigator.clipboard.writeText(_buildCompartirUrl());
-    if (_compartirImagen) {
-        const nombre = _compartirNombre.replace(/[^a-zA-Z0-9]/g, '_') + '.jpg';
-        const blob = _compartirImagen.startsWith('data:')
-            ? _dataUrlToBlob(_compartirImagen)
-            : null;
-        if (blob) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = nombre;
-            document.body.appendChild(a); a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } else {
-            fetch(_compartirImagen)
-                .then(r => r.blob())
-                .then(b => {
-                    const url = URL.createObjectURL(b);
-                    const a = document.createElement('a');
-                    a.href = url; a.download = nombre;
-                    document.body.appendChild(a); a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                });
-        }
-        toast('Foto descargada y enlace copiado — abriendo Marketplace…');
-    } else {
-        toast('Enlace copiado — abriendo Marketplace…');
-    }
+    toast('Enlace copiado — abriendo Marketplace…');
     setTimeout(() => window.open('https://www.facebook.com/marketplace/create', '_blank'), 400);
 }
 </script>

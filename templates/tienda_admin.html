@@ -2737,13 +2737,34 @@ function _abrirMarketplace() {
         a.download = (_compartirNombre || 'producto').replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.jpg';
         a.click();
     }
-    window.open('https://www.facebook.com/marketplace/create', '_blank', `width=${half},height=${sh},left=${half},top=0`);
-    document.getElementById('modal-compartir').classList.add('hidden');
-    document.getElementById('modal-marketplace-img').classList.remove('hidden');
-    document.getElementById('mkt-img').src = _compartirImagen || '';
-    document.getElementById('mkt-nombre').textContent = _compartirNombre || '';
-    document.getElementById('mkt-precio').textContent = _compartirPrecio ? '$' + Number(_compartirPrecio).toLocaleString('es-CO') : '';
-    document.getElementById('mkt-desc').textContent = _compartirDesc || '';
+    const nombre = _compartirNombre || '';
+    const precio = _compartirPrecio ? '$' + Number(_compartirPrecio).toLocaleString('es-CO') : '';
+    const desc = _compartirDesc || '';
+    const win = window.open('', '_blank', `width=${half},height=${sh},left=0,top=0`);
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${nombre}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#111;color:#fff;font-family:sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;}
+img{max-width:100%;max-height:35vh;border-radius:12px;object-fit:contain;}
+.kit{width:100%;max-width:420px;display:flex;flex-direction:column;gap:8px;}
+.row{background:#1f2937;border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.row div{flex:1;min-width:0;}.label{font-size:11px;color:#9ca3af;margin-bottom:2px;}
+.val{font-size:14px;font-weight:600;white-space:pre-wrap;word-break:break-word;}
+.copy{font-size:12px;font-weight:700;color:#60a5fa;background:none;border:none;cursor:pointer;shrink:0;padding:4px 8px;border-radius:6px;}
+.copy:hover{background:#374151;}.hint{font-size:12px;color:#6b7280;text-align:center;}
+</style></head><body>
+<img src="${_compartirImagen || ''}">
+<p class="hint">Toca cualquier lugar para abrir Marketplace →</p>
+<div class="kit">
+  <div class="row"><div><p class="label">Título</p><p class="val">${nombre}</p></div><button class="copy" onclick="navigator.clipboard.writeText('${nombre.replace(/'/g,"\\'")}');this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)">Copiar</button></div>
+  <div class="row"><div><p class="label">Precio</p><p class="val">${precio}</p></div><button class="copy" onclick="navigator.clipboard.writeText('${precio}');this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)">Copiar</button></div>
+  <div class="row"><div><p class="label">Descripción</p><p class="val">${desc}</p></div><button class="copy" onclick="navigator.clipboard.writeText('${desc.replace(/'/g,"\\'").replace(/\n/g,'\\n')}');this.textContent='✓';setTimeout(()=>this.textContent='Copiar',1500)">Copiar</button></div>
+</div>
+<script>
+document.addEventListener('click', function() {
+    window.open('https://www.facebook.com/marketplace/create', '_blank', 'width=${half},height=${sh},left=${half},top=0');
+}, {once: true});
+<\/script>
+</body></html>`);
 }
 </script>
 

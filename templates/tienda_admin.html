@@ -2728,20 +2728,10 @@ function _dataUrlToBlob(dataUrl) {
 function _abrirMarketplace() {
     window.open('https://www.facebook.com/marketplace/create', '_blank');
     if (_compartirImagen) {
-        const sw = screen.availWidth, sh = screen.availHeight;
-        setTimeout(() => {
-            const win = window.open('', '_blank', `width=${Math.floor(sw/2)},height=${sh},left=${Math.floor(sw/2)},top=0`);
-            if (win) {
-                win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${_compartirNombre || 'Producto'}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;gap:20px;padding:24px;}
-img{max-width:100%;max-height:75vh;border-radius:12px;cursor:grab;box-shadow:0 8px 32px #0008;user-select:none;}
-p{color:#fff;font-size:20px;font-weight:700;text-align:center;}
-small{color:#888;font-size:13px;}</style></head>
-<body><img src="${_compartirImagen}" draggable="true">
-<p>Arrastra esta imagen a Marketplace</p>
-<small>${_compartirNombre || ''}</small></body></html>`);
-            }
-        }, 300);
+        document.getElementById('modal-compartir').classList.add('hidden');
+        document.getElementById('modal-marketplace-img').classList.remove('hidden');
+        document.getElementById('mkt-img').src = _compartirImagen;
+        document.getElementById('mkt-nombre').textContent = _compartirNombre || '';
     }
 }
 </script>

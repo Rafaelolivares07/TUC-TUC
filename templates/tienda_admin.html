@@ -2726,7 +2726,8 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], {type: mime});
 }
 function _abrirMarketplace() {
-    window.open('https://www.facebook.com/marketplace/create', '_blank');
+    const sw = screen.availWidth, sh = screen.availHeight;
+    window.open('https://www.facebook.com/marketplace/create', '_blank', `width=${Math.floor(sw/2)},height=${sh},left=0,top=0`);
     if (_compartirImagen) {
         document.getElementById('modal-compartir').classList.add('hidden');
         document.getElementById('modal-marketplace-img').classList.remove('hidden');

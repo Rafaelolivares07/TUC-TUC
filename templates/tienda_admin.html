@@ -2726,17 +2726,29 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], {type: mime});
 }
 function _abrirMarketplace() {
+    if (!_compartirImagen) {
+        window.open('https://www.facebook.com/marketplace/create', '_blank');
+        return;
+    }
     const sw = screen.availWidth, sh = screen.availHeight;
     const half = Math.floor(sw / 2);
-    window.moveTo(0, 0);
-    window.resizeTo(half, sh);
-    window.open('https://www.facebook.com/marketplace/create', '_blank', `width=${half},height=${sh},left=${half},top=0`);
-    if (_compartirImagen) {
-        document.getElementById('modal-compartir').classList.add('hidden');
-        document.getElementById('modal-marketplace-img').classList.remove('hidden');
-        document.getElementById('mkt-img').src = _compartirImagen;
-        document.getElementById('mkt-nombre').textContent = _compartirNombre || '';
-    }
+    const win = window.open('', '_blank', `width=${half},height=${sh},left=0,top=0`);
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${_compartirNombre || 'Producto'}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;gap:16px;padding:24px;user-select:none;}
+img{max-width:100%;max-height:72vh;border-radius:12px;cursor:grab;box-shadow:0 8px 32px #0008;}
+p{color:#fff;font-size:18px;font-weight:700;text-align:center;}
+small{color:#888;font-size:13px;}</style></head>
+<body>
+<img id="img" src="${_compartirImagen}" draggable="true">
+<p>Arrastra la imagen a Marketplace</p>
+<small>${_compartirNombre || ''}</small>
+<script>
+document.getElementById('img').addEventListener('mousedown', function() {
+    window.open('https://www.facebook.com/marketplace/create', '_blank', 'width=${half},height=${sh},left=${half},top=0');
+}, {once: true});
+<\/script>
+</body></html>`);
 }
 </script>
 

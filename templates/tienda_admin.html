@@ -2726,7 +2726,17 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], {type: mime});
 }
 function _abrirMarketplace() {
-    if (_compartirImagen) window.open(_compartirImagen, '_blank');
+    if (_compartirImagen) {
+        const win = window.open('', '_blank', 'width=620,height=720,left=20,top=40');
+        win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${_compartirNombre || 'Producto'}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;gap:20px;padding:24px;}
+img{max-width:100%;max-height:70vh;border-radius:12px;cursor:grab;box-shadow:0 8px 32px #0008;user-select:none;}
+.label{color:#fff;font-size:20px;font-weight:700;text-align:center;}
+.sub{color:#888;font-size:13px;text-align:center;}</style></head>
+<body><img src="${_compartirImagen}" draggable="true">
+<p class="label">↖ Arrastra esta imagen a Marketplace</p>
+<p class="sub">${_compartirNombre || ''}</p></body></html>`);
+    }
     window.open('https://www.facebook.com/marketplace/create', '_blank');
 }
 </script>

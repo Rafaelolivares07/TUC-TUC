@@ -30,6 +30,7 @@ def create_app():
     from .blueprints.contabilidad import bp as contabilidad_bp, ejecutar_programaciones_job
     from .blueprints.tracking import bp as tracking_bp
     from .blueprints.watch import bp as watch_bp
+    from .blueprints.pautas import bp as pautas_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(contabilidad_bp)
     app.register_blueprint(tracking_bp)
     app.register_blueprint(watch_bp)
+    app.register_blueprint(pautas_bp)
 
     @app.before_request
     def _cliente_subdominio():

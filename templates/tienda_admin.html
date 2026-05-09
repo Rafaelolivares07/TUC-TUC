@@ -109,6 +109,7 @@
                 <a href="/contabilidad/tienda/{{ tienda.slug }}" class="tab-btn flex items-center gap-1">📒 Contabilidad</a>
                 <a href="/admin/tienda/{{ tienda.slug }}/metodos-pago" class="tab-btn flex items-center gap-1">💳 Métodos de Pago</a>
                 <a href="/admin/contactos" class="tab-btn flex items-center gap-1">👥 Contactos</a>
+                <button onclick="cambiarTab('pauta')" id="tab-pauta" class="tab-btn">📣 Pauta</button>
                 <button onclick="cambiarTab('vendedores')" id="tab-vendedores" class="tab-btn">🤝 Vendedores</button>
                 <button onclick="cambiarTab('soporte')" id="tab-soporte" class="tab-btn">🖥️ Soporte</button>
             </div>
@@ -436,6 +437,159 @@
         </div>
     </div>
 
+    <!-- ====== TAB: PAUTA ====== -->
+    <div id="panel-pauta" class="p-5 hidden bg-white rounded-2xl shadow-lg mb-6">
+
+        <!-- KPIs -->
+        <div class="mb-6">
+            <h2 class="font-bold text-gray-800 text-lg mb-1">Alcance últ. 7 días</h2>
+            <p class="text-xs text-gray-400 mb-4">Rendimiento de tus pautas activas</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-rose-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-500 mb-1">Clics al landing</p>
+                    <p class="text-2xl font-bold text-gray-800" id="pauta-clics">—</p>
+                    <p class="text-xs text-rose-500 mt-1" id="pauta-clics-delta">—</p>
+                </div>
+                <div class="bg-rose-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-500 mb-1">CTR</p>
+                    <p class="text-2xl font-bold text-gray-800" id="pauta-ctr">—</p>
+                    <p class="text-xs text-gray-400 mt-1">conversión</p>
+                </div>
+                <div class="bg-rose-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-500 mb-1">Pedidos atribuidos</p>
+                    <p class="text-2xl font-bold text-gray-800" id="pauta-pedidos">—</p>
+                    <p class="text-xs text-rose-500 mt-1" id="pauta-pedidos-delta">—</p>
+                </div>
+                <div class="bg-rose-50 rounded-xl p-4">
+                    <p class="text-xs text-gray-500 mb-1">Ventas atribuidas</p>
+                    <p class="text-2xl font-bold text-gray-800" id="pauta-ventas">—</p>
+                    <p class="text-xs text-gray-400 mt-1" id="pauta-roas">ROAS —</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Crear pauta -->
+        <div class="border border-gray-100 rounded-xl p-5 mb-6">
+            <h2 class="font-bold text-gray-800 text-base mb-1">Crear pauta</h2>
+            <p class="text-xs text-gray-400 mb-5">Una publicación → múltiples plataformas. El sistema adapta el contenido por canal.</p>
+
+            <!-- Paso 1: Producto -->
+            <div class="mb-5">
+                <p class="text-sm font-semibold text-gray-700 mb-2">1 · ¿Qué vas a pautar?</p>
+                <div class="relative">
+                    <input id="pauta-producto-input" type="text" placeholder="Buscar producto..." autocomplete="off"
+                           class="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-400"
+                           oninput="buscarProductoPauta(this.value)">
+                    <div id="pauta-producto-lista" class="absolute z-20 bg-white border border-gray-200 rounded-xl shadow-lg w-full mt-1 hidden max-h-48 overflow-y-auto"></div>
+                </div>
+                <div id="pauta-productos-sel" class="flex flex-wrap gap-2 mt-2"></div>
+            </div>
+
+            <!-- Paso 2: Mensaje -->
+            <div class="mb-5">
+                <p class="text-sm font-semibold text-gray-700 mb-2">2 · Tu mensaje base</p>
+                <textarea id="pauta-mensaje" rows="3" maxlength="500"
+                          class="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm resize-none focus:outline-none focus:border-rose-400"
+                          placeholder="Ej: Sofá modular Aspen — tela antimanchas, entrega gratis en Cali."
+                          oninput="document.getElementById('pauta-chars').textContent = this.value.length + '/500'"></textarea>
+                <p class="text-xs text-gray-400 text-right mt-1" id="pauta-chars">0/500</p>
+                <div class="flex gap-2 flex-wrap mt-2">
+                    <button onclick="generarVariantes('vendedor')" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-rose-50 hover:text-rose-600 rounded-full transition">✨ Más vendedor</button>
+                    <button onclick="generarVariantes('casual')" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-rose-50 hover:text-rose-600 rounded-full transition">😊 Más casual</button>
+                    <button onclick="generarVariantes('urgente')" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-rose-50 hover:text-rose-600 rounded-full transition">⚡ Con urgencia</button>
+                </div>
+                <div id="pauta-variante-spinner" class="hidden text-xs text-rose-500 mt-2">✨ Generando variante...</div>
+            </div>
+
+            <!-- Paso 3: Plataformas -->
+            <div class="mb-5">
+                <p class="text-sm font-semibold text-gray-700 mb-2">3 · ¿A dónde lo llevamos?</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 cursor-pointer hover:border-rose-300 transition">
+                        <input type="checkbox" value="instagram" class="pauta-plataforma accent-rose-500" checked> <span class="text-sm">📸 Instagram</span>
+                    </label>
+                    <label class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 cursor-pointer hover:border-rose-300 transition">
+                        <input type="checkbox" value="tiktok" class="pauta-plataforma accent-rose-500" checked> <span class="text-sm">🎵 TikTok</span>
+                    </label>
+                    <label class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 cursor-pointer hover:border-rose-300 transition">
+                        <input type="checkbox" value="marketplace" class="pauta-plataforma accent-rose-500" checked> <span class="text-sm">🛒 Marketplace</span>
+                    </label>
+                    <label class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 cursor-pointer hover:border-rose-300 transition">
+                        <input type="checkbox" value="whatsapp" class="pauta-plataforma accent-rose-500" checked> <span class="text-sm">💬 WhatsApp</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Paso 4: Cuándo -->
+            <div class="mb-5">
+                <p class="text-sm font-semibold text-gray-700 mb-2">4 · ¿Cuándo publicamos?</p>
+                <div class="flex gap-2">
+                    <button onclick="setPautaHora('recomendado')" id="hora-recomendado"
+                            class="flex-1 text-xs border-2 border-rose-500 bg-rose-50 text-rose-700 rounded-xl px-3 py-2 font-semibold transition">
+                        ⭐ Recomendado<br><span class="font-normal text-gray-500">Hoy 7:30 PM</span>
+                    </button>
+                    <button onclick="setPautaHora('ahora')" id="hora-ahora"
+                            class="flex-1 text-xs border-2 border-gray-200 rounded-xl px-3 py-2 font-semibold transition">
+                        Inmediato<br><span class="font-normal text-gray-500">Ya mismo</span>
+                    </button>
+                    <button onclick="setPautaHora('custom')" id="hora-custom"
+                            class="flex-1 text-xs border-2 border-gray-200 rounded-xl px-3 py-2 font-semibold transition">
+                        Personalizado<br><span class="font-normal text-gray-500">Elegir...</span>
+                    </button>
+                </div>
+                <input type="datetime-local" id="pauta-fecha-custom" class="hidden mt-2 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+
+            <!-- Preview -->
+            <div class="mb-5">
+                <p class="text-sm font-semibold text-gray-700 mb-2">Vista previa</p>
+                <div class="flex gap-2 mb-3">
+                    <button onclick="verPreview('instagram')" class="preview-tab text-xs px-3 py-1.5 rounded-full bg-rose-500 text-white">IG</button>
+                    <button onclick="verPreview('tiktok')" class="preview-tab text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">TikTok</button>
+                    <button onclick="verPreview('marketplace')" class="preview-tab text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">Mkt</button>
+                    <button onclick="verPreview('whatsapp')" class="preview-tab text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600">WA</button>
+                </div>
+                <div id="pauta-preview-box" class="bg-gray-50 rounded-xl p-4 text-sm text-gray-500 min-h-20 flex items-center justify-center">
+                    Genera variantes para ver la preview
+                </div>
+            </div>
+
+            <!-- Acciones -->
+            <div class="flex gap-3">
+                <button onclick="publicarPauta()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-xl text-sm transition">
+                    Publicar en redes
+                </button>
+                <button onclick="guardarBorrador()" class="flex-1 border-2 border-rose-500 text-rose-600 font-bold py-3 rounded-xl text-sm hover:bg-rose-50 transition">
+                    Guardar borrador
+                </button>
+            </div>
+        </div>
+
+        <!-- Atribución de ventas -->
+        <div class="border border-gray-100 rounded-xl p-5 mb-6">
+            <h2 class="font-bold text-gray-800 text-base mb-1">¿De dónde vienen tus ventas?</h2>
+            <p class="text-xs text-gray-400 mb-4">Cada pedido enlazado a la pauta que lo originó — últ. 30 días</p>
+            <div class="flex gap-2 mb-4 flex-wrap">
+                <button onclick="filtrarAtribucion(30, this)" class="text-xs px-3 py-1.5 rounded-full bg-rose-500 text-white pauta-filtro">30 días</button>
+                <button onclick="filtrarAtribucion(7, this)" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro">7 días</button>
+                <button onclick="filtrarAtribucion(0, this)" class="text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro">Este mes</button>
+            </div>
+            <div id="pauta-ventas-lista" class="space-y-3 mb-5">
+                <p class="text-xs text-gray-400 text-center py-4">Cargando ventas atribuidas...</p>
+            </div>
+            <!-- Mix por canal -->
+            <div id="pauta-mix-canales" class="space-y-2"></div>
+        </div>
+
+        <!-- Calendario semanal -->
+        <div class="border border-gray-100 rounded-xl p-5">
+            <h2 class="font-bold text-gray-800 text-base mb-1">Esta semana</h2>
+            <p class="text-xs text-gray-400 mb-4">Programadas y en vivo</p>
+            <div id="pauta-calendario" class="grid grid-cols-7 gap-1 text-center text-xs mb-4"></div>
+            <div id="pauta-agenda" class="space-y-2"></div>
+        </div>
+    </div>
+
     <!-- ====== TAB: SOPORTE ====== -->
     <div id="panel-soporte" class="p-6 hidden bg-white rounded-2xl shadow-lg mb-6">
         <h2 class="font-bold text-gray-800 text-lg mb-1">Asistencia Remota</h2>
@@ -565,7 +719,7 @@ function toast(msg, error) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','inventario','personalizar','acceso','ubicacion','vendedores','soporte'].forEach(t => {
+    ['catalogo','pedidos','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
         const btn = document.getElementById('tab-' + t);
         if (btn) btn.classList.toggle('tab-active', t === tab);
@@ -1527,6 +1681,232 @@ async function cargarSuscripcion() {
         }
     } catch(e) {}
 }
+
+// === PAUTA ===
+const PAUTA_BASE = `/api/tienda/${SLUG}/pauta`;
+let _pautaProductosSel = [];
+let _pautaHora = 'recomendado';
+let _pautaVariantes = {};
+let _pautaPreviewActiva = 'instagram';
+
+async function cargarKPIsPauta() {
+    try {
+        const r = await fetch(PAUTA_BASE + '/kpis');
+        const d = await r.json();
+        if (!d.ok) return;
+        document.getElementById('pauta-clics').textContent = (d.clics || 0).toLocaleString('es-CO');
+        document.getElementById('pauta-clics-delta').textContent = d.clics_delta || '—';
+        document.getElementById('pauta-ctr').textContent = d.ctr ? d.ctr + '%' : '—';
+        document.getElementById('pauta-pedidos').textContent = (d.pedidos || 0).toLocaleString('es-CO');
+        document.getElementById('pauta-pedidos-delta').textContent = d.pedidos_delta || '—';
+        document.getElementById('pauta-ventas').textContent = d.ventas ? '$' + parseInt(d.ventas).toLocaleString('es-CO') : '—';
+        document.getElementById('pauta-roas').textContent = d.roas ? 'ROAS ' + d.roas + 'x' : 'ROAS —';
+    } catch(e) {}
+}
+
+let _buscarPautaTimer;
+function buscarProductoPauta(q) {
+    clearTimeout(_buscarPautaTimer);
+    const lista = document.getElementById('pauta-producto-lista');
+    if (q.length < 2) { lista.classList.add('hidden'); return; }
+    _buscarPautaTimer = setTimeout(async () => {
+        try {
+            const r = await fetch(BASE + `/buscar-producto?q=${encodeURIComponent(q)}`);
+            const d = await r.json();
+            if (!d.ok || !d.productos.length) { lista.classList.add('hidden'); return; }
+            lista.innerHTML = d.productos.map(p =>
+                `<div class="px-4 py-2 hover:bg-rose-50 cursor-pointer text-sm" onclick="selProductoPauta(${p.id},'${p.nombre.replace(/'/g,"\\'")}')">${p.nombre}</div>`
+            ).join('');
+            lista.classList.remove('hidden');
+        } catch(e) {}
+    }, 280);
+}
+
+function selProductoPauta(id, nombre) {
+    if (_pautaProductosSel.find(p => p.id === id)) return;
+    _pautaProductosSel.push({id, nombre});
+    document.getElementById('pauta-producto-input').value = '';
+    document.getElementById('pauta-producto-lista').classList.add('hidden');
+    renderProductosSel();
+}
+
+function renderProductosSel() {
+    document.getElementById('pauta-productos-sel').innerHTML = _pautaProductosSel.map(p =>
+        `<span class="flex items-center gap-1 bg-rose-100 text-rose-700 text-xs px-3 py-1 rounded-full">
+            ${p.nombre}
+            <button onclick="quitarProductoPauta(${p.id})" class="ml-1 font-bold hover:text-rose-900">×</button>
+        </span>`
+    ).join('');
+}
+
+function quitarProductoPauta(id) {
+    _pautaProductosSel = _pautaProductosSel.filter(p => p.id !== id);
+    renderProductosSel();
+}
+
+async function generarVariantes(tono) {
+    const mensaje = document.getElementById('pauta-mensaje').value.trim();
+    if (!mensaje) { toast('Escribe el mensaje base primero', true); return; }
+    const plataformas = [...document.querySelectorAll('.pauta-plataforma:checked')].map(c => c.value);
+    if (!plataformas.length) { toast('Selecciona al menos una plataforma', true); return; }
+    document.getElementById('pauta-variante-spinner').classList.remove('hidden');
+    try {
+        const r = await fetch(PAUTA_BASE + '/generar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ producto_ids: _pautaProductosSel.map(p => p.id), mensaje_base: mensaje, plataformas, tono })
+        });
+        const d = await r.json();
+        if (!d.ok) { toast(d.error || 'Error generando variantes', true); return; }
+        _pautaVariantes = d.variantes;
+        verPreview(_pautaPreviewActiva);
+        toast('Variantes generadas');
+    } catch(e) { toast('Error de conexión', true); }
+    finally { document.getElementById('pauta-variante-spinner').classList.add('hidden'); }
+}
+
+function verPreview(plataforma) {
+    _pautaPreviewActiva = plataforma;
+    document.querySelectorAll('.preview-tab').forEach(b => {
+        b.className = b.textContent.toLowerCase().includes(plataforma.slice(0,2))
+            ? 'preview-tab text-xs px-3 py-1.5 rounded-full bg-rose-500 text-white'
+            : 'preview-tab text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600';
+    });
+    const box = document.getElementById('pauta-preview-box');
+    const v = _pautaVariantes[plataforma];
+    if (!v) { box.innerHTML = '<span class="text-gray-400">Genera variantes para ver la preview</span>'; return; }
+    const icons = {instagram:'📸', tiktok:'🎵', marketplace:'🛒', whatsapp:'💬'};
+    box.innerHTML = `
+        <div class="w-full">
+            <p class="text-xs font-bold text-gray-500 mb-2">${icons[plataforma] || ''} ${plataforma.toUpperCase()}</p>
+            <p class="text-sm text-gray-800 mb-2">${v.copy || ''}</p>
+            ${v.hashtags && v.hashtags.length ? `<p class="text-xs text-rose-400">${v.hashtags.map(h=>'#'+h).join(' ')}</p>` : ''}
+            ${v.hook ? `<p class="text-xs text-gray-400 mt-1">Hook: ${v.hook}</p>` : ''}
+            ${v.cta ? `<p class="text-xs text-gray-400 mt-1">CTA: ${v.cta}</p>` : ''}
+        </div>`;
+}
+
+function setPautaHora(tipo) {
+    _pautaHora = tipo;
+    ['recomendado','ahora','custom'].forEach(t => {
+        const btn = document.getElementById('hora-' + t);
+        btn.className = t === tipo
+            ? 'flex-1 text-xs border-2 border-rose-500 bg-rose-50 text-rose-700 rounded-xl px-3 py-2 font-semibold transition'
+            : 'flex-1 text-xs border-2 border-gray-200 rounded-xl px-3 py-2 font-semibold transition';
+    });
+    document.getElementById('pauta-fecha-custom').classList.toggle('hidden', tipo !== 'custom');
+}
+
+async function publicarPauta() {
+    const mensaje = document.getElementById('pauta-mensaje').value.trim();
+    if (!mensaje) { toast('Escribe el mensaje base', true); return; }
+    const plataformas = [...document.querySelectorAll('.pauta-plataforma:checked')].map(c => c.value);
+    if (!plataformas.length) { toast('Selecciona al menos una plataforma', true); return; }
+    let scheduled_at = null;
+    if (_pautaHora === 'custom') {
+        scheduled_at = document.getElementById('pauta-fecha-custom').value;
+        if (!scheduled_at) { toast('Elige la fecha y hora', true); return; }
+    }
+    try {
+        const r = await fetch(PAUTA_BASE, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ producto_ids: _pautaProductosSel.map(p => p.id), mensaje_base: mensaje, plataformas, hora: _pautaHora, scheduled_at, variantes: _pautaVariantes })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Pauta guardada'); cargarCalendarioPauta(); }
+        else toast(d.error || 'Error', true);
+    } catch(e) { toast('Error de conexión', true); }
+}
+
+async function guardarBorrador() {
+    const mensaje = document.getElementById('pauta-mensaje').value.trim();
+    if (!mensaje) { toast('Escribe el mensaje base', true); return; }
+    const plataformas = [...document.querySelectorAll('.pauta-plataforma:checked')].map(c => c.value);
+    try {
+        const r = await fetch(PAUTA_BASE + '/borrador', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ producto_ids: _pautaProductosSel.map(p => p.id), mensaje_base: mensaje, plataformas })
+        });
+        const d = await r.json();
+        if (d.ok) toast('Borrador guardado');
+        else toast(d.error || 'Error', true);
+    } catch(e) { toast('Error de conexión', true); }
+}
+
+async function filtrarAtribucion(dias, btn) {
+    document.querySelectorAll('.pauta-filtro').forEach(b => {
+        b.className = 'text-xs px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 pauta-filtro';
+    });
+    btn.className = 'text-xs px-3 py-1.5 rounded-full bg-rose-500 text-white pauta-filtro';
+    await cargarAtribucion(dias);
+}
+
+async function cargarAtribucion(dias = 30) {
+    const lista = document.getElementById('pauta-ventas-lista');
+    const mix = document.getElementById('pauta-mix-canales');
+    try {
+        const r = await fetch(PAUTA_BASE + `/atribucion?dias=${dias}`);
+        const d = await r.json();
+        if (!d.ok) { lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Sin datos</p>'; return; }
+        const iconos = {instagram:'📸', tiktok:'🎵', marketplace:'🛒', whatsapp:'💬'};
+        const estadoColor = {entregado:'text-green-600 bg-green-50', 'en camino':'text-amber-600 bg-amber-50', confirmado:'text-blue-600 bg-blue-50'};
+        lista.innerHTML = (d.ventas || []).map(v => `
+            <div class="flex items-center justify-between border border-gray-100 rounded-xl px-4 py-3">
+                <div class="flex-1">
+                    <p class="text-sm font-semibold text-gray-800">${v.producto}</p>
+                    <span class="text-xs px-2 py-0.5 rounded-full font-medium ${estadoColor[v.estado] || 'text-gray-500 bg-gray-100'}">${v.estado}</span>
+                    <p class="text-xs text-gray-400 mt-1">${v.cliente} · ${iconos[v.plataforma] || ''} ${v.fuente_display || v.fuente}</p>
+                </div>
+                <p class="text-sm font-bold text-gray-800 ml-4">$${parseInt(v.total).toLocaleString('es-CO')}</p>
+            </div>`).join('') || '<p class="text-xs text-gray-400 text-center py-4">Sin ventas atribuidas</p>';
+        if (d.mix) {
+            const total = Object.values(d.mix).reduce((a,b) => a+b, 0) || 1;
+            mix.innerHTML = `<p class="text-xs font-semibold text-gray-500 mb-2 mt-2">Mix por canal</p>` +
+                Object.entries(d.mix).map(([canal, cnt]) => {
+                    const pct = Math.round(cnt / total * 100);
+                    return `<div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-gray-500 w-24">${iconos[canal] || ''} ${canal}</span>
+                        <div class="flex-1 bg-gray-100 rounded-full h-2"><div class="bg-rose-500 h-2 rounded-full" style="width:${pct}%"></div></div>
+                        <span class="text-xs text-gray-500 w-8 text-right">${pct}%</span>
+                    </div>`;
+                }).join('');
+        }
+    } catch(e) { lista.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Error cargando datos</p>'; }
+}
+
+async function cargarCalendarioPauta() {
+    try {
+        const r = await fetch(PAUTA_BASE + '/calendario');
+        const d = await r.json();
+        if (!d.ok) return;
+        const dias = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB'];
+        const hoy = new Date();
+        const cal = document.getElementById('pauta-calendario');
+        const agenda = document.getElementById('pauta-agenda');
+        cal.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+            const fecha = new Date(hoy); fecha.setDate(hoy.getDate() - hoy.getDay() + i);
+            const esHoy = fecha.toDateString() === hoy.toDateString();
+            cal.innerHTML += `<div class="${esHoy ? 'bg-rose-500 text-white' : 'bg-gray-50 text-gray-600'} rounded-xl p-2 flex flex-col items-center">
+                <span class="text-xs font-bold">${dias[i]}</span>
+                <span class="text-sm font-bold">${fecha.getDate()}</span>
+            </div>`;
+        }
+        agenda.innerHTML = (d.pautas || []).map(p =>
+            `<div class="flex items-center gap-3 border border-gray-100 rounded-xl px-4 py-2">
+                <span class="text-xs font-bold ${p.status === 'activa' ? 'text-rose-500' : 'text-gray-400'}">${p.hora}</span>
+                <span class="text-sm text-gray-700 flex-1">${p.hook || p.mensaje_base || '—'}</span>
+                <span class="text-xs text-gray-400">${(p.plataformas || []).length} redes</span>
+            </div>`
+        ).join('') || '<p class="text-xs text-gray-400 text-center py-2">Sin pautas esta semana</p>';
+    } catch(e) {}
+}
+
+// Cargar pauta cuando se activa el tab
+document.getElementById('tab-pauta').addEventListener('click', () => {
+    cargarKPIsPauta();
+    cargarAtribucion(30);
+    cargarCalendarioPauta();
+});
 
 // === Init ===
 cargarProductos();

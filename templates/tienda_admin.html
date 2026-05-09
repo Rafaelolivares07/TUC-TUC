@@ -2744,9 +2744,24 @@ small{color:#888;font-size:13px;}</style></head>
 <p>Arrastra la imagen a Marketplace</p>
 <small>${_compartirNombre || ''}</small>
 <script>
-document.getElementById('img').addEventListener('mousedown', function() {
-    window.open('https://www.facebook.com/marketplace/create', '_blank', 'width=${half},height=${sh},left=${half},top=0');
-}, {once: true});
+(function() {
+    var img = document.getElementById('img');
+    var imageFile = null;
+    fetch(img.src)
+        .then(function(r) { return r.blob(); })
+        .then(function(blob) {
+            imageFile = new File([blob], 'producto.jpg', {type: blob.type || 'image/jpeg'});
+        });
+    img.addEventListener('mousedown', function() {
+        window.open('https://www.facebook.com/marketplace/create', '_blank', 'width=${half},height=${sh},left=${half},top=0');
+    }, {once: true});
+    img.addEventListener('dragstart', function(e) {
+        if (imageFile) {
+            e.dataTransfer.clearData();
+            try { e.dataTransfer.items.add(imageFile); } catch(ex) {}
+        }
+    });
+})();
 <\/script>
 </body></html>`);
 }

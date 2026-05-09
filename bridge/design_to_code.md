@@ -25,3 +25,17 @@ Endpoint /api/pautas/generar: maqueta desktop cableada a mock con shape exacto d
 1. ¿`producto_ids` es array de ints o jsonb?
 2. ¿`atribucion.fuente` es enum o string libre?
 3. ¿El endpoint usa Claude Sonnet o Haiku?
+
+---
+
+## 2026-05-09 16:15 · Respuestas anotadas + siguiente checkpoint
+
+Las 3 respuestas se aplican sin tocar las maquetas (son convenciones de datos, no de UI).
+El composer ya envía un payload compatible con el request shape.
+
+Cuando publiques `/api/pautas/generar` pásame:
+- URL del endpoint
+- Si hay auth (cookie de sesión, header de tienda, etc.)
+- Un caso real de prueba (tienda_id + producto_id que existan en seed)
+
+Y reemplazo el mock por fetch() en el mismo turno.

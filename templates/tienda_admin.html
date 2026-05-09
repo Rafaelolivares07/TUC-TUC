@@ -2728,16 +2728,10 @@ function _dataUrlToBlob(dataUrl) {
 function _abrirMarketplace() {
     window.open('https://www.facebook.com/marketplace/create', '_blank');
     if (_compartirImagen) {
-        const sw = screen.availWidth, sh = screen.availHeight;
-        const win = window.open('', '_blank', `width=${Math.floor(sw/2)},height=${sh},left=${Math.floor(sw/2)},top=0`);
-        win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${_compartirNombre || 'Producto'}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;gap:20px;padding:24px;}
-img{max-width:100%;max-height:70vh;border-radius:12px;cursor:grab;box-shadow:0 8px 32px #0008;user-select:none;}
-.label{color:#fff;font-size:20px;font-weight:700;text-align:center;}
-.sub{color:#888;font-size:13px;text-align:center;}</style></head>
-<body><img src="${_compartirImagen}" draggable="true">
-<p class="label">↖ Arrastra esta imagen a Marketplace</p>
-<p class="sub">${_compartirNombre || ''}</p></body></html>`);
+        document.getElementById('modal-compartir').classList.add('hidden');
+        document.getElementById('modal-marketplace-img').classList.remove('hidden');
+        document.getElementById('mkt-img').src = _compartirImagen;
+        document.getElementById('mkt-nombre').textContent = _compartirNombre || '';
     }
 }
 </script>
@@ -2863,6 +2857,14 @@ img{max-width:100%;max-height:70vh;border-radius:12px;cursor:grab;box-shadow:0 8
             </button>
         </div>
     </div>
+</div>
+
+<!-- Modal imagen grande para arrastrar a Marketplace -->
+<div id="modal-marketplace-img" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center" style="background:#111;">
+    <button onclick="document.getElementById('modal-marketplace-img').classList.add('hidden')" class="absolute top-4 right-4 text-white text-3xl leading-none opacity-60 hover:opacity-100">&times;</button>
+    <img id="mkt-img" src="" draggable="true" class="max-w-full max-h-[75vh] rounded-xl shadow-2xl cursor-grab select-none">
+    <p class="text-white text-xl font-bold mt-6">Arrastra esta imagen a Marketplace</p>
+    <p id="mkt-nombre" class="text-gray-400 text-sm mt-2"></p>
 </div>
 
 <script>

@@ -2726,9 +2726,29 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], {type: mime});
 }
 function _abrirMarketplace() {
-    navigator.clipboard.writeText(_buildCompartirUrl());
-    toast('Enlace copiado — abriendo Marketplace…');
-    setTimeout(() => window.open('https://www.facebook.com/marketplace/create', '_blank'), 400);
+    const img = _compartirImagen || '';
+    const nombre = _compartirNombre || 'producto';
+    const nombreArchivo = nombre.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.jpg';
+    if (img) {
+        fetch(img)
+            .then(r => r.blob())
+            .then(blob => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = nombreArchivo;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                toast('Imagen descargada — ahora súbela en Marketplace');
+                setTimeout(() => window.open('https://www.facebook.com/marketplace/create', '_blank'), 800);
+            })
+            .catch(() => {
+                toast('Abriendo Marketplace…');
+                window.open('https://www.facebook.com/marketplace/create', '_blank');
+            });
+    } else {
+        toast('Abriendo Marketplace…');
+        window.open('https://www.facebook.com/marketplace/create', '_blank');
+    }
 }
 </script>
 

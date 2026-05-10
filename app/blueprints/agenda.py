@@ -17,6 +17,10 @@ def _asegurar_tabla():
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        try:
+            conn.execute("ALTER TABLE agenda_items ADD COLUMN fecha_limite TIMESTAMP")
+        except Exception:
+            pass
         conn.commit()
 
 
@@ -26,9 +30,12 @@ def agenda():
     _asegurar_tabla()
     with get_db_connection() as conn:
         cur = conn.execute("""
-            SELECT id, texto, completado, categoria, orden
+            SELECT id, texto, completado, categoria, orden, fecha_limite
             FROM agenda_items
-            ORDER BY completado ASC, orden ASC, id ASC
+            ORDER BY completado ASC,
+                     CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END ASC,
+                     fecha_limite ASC NULLS LAST,
+                     orden ASC, id ASC
         """)
         items = cur.fetchall()
     return render_template('agenda.html', items=items)
@@ -41,12 +48,13 @@ def agregar_item():
     data = request.get_json()
     texto = (data.get('texto') or '').strip()
     categoria = (data.get('categoria') or '').strip()
+    fecha_limite = (data.get('fecha_limite') or '').strip() or None
     if not texto:
         return jsonify({'ok': False, 'error': 'Texto vacío'})
     with get_db_connection() as conn:
         cur = conn.execute(
-            "INSERT INTO agenda_items (texto, categoria) VALUES (%s, %s) RETURNING id",
-            (texto, categoria)
+            "INSERT INTO agenda_items (texto, categoria, fecha_limite) VALUES (%s, %s, %s) RETURNING id",
+            (texto, categoria, fecha_limite)
         )
         item_id = cur.fetchone()[0]
         conn.commit()
@@ -85,12 +93,13 @@ def merlin_agregar():
     _asegurar_tabla()
     texto = (data.get('texto') or '').strip()
     categoria = (data.get('categoria') or '').strip()
+    fecha_limite = (data.get('fecha_limite') or '').strip() or None
     if not texto:
         return jsonify({'ok': False, 'error': 'Texto vacío'})
     with get_db_connection() as conn:
         cur = conn.execute(
-            "INSERT INTO agenda_items (texto, categoria) VALUES (%s, %s) RETURNING id",
-            (texto, categoria)
+            "INSERT INTO agenda_items (texto, categoria, fecha_limite) VALUES (%s, %s, %s) RETURNING id",
+            (texto, categoria, fecha_limite)
         )
         item_id = cur.fetchone()[0]
         conn.commit()

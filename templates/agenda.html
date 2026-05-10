@@ -73,8 +73,21 @@
   }
 
   .agregar input[type=text]:focus { border-color: #999; }
-
   .agregar input[type=text]::placeholder { color: #bbb; }
+
+  .agregar input[type=datetime-local] {
+    border: none;
+    border-bottom: 1.5px solid #e0e0e0;
+    padding: 6px 4px;
+    font-size: .85rem;
+    color: #888;
+    background: transparent;
+    outline: none;
+    width: fit-content;
+    transition: border-color .2s;
+  }
+
+  .agregar input[type=datetime-local]:focus { border-color: #bbb; }
 
   .btn-agregar {
     background: #e8e8e8;
@@ -113,14 +126,29 @@
     cursor: pointer;
   }
 
-  .item-texto {
+  .item-body {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .item-texto {
     font-size: .95rem;
     color: #333;
     line-height: 1.5;
     cursor: pointer;
     transition: color .2s;
   }
+
+  .item-fecha {
+    font-size: .75rem;
+    color: #aaa;
+    letter-spacing: .2px;
+  }
+
+  .item-fecha.vence-hoy { color: #e07b00; font-weight: 600; }
+  .item-fecha.vencido   { color: #d04040; font-weight: 600; }
 
   .item.completado .item-texto {
     text-decoration: line-through;
@@ -167,6 +195,7 @@
 
   <div class="agregar">
     <input type="text" id="inp-nuevo" placeholder="Nueva tarea..." maxlength="300">
+    <input type="datetime-local" id="inp-fecha">
     <button class="btn-agregar" onclick="agregar()">+ Agregar</button>
   </div>
 
@@ -181,7 +210,12 @@
     {% for item in pendientes %}
     <li class="item" id="item-{{ item[0] }}">
       <input type="checkbox" onchange="toggle({{ item[0] }}, this)">
-      <span class="item-texto">{{ item[1] }}</span>
+      <div class="item-body">
+        <span class="item-texto">{{ item[1] }}</span>
+        {% if item[5] %}
+        <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
+        {% endif %}
+      </div>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
     </li>
     {% endfor %}
@@ -191,7 +225,12 @@
     {% for item in completados %}
     <li class="item completado" id="item-{{ item[0] }}">
       <input type="checkbox" checked onchange="toggle({{ item[0] }}, this)">
-      <span class="item-texto">{{ item[1] }}</span>
+      <div class="item-body">
+        <span class="item-texto">{{ item[1] }}</span>
+        {% if item[5] %}
+        <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
+        {% endif %}
+      </div>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
     </li>
     {% endfor %}
@@ -204,17 +243,40 @@
     if (e.key === 'Enter') agregar();
   });
 
+  // Renderizar fechas
+  const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  function fmtFecha(ts) {
+    const d = new Date(ts);
+    const hoy = new Date();
+    const manana = new Date(); manana.setDate(hoy.getDate() + 1);
+    const esHoy = d.toDateString() === hoy.toDateString();
+    const esManana = d.toDateString() === manana.toDateString();
+    const hora = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    const fecha = esHoy ? 'Hoy' : esManana ? 'Mañana' : `${d.getDate()} ${MESES[d.getMonth()]}`;
+    return `${fecha} · ${hora}`;
+  }
+
+  document.querySelectorAll('.item-fecha[data-ts]').forEach(el => {
+    const ts = el.dataset.ts;
+    const d = new Date(ts);
+    const hoy = new Date();
+    el.textContent = fmtFecha(ts);
+    if (d < hoy && d.toDateString() !== hoy.toDateString()) el.classList.add('vencido');
+    else if (d.toDateString() === hoy.toDateString()) el.classList.add('vence-hoy');
+  });
+
   async function agregar() {
     const inp = document.getElementById('inp-nuevo');
+    const fecha = document.getElementById('inp-fecha').value;
     const texto = inp.value.trim();
     if (!texto) return;
     const r = await fetch('/agenda/item', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({texto})
+      body: JSON.stringify({texto, fecha_limite: fecha || null})
     });
     const d = await r.json();
-    if (d.ok) { inp.value = ''; location.reload(); }
+    if (d.ok) { inp.value = ''; document.getElementById('inp-fecha').value = ''; location.reload(); }
   }
 
   async function toggle(id, cb) {

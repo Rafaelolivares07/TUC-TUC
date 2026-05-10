@@ -75,3 +75,23 @@ def eliminar_item(item_id):
         conn.execute("DELETE FROM agenda_items WHERE id = %s", (item_id,))
         conn.commit()
     return jsonify({'ok': True})
+
+
+@bp.route('/agenda/merlin', methods=['POST'])
+def merlin_agregar():
+    data = request.get_json()
+    if data.get('token') != 'merlin-agenda-2026':
+        return jsonify({'ok': False, 'error': 'Token inválido'}), 403
+    _asegurar_tabla()
+    texto = (data.get('texto') or '').strip()
+    categoria = (data.get('categoria') or '').strip()
+    if not texto:
+        return jsonify({'ok': False, 'error': 'Texto vacío'})
+    with get_db_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO agenda_items (texto, categoria) VALUES (%s, %s) RETURNING id",
+            (texto, categoria)
+        )
+        item_id = cur.fetchone()[0]
+        conn.commit()
+    return jsonify({'ok': True, 'id': item_id})

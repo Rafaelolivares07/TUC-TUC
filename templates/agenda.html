@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f5f5f0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+
+  .libreta {
+    background: #fff;
+    width: 100%;
+    max-width: 680px;
+    border-radius: 4px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.10), 4px 0 0 #e8e8e8 inset;
+    padding: 48px 48px 48px 64px;
+    position: relative;
+    min-height: 80vh;
+  }
+
+  /* Línea roja vertical de libreta */
+  .libreta::before {
+    content: '';
+    position: absolute;
+    left: 52px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #f0a0a0;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c2c2c;
+    margin-bottom: 8px;
+    letter-spacing: -.5px;
+  }
+
+  .subtitulo {
+    font-size: .82rem;
+    color: #999;
+    margin-bottom: 32px;
+  }
+
+  /* Formulario agregar */
+  .agregar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+
+  .agregar input[type=text] {
+    flex: 1;
+    border: none;
+    border-bottom: 1.5px solid #ccc;
+    padding: 6px 4px;
+    font-size: .95rem;
+    color: #333;
+    background: transparent;
+    outline: none;
+    transition: border-color .2s;
+  }
+
+  .agregar input[type=text]:focus { border-color: #5b8def; }
+
+  .agregar input[type=text]::placeholder { color: #bbb; }
+
+  .btn-agregar {
+    background: #5b8def;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 18px;
+    font-size: .88rem;
+    cursor: pointer;
+    transition: background .2s;
+    white-space: nowrap;
+  }
+
+  .btn-agregar:hover { background: #3a6fd8; }
+
+  /* Items */
+  .items { list-style: none; }
+
+  .item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+    transition: opacity .2s;
+  }
+
+  .item:last-child { border-bottom: none; }
+
+  .item input[type=checkbox] {
+    width: 17px;
+    height: 17px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    accent-color: #5b8def;
+    cursor: pointer;
+  }
+
+  .item-texto {
+    flex: 1;
+    font-size: .95rem;
+    color: #333;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: color .2s;
+  }
+
+  .item.completado .item-texto {
+    text-decoration: line-through;
+    color: #bbb;
+  }
+
+  .item.completado { opacity: .7; }
+
+  .btn-borrar {
+    background: none;
+    border: none;
+    color: #ddd;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color .2s;
+    flex-shrink: 0;
+  }
+
+  .btn-borrar:hover { color: #f55; }
+
+  .seccion-titulo {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #bbb;
+    margin: 24px 0 4px;
+  }
+
+  .empty {
+    color: #ccc;
+    font-size: .9rem;
+    padding: 24px 0;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="libreta">
+  <h1>Agenda</h1>
+  <p class="subtitulo">Rafael Olivares · TUC TUC</p>
+
+  <div class="agregar">
+    <input type="text" id="inp-nuevo" placeholder="Nueva tarea..." maxlength="300">
+    <button class="btn-agregar" onclick="agregar()">+ Agregar</button>
+  </div>
+
+  <ul class="items" id="lista">
+    {% set pendientes = items | selectattr('2', 'equalto', False) | list %}
+    {% set completados = items | selectattr('2', 'equalto', True) | list %}
+
+    {% if not items %}
+      <li class="empty">Sin tareas por ahora.</li>
+    {% endif %}
+
+    {% for item in pendientes %}
+    <li class="item" id="item-{{ item[0] }}">
+      <input type="checkbox" onchange="toggle({{ item[0] }}, this)">
+      <span class="item-texto">{{ item[1] }}</span>
+      <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
+    </li>
+    {% endfor %}
+
+    {% if completados %}
+    <li class="seccion-titulo">Completadas</li>
+    {% for item in completados %}
+    <li class="item completado" id="item-{{ item[0] }}">
+      <input type="checkbox" checked onchange="toggle({{ item[0] }}, this)">
+      <span class="item-texto">{{ item[1] }}</span>
+      <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
+    </li>
+    {% endfor %}
+    {% endif %}
+  </ul>
+</div>
+
+<script>
+  document.getElementById('inp-nuevo').addEventListener('keydown', e => {
+    if (e.key === 'Enter') agregar();
+  });
+
+  async function agregar() {
+    const inp = document.getElementById('inp-nuevo');
+    const texto = inp.value.trim();
+    if (!texto) return;
+    const r = await fetch('/agenda/item', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({texto})
+    });
+    const d = await r.json();
+    if (d.ok) { inp.value = ''; location.reload(); }
+  }
+
+  async function toggle(id, cb) {
+    const r = await fetch(`/agenda/item/${id}/toggle`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      const li = document.getElementById(`item-${id}`);
+      li.classList.toggle('completado', d.completado);
+      cb.checked = d.completado;
+    }
+  }
+
+  async function borrar(id) {
+    await fetch(`/agenda/item/${id}`, {method: 'DELETE'});
+    document.getElementById(`item-${id}`).remove();
+  }
+</script>
+</body>
+</html>

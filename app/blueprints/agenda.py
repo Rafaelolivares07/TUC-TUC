@@ -85,11 +85,26 @@ def eliminar_item(item_id):
     return jsonify({'ok': True})
 
 
-@bp.route('/agenda/merlin', methods=['POST'])
+@bp.route('/agenda/merlin', methods=['GET', 'POST'])
 def merlin_agregar():
-    data = request.get_json()
-    if data.get('token') != 'merlin-agenda-2026':
+    token = request.args.get('token') or (request.get_json(silent=True) or {}).get('token')
+    if token != 'merlin-agenda-2026':
         return jsonify({'ok': False, 'error': 'Token inválido'}), 403
+
+    if request.method == 'GET':
+        with get_db_connection() as conn:
+            cur = conn.execute("""
+                SELECT id, texto, completado, fecha_limite
+                FROM agenda_items
+                ORDER BY completado ASC,
+                         CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END ASC,
+                         fecha_limite ASC NULLS LAST, id ASC
+            """)
+            rows = cur.fetchall()
+        items = [{'id': r[0], 'texto': r[1], 'completado': r[2],
+                  'fecha_limite': r[3].isoformat() if r[3] else None} for r in rows]
+        return jsonify({'ok': True, 'items': items})
+
     _asegurar_tabla()
     texto = (data.get('texto') or '').strip()
     categoria = (data.get('categoria') or '').strip()

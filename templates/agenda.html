@@ -55,15 +55,16 @@
   /* Formulario agregar */
   .agregar {
     display: flex;
+    flex-direction: column;
     gap: 8px;
     margin-bottom: 32px;
   }
 
   .agregar input[type=text] {
-    flex: 1;
+    width: 100%;
     border: none;
     border-bottom: 1.5px solid #ccc;
-    padding: 6px 4px;
+    padding: 8px 4px;
     font-size: .95rem;
     color: #333;
     background: transparent;
@@ -71,23 +72,23 @@
     transition: border-color .2s;
   }
 
-  .agregar input[type=text]:focus { border-color: #5b8def; }
+  .agregar input[type=text]:focus { border-color: #999; }
 
   .agregar input[type=text]::placeholder { color: #bbb; }
 
   .btn-agregar {
-    background: #5b8def;
-    color: #fff;
+    background: #e8e8e8;
+    color: #555;
     border: none;
     border-radius: 6px;
-    padding: 6px 18px;
+    padding: 8px 18px;
     font-size: .88rem;
     cursor: pointer;
     transition: background .2s;
-    white-space: nowrap;
+    align-self: flex-end;
   }
 
-  .btn-agregar:hover { background: #3a6fd8; }
+  .btn-agregar:hover { background: #d5d5d5; }
 
   /* Items */
   .items { list-style: none; }

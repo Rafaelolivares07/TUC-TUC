@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify
 from ..db import get_db_connection
 from .auth import admin_required
 
@@ -7,17 +7,16 @@ bp = Blueprint('agenda', __name__)
 
 def _asegurar_tabla():
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS agenda_items (
-                    id SERIAL PRIMARY KEY,
-                    texto TEXT NOT NULL,
-                    completado BOOLEAN DEFAULT FALSE,
-                    categoria TEXT DEFAULT '',
-                    orden INT DEFAULT 0,
-                    creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agenda_items (
+                id SERIAL PRIMARY KEY,
+                texto TEXT NOT NULL,
+                completado BOOLEAN DEFAULT FALSE,
+                categoria TEXT DEFAULT '',
+                orden INT DEFAULT 0,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -26,13 +25,12 @@ def _asegurar_tabla():
 def agenda():
     _asegurar_tabla()
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, texto, completado, categoria, orden
-                FROM agenda_items
-                ORDER BY completado ASC, orden ASC, id ASC
-            """)
-            items = cur.fetchall()
+        cur = conn.execute("""
+            SELECT id, texto, completado, categoria, orden
+            FROM agenda_items
+            ORDER BY completado ASC, orden ASC, id ASC
+        """)
+        items = cur.fetchall()
     return render_template('agenda.html', items=items)
 
 
@@ -46,12 +44,11 @@ def agregar_item():
     if not texto:
         return jsonify({'ok': False, 'error': 'Texto vacío'})
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO agenda_items (texto, categoria)
-                VALUES (%s, %s) RETURNING id
-            """, (texto, categoria))
-            item_id = cur.fetchone()[0]
+        cur = conn.execute(
+            "INSERT INTO agenda_items (texto, categoria) VALUES (%s, %s) RETURNING id",
+            (texto, categoria)
+        )
+        item_id = cur.fetchone()[0]
         conn.commit()
     return jsonify({'ok': True, 'id': item_id})
 
@@ -60,23 +57,21 @@ def agregar_item():
 @admin_required
 def toggle_item(item_id):
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE agenda_items SET completado = NOT completado
-                WHERE id = %s RETURNING completado
-            """, (item_id,))
-            row = cur.fetchone()
+        cur = conn.execute(
+            "UPDATE agenda_items SET completado = NOT completado WHERE id = %s RETURNING completado",
+            (item_id,)
+        )
+        row = cur.fetchone()
         conn.commit()
     if not row:
         return jsonify({'ok': False, 'error': 'No encontrado'})
-    return jsonify({'ok': True, 'completado': row[0]})
+    return jsonify({'ok': True, 'completado': row['completado']})
 
 
 @bp.route('/agenda/item/<int:item_id>', methods=['DELETE'])
 @admin_required
 def eliminar_item(item_id):
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM agenda_items WHERE id = %s", (item_id,))
+        conn.execute("DELETE FROM agenda_items WHERE id = %s", (item_id,))
         conn.commit()
     return jsonify({'ok': True})

@@ -106,6 +106,7 @@ def merlin_agregar():
         return jsonify({'ok': True, 'items': items})
 
     _asegurar_tabla()
+    data = request.get_json(silent=True) or {}
     texto = (data.get('texto') or '').strip()
     categoria = (data.get('categoria') or '').strip()
     fecha_limite = (data.get('fecha_limite') or '').strip() or None

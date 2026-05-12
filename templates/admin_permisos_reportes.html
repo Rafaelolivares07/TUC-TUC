@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Permisos de Reportes SAR{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <h1 class="h3 mb-4">
+    <i class="bi bi-bar-chart-fill text-primary me-2"></i>Permisos de Reportes SAR
+  </h1>
+
+  {% if not clientes %}
+  <div class="alert alert-warning">
+    Ningún agente se ha conectado en los últimos 30 días.
+  </div>
+  {% else %}
+  <p class="text-muted small mb-4">
+    Habilite reportes por cliente y por fuente. <strong>Local</strong> y <strong>Remoto</strong> son independientes.
+    Si no hay ningún permiso habilitado para un cliente, ese cliente no verá reportes.
+  </p>
+
+  {% for c in clientes %}
+  <div class="card shadow-sm mb-3" id="card-{{ c.id | replace(' ', '_') }}">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <div>
+        <span class="fw-semibold">{{ c.nombre }}</span>
+        <span class="text-muted ms-2 small font-monospace">{{ c.id }}</span>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="guardar('{{ c.id }}')">
+        <i class="bi bi-floppy me-1"></i>Guardar
+      </button>
+    </div>
+    <div class="card-body pb-2">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" style="font-size:.85rem">
+          <thead class="table-light">
+            <tr>
+              <th style="width:40%">Reporte</th>
+              <th style="width:15%" class="text-muted small">Categoría</th>
+              <th class="text-center" style="width:22%">
+                <span class="badge" style="background:#d1e7dd;color:#0a3622">LOCAL</span>
+              </th>
+              <th class="text-center" style="width:22%">
+                <span class="badge" style="background:#cfe2ff;color:#084298">REMOTO</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in reportes %}
+            <tr>
+              <td class="fw-semibold">{{ r.nombre }}</td>
+              <td class="text-muted">{{ r.categoria }}</td>
+              <td class="text-center">
+                <div class="form-check form-switch d-inline-block mb-0">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         id="chk-{{ c.id }}-{{ r.id }}-local"
+                         data-cliente="{{ c.id }}" data-reporte="{{ r.id }}" data-fuente="local">
+                </div>
+              </td>
+              <td class="text-center">
+                <div class="form-check form-switch d-inline-block mb-0">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         id="chk-{{ c.id }}-{{ r.id }}-remoto"
+                         data-cliente="{{ c.id }}" data-reporte="{{ r.id }}" data-fuente="remoto">
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+</div>
+
+<script>
+const CLIENTES  = {{ clientes | tojson }};
+const REPORTES  = {{ reportes | tojson }};
+
+// Carga permisos actuales para cada cliente
+async function cargarTodo() {
+  await Promise.all(CLIENTES.map(c => cargarPermisos(c.id)));
+}
+
+async function cargarPermisos(cid) {
+  try {
+    const r = await fetch(`/api/admin-agent/reportes-permisos/${encodeURIComponent(cid)}`);
+    const d = await r.json();
+    if (!d.ok) return;
+    d.permisos.forEach(p => {
+      const el = document.getElementById(`chk-${cid}-${p.reporte_id}-${p.fuente}`);
+      if (el) el.checked = true;
+    });
+  } catch {}
+}
+
+async function guardar(cid) {
+  // Recopilar todos los checks marcados para este cliente
+  const permisos = [];
+  REPORTES.forEach(r => {
+    ['local', 'remoto'].forEach(fuente => {
+      const el = document.getElementById(`chk-${cid}-${r.id}-${fuente}`);
+      if (el && el.checked) permisos.push({reporte_id: r.id, fuente});
+    });
+  });
+
+  // Encontrar el botón del card de este cliente
+  const cardId = 'card-' + cid.replace(/ /g, '_');
+  const btn = document.querySelector(`#${CSS.escape(cardId)} button`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+
+  try {
+    const r = await fetch(`/api/admin-agent/reportes-permisos/${encodeURIComponent(cid)}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({permisos})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      if (btn) {
+        btn.className = 'btn btn-sm btn-success';
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardado';
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.className = 'btn btn-sm btn-primary';
+          btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+        }, 2000);
+      }
+    } else {
+      alert('Error: ' + d.error);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar'; }
+    }
+  } catch(e) {
+    alert('Error de red: ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar'; }
+  }
+}
+
+cargarTodo();
+</script>
+{% endblock %}

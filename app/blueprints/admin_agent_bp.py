@@ -54,6 +54,13 @@ def _crear_tablas(conn):
             ip VARCHAR(50),
             created_at TIMESTAMPTZ DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS reporte_permisos (
+            id SERIAL PRIMARY KEY,
+            reporte_id VARCHAR(100) NOT NULL,
+            cliente_id VARCHAR(100) NOT NULL,
+            fuente VARCHAR(10) NOT NULL DEFAULT 'local',
+            UNIQUE(reporte_id, cliente_id, fuente)
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -533,3 +540,77 @@ def agentes_page():
 @admin_required
 def consultas_page():
     return render_template('admin_consultas.html')
+
+
+# ── Permisos de reportes SAR por cliente ──────────────────────────────────────
+
+REPORTES_CATALOGO = [
+    {'id': 'inventario',       'nombre': 'Rotación de Inventario', 'categoria': 'Inventario'},
+    {'id': 'ventas_clientes',  'nombre': 'Ventas por Clientes',    'categoria': 'Ventas'},
+    {'id': 'consulta_cuentas', 'nombre': 'Consulta de Cuentas',    'categoria': 'Contabilidad'},
+    {'id': 'reg_ctas',         'nombre': 'Movimientos REG_CTAS',   'categoria': 'Contabilidad'},
+]
+
+
+@bp.route('/api/admin-agent/reportes-permisos/<cliente_id>', methods=['GET'])
+def reportes_permisos_get(cliente_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        rows = conn.execute(
+            "SELECT reporte_id, fuente FROM reporte_permisos WHERE cliente_id=%s",
+            (cliente_id,)
+        ).fetchall()
+        return jsonify({'ok': True, 'permisos': [{'reporte_id': r['reporte_id'], 'fuente': r['fuente']} for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/reportes-permisos/<cliente_id>', methods=['POST'])
+@solo_admin
+def reportes_permisos_set(cliente_id):
+    permisos = (request.get_json() or {}).get('permisos', [])
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        conn.execute("DELETE FROM reporte_permisos WHERE cliente_id=%s", (cliente_id,))
+        for p in permisos:
+            rid   = str(p.get('reporte_id', '')).strip()
+            fuente = str(p.get('fuente', 'local')).strip()
+            if rid and fuente in ('local', 'remoto'):
+                conn.execute(
+                    "INSERT INTO reporte_permisos (reporte_id, cliente_id, fuente) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+                    (rid, cliente_id, fuente)
+                )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/admin/permisos-reportes')
+@solo_admin
+def permisos_reportes_page():
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        rows = conn.execute("""
+            SELECT DISTINCT ON (cliente_id) cliente_id, nombre
+            FROM admin_agent_sesiones
+            WHERE ultimo_ping > NOW() - INTERVAL '30 days'
+            ORDER BY cliente_id, id DESC
+        """).fetchall()
+        clientes = [{'id': r['cliente_id'], 'nombre': r['nombre'] or r['cliente_id']} for r in rows]
+        return render_template('admin_permisos_reportes.html',
+                               clientes=clientes,
+                               reportes=REPORTES_CATALOGO)
+    except Exception as e:
+        return str(e), 500
+    finally:
+        conn.close()

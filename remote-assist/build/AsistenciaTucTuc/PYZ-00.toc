@@ -1,5 +1,5 @@
 ('C:\\Users\\RAFAEL '
- 'OLIVARES\\Documents\\MiAppMedicamentos\\remote-assist\\build\\AsistenciaTucTuc\\PYZ-00.pyz',
+ 'OLIVARES\\Documents\\TucTucV2\\remote-assist\\build\\AsistenciaTucTuc\\PYZ-00.pyz',
  [('PIL',
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\PIL\\__init__.py',
@@ -347,6 +347,7 @@
   ('_py_warnings', 'C:\\Python314\\Lib\\_py_warnings.py', 'PYMODULE'),
   ('_pydatetime', 'C:\\Python314\\Lib\\_pydatetime.py', 'PYMODULE'),
   ('_pydecimal', 'C:\\Python314\\Lib\\_pydecimal.py', 'PYMODULE'),
+  ('_pyio', 'C:\\Python314\\Lib\\_pyio.py', 'PYMODULE'),
   ('_pyrepl', 'C:\\Python314\\Lib\\_pyrepl\\__init__.py', 'PYMODULE'),
   ('_pyrepl._module_completer',
    'C:\\Python314\\Lib\\_pyrepl\\_module_completer.py',
@@ -529,6 +530,70 @@
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\certifi\\core.py',
    'PYMODULE'),
+  ('cffi',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\__init__.py',
+   'PYMODULE'),
+  ('cffi._imp_emulation',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\_imp_emulation.py',
+   'PYMODULE'),
+  ('cffi._shimmed_dist_utils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\_shimmed_dist_utils.py',
+   'PYMODULE'),
+  ('cffi.api',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\api.py',
+   'PYMODULE'),
+  ('cffi.cffi_opcode',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\cffi_opcode.py',
+   'PYMODULE'),
+  ('cffi.commontypes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\commontypes.py',
+   'PYMODULE'),
+  ('cffi.cparser',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\cparser.py',
+   'PYMODULE'),
+  ('cffi.error',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\error.py',
+   'PYMODULE'),
+  ('cffi.ffiplatform',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\ffiplatform.py',
+   'PYMODULE'),
+  ('cffi.lock',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\lock.py',
+   'PYMODULE'),
+  ('cffi.model',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\model.py',
+   'PYMODULE'),
+  ('cffi.pkgconfig',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\pkgconfig.py',
+   'PYMODULE'),
+  ('cffi.recompiler',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\recompiler.py',
+   'PYMODULE'),
+  ('cffi.vengine_cpy',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\vengine_cpy.py',
+   'PYMODULE'),
+  ('cffi.vengine_gen',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\vengine_gen.py',
+   'PYMODULE'),
+  ('cffi.verifier',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\cffi\\verifier.py',
+   'PYMODULE'),
   ('charset_normalizer',
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\charset_normalizer\\__init__.py',
@@ -536,10 +601,6 @@
   ('charset_normalizer.api',
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\charset_normalizer\\api.py',
-   'PYMODULE'),
-  ('charset_normalizer.cd',
-   'C:\\Users\\RAFAEL '
-   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\charset_normalizer\\cd.py',
    'PYMODULE'),
   ('charset_normalizer.constant',
    'C:\\Users\\RAFAEL '
@@ -827,6 +888,18 @@
   ('decimal', 'C:\\Python314\\Lib\\decimal.py', 'PYMODULE'),
   ('difflib', 'C:\\Python314\\Lib\\difflib.py', 'PYMODULE'),
   ('dis', 'C:\\Python314\\Lib\\dis.py', 'PYMODULE'),
+  ('dns',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\dns\\__init__.py',
+   'PYMODULE'),
+  ('dns.rdtypes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\dns\\rdtypes\\__init__.py',
+   'PYMODULE'),
+  ('dns.version',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\dns\\version.py',
+   'PYMODULE'),
   ('doctest', 'C:\\Python314\\Lib\\doctest.py', 'PYMODULE'),
   ('email', 'C:\\Python314\\Lib\\email\\__init__.py', 'PYMODULE'),
   ('email._encoded_words',
@@ -934,12 +1007,1226 @@
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\engineio\\static_files.py',
    'PYMODULE'),
+  ('eventlet',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\__init__.py',
+   'PYMODULE'),
+  ('eventlet._version',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\_version.py',
+   'PYMODULE'),
+  ('eventlet.convenience',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\convenience.py',
+   'PYMODULE'),
+  ('eventlet.corolocal',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\corolocal.py',
+   'PYMODULE'),
+  ('eventlet.event',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\event.py',
+   'PYMODULE'),
+  ('eventlet.green',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\__init__.py',
+   'PYMODULE'),
+  ('eventlet.green.MySQLdb',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\MySQLdb.py',
+   'PYMODULE'),
+  ('eventlet.green.OpenSSL',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\OpenSSL\\__init__.py',
+   'PYMODULE'),
+  ('eventlet.green.OpenSSL.SSL',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\OpenSSL\\SSL.py',
+   'PYMODULE'),
+  ('eventlet.green.OpenSSL.crypto',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\OpenSSL\\crypto.py',
+   'PYMODULE'),
+  ('eventlet.green.OpenSSL.tsafe',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\OpenSSL\\tsafe.py',
+   'PYMODULE'),
+  ('eventlet.green.OpenSSL.version',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\OpenSSL\\version.py',
+   'PYMODULE'),
+  ('eventlet.green.Queue',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\Queue.py',
+   'PYMODULE'),
+  ('eventlet.green._socket_nodns',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\_socket_nodns.py',
+   'PYMODULE'),
+  ('eventlet.green.builtin',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\builtin.py',
+   'PYMODULE'),
+  ('eventlet.green.os',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\os.py',
+   'PYMODULE'),
+  ('eventlet.green.select',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\select.py',
+   'PYMODULE'),
+  ('eventlet.green.selectors',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\selectors.py',
+   'PYMODULE'),
+  ('eventlet.green.socket',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\socket.py',
+   'PYMODULE'),
+  ('eventlet.green.ssl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\ssl.py',
+   'PYMODULE'),
+  ('eventlet.green.subprocess',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\subprocess.py',
+   'PYMODULE'),
+  ('eventlet.green.thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\thread.py',
+   'PYMODULE'),
+  ('eventlet.green.threading',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\threading.py',
+   'PYMODULE'),
+  ('eventlet.green.time',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\time.py',
+   'PYMODULE'),
+  ('eventlet.green.zmq',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\green\\zmq.py',
+   'PYMODULE'),
+  ('eventlet.greenio',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\greenio\\__init__.py',
+   'PYMODULE'),
+  ('eventlet.greenio.base',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\greenio\\base.py',
+   'PYMODULE'),
+  ('eventlet.greenio.py3',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\greenio\\py3.py',
+   'PYMODULE'),
+  ('eventlet.greenpool',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\greenpool.py',
+   'PYMODULE'),
+  ('eventlet.greenthread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\greenthread.py',
+   'PYMODULE'),
+  ('eventlet.hubs',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\hubs\\__init__.py',
+   'PYMODULE'),
+  ('eventlet.hubs.asyncio',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\hubs\\asyncio.py',
+   'PYMODULE'),
+  ('eventlet.hubs.hub',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\hubs\\hub.py',
+   'PYMODULE'),
+  ('eventlet.hubs.timer',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\hubs\\timer.py',
+   'PYMODULE'),
+  ('eventlet.lock',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\lock.py',
+   'PYMODULE'),
+  ('eventlet.patcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\patcher.py',
+   'PYMODULE'),
+  ('eventlet.queue',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\queue.py',
+   'PYMODULE'),
+  ('eventlet.semaphore',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\semaphore.py',
+   'PYMODULE'),
+  ('eventlet.support',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\support\\__init__.py',
+   'PYMODULE'),
+  ('eventlet.support.greendns',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\support\\greendns.py',
+   'PYMODULE'),
+  ('eventlet.support.greenlets',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\support\\greenlets.py',
+   'PYMODULE'),
+  ('eventlet.support.psycopg2_patcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\support\\psycopg2_patcher.py',
+   'PYMODULE'),
+  ('eventlet.timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\timeout.py',
+   'PYMODULE'),
+  ('eventlet.tpool',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\eventlet\\tpool.py',
+   'PYMODULE'),
+  ('fileinput', 'C:\\Python314\\Lib\\fileinput.py', 'PYMODULE'),
   ('fnmatch', 'C:\\Python314\\Lib\\fnmatch.py', 'PYMODULE'),
   ('fractions', 'C:\\Python314\\Lib\\fractions.py', 'PYMODULE'),
   ('ftplib', 'C:\\Python314\\Lib\\ftplib.py', 'PYMODULE'),
   ('getopt', 'C:\\Python314\\Lib\\getopt.py', 'PYMODULE'),
+  ('getpass', 'C:\\Python314\\Lib\\getpass.py', 'PYMODULE'),
   ('gettext', 'C:\\Python314\\Lib\\gettext.py', 'PYMODULE'),
+  ('gevent',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\__init__.py',
+   'PYMODULE'),
+  ('gevent._abstract_linkable',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_abstract_linkable.py',
+   'PYMODULE'),
+  ('gevent._compat',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_compat.py',
+   'PYMODULE'),
+  ('gevent._config',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_config.py',
+   'PYMODULE'),
+  ('gevent._ffi',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_ffi\\__init__.py',
+   'PYMODULE'),
+  ('gevent._ffi.callback',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_ffi\\callback.py',
+   'PYMODULE'),
+  ('gevent._ffi.loop',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_ffi\\loop.py',
+   'PYMODULE'),
+  ('gevent._ffi.watcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_ffi\\watcher.py',
+   'PYMODULE'),
+  ('gevent._fileobjectcommon',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_fileobjectcommon.py',
+   'PYMODULE'),
+  ('gevent._fileobjectposix',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_fileobjectposix.py',
+   'PYMODULE'),
+  ('gevent._greenlet_primitives',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_greenlet_primitives.py',
+   'PYMODULE'),
+  ('gevent._hub_local',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_hub_local.py',
+   'PYMODULE'),
+  ('gevent._hub_primitives',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_hub_primitives.py',
+   'PYMODULE'),
+  ('gevent._ident',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_ident.py',
+   'PYMODULE'),
+  ('gevent._imap',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_imap.py',
+   'PYMODULE'),
+  ('gevent._interfaces',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_interfaces.py',
+   'PYMODULE'),
+  ('gevent._monitor',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_monitor.py',
+   'PYMODULE'),
+  ('gevent._patcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_patcher.py',
+   'PYMODULE'),
+  ('gevent._semaphore',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_semaphore.py',
+   'PYMODULE'),
+  ('gevent._socket3',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_socket3.py',
+   'PYMODULE'),
+  ('gevent._socketcommon',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_socketcommon.py',
+   'PYMODULE'),
+  ('gevent._tblib',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_tblib.py',
+   'PYMODULE'),
+  ('gevent._threading',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_threading.py',
+   'PYMODULE'),
+  ('gevent._tracer',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_tracer.py',
+   'PYMODULE'),
+  ('gevent._util',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_util.py',
+   'PYMODULE'),
+  ('gevent._waiter',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\_waiter.py',
+   'PYMODULE'),
+  ('gevent.ares',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\ares.py',
+   'PYMODULE'),
+  ('gevent.backdoor',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\backdoor.py',
+   'PYMODULE'),
+  ('gevent.baseserver',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\baseserver.py',
+   'PYMODULE'),
+  ('gevent.builtins',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\builtins.py',
+   'PYMODULE'),
+  ('gevent.contextvars',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\contextvars.py',
+   'PYMODULE'),
+  ('gevent.core',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\core.py',
+   'PYMODULE'),
+  ('gevent.event',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\event.py',
+   'PYMODULE'),
+  ('gevent.events',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\events.py',
+   'PYMODULE'),
+  ('gevent.exceptions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\exceptions.py',
+   'PYMODULE'),
+  ('gevent.fileobject',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\fileobject.py',
+   'PYMODULE'),
+  ('gevent.greenlet',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\greenlet.py',
+   'PYMODULE'),
+  ('gevent.hub',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\hub.py',
+   'PYMODULE'),
+  ('gevent.libev',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libev\\__init__.py',
+   'PYMODULE'),
+  ('gevent.libev._corecffi_build',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libev\\_corecffi_build.py',
+   'PYMODULE'),
+  ('gevent.libev.corecffi',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libev\\corecffi.py',
+   'PYMODULE'),
+  ('gevent.libev.watcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libev\\watcher.py',
+   'PYMODULE'),
+  ('gevent.libuv',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libuv\\__init__.py',
+   'PYMODULE'),
+  ('gevent.libuv._corecffi_build',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libuv\\_corecffi_build.py',
+   'PYMODULE'),
+  ('gevent.libuv.loop',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libuv\\loop.py',
+   'PYMODULE'),
+  ('gevent.libuv.watcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\libuv\\watcher.py',
+   'PYMODULE'),
+  ('gevent.local',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\local.py',
+   'PYMODULE'),
+  ('gevent.lock',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\lock.py',
+   'PYMODULE'),
+  ('gevent.monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\__init__.py',
+   'PYMODULE'),
+  ('gevent.monkey.__main__',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\__main__.py',
+   'PYMODULE'),
+  ('gevent.monkey._errors',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_errors.py',
+   'PYMODULE'),
+  ('gevent.monkey._main',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_main.py',
+   'PYMODULE'),
+  ('gevent.monkey._patch_thread_common',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_patch_thread_common.py',
+   'PYMODULE'),
+  ('gevent.monkey._patch_thread_gte313',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_patch_thread_gte313.py',
+   'PYMODULE'),
+  ('gevent.monkey._patch_thread_lt313',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_patch_thread_lt313.py',
+   'PYMODULE'),
+  ('gevent.monkey._state',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_state.py',
+   'PYMODULE'),
+  ('gevent.monkey._util',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\_util.py',
+   'PYMODULE'),
+  ('gevent.monkey.api',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\monkey\\api.py',
+   'PYMODULE'),
+  ('gevent.os',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\os.py',
+   'PYMODULE'),
+  ('gevent.pool',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\pool.py',
+   'PYMODULE'),
+  ('gevent.pywsgi',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\pywsgi.py',
+   'PYMODULE'),
+  ('gevent.queue',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\queue.py',
+   'PYMODULE'),
+  ('gevent.resolver',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\__init__.py',
+   'PYMODULE'),
+  ('gevent.resolver._addresses',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\_addresses.py',
+   'PYMODULE'),
+  ('gevent.resolver._hostsfile',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\_hostsfile.py',
+   'PYMODULE'),
+  ('gevent.resolver.ares',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\ares.py',
+   'PYMODULE'),
+  ('gevent.resolver.blocking',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\blocking.py',
+   'PYMODULE'),
+  ('gevent.resolver.dnspython',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\dnspython.py',
+   'PYMODULE'),
+  ('gevent.resolver.thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver\\thread.py',
+   'PYMODULE'),
+  ('gevent.resolver_ares',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver_ares.py',
+   'PYMODULE'),
+  ('gevent.resolver_thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\resolver_thread.py',
+   'PYMODULE'),
+  ('gevent.select',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\select.py',
+   'PYMODULE'),
+  ('gevent.selectors',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\selectors.py',
+   'PYMODULE'),
+  ('gevent.server',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\server.py',
+   'PYMODULE'),
+  ('gevent.signal',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\signal.py',
+   'PYMODULE'),
+  ('gevent.socket',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\socket.py',
+   'PYMODULE'),
+  ('gevent.ssl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\ssl.py',
+   'PYMODULE'),
+  ('gevent.subprocess',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\subprocess.py',
+   'PYMODULE'),
+  ('gevent.testing',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\__init__.py',
+   'PYMODULE'),
+  ('gevent.testing.errorhandler',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\errorhandler.py',
+   'PYMODULE'),
+  ('gevent.testing.exception',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\exception.py',
+   'PYMODULE'),
+  ('gevent.testing.flaky',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\flaky.py',
+   'PYMODULE'),
+  ('gevent.testing.hub',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\hub.py',
+   'PYMODULE'),
+  ('gevent.testing.leakcheck',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\leakcheck.py',
+   'PYMODULE'),
+  ('gevent.testing.modules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\modules.py',
+   'PYMODULE'),
+  ('gevent.testing.monkey_test',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\monkey_test.py',
+   'PYMODULE'),
+  ('gevent.testing.openfiles',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\openfiles.py',
+   'PYMODULE'),
+  ('gevent.testing.params',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\params.py',
+   'PYMODULE'),
+  ('gevent.testing.patched_tests_setup',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\patched_tests_setup.py',
+   'PYMODULE'),
+  ('gevent.testing.resources',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\resources.py',
+   'PYMODULE'),
+  ('gevent.testing.six',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\six.py',
+   'PYMODULE'),
+  ('gevent.testing.skipping',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\skipping.py',
+   'PYMODULE'),
+  ('gevent.testing.sockets',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\sockets.py',
+   'PYMODULE'),
+  ('gevent.testing.support',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\support.py',
+   'PYMODULE'),
+  ('gevent.testing.switching',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\switching.py',
+   'PYMODULE'),
+  ('gevent.testing.sysinfo',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\sysinfo.py',
+   'PYMODULE'),
+  ('gevent.testing.testcase',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\testcase.py',
+   'PYMODULE'),
+  ('gevent.testing.testrunner',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\testrunner.py',
+   'PYMODULE'),
+  ('gevent.testing.timing',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\timing.py',
+   'PYMODULE'),
+  ('gevent.testing.travis',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\travis.py',
+   'PYMODULE'),
+  ('gevent.testing.util',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\testing\\util.py',
+   'PYMODULE'),
+  ('gevent.tests',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\__init__.py',
+   'PYMODULE'),
+  ('gevent.tests.__main__',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\__main__.py',
+   'PYMODULE'),
+  ('gevent.tests._blocks_at_top_level',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\_blocks_at_top_level.py',
+   'PYMODULE'),
+  ('gevent.tests._import_import_patch',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\_import_import_patch.py',
+   'PYMODULE'),
+  ('gevent.tests._import_patch',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\_import_patch.py',
+   'PYMODULE'),
+  ('gevent.tests._import_wait',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\_import_wait.py',
+   'PYMODULE'),
+  ('gevent.tests._imports_at_top_level',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\_imports_at_top_level.py',
+   'PYMODULE'),
+  ('gevent.tests._imports_imports_at_top_level',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\_imports_imports_at_top_level.py',
+   'PYMODULE'),
+  ('gevent.tests.getaddrinfo_module',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\getaddrinfo_module.py',
+   'PYMODULE'),
+  ('gevent.tests.known_failures',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\known_failures.py',
+   'PYMODULE'),
+  ('gevent.tests.lock_tests',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\lock_tests.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\__init__.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.__main__',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\__main__.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.issue1526_no_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\issue1526_no_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.issue1526_with_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\issue1526_with_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.issue302monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\issue302monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.script',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\script.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.threadpool_monkey_patches',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\threadpool_monkey_patches.py',
+   'PYMODULE'),
+  ('gevent.tests.monkey_package.threadpool_no_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\monkey_package\\threadpool_no_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.test__GreenletExit',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__GreenletExit.py',
+   'PYMODULE'),
+  ('gevent.tests.test___config',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test___config.py',
+   'PYMODULE'),
+  ('gevent.tests.test___ident',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test___ident.py',
+   'PYMODULE'),
+  ('gevent.tests.test___monitor',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test___monitor.py',
+   'PYMODULE'),
+  ('gevent.tests.test___monkey_patching',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test___monkey_patching.py',
+   'PYMODULE'),
+  ('gevent.tests.test__all__',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__all__.py',
+   'PYMODULE'),
+  ('gevent.tests.test__api',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__api.py',
+   'PYMODULE'),
+  ('gevent.tests.test__api_timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__api_timeout.py',
+   'PYMODULE'),
+  ('gevent.tests.test__ares_host_result',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__ares_host_result.py',
+   'PYMODULE'),
+  ('gevent.tests.test__ares_timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__ares_timeout.py',
+   'PYMODULE'),
+  ('gevent.tests.test__backdoor',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__backdoor.py',
+   'PYMODULE'),
+  ('gevent.tests.test__close_backend_fd',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__close_backend_fd.py',
+   'PYMODULE'),
+  ('gevent.tests.test__compat',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__compat.py',
+   'PYMODULE'),
+  ('gevent.tests.test__contextvars',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__contextvars.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_async',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_async.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_callback',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_callback.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_fork',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_fork.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_loop_run',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_loop_run.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_stat',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_stat.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_timer',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_timer.py',
+   'PYMODULE'),
+  ('gevent.tests.test__core_watcher',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__core_watcher.py',
+   'PYMODULE'),
+  ('gevent.tests.test__destroy',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__destroy.py',
+   'PYMODULE'),
+  ('gevent.tests.test__destroy_default_loop',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__destroy_default_loop.py',
+   'PYMODULE'),
+  ('gevent.tests.test__doctests',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__doctests.py',
+   'PYMODULE'),
+  ('gevent.tests.test__environ',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__environ.py',
+   'PYMODULE'),
+  ('gevent.tests.test__event',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__event.py',
+   'PYMODULE'),
+  ('gevent.tests.test__events',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__events.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_echoserver',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_echoserver.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_portforwarder',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_portforwarder.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_udp_client',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_udp_client.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_udp_server',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_udp_server.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_webproxy',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_webproxy.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_wsgiserver',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_wsgiserver.py',
+   'PYMODULE'),
+  ('gevent.tests.test__example_wsgiserver_ssl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__example_wsgiserver_ssl.py',
+   'PYMODULE'),
+  ('gevent.tests.test__examples',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__examples.py',
+   'PYMODULE'),
+  ('gevent.tests.test__exc_info',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__exc_info.py',
+   'PYMODULE'),
+  ('gevent.tests.test__execmodules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__execmodules.py',
+   'PYMODULE'),
+  ('gevent.tests.test__fileobject',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__fileobject.py',
+   'PYMODULE'),
+  ('gevent.tests.test__getaddrinfo_import',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__getaddrinfo_import.py',
+   'PYMODULE'),
+  ('gevent.tests.test__greenio',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__greenio.py',
+   'PYMODULE'),
+  ('gevent.tests.test__greenlet',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__greenlet.py',
+   'PYMODULE'),
+  ('gevent.tests.test__greenletset',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__greenletset.py',
+   'PYMODULE'),
+  ('gevent.tests.test__greenness',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__greenness.py',
+   'PYMODULE'),
+  ('gevent.tests.test__hub',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__hub.py',
+   'PYMODULE'),
+  ('gevent.tests.test__hub_join',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__hub_join.py',
+   'PYMODULE'),
+  ('gevent.tests.test__hub_join_timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__hub_join_timeout.py',
+   'PYMODULE'),
+  ('gevent.tests.test__import_blocking_in_greenlet',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__import_blocking_in_greenlet.py',
+   'PYMODULE'),
+  ('gevent.tests.test__import_wait',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__import_wait.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue112',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue112.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue1686',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue1686.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue1864',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue1864.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue230',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue230.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue330',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue330.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue467',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue467.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue6',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue6.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue600',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue600.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue607',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue607.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue639',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue639.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issue_728',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issue_728.py',
+   'PYMODULE'),
+  ('gevent.tests.test__issues461_471',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__issues461_471.py',
+   'PYMODULE'),
+  ('gevent.tests.test__iwait',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__iwait.py',
+   'PYMODULE'),
+  ('gevent.tests.test__joinall',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__joinall.py',
+   'PYMODULE'),
+  ('gevent.tests.test__local',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__local.py',
+   'PYMODULE'),
+  ('gevent.tests.test__lock',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__lock.py',
+   'PYMODULE'),
+  ('gevent.tests.test__loop_callback',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__loop_callback.py',
+   'PYMODULE'),
+  ('gevent.tests.test__makefile_ref',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__makefile_ref.py',
+   'PYMODULE'),
+  ('gevent.tests.test__memleak',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__memleak.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_builtins_future',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_builtins_future.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_hub_in_thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_hub_in_thread.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_logging',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_logging.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_module_run',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_module_run.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_multiple_imports',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_multiple_imports.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_queue',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_queue.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_select',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_select.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_selectors',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_selectors.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_sigchld',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_sigchld.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_sigchld_2',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_sigchld_2.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_sigchld_3',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_sigchld_3.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_sigchld_wakeup_fd',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_sigchld_wakeup_fd.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_ssl_warning',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_ssl_warning.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_ssl_warning2',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_ssl_warning2.py',
+   'PYMODULE'),
+  ('gevent.tests.test__monkey_ssl_warning3',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__monkey_ssl_warning3.py',
+   'PYMODULE'),
+  ('gevent.tests.test__nondefaultloop',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__nondefaultloop.py',
+   'PYMODULE'),
+  ('gevent.tests.test__order',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__order.py',
+   'PYMODULE'),
+  ('gevent.tests.test__os',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__os.py',
+   'PYMODULE'),
+  ('gevent.tests.test__pool',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__pool.py',
+   'PYMODULE'),
+  ('gevent.tests.test__pywsgi',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__pywsgi.py',
+   'PYMODULE'),
+  ('gevent.tests.test__queue',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__queue.py',
+   'PYMODULE'),
+  ('gevent.tests.test__real_greenlet',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__real_greenlet.py',
+   'PYMODULE'),
+  ('gevent.tests.test__refcount',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__refcount.py',
+   'PYMODULE'),
+  ('gevent.tests.test__refcount_core',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__refcount_core.py',
+   'PYMODULE'),
+  ('gevent.tests.test__resolver_dnspython',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__resolver_dnspython.py',
+   'PYMODULE'),
+  ('gevent.tests.test__select',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__select.py',
+   'PYMODULE'),
+  ('gevent.tests.test__selectors',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__selectors.py',
+   'PYMODULE'),
+  ('gevent.tests.test__semaphore',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__semaphore.py',
+   'PYMODULE'),
+  ('gevent.tests.test__server',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__server.py',
+   'PYMODULE'),
+  ('gevent.tests.test__server_pywsgi',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__server_pywsgi.py',
+   'PYMODULE'),
+  ('gevent.tests.test__signal',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__signal.py',
+   'PYMODULE'),
+  ('gevent.tests.test__sleep0',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__sleep0.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_close',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_close.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_dns',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_dns.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_dns6',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_dns6.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_errors',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_errors.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_ex',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_ex.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_send_memoryview',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_send_memoryview.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_ssl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_ssl.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socket_timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socket_timeout.py',
+   'PYMODULE'),
+  ('gevent.tests.test__socketpair',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__socketpair.py',
+   'PYMODULE'),
+  ('gevent.tests.test__ssl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__ssl.py',
+   'PYMODULE'),
+  ('gevent.tests.test__subprocess',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__subprocess.py',
+   'PYMODULE'),
+  ('gevent.tests.test__subprocess_interrupted',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__subprocess_interrupted.py',
+   'PYMODULE'),
+  ('gevent.tests.test__subprocess_poll',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__subprocess_poll.py',
+   'PYMODULE'),
+  ('gevent.tests.test__systemerror',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__systemerror.py',
+   'PYMODULE'),
+  ('gevent.tests.test__thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__thread.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_2',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_2.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_before_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_before_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_fork_from_dummy',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_fork_from_dummy.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_holding_lock_while_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_holding_lock_while_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_monkey_in_thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_monkey_in_thread.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_native_before_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_native_before_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_no_monkey',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_no_monkey.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_patched_local',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_patched_local.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threading_vs_settrace',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threading_vs_settrace.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threadpool',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threadpool.py',
+   'PYMODULE'),
+  ('gevent.tests.test__threadpool_executor_patched',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__threadpool_executor_patched.py',
+   'PYMODULE'),
+  ('gevent.tests.test__timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__timeout.py',
+   'PYMODULE'),
+  ('gevent.tests.test__util',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\tests\\test__util.py',
+   'PYMODULE'),
+  ('gevent.thread',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\thread.py',
+   'PYMODULE'),
+  ('gevent.threading',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\threading.py',
+   'PYMODULE'),
+  ('gevent.threadpool',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\threadpool.py',
+   'PYMODULE'),
+  ('gevent.time',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\time.py',
+   'PYMODULE'),
+  ('gevent.timeout',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\timeout.py',
+   'PYMODULE'),
+  ('gevent.util',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\util.py',
+   'PYMODULE'),
+  ('gevent.win32util',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\gevent\\win32util.py',
+   'PYMODULE'),
   ('glob', 'C:\\Python314\\Lib\\glob.py', 'PYMODULE'),
+  ('greenlet',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\greenlet\\__init__.py',
+   'PYMODULE'),
   ('gzip', 'C:\\Python314\\Lib\\gzip.py', 'PYMODULE'),
   ('hashlib', 'C:\\Python314\\Lib\\hashlib.py', 'PYMODULE'),
   ('hmac', 'C:\\Python314\\Lib\\hmac.py', 'PYMODULE'),
@@ -1041,6 +2328,18 @@
   ('logging', 'C:\\Python314\\Lib\\logging\\__init__.py', 'PYMODULE'),
   ('lzma', 'C:\\Python314\\Lib\\lzma.py', 'PYMODULE'),
   ('mimetypes', 'C:\\Python314\\Lib\\mimetypes.py', 'PYMODULE'),
+  ('more_itertools',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\more_itertools\\__init__.py',
+   'PYMODULE'),
+  ('more_itertools.more',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\more_itertools\\more.py',
+   'PYMODULE'),
+  ('more_itertools.recipes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\more_itertools\\recipes.py',
+   'PYMODULE'),
   ('mouseinfo',
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\mouseinfo\\__init__.py',
@@ -1156,6 +2455,558 @@
    'PYMODULE'),
   ('netrc', 'C:\\Python314\\Lib\\netrc.py', 'PYMODULE'),
   ('numbers', 'C:\\Python314\\Lib\\numbers.py', 'PYMODULE'),
+  ('numpy',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\__init__.py',
+   'PYMODULE'),
+  ('numpy.__config__',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\__config__.py',
+   'PYMODULE'),
+  ('numpy._array_api_info',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_array_api_info.py',
+   'PYMODULE'),
+  ('numpy._core',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\__init__.py',
+   'PYMODULE'),
+  ('numpy._core._add_newdocs',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_add_newdocs.py',
+   'PYMODULE'),
+  ('numpy._core._add_newdocs_scalars',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_add_newdocs_scalars.py',
+   'PYMODULE'),
+  ('numpy._core._asarray',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_asarray.py',
+   'PYMODULE'),
+  ('numpy._core._dtype',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_dtype.py',
+   'PYMODULE'),
+  ('numpy._core._dtype_ctypes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_dtype_ctypes.py',
+   'PYMODULE'),
+  ('numpy._core._exceptions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_exceptions.py',
+   'PYMODULE'),
+  ('numpy._core._internal',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_internal.py',
+   'PYMODULE'),
+  ('numpy._core._methods',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_methods.py',
+   'PYMODULE'),
+  ('numpy._core._string_helpers',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_string_helpers.py',
+   'PYMODULE'),
+  ('numpy._core._type_aliases',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_type_aliases.py',
+   'PYMODULE'),
+  ('numpy._core._ufunc_config',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\_ufunc_config.py',
+   'PYMODULE'),
+  ('numpy._core.arrayprint',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\arrayprint.py',
+   'PYMODULE'),
+  ('numpy._core.defchararray',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\defchararray.py',
+   'PYMODULE'),
+  ('numpy._core.einsumfunc',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\einsumfunc.py',
+   'PYMODULE'),
+  ('numpy._core.fromnumeric',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\fromnumeric.py',
+   'PYMODULE'),
+  ('numpy._core.function_base',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\function_base.py',
+   'PYMODULE'),
+  ('numpy._core.getlimits',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\getlimits.py',
+   'PYMODULE'),
+  ('numpy._core.memmap',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\memmap.py',
+   'PYMODULE'),
+  ('numpy._core.multiarray',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\multiarray.py',
+   'PYMODULE'),
+  ('numpy._core.numeric',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\numeric.py',
+   'PYMODULE'),
+  ('numpy._core.numerictypes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\numerictypes.py',
+   'PYMODULE'),
+  ('numpy._core.overrides',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\overrides.py',
+   'PYMODULE'),
+  ('numpy._core.printoptions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\printoptions.py',
+   'PYMODULE'),
+  ('numpy._core.records',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\records.py',
+   'PYMODULE'),
+  ('numpy._core.shape_base',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\shape_base.py',
+   'PYMODULE'),
+  ('numpy._core.strings',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\strings.py',
+   'PYMODULE'),
+  ('numpy._core.umath',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_core\\umath.py',
+   'PYMODULE'),
+  ('numpy._distributor_init',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_distributor_init.py',
+   'PYMODULE'),
+  ('numpy._expired_attrs_2_0',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_expired_attrs_2_0.py',
+   'PYMODULE'),
+  ('numpy._globals',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_globals.py',
+   'PYMODULE'),
+  ('numpy._pytesttester',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_pytesttester.py',
+   'PYMODULE'),
+  ('numpy._typing',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\__init__.py',
+   'PYMODULE'),
+  ('numpy._typing._add_docstring',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_add_docstring.py',
+   'PYMODULE'),
+  ('numpy._typing._array_like',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_array_like.py',
+   'PYMODULE'),
+  ('numpy._typing._char_codes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_char_codes.py',
+   'PYMODULE'),
+  ('numpy._typing._dtype_like',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_dtype_like.py',
+   'PYMODULE'),
+  ('numpy._typing._nbit',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_nbit.py',
+   'PYMODULE'),
+  ('numpy._typing._nbit_base',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_nbit_base.py',
+   'PYMODULE'),
+  ('numpy._typing._nested_sequence',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_nested_sequence.py',
+   'PYMODULE'),
+  ('numpy._typing._scalars',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_scalars.py',
+   'PYMODULE'),
+  ('numpy._typing._shape',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_shape.py',
+   'PYMODULE'),
+  ('numpy._typing._ufunc',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_typing\\_ufunc.py',
+   'PYMODULE'),
+  ('numpy._utils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_utils\\__init__.py',
+   'PYMODULE'),
+  ('numpy._utils._convertions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_utils\\_convertions.py',
+   'PYMODULE'),
+  ('numpy._utils._inspect',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\_utils\\_inspect.py',
+   'PYMODULE'),
+  ('numpy.char',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\char\\__init__.py',
+   'PYMODULE'),
+  ('numpy.core',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\core\\__init__.py',
+   'PYMODULE'),
+  ('numpy.core._utils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\core\\_utils.py',
+   'PYMODULE'),
+  ('numpy.ctypeslib',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\ctypeslib\\__init__.py',
+   'PYMODULE'),
+  ('numpy.ctypeslib._ctypeslib',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\ctypeslib\\_ctypeslib.py',
+   'PYMODULE'),
+  ('numpy.dtypes',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\dtypes.py',
+   'PYMODULE'),
+  ('numpy.exceptions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\exceptions.py',
+   'PYMODULE'),
+  ('numpy.f2py',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\__init__.py',
+   'PYMODULE'),
+  ('numpy.f2py.__version__',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\__version__.py',
+   'PYMODULE'),
+  ('numpy.f2py._backends',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\_backends\\__init__.py',
+   'PYMODULE'),
+  ('numpy.f2py._backends._backend',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\_backends\\_backend.py',
+   'PYMODULE'),
+  ('numpy.f2py._backends._distutils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\_backends\\_distutils.py',
+   'PYMODULE'),
+  ('numpy.f2py._backends._meson',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\_backends\\_meson.py',
+   'PYMODULE'),
+  ('numpy.f2py._isocbind',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\_isocbind.py',
+   'PYMODULE'),
+  ('numpy.f2py.auxfuncs',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\auxfuncs.py',
+   'PYMODULE'),
+  ('numpy.f2py.capi_maps',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\capi_maps.py',
+   'PYMODULE'),
+  ('numpy.f2py.cb_rules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\cb_rules.py',
+   'PYMODULE'),
+  ('numpy.f2py.cfuncs',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\cfuncs.py',
+   'PYMODULE'),
+  ('numpy.f2py.common_rules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\common_rules.py',
+   'PYMODULE'),
+  ('numpy.f2py.crackfortran',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\crackfortran.py',
+   'PYMODULE'),
+  ('numpy.f2py.diagnose',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\diagnose.py',
+   'PYMODULE'),
+  ('numpy.f2py.f2py2e',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\f2py2e.py',
+   'PYMODULE'),
+  ('numpy.f2py.f90mod_rules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\f90mod_rules.py',
+   'PYMODULE'),
+  ('numpy.f2py.func2subr',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\func2subr.py',
+   'PYMODULE'),
+  ('numpy.f2py.rules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\rules.py',
+   'PYMODULE'),
+  ('numpy.f2py.symbolic',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\symbolic.py',
+   'PYMODULE'),
+  ('numpy.f2py.use_rules',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\f2py\\use_rules.py',
+   'PYMODULE'),
+  ('numpy.fft',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\fft\\__init__.py',
+   'PYMODULE'),
+  ('numpy.fft._helper',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\fft\\_helper.py',
+   'PYMODULE'),
+  ('numpy.fft._pocketfft',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\fft\\_pocketfft.py',
+   'PYMODULE'),
+  ('numpy.lib',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\__init__.py',
+   'PYMODULE'),
+  ('numpy.lib._array_utils_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_array_utils_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._arraypad_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_arraypad_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._arraysetops_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_arraysetops_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._arrayterator_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_arrayterator_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._datasource',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_datasource.py',
+   'PYMODULE'),
+  ('numpy.lib._format_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_format_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._function_base_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_function_base_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._histograms_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_histograms_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._index_tricks_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_index_tricks_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._iotools',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_iotools.py',
+   'PYMODULE'),
+  ('numpy.lib._nanfunctions_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_nanfunctions_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._npyio_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_npyio_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._polynomial_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_polynomial_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._scimath_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_scimath_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._shape_base_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_shape_base_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._stride_tricks_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_stride_tricks_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._twodim_base_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_twodim_base_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._type_check_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_type_check_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._ufunclike_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_ufunclike_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._utils_impl',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_utils_impl.py',
+   'PYMODULE'),
+  ('numpy.lib._version',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\_version.py',
+   'PYMODULE'),
+  ('numpy.lib.array_utils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\array_utils.py',
+   'PYMODULE'),
+  ('numpy.lib.format',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\format.py',
+   'PYMODULE'),
+  ('numpy.lib.introspect',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\introspect.py',
+   'PYMODULE'),
+  ('numpy.lib.mixins',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\mixins.py',
+   'PYMODULE'),
+  ('numpy.lib.npyio',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\npyio.py',
+   'PYMODULE'),
+  ('numpy.lib.recfunctions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\recfunctions.py',
+   'PYMODULE'),
+  ('numpy.lib.scimath',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\scimath.py',
+   'PYMODULE'),
+  ('numpy.lib.stride_tricks',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\lib\\stride_tricks.py',
+   'PYMODULE'),
+  ('numpy.linalg',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\linalg\\__init__.py',
+   'PYMODULE'),
+  ('numpy.linalg._linalg',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\linalg\\_linalg.py',
+   'PYMODULE'),
+  ('numpy.ma',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\ma\\__init__.py',
+   'PYMODULE'),
+  ('numpy.ma.core',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\ma\\core.py',
+   'PYMODULE'),
+  ('numpy.ma.extras',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\ma\\extras.py',
+   'PYMODULE'),
+  ('numpy.ma.mrecords',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\ma\\mrecords.py',
+   'PYMODULE'),
+  ('numpy.matlib',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\matlib.py',
+   'PYMODULE'),
+  ('numpy.matrixlib',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\matrixlib\\__init__.py',
+   'PYMODULE'),
+  ('numpy.matrixlib.defmatrix',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\matrixlib\\defmatrix.py',
+   'PYMODULE'),
+  ('numpy.polynomial',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\__init__.py',
+   'PYMODULE'),
+  ('numpy.polynomial._polybase',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\_polybase.py',
+   'PYMODULE'),
+  ('numpy.polynomial.chebyshev',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\chebyshev.py',
+   'PYMODULE'),
+  ('numpy.polynomial.hermite',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\hermite.py',
+   'PYMODULE'),
+  ('numpy.polynomial.hermite_e',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\hermite_e.py',
+   'PYMODULE'),
+  ('numpy.polynomial.laguerre',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\laguerre.py',
+   'PYMODULE'),
+  ('numpy.polynomial.legendre',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\legendre.py',
+   'PYMODULE'),
+  ('numpy.polynomial.polynomial',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\polynomial.py',
+   'PYMODULE'),
+  ('numpy.polynomial.polyutils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\polynomial\\polyutils.py',
+   'PYMODULE'),
+  ('numpy.random',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\random\\__init__.py',
+   'PYMODULE'),
+  ('numpy.random._pickle',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\random\\_pickle.py',
+   'PYMODULE'),
+  ('numpy.rec',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\rec\\__init__.py',
+   'PYMODULE'),
+  ('numpy.strings',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\strings\\__init__.py',
+   'PYMODULE'),
+  ('numpy.testing',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\testing\\__init__.py',
+   'PYMODULE'),
+  ('numpy.testing._private',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\testing\\_private\\__init__.py',
+   'PYMODULE'),
+  ('numpy.testing._private.extbuild',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\testing\\_private\\extbuild.py',
+   'PYMODULE'),
+  ('numpy.testing._private.utils',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\testing\\_private\\utils.py',
+   'PYMODULE'),
+  ('numpy.testing.overrides',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\testing\\overrides.py',
+   'PYMODULE'),
+  ('numpy.typing',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\typing\\__init__.py',
+   'PYMODULE'),
+  ('numpy.version',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\numpy\\version.py',
+   'PYMODULE'),
   ('opcode', 'C:\\Python314\\Lib\\opcode.py', 'PYMODULE'),
   ('packaging',
    'C:\\Users\\RAFAEL '
@@ -1224,6 +3075,50 @@
   ('pkgutil', 'C:\\Python314\\Lib\\pkgutil.py', 'PYMODULE'),
   ('platform', 'C:\\Python314\\Lib\\platform.py', 'PYMODULE'),
   ('pprint', 'C:\\Python314\\Lib\\pprint.py', 'PYMODULE'),
+  ('psutil',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psutil\\__init__.py',
+   'PYMODULE'),
+  ('psutil._common',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psutil\\_common.py',
+   'PYMODULE'),
+  ('psutil._ntuples',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psutil\\_ntuples.py',
+   'PYMODULE'),
+  ('psutil._pswindows',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psutil\\_pswindows.py',
+   'PYMODULE'),
+  ('psycopg2',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\__init__.py',
+   'PYMODULE'),
+  ('psycopg2._ipaddress',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\_ipaddress.py',
+   'PYMODULE'),
+  ('psycopg2._json',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\_json.py',
+   'PYMODULE'),
+  ('psycopg2._range',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\_range.py',
+   'PYMODULE'),
+  ('psycopg2.extensions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\extensions.py',
+   'PYMODULE'),
+  ('psycopg2.extras',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\extras.py',
+   'PYMODULE'),
+  ('psycopg2.sql',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\psycopg2\\sql.py',
+   'PYMODULE'),
   ('py_compile', 'C:\\Python314\\Lib\\py_compile.py', 'PYMODULE'),
   ('pyautogui',
    'C:\\Users\\RAFAEL '
@@ -1240,6 +3135,26 @@
   ('pyautogui._pyautogui_x11',
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\pyautogui\\_pyautogui_x11.py',
+   'PYMODULE'),
+  ('pycparser',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\pycparser\\__init__.py',
+   'PYMODULE'),
+  ('pycparser.ast_transforms',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\pycparser\\ast_transforms.py',
+   'PYMODULE'),
+  ('pycparser.c_ast',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\pycparser\\c_ast.py',
+   'PYMODULE'),
+  ('pycparser.c_lexer',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\pycparser\\c_lexer.py',
+   'PYMODULE'),
+  ('pycparser.c_parser',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\pycparser\\c_parser.py',
    'PYMODULE'),
   ('pydoc', 'C:\\Python314\\Lib\\pydoc.py', 'PYMODULE'),
   ('pydoc_data', 'C:\\Python314\\Lib\\pydoc_data\\__init__.py', 'PYMODULE'),
@@ -1623,18 +3538,6 @@
   ('setuptools._vendor.jaraco.text',
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\setuptools\\_vendor\\jaraco\\text\\__init__.py',
-   'PYMODULE'),
-  ('setuptools._vendor.more_itertools',
-   'C:\\Users\\RAFAEL '
-   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\setuptools\\_vendor\\more_itertools\\__init__.py',
-   'PYMODULE'),
-  ('setuptools._vendor.more_itertools.more',
-   'C:\\Users\\RAFAEL '
-   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\setuptools\\_vendor\\more_itertools\\more.py',
-   'PYMODULE'),
-  ('setuptools._vendor.more_itertools.recipes',
-   'C:\\Users\\RAFAEL '
-   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\setuptools\\_vendor\\more_itertools\\recipes.py',
    'PYMODULE'),
   ('setuptools._vendor.packaging',
    'C:\\Users\\RAFAEL '
@@ -2030,6 +3933,10 @@
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\socketio\\zmq_manager.py',
    'PYMODULE'),
   ('socketserver', 'C:\\Python314\\Lib\\socketserver.py', 'PYMODULE'),
+  ('socks',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\socks.py',
+   'PYMODULE'),
   ('ssl', 'C:\\Python314\\Lib\\ssl.py', 'PYMODULE'),
   ('statistics', 'C:\\Python314\\Lib\\statistics.py', 'PYMODULE'),
   ('string', 'C:\\Python314\\Lib\\string\\__init__.py', 'PYMODULE'),
@@ -2038,6 +3945,26 @@
   ('sysconfig', 'C:\\Python314\\Lib\\sysconfig\\__init__.py', 'PYMODULE'),
   ('tarfile', 'C:\\Python314\\Lib\\tarfile.py', 'PYMODULE'),
   ('tempfile', 'C:\\Python314\\Lib\\tempfile.py', 'PYMODULE'),
+  ('test', 'C:\\Python314\\Lib\\test\\__init__.py', 'PYMODULE'),
+  ('test.libregrtest',
+   'C:\\Python314\\Lib\\test\\libregrtest\\__init__.py',
+   'PYMODULE'),
+  ('test.lock_tests', 'C:\\Python314\\Lib\\test\\lock_tests.py', 'PYMODULE'),
+  ('test.support',
+   'C:\\Python314\\Lib\\test\\support\\__init__.py',
+   'PYMODULE'),
+  ('test.support.import_helper',
+   'C:\\Python314\\Lib\\test\\support\\import_helper.py',
+   'PYMODULE'),
+  ('test.support.os_helper',
+   'C:\\Python314\\Lib\\test\\support\\os_helper.py',
+   'PYMODULE'),
+  ('test.support.script_helper',
+   'C:\\Python314\\Lib\\test\\support\\script_helper.py',
+   'PYMODULE'),
+  ('test.support.threading_helper',
+   'C:\\Python314\\Lib\\test\\support\\threading_helper.py',
+   'PYMODULE'),
   ('textwrap', 'C:\\Python314\\Lib\\textwrap.py', 'PYMODULE'),
   ('threading', 'C:\\Python314\\Lib\\threading.py', 'PYMODULE'),
   ('tkinter', 'C:\\Python314\\Lib\\tkinter\\__init__.py', 'PYMODULE'),
@@ -2285,6 +4212,8 @@
    'C:\\Users\\RAFAEL '
    'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\websocket\\_utils.py',
    'PYMODULE'),
+  ('wsgiref', 'C:\\Python314\\Lib\\wsgiref\\__init__.py', 'PYMODULE'),
+  ('wsgiref.validate', 'C:\\Python314\\Lib\\wsgiref\\validate.py', 'PYMODULE'),
   ('xml', 'C:\\Python314\\Lib\\xml\\__init__.py', 'PYMODULE'),
   ('xml.etree', 'C:\\Python314\\Lib\\xml\\etree\\__init__.py', 'PYMODULE'),
   ('xml.etree.ElementInclude',
@@ -2324,4 +4253,41 @@
   ('zipfile._path.glob',
    'C:\\Python314\\Lib\\zipfile\\_path\\glob.py',
    'PYMODULE'),
-  ('zipimport', 'C:\\Python314\\Lib\\zipimport.py', 'PYMODULE')])
+  ('zipimport', 'C:\\Python314\\Lib\\zipimport.py', 'PYMODULE'),
+  ('zope', '-', 'PYMODULE'),
+  ('zope.event',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\event\\__init__.py',
+   'PYMODULE'),
+  ('zope.interface',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\__init__.py',
+   'PYMODULE'),
+  ('zope.interface._compat',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\_compat.py',
+   'PYMODULE'),
+  ('zope.interface.declarations',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\declarations.py',
+   'PYMODULE'),
+  ('zope.interface.exceptions',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\exceptions.py',
+   'PYMODULE'),
+  ('zope.interface.interface',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\interface.py',
+   'PYMODULE'),
+  ('zope.interface.interfaces',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\interfaces.py',
+   'PYMODULE'),
+  ('zope.interface.ro',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\ro.py',
+   'PYMODULE'),
+  ('zope.interface.verify',
+   'C:\\Users\\RAFAEL '
+   'OLIVARES\\AppData\\Roaming\\Python\\Python314\\site-packages\\zope\\interface\\verify.py',
+   'PYMODULE')])

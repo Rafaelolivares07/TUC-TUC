@@ -261,6 +261,8 @@ def respuesta():
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
+        import traceback, logging
+        logging.error(f"respuesta 500: {e}\n{traceback.format_exc()}")
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

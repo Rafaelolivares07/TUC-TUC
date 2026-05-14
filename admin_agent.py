@@ -630,6 +630,8 @@ def _procesar_consulta(base, token, ruta_bd, consulta):
         r = requests.post(f"{base}/api/admin-agent/respuesta",
             json={'token': token, 'consulta_id': cid, 'respuesta': resultado},
             timeout=60)
+        if not r.ok:
+            print(f"  -> respuesta HTTP {r.status_code}: {r.text[:500]}")
         r.raise_for_status()
         n = len(resultado) if hasattr(resultado, '__len__') else '?'
         print(f"  -> OK #{cid} ({n})")

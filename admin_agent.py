@@ -387,7 +387,233 @@ CONSULTAS = {
     'buscar_nit':        consulta_buscar_nit,
     'buscar_cuenta':     consulta_buscar_cuenta,
     'buscar_empresas':   consulta_buscar_empresas,
+    'multi_tabla':       None,  # registrado abajo después de definir la función
 }
+
+
+# ── Lector genérico de DBF (para multi_tabla) ─────────────────────────────────
+
+_ENC_GEN = 'cp1252'
+
+
+def _leer_header_gen(path):
+    """Retorna (num_records, header_size, rec_size, campos)."""
+    with open(path, 'rb') as f:
+        hdr = f.read(32)
+        num_records = struct.unpack_from('<I', hdr, 4)[0]
+        header_size = struct.unpack_from('<H', hdr, 8)[0]
+        rec_size    = struct.unpack_from('<H', hdr, 10)[0]
+        campos = []
+        offset = 1
+        while True:
+            fd = f.read(32)
+            if not fd or fd[0] == 0x0D:
+                break
+            nombre   = fd[0:11].rstrip(b'\x00').decode('ascii', 'replace').upper()
+            tipo     = chr(fd[11])
+            longitud = fd[16]
+            campos.append({'nombre': nombre, 'tipo': tipo, 'offset': offset, 'longitud': longitud})
+            offset += longitud
+    return num_records, header_size, rec_size, campos
+
+
+def _parse_fecha_gen(s):
+    s = str(s).strip().replace('-', '')
+    if len(s) == 8:
+        try:
+            return datetime.date(int(s[:4]), int(s[4:6]), int(s[6:8]))
+        except Exception:
+            pass
+    return None
+
+
+def _date_to_jd_gen(d):
+    a = (14 - d.month) // 12
+    y = d.year + 4800 - a
+    m = d.month + 12 * a - 3
+    return d.day + (153*m + 2)//5 + 365*y + y//4 - y//100 + y//400 - 32045
+
+
+def _leer_valor_gen(b, campo):
+    o, n, t = campo['offset'], campo['longitud'], campo['tipo']
+    raw = b[o:o+n]
+    if t == 'C':
+        return raw.strip(b' ').decode(_ENC_GEN, 'replace')
+    if t == 'N':
+        v = raw.strip()
+        try: return float(v) if v else 0.0
+        except: return 0.0
+    if t == 'D':
+        return raw.decode('ascii', 'replace').strip()
+    if t == 'T':
+        jd = struct.unpack_from('<I', raw, 0)[0]
+        ms = struct.unpack_from('<I', raw, 4)[0]
+        return (jd, ms)
+    if t == 'L':
+        return chr(raw[0]) if raw else 'F'
+    return raw.strip(b' ').decode(_ENC_GEN, 'replace')
+
+
+def _serializar_gen(val, tipo):
+    if tipo == 'T':
+        jd, ms = val
+        if jd == 0:
+            return None
+        try:
+            l = jd + 68569
+            nn = (4 * l) // 146097
+            l = l - (146097 * nn + 3) // 4
+            ii = (4000 * (l + 1)) // 1461001
+            l = l - (1461 * ii) // 4 + 31
+            j = (80 * l) // 2447
+            day = l - (2447 * j) // 80
+            l = j // 11
+            month = j + 2 - 12 * l
+            year = 100 * (nn - 49) + ii + l
+            ts = ms // 1000
+            return datetime.datetime(year, month, day, ts//3600, (ts%3600)//60, ts%60).isoformat()
+        except Exception:
+            return None
+    return val
+
+
+def _filtro_fila_gen(b, campos_map, filtros):
+    for nombre_f, valor_f in filtros.items():
+        c = campos_map.get(nombre_f.upper())
+        if c is None:
+            continue
+        o, n, t = c['offset'], c['longitud'], c['tipo']
+        raw = b[o:o+n]
+        if t == 'C':
+            val = raw.strip(b' ').decode(_ENC_GEN, 'replace').upper()
+            if val != str(valor_f).upper().strip():
+                return False
+        elif t == 'N':
+            try: fval = float(raw.strip()) if raw.strip() else 0.0
+            except: fval = 0.0
+            if isinstance(valor_f, dict):
+                if 'min' in valor_f and fval < valor_f['min']: return False
+                if 'max' in valor_f and fval > valor_f['max']: return False
+            else:
+                if fval != float(valor_f): return False
+        elif t == 'D':
+            dstr = raw.decode('ascii', 'replace').strip()
+            dint = int(dstr) if dstr.isdigit() else 0
+            def _dval(s): s = str(s).replace('-', ''); return int(s) if len(s) == 8 else 0
+            if isinstance(valor_f, dict):
+                if 'desde' in valor_f and dint < _dval(valor_f['desde']): return False
+                if 'hasta' in valor_f and dint > _dval(valor_f['hasta']): return False
+        elif t == 'T':
+            jd = struct.unpack_from('<I', raw, 0)[0]
+            if isinstance(valor_f, dict):
+                if 'desde' in valor_f:
+                    d = _parse_fecha_gen(valor_f['desde'])
+                    if d and jd < _date_to_jd_gen(d): return False
+                if 'hasta' in valor_f:
+                    d = _parse_fecha_gen(valor_f['hasta'])
+                    if d and jd > _date_to_jd_gen(d): return False
+    return True
+
+
+def _aplicar_filtros_numpy_gen(arr, rec_size, campos_map, filtros):
+    mask = arr[:, 0] != 0x2A
+    for nombre_f, valor_f in filtros.items():
+        c = campos_map.get(nombre_f.upper())
+        if c is None:
+            continue
+        o, n, t = c['offset'], c['longitud'], c['tipo']
+        if t == 'C':
+            val_b = str(valor_f).upper().encode(_ENC_GEN, 'replace').ljust(n)[:n]
+            mask &= np.all(arr[:, o:o+n] == np.frombuffer(val_b, dtype=np.uint8), axis=1)
+        elif t == 'N':
+            raw_n = arr[:, o:o+n]
+            vals = np.zeros(len(arr), dtype=np.float64)
+            for i in range(len(arr)):
+                v = raw_n[i].tobytes().strip()
+                try: vals[i] = float(v) if v else 0.0
+                except: pass
+            if isinstance(valor_f, dict):
+                if 'min' in valor_f: mask &= vals >= valor_f['min']
+                if 'max' in valor_f: mask &= vals <= valor_f['max']
+            else:
+                try: mask &= vals == float(valor_f)
+                except Exception: pass
+        elif t == 'D':
+            def _dval(s): s = str(s).replace('-', ''); return int(s) if len(s) == 8 else 0
+            yr = (arr[:,o  ]-48)*1000 + (arr[:,o+1]-48)*100 + (arr[:,o+2]-48)*10 + (arr[:,o+3]-48)
+            mn = (arr[:,o+4]-48)*10   + (arr[:,o+5]-48)
+            dy = (arr[:,o+6]-48)*10   + (arr[:,o+7]-48)
+            dint = yr.astype(np.int64)*10000 + mn.astype(np.int64)*100 + dy.astype(np.int64)
+            if isinstance(valor_f, dict):
+                if 'desde' in valor_f: mask &= dint >= _dval(valor_f['desde'])
+                if 'hasta' in valor_f: mask &= dint <= _dval(valor_f['hasta'])
+        elif t == 'T':
+            jd = (arr[:,o  ].astype(np.int64) | (arr[:,o+1].astype(np.int64)<<8) |
+                  (arr[:,o+2].astype(np.int64)<<16) | (arr[:,o+3].astype(np.int64)<<24))
+            if isinstance(valor_f, dict):
+                if 'desde' in valor_f:
+                    d = _parse_fecha_gen(valor_f['desde'])
+                    if d: mask &= jd >= _date_to_jd_gen(d)
+                if 'hasta' in valor_f:
+                    d = _parse_fecha_gen(valor_f['hasta'])
+                    if d: mask &= jd <= _date_to_jd_gen(d)
+    return mask
+
+
+def leer_tabla_filtrada_gen(ruta_bd, tabla, campos_pedidos, filtros):
+    """Lee tabla.DBF, aplica filtros y retorna solo campos_pedidos."""
+    path = os.path.join(ruta_bd, tabla.upper() + '.DBF')
+    num_records, header_size, rec_size, campos = _leer_header_gen(path)
+    campos_map = {c['nombre']: c for c in campos}
+    if not campos_pedidos:
+        campos_pedidos = [c['nombre'] for c in campos]
+    campos_pedidos = [c.upper() for c in campos_pedidos]
+    campos_out = [campos_map[n] for n in campos_pedidos if n in campos_map]
+    with open(path, 'rb') as f:
+        f.seek(header_size)
+        raw = f.read(num_records * rec_size)
+    actual = len(raw) // rec_size
+    resultado = []
+    if HAS_NUMPY and actual > 0:
+        arr = np.frombuffer(raw[:actual * rec_size], dtype=np.uint8).reshape(actual, rec_size)
+        mask = _aplicar_filtros_numpy_gen(arr, rec_size, campos_map, filtros)
+        for idx in np.where(mask)[0]:
+            b = raw[int(idx)*rec_size:(int(idx)+1)*rec_size]
+            row = {c['nombre']: _serializar_gen(_leer_valor_gen(b, c), c['tipo']) for c in campos_out}
+            resultado.append(row)
+    else:
+        for i in range(actual):
+            b = raw[i*rec_size:(i+1)*rec_size]
+            if b[0] == 0x2A:
+                continue
+            if not _filtro_fila_gen(b, campos_map, filtros):
+                continue
+            row = {c['nombre']: _serializar_gen(_leer_valor_gen(b, c), c['tipo']) for c in campos_out}
+            resultado.append(row)
+    return resultado
+
+
+def consulta_multi_tabla(ruta_bd, parametros):
+    """Handler para tipo='multi_tabla': lee varias tablas DBF en un solo request."""
+    if isinstance(parametros, str):
+        try:
+            parametros = json.loads(parametros)
+        except Exception:
+            parametros = {}
+    tablas = parametros.get('tablas', [])
+    resultado = {}
+    for t in tablas:
+        nombre  = t.get('tabla', '').upper()
+        campos  = t.get('campos', [])
+        filtros = t.get('filtros', {})
+        try:
+            resultado[nombre] = leer_tabla_filtrada_gen(ruta_bd, nombre, campos, filtros)
+        except Exception as e:
+            resultado[nombre] = {'error': str(e)}
+    return resultado
+
+
+CONSULTAS['multi_tabla'] = consulta_multi_tabla
 
 
 def _procesar_consulta(base, token, ruta_bd, consulta):
@@ -395,16 +621,18 @@ def _procesar_consulta(base, token, ruta_bd, consulta):
     cid   = consulta['id']
     tipo  = consulta['tipo']
     params = consulta.get('parametros') or {}
-    print(f"Consulta #{cid}: {tipo} {params}")
+    print(f"Consulta #{cid}: {tipo}")
 
     try:
         if tipo not in CONSULTAS:
             raise ValueError(f'Tipo desconocido: {tipo}')
         resultado = CONSULTAS[tipo](ruta_bd, params)
-        requests.post(f"{base}/api/admin-agent/respuesta",
+        r = requests.post(f"{base}/api/admin-agent/respuesta",
             json={'token': token, 'consulta_id': cid, 'respuesta': resultado},
-            timeout=30)
-        print(f"  → {len(resultado)} registros enviados")
+            timeout=60)
+        r.raise_for_status()
+        n = len(resultado) if hasattr(resultado, '__len__') else '?'
+        print(f"  -> OK #{cid} ({n})")
     except Exception as e:
         try:
             requests.post(f"{base}/api/admin-agent/respuesta",
@@ -412,20 +640,23 @@ def _procesar_consulta(base, token, ruta_bd, consulta):
                 timeout=10)
         except Exception:
             pass
-        print(f"  → ERROR: {e}")
+        print(f"  -> ERROR #{cid}: {e}")
     finally:
         with _lock:
             _en_proceso.discard(cid)
 
 
-def _pid_existe(pid: int) -> bool:
-    import ctypes
-    PROCESS_QUERY_INFORMATION = 0x0400
-    h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_INFORMATION, False, pid)
-    if not h:
+def _pid_es_admin_agent(pid: int) -> bool:
+    """True solo si el PID existe Y su línea de comando contiene admin_agent."""
+    try:
+        result = subprocess.run(
+            ['wmic', 'process', 'where', f'processid={pid}', 'get', 'commandline'],
+            capture_output=True, text=True, timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        return 'admin_agent' in result.stdout
+    except Exception:
         return False
-    ctypes.windll.kernel32.CloseHandle(h)
-    return True
 
 
 def _adquirir_lock(cliente_id: str) -> bool:
@@ -435,7 +666,7 @@ def _adquirir_lock(cliente_id: str) -> bool:
     if os.path.exists(lock_path):
         try:
             old_pid = int(open(lock_path).read().strip())
-            if _pid_existe(old_pid):
+            if _pid_es_admin_agent(old_pid):
                 return False  # ya corre
         except Exception:
             pass  # lock stale — sobrescribir

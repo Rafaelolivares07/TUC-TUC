@@ -137,6 +137,7 @@
 </div>
 
 <script>
+const _conFuente = p => Object.assign({}, p, {fuente: localStorage.getItem('sar_fuente')||'local', cliente_id: localStorage.getItem('sar_cliente_id')||''});
 let _rows = [], _sortCol = 1, _sortAsc = true;
 const COLS = ['puesto_cant','nombre','identificacion','cantidad','por_cant','subtotal','por_val','iva','puesto_cant','puesto_val'];
 const fmt  = n => Number(n).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -159,7 +160,7 @@ function consultar() {
   fetch('/api/reporte/ventas_clientes', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(filtros)
+    body: JSON.stringify(_conFuente(filtros))
   })
   .then(r => r.json())
   .then(data => {

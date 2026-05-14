@@ -131,6 +131,8 @@ function mostrarEstadoAgente() {
 function guardarFuente() {
   const fuente     = document.querySelector('input[name=fuente]:checked').value;
   const cliente_id = fuente === 'remoto' ? document.getElementById('sel-agente').value : '';
+  localStorage.setItem('sar_fuente',     fuente);
+  localStorage.setItem('sar_cliente_id', cliente_id);
   fetch('/api/fuente', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},

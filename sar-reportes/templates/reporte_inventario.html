@@ -148,6 +148,7 @@
 </div>
 
 <script>
+const _conFuente = p => Object.assign({}, p, {fuente: localStorage.getItem('sar_fuente')||'local', cliente_id: localStorage.getItem('sar_cliente_id')||''});
 let _rows = [], _sortCol = 6, _sortAsc = false;
 let _params = {};
 
@@ -239,7 +240,7 @@ function consultar() {
   fetch('/api/reporte/inventario', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(_params)
+    body: JSON.stringify(_conFuente(_params))
   })
   .then(r => r.json())
   .then(data => {
@@ -276,7 +277,7 @@ function exportarExcel() {
   fetch('/api/reporte/inventario/excel', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(_params)
+    body: JSON.stringify(_conFuente(_params))
   })
   .then(r => r.blob())
   .then(blob => {

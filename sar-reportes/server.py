@@ -193,7 +193,12 @@ def api_reporte(reporte_id):
     if reporte_id not in CATALOGO:
         return jsonify({'ok': False, 'error': 'Reporte no encontrado'}), 404
     modulo  = CATALOGO[reporte_id]
-    filtros = request.get_json() or {}
+    body    = request.get_json() or {}
+    fuente     = body.pop('fuente',     session.get('fuente',     'local'))
+    cliente_id = body.pop('cliente_id', session.get('cliente_id', '')).strip()
+    session['fuente']     = fuente
+    session['cliente_id'] = cliente_id
+    filtros = body
     t0      = time.time()
     try:
         dl     = _get_data_layer()
@@ -214,7 +219,12 @@ def api_reporte_excel(reporte_id):
     if reporte_id not in CATALOGO:
         return 'Reporte no encontrado', 404
     modulo  = CATALOGO[reporte_id]
-    filtros = request.get_json() or {}
+    body    = request.get_json() or {}
+    fuente     = body.pop('fuente',     session.get('fuente',     'local'))
+    cliente_id = body.pop('cliente_id', session.get('cliente_id', '')).strip()
+    session['fuente']     = fuente
+    session['cliente_id'] = cliente_id
+    filtros = body
     try:
         dl     = _get_data_layer()
         tablas = modulo.tablas_requeridas(filtros)

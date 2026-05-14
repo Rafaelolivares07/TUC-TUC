@@ -146,6 +146,7 @@
 </div>
 
 <script>
+const _conFuente = p => Object.assign({}, p, {fuente: localStorage.getItem('sar_fuente')||'local', cliente_id: localStorage.getItem('sar_cliente_id')||''});
 let _rows = [], _sortCol = 1, _sortAsc = true;
 const COLS = ['consecutivo','fecha','lapso','tipo','documento','cuenta','nit','tercero_nom','debito','credito','detalle'];
 const fmt  = n => Number(n).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -170,7 +171,7 @@ function consultar() {
   fetch('/api/reporte/reg_ctas', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(filtros)
+    body: JSON.stringify(_conFuente(filtros))
   })
   .then(r => r.json())
   .then(data => {

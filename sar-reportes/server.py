@@ -37,10 +37,11 @@ AWS_USUARIO  = _cfg.get('aws', 'usuario',   fallback='')
 AWS_PASSWORD = _cfg.get('aws', 'password',  fallback='')
 CLIENTE_ID   = _cfg.get('aws', 'cliente_id', fallback='').strip()
 
-_aws_session = None  # requests.Session con cookie de AWS reutilizable
-_permisos_cache = None  # {fuente: set(reporte_id)}
-_permisos_ts    = 0.0  # timestamp de la última carga
-_PERMISOS_TTL   = 30   # segundos antes de refrescar
+_aws_session     = None   # requests.Session con cookie de AWS reutilizable
+_aws_session_ok  = False  # True después de login exitoso
+_permisos_cache  = None   # {fuente: set(reporte_id)}
+_permisos_ts     = 0.0    # timestamp de la última carga
+_PERMISOS_TTL    = 30     # segundos antes de refrescar
 
 
 def _cargar_permisos(cliente_id=None):
@@ -53,8 +54,7 @@ def _cargar_permisos(cliente_id=None):
         _permisos_ts    = time.time()
         return
     try:
-        s = _get_aws_session()
-        r = s.get(f'{BASE_URL_AWS}/api/admin-agent/reportes-permisos/{cid}', timeout=8)
+        r = _aws_get(f'/api/admin-agent/reportes-permisos/{cid}', timeout=8)
         data = r.json()
         if data.get('ok'):
             cache = {'local': set(), 'remoto': set()}
@@ -75,18 +75,31 @@ def _permisos_vigentes(cliente_id=None):
     return _permisos_cache
 
 def _get_aws_session():
-    """Retorna una requests.Session autenticada en AWS. Hace login si es necesario."""
+    """Retorna una requests.Session autenticada en AWS. Re-login si la cookie expiró."""
     import requests as req
-    global _aws_session
-    if _aws_session:
-        r = _aws_session.get(f'{BASE_URL_AWS}/api/admin-agent/agentes', timeout=5)
-        if r.status_code == 200:
-            return _aws_session
+    global _aws_session, _aws_session_ok
+    if _aws_session and _aws_session_ok:
+        return _aws_session
     s = req.Session()
-    s.post(f'{BASE_URL_AWS}/auth/login',
-           data={'usuario': AWS_USUARIO, 'password': AWS_PASSWORD}, timeout=10)
+    s.post(f'{BASE_URL_AWS}/admin/login',
+           data={'usuario': AWS_USUARIO, 'password': AWS_PASSWORD},
+           timeout=10, allow_redirects=True)
+    _aws_session_ok = 'session' in s.cookies
     _aws_session = s
     return s
+
+
+def _aws_get(path, timeout=10):
+    """GET autenticado a AWS. Re-login automático si devuelve 401."""
+    global _aws_session_ok
+    for _ in range(2):
+        s = _get_aws_session()
+        r = s.get(f'{BASE_URL_AWS}{path}', timeout=timeout)
+        if r.status_code == 401:
+            _aws_session_ok = False  # forzar re-login en siguiente intento
+            continue
+        return r
+    raise RuntimeError('No se pudo autenticar en AWS')
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,8 +138,7 @@ def set_fuente():
 def api_agentes():
     """Proxy hacia AWS — retorna agentes conectados."""
     try:
-        s = _get_aws_session()
-        r = s.get(f'{BASE_URL_AWS}/api/admin-agent/agentes', timeout=8)
+        r = _aws_get('/api/admin-agent/agentes', timeout=8)
         return jsonify(r.json())
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'agentes': []})

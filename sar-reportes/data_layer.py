@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from agente import leer_tabla_filtrada
 
 POLL_INTERVALO  = 2    # segundos entre checks de respuesta
-TIMEOUT_REMOTO  = 60   # segundos máximo esperando respuesta del agente
+TIMEOUT_REMOTO  = 120  # segundos máximo esperando respuesta del agente
 
 
 class DataLayer:
@@ -99,6 +99,77 @@ class DataLayer:
             if data.get('estado') == 'error':
                 raise RuntimeError(f'Error en agente: {data.get("error")}')
             # pendiente/procesando → seguir esperando
+
+
+    def ejecutar_reporte(self, reporte_id, filtros):
+        """Solo modo remoto: pide al agente calcular el reporte completo localmente.
+        Retorna la lista de filas ya calculadas."""
+        if self.fuente != 'remoto':
+            raise RuntimeError('ejecutar_reporte solo disponible en modo remoto')
+        s = self.aws_session
+
+        r = s.post(
+            f'{self.base_url}/api/admin-agent/consultar',
+            json={'cliente_id': self.cliente_id,
+                  'tipo': 'ejecutar_reporte',
+                  'parametros': {'reporte_id': reporte_id, 'filtros': filtros}},
+            timeout=15
+        )
+        data = r.json()
+        if not data.get('ok'):
+            raise RuntimeError(f'Error encolando consulta: {data.get("error")}')
+        consulta_id = data['consulta_id']
+
+        t0 = time.time()
+        while True:
+            if time.time() - t0 > TIMEOUT_REMOTO:
+                raise TimeoutError('El agente no respondió a tiempo')
+            time.sleep(POLL_INTERVALO)
+            r = s.get(
+                f'{self.base_url}/api/admin-agent/resultado/{consulta_id}',
+                timeout=15
+            )
+            data = r.json()
+            if data.get('estado') == 'lista':
+                resp = data.get('respuesta') or {}
+                if isinstance(resp, dict) and 'error' in resp:
+                    raise RuntimeError(f'Error en agente: {resp["error"]}')
+                return resp.get('rows', [])
+            if data.get('estado') == 'error':
+                raise RuntimeError(f'Error en agente: {data.get("error")}')
+
+    def consultar(self, tipo, parametros):
+        """Envía una consulta genérica al agente (estado, subir_archivo, etc.)
+        y retorna la respuesta cruda."""
+        if self.fuente != 'remoto':
+            raise RuntimeError('consultar solo disponible en modo remoto')
+        s = self.aws_session
+
+        r = s.post(
+            f'{self.base_url}/api/admin-agent/consultar',
+            json={'cliente_id': self.cliente_id, 'tipo': tipo,
+                  'parametros': parametros},
+            timeout=15
+        )
+        data = r.json()
+        if not data.get('ok'):
+            raise RuntimeError(f'Error encolando consulta: {data.get("error")}')
+        consulta_id = data['consulta_id']
+
+        t0 = time.time()
+        while True:
+            if time.time() - t0 > TIMEOUT_REMOTO:
+                raise TimeoutError('El agente no respondió a tiempo')
+            time.sleep(POLL_INTERVALO)
+            r = s.get(
+                f'{self.base_url}/api/admin-agent/resultado/{consulta_id}',
+                timeout=15
+            )
+            data = r.json()
+            if data.get('estado') == 'lista':
+                return data.get('respuesta')
+            if data.get('estado') == 'error':
+                raise RuntimeError(f'Error en agente: {data.get("error")}')
 
 
 def leer_ruta_bd():

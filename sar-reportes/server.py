@@ -192,8 +192,8 @@ def ver_reporte(reporte_id):
 def api_reporte(reporte_id):
     if reporte_id not in CATALOGO:
         return jsonify({'ok': False, 'error': 'Reporte no encontrado'}), 404
-    modulo  = CATALOGO[reporte_id]
-    body    = request.get_json() or {}
+    modulo     = CATALOGO[reporte_id]
+    body       = request.get_json() or {}
     fuente     = body.pop('fuente',     session.get('fuente',     'local'))
     cliente_id = body.pop('cliente_id', session.get('cliente_id', '')).strip()
     session['fuente']     = fuente
@@ -201,10 +201,14 @@ def api_reporte(reporte_id):
     filtros = body
     t0      = time.time()
     try:
-        dl     = _get_data_layer()
-        tablas = modulo.tablas_requeridas(filtros)
-        datos  = dl.leer(tablas)
-        rows   = modulo.calcular(datos, filtros)
+        dl = _get_data_layer()
+        if fuente == 'remoto':
+            # El agente calcula el reporte completo localmente — solo llegan rows finales
+            rows = dl.ejecutar_reporte(reporte_id, filtros)
+        else:
+            tablas = modulo.tablas_requeridas(filtros)
+            datos  = dl.leer(tablas)
+            rows   = modulo.calcular(datos, filtros)
         elapsed = round(time.time() - t0, 1)
         return jsonify({'ok': True, 'rows': rows, 'elapsed': elapsed,
                         'total': len(rows)})
@@ -226,10 +230,13 @@ def api_reporte_excel(reporte_id):
     session['cliente_id'] = cliente_id
     filtros = body
     try:
-        dl     = _get_data_layer()
-        tablas = modulo.tablas_requeridas(filtros)
-        datos  = dl.leer(tablas)
-        rows   = modulo.calcular(datos, filtros)
+        dl = _get_data_layer()
+        if fuente == 'remoto':
+            rows = dl.ejecutar_reporte(reporte_id, filtros)
+        else:
+            tablas = modulo.tablas_requeridas(filtros)
+            datos  = dl.leer(tablas)
+            rows   = modulo.calcular(datos, filtros)
         buf    = _generar_excel(reporte_id, rows, filtros)
         fname  = f'{reporte_id}_{datetime.date.today()}.xlsx'
         return send_file(buf, as_attachment=True, download_name=fname,
@@ -245,6 +252,41 @@ def api_empresas():
         return jsonify({'ok': True, 'empresas': empresas})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'empresas': []})
+
+
+@app.route('/api/estado', methods=['POST'])
+def api_estado():
+    """Envía consulta_estado al agente remoto y retorna el resultado."""
+    body       = request.get_json() or {}
+    cliente_id = body.get('cliente_id', session.get('cliente_id', '')).strip()
+    items      = body.get('items', ['todo'])
+    if not cliente_id:
+        return jsonify({'ok': False, 'error': 'cliente_id requerido'})
+    try:
+        dl  = DataLayer(fuente='remoto', base_url=BASE_URL_AWS,
+                        cliente_id=cliente_id, aws_session=_get_aws_session())
+        res = dl.consultar('consulta_estado', {'items': items})
+        return jsonify({'ok': True, 'estado': res})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/archivo', methods=['POST'])
+def api_archivo():
+    """Pide al agente remoto leer un archivo y lo retorna."""
+    body       = request.get_json() or {}
+    cliente_id = body.get('cliente_id', session.get('cliente_id', '')).strip()
+    ruta       = body.get('ruta', '')
+    ultimas_lineas = int(body.get('ultimas_lineas', 0))
+    if not cliente_id or not ruta:
+        return jsonify({'ok': False, 'error': 'cliente_id y ruta requeridos'})
+    try:
+        dl  = DataLayer(fuente='remoto', base_url=BASE_URL_AWS,
+                        cliente_id=cliente_id, aws_session=_get_aws_session())
+        res = dl.consultar('subir_archivo', {'ruta': ruta, 'ultimas_lineas': ultimas_lineas})
+        return jsonify({'ok': True, **res})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
 
 
 # ── Helpers internos ──────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ Uso:
 """
 
 import os, sys, time, json, argparse, threading
-import datetime, struct, mmap, socket, configparser
+import datetime, struct, mmap, socket, configparser, subprocess
 import requests
 import dbf
 try:
@@ -96,7 +96,7 @@ def _leer_tabla_campos_binario(path, rec_size, campos_offsets, enc='cp1252'):
             continue
         row = {}
         for nombre_c, off, ln in campos_offsets:
-            row[nombre_c] = raw[base+off: base+off+ln].strip(b' ').decode(enc, 'replace')
+            row[nombre_c] = raw[base+off: base+off+ln].strip(b' \x00').decode(enc, 'replace').replace('\x00', '')
         rows.append(row)
     return rows
 
@@ -240,7 +240,7 @@ def consulta_reg_ctas(ruta_bd, parametros):
         def _rec(idx):
             """Parse un registro desde raw bytes."""
             b = raw[idx * REC_SIZE: (idx+1) * REC_SIZE]
-            def s(o, n): return b[o:o+n].strip(b' ').decode(ENC, 'replace')
+            def s(o, n): return b[o:o+n].strip(b' \x00').decode(ENC, 'replace').replace('\x00', '')
             def f(o, n):
                 v = b[o:o+n].strip()
                 try: return float(v) if v else 0.0
@@ -438,7 +438,7 @@ def _leer_valor_gen(b, campo):
     o, n, t = campo['offset'], campo['longitud'], campo['tipo']
     raw = b[o:o+n]
     if t == 'C':
-        return raw.strip(b' ').decode(_ENC_GEN, 'replace')
+        return raw.strip(b' \x00').decode(_ENC_GEN, 'replace').replace('\x00', '')
     if t == 'N':
         v = raw.strip()
         try: return float(v) if v else 0.0
@@ -614,6 +614,178 @@ def consulta_multi_tabla(ruta_bd, parametros):
 
 
 CONSULTAS['multi_tabla'] = consulta_multi_tabla
+
+
+# ── ejecutar_reporte: calcula el reporte completo localmente ──────────────────
+
+def consulta_ejecutar_reporte(ruta_bd, parametros):
+    """Importa el módulo de reporte de sar-reportes, ejecuta tablas_requeridas +
+    leer + calcular localmente, y devuelve solo las filas finales."""
+    reporte_id = str(parametros.get('reporte_id', '')).strip()
+    filtros    = parametros.get('filtros', {})
+    if not reporte_id:
+        return {'error': 'reporte_id requerido'}
+
+    sar_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sar-reportes')
+    if sar_path not in sys.path:
+        sys.path.insert(0, sar_path)
+
+    try:
+        from reportes import CATALOGO
+    except ImportError as e:
+        return {'error': f'No se pudo importar reportes: {e}'}
+
+    if reporte_id not in CATALOGO:
+        return {'error': f'Reporte desconocido: {reporte_id}'}
+
+    modulo = CATALOGO[reporte_id]
+    t0 = time.time()
+    try:
+        tablas_req = modulo.tablas_requeridas(filtros)
+        datos = {}
+        for t in tablas_req:
+            nombre   = t['tabla'].upper()
+            campos   = t.get('campos', [])
+            filtros_t = t.get('filtros', {})
+            datos[nombre] = leer_tabla_filtrada_gen(ruta_bd, nombre, campos, filtros_t)
+        rows    = modulo.calcular(datos, filtros)
+        elapsed = round(time.time() - t0, 1)
+        return {'rows': rows, 'total': len(rows), 'elapsed': elapsed}
+    except Exception as e:
+        import traceback
+        return {'error': str(e), 'traceback': traceback.format_exc()[-1000:]}
+
+
+# ── consulta_estado: snapshot del estado de la máquina ───────────────────────
+
+def consulta_estado(ruta_bd, parametros):
+    """Devuelve estado de la máquina: startup items, procesos, BD, Alegra daemon."""
+    items = parametros.get('items', ['todo'])
+    todo  = 'todo' in items
+    res   = {}
+
+    # ── Startup items ─────────────────────────────────────────────────────────
+    if todo or 'startup' in items:
+        startup_path = os.path.expandvars(
+            r'%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup')
+        try:
+            archivos = sorted(os.listdir(startup_path))
+            res['startup'] = {'ruta': startup_path, 'archivos': archivos}
+        except Exception as e:
+            res['startup'] = {'error': str(e)}
+
+    # ── Procesos conocidos ────────────────────────────────────────────────────
+    if todo or 'procesos' in items:
+        CONOCIDOS = [
+            'admin_agent',
+            'administrator.exe',
+            'administrator_web',
+            'AlegraDaemon',
+            'alegra_daemon',
+            'server.py',
+            'merlin_daemon',
+            'deploy_watcher',
+        ]
+        try:
+            out = subprocess.run(
+                ['tasklist', '/FO', 'CSV', '/NH'],
+                capture_output=True, text=True, timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            ).stdout.lower()
+            activos = {nombre: nombre.lower() in out for nombre in CONOCIDOS}
+            # También leer líneas de wmic para ver commandlines completas
+            wmic = subprocess.run(
+                ['wmic', 'process', 'get', 'processid,commandline'],
+                capture_output=True, text=True, timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            ).stdout
+            res['procesos'] = {'activos': activos, 'detalle': wmic[:3000]}
+        except Exception as e:
+            res['procesos'] = {'error': str(e)}
+
+    # ── Base de datos ─────────────────────────────────────────────────────────
+    if todo or 'bd' in items:
+        try:
+            accesible = os.path.isdir(ruta_bd)
+            muestra   = sorted([f for f in os.listdir(ruta_bd) if f.upper().endswith('.DBF')])[:8] if accesible else []
+            res['bd'] = {'ruta': ruta_bd, 'accesible': accesible, 'muestra_dbf': muestra}
+        except Exception as e:
+            res['bd'] = {'error': str(e)}
+
+    # ── Alegra daemon ─────────────────────────────────────────────────────────
+    if todo or 'alegra_daemon' in items:
+        PID_FILE   = r'C:\S.A.R\alegra_daemon.pid'
+        PAUSA_FILE = r'C:\S.A.R\alegra_daemon_pausa.txt'
+        LOG_FILE   = r'C:\S.A.R\alegra_vfp.log'
+        info = {}
+        try:
+            info['en_pausa'] = os.path.exists(PAUSA_FILE)
+            if os.path.exists(PID_FILE):
+                pid = int(open(PID_FILE).read().strip())
+                chk = subprocess.run(
+                    ['wmic', 'process', 'where', f'processid={pid}', 'get', 'processid'],
+                    capture_output=True, text=True, timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                ).stdout
+                info['activo'] = str(pid) in chk
+                info['pid']    = pid
+            else:
+                info['activo'] = False
+            if os.path.exists(LOG_FILE):
+                with open(LOG_FILE, 'r', encoding='utf-8', errors='replace') as f:
+                    lineas = f.readlines()
+                info['ultimas_lineas'] = ''.join(lineas[-30:])
+                info['total_lineas']   = len(lineas)
+        except Exception as e:
+            info['error'] = str(e)
+        res['alegra_daemon'] = info
+
+    return res
+
+
+# ── subir_archivo: lee un archivo local y lo retorna ─────────────────────────
+
+def consulta_subir_archivo(ruta_bd, parametros):
+    """Lee un archivo de la máquina cliente y lo devuelve en la respuesta.
+    Parámetros:
+      ruta          — ruta absoluta del archivo
+      ultimas_lineas — si > 0, retorna solo las últimas N líneas (texto)
+      max_bytes     — límite en bytes para binario (default 5MB)
+    """
+    ruta          = parametros.get('ruta', '')
+    ultimas_lineas = int(parametros.get('ultimas_lineas', 0))
+    max_bytes     = int(parametros.get('max_bytes', 5 * 1024 * 1024))
+
+    if not ruta:
+        return {'error': 'ruta requerida'}
+    if not os.path.isfile(ruta):
+        return {'error': f'Archivo no encontrado: {ruta}'}
+
+    try:
+        stat  = os.stat(ruta)
+        nombre = os.path.basename(ruta)
+        size  = stat.st_size
+
+        if ultimas_lineas > 0:
+            with open(ruta, 'r', encoding='utf-8', errors='replace') as f:
+                lineas = f.readlines()
+            contenido = ''.join(lineas[-ultimas_lineas:])
+            return {'nombre': nombre, 'bytes': size,
+                    'total_lineas': len(lineas), 'contenido': contenido}
+        else:
+            import base64
+            with open(ruta, 'rb') as f:
+                data = f.read(max_bytes)
+            truncado = size > max_bytes
+            return {'nombre': nombre, 'bytes': size, 'truncado': truncado,
+                    'contenido_b64': base64.b64encode(data).decode('ascii')}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+CONSULTAS['ejecutar_reporte'] = consulta_ejecutar_reporte
+CONSULTAS['consulta_estado']  = consulta_estado
+CONSULTAS['subir_archivo']    = consulta_subir_archivo
 
 
 def _procesar_consulta(base, token, ruta_bd, consulta):

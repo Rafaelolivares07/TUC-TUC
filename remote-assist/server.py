@@ -546,7 +546,7 @@ def on_viewer_join(data):
     # Si el agente ya está conectado, notificar al nuevo visor inmediatamente
     if session_id in active_sessions:
         emit('agent_connected')
-    print(f'[visor] conectado → sesión {session_id}')
+    print(f'[visor] conectado sesion {session_id}')
 
 
 # ─── SocketIO — Agente ───────────────────────────────────────────────────────
@@ -561,12 +561,16 @@ def on_agent_join(data):
     join_room(f'agent_{session_id}')
     join_room(f'session_{session_id}')
     emit('agent_ready')
-    # Avisar al visor que el agente llegó
     emit('agent_connected', room=f'viewer_{session_id}')
-    print(f'[agente] conectado → sesión {session_id}')
-    import time
-    active_sessions[session_id] = time.time()
-    sid_to_session[request.sid] = session_id
+    try:
+        import time as _time
+        active_sessions[session_id] = _time.time()
+        sid_to_session[request.sid] = session_id
+        with open('C:/S.A.R/server.log', 'a') as _f:
+            _f.write(f'[agente] join ok sesion={session_id} sid={request.sid}\n')
+    except Exception as _e:
+        with open('C:/S.A.R/server.log', 'a') as _f:
+            _f.write(f'[agente] ERROR sesion={session_id}: {_e}\n')
 
 
 @socketio.on('frame')

@@ -29,8 +29,22 @@ except ImportError as e:
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
-# ─── Config (hardcodeado — el cliente no toca nada) ───────────────────────────
-SERVER   = "https://tuc-tuc-remote.onrender.com"
+# ─── Config ───────────────────────────────────────────────────────────────────
+RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/relay_url.txt"
+_SERVER_FALLBACK = "https://viabu-190-66-70-60.run.pinggy-free.link"
+
+def _fetch_server_url():
+    try:
+        import urllib.request
+        with urllib.request.urlopen(RELAY_URL_GITHUB, timeout=8) as r:
+            url = r.read().decode().strip()
+        if url.startswith("http"):
+            return url
+    except Exception:
+        pass
+    return _SERVER_FALLBACK
+
+SERVER   = _fetch_server_url()
 TOKEN    = "tuctuc-remote-2026"
 SESSION  = __import__('random').randint(100000, 999999).__str__()
 FPS      = 8

@@ -28,19 +28,19 @@ TIMEOUT_REMOTO  = 60   # segundos máximo esperando respuesta del agente
 
 class DataLayer:
 
-    def __init__(self, fuente, ruta_bd=None, base_url=None, cliente_id=None, session_token=None):
+    def __init__(self, fuente, ruta_bd=None, base_url=None, cliente_id=None, aws_session=None):
         """
         fuente: 'local' | 'remoto'
         ruta_bd: ruta a la carpeta con los .DBF (modo local)
         base_url: URL del servidor AWS (modo remoto)
         cliente_id: id del cliente/agente (modo remoto)
-        session_token: token de sesión Flask del usuario (modo remoto)
+        aws_session: requests.Session ya autenticada contra AWS (modo remoto)
         """
-        self.fuente       = fuente
-        self.ruta_bd      = ruta_bd
-        self.base_url     = (base_url or '').rstrip('/')
-        self.cliente_id   = cliente_id
-        self.session_token = session_token
+        self.fuente      = fuente
+        self.ruta_bd     = ruta_bd
+        self.base_url    = (base_url or '').rstrip('/')
+        self.cliente_id  = cliente_id
+        self.aws_session = aws_session
 
     def leer(self, tablas):
         """
@@ -68,15 +68,14 @@ class DataLayer:
     # ── Remoto ────────────────────────────────────────────────────────────────
 
     def _leer_remoto(self, tablas):
-        import requests
+        s = self.aws_session  # requests.Session ya autenticada
 
         # Encolar consulta
-        r = requests.post(
+        r = s.post(
             f'{self.base_url}/api/admin-agent/consultar',
             json={'cliente_id': self.cliente_id,
                   'tipo': 'multi_tabla',
                   'parametros': {'tablas': tablas}},
-            cookies={'session': self.session_token} if self.session_token else {},
             timeout=15
         )
         data = r.json()
@@ -90,7 +89,7 @@ class DataLayer:
             if time.time() - t0 > TIMEOUT_REMOTO:
                 raise TimeoutError('El agente no respondió a tiempo')
             time.sleep(POLL_INTERVALO)
-            r = requests.get(
+            r = s.get(
                 f'{self.base_url}/api/admin-agent/resultado/{consulta_id}',
                 timeout=15
             )

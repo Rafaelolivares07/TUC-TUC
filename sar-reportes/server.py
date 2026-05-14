@@ -105,13 +105,13 @@ def _aws_get(path, timeout=10):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_data_layer():
-    """Construye DataLayer según parámetros de la request."""
-    fuente     = request.args.get('fuente', 'local')
-    cliente_id = request.args.get('cliente_id', '').strip()
+    """Construye DataLayer según fuente guardada en sesión Flask."""
+    fuente     = session.get('fuente', 'local')
+    cliente_id = session.get('cliente_id', '').strip()
     if fuente == 'remoto':
         return DataLayer(fuente='remoto', base_url=BASE_URL_AWS,
                          cliente_id=cliente_id,
-                         session_token=request.cookies.get('session'))
+                         aws_session=_get_aws_session())
     ruta_bd = leer_ruta_bd()
     return DataLayer(fuente='local', ruta_bd=ruta_bd)
 

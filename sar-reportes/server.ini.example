@@ -1,0 +1,8 @@
+[aws]
+base_url  = https://admin.tuc-tuc.co
+usuario   = <usuario_tuctuc>
+password  = <password>
+; cliente_id identifica esta instalación ante AWS.
+; Vacío → PC de Rafael, sin restricciones.
+; Con valor (ej: pilar_peralta) → solo reportes habilitados en /admin/permisos-reportes.
+cliente_id =

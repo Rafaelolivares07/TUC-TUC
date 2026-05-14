@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rotación de Inventario — SAR</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  body { background: #f4f7fb; font-size: 13px; }
+  .panel-filtros { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 14px; }
+  .panel-totales { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 12px 20px; margin-bottom: 14px; }
+  .total-box { text-align: center; }
+  .total-box .val { font-size: 17px; font-weight: 700; color: #003f7f; }
+  .total-box .val.danger { color: #b91c1c; }
+  .total-box .val.warning { color: #92400e; }
+  .total-box .lbl { font-size: 11px; color: #888; text-transform: uppercase; }
+  #tabla-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; overflow-x: auto; }
+  table { font-size: 12px; white-space: nowrap; }
+  thead th { background: #003f7f; color: #fff; cursor: pointer; user-select: none; }
+  thead th:hover { background: #00539f; }
+  thead th .sort-ico { opacity: 0.5; font-size: 10px; }
+  thead th.sort-asc .sort-ico::after  { content: ' ▲'; opacity: 1; }
+  thead th.sort-desc .sort-ico::after { content: ' ▼'; opacity: 1; }
+  tbody tr:nth-child(even) { background: #f0f6ff; }
+  tbody tr:hover { background: #d6eaff; }
+  .num { text-align: right; }
+  .fila-total td { font-weight: 700; background: #e8f0ff !important; border-top: 2px solid #003f7f; }
+  .spinner-wrap { text-align: center; padding: 40px; color: #888; }
+  .ts { color: #1a7f3c; font-weight: 600; }
+  .tb { color: #b91c1c; font-weight: 600; }
+  .te { color: #666; }
+  .bdg { font-size: 10px; border-radius: 3px; padding: 1px 6px; display: inline-block; }
+  .bdg-comprar-ya { background: #f8d7da; color: #842029; }
+  .bdg-exceso     { background: #fff3cd; color: #664d03; }
+  .bdg-no-vendido { background: #cfe2ff; color: #084298; }
+  .bdg-ajustar    { background: #e2d9f3; color: #432874; }
+  .bdg-max        { background: #d1e7dd; color: #0a3622; }
+  .bdg-stock-ok   { background: #d1e7dd; color: #0a3622; font-weight: 700; }
+  .bdg-sin-reg    { background: #e2e3e5; color: #41464b; }
+</style>
+</head>
+<body>
+<div class="container-fluid py-3">
+
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <a href="/" class="text-decoration-none text-secondary"><i class="bi bi-arrow-left me-1"></i>Menú</a>
+    <h5 class="mb-0 text-primary fw-bold"><i class="bi bi-boxes me-2"></i>Rotación de Inventario</h5>
+    <small class="text-muted">SAR Reportes</small>
+  </div>
+
+  <!-- Filtros -->
+  <div class="panel-filtros">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Empresa</label>
+        <select id="f-empresa" class="form-select form-select-sm" style="min-width:140px">
+          <option value="">— Todas (consolidado) —</option>
+          {% for emp in empresas %}
+          <option value="{{ emp }}">{{ emp }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Ventas desde</label>
+        <input type="date" id="f-desde" class="form-control form-control-sm" value="{{ desde }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Hasta</label>
+        <input type="date" id="f-hasta" class="form-control form-control-sm" value="{{ hasta }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Stock mín (días)</label>
+        <input type="number" id="f-dias-min" class="form-control form-control-sm" style="width:80px" value="30" min="1">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Stock máx (días)</label>
+        <input type="number" id="f-dias-max" class="form-control form-control-sm" style="width:80px" value="90" min="1">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm" style="min-width:120px" onclick="consultar()">
+          <i class="bi bi-search me-1"></i>Consultar
+        </button>
+      </div>
+      <div class="col-auto" id="btn-excel-wrap" style="display:none">
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="col-auto ms-auto">
+        <small id="info-registros" class="text-muted"></small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Totales -->
+  <div class="panel-totales" id="panel-totales" style="display:none">
+    <div class="row g-3">
+      <div class="col total-box"><div class="val" id="t-productos">—</div><div class="lbl">Productos</div></div>
+      <div class="col total-box"><div class="val" id="t-valor">—</div><div class="lbl">Valor Saldo</div></div>
+      <div class="col total-box"><div class="val danger" id="t-comprar">—</div><div class="lbl">Comprar Ya</div></div>
+      <div class="col total-box"><div class="val warning" id="t-exceso">—</div><div class="lbl">Exceso</div></div>
+      <div class="col total-box"><div class="val" id="t-sin-venta">—</div><div class="lbl">Sin Venta</div></div>
+      <div class="col total-box"><div class="val" id="t-negativos">—</div><div class="lbl">Negativos</div></div>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="tabla-wrap">
+    <div class="spinner-wrap" id="estado-inicial">
+      <i class="bi bi-arrow-up-circle text-primary fs-4"></i>
+      <div class="mt-2">Seleccione filtros y pulse Consultar</div>
+    </div>
+    <div class="spinner-wrap d-none" id="spinner">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2">Procesando...</div>
+    </div>
+    <table class="table table-bordered table-hover mb-0 d-none" id="tabla">
+      <thead>
+        <tr>
+          <th onclick="ordenar(0)" data-col="0">CÓDIGO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(1)" data-col="1">NOMBRE<span class="sort-ico"></span></th>
+          <th onclick="ordenar(2)" data-col="2">GRUPO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(3)" data-col="3">UND<span class="sort-ico"></span></th>
+          <th onclick="ordenar(4)" data-col="4" class="num">SALDO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(5)" data-col="5" class="num">VALOR $<span class="sort-ico"></span></th>
+          <th onclick="ordenar(6)" data-col="6" class="num"># VENTAS<span class="sort-ico"></span></th>
+          <th onclick="ordenar(7)" data-col="7">ÚLTIMA VENTA<span class="sort-ico"></span></th>
+          <th onclick="ordenar(8)" data-col="8" class="num">DÍAS SIN VENTA<span class="sort-ico"></span></th>
+          <th onclick="ordenar(9)" data-col="9" class="num">DÍAS PROM<span class="sort-ico"></span></th>
+          <th onclick="ordenar(10)" data-col="10" class="num">DÍAS P/VENDER<span class="sort-ico"></span></th>
+          <th onclick="ordenar(11)" data-col="11">TENDENCIA<span class="sort-ico"></span></th>
+          <th onclick="ordenar(12)" data-col="12">DECISIÓN<span class="sort-ico"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr class="fila-total">
+          <td colspan="4">TOTAL</td>
+          <td class="num" id="ft-saldo"></td>
+          <td class="num" id="ft-valor"></td>
+          <td colspan="7"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div>
+
+<script>
+let _rows = [], _sortCol = 6, _sortAsc = false;
+let _params = {};
+
+const fmt  = (n, d=2) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('es-CO', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtI = n => (n === null || n === undefined) ? '' : Math.round(n).toLocaleString('es-CO');
+const fmtM = n => (n === null || n === undefined) ? '' : '$ ' + Math.round(n).toLocaleString('es-CO');
+
+function decBadge(d) {
+  if (!d) return '';
+  let c = 'bdg-max';
+  if (d.includes('COMPRAR YA'))        c = 'bdg-comprar-ya';
+  else if (d.includes('EXCESO'))       c = 'bdg-exceso';
+  else if (d.includes('NO VENDIDO'))   c = 'bdg-no-vendido';
+  else if (d.includes('AJUSTAR'))      c = 'bdg-ajustar';
+  else if (d.includes('SIN REGISTRO')) c = 'bdg-sin-reg';
+  else if (d === 'STOCK OK')           c = 'bdg-stock-ok';
+  return `<span class="bdg ${c}">${d}</span>`;
+}
+function tendHtml(t) {
+  if (!t) return '';
+  if (t.startsWith('SUBE'))  return `<span class="ts">▲ ${t}</span>`;
+  if (t.startsWith('BAJA'))  return `<span class="tb">▼ ${t}</span>`;
+  if (t === 'ESTABLE')       return `<span class="te">— ESTABLE</span>`;
+  return t;
+}
+
+const COLS = ['codigo','nombre','grupo','und','saldo','valor_saldo','n_ventas','ultima_venta','dias_sin_venta','dias_prom','dias_para_vender','tendencia','decision'];
+
+function renderTabla() {
+  const key = COLS[_sortCol];
+  const sorted = [..._rows].sort((a, b) => {
+    let va = a[key] ?? '', vb = b[key] ?? '';
+    if (va === '' || va === null) return 1;
+    if (vb === '' || vb === null) return -1;
+    if (typeof va === 'number') return _sortAsc ? va - vb : vb - va;
+    return _sortAsc ? String(va).localeCompare(String(vb),'es') : String(vb).localeCompare(String(va),'es');
+  });
+
+  document.getElementById('tbody').innerHTML = sorted.map(r => `<tr>
+    <td>${r.codigo}</td>
+    <td>${r.nombre}</td>
+    <td>${r.grupo||''}</td>
+    <td>${r.und||''}</td>
+    <td class="num">${fmt(r.saldo)}</td>
+    <td class="num">${fmtM(r.valor_saldo)}</td>
+    <td class="num">${fmtI(r.n_ventas)}</td>
+    <td>${r.ultima_venta||''}</td>
+    <td class="num">${fmt(r.dias_sin_venta,0)}</td>
+    <td class="num">${fmt(r.dias_prom,0)}</td>
+    <td class="num">${fmt(r.dias_para_vender,0)}</td>
+    <td>${tendHtml(r.tendencia)}</td>
+    <td>${decBadge(r.decision)}</td>
+  </tr>`).join('');
+
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (parseInt(th.dataset.col) === _sortCol)
+      th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
+  });
+  document.getElementById('tabla').classList.remove('d-none');
+
+  const totSaldo = _rows.reduce((s,r) => s + (r.saldo||0), 0);
+  const totValor = _rows.reduce((s,r) => s + (r.valor_saldo||0), 0);
+  document.getElementById('ft-saldo').textContent = fmt(totSaldo);
+  document.getElementById('ft-valor').textContent = fmtM(totValor);
+}
+
+function ordenar(col) {
+  if (_sortCol === col) _sortAsc = !_sortAsc;
+  else { _sortCol = col; _sortAsc = true; }
+  renderTabla();
+}
+
+function consultar() {
+  _params = {
+    empresa:  document.getElementById('f-empresa').value,
+    desde:    document.getElementById('f-desde').value,
+    hasta:    document.getElementById('f-hasta').value,
+    dias_min: document.getElementById('f-dias-min').value,
+    dias_max: document.getElementById('f-dias-max').value,
+  };
+  document.getElementById('estado-inicial').classList.add('d-none');
+  document.getElementById('spinner').classList.remove('d-none');
+  document.getElementById('tabla').classList.add('d-none');
+  document.getElementById('panel-totales').style.display = 'none';
+  document.getElementById('btn-excel-wrap').style.display = 'none';
+  document.getElementById('info-registros').textContent = '';
+
+  fetch('/api/reporte/inventario', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(_params)
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('spinner').classList.add('d-none');
+    if (!data.ok) { alert('Error: ' + data.error); return; }
+    _rows = data.rows;
+    renderTabla();
+    mostrarTotales();
+    document.getElementById('btn-excel-wrap').style.display = '';
+    document.getElementById('info-registros').textContent = `${_rows.length} productos · ${data.elapsed}s`;
+  })
+  .catch(e => {
+    document.getElementById('spinner').classList.add('d-none');
+    alert('Error de conexión: ' + e);
+  });
+}
+
+function mostrarTotales() {
+  const comprar   = _rows.filter(r => r.decision && r.decision.includes('COMPRAR YA')).length;
+  const exceso    = _rows.filter(r => r.decision && r.decision.includes('EXCESO')).length;
+  const sinVenta  = _rows.filter(r => r.decision && r.decision.includes('NO VENDIDO')).length;
+  const negativos = _rows.filter(r => r.saldo < 0).length;
+  const totValor  = _rows.reduce((s,r) => s + (r.valor_saldo||0), 0);
+  document.getElementById('t-productos').textContent = _rows.length.toLocaleString('es-CO');
+  document.getElementById('t-valor').textContent     = fmtM(totValor);
+  document.getElementById('t-comprar').textContent   = comprar;
+  document.getElementById('t-exceso').textContent    = exceso;
+  document.getElementById('t-sin-venta').textContent = sinVenta;
+  document.getElementById('t-negativos').textContent = negativos;
+  document.getElementById('panel-totales').style.display = '';
+}
+
+function exportarExcel() {
+  fetch('/api/reporte/inventario/excel', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(_params)
+  })
+  .then(r => r.blob())
+  .then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventario_${_params.desde}_${_params.hasta}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter') consultar(); });
+</script>
+</body>
+</html>

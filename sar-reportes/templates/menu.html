@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reportes SAR</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  body { background: #f4f7fb; font-size: 13px; }
+  .panel-fuente { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 18px; }
+  .categoria-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: #003f7f; border-bottom: 2px solid #003f7f; padding-bottom: 4px; margin-bottom: 10px; }
+  .reporte-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    background: #fff; border-radius: 6px; box-shadow: 0 1px 4px #0001;
+    text-decoration: none; color: #1a1a2e; margin-bottom: 6px; transition: box-shadow .12s; }
+  .reporte-item:hover { box-shadow: 0 3px 12px #003f7f22; color: #003f7f; }
+  .reporte-item .icon { color: #003f7f; font-size: 15px; flex-shrink: 0; }
+  .reporte-item .nombre { font-size: 13px; font-weight: 500; }
+  .fuente-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  .fuente-local  { background: #d1e7dd; color: #0a3622; }
+  .fuente-remoto { background: #cfe2ff; color: #084298; }
+  h5 { color: #003f7f; }
+</style>
+</head>
+<body>
+<div class="container-fluid py-4" style="max-width:900px">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <h5 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill me-2"></i>Reportes SAR</h5>
+    <span id="badge-fuente" class="fuente-badge {{ 'fuente-remoto' if fuente == 'remoto' else 'fuente-local' }}">
+      {{ 'REMOTO' if fuente == 'remoto' else 'LOCAL' }}
+    </span>
+  </div>
+
+  <!-- Selector de fuente -->
+  <div class="panel-fuente">
+    <div class="row g-3 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Fuente de datos</label>
+        <div class="d-flex gap-3 mt-1">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="fuente" id="r-local" value="local"
+              {{ 'checked' if fuente != 'remoto' else '' }} onchange="onFuenteChange()">
+            <label class="form-check-label" for="r-local">Local</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="fuente" id="r-remoto" value="remoto"
+              {{ 'checked' if fuente == 'remoto' else '' }} onchange="onFuenteChange()">
+            <label class="form-check-label" for="r-remoto">Remoto</label>
+          </div>
+        </div>
+      </div>
+      <div class="col-auto" id="wrap-agente" style="display:{{ 'block' if fuente == 'remoto' else 'none' }}">
+        <label class="form-label mb-1 small fw-semibold">Agente</label>
+        <select id="sel-agente" class="form-select form-select-sm" style="min-width:220px" onchange="guardarFuente()">
+          <option value="">— cargando agentes —</option>
+        </select>
+        <small id="agente-estado" class="text-muted d-block mt-1"></small>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm" onclick="guardarFuente()">
+          <i class="bi bi-check2 me-1"></i>Aplicar
+        </button>
+      </div>
+      <div class="col-auto ms-auto">
+        <small id="msg-fuente" class="text-success fw-semibold"></small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reportes por categoría -->
+  {% for categoria, reportes in categorias.items() %}
+  <div class="mb-4">
+    <div class="categoria-titulo"><i class="bi bi-folder2-open me-1"></i>{{ categoria }}</div>
+    <div class="row g-0">
+      {% for r in reportes %}
+      <div class="col-md-6 pe-md-2">
+        <a href="/reporte/{{ r.id }}" class="reporte-item">
+          <i class="bi bi-file-earmark-bar-graph icon"></i>
+          <span class="nombre">{{ r.nombre }}</span>
+          <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:11px"></i>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+
+<script>
+const CLIENTE_ID_ACTUAL = '{{ cliente_id }}';
+
+function onFuenteChange() {
+  const esRemoto = document.getElementById('r-remoto').checked;
+  document.getElementById('wrap-agente').style.display = esRemoto ? 'block' : 'none';
+  if (esRemoto) cargarAgentes();
+}
+
+function cargarAgentes() {
+  document.getElementById('sel-agente').innerHTML = '<option value="">— cargando —</option>';
+  document.getElementById('agente-estado').textContent = '';
+  fetch('/api/agentes')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok || !data.agentes.length) {
+        document.getElementById('sel-agente').innerHTML = '<option value="">— sin agentes conectados —</option>';
+        return;
+      }
+      const opts = data.agentes.map(a => {
+        const estado = a.conectado ? '🟢' : '🔴';
+        const selected = a.cliente_id === CLIENTE_ID_ACTUAL ? 'selected' : '';
+        return `<option value="${a.cliente_id}" ${selected}>${estado} ${a.nombre} (${a.cliente_id})</option>`;
+      });
+      document.getElementById('sel-agente').innerHTML = opts.join('');
+      mostrarEstadoAgente();
+    })
+    .catch(() => {
+      document.getElementById('sel-agente').innerHTML = '<option value="">— error conectando a AWS —</option>';
+    });
+}
+
+function mostrarEstadoAgente() {
+  const sel = document.getElementById('sel-agente');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt) {
+    document.getElementById('agente-estado').textContent = opt.text.includes('🟢') ? 'Conectado' : 'Desconectado';
+  }
+}
+
+function guardarFuente() {
+  const fuente     = document.querySelector('input[name=fuente]:checked').value;
+  const cliente_id = fuente === 'remoto' ? document.getElementById('sel-agente').value : '';
+  fetch('/api/fuente', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({fuente, cliente_id})
+  })
+  .then(r => r.json())
+  .then(() => {
+    const badge = document.getElementById('badge-fuente');
+    badge.textContent = fuente === 'remoto' ? 'REMOTO' : 'LOCAL';
+    badge.className = 'fuente-badge ' + (fuente === 'remoto' ? 'fuente-remoto' : 'fuente-local');
+    document.getElementById('msg-fuente').textContent = '✓ Guardado';
+    setTimeout(() => document.getElementById('msg-fuente').textContent = '', 2000);
+  });
+}
+
+// Si ya estaba en remoto al cargar, poblar el select
+if (document.getElementById('r-remoto').checked) cargarAgentes();
+</script>
+</body>
+</html>

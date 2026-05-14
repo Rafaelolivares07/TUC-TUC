@@ -251,7 +251,8 @@ def respuesta():
         ).fetchone()
         if not sesion:
             return jsonify({'ok': False, 'error': 'sesión inválida'}), 401
-        payload = json.dumps(resp_data if resp_data is not None else {'error': error})
+        from psycopg2.extras import Json as PgJson
+        payload = PgJson(resp_data if resp_data is not None else {'error': error})
         estado  = 'error' if error else 'lista'
         conn.execute(
             "UPDATE admin_agent_consultas SET respuesta=%s, estado=%s, respondida_at=NOW() "

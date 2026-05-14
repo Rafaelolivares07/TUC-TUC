@@ -99,10 +99,21 @@ def checkin():
     nombre   = (data.get('nombre') or cliente_id).strip()
     ip_local = (data.get('ip_local') or '').strip()
     ruta_bd  = (data.get('ruta_bd') or '').strip()
-    token    = secrets.token_hex(24)
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        # Si ya hay sesión activa con ping reciente (< 25s), reutilizarla
+        existing = conn.execute(
+            "SELECT token FROM admin_agent_sesiones "
+            "WHERE cliente_id=%s AND activo=TRUE "
+            "AND ultimo_ping > NOW() - INTERVAL '25 seconds' "
+            "ORDER BY ultimo_ping DESC LIMIT 1",
+            (cliente_id,)
+        ).fetchone()
+        if existing:
+            conn.commit()
+            return jsonify({'ok': True, 'token': existing['token'], 'reused': True})
+        token = secrets.token_hex(24)
         conn.execute("UPDATE admin_agent_sesiones SET activo=FALSE WHERE cliente_id=%s", (cliente_id,))
         conn.execute(
             "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd) VALUES (%s,%s,%s,%s,%s)",

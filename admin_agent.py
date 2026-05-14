@@ -418,6 +418,31 @@ def _procesar_consulta(base, token, ruta_bd, consulta):
             _en_proceso.discard(cid)
 
 
+def _pid_existe(pid: int) -> bool:
+    import ctypes
+    PROCESS_QUERY_INFORMATION = 0x0400
+    h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_INFORMATION, False, pid)
+    if not h:
+        return False
+    ctypes.windll.kernel32.CloseHandle(h)
+    return True
+
+
+def _adquirir_lock(cliente_id: str) -> bool:
+    """Crea un lock file con el PID actual. Retorna False si ya hay otra instancia."""
+    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             f"admin_agent_{cliente_id}.lock")
+    if os.path.exists(lock_path):
+        try:
+            old_pid = int(open(lock_path).read().strip())
+            if _pid_existe(old_pid):
+                return False  # ya corre
+        except Exception:
+            pass  # lock stale — sobrescribir
+    open(lock_path, 'w').write(str(os.getpid()))
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--servidor', default='https://admin.tuc-tuc.co')
@@ -426,6 +451,10 @@ def main():
 
     base = args.servidor.rstrip('/')
     cliente_id = args.cliente
+
+    if not _adquirir_lock(cliente_id):
+        print(f"Ya hay una instancia de admin_agent corriendo para '{cliente_id}'. Saliendo.")
+        sys.exit(0)
 
     nombre   = leer_config() or cliente_id
     ip_local = get_ip_local()
@@ -503,10 +532,10 @@ def main():
                     token = data['token']
                     print(f"Reconectado. Token: {token[:12]}...")
                 else:
-                    print(f"ERROR checkin: {data.get('error')} — reintentando en 30s...")
+                    print(f"ERROR checkin: {data.get('error')} - reintentando en 30s...")
                     time.sleep(30)
             except Exception as e:
-                print(f"ERROR reconectando: {e} — reintentando en 30s...")
+                print(f"ERROR reconectando: {e} - reintentando en 30s...")
                 time.sleep(30)
 
     except KeyboardInterrupt:

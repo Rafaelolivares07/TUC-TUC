@@ -192,10 +192,22 @@ def ejecutar_comando(data):
                 'Enter': 'enter', 'Backspace': 'backspace', 'Tab': 'tab',
                 'Escape': 'esc', 'Delete': 'delete', 'ArrowUp': 'up',
                 'ArrowDown': 'down', 'ArrowLeft': 'left', 'ArrowRight': 'right',
+                'Space': 'space', 'F1': 'f1', 'F2': 'f2', 'F3': 'f3', 'F4': 'f4',
+                'F5': 'f5', 'F6': 'f6', 'F7': 'f7', 'F8': 'f8', 'F9': 'f9',
+                'F10': 'f10', 'F11': 'f11', 'F12': 'f12',
             }
-            mapped = key_map.get(key, key if len(key) == 1 else None)
-            if mapped:
-                pyautogui.press(mapped)
+            if '+' in key:
+                # Combo: win+r, alt+F4, ctrl+c, etc.
+                parts = [p.strip().lower() for p in key.split('+')]
+                mod_map = {'win': 'winleft', 'ctrl': 'ctrl', 'alt': 'alt', 'shift': 'shift'}
+                mapped_parts = []
+                for p in parts:
+                    mapped_parts.append(mod_map.get(p, key_map.get(p, p if len(p) == 1 else p.lower())))
+                pyautogui.hotkey(*mapped_parts)
+            else:
+                mapped = key_map.get(key, key if len(key) == 1 else None)
+                if mapped:
+                    pyautogui.press(mapped)
         elif tipo == 'calibrate_show':
             ventana.root.after(0, _crear_overlay_calibracion)
         elif tipo == 'calibrate_hide':
@@ -369,7 +381,13 @@ def on_file_chunk_in(data):
     if recibidos == total:
         try:
             contenido = b''.join(_chunks_entrantes[nombre]['chunks'][i] for i in range(total))
-            desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+            try:
+                import winreg
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                        r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders') as _k:
+                    desktop = winreg.QueryValueEx(_k, 'Desktop')[0]
+            except Exception:
+                desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
             os.makedirs(desktop, exist_ok=True)
             with open(os.path.join(desktop, nombre), 'wb') as f:
                 f.write(contenido)

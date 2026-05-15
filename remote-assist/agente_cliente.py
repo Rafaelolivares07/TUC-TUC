@@ -30,7 +30,7 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-EXE_VERSION      = "2.1"
+EXE_VERSION      = "2.2"
 RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/remote_url.txt"
 VER_URL_GITHUB   = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/version.txt"
 EXE_DOWNLOAD_URL = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
@@ -84,35 +84,33 @@ def _auto_update():
     lbl_pct.pack()
     root_upd.update()
 
-    import tempfile as _tmp, subprocess as _sp
+    import tempfile as _tmp, subprocess as _sp, shutil as _sh, socket as _sock
     exe_actual = sys.executable
     tmp_exe = os.path.join(_tmp.gettempdir(), 'AsistenciaTucTuc_update.exe')
-    vbs_path = os.path.join(_tmp.gettempdir(), 'tuctuc_upd.vbs')
-
-    def _hook(count, block_size, total):
-        if total > 0:
-            pct = min(int(count * block_size * 100 / total), 100)
-            bar['value'] = pct
-            lbl_pct.config(text=f"{pct}%")
-            root_upd.update()
 
     try:
-        urllib.request.urlretrieve(EXE_DOWNLOAD_URL, tmp_exe, reporthook=_hook)
+        _sock.setdefaulttimeout(30)
+        with urllib.request.urlopen(EXE_DOWNLOAD_URL) as resp:
+            total = int(resp.headers.get('Content-Length', 0))
+            downloaded = 0
+            with open(tmp_exe, 'wb') as fout:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    fout.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        pct = min(int(downloaded * 100 / total), 100)
+                        bar['value'] = pct
+                        lbl_pct.config(text=f"{pct}%")
+                        root_upd.update()
         root_upd.destroy()
-        # VBScript: espera 2s, copia EXE, relanza. wscript.exe corre sin consola ni diálogos.
-        vbs_code = (
-            'WScript.Sleep 2000\n'
-            f'CreateObject("Scripting.FileSystemObject").CopyFile "{tmp_exe}", "{exe_actual}", True\n'
-            f'CreateObject("WScript.Shell").Run Chr(34) & "{exe_actual}" & Chr(34), 1, False\n'
-            f'CreateObject("Scripting.FileSystemObject").DeleteFile WScript.ScriptFullName\n'
-        )
-        with open(vbs_path, 'w') as f:
-            f.write(vbs_code)
-        _sp.Popen(
-            ['wscript.exe', '/nologo', vbs_path],
-            stdin=_sp.DEVNULL, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
-            creationflags=0x08000000  # CREATE_NO_WINDOW
-        )
+        # PyInstaller --onefile no bloquea el EXE original — se puede sobreescribir en caliente
+        _sh.copy2(tmp_exe, exe_actual)
+        os.remove(tmp_exe)
+        time.sleep(0.3)
+        _sp.Popen([exe_actual])
         time.sleep(0.5)
         sys.exit(0)
     except Exception:
@@ -120,7 +118,10 @@ def _auto_update():
             os.remove(tmp_exe)
         except Exception:
             pass
-        root_upd.destroy()
+        try:
+            root_upd.destroy()
+        except Exception:
+            pass
 
 
 def _fetch_server_url():

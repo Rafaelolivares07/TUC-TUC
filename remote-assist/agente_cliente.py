@@ -366,13 +366,14 @@ _chunks_entrantes = {}   # nombre -> {total, chunks: {idx: bytes}}
 
 @sio.on('file_chunk_in')
 def on_file_chunk_in(data):
-    """Técnico envía archivo en chunks — ensamblar y guardar en Desktop."""
+    """Técnico envía archivo en chunks — ensamblar y guardar."""
     nombre = os.path.basename(data.get('nombre', 'archivo_recibido'))
     idx    = data['idx']
     total  = data['total']
+    destino = data.get('destino', '').strip()  # ruta destino opcional
 
     if nombre not in _chunks_entrantes:
-        _chunks_entrantes[nombre] = {'total': total, 'chunks': {}}
+        _chunks_entrantes[nombre] = {'total': total, 'chunks': {}, 'destino': destino}
 
     _chunks_entrantes[nombre]['chunks'][idx] = base64.b64decode(data['b64'])
     recibidos = len(_chunks_entrantes[nombre]['chunks'])
@@ -381,18 +382,20 @@ def on_file_chunk_in(data):
     if recibidos == total:
         try:
             contenido = b''.join(_chunks_entrantes[nombre]['chunks'][i] for i in range(total))
-            try:
-                import winreg
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                        r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders') as _k:
-                    desktop = winreg.QueryValueEx(_k, 'Desktop')[0]
-            except Exception:
-                desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
-            os.makedirs(desktop, exist_ok=True)
-            with open(os.path.join(desktop, nombre), 'wb') as f:
+            carpeta = _chunks_entrantes[nombre].get('destino', '')
+            if not carpeta:
+                try:
+                    import winreg
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders') as _k:
+                        carpeta = winreg.QueryValueEx(_k, 'Desktop')[0]
+                except Exception:
+                    carpeta = os.path.join(os.path.expanduser('~'), 'Desktop')
+            os.makedirs(carpeta, exist_ok=True)
+            with open(os.path.join(carpeta, nombre), 'wb') as f:
                 f.write(contenido)
             del _chunks_entrantes[nombre]
-            ventana.set_archivo(f"📥 {nombre} guardado en Desktop")
+            ventana.set_archivo(f"📥 {nombre} -> {carpeta}")
         except Exception as e:
             ventana.set_archivo(f"✗ Error al guardar: {e}", color="#f87171")
 

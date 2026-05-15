@@ -550,12 +550,6 @@ def agentes_page():
         conn.close()
 
 
-@bp.route('/admin/consultas')
-@admin_required
-def consultas_page():
-    return render_template('admin_consultas.html')
-
-
 # ── Permisos de reportes SAR por cliente ──────────────────────────────────────
 
 REPORTES_CATALOGO = [

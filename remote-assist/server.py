@@ -27,8 +27,10 @@ ACCESS_TOKEN = os.getenv('ACCESS_TOKEN', 'tuctuc-remote-2026')
 # Registro de sesiones activas (agentes conectados)
 # session_id -> timestamp de conexión
 active_sessions = {}
-# sid -> session_id (para limpiar al desconectar)
+# sid -> session_id (para limpiar al desconectar — solo agentes)
 sid_to_session = {}
+# session_id -> set of viewer SIDs
+active_viewers = {}  # session_id -> viewer_sid (último viewer activo)
 
 # ─── Páginas ─────────────────────────────────────────────────────────────────
 
@@ -125,6 +127,12 @@ VIEWER_HTML = """<!DOCTYPE html>
   <button id="btn-archivos" onclick="toggleArchivos()" title="Transferencia de archivos">📁 Archivos</button>
   <button id="btn-terminal" onclick="toggleTerminal()" title="Terminal remota">⌨️ Terminal</button>
   <button id="btn-calibrar" onclick="iniciarCalibracion()" title="Calibrar puntero remoto">🎯 Calibrar</button>
+  <select id="sel-calidad" onchange="cambiarCalidad(this.value)" title="Calidad de imagen" style="margin-left:8px;background:#334155;color:#cbd5e1;border:none;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;display:none">
+    <option value="low">🔵 Baja</option>
+    <option value="mid">🟡 Media</option>
+    <option value="high" selected>🟢 Alta</option>
+    <option value="ultra">⚡ Ultra</option>
+  </select>
 </div>
 
 <div id="panel-terminal">
@@ -208,6 +216,18 @@ function aplicarCalib(rx, ry) {
   return { rx: calib.sx * rx + calib.ox, ry: calib.sy * ry + calib.oy };
 }
 
+const QUALITY_PRESETS = {
+  low:   {quality: 50, scale: 0.6},
+  mid:   {quality: 70, scale: 0.85},
+  high:  {quality: 85, scale: 1.0},
+  ultra: {quality: 95, scale: 1.0},
+};
+function cambiarCalidad(preset) {
+  if (!socket) return;
+  const p = QUALITY_PRESETS[preset];
+  if (p) socket.emit('set_quality', {session_id: sessionId, quality: p.quality, scale: p.scale});
+}
+
 function iniciarCalibracion() {
   if (!socket) return;
   calibMode = true; calibClicks = [];
@@ -284,6 +304,7 @@ function conectar() {
     setStatus('yellow', 'Esperando agente...');
     const btn = document.getElementById('btn-calibrar');
     btn.style.display = '';
+    document.getElementById('sel-calidad').style.display = '';
     if (localStorage.getItem('remote_calib')) {
       btn.classList.add('calibrado');
       btn.title = 'Calibrado ✓ — Click para recalibrar';
@@ -303,6 +324,7 @@ function conectar() {
   socket.on('disconnect', () => {
     setStatus('red', 'Desconectado');
     document.getElementById('btn-calibrar').style.display = 'none';
+    document.getElementById('sel-calidad').style.display = 'none';
     if (calibMode) cancelarCalibracion();
   });
   socket.on('file_chunk', onFileChunk);
@@ -343,10 +365,32 @@ setInterval(cargarSesiones, 3000);
 
 // ─── Comandos al agente ──────────────────────────────────────────────────────
 const screenEl = document.getElementById('screen');
+
+// Calcula coordenadas relativas (0-1) dentro de la imagen real,
+// descontando las barras negras que deja object-fit:contain
+function coordsFromEvent(e) {
+  const rect = screenEl.getBoundingClientRect();
+  const nw = screenEl.naturalWidth  || rect.width;
+  const nh = screenEl.naturalHeight || rect.height;
+  const contAR = rect.width / rect.height;
+  const imgAR  = nw / nh;
+  let iw, ih, ix, iy;
+  if (imgAR > contAR) {
+    iw = rect.width;  ih = rect.width / imgAR;
+    ix = rect.left;   iy = rect.top + (rect.height - ih) / 2;
+  } else {
+    ih = rect.height; iw = rect.height * imgAR;
+    iy = rect.top;    ix = rect.left + (rect.width - iw) / 2;
+  }
+  return {
+    rx: Math.max(0, Math.min(1, (e.clientX - ix) / iw)),
+    ry: Math.max(0, Math.min(1, (e.clientY - iy) / ih))
+  };
+}
+
 screenEl.addEventListener('click', (e) => {
   if (!socket) return;
-  const rect = screenEl.getBoundingClientRect();
-  const rx = (e.clientX-rect.left)/rect.width, ry = (e.clientY-rect.top)/rect.height;
+  const {rx, ry} = coordsFromEvent(e);
   if (calibMode) {
     calibClicks.push({rx, ry});
     if (calibClicks.length < 4) actualizarPanelCalib();
@@ -358,20 +402,17 @@ screenEl.addEventListener('click', (e) => {
 });
 screenEl.addEventListener('contextmenu', (e) => {
   e.preventDefault(); if (!socket || calibMode) return;
-  const rect = screenEl.getBoundingClientRect();
-  const c = aplicarCalib((e.clientX-rect.left)/rect.width, (e.clientY-rect.top)/rect.height);
+  const c = aplicarCalib(...Object.values(coordsFromEvent(e)));
   socket.emit('command', { session_id: sessionId, type: 'click', x: c.rx, y: c.ry, button: 'right' });
 });
 screenEl.addEventListener('dblclick', (e) => {
   if (!socket || calibMode) return;
-  const rect = screenEl.getBoundingClientRect();
-  const c = aplicarCalib((e.clientX-rect.left)/rect.width, (e.clientY-rect.top)/rect.height);
+  const c = aplicarCalib(...Object.values(coordsFromEvent(e)));
   socket.emit('command', { session_id: sessionId, type: 'double_click', x: c.rx, y: c.ry });
 });
 screenEl.addEventListener('mousemove', (e) => {
   if (!socket || calibMode) return;
-  const rect = screenEl.getBoundingClientRect();
-  const c = aplicarCalib((e.clientX-rect.left)/rect.width, (e.clientY-rect.top)/rect.height);
+  const c = aplicarCalib(...Object.values(coordsFromEvent(e)));
   socket.emit('command', { session_id: sessionId, type: 'move', x: c.rx, y: c.ry });
 });
 screenEl.addEventListener('wheel', (e) => {
@@ -542,10 +583,11 @@ def on_viewer_join(data):
     session_id = data.get('session_id', 'default')
     join_room(f'viewer_{session_id}')
     join_room(f'session_{session_id}')
+    active_viewers[session_id] = request.sid
     emit('viewer_ok')
-    # Si el agente ya está conectado, notificar al nuevo visor inmediatamente
     if session_id in active_sessions:
         emit('agent_connected')
+        emit('viewer_joined', room=f'agent_{session_id}')
     print(f'[visor] conectado sesion {session_id}')
 
 
@@ -562,15 +604,12 @@ def on_agent_join(data):
     join_room(f'session_{session_id}')
     emit('agent_ready')
     emit('agent_connected', room=f'viewer_{session_id}')
-    try:
-        import time as _time
-        active_sessions[session_id] = _time.time()
-        sid_to_session[request.sid] = session_id
-        with open('C:/S.A.R/server.log', 'a') as _f:
-            _f.write(f'[agente] join ok sesion={session_id} sid={request.sid}\n')
-    except Exception as _e:
-        with open('C:/S.A.R/server.log', 'a') as _f:
-            _f.write(f'[agente] ERROR sesion={session_id}: {_e}\n')
+    # Si ya hay un viewer activo, notificar al agente que el técnico está presente
+    if session_id in active_viewers:
+        emit('viewer_joined')
+    import time as _time
+    active_sessions[session_id] = _time.time()
+    sid_to_session[request.sid] = session_id
 
 
 @socketio.on('frame')
@@ -606,6 +645,11 @@ def on_file_chunk(data):
     emit('file_chunk', data, room=f'viewer_{session_id}')
 
 
+@socketio.on('set_quality')
+def on_set_quality(data):
+    session_id = data.get('session_id', 'default')
+    emit('set_quality', data, room=f'agent_{session_id}')
+
 @socketio.on('exec')
 def on_exec(data):
     """Técnico → agente: ejecutar comando."""
@@ -622,11 +666,19 @@ def on_exec_result(data):
 
 @socketio.on('disconnect')
 def on_disconnect():
-    print(f'[disconnect] sid={request.sid}')
-    session_id = sid_to_session.pop(request.sid, None)
+    sid = request.sid
+    session_id = sid_to_session.pop(sid, None)
     if session_id:
+        # Agente desconectado
         active_sessions.pop(session_id, None)
         emit('agent_disconnected', room=f'viewer_{session_id}')
+    else:
+        # Revisar si era un viewer
+        for sess, vsid in list(active_viewers.items()):
+            if vsid == sid:
+                del active_viewers[sess]
+                emit('viewer_left', room=f'agent_{sess}')
+                break
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────

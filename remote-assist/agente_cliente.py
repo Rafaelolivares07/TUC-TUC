@@ -30,7 +30,7 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-EXE_VERSION      = "2.2"
+EXE_VERSION      = "2.3"
 RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/remote_url.txt"
 VER_URL_GITHUB   = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/version.txt"
 EXE_DOWNLOAD_URL = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
@@ -522,14 +522,18 @@ def hilo_conexion():
 
 def main():
     global ventana
-    ventana = VentanaAsistencia()
+    try:
+        ventana = VentanaAsistencia()
 
-    t1 = threading.Thread(target=hilo_conexion, daemon=True)
-    t2 = threading.Thread(target=loop_frames, daemon=True)
-    t1.start()
-    t2.start()
+        t1 = threading.Thread(target=hilo_conexion, daemon=True)
+        t2 = threading.Thread(target=loop_frames, daemon=True)
+        t1.start()
+        t2.start()
 
-    ventana.run()
+        ventana.run()
+    except Exception:
+        import traceback as _tb, tkinter.messagebox as _mb
+        _mb.showerror("TUC TUC — Error de inicio", _tb.format_exc())
 
 
 if __name__ == '__main__':

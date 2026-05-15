@@ -30,7 +30,7 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-EXE_VERSION      = "2.0"
+EXE_VERSION      = "2.1"
 RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/remote_url.txt"
 VER_URL_GITHUB   = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/version.txt"
 EXE_DOWNLOAD_URL = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
@@ -84,10 +84,10 @@ def _auto_update():
     lbl_pct.pack()
     root_upd.update()
 
-    import tempfile as _tmp
+    import tempfile as _tmp, subprocess as _sp
     exe_actual = sys.executable
     tmp_exe = os.path.join(_tmp.gettempdir(), 'AsistenciaTucTuc_update.exe')
-    bat     = os.path.join(_tmp.gettempdir(), 'tuctuc_update.bat')
+    vbs_path = os.path.join(_tmp.gettempdir(), 'tuctuc_upd.vbs')
 
     def _hook(count, block_size, total):
         if total > 0:
@@ -99,21 +99,21 @@ def _auto_update():
     try:
         urllib.request.urlretrieve(EXE_DOWNLOAD_URL, tmp_exe, reporthook=_hook)
         root_upd.destroy()
-        # Bat que espera a que este proceso termine, reemplaza y relanza
-        bat_code = (
-            f'@echo off\n'
-            f':wait\n'
-            f'tasklist /FI "PID eq {os.getpid()}" 2>nul | find /i "{os.getpid()}" >nul\n'
-            f'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)\n'
-            f'copy /y "{tmp_exe}" "{exe_actual}" >nul\n'
-            f'del "{tmp_exe}" >nul 2>nul\n'
-            f'start "" "{exe_actual}"\n'
-            f'del "%~f0"\n'
+        # VBScript: espera 2s, copia EXE, relanza. wscript.exe corre sin consola ni diálogos.
+        vbs_code = (
+            'WScript.Sleep 2000\n'
+            f'CreateObject("Scripting.FileSystemObject").CopyFile "{tmp_exe}", "{exe_actual}", True\n'
+            f'CreateObject("WScript.Shell").Run Chr(34) & "{exe_actual}" & Chr(34), 1, False\n'
+            f'CreateObject("Scripting.FileSystemObject").DeleteFile WScript.ScriptFullName\n'
         )
-        with open(bat, 'w') as f:
-            f.write(bat_code)
-        os.startfile(bat)  # lanza bat completamente desacoplado del proceso padre
-        time.sleep(0.3)
+        with open(vbs_path, 'w') as f:
+            f.write(vbs_code)
+        _sp.Popen(
+            ['wscript.exe', '/nologo', vbs_path],
+            stdin=_sp.DEVNULL, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+            creationflags=0x08000000  # CREATE_NO_WINDOW
+        )
+        time.sleep(0.5)
         sys.exit(0)
     except Exception:
         try:

@@ -30,26 +30,113 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE    = 0
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/relay_url.txt"
-_SERVER_FALLBACK = "https://viabu-190-66-70-60.run.pinggy-free.link"
+EXE_VERSION      = "2.0"
+RELAY_URL_GITHUB = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/remote_url.txt"
+VER_URL_GITHUB   = "https://raw.githubusercontent.com/Rafaelolivares07/TUC-TUC/main/version.txt"
+EXE_DOWNLOAD_URL = "https://github.com/Rafaelolivares07/TUC-TUC/releases/latest/download/AsistenciaTucTuc.exe"
+_SERVER_FALLBACK = "https://remote.tuc-tuc.co"
 
-def _fetch_server_url():
+
+def _fetch_text(url, timeout=8):
     try:
         import urllib.request
-        with urllib.request.urlopen(RELAY_URL_GITHUB, timeout=8) as r:
-            url = r.read().decode().strip()
-        if url.startswith("http"):
-            return url
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return r.read().decode().strip()
     except Exception:
-        pass
+        return None
+
+
+def _auto_update():
+    """Si hay versión nueva en GitHub, muestra progreso y relanza el EXE."""
+    if not getattr(sys, 'frozen', False):
+        return
+    ver_remota = _fetch_text(VER_URL_GITHUB)
+    if not ver_remota:
+        return
+    try:
+        if float(ver_remota) <= float(EXE_VERSION):
+            return
+    except ValueError:
+        return
+
+    # Ventana de progreso
+    import urllib.request, tempfile, shutil
+    root_upd = tk.Tk()
+    root_upd.title("TUC TUC — Actualizando")
+    root_upd.geometry("340x130")
+    root_upd.resizable(False, False)
+    root_upd.overrideredirect(True)
+    root_upd.configure(bg="#1e293b")
+    root_upd.update_idletasks()
+    x = (root_upd.winfo_screenwidth() - 340) // 2
+    y = (root_upd.winfo_screenheight() - 130) // 2
+    root_upd.geometry(f"340x130+{x}+{y}")
+
+    tk.Label(root_upd, text="TUC TUC", font=("Arial", 13, "bold"),
+             fg="#2563eb", bg="#1e293b").pack(pady=(16, 2))
+    lbl_ver = tk.Label(root_upd, text=f"Actualizando a V{ver_remota}...",
+                       font=("Arial", 9), fg="#94a3b8", bg="#1e293b")
+    lbl_ver.pack()
+    bar = ttk.Progressbar(root_upd, length=280, mode='determinate')
+    bar.pack(pady=10)
+    lbl_pct = tk.Label(root_upd, text="0%", font=("Arial", 9),
+                       fg="#64748b", bg="#1e293b")
+    lbl_pct.pack()
+    root_upd.update()
+
+    import tempfile as _tmp
+    exe_actual = sys.executable
+    tmp_exe = os.path.join(_tmp.gettempdir(), 'AsistenciaTucTuc_update.exe')
+    bat     = os.path.join(_tmp.gettempdir(), 'tuctuc_update.bat')
+
+    def _hook(count, block_size, total):
+        if total > 0:
+            pct = min(int(count * block_size * 100 / total), 100)
+            bar['value'] = pct
+            lbl_pct.config(text=f"{pct}%")
+            root_upd.update()
+
+    try:
+        urllib.request.urlretrieve(EXE_DOWNLOAD_URL, tmp_exe, reporthook=_hook)
+        root_upd.destroy()
+        # Bat que espera a que este proceso termine, reemplaza y relanza
+        bat_code = (
+            f'@echo off\n'
+            f':wait\n'
+            f'tasklist /FI "PID eq {os.getpid()}" 2>nul | find /i "{os.getpid()}" >nul\n'
+            f'if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)\n'
+            f'copy /y "{tmp_exe}" "{exe_actual}" >nul\n'
+            f'del "{tmp_exe}" >nul 2>nul\n'
+            f'start "" "{exe_actual}"\n'
+            f'del "%~f0"\n'
+        )
+        with open(bat, 'w') as f:
+            f.write(bat_code)
+        os.startfile(bat)  # lanza bat completamente desacoplado del proceso padre
+        time.sleep(0.3)
+        sys.exit(0)
+    except Exception:
+        try:
+            os.remove(tmp_exe)
+        except Exception:
+            pass
+        root_upd.destroy()
+
+
+def _fetch_server_url():
+    url = _fetch_text(RELAY_URL_GITHUB)
+    if url and url.startswith("http"):
+        return url
     return _SERVER_FALLBACK
 
+
+_auto_update()
 SERVER   = _fetch_server_url()
 TOKEN    = "tuctuc-remote-2026"
 SESSION  = __import__('random').randint(100000, 999999).__str__()
 FPS      = 8
-QUALITY  = 70
-SCALE    = 0.85
+QUALITY  = 85
+SCALE    = 1.0
 # ─────────────────────────────────────────────────────────────────────────────
 
 sio      = sio_lib.Client(reconnection=True, reconnection_delay=3, reconnection_attempts=0)
@@ -122,49 +209,69 @@ class VentanaAsistencia:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Asistencia Técnica TUC TUC")
-        self.root.geometry("340x200")
+        self.root.geometry("340x220")
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self.cerrar)
 
-        # Centrar ventana
         self.root.update_idletasks()
         x = (self.root.winfo_screenwidth() - 340) // 2
-        y = (self.root.winfo_screenheight() - 200) // 2
-        self.root.geometry(f"340x200+{x}+{y}")
+        y = (self.root.winfo_screenheight() - 220) // 2
+        self.root.geometry(f"340x220+{x}+{y}")
 
-        # Título
+        self._tecnico_conectado = False
+        self._tiempo_inicio     = None
+        self._pulso_on          = True
+
         tk.Label(self.root, text="TUC TUC", font=("Arial", 18, "bold"),
-                 fg="#2563eb").pack(pady=(20, 2))
-        tk.Label(self.root, text="Asistencia Técnica Remota",
+                 fg="#2563eb").pack(pady=(16, 2))
+        tk.Label(self.root, text=f"Asistencia Técnica Remota  V{EXE_VERSION}",
                  font=("Arial", 10), fg="#555").pack()
 
-        # Código de sesión
         codigo = SESSION[:3] + "-" + SESSION[3:]
         tk.Label(self.root, text="Tu código de sesión:",
-                 font=("Arial", 9), fg="#888").pack(pady=(10, 0))
+                 font=("Arial", 9), fg="#888").pack(pady=(8, 0))
         tk.Label(self.root, text=codigo,
                  font=("Courier New", 26, "bold"), fg="#16a34a").pack()
 
-        # Estado
+        # Estado + contador
         self.frame_estado = tk.Frame(self.root)
-        self.frame_estado.pack(pady=14)
+        self.frame_estado.pack(pady=(8, 0))
         self.dot = tk.Label(self.frame_estado, text="●", font=("Arial", 14), fg="#999")
         self.dot.pack(side="left", padx=(0, 6))
         self.lbl_estado = tk.Label(self.frame_estado, text="Conectando...",
                                    font=("Arial", 11))
         self.lbl_estado.pack(side="left")
+        self.lbl_timer = tk.Label(self.frame_estado, text="",
+                                  font=("Arial", 9), fg="#64748b")
+        self.lbl_timer.pack(side="left", padx=(6, 0))
 
-        # Botón cerrar
+        # Aviso "no cierre"
+        self.lbl_aviso = tk.Label(self.root,
+                                  text="No cierre esta ventana mientras el tecnico trabaja.",
+                                  font=("Arial", 8), fg="#dc2626")
+        # no se empaqueta aún — aparece solo con técnico conectado
+
         self.btn = tk.Button(self.root, text="Cerrar sesión", command=self.cerrar,
                              bg="#ef4444", fg="white", font=("Arial", 10),
                              relief="flat", padx=16, pady=6, cursor="hand2")
-        self.btn.pack(pady=4)
-
-        tk.Label(self.root, text="Tu técnico puede ver y controlar tu pantalla.",
-                 font=("Arial", 8), fg="#888").pack()
+        self.btn.pack(pady=6)
 
         self.lbl_archivo = tk.Label(self.root, text="", font=("Arial", 8), fg="#22c55e")
-        self.lbl_archivo.pack(pady=(2, 0))
+        self.lbl_archivo.pack(pady=(0, 2))
+
+        self._tick()
+
+    def _tick(self):
+        if self._tecnico_conectado:
+            # Pulso: alternar entre verde claro y verde oscuro
+            self.dot.config(fg="#22c55e" if self._pulso_on else "#86efac")
+            self._pulso_on = not self._pulso_on
+            # Contador
+            if self._tiempo_inicio:
+                secs = int(time.time() - self._tiempo_inicio)
+                m, s = divmod(secs, 60)
+                self.lbl_timer.config(text=f"· {m}m {s:02d}s")
+        self.root.after(600, self._tick)
 
     def set_estado(self, color, texto):
         self.root.after(0, lambda: self._actualizar(color, texto))
@@ -176,6 +283,15 @@ class VentanaAsistencia:
         colores = {'verde': '#22c55e', 'amarillo': '#eab308', 'rojo': '#ef4444', 'gris': '#999'}
         self.dot.config(fg=colores.get(color, '#999'))
         self.lbl_estado.config(text=texto)
+        if color == 'verde':
+            self._tecnico_conectado = True
+            self._tiempo_inicio = time.time()
+            self.lbl_aviso.pack(before=self.btn)
+        else:
+            self._tecnico_conectado = False
+            self._tiempo_inicio = None
+            self.lbl_timer.config(text="")
+            self.lbl_aviso.pack_forget()
 
     def cerrar(self):
         global running
@@ -201,11 +317,30 @@ def connect():
 
 @sio.on('agent_ready')
 def on_ready():
-    ventana.set_estado('amarillo', 'Esperando al técnico...')
+    ventana.set_estado('amarillo', 'Esperando al tecnico...')
+
+@sio.on('viewer_joined')
+def on_viewer_joined():
+    ventana.set_estado('verde', 'Tecnico conectado')
+
+@sio.on('viewer_left')
+def on_viewer_left():
+    ventana.set_estado('amarillo', 'Esperando al tecnico...')
 
 @sio.on('agent_error')
 def on_error(data):
     ventana.set_estado('rojo', f"Error: {data.get('msg', 'desconocido')}")
+
+@sio.on('set_quality')
+def on_set_quality(data):
+    global QUALITY, SCALE
+    QUALITY = int(data.get('quality', QUALITY))
+    SCALE   = float(data.get('scale', SCALE))
+    try:
+        img_b64 = capturar_frame()
+        sio.emit('frame', {'session_id': SESSION, 'img': img_b64})
+    except Exception:
+        pass
 
 @sio.on('command')
 def on_command(data):

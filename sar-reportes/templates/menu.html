@@ -66,11 +66,6 @@
         </select>
         <small id="agente-estado" class="text-muted d-block mt-1"></small>
       </div>
-      <div class="col-auto">
-        <button class="btn btn-primary btn-sm" onclick="guardarFuente()">
-          <i class="bi bi-check2 me-1"></i>Aplicar
-        </button>
-      </div>
       <div class="col-auto ms-auto">
         <small id="msg-fuente" class="text-success fw-semibold"></small>
       </div>
@@ -104,6 +99,7 @@ function onFuenteChange() {
   const esRemoto = document.getElementById('r-remoto').checked;
   document.getElementById('wrap-agente').style.display = esRemoto ? 'block' : 'none';
   if (esRemoto) cargarAgentes();
+  else guardarFuente();
 }
 
 function cargarAgentes() {

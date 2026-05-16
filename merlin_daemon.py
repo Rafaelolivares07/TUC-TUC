@@ -35,7 +35,7 @@ if _FFMPEG_BIN not in os.environ.get('PATH', ''):
 DB_URL         = os.getenv('DATABASE_URL')
 APP_DIR        = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
 CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\.local\bin\claude.exe"
-TUCTUC_URL     = "https://tuc-tuc.onrender.com"
+TUCTUC_URL     = "https://admin.tuc-tuc.co"
 HB_TOKEN       = "tuctuc-hb-2026"
 CLAUDE_WINDOW  = "Claude Code"
 

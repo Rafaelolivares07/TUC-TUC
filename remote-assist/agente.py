@@ -7,7 +7,7 @@ RemoteAssist — Agente (corre en el PC controlado)
 
 Uso:
   py agente.py
-  py agente.py --server https://mi-relay.onrender.com --token mi-token --session default
+  py agente.py --server https://remote.tuc-tuc.co --token mi-token --session default
 """
 
 import argparse
@@ -70,7 +70,7 @@ def mostrar_ventana(codigo):
 
 
 # ─── Config por defecto ───────────────────────────────────────────────────────
-DEFAULT_SERVER  = "https://tuc-tuc-remote.onrender.com"
+DEFAULT_SERVER  = "https://remote.tuc-tuc.co"
 DEFAULT_TOKEN   = "tuctuc-remote-2026"
 DEFAULT_SESSION = "default"
 FPS_TARGET      = 8        # frames por segundo

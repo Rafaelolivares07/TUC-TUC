@@ -110,6 +110,7 @@
 
 <script>
 const CLIENTE_ID_ACTUAL = '{{ cliente_id }}';
+const RUTA_BD_LOCAL     = '{{ ruta_bd_local | replace("\\", "\\\\") }}';
 
 function onFuenteChange() {
   const esRemoto = document.getElementById('r-remoto').checked;
@@ -131,10 +132,11 @@ function cargarAgentes() {
       const opts = data.agentes.map(a => {
         const estado = a.conectado ? '🟢' : '🔴';
         const selected = a.cliente_id === CLIENTE_ID_ACTUAL ? 'selected' : '';
-        return `<option value="${a.cliente_id}" ${selected}>${estado} ${a.nombre} (${a.cliente_id})</option>`;
+        return `<option value="${a.cliente_id}" data-ruta="${a.ruta_bd || ''}" ${selected}>${estado} ${a.nombre} (${a.cliente_id})</option>`;
       });
       document.getElementById('sel-agente').innerHTML = opts.join('');
       mostrarEstadoAgente();
+      guardarFuente();  // poblar localStorage con el agente auto-seleccionado
     })
     .catch(() => {
       document.getElementById('sel-agente').innerHTML = '<option value="">— error conectando a AWS —</option>';
@@ -151,9 +153,13 @@ function mostrarEstadoAgente() {
 
 function guardarFuente() {
   const fuente     = document.querySelector('input[name=fuente]:checked').value;
-  const cliente_id = fuente === 'remoto' ? document.getElementById('sel-agente').value : '';
+  const sel        = document.getElementById('sel-agente');
+  const opt        = sel && sel.options[sel.selectedIndex];
+  const cliente_id = fuente === 'remoto' ? (sel ? sel.value : '') : '';
+  const ruta_bd    = fuente === 'remoto' ? (opt ? (opt.dataset.ruta || '') : '') : RUTA_BD_LOCAL;
   localStorage.setItem('sar_fuente',     fuente);
   localStorage.setItem('sar_cliente_id', cliente_id);
+  localStorage.setItem('sar_ruta_bd',    ruta_bd);
   fetch('/api/fuente', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},

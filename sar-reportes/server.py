@@ -275,9 +275,14 @@ def menu():
         categorias[getattr(r, 'CATEGORIA', 'General')].append(
             {'id': r.ID, 'nombre': r.NOMBRE}
         )
+    try:
+        ruta_bd_local = leer_ruta_bd()
+    except Exception:
+        ruta_bd_local = ''
     return render_template('menu.html', categorias=dict(categorias),
                            fuente=fuente,
-                           cliente_id=session.get('cliente_id', ''))
+                           cliente_id=session.get('cliente_id', ''),
+                           ruta_bd_local=ruta_bd_local)
 
 
 @app.route('/reporte/<reporte_id>')

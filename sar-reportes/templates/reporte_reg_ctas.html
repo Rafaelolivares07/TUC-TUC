@@ -327,13 +327,14 @@ document.addEventListener('keydown', e => {
 (function actualizarBadgeFuente() {
   const fuente  = localStorage.getItem('sar_fuente') || 'local';
   const cliente = (localStorage.getItem('sar_cliente_id') || '').trim();
+  const ruta    = (localStorage.getItem('sar_ruta_bd')    || '').trim();
   const badge   = document.getElementById('badge-fuente');
   if (fuente === 'remoto') {
-    badge.textContent = cliente ? `REMOTO · ${cliente}` : 'REMOTO';
-    badge.className   = 'badge bg-warning text-dark';
+    badge.innerHTML = `REMOTO${cliente ? ' · <b>' + cliente + '</b>' : ''}${ruta ? '<br><small style="font-weight:400;opacity:.85">' + ruta + '</small>' : ''}`;
+    badge.className = 'badge bg-warning text-dark';
   } else {
-    badge.textContent = 'LOCAL';
-    badge.className   = 'badge bg-success';
+    badge.innerHTML = `LOCAL${ruta ? '<br><small style="font-weight:400;opacity:.85">' + ruta + '</small>' : ''}`;
+    badge.className = 'badge bg-success';
   }
 })();
 </script>

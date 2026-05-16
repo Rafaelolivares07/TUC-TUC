@@ -3,13 +3,78 @@ admin_agent.py — Agente local Administrator VFP
 Corre en el PC del cliente. Lee DBF locales y responde consultas desde Render.
 
 Uso:
-    python admin_agent.py --servidor https://tuc-tuc.onrender.com --cliente pilar
+    python admin_agent.py --servidor https://admin.tuc-tuc.co --cliente pilar
 """
 
 import os, sys, time, json, argparse, threading
 import datetime, struct, mmap, socket, configparser, subprocess
 import requests
 import dbf
+
+VERSION     = '1.2.0'
+_BASE_URL   = ''   # se setea en main() antes de lanzar el thread de update
+_CLIENTE_ID = ''   # ídem
+
+
+# ── Auto-update ────────────────────────────────────────────────────────────────
+
+def _tuple_version(v):
+    try:    return tuple(int(x) for x in str(v).split('.'))
+    except: return (0,)
+
+
+def _chequear_update():
+    time.sleep(20)  # esperar al checkin inicial
+    try:
+        r = requests.get(f'{_BASE_URL}/api/version/agentes', timeout=10)
+        data = r.json()
+        if not data.get('ok'):
+            return
+        info = data.get('admin_agent', {})
+        v_remota = info.get('version', '0')
+        if _tuple_version(v_remota) > _tuple_version(VERSION):
+            print(f"[update] Nueva versión disponible: {v_remota} (actual {VERSION})")
+            _descargar_y_aplicar(info.get('url', ''), v_remota)
+    except Exception as e:
+        print(f"[update] Error al chequear: {e}")
+
+
+def _descargar_y_aplicar(url, v_remota):
+    exe_dir    = _exe_dir()
+    exe_actual = os.path.join(exe_dir, 'AdminAgent.exe') if getattr(sys, 'frozen', False) else None
+    exe_nuevo  = os.path.join(exe_dir, 'AdminAgent_new.exe')
+    bat_path   = os.path.join(exe_dir, 'updater_agent.bat')
+
+    try:
+        print(f"[update] Descargando AdminAgent v{v_remota}...")
+        r = requests.get(url, stream=True, timeout=180)
+        r.raise_for_status()
+        with open(exe_nuevo, 'wb') as f:
+            for chunk in r.iter_content(65536):
+                if chunk:
+                    f.write(chunk)
+
+        print("[update] Descarga completa. Aplicando...")
+
+        if exe_actual:
+            bat = (
+                '@echo off\r\n'
+                'timeout /t 3 /nobreak >nul\r\n'
+                f'move /y "{exe_nuevo}" "{exe_actual}"\r\n'
+                f'start "" "{exe_actual}" --cliente {_CLIENTE_ID}\r\n'
+            )
+            with open(bat_path, 'w', encoding='ascii') as f:
+                f.write(bat)
+            subprocess.Popen(
+                [bat_path], shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
+            )
+            time.sleep(1)
+            os._exit(0)
+        else:
+            print("[update] Descargado. Reinicia manualmente (modo desarrollo).")
+    except Exception as e:
+        print(f"[update] Error al aplicar: {e}")
 try:
     import numpy as np
     HAS_NUMPY = True
@@ -23,10 +88,22 @@ _en_proceso = set()
 _lock = threading.Lock()
 
 
+def _exe_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _bundle_dir():
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sar-reportes')
+
+
 def leer_config():
     cfg = configparser.ConfigParser()
-    ini = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'admin_agent.ini')
-    cfg.read(ini, encoding='utf-8')
+    ini = os.path.join(_exe_dir(), 'admin_agent.ini')
+    cfg.read(ini, encoding='utf-8-sig')
     return cfg.get('agent', 'nombre', fallback='').strip()
 
 
@@ -626,7 +703,7 @@ def consulta_ejecutar_reporte(ruta_bd, parametros):
     if not reporte_id:
         return {'error': 'reporte_id requerido'}
 
-    sar_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sar-reportes')
+    sar_path = _bundle_dir()
     if sar_path not in sys.path:
         sys.path.insert(0, sar_path)
 
@@ -783,9 +860,40 @@ def consulta_subir_archivo(ruta_bd, parametros):
         return {'error': str(e)}
 
 
-CONSULTAS['ejecutar_reporte'] = consulta_ejecutar_reporte
-CONSULTAS['consulta_estado']  = consulta_estado
-CONSULTAS['subir_archivo']    = consulta_subir_archivo
+def consulta_escribir_archivo(ruta_bd, params):
+    """Escribe contenido de texto a un archivo local."""
+    ruta     = params.get('ruta', '').replace('/', '\\')
+    contenido = params.get('contenido', '')
+    encoding  = params.get('encoding', 'utf-8')
+    if not ruta:
+        return {'error': 'ruta requerida'}
+    try:
+        os.makedirs(os.path.dirname(ruta), exist_ok=True)
+        with open(ruta, 'w', encoding=encoding) as f:
+            f.write(contenido)
+        return {'ok': True, 'bytes': len(contenido.encode(encoding))}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def consulta_exec_cmd(ruta_bd, params):
+    """Ejecuta un comando del sistema y retorna stdout."""
+    cmd = params.get('cmd', '')
+    if not cmd:
+        return {'error': 'cmd requerido'}
+    try:
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+                           timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+        return {'stdout': r.stdout, 'stderr': r.stderr, 'returncode': r.returncode}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+CONSULTAS['ejecutar_reporte']  = consulta_ejecutar_reporte
+CONSULTAS['consulta_estado']   = consulta_estado
+CONSULTAS['subir_archivo']     = consulta_subir_archivo
+CONSULTAS['escribir_archivo']  = consulta_escribir_archivo
+CONSULTAS['exec_cmd']          = consulta_exec_cmd
 
 
 def _procesar_consulta(base, token, ruta_bd, consulta):
@@ -835,8 +943,7 @@ def _pid_es_admin_agent(pid: int) -> bool:
 
 def _adquirir_lock(cliente_id: str) -> bool:
     """Crea un lock file con el PID actual. Retorna False si ya hay otra instancia."""
-    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             f"admin_agent_{cliente_id}.lock")
+    lock_path = os.path.join(_exe_dir(), f"admin_agent_{cliente_id}.lock")
     if os.path.exists(lock_path):
         try:
             old_pid = int(open(lock_path).read().strip())
@@ -849,6 +956,8 @@ def _adquirir_lock(cliente_id: str) -> bool:
 
 
 def main():
+    global _BASE_URL, _CLIENTE_ID
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--servidor', default='https://admin.tuc-tuc.co')
     parser.add_argument('--cliente',  required=True)
@@ -857,6 +966,9 @@ def main():
     base = args.servidor.rstrip('/')
     cliente_id = args.cliente
 
+    _BASE_URL   = base
+    _CLIENTE_ID = cliente_id
+
     if not _adquirir_lock(cliente_id):
         print(f"Ya hay una instancia de admin_agent corriendo para '{cliente_id}'. Saliendo.")
         sys.exit(0)
@@ -864,8 +976,10 @@ def main():
     nombre   = leer_config() or cliente_id
     ip_local = get_ip_local()
 
-    print(f"=== Admin Agent - cliente: {cliente_id} | nombre: {nombre} | ip: {ip_local} ===")
+    print(f"=== Admin Agent v{VERSION} - cliente: {cliente_id} | nombre: {nombre} | ip: {ip_local} ===")
     print(f"Servidor: {base}")
+
+    threading.Thread(target=_chequear_update, daemon=True).start()
 
     try:
         ruta_bd = leer_ruta_bd()

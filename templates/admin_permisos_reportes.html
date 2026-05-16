@@ -79,7 +79,8 @@
 const CLIENTES  = {{ clientes | tojson }};
 const REPORTES  = {{ reportes | tojson }};
 
-// Carga permisos actuales para cada cliente
+const _guardando = {};  // debounce por cid
+
 async function cargarTodo() {
   await Promise.all(CLIENTES.map(c => cargarPermisos(c.id)));
 }
@@ -89,6 +90,13 @@ async function cargarPermisos(cid) {
     const r = await fetch(`/api/admin-agent/reportes-permisos/${encodeURIComponent(cid)}`);
     const d = await r.json();
     if (!d.ok) return;
+    // primero apaga todos, luego prende los que están en BD
+    REPORTES.forEach(rp => {
+      ['local','remoto'].forEach(fuente => {
+        const el = document.getElementById(`chk-${cid}-${rp.id}-${fuente}`);
+        if (el) el.checked = false;
+      });
+    });
     d.permisos.forEach(p => {
       const el = document.getElementById(`chk-${cid}-${p.reporte_id}-${p.fuente}`);
       if (el) el.checked = true;
@@ -96,8 +104,13 @@ async function cargarPermisos(cid) {
   } catch {}
 }
 
+function onToggle(cid) {
+  // Debounce: espera 300ms desde el último cambio antes de guardar
+  clearTimeout(_guardando[cid]);
+  _guardando[cid] = setTimeout(() => guardar(cid), 300);
+}
+
 async function guardar(cid) {
-  // Recopilar todos los checks marcados para este cliente
   const permisos = [];
   REPORTES.forEach(r => {
     ['local', 'remoto'].forEach(fuente => {
@@ -106,7 +119,6 @@ async function guardar(cid) {
     });
   });
 
-  // Encontrar el botón del card de este cliente
   const cardId = 'card-' + cid.replace(/ /g, '_');
   const btn = document.querySelector(`#${CSS.escape(cardId)} button`);
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
@@ -126,7 +138,7 @@ async function guardar(cid) {
           btn.disabled = false;
           btn.className = 'btn btn-sm btn-primary';
           btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
-        }, 2000);
+        }, 1500);
       }
     } else {
       alert('Error: ' + d.error);
@@ -139,5 +151,12 @@ async function guardar(cid) {
 }
 
 cargarTodo();
+
+// Auto-guardar al cambiar cualquier toggle
+document.addEventListener('change', e => {
+  if (e.target.matches('input[data-cliente]')) {
+    onToggle(e.target.dataset.cliente);
+  }
+});
 </script>
 {% endblock %}

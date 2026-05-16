@@ -14,7 +14,7 @@ Rutas:
 
 import os, sys, datetime, time, io, configparser, threading, subprocess
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 
 def _exe_dir():
     if getattr(sys, 'frozen', False):

@@ -14,7 +14,7 @@ Rutas:
 
 import os, sys, datetime, time, io, configparser, threading, subprocess
 
-VERSION = '1.2.0'
+VERSION = '1.2.1'
 
 def _exe_dir():
     if getattr(sys, 'frozen', False):
@@ -135,7 +135,11 @@ def _descargar_y_aplicar():
             with open(bat_path, 'w', encoding='ascii') as f:
                 f.write(bat)
             time.sleep(1)
-            subprocess.Popen(['cmd', '/c', bat_path], creationflags=0x00000008)  # DETACHED_PROCESS
+            subprocess.Popen(
+                ['cmd', '/c', bat_path],
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+                close_fds=True
+            )
             time.sleep(1)
             os._exit(0)
         else:

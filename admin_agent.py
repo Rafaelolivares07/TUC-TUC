@@ -11,7 +11,7 @@ import datetime, struct, mmap, socket, configparser, subprocess
 import requests
 import dbf
 
-VERSION     = '1.2.0'
+VERSION     = '1.2.1'
 _BASE_URL   = ''   # se setea en main() antes de lanzar el thread de update
 _CLIENTE_ID = ''   # ídem
 
@@ -66,8 +66,9 @@ def _descargar_y_aplicar(url, v_remota):
             with open(bat_path, 'w', encoding='ascii') as f:
                 f.write(bat)
             subprocess.Popen(
-                [bat_path], shell=True,
-                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
+                ['cmd', '/c', bat_path],
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+                close_fds=True
             )
             time.sleep(1)
             os._exit(0)

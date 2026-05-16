@@ -168,17 +168,14 @@ def _catalogo_filtrado(fuente, cliente_id=None):
     if cache is None:
         return CATALOGO
     permitidos = cache.get(fuente, set())
-    if not permitidos:
-        return CATALOGO  # sin permisos configurados para esta fuente → sin restricción
     return {k: v for k, v in CATALOGO.items() if k in permitidos}
 
 
 @app.route('/')
 def menu():
     from collections import defaultdict
-    fuente     = session.get('fuente', 'local')
-    cliente_id = session.get('cliente_id', '') or CLIENTE_ID
-    catalogo   = _catalogo_filtrado(fuente, cliente_id)
+    fuente   = session.get('fuente', 'local')
+    catalogo = _catalogo_filtrado(fuente, CLIENTE_ID)  # siempre el usuario local, no el agente
     categorias = defaultdict(list)
     for r in catalogo.values():
         categorias[getattr(r, 'CATEGORIA', 'General')].append(

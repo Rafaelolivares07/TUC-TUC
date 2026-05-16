@@ -13,7 +13,18 @@ Rutas:
 """
 
 import os, sys, datetime, time, io, configparser
-sys.path.insert(0, os.path.dirname(__file__))
+
+def _exe_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def _bundle_dir():
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+sys.path.insert(0, _bundle_dir())
 
 from flask import Flask, render_template, request, jsonify, send_file, session
 from data_layer import DataLayer, leer_ruta_bd
@@ -26,12 +37,12 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__, template_folder=os.path.join(_bundle_dir(), 'templates'))
 app.secret_key = 'sar-reportes-2026'
 
 # ── Configuración AWS ─────────────────────────────────────────────────────────
 _cfg = configparser.ConfigParser()
-_cfg.read(os.path.join(os.path.dirname(__file__), 'server.ini'), encoding='utf-8')
+_cfg.read(os.path.join(_exe_dir(), 'server.ini'), encoding='utf-8-sig')
 BASE_URL_AWS = _cfg.get('aws', 'base_url',   fallback='https://admin.tuc-tuc.co')
 AWS_USUARIO  = _cfg.get('aws', 'usuario',   fallback='')
 AWS_PASSWORD = _cfg.get('aws', 'password',  fallback='')
@@ -134,6 +145,11 @@ def set_fuente():
     session['cliente_id'] = data.get('cliente_id', '')
     return jsonify({'ok': True})
 
+@app.route('/admin')
+def admin_agente():
+    return render_template('admin_agente.html')
+
+
 @app.route('/api/agentes')
 def api_agentes():
     """Proxy hacia AWS — retorna agentes conectados."""
@@ -152,6 +168,8 @@ def _catalogo_filtrado(fuente, cliente_id=None):
     if cache is None:
         return CATALOGO
     permitidos = cache.get(fuente, set())
+    if not permitidos:
+        return CATALOGO  # sin permisos configurados para esta fuente → sin restricción
     return {k: v for k, v in CATALOGO.items() if k in permitidos}
 
 

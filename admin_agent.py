@@ -11,7 +11,7 @@ import datetime, struct, mmap, socket, configparser, subprocess
 import requests
 import dbf
 
-VERSION     = '1.2.1'
+VERSION     = '1.2.2'
 _BASE_URL   = ''   # se setea en main() antes de lanzar el thread de update
 _CLIENTE_ID = ''   # ídem
 
@@ -618,10 +618,10 @@ def _aplicar_filtros_numpy_gen(arr, rec_size, campos_map, filtros):
                 except Exception: pass
         elif t == 'D':
             def _dval(s): s = str(s).replace('-', ''); return int(s) if len(s) == 8 else 0
-            yr = (arr[:,o  ]-48)*1000 + (arr[:,o+1]-48)*100 + (arr[:,o+2]-48)*10 + (arr[:,o+3]-48)
-            mn = (arr[:,o+4]-48)*10   + (arr[:,o+5]-48)
-            dy = (arr[:,o+6]-48)*10   + (arr[:,o+7]-48)
-            dint = yr.astype(np.int64)*10000 + mn.astype(np.int64)*100 + dy.astype(np.int64)
+            yr = (arr[:,o  ].astype(np.int64)-48)*1000 + (arr[:,o+1].astype(np.int64)-48)*100 + (arr[:,o+2].astype(np.int64)-48)*10 + (arr[:,o+3].astype(np.int64)-48)
+            mn = (arr[:,o+4].astype(np.int64)-48)*10   + (arr[:,o+5].astype(np.int64)-48)
+            dy = (arr[:,o+6].astype(np.int64)-48)*10   + (arr[:,o+7].astype(np.int64)-48)
+            dint = yr*10000 + mn*100 + dy
             if isinstance(valor_f, dict):
                 if 'desde' in valor_f: mask &= dint >= _dval(valor_f['desde'])
                 if 'hasta' in valor_f: mask &= dint <= _dval(valor_f['hasta'])

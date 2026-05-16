@@ -12,7 +12,9 @@ Rutas:
     GET  /api/empresas              → lista de empresas (fuente local)
 """
 
-import os, sys, datetime, time, io, configparser
+import os, sys, datetime, time, io, configparser, threading, subprocess
+
+VERSION = '1.1.0'
 
 def _exe_dir():
     if getattr(sys, 'frozen', False):
@@ -53,6 +55,98 @@ _aws_session_ok  = False  # True después de login exitoso
 _permisos_cache  = None   # {fuente: set(reporte_id)}
 _permisos_ts     = 0.0    # timestamp de la última carga
 _PERMISOS_TTL    = 30     # segundos antes de refrescar
+
+# ── Auto-update ───────────────────────────────────────────────────────────────
+_update = {
+    'disponible': False,
+    'version':    None,
+    'url':        None,
+    'estado':     'idle',   # idle | descargando | listo | error
+    'progreso':   0,        # 0-100
+    'mensaje':    '',
+}
+
+
+def _tuple_version(v):
+    try:    return tuple(int(x) for x in str(v).split('.'))
+    except: return (0,)
+
+
+def _chequear_update():
+    """Corre en thread background al arrancar. Consulta el servidor."""
+    time.sleep(8)  # esperar a que Flask levante
+    try:
+        import requests as _req
+        r = _req.get(f'{BASE_URL_AWS}/api/version/agentes', timeout=10)
+        data = r.json()
+        if not data.get('ok'):
+            return
+        info = data.get('sar_reportes', {})
+        v_remota = info.get('version', '0')
+        if _tuple_version(v_remota) > _tuple_version(VERSION):
+            _update['disponible'] = True
+            _update['version']    = v_remota
+            _update['url']        = info.get('url', '')
+            _update['estado']     = 'disponible'
+            _update['mensaje']    = f'Nueva versión {v_remota} disponible'
+    except Exception:
+        pass
+
+
+def _descargar_y_aplicar():
+    """Descarga el nuevo EXE y crea el updater.bat. Corre en thread."""
+    import requests as _req
+    exe_dir  = _exe_dir()
+    exe_actual = os.path.join(exe_dir, 'SarReportes.exe') if getattr(sys, 'frozen', False) else None
+    exe_nuevo  = os.path.join(exe_dir, 'SarReportes_new.exe')
+    bat_path   = os.path.join(exe_dir, 'updater.bat')
+
+    try:
+        _update['estado']   = 'descargando'
+        _update['progreso'] = 0
+        _update['mensaje']  = 'Descargando actualización...'
+
+        r = _req.get(_update['url'], stream=True, timeout=120)
+        r.raise_for_status()
+        total = int(r.headers.get('content-length', 0))
+        descargado = 0
+
+        with open(exe_nuevo, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
+                    descargado += len(chunk)
+                    if total:
+                        _update['progreso'] = int(descargado * 100 / total)
+
+        _update['progreso'] = 100
+        _update['mensaje']  = 'Descarga completa. Aplicando...'
+        _update['estado']   = 'listo'
+
+        if exe_actual:
+            # Crear batch que espera, reemplaza y relanza
+            bat = (
+                f'@echo off\r\n'
+                f'timeout /t 3 /nobreak > nul\r\n'
+                f'move /y "{exe_nuevo}" "{exe_actual}"\r\n'
+                f'start "" "{exe_actual}"\r\n'
+                f'del "%~f0"\r\n'
+            )
+            with open(bat_path, 'w', encoding='ascii') as f:
+                f.write(bat)
+            time.sleep(1)
+            subprocess.Popen(['cmd', '/c', bat_path], creationflags=0x00000008)  # DETACHED_PROCESS
+            time.sleep(1)
+            os._exit(0)
+        else:
+            _update['mensaje'] = 'Descargado. Reinicia manualmente (modo desarrollo).'
+
+    except Exception as e:
+        _update['estado']  = 'error'
+        _update['mensaje'] = f'Error: {e}'
+
+
+threading.Thread(target=_chequear_update, daemon=True).start()
 
 
 def _cargar_permisos(cliente_id=None):
@@ -302,6 +396,21 @@ def api_archivo():
         return jsonify({'ok': True, **res})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)})
+
+
+# ── Auto-update rutas ─────────────────────────────────────────────────────────
+
+@app.route('/api/update/estado')
+def api_update_estado():
+    return jsonify({**_update, 'version_actual': VERSION})
+
+
+@app.route('/api/update/aplicar', methods=['POST'])
+def api_update_aplicar():
+    if not _update['disponible'] or _update['estado'] in ('descargando', 'listo'):
+        return jsonify({'ok': False, 'error': 'No hay update disponible o ya en proceso'})
+    threading.Thread(target=_descargar_y_aplicar, daemon=True).start()
+    return jsonify({'ok': True})
 
 
 # ── Helpers internos ──────────────────────────────────────────────────────────

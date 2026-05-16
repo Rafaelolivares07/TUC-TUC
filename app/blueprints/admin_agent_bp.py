@@ -622,3 +622,25 @@ def permisos_reportes_page():
         return str(e), 500
     finally:
         conn.close()
+
+
+# ── Versiones de agentes — auto-update ────────────────────────────────────────
+# Para publicar nueva versión: actualizar aquí + subir EXE al release de GitHub.
+# La URL base apunta al release tag correspondiente.
+
+VERSIONES_AGENTES = {
+    'sar_reportes': {
+        'version': '1.1.0',
+        'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/SarAgentes-v1.1/SarReportes.exe',
+    },
+    'admin_agent': {
+        'version': '1.1.0',
+        'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/SarAgentes-v1.1/AdminAgent.exe',
+    },
+}
+
+
+@bp.route('/api/version/agentes', methods=['GET'])
+def api_version_agentes():
+    """Público — sin auth. Los EXEs locales lo consultan al arrancar."""
+    return jsonify({'ok': True, **VERSIONES_AGENTES})

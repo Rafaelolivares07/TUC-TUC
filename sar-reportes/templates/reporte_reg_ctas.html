@@ -27,6 +27,12 @@
   .fila-total td { font-weight: 700; background: #e8f0ff !important; border-top: 2px solid #003f7f; }
   .spinner-wrap { text-align: center; padding: 40px; color: #888; }
   .detalle-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .paginacion { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #f8faff; border-top: 1px solid #dee2ef; font-size: 13px; }
+  .paginacion button { padding: 3px 10px; font-size: 12px; border: 1px solid #bcd; border-radius: 4px; background: #fff; cursor: pointer; }
+  .paginacion button:hover:not(:disabled) { background: #e8f0ff; }
+  .paginacion button:disabled { opacity: .4; cursor: default; }
+  .paginacion .pag-info { color: #555; }
+  #aviso-limite { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 6px 12px; font-size: 12px; display: none; }
 </style>
 </head>
 <body>
@@ -35,6 +41,7 @@
   <div class="d-flex align-items-center gap-3 mb-3">
     <a href="/" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left me-1"></i>Menú</a>
     <h5 class="mb-0 fw-bold" style="color:#003f7f"><i class="bi bi-table me-2"></i>Movimientos REG_CTAS</h5>
+    <span id="badge-fuente" class="badge" style="font-size:11px"></span>
   </div>
 
   <!-- Filtros -->
@@ -79,6 +86,10 @@
         <small id="info-registros" class="text-muted"></small>
       </div>
     </div>
+    <div id="aviso-limite" class="mt-2">
+      <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+      <span id="aviso-texto"></span> — use Excel para exportar todos los registros.
+    </div>
   </div>
 
   <!-- Totales -->
@@ -113,33 +124,41 @@
       <div class="spinner-border text-primary" role="status"></div>
       <div class="mt-2">Consultando…</div>
     </div>
-    <div style="max-height:60vh;overflow-y:auto" id="tabla-contenedor" class="d-none">
-      <table class="table table-bordered table-hover mb-0" id="tabla">
-        <thead>
-          <tr>
-            <th onclick="ordenar(0)" data-col="0">#<span class="sort-ico"></span></th>
-            <th onclick="ordenar(1)" data-col="1">FECHA<span class="sort-ico"></span></th>
-            <th onclick="ordenar(2)" data-col="2">LAPSO<span class="sort-ico"></span></th>
-            <th onclick="ordenar(3)" data-col="3">TIPO<span class="sort-ico"></span></th>
-            <th onclick="ordenar(4)" data-col="4">DOCUMENTO<span class="sort-ico"></span></th>
-            <th onclick="ordenar(5)" data-col="5">CUENTA<span class="sort-ico"></span></th>
-            <th onclick="ordenar(6)" data-col="6">NIT<span class="sort-ico"></span></th>
-            <th onclick="ordenar(7)" data-col="7">TERCERO<span class="sort-ico"></span></th>
-            <th onclick="ordenar(8)" data-col="8" class="num">DÉBITO<span class="sort-ico"></span></th>
-            <th onclick="ordenar(9)" data-col="9" class="num">CRÉDITO<span class="sort-ico"></span></th>
-            <th>DETALLE</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-        <tfoot>
-          <tr class="fila-total">
-            <td colspan="8" class="text-end">TOTAL</td>
-            <td class="num" id="ft-deb"></td>
-            <td class="num" id="ft-cre"></td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
+    <div id="tabla-contenedor" class="d-none">
+      <div style="max-height:58vh;overflow-y:auto">
+        <table class="table table-bordered table-hover mb-0" id="tabla">
+          <thead>
+            <tr>
+              <th onclick="ordenar(0)" data-col="0">#<span class="sort-ico"></span></th>
+              <th onclick="ordenar(1)" data-col="1">FECHA<span class="sort-ico"></span></th>
+              <th onclick="ordenar(2)" data-col="2">LAPSO<span class="sort-ico"></span></th>
+              <th onclick="ordenar(3)" data-col="3">TIPO<span class="sort-ico"></span></th>
+              <th onclick="ordenar(4)" data-col="4">DOCUMENTO<span class="sort-ico"></span></th>
+              <th onclick="ordenar(5)" data-col="5">CUENTA<span class="sort-ico"></span></th>
+              <th onclick="ordenar(6)" data-col="6">NIT<span class="sort-ico"></span></th>
+              <th onclick="ordenar(7)" data-col="7">TERCERO<span class="sort-ico"></span></th>
+              <th onclick="ordenar(8)" data-col="8" class="num">DÉBITO<span class="sort-ico"></span></th>
+              <th onclick="ordenar(9)" data-col="9" class="num">CRÉDITO<span class="sort-ico"></span></th>
+              <th>DETALLE</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+          <tfoot>
+            <tr class="fila-total">
+              <td colspan="8" class="text-end">TOTAL PÁGINA</td>
+              <td class="num" id="ft-deb"></td>
+              <td class="num" id="ft-cre"></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="paginacion" id="paginacion">
+        <button id="btn-prev" onclick="cambiarPagina(-1)" disabled>&#8592; Ant</button>
+        <span class="pag-info" id="pag-info"></span>
+        <button id="btn-next" onclick="cambiarPagina(1)">Sig &#8594;</button>
+        <span class="ms-auto text-muted" id="pag-total-info"></span>
+      </div>
     </div>
   </div>
 
@@ -147,7 +166,8 @@
 
 <script>
 const _conFuente = p => Object.assign({}, p, {fuente: localStorage.getItem('sar_fuente')||'local', cliente_id: localStorage.getItem('sar_cliente_id')||''});
-let _rows = [], _sortCol = 1, _sortAsc = true;
+let _rows = [], _sorted = [], _sortCol = 1, _sortAsc = true, _page = 0;
+const PAGE_SIZE = 500;
 const COLS = ['consecutivo','fecha','lapso','tipo','documento','cuenta','nit','tercero_nom','debito','credito','detalle'];
 const fmt  = n => Number(n).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
 
@@ -178,10 +198,17 @@ function consultar() {
     document.getElementById('spinner').classList.add('d-none');
     if (!data.ok) { alert('Error: ' + data.error); document.getElementById('estado-inicial').classList.remove('d-none'); return; }
     _rows = data.rows;
+    _page = 0;
     mostrarTotales(_rows);
-    renderTabla();
+    ordenarYRender();
     document.getElementById('btn-excel-wrap').style.display = '';
     document.getElementById('info-registros').textContent = data.total + ' registros · ' + data.elapsed + 's';
+    const aviso = document.getElementById('aviso-limite');
+    if (data.total > PAGE_SIZE) {
+      document.getElementById('aviso-texto').textContent =
+        `Se muestran ${PAGE_SIZE} filas por página de ${data.total} totales`;
+      aviso.style.display = '';
+    } else { aviso.style.display = 'none'; }
   })
   .catch(e => {
     document.getElementById('spinner').classList.add('d-none');
@@ -204,15 +231,23 @@ function mostrarTotales(rows) {
   document.getElementById('panel-totales').style.display = '';
 }
 
-function renderTabla() {
+function ordenarYRender() {
   const field = COLS[_sortCol];
-  const sorted = [..._rows].sort((a, b) => {
+  _sorted = [..._rows].sort((a, b) => {
     let va = a[field] ?? '', vb = b[field] ?? '';
     if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
     return _sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
   });
+  renderPagina();
+}
 
-  document.getElementById('tbody').innerHTML = sorted.map(r => {
+function renderPagina() {
+  const totalPags = Math.max(1, Math.ceil(_sorted.length / PAGE_SIZE));
+  if (_page >= totalPags) _page = totalPags - 1;
+  const inicio = _page * PAGE_SIZE;
+  const pagina = _sorted.slice(inicio, inicio + PAGE_SIZE);
+
+  document.getElementById('tbody').innerHTML = pagina.map(r => {
     const tipTxt = r.tipo_nom ? `<br><small class="text-muted">${r.tipo_nom}</small>` : '';
     const terTxt = r.tercero_nom ? `<br><small class="text-muted">${r.tercero_nom}</small>` : '';
     const anul   = r.anulado ? ' <span class="badge bg-danger" style="font-size:9px">ANUL</span>' : '';
@@ -231,6 +266,20 @@ function renderTabla() {
     </tr>`;
   }).join('');
 
+  // totales de la página
+  const totDeb = pagina.reduce((s,r)=>s+r.debito,0);
+  const totCre = pagina.reduce((s,r)=>s+r.credito,0);
+  document.getElementById('ft-deb').textContent = fmt(totDeb);
+  document.getElementById('ft-cre').textContent = fmt(totCre);
+
+  // controles paginación
+  document.getElementById('pag-info').textContent = `Página ${_page+1} de ${totalPags}`;
+  document.getElementById('pag-total-info').textContent =
+    `filas ${inicio+1}–${Math.min(inicio+PAGE_SIZE, _sorted.length)} de ${_sorted.length}`;
+  document.getElementById('btn-prev').disabled = _page === 0;
+  document.getElementById('btn-next').disabled = _page >= totalPags - 1;
+  document.getElementById('paginacion').style.display = totalPags <= 1 ? 'none' : '';
+
   document.querySelectorAll('#tabla thead th').forEach(th => {
     th.classList.remove('sort-asc','sort-desc');
     if (parseInt(th.dataset.col) === _sortCol)
@@ -240,9 +289,15 @@ function renderTabla() {
   document.getElementById('estado-inicial').classList.add('d-none');
 }
 
+function cambiarPagina(delta) {
+  _page += delta;
+  renderPagina();
+  document.getElementById('tabla-wrap').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
 function ordenar(col) {
   if (_sortCol === col) _sortAsc = !_sortAsc; else { _sortCol = col; _sortAsc = true; }
-  if (_rows.length) renderTabla();
+  if (_rows.length) { _page = 0; ordenarYRender(); }
 }
 
 function exportarExcel() {
@@ -268,6 +323,19 @@ function exportarExcel() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') consultar();
 });
+
+(function actualizarBadgeFuente() {
+  const fuente  = localStorage.getItem('sar_fuente') || 'local';
+  const cliente = (localStorage.getItem('sar_cliente_id') || '').trim();
+  const badge   = document.getElementById('badge-fuente');
+  if (fuente === 'remoto') {
+    badge.textContent = cliente ? `REMOTO · ${cliente}` : 'REMOTO';
+    badge.className   = 'badge bg-warning text-dark';
+  } else {
+    badge.textContent = 'LOCAL';
+    badge.className   = 'badge bg-success';
+  }
+})();
 </script>
 </body>
 </html>

@@ -3,12 +3,12 @@
 # Todo queda bajo C:\S.A.R\actualizaciones\agentes\
 # Crea VBS de startup. No requiere Python.
 #
-# Uso:
-#   irm URL | iex                          <- usa cliente "pilar" por defecto
-#   & ([scriptblock]::Create((irm URL))) -Cliente lenovo   <- cliente personalizado
+# Uso (siempre pasar -Cliente):
+#   & ([scriptblock]::Create((irm URL))) -Cliente lenovo
+#   & ([scriptblock]::Create((irm URL))) -Cliente pilar
 
 param(
-    [string]$Cliente = "pilar",
+    [Parameter(Mandatory=$true)][string]$Cliente,
     [string]$Nombre  = ""
 )
 

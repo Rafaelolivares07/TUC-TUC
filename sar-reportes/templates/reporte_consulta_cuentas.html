@@ -36,6 +36,7 @@
   <div class="d-flex align-items-center gap-3 mb-3">
     <a href="/" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left me-1"></i>Menú</a>
     <h5 class="mb-0 fw-bold" style="color:#003f7f"><i class="bi bi-journal-text me-2"></i>Consulta de Cuentas</h5>
+    <span id="badge-fuente" class="badge" style="font-size:11px"></span>
   </div>
 
   <!-- Filtros -->
@@ -245,6 +246,19 @@ function exportarExcel() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter') consultar();
 });
+
+(function actualizarBadgeFuente() {
+  const fuente  = localStorage.getItem('sar_fuente') || 'local';
+  const cliente = (localStorage.getItem('sar_cliente_id') || '').trim();
+  const badge   = document.getElementById('badge-fuente');
+  if (fuente === 'remoto') {
+    badge.textContent = cliente ? `REMOTO · ${cliente}` : 'REMOTO';
+    badge.className   = 'badge bg-warning text-dark';
+  } else {
+    badge.textContent = 'LOCAL';
+    badge.className   = 'badge bg-success';
+  }
+})();
 </script>
 </body>
 </html>

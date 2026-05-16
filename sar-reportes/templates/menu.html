@@ -20,6 +20,15 @@
   .fuente-local  { background: #d1e7dd; color: #0a3622; }
   .fuente-remoto { background: #cfe2ff; color: #084298; }
   h5 { color: #003f7f; }
+  #banner-update { display:none; background:#0a3622; color:#fff; border-radius:8px;
+    padding:14px 20px; margin-bottom:16px; }
+  #banner-update .titulo { font-weight:700; font-size:14px; margin-bottom:6px; }
+  #banner-update .barra-wrap { background:#ffffff33; border-radius:4px; height:10px; overflow:hidden; margin:8px 0; }
+  #banner-update .barra-fill { background:#4ade80; height:100%; width:0%; transition:width .3s; border-radius:4px; }
+  #banner-update .sub { font-size:12px; opacity:.85; }
+  #banner-update button { background:#4ade80; color:#0a3622; border:none; border-radius:5px;
+    padding:5px 16px; font-weight:700; font-size:12px; cursor:pointer; margin-top:4px; }
+  #banner-update button:hover { background:#22c55e; }
 </style>
 </head>
 <body>
@@ -39,6 +48,13 @@
     <span id="badge-fuente" class="fuente-badge {{ 'fuente-remoto' if fuente == 'remoto' else 'fuente-local' }}">
       {{ 'REMOTO' if fuente == 'remoto' else 'LOCAL' }}
     </span>
+  </div>
+
+  <!-- Banner auto-update -->
+  <div id="banner-update">
+    <div class="titulo" id="upd-titulo">🔄 Actualizando SAR Reportes…</div>
+    <div class="barra-wrap"><div class="barra-fill" id="upd-barra"></div></div>
+    <div class="sub" id="upd-msg"></div>
   </div>
 
   <!-- Selector de fuente -->
@@ -155,6 +171,76 @@ function guardarFuente() {
 
 // Si ya estaba en remoto al cargar, poblar el select
 if (document.getElementById('r-remoto').checked) cargarAgentes();
+
+// ── Auto-update ──────────────────────────────────────────────────────────────
+let _updPolling = null;
+
+function mostrarBanner(estado, version, msg, progreso) {
+  const banner = document.getElementById('banner-update');
+  const barra  = document.getElementById('upd-barra');
+  banner.style.display = 'block';
+
+  if (estado === 'disponible') {
+    document.getElementById('upd-titulo').innerHTML =
+      `⬆️ Actualización disponible — SAR Reportes v${version} &nbsp;` +
+      `<button onclick="aplicarUpdate()">Instalar ahora</button>`;
+    document.getElementById('upd-msg').textContent = 'Se instalará automáticamente y el sistema se reiniciará.';
+    barra.style.width = '0%';
+
+  } else if (estado === 'descargando') {
+    document.getElementById('upd-titulo').textContent = `🔄 Descargando SAR Reportes v${version}…`;
+    document.getElementById('upd-msg').textContent    = msg || '';
+    barra.style.width = (progreso || 0) + '%';
+
+  } else if (estado === 'listo') {
+    document.getElementById('upd-titulo').textContent = `✅ Actualizado a v${version} — reiniciando…`;
+    document.getElementById('upd-msg').textContent    = 'El sistema se reiniciará en unos segundos.';
+    barra.style.width = '100%';
+
+  } else if (estado === 'error') {
+    document.getElementById('upd-titulo').textContent = '❌ Error en actualización';
+    document.getElementById('upd-msg').textContent    = msg || '';
+  }
+}
+
+function chequearUpdate() {
+  fetch('/api/update/estado')
+    .then(r => r.json())
+    .then(d => {
+      if (d.estado === 'idle' || !d.disponible) return;
+      mostrarBanner(d.estado, d.version, d.mensaje, d.progreso);
+      // seguir polling mientras descarga
+      if (d.estado === 'descargando' && !_updPolling) {
+        _updPolling = setInterval(() => {
+          fetch('/api/update/estado').then(r=>r.json()).then(u => {
+            mostrarBanner(u.estado, u.version, u.mensaje, u.progreso);
+            if (u.estado !== 'descargando') { clearInterval(_updPolling); _updPolling = null; }
+          });
+        }, 800);
+      }
+    })
+    .catch(() => {});
+}
+
+function aplicarUpdate() {
+  fetch('/api/update/aplicar', {method:'POST'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        mostrarBanner('descargando', document.getElementById('upd-titulo').textContent.match(/v([\d.]+)/)?.[1] || '?', 'Iniciando descarga…', 0);
+        _updPolling = setInterval(() => {
+          fetch('/api/update/estado').then(r=>r.json()).then(u => {
+            mostrarBanner(u.estado, u.version, u.mensaje, u.progreso);
+            if (u.estado !== 'descargando') { clearInterval(_updPolling); _updPolling = null; }
+          });
+        }, 800);
+      }
+    });
+}
+
+// Chequear al cargar y luego cada 30s
+chequearUpdate();
+setInterval(chequearUpdate, 30000);
 </script>
 </body>
 </html>

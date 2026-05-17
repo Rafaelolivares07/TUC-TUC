@@ -29,6 +29,9 @@ move /y "%DEST%\SarReportes_new.exe" "%DEST%\SarReportes.exe"
 
 echo Configurando ini...
 powershell -Command "[System.IO.File]::WriteAllText('%DEST%\admin_agent.ini', \"[agent]`r`nnombre = Oficina lenovo`r`ncliente_id = lenovo`r`n\", [System.Text.Encoding]::Default)"
+echo --- Contenido ini resultante ---
+type "%DEST%\admin_agent.ini"
+echo --------------------------------
 
 echo Reiniciando agentes...
 start "" "%DEST%\AdminAgent.exe" --cliente lenovo

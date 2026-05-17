@@ -28,9 +28,7 @@ move /y "%DEST%\AdminAgent_new.exe"  "%DEST%\AdminAgent.exe"
 move /y "%DEST%\SarReportes_new.exe" "%DEST%\SarReportes.exe"
 
 echo Configurando ini...
-echo [agent]> "%DEST%\admin_agent.ini"
-echo nombre = Oficina lenovo>> "%DEST%\admin_agent.ini"
-echo cliente_id = lenovo>> "%DEST%\admin_agent.ini"
+powershell -Command "Set-Content '%DEST%\admin_agent.ini' \"[agent]`nnombre = Oficina lenovo`ncliente_id = lenovo\" -Encoding Default"
 
 echo Reiniciando agentes...
 start "" "%DEST%\AdminAgent.exe" --cliente lenovo

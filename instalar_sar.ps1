@@ -1,4 +1,4 @@
-﻿param(
+param(
     [string]$Cliente  = "lenovo",
     [string]$Nombre   = "Oficina lenovo"
 )
@@ -6,7 +6,7 @@
 $BASE = "https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes"
 $DEST = "C:\S.A.R\actualizaciones\agentes"
 
-Write-Host "=== SAR Agentes — Actualizacion ===" -ForegroundColor Cyan
+Write-Host "=== SAR Agentes - Actualizacion ===" -ForegroundColor Cyan
 Write-Host "Cliente  : $Cliente"
 Write-Host "Nombre   : $Nombre"
 Write-Host "Destino  : $DEST"

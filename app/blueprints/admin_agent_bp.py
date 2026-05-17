@@ -111,6 +111,10 @@ def checkin():
             (cliente_id,)
         ).fetchone()
         if existing:
+            conn.execute(
+                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s WHERE token=%s",
+                (nombre, ip_local, existing['token'])
+            )
             conn.commit()
             return jsonify({'ok': True, 'token': existing['token'], 'reused': True})
         token = secrets.token_hex(24)

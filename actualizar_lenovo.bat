@@ -2,7 +2,7 @@
 echo Actualizando SAR Agentes...
 
 set DEST=C:\S.A.R\actualizaciones\agentes
-set BASE=https://github.com/Rafaelolivares07/TUC-TUC/releases/download/SarAgentes-v1.2
+set BASE=https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes
 
 echo Descargando AdminAgent.exe...
 powershell -Command "Invoke-WebRequest '%BASE%/AdminAgent.exe' -OutFile '%DEST%\AdminAgent_new.exe'"

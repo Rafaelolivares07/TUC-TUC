@@ -631,11 +631,11 @@ def permisos_reportes_page():
 VERSIONES_AGENTES = {
     'sar_reportes': {
         'version': '1.2.1',
-        'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/SarAgentes-v1.2/SarReportes.exe',
+        'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/SarReportes.exe',
     },
     'admin_agent': {
         'version': '1.2.2',
-        'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/SarAgentes-v1.2/AdminAgent.exe',
+        'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/AdminAgent.exe',
     },
 }
 

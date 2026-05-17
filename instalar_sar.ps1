@@ -3,6 +3,8 @@ param(
     [string]$Nombre   = "Oficina lenovo"
 )
 
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $BASE = "https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes"
 $DEST = "C:\S.A.R\actualizaciones\agentes"
 
@@ -13,22 +15,27 @@ Write-Host "Destino  : $DEST"
 Write-Host ""
 
 # Descargar EXEs
+New-Item -ItemType Directory -Force $DEST | Out-Null
 foreach ($exe in @("AdminAgent.exe", "SarReportes.exe")) {
-    Write-Host "Descargando $exe..." -NoNewline
-    Invoke-WebRequest "$BASE/$exe" -OutFile "$DEST\${exe}_new" -UseBasicParsing
-    Write-Host " OK" -ForegroundColor Green
+    Write-Host "Descargando $exe..."
+    $dest_tmp = "$DEST\${exe}_new"
+    & curl.exe -L --retry 3 --retry-delay 2 --silent --show-error -o $dest_tmp "$BASE/$exe"
+    if ($LASTEXITCODE -ne 0) { Write-Host "ERROR curl $exe (codigo $LASTEXITCODE)" -ForegroundColor Red; exit 1 }
+    Write-Host "$exe OK" -ForegroundColor Green
 }
 
 # Detener agentes
 Write-Host "Deteniendo agentes..."
 Stop-Process -Name "AdminAgent"  -Force -ErrorAction SilentlyContinue
 Stop-Process -Name "SarReportes" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 3
 
 # Reemplazar EXEs
 Write-Host "Reemplazando ejecutables..."
-Move-Item -Force "$DEST\AdminAgent.exe_new"  "$DEST\AdminAgent.exe"
-Move-Item -Force "$DEST\SarReportes.exe_new" "$DEST\SarReportes.exe"
+foreach ($exe in @("AdminAgent.exe", "SarReportes.exe")) {
+    Remove-Item -Force "$DEST\$exe" -ErrorAction SilentlyContinue
+    Move-Item "$DEST\${exe}_new" "$DEST\$exe"
+}
 
 # Escribir ini
 Write-Host "Configurando ini..."

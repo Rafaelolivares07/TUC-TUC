@@ -27,6 +27,9 @@ echo Reemplazando ejecutables...
 move /y "%DEST%\AdminAgent_new.exe"  "%DEST%\AdminAgent.exe"
 move /y "%DEST%\SarReportes_new.exe" "%DEST%\SarReportes.exe"
 
+echo Configurando ini...
+(echo [agent]& echo nombre = Oficina lenovo& echo cliente_id = lenovo) > "%DEST%\admin_agent.ini"
+
 echo Reiniciando agentes...
 start "" "%DEST%\AdminAgent.exe" --cliente lenovo
 start "" "%DEST%\SarReportes.exe"

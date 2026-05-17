@@ -209,13 +209,14 @@ def ping():
     data    = request.get_json() or {}
     token   = data.get('token', '')
     ruta_bd = (data.get('ruta_bd') or '').strip() or None
+    nombre  = (data.get('nombre') or '').strip() or None
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
         sesion = conn.execute(
-            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW(), ruta_bd=COALESCE(%s,ruta_bd) "
+            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW(), ruta_bd=COALESCE(%s,ruta_bd), nombre=COALESCE(%s,nombre) "
             "WHERE token=%s AND activo=TRUE RETURNING id",
-            (ruta_bd, token)
+            (ruta_bd, nombre, token)
         ).fetchone()
         if not sesion:
             return jsonify({'ok': False, 'error': 'sesión inválida'}), 401

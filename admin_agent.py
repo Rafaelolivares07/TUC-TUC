@@ -1014,7 +1014,7 @@ def main():
             while True:
                 try:
                     r = requests.post(f"{base}/api/admin-agent/ping",
-                                      json={'token': token, 'ruta_bd': ruta_bd}, timeout=15)
+                                      json={'token': token, 'ruta_bd': ruta_bd, 'nombre': nombre}, timeout=15)
                     data = r.json()
                     if not data.get('ok'):
                         print(f"Sesion perdida ({data.get('error','?')}) - reconectando en 5s...")

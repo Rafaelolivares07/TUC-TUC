@@ -567,6 +567,32 @@ REPORTES_CATALOGO = [
 ]
 
 
+# ── Login SAR (llamado desde SarReportes.exe) ────────────────────────────────
+
+@bp.route('/api/sar/login', methods=['POST'])
+def sar_login():
+    """Valida credenciales SAR — sin autenticación previa requerida."""
+    data     = request.get_json() or {}
+    usuario  = str(data.get('usuario',  '')).strip()
+    password = str(data.get('password', '')).strip()
+    if not usuario or not password:
+        return jsonify({'ok': False, 'error': 'Credenciales requeridas'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT id, nombre, rol FROM usuarios "
+            "WHERE usuario=%s AND password=%s AND rol IN ('Administrador','ClienteVFP')",
+            (usuario, password)
+        ).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'Usuario o contraseña incorrectos'}), 401
+        return jsonify({'ok': True, 'usuario_id': row['id'], 'nombre': row['nombre'], 'rol': row['rol']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 # ── Permisos de reportes — por usuario ───────────────────────────────────────
 
 @bp.route('/api/admin-agent/mis-reportes-permisos', methods=['GET'])

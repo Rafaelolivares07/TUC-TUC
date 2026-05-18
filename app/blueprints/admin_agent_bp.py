@@ -69,6 +69,7 @@ def _crear_tablas(conn):
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS nombre VARCHAR(200)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ip_local VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500)',
+        'ALTER TABLE reporte_permisos ADD COLUMN IF NOT EXISTS usuario_id INTEGER',
     ]:
         try:
             conn.execute(alter)
@@ -565,16 +566,20 @@ REPORTES_CATALOGO = [
 ]
 
 
-@bp.route('/api/admin-agent/reportes-permisos/<cliente_id>', methods=['GET'])
-def reportes_permisos_get(cliente_id):
-    if 'usuario_id' not in session:
+# ── Permisos de reportes — por usuario ───────────────────────────────────────
+
+@bp.route('/api/admin-agent/mis-reportes-permisos', methods=['GET'])
+def mis_reportes_permisos():
+    """SarReportes llama este endpoint — usa la sesión autenticada."""
+    uid = session.get('usuario_id')
+    if not uid:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
         rows = conn.execute(
-            "SELECT reporte_id, fuente FROM reporte_permisos WHERE cliente_id=%s",
-            (cliente_id,)
+            "SELECT reporte_id, fuente FROM reporte_permisos WHERE usuario_id=%s",
+            (uid,)
         ).fetchall()
         return jsonify({'ok': True, 'permisos': [{'reporte_id': r['reporte_id'], 'fuente': r['fuente']} for r in rows]})
     except Exception as e:
@@ -583,21 +588,39 @@ def reportes_permisos_get(cliente_id):
         conn.close()
 
 
-@bp.route('/api/admin-agent/reportes-permisos/<cliente_id>', methods=['POST'])
+@bp.route('/api/admin-agent/reportes-permisos-u/<int:uid>', methods=['GET'])
 @solo_admin
-def reportes_permisos_set(cliente_id):
+def reportes_permisos_get_u(uid):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        rows = conn.execute(
+            "SELECT reporte_id, fuente FROM reporte_permisos WHERE usuario_id=%s",
+            (uid,)
+        ).fetchall()
+        return jsonify({'ok': True, 'permisos': [{'reporte_id': r['reporte_id'], 'fuente': r['fuente']} for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/reportes-permisos-u/<int:uid>', methods=['POST'])
+@solo_admin
+def reportes_permisos_set_u(uid):
     permisos = (request.get_json() or {}).get('permisos', [])
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        conn.execute("DELETE FROM reporte_permisos WHERE cliente_id=%s", (cliente_id,))
+        conn.execute("DELETE FROM reporte_permisos WHERE usuario_id=%s", (uid,))
         for p in permisos:
-            rid   = str(p.get('reporte_id', '')).strip()
+            rid    = str(p.get('reporte_id', '')).strip()
             fuente = str(p.get('fuente', 'local')).strip()
             if rid and fuente in ('local', 'remoto'):
                 conn.execute(
-                    "INSERT INTO reporte_permisos (reporte_id, cliente_id, fuente) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
-                    (rid, cliente_id, fuente)
+                    "INSERT INTO reporte_permisos (reporte_id, usuario_id, fuente) VALUES (%s,%s,%s) "
+                    "ON CONFLICT DO NOTHING",
+                    (rid, uid, fuente)
                 )
         conn.commit()
         return jsonify({'ok': True})
@@ -607,26 +630,180 @@ def reportes_permisos_set(cliente_id):
         conn.close()
 
 
-@bp.route('/admin/permisos-reportes')
+# ── Agentes por usuario ───────────────────────────────────────────────────────
+
+@bp.route('/api/admin-agent/usuario-agentes/<int:uid>', methods=['GET'])
 @solo_admin
-def permisos_reportes_page():
+def usuario_agentes_get(uid):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        rows = conn.execute(
+            "SELECT cliente_id FROM admin_agent_permisos WHERE usuario_id=%s",
+            (uid,)
+        ).fetchall()
+        return jsonify({'ok': True, 'agentes': [r['cliente_id'] for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/usuario-agentes/<int:uid>', methods=['POST'])
+@solo_admin
+def usuario_agentes_set(uid):
+    agentes = (request.get_json() or {}).get('agentes', [])
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        conn.execute("DELETE FROM admin_agent_permisos WHERE usuario_id=%s", (uid,))
+        for aid in agentes:
+            aid = str(aid).strip()
+            if aid:
+                conn.execute(
+                    "INSERT INTO admin_agent_permisos (usuario_id, cliente_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                    (uid, aid)
+                )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/agentes-activos', methods=['GET'])
+@solo_admin
+def agentes_activos():
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
         rows = conn.execute("""
-            SELECT DISTINCT ON (cliente_id) cliente_id, nombre
+            SELECT DISTINCT ON (cliente_id) cliente_id, nombre, ultimo_ping
             FROM admin_agent_sesiones
             WHERE ultimo_ping > NOW() - INTERVAL '30 days'
             ORDER BY cliente_id, id DESC
         """).fetchall()
-        clientes = [{'id': r['cliente_id'], 'nombre': r['nombre'] or r['cliente_id']} for r in rows]
-        return render_template('admin_permisos_reportes.html',
-                               clientes=clientes,
-                               reportes=REPORTES_CATALOGO)
+        now = datetime.now(timezone.utc)
+        agentes = []
+        for r in rows:
+            up = r['ultimo_ping']
+            if up:
+                if up.tzinfo is None:
+                    up = up.replace(tzinfo=timezone.utc)
+                diff = (now - up).total_seconds()
+                online = diff < 300
+                mins = int(diff / 60)
+                if mins < 60:
+                    ultimo = f'hace {mins}min'
+                elif mins < 1440:
+                    ultimo = f'hace {mins // 60}h'
+                else:
+                    ultimo = f'hace {mins // 1440}d'
+            else:
+                online = False
+                ultimo = 'desconocido'
+            agentes.append({
+                'id':     r['cliente_id'],
+                'nombre': r['nombre'] or r['cliente_id'],
+                'online': online,
+                'ultimo': ultimo,
+            })
+        return jsonify({'ok': True, 'agentes': agentes})
     except Exception as e:
-        return str(e), 500
+        return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# ── CRUD usuarios SAR ─────────────────────────────────────────────────────────
+
+@bp.route('/api/admin-agent/sar-usuarios', methods=['GET'])
+@solo_admin
+def sar_usuarios_list():
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, usuario, nombre, rol FROM usuarios "
+            "WHERE rol IN ('Administrador','ClienteVFP') ORDER BY nombre"
+        ).fetchall()
+        return jsonify({'ok': True, 'usuarios': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/sar-usuarios', methods=['POST'])
+@solo_admin
+def sar_usuarios_crear():
+    data    = request.get_json() or {}
+    usuario = str(data.get('usuario',  '')).strip()
+    password = str(data.get('password', '')).strip()
+    nombre  = str(data.get('nombre',   '')).strip()
+    rol     = str(data.get('rol', 'ClienteVFP')).strip()
+    if not usuario or not password or not nombre:
+        return jsonify({'ok': False, 'error': 'usuario, password y nombre son requeridos'}), 400
+    if rol not in ('Administrador', 'ClienteVFP'):
+        return jsonify({'ok': False, 'error': 'rol inválido'}), 400
+    conn = get_db_connection()
+    try:
+        if conn.execute("SELECT 1 FROM usuarios WHERE usuario=%s", (usuario,)).fetchone():
+            return jsonify({'ok': False, 'error': 'Usuario ya existe'}), 409
+        row = conn.execute(
+            "INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (%s,%s,%s,%s) RETURNING id",
+            (usuario, password, nombre, rol)
+        ).fetchone()
+        conn.commit()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/sar-usuarios/<int:uid>', methods=['PATCH'])
+@solo_admin
+def sar_usuarios_update(uid):
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        if data.get('password'):
+            conn.execute("UPDATE usuarios SET password=%s WHERE id=%s", (data['password'], uid))
+        if data.get('nombre'):
+            conn.execute("UPDATE usuarios SET nombre=%s WHERE id=%s", (data['nombre'], uid))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/sar-usuarios/<int:uid>', methods=['DELETE'])
+@solo_admin
+def sar_usuarios_delete(uid):
+    if uid == session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No puedes eliminarte a ti mismo'}), 400
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM reporte_permisos WHERE usuario_id=%s", (uid,))
+        conn.execute("DELETE FROM admin_agent_permisos WHERE usuario_id=%s", (uid,))
+        conn.execute("DELETE FROM usuarios WHERE id=%s AND rol != 'Administrador'", (uid,))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ── Página de permisos ────────────────────────────────────────────────────────
+
+@bp.route('/admin/permisos-reportes')
+@solo_admin
+def permisos_reportes_page():
+    return render_template('admin_permisos_reportes.html', reportes=REPORTES_CATALOGO)
 
 
 # ── Versiones de agentes — auto-update ────────────────────────────────────────

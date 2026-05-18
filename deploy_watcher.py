@@ -26,7 +26,7 @@ except ImportError:
     subprocess.run([sys.executable, '-m', 'pip', 'install', 'requests'], check=True)
     import requests
 
-APP_URL    = 'https://tuc-tuc.onrender.com'
+APP_URL    = 'https://admin.tuc-tuc.co'
 ESTADO_FILE = Path(__file__).parent / 'deploy_estado.json'
 INTERVALO  = 20   # segundos entre checks
 MAX_MIN    = 30   # minutos máximo de espera

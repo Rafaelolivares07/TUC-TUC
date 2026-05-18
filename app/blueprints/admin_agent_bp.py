@@ -70,6 +70,7 @@ def _crear_tablas(conn):
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ip_local VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500)',
         'ALTER TABLE reporte_permisos ADD COLUMN IF NOT EXISTS usuario_id INTEGER',
+        'ALTER TABLE reporte_permisos ALTER COLUMN cliente_id DROP NOT NULL',
     ]:
         try:
             conn.execute(alter)

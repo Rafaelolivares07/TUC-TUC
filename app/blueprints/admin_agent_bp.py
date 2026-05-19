@@ -465,7 +465,7 @@ def agentes():
         if session.get('rol') == 'Administrador':
             rows = conn.execute("""
                 SELECT DISTINCT ON (cliente_id)
-                    cliente_id, nombre, ip_local, ruta_bd, activo, ultimo_ping
+                    cliente_id, nombre, alias, ip_local, ruta_bd, activo, ultimo_ping
                 FROM admin_agent_sesiones
                 WHERE ultimo_ping > NOW() - INTERVAL '24 hours'
                 ORDER BY cliente_id, id DESC
@@ -473,7 +473,7 @@ def agentes():
         else:
             rows = conn.execute("""
                 SELECT DISTINCT ON (s.cliente_id)
-                    s.cliente_id, s.nombre, s.ip_local, s.ruta_bd, s.activo, s.ultimo_ping
+                    s.cliente_id, s.nombre, s.alias, s.ip_local, s.ruta_bd, s.activo, s.ultimo_ping
                 FROM admin_agent_sesiones s
                 JOIN admin_agent_permisos p ON p.cliente_id = s.cliente_id
                 WHERE p.usuario_id = %s
@@ -487,9 +487,11 @@ def agentes():
             if ping and ping.tzinfo is None:
                 ping = ping.replace(tzinfo=timezone.utc)
             lag = int((now - ping).total_seconds()) if ping else 9999
+            nombre_display = r['alias'] or r['nombre'] or r['cliente_id']
             result.append({
                 'cliente_id': r['cliente_id'],
-                'nombre':     r['nombre'] or r['cliente_id'],
+                'nombre':     nombre_display,
+                'alias':      r['alias'] or '',
                 'ip_local':   r['ip_local'] or '',
                 'ruta_bd':    r['ruta_bd'] or '',
                 'conectado':  bool(r['activo']) and lag < 30,

@@ -67,6 +67,7 @@ def _crear_tablas(conn):
     conn.commit()
     for alter in [
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS nombre VARCHAR(200)',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS alias VARCHAR(200)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ip_local VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500)',
         'ALTER TABLE reporte_permisos ADD COLUMN IF NOT EXISTS usuario_id INTEGER',
@@ -706,7 +707,7 @@ def agentes_activos():
     try:
         _crear_tablas(conn)
         rows = conn.execute("""
-            SELECT DISTINCT ON (cliente_id) cliente_id, nombre, ultimo_ping
+            SELECT DISTINCT ON (cliente_id) cliente_id, nombre, alias, ultimo_ping
             FROM admin_agent_sesiones
             WHERE ultimo_ping > NOW() - INTERVAL '30 days'
             ORDER BY cliente_id, id DESC
@@ -731,12 +732,32 @@ def agentes_activos():
                 online = False
                 ultimo = 'desconocido'
             agentes.append({
-                'id':     r['cliente_id'],
-                'nombre': r['nombre'] or r['cliente_id'],
-                'online': online,
-                'ultimo': ultimo,
+                'id':       r['cliente_id'],
+                'nombre':   r['alias'] or r['nombre'] or r['cliente_id'],
+                'alias':    r['alias'] or '',
+                'online':   online,
+                'ultimo':   ultimo,
             })
         return jsonify({'ok': True, 'agentes': agentes})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin-agent/agente/<cliente_id>/alias', methods=['POST'])
+@solo_admin
+def agente_alias(cliente_id):
+    data  = request.get_json(force=True)
+    alias = str(data.get('alias', '')).strip()
+    conn  = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE admin_agent_sesiones SET alias=%s WHERE cliente_id=%s",
+            (alias or None, cliente_id)
+        )
+        conn.commit()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

@@ -233,16 +233,21 @@ async function cargarAgentesUsuario(uid) {
     return;
   }
   panel.innerHTML = _agentes.map(a => `
-    <div class="form-check mb-1">
-      <input class="form-check-input" type="checkbox" id="ag-${uid}-${a.id}"
+    <div class="form-check mb-1 d-flex align-items-center gap-2">
+      <input class="form-check-input flex-shrink-0" type="checkbox" id="ag-${uid}-${a.id}"
              ${asignados.has(a.id) ? 'checked' : ''}>
-      <label class="form-check-label" for="ag-${uid}-${a.id}">
-        <span class="me-1">${a.nombre}</span>
+      <label class="form-check-label flex-grow-1" for="ag-${uid}-${a.id}">
+        <span class="me-1" id="alias-label-${a.id}">${a.nombre}</span>
         <span class="font-monospace text-muted small">${a.id}</span>
         <span class="badge ms-1 ${a.online ? 'bg-success' : 'bg-secondary'}" style="font-size:.7rem">
           ${a.online ? 'online' : a.ultimo}
         </span>
       </label>
+      <button class="btn btn-outline-secondary btn-sm py-0 px-1 flex-shrink-0"
+              title="Renombrar agente"
+              onclick="editarAlias('${a.id}','${(a.alias||'').replace(/'/g,'&#39;')}');event.preventDefault()">
+        <i class="bi bi-pencil" style="font-size:.75rem"></i>
+      </button>
     </div>`).join('');
 }
 
@@ -347,6 +352,21 @@ async function eliminarUsuario(uid, nombre) {
   const d = await api(`/api/admin-agent/sar-usuarios/${uid}`, 'DELETE');
   if (!d.ok) { alert(d.error || 'Error al eliminar'); return; }
   await cargarUsuarios();
+}
+
+// ── Alias agente ─────────────────────────────────────────────────────────────
+
+function editarAlias(clienteId, aliasActual) {
+  const nuevo = prompt(`Nombre para el agente:\n(${clienteId})`, aliasActual);
+  if (nuevo === null) return;
+  api(`/api/admin-agent/agente/${encodeURIComponent(clienteId)}/alias`, 'POST', { alias: nuevo.trim() })
+    .then(d => {
+      if (!d.ok) { alert('Error al guardar: ' + (d.error || '')); return; }
+      const lbl = document.getElementById(`alias-label-${clienteId}`);
+      if (lbl) lbl.textContent = nuevo.trim() || clienteId;
+      const ag = _agentes.find(a => a.id === clienteId);
+      if (ag) { ag.alias = nuevo.trim(); ag.nombre = nuevo.trim() || ag.nombre; }
+    });
 }
 
 // ── Util ──────────────────────────────────────────────────────────────────────

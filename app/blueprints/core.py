@@ -595,7 +595,7 @@ def api_admin_db_estructura(nombre):
 
 # ── Deploy webhook ────────────────────────────────────────────────────────────
 
-@bp.route('/api/webhook/render-deploy', methods=['POST'])
+@bp.route('/api/webhook/deploy', methods=['POST'])
 def api_webhook_render_deploy():
     try:
         data = request.get_json(silent=True) or {}

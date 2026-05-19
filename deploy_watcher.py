@@ -1,12 +1,12 @@
 """
-deploy_watcher.py — Monitor local de deploy en Render.
+deploy_watcher.py — Monitor local de deploy en producción (admin.tuc-tuc.co).
 
-Uso (lo llama Claude automáticamente después de cada git push):
+Uso (lo llama el hook post-commit automáticamente después de cada git push):
     python deploy_watcher.py <commit_hash>
 
 Flujo:
 1. Escribe deploy_estado.json con commit, estado=pendiente, fecha
-2. Cada 20s consulta https://tuc-tuc.onrender.com/api/version
+2. Cada 20s consulta https://admin.tuc-tuc.co/api/version
 3. Cuando el commit coincide:
    - Notificación Windows (balloon en bandeja)
    - Notificación Telegram (via servidor — el servidor tiene el token en BD)
@@ -57,7 +57,7 @@ def notificar_telegram(commit, mensaje_commit):
     """Llama al endpoint del servidor para que mande el Telegram (token está en la BD)."""
     try:
         requests.post(
-            f'{APP_URL}/api/webhook/render-deploy',
+            f'{APP_URL}/api/webhook/deploy',
             json={'commit': {'id': commit, 'message': mensaje_commit}, 'status': 'live'},
             timeout=10
         )

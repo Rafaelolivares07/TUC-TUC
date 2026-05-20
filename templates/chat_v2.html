@@ -264,7 +264,7 @@ const ES_INVITADO    = {{ 'true' if es_invitado else 'false' }};
 const TOKEN_INICIAL  = "{{ token_inicial }}";
 
 // ── Estado compartido ────────────────────────────────────────────
-let vozActiva = false, vozRecognizer = null;
+let grabando = false, mediaRecorder = null, audioChunks = [];
 let modoApunte = false;
 let ttsActivo = localStorage.getItem('chat_tts') === '1';
 let _pendientesEstado = new Set();
@@ -409,126 +409,75 @@ function enviarImagen(input) {
   if (file) enviarImagenFile(file);
 }
 
-// ── Audio + transcripción simultánea ────────────────────────────
-// MediaRecorder graba el archivo (sube a Cloudinary, queda en el chat).
-// SpeechRecognition corre en paralelo y acumula la transcripción.
-// Al terminar: el chat recibe el audio Y un mensaje de texto con la transcripción.
-const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+// ── Grabación audio (idéntico a chat.html original) ──────────────
 let _uploadId = null, _chunkPromises = [];
-let _sttTranscript = '';
 
-async function toggleVoz() {
+async function toggleGrabacion() {
   const btn  = document.getElementById('btn-mic');
   const onda = document.getElementById('onda-mic');
   const tok  = tokenActivo;
 
-  if (!vozActiva) {
-    // ── Arrancar ──────────────────────────────────────────────────
-    let stream;
+  if (!grabando) {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({audio: true});
-    } catch(e) {
-      alert('No se pudo acceder al micrófono. Verifica los permisos.');
-      return;
-    }
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      _uploadId = crypto.randomUUID();
+      _chunkPromises = [];
+      let totalBytes = 0;
 
-    // MediaRecorder — igual que antes
-    _uploadId = crypto.randomUUID();
-    _chunkPromises = [];
-    let totalBytes = 0;
-    const mr = new MediaRecorder(stream, {audioBitsPerSecond: 32000});
-    vozRecognizer = mr; // reutilizamos la variable para el MediaRecorder
+      mediaRecorder = new MediaRecorder(stream, {audioBitsPerSecond: 32000});
 
-    mr.ondataavailable = e => {
-      if (!e.data || e.data.size === 0) return;
-      totalBytes += e.data.size;
-      const form = new FormData();
-      form.append('upload_id', _uploadId);
-      form.append('chunk', e.data, 'chunk.webm');
-      _chunkPromises.push(
-        fetch('/api/chat/audio/chunk', {method: 'POST', body: form}).catch(() => {})
-      );
-    };
+      mediaRecorder.ondataavailable = e => {
+        if (!e.data || e.data.size === 0) return;
+        totalBytes += e.data.size;
+        const form = new FormData();
+        form.append('upload_id', _uploadId);
+        form.append('chunk', e.data, 'chunk.webm');
+        _chunkPromises.push(
+          fetch('/api/chat/audio/chunk', {method: 'POST', body: form}).catch(() => {})
+        );
+      };
 
-    mr.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      const transcript = _sttTranscript.trim();
-      if (totalBytes < 300) { _micDesactivar(btn, onda); return; }
-      btn.innerHTML = '⏳';
-      await Promise.all(_chunkPromises);
-      const form = new FormData();
-      form.append('upload_id', _uploadId);
-      const rUp = await fetch('/api/chat/audio/finalizar', {method: 'POST', body: form})
-        .then(r => r.json()).catch(() => null);
-      const esCreador = convData[tok]?.creador_id === MI_TERCERO_ID;
-      if (rUp && rUp.ok) {
-        if (modoApunte) {
-          await guardarApunte('audio', '', rUp.url);
-          if (transcript) await guardarApunte('texto', transcript, '');
-        } else {
-          // 1) Enviar audio
-          await fetch('/api/chat/invitado/enviar', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: esCreador})
-          });
-          // 2) Enviar transcripción si hay
-          if (transcript) {
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (totalBytes < 300) { btn.innerHTML = micIconSvg(); if(onda) onda.classList.add('hidden'); return; }
+        btn.innerHTML = '⏳';
+        await Promise.all(_chunkPromises);
+        const form = new FormData();
+        form.append('upload_id', _uploadId);
+        const rUp = await fetch('/api/chat/audio/finalizar', {method: 'POST', body: form})
+          .then(r => r.json()).catch(() => null);
+        if (rUp && rUp.ok) {
+          if (modoApunte) {
+            await guardarApunte('audio', '', rUp.url);
+          } else {
             await fetch('/api/chat/invitado/enviar', {
               method: 'POST', headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({token: tok, mensaje: '📝 ' + transcript, tipo: 'texto', es_creador: esCreador})
+              body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: (convData[tok]?.creador_id === MI_TERCERO_ID)})
             });
+            pollMensajes();
           }
-          pollMensajes();
+        } else {
+          alert('Error subiendo audio: ' + (rUp?.error || 'desconocido'));
         }
-      } else {
-        alert('Error subiendo audio: ' + (rUp?.error || 'desconocido'));
-      }
-      _micDesactivar(btn, onda);
-    };
-
-    mr.start(3000);
-
-    // SpeechRecognition — corre en paralelo sobre el mismo stream
-    _sttTranscript = '';
-    if (_SR) {
-      const sr = new _SR();
-      sr.lang = 'es-CO';
-      sr.interimResults = false;
-      sr.continuous = true;
-      sr.onresult = (e) => {
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) _sttTranscript += e.results[i][0].transcript + ' ';
-        }
+        btn.innerHTML = micIconSvg();
+        if (onda) onda.classList.add('hidden');
       };
-      sr.onerror = () => {};  // silencioso — el audio sigue aunque falle STT
-      try { sr.start(); } catch(e) {}
-      // guardar ref para poder detenerlo
-      mr._srRef = sr;
+
+      mediaRecorder.start(3000);
+      grabando = true;
+      btn.classList.replace('bg-gray-800', 'bg-red-600');
+      if (btn.classList.contains('hover:bg-gray-600')) btn.classList.replace('hover:bg-gray-600', 'hover:bg-red-500');
+      btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+      if (onda) onda.classList.remove('hidden');
+    } catch(e) {
+      alert('No se pudo acceder al micrófono. Verifica los permisos.');
     }
-
-    vozActiva = true;
-    btn.classList.replace('bg-gray-800', 'bg-red-600');
-    btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
-    if (onda) onda.classList.remove('hidden');
-
   } else {
-    // ── Detener ───────────────────────────────────────────────────
-    const mr = vozRecognizer;
-    if (mr && mr._srRef) try { mr._srRef.stop(); } catch(e) {}
-    if (mr) mr.stop();
-    vozActiva = false;
+    mediaRecorder.stop();
+    grabando = false;
     btn.classList.replace('bg-red-600', 'bg-gray-800');
     if (btn.classList.contains('hover:bg-red-500')) btn.classList.replace('hover:bg-red-500', 'hover:bg-gray-600');
   }
-}
-
-function _micDesactivar(btn, onda) {
-  vozActiva = false;
-  vozRecognizer = null;
-  if (!btn) btn = document.getElementById('btn-mic');
-  if (!onda) onda = document.getElementById('onda-mic');
-  if (btn) { btn.classList.replace('bg-red-600', 'bg-gray-800'); btn.innerHTML = micIconSvg(); }
-  if (onda) onda.classList.add('hidden');
 }
 
 // ── Polling mensajes ──────────────────────────────────────────────
@@ -993,13 +942,16 @@ function abrirConv(token, nombre) {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
           </svg>
         </button>
-        <button id="btn-stt" onclick="toggleSTT()" title="Dictar texto"
-                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition">
+        <button id="btn-stt" onclick="toggleSTT()" title="Hablar → texto (toca, habla, para solo)"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-emerald-700 flex items-center justify-center transition">
           <svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1a3 3 0 0 1 3 3v8a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line stroke-linecap="round" stroke-linejoin="round" stroke-width="2" x1="12" y1="19" x2="12" y2="23"/>
+            <line stroke-linecap="round" stroke-linejoin="round" stroke-width="2" x1="8" y1="23" x2="16" y2="23"/>
           </svg>
         </button>
-        <button id="btn-mic" onclick="toggleVoz()" title="Hablar (voz a texto)"
+        <button id="btn-mic" onclick="toggleGrabacion()" title="Grabar audio"
                 class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition relative">
           ${micIconSvg()}
           <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
@@ -1128,38 +1080,69 @@ async function registrarTelefono() {
   alert(r.merged ? '¡Cuenta unificada! Tus conversaciones se fusionaron.' : '¡Registrado correctamente! Ya puedes acceder desde cualquier dispositivo.');
 }
 
-// STT
-const _sttIconNormal = `<svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>`;
-const _sttIconActivo = `<svg class="w-5 h-5 text-emerald-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#10b981" opacity=".25"/><circle cx="12" cy="12" r="5" fill="#10b981"/></svg>`;
+// ── STT mejorado — single-shot, estilo Nativo ────────────────────
+// Toca → escucha → para solo cuando detecta silencio → texto en textarea.
+// No es continuo: cada toque es una grabación independiente.
+const _sttIconNormal = `<svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1a3 3 0 0 1 3 3v8a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line stroke-linecap="round" stroke-linejoin="round" stroke-width="2" x1="12" y1="19" x2="12" y2="23"/><line stroke-linecap="round" stroke-linejoin="round" stroke-width="2" x1="8" y1="23" x2="16" y2="23"/></svg>`;
+const _sttIconActivo  = `<svg class="w-5 h-5" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24" style="animation:pulse-stt 1s ease-in-out infinite alternate"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 0 1 3 3v8a3 3 0 0 1-6 0V4a3 3 0 0 1 3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 0 1-14 0v-2"/><line stroke-linecap="round" x1="12" y1="19" x2="12" y2="23"/><line stroke-linecap="round" x1="8" y1="23" x2="16" y2="23"/></svg><style>@keyframes pulse-stt{from{opacity:.5}to{opacity:1}}</style>`;
 
 function toggleSTT() {
   if (!STT) { alert('Tu navegador no soporta dictado de voz. Prueba Chrome o Edge.'); return; }
   const btn = document.getElementById('btn-stt');
-  if (!sttActivo) {
-    reconocedor = new STT();
-    reconocedor.lang = 'es-CO'; reconocedor.continuous = true; reconocedor.interimResults = false;
-    reconocedor.onresult = e => {
-      const txt = e.results[e.results.length-1][0].transcript;
-      const el = document.getElementById('txt-msg');
-      el.value += (el.value ? ' ' : '') + txt; autoResize(el);
-    };
-    reconocedor.onerror = e => {
-      if (e.error === 'not-allowed') {
-        alert('Permiso de micrófono denegado. Habilítalo en la configuración del navegador.');
-        desactivarSTT();
-      }
-      // no-speech, audio-capture, network — no desactivar, onend reiniciará
-    };
-    reconocedor.onend = () => { if (sttActivo) setTimeout(() => { try { reconocedor.start(); } catch(e){} }, 300); };
-    reconocedor.start(); sttActivo = true;
-    if (btn) { btn.classList.add('bg-emerald-900'); btn.classList.remove('bg-gray-700'); btn.innerHTML = _sttIconActivo; }
-  } else { desactivarSTT(); }
+
+  if (sttActivo) {
+    // Detener manualmente
+    if (reconocedor) try { reconocedor.stop(); } catch(e) {}
+    desactivarSTT();
+    return;
+  }
+
+  reconocedor = new STT();
+  reconocedor.lang = 'es-CO';
+  reconocedor.continuous = false;    // para solo (como Nativo)
+  reconocedor.interimResults = true; // muestra texto en tiempo real
+
+  const el = document.getElementById('txt-msg');
+  const baseValue = el.value;
+  let finalText = '';
+
+  reconocedor.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    // Muestra interim en tiempo real; al finalizar queda el texto definitivo
+    el.value = baseValue + (baseValue && (finalText || interim) ? ' ' : '') + (finalText || interim);
+    autoResize(el);
+  };
+
+  reconocedor.onerror = e => {
+    if (e.error === 'not-allowed') alert('Permiso de micrófono denegado. Habilítalo en la configuración del navegador.');
+    desactivarSTT();
+  };
+
+  reconocedor.onend = () => {
+    // Asegura que quede el texto final (sin interim)
+    if (finalText) {
+      el.value = baseValue + (baseValue ? ' ' : '') + finalText.trim();
+      autoResize(el);
+    }
+    desactivarSTT();
+    el.focus();
+  };
+
+  reconocedor.start();
+  sttActivo = true;
+  if (btn) { btn.classList.add('bg-emerald-900'); btn.classList.remove('bg-gray-800'); btn.innerHTML = _sttIconActivo; }
 }
 
 function desactivarSTT() {
-  if (reconocedor) reconocedor.stop(); sttActivo = false;
+  if (reconocedor) { try { reconocedor.stop(); } catch(e) {} reconocedor = null; }
+  sttActivo = false;
   const btn = document.getElementById('btn-stt');
-  if (btn) { btn.classList.remove('bg-emerald-900'); btn.classList.add('bg-gray-700'); btn.innerHTML = _sttIconNormal; }
+  if (btn) { btn.classList.remove('bg-emerald-900'); btn.classList.add('bg-gray-800'); btn.innerHTML = _sttIconNormal; }
 }
 
 // ── Drag & drop + paste de imágenes ──────────────────────────────

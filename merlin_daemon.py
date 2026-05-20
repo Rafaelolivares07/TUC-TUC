@@ -450,7 +450,7 @@ def llamar_claude(prompt):
 def _escribir_inbox(contenido):
     import json
     INBOX_FILE.write_text(
-        json.dumps({'contenido': contenido, 'lang': 'en'}, ensure_ascii=False),
+        json.dumps({'contenido': contenido}, ensure_ascii=False),
         encoding='utf-8'
     )
 

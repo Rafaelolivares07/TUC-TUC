@@ -57,6 +57,17 @@
     "ask": []
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:\\Users\\RAFAEL OLIVARES\\Documents\\MiAppMedicamentos\\chat_context_hook.py\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",

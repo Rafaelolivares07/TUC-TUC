@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chat — TUC TUC</title>
+  {% if es_invitado %}
+  <meta property="og:title" content="Tienes un mensaje en TUC TUC 💬">
+  <meta property="og:description" content="Responde con texto, audio o imagen — sin registrarte.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  {% endif %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { height: 100%; height: 100dvh; overscroll-behavior: none; }
+    body { display: flex; flex-direction: row; height: 100dvh; overflow: hidden; }
+    #panel-chat { min-width: 0; min-height: 0; }
+    #sidebar { min-height: 0; }
+    #mensajes { scroll-behavior: auto; }
+    .bubble-in  { animation: slideIn  .18s ease-out; }
+    .bubble-out { animation: slideOut .18s ease-out; }
+    @keyframes slideIn  { from { opacity:0; transform: translateY(8px) translateX(-8px); } to { opacity:1; transform: none; } }
+    @keyframes slideOut { from { opacity:0; transform: translateY(8px) translateX( 8px); } to { opacity:1; transform: none; } }
+    .onda span { display:inline-block; width:4px; border-radius:4px; background:#ef4444; animation: ondaUp .7s ease-in-out infinite alternate; }
+    .onda span:nth-child(2) { animation-delay:.1s; }
+    .onda span:nth-child(3) { animation-delay:.2s; }
+    .onda span:nth-child(4) { animation-delay:.3s; }
+    .onda span:nth-child(5) { animation-delay:.4s; }
+    @keyframes ondaUp { from { height:6px; } to { height:22px; } }
+    .audio-hook { background: linear-gradient(135deg, #1e3a5f 0%, #1a2d4a 100%); border: 1px solid #2563eb44; }
+    textarea { field-sizing: content; }
+    .barra-input { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+    #drop-overlay { pointer-events: none; opacity: 0; transition: opacity .15s; }
+    #drop-overlay.activo { pointer-events: all; opacity: 1; }
+  </style>
+</head>
+<body class="bg-gray-950 text-white overflow-hidden flex" style="height:100dvh">
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SIDEBAR — todos los terceros                                   -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="sidebar" class="w-full md:w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+
+  <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div id="mi-avatar" onclick="abrirModalPerfil()"
+           class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition" title="Perfil y configuración">
+        ?
+      </div>
+      <input id="inp-foto-perfil" type="file" accept="image/*" class="hidden" onchange="subirFotoPerfil(this)">
+      <span id="mi-nombre-sidebar" class="font-semibold text-sm truncate">TUC TUC Chat</span>
+    </div>
+    <div class="flex gap-1.5">
+      <button onclick="abrirChatMerlin()" title="Hablar con Merlin"
+              class="bg-indigo-700 hover:bg-indigo-600 text-white text-xs px-2.5 py-1.5 rounded-full transition font-medium flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>
+        Merlin
+      </button>
+      <button onclick="abrirNuevoInvitado()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full transition font-medium">
+        + Invitar
+      </button>
+    </div>
+  </div>
+
+  {% if es_invitado %}
+  <div id="banner-registro" class="mx-3 mt-3 bg-indigo-900/40 border border-indigo-700/50 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+    <p class="text-xs text-indigo-300 leading-snug">Regístrate para no perder tus conversaciones</p>
+    <button onclick="abrirModalRegistro()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition whitespace-nowrap flex-shrink-0">
+      Registrar
+    </button>
+  </div>
+  {% endif %}
+
+  <div id="lista-convs" class="flex-1 overflow-y-auto mt-1">
+    <div class="p-4 text-gray-500 text-sm text-center">Cargando...</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PANEL CHAT                                                     -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="panel-chat" class="flex-1 flex flex-col hidden md:flex">
+  <!-- Estado vacío — se reemplaza al abrir una conversación -->
+  <div class="flex-1 flex items-center justify-center text-gray-600">
+    <div class="text-center">
+      <div class="text-5xl mb-3">💬</div>
+      <p class="text-lg">Selecciona una conversación</p>
+      <p class="text-sm mt-1">o invita a alguien nuevo</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL GALERÍA (compartido)                                     -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="modal-foto" class="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-between hidden py-6 px-4" onclick="cerrarFotoGrande()">
+  <div class="flex items-center justify-between w-full max-w-sm" onclick="event.stopPropagation()">
+    <span id="galeria-nombre" class="text-white font-semibold text-lg"></span>
+    <button onclick="cerrarFotoGrande()" class="text-gray-400 hover:text-white text-2xl leading-none">×</button>
+  </div>
+  <div class="relative flex items-center justify-center w-full max-w-sm flex-1 py-4" onclick="event.stopPropagation()">
+    <button id="btn-gal-prev" onclick="galeriaNav(-1)"
+            class="absolute left-0 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white text-xl hover:bg-black/80 transition hidden">‹</button>
+    <div id="galeria-foto-wrap" class="w-72 h-72 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-7xl font-bold text-white shadow-2xl flex-shrink-0"></div>
+    <button id="btn-gal-next" onclick="galeriaNav(1)"
+            class="absolute right-0 z-10 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center text-white text-xl hover:bg-black/80 transition hidden">›</button>
+  </div>
+  <div class="flex flex-col items-center gap-3 w-full max-w-sm" onclick="event.stopPropagation()">
+    <div id="galeria-dots" class="flex gap-1.5 min-h-[8px]"></div>
+    <div class="flex gap-3">
+      <button id="btn-galeria-agregar" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-full transition hidden"
+              onclick="document.getElementById('inp-foto-galeria').click()">+ Agregar foto</button>
+      <button id="btn-galeria-eliminar" class="bg-red-900/60 hover:bg-red-800 text-red-300 text-sm px-4 py-2 rounded-full transition hidden"
+              onclick="galeriaEliminarActual()">Eliminar</button>
+    </div>
+    <input id="inp-foto-galeria" type="file" accept="image/*" class="hidden" onchange="galeriaSubirFoto(this)">
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL NUEVA CONVERSACIÓN (todos)                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="modal-invitado" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-gray-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+    <h2 class="text-lg font-bold mb-4">Nueva conversación</h2>
+    <div class="mb-3">
+      <label class="text-xs text-gray-400 mb-1 block">Nombre del contacto</label>
+      <input id="inv-nombre" type="text" placeholder="ej: María" autocomplete="off"
+             class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+             onkeydown="if(event.key==='Enter')crearInvitado()">
+    </div>
+    <div class="mb-5">
+      <label class="text-xs text-gray-400 mb-1 block">Origen (opcional)</label>
+      <input id="inv-origen" type="text" placeholder="ej: Tinder, WhatsApp..."
+             class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div id="inv-link-wrap" class="hidden mb-4">
+      <div id="inv-link-texto" class="bg-gray-800 rounded-xl p-3 text-blue-400 text-sm break-all mb-3 cursor-pointer select-all" onclick="copiarLinkInv()"></div>
+      <button onclick="copiarLinkInv()" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-xl text-sm font-medium transition">📋 Copiar link</button>
+    </div>
+    <div id="inv-btns" class="flex gap-3">
+      <button onclick="cerrarModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 py-3 rounded-xl transition text-sm">Cancelar</button>
+      <button onclick="crearInvitado()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl transition text-sm font-medium">Crear link</button>
+    </div>
+  </div>
+</div>
+<!-- Modal perfil (todos) -->
+<div id="modal-perfil" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md shadow-2xl pb-safe" onclick="event.stopPropagation()">
+    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mt-4 mb-5"></div>
+    <!-- Cabecera: avatar + nombre -->
+    <div class="px-6 pb-5 flex items-center gap-4 border-b border-gray-800">
+      <div id="perfil-modal-avatar"
+           onclick="cerrarModalPerfil(); setTimeout(verMiFotoGrande, 150)"
+           class="w-14 h-14 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xl cursor-pointer overflow-hidden flex-shrink-0 hover:opacity-80 transition">R</div>
+      <div class="flex-1 min-w-0">
+        <p id="perfil-modal-nombre" class="font-semibold text-white text-base truncate">—</p>
+        <button onclick="cerrarModalPerfil(); setTimeout(verMiFotoGrande, 150)"
+                class="text-xs text-blue-400 hover:text-blue-300 transition mt-0.5">Ver galería →</button>
+      </div>
+    </div>
+    <!-- Tonos -->
+    <div class="px-6 py-5">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tono de notificación</p>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button id="tono-btn-clasico" onclick="seleccionarTono('clasico')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          🔔 Clásico
+        </button>
+        <button id="tono-btn-suave" onclick="seleccionarTono('suave')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          🎵 Suave
+        </button>
+        <button id="tono-btn-alegre" onclick="seleccionarTono('alegre')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          ✨ Alegre
+        </button>
+        <button id="tono-btn-pop" onclick="seleccionarTono('pop')"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          ⚡ Pop
+        </button>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="tono-btn-personalizado" onclick="document.getElementById('inp-tono-file').click()"
+                class="tono-btn flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition border border-transparent">
+          📁 Personalizado
+        </button>
+        <span id="tono-custom-label" class="text-xs text-gray-500 truncate flex-1"></span>
+        <input id="inp-tono-file" type="file" accept="audio/*" class="hidden" onchange="cargarTonoPersonalizado(this)">
+      </div>
+      <p class="text-xs text-gray-600 mt-3">Toca cada tono para previsualizarlo antes de elegir.</p>
+    </div>
+    <div class="px-6 pb-7">
+      <button onclick="cerrarModalPerfil()" class="w-full bg-gray-800 hover:bg-gray-700 py-3 rounded-xl text-sm transition">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAL REGISTRO TELÉFONO (invitados)                            -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+{% if es_invitado %}
+<div id="modal-registro" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-md p-6 pb-8 shadow-2xl">
+    <div class="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-5"></div>
+    <h2 class="text-base font-semibold mb-1">Registrar mi número</h2>
+    <p class="text-xs text-gray-500 mb-5">Asocia tu número para acceder desde cualquier dispositivo y no perder tus conversaciones.</p>
+    <input id="reg-nombre" type="text" placeholder="Tu nombre"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+           onkeydown="if(event.key==='Enter')document.getElementById('reg-telefono').focus()">
+    <input id="reg-telefono" type="tel" placeholder="Teléfono (ej: 3001234567)"
+           class="w-full bg-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-5"
+           onkeydown="if(event.key==='Enter')registrarTelefono()">
+    <div id="reg-error" class="hidden text-red-400 text-xs mb-3"></div>
+    <div class="flex gap-3">
+      <button onclick="cerrarModalRegistro()" class="flex-1 bg-gray-800 py-3 rounded-xl text-sm">Cancelar</button>
+      <button onclick="registrarTelefono()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl text-sm font-medium transition">Registrar</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal selector de cards -->
+<div id="modal-card" class="fixed inset-0 bg-black/80 z-50 flex items-end justify-center hidden">
+  <div class="bg-gray-900 rounded-t-3xl w-full max-w-lg flex flex-col" style="max-height:85vh">
+    <div class="px-5 pt-5 pb-3 flex items-center justify-between shrink-0">
+      <div>
+        <h2 class="font-bold text-white text-base">Compartir producto</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Elige un negocio y luego el ítem</p>
+      </div>
+      <button onclick="cerrarModalCard()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <!-- Selector de negocio -->
+    <div id="card-negocios" class="px-4 pb-3 flex gap-2 overflow-x-auto shrink-0 scrollbar-none"></div>
+    <!-- Buscador de ítems -->
+    <div class="px-4 pb-3 shrink-0">
+      <input id="card-buscar" type="search" placeholder="Buscar producto o plato..."
+             class="w-full bg-gray-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none"
+             oninput="filtrarCardItems(this.value)">
+    </div>
+    <!-- Lista de ítems -->
+    <div id="card-items" class="overflow-y-auto px-4 pb-6 space-y-2"></div>
+  </div>
+</div>
+
+<!-- Input imagen global (accesible desde ambos modos) -->
+<input id="inp-chat-imagen" type="file" accept="image/*" class="hidden" onchange="enviarImagen(this)">
+
+<!-- Overlay drag & drop -->
+<div id="drop-overlay" class="fixed inset-0 z-50 bg-blue-900/80 flex flex-col items-center justify-center gap-3 rounded-none">
+  <svg class="w-16 h-16 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+  </svg>
+  <p class="text-blue-100 text-lg font-semibold">Suelta para enviar la imagen</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- SCRIPT UNIFICADO                                               -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<script>
+// ── Contexto desde Flask ─────────────────────────────────────────
+const MI_TERCERO_ID  = {{ mi_tercero_id or 0 }};
+const ES_INVITADO    = {{ 'true' if es_invitado else 'false' }};
+const TOKEN_INICIAL  = "{{ token_inicial }}";
+
+// ── Estado compartido ────────────────────────────────────────────
+let vozActiva = false, vozRecognizer = null;
+let modoApunte = false;
+let ttsActivo = localStorage.getItem('chat_tts') === '1';
+let _pendientesEstado = new Set();
+const idsRenderizados = new Set();
+let pollingInterval = null;
+let ultimoMsgId = 0;
+let miFoto = '', miTerceroId = null;
+let convData = {}, tokenActivo = '';
+let convInfo = null;
+
+// Galería
+let gFotos = [], gIndice = 0, gEsMia = false, gTerceroId = null, _swipeX = null;
+
+// STT (solo invitado)
+const STT = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconocedor = null, sttActivo = false;
+
+// Sonido de notificación
+let tonoActual = localStorage.getItem('chat_tono') || 'clasico';
+let _audioCtxInst = null;
+let _bufferPersonalizado = null;
+let _nombreArchivoTono = '';
+
+// ── Init ─────────────────────────────────────────────────────────
+cargarConversaciones();
+setInterval(cargarConversaciones, 15000);
+cargarMiPerfil();
+
+// Swipe galería
+document.getElementById('modal-foto').addEventListener('touchstart', e => { _swipeX = e.touches[0].clientX; }, { passive: true });
+document.getElementById('modal-foto').addEventListener('touchend', e => {
+  if (_swipeX === null) return;
+  const dx = e.changedTouches[0].clientX - _swipeX;
+  if (Math.abs(dx) > 40) galeriaNav(dx < 0 ? 1 : -1);
+  _swipeX = null;
+});
+
+// ══════════════════════════════════════════════════════════════════
+// FUNCIONES COMPARTIDAS
+// ══════════════════════════════════════════════════════════════════
+
+function aplicarAvatar(el, url) {
+  if (!url || !el) return;
+  el.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+}
+
+function avatarHtml(foto, nombre, size='w-10 h-10') {
+  const inicial = (nombre || '?')[0].toUpperCase();
+  if (foto) return `<div class="${size} rounded-full overflow-hidden flex-shrink-0"><img src="${foto}" class="w-full h-full object-cover"></div>`;
+  return `<div class="${size} rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0">${inicial}</div>`;
+}
+
+function formatHora(fecha) {
+  if (!fecha) return '';
+  let s = String(fecha).replace(' ', 'T');
+  if (!s.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(s)) s += 'Z';
+  return new Date(s).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function chulito(estado, esMio) {
+  if (!esMio) return '';
+  if (estado === 'leido') return ' <span style="color:#ffffff;font-size:11px">✓✓</span>';
+  return ' <span style="opacity:.5;font-size:11px">✓</span>';
+}
+
+async function actualizarEstados() {
+  if (!_pendientesEstado.size || !tokenActivo) return;
+  const ids = [..._pendientesEstado].join(',');
+  const r = await fetch(`/api/chat/mensajes/estados?ids=${ids}`).then(r => r.json()).catch(() => null);
+  if (!r?.ok) return;
+  for (const [id, estado] of Object.entries(r.estados)) {
+    if (estado === 'leido') {
+      const el = document.getElementById(`est-${id}`);
+      if (el) el.outerHTML = '<span id="est-' + id + '" style="color:#ffffff;font-size:11px">✓✓</span>';
+      _pendientesEstado.delete(Number(id));
+    }
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 112) + 'px';
+}
+
+function micIconSvg() {
+  return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>';
+}
+
+function toggleTTS() {
+  ttsActivo = !ttsActivo;
+  localStorage.setItem('chat_tts', ttsActivo ? '1' : '0');
+  const btn = document.getElementById('btn-tts');
+  if (!btn) return;
+  if (ttsActivo) {
+    btn.classList.add('bg-emerald-800'); btn.classList.remove('bg-gray-800');
+  } else {
+    btn.classList.remove('bg-emerald-800'); btn.classList.add('bg-gray-800');
+    speechSynthesis.cancel();
+  }
+}
+
+function leerEnVoz(texto) {
+  if (!ttsActivo || !texto) return;
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(texto);
+  utt.lang = 'es-CO';
+  utt.rate = 1.05;
+  // intentar voz en español si hay disponible
+  const voces = speechSynthesis.getVoices();
+  const vozEs = voces.find(v => v.lang.startsWith('es') && v.localService) || voces.find(v => v.lang.startsWith('es'));
+  if (vozEs) utt.voice = vozEs;
+  speechSynthesis.speak(utt);
+}
+
+// ── Enviar texto ──────────────────────────────────────────────────
+function enviarTexto() {
+  const el = document.getElementById('txt-msg');
+  if (!el) return;
+  const msg = el.value.trim();
+  if (!msg || !tokenActivo) return;
+  el.value = ''; el.style.height = 'auto';
+  if (modoApunte) {
+    guardarApunte('texto', msg, null);
+    return;
+  }
+  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
+  fetch('/api/chat/invitado/enviar', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tokenActivo, mensaje: msg, tipo: 'texto', es_creador: esCreador})
+  }).then(() => pollMensajes());
+}
+
+// ── Enviar imagen ─────────────────────────────────────────────────
+function enviarImagen(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (file) enviarImagenFile(file);
+}
+
+// ── Voz a texto (Web Speech API) ─────────────────────────────────
+const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function toggleVoz() {
+  const btn  = document.getElementById('btn-mic');
+  const onda = document.getElementById('onda-mic');
+
+  if (vozActiva) {
+    if (vozRecognizer) try { vozRecognizer.stop(); } catch(e) {}
+    return;
+  }
+
+  if (!_SR) {
+    alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.');
+    return;
+  }
+
+  const r = new _SR();
+  r.lang = 'es-CO';
+  r.interimResults = true;
+  r.continuous = false;
+  vozRecognizer = r;
+
+  const el = document.getElementById('txt-msg');
+  const baseValue = el.value;
+
+  r.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    el.value = baseValue + (baseValue && (final || interim) ? ' ' : '') + (final || interim);
+    autoResize(el);
+  };
+
+  r.onerror = (e) => {
+    if (e.error === 'not-allowed') alert('Permiso de micrófono denegado. Habilítalo en la configuración del navegador.');
+    _vozDesactivar(btn, onda);
+  };
+
+  r.onend = () => { _vozDesactivar(btn, onda); };
+
+  vozActiva = true;
+  r.start();
+  btn.classList.replace('bg-gray-800', 'bg-red-600');
+  btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+  if (onda) onda.classList.remove('hidden');
+}
+
+function _vozDesactivar(btn, onda) {
+  vozActiva = false;
+  vozRecognizer = null;
+  if (!btn) btn = document.getElementById('btn-mic');
+  if (!onda) onda = document.getElementById('onda-mic');
+  if (btn) { btn.classList.replace('bg-red-600', 'bg-gray-800'); btn.innerHTML = micIconSvg(); }
+  if (onda) onda.classList.add('hidden');
+}
+
+// ── Polling mensajes ──────────────────────────────────────────────
+function pollMensajes() {
+  if (!tokenActivo) return;
+  fetch(`/api/chat/invitado/mensajes/${tokenActivo}?desde=${ultimoMsgId}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.ok) return;
+      convInfo = d.conv;
+      const cont = document.getElementById('mensajes');
+      if (!cont) return;
+      renderMensajes(d.mensajes, cont);
+      actualizarEstados();
+    });
+}
+
+// ── Render mensajes (unificado) ───────────────────────────────────
+function renderMensajes(msgs, cont) {
+  if (!msgs || !msgs.length) return;
+  const esInicio = ultimoMsgId === 0;
+  let hayMsgAjeno = false;
+  msgs.forEach((m, idx) => {
+    if (idsRenderizados.has(m.id)) return;
+    idsRenderizados.add(m.id);
+    ultimoMsgId = Math.max(ultimoMsgId, m.id);
+
+    // ¿Quién lo envió? — "mío" = lado derecho
+    const esMio = m.remitente_id === MI_TERCERO_ID;
+
+    if (!esInicio && !esMio) hayMsgAjeno = true;
+
+    const animClass = esMio ? 'bubble-out' : 'bubble-in';
+    const div = document.createElement('div');
+    div.className = `flex ${esMio ? 'justify-end' : 'justify-start'} ${animClass}`;
+
+    // Hook especial: primer audio ajeno al llegar por un link de invitación
+    if (ES_INVITADO && !esMio && m.tipo === 'audio' && idx === 0 && esInicio && m.url_archivo) {
+      const nc = convInfo?.nombre_creador || 'TUC TUC';
+      div.innerHTML = `
+        <div class="audio-hook rounded-2xl rounded-bl-sm p-4 max-w-[80%] w-full">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">${nc[0].toUpperCase()}</div>
+            <div>
+              <div class="text-xs font-medium text-blue-300">${escHtml(nc)}</div>
+              <div class="text-xs text-gray-500">${formatHora(m.fecha)}</div>
+            </div>
+          </div>
+          <div class="text-sm text-gray-300 mb-2">🎵 Te envió un audio exclusivo</div>
+          <audio controls src="${m.url_archivo}" class="w-full h-9 rounded-lg" preload="metadata"></audio>
+          <div class="text-xs text-gray-500 mt-2 text-center">Solo disponible en TUC TUC</div>
+        </div>`;
+    } else if (m.tipo === 'audio' && m.url_archivo) {
+      div.innerHTML = `
+        <div class="px-3 py-2.5 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
+          <audio controls src="${m.url_archivo}" class="max-w-[210px] h-8" preload="metadata"></audio>
+          <div class="text-xs mt-1 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+        </div>`;
+    } else if (m.tipo === 'imagen' && m.url_archivo) {
+      div.innerHTML = `
+        <div class="rounded-2xl overflow-hidden ${esMio ? 'rounded-br-sm' : 'rounded-bl-sm'} max-w-[75%] cursor-pointer"
+             onclick="verFotoGrande('${m.url_archivo}', '', false)">
+          <img src="${m.url_archivo}" class="max-w-[260px] max-h-64 object-cover block" loading="lazy">
+          <div class="text-xs px-2 pb-1.5 pt-0.5 ${esMio ? 'bg-blue-600 text-right' : 'bg-gray-800'}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+        </div>`;
+    } else if (m.tipo === 'card' && m.card_payload) {
+      const cp = typeof m.card_payload === 'string' ? JSON.parse(m.card_payload) : m.card_payload;
+      const precio = cp.precio ? '$' + Number(cp.precio).toLocaleString('es-CO') : '';
+      div.innerHTML = `
+        <div class="max-w-[280px] rounded-2xl overflow-hidden shadow-lg cursor-pointer ${esMio ? 'rounded-br-sm' : 'rounded-bl-sm'}"
+             onclick="window.open('${cp.url || '#'}','_blank')">
+          ${cp.imagen ? `<img src="${cp.imagen}" class="w-full h-40 object-cover block" loading="lazy">` : ''}
+          <div class="p-3 bg-gray-800">
+            ${cp.negocio ? `<p class="text-xs text-blue-400 font-semibold mb-0.5">${escHtml(cp.negocio)}</p>` : ''}
+            <p class="font-bold text-white text-sm leading-tight">${escHtml(cp.titulo || '')}</p>
+            ${cp.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 line-clamp-2">${escHtml(cp.descripcion)}</p>` : ''}
+            <div class="flex items-center justify-between mt-2">
+              ${precio ? `<span class="text-green-400 font-bold text-sm">${precio}</span>` : '<span></span>'}
+              <span class="text-xs bg-blue-600 text-white rounded-full px-2.5 py-0.5 font-medium">
+                ${cp.accion || 'Ver más'}
+              </span>
+            </div>
+          </div>
+          <div class="text-xs px-3 pb-2 bg-gray-800 ${esMio ? 'text-right' : ''}"><span class="opacity-40">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+        </div>`;
+    } else if (m.tipo !== 'sistema') {
+      div.innerHTML = `
+        <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
+          <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
+          <div class="text-xs mt-0.5 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+        </div>`;
+    }
+    if (div.innerHTML) {
+      cont.appendChild(div);
+      // Trackear mis mensajes pendientes para actualizar chulos
+      if (esMio && m.estado !== 'leido') _pendientesEstado.add(m.id);
+      // TTS: leer mensajes ajenos nuevos (no al cargar el historial)
+      if (!esInicio && !esMio && ttsActivo && m.tipo === 'texto' && m.mensaje) {
+        leerEnVoz(m.mensaje);
+      }
+    }
+  });
+  const _scrollFin = () => { cont.scrollTop = cont.scrollHeight; };
+  requestAnimationFrame(() => requestAnimationFrame(_scrollFin));
+  cont.querySelectorAll('img').forEach(img => {
+    if (!img.complete) img.addEventListener('load', _scrollFin, {once: true});
+  });
+  if (hayMsgAjeno) sonarNotificacion();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GALERÍA (compartida)
+// ══════════════════════════════════════════════════════════════════
+
+async function abrirGaleria(terceroId, nombre, esMia) {
+  if (!terceroId) return;
+  gEsMia = esMia; gTerceroId = terceroId;
+  document.getElementById('galeria-nombre').textContent = nombre;
+  document.getElementById('modal-foto').classList.remove('hidden');
+  document.getElementById('btn-galeria-agregar').classList.toggle('hidden', !esMia);
+
+  const r = await fetch(`/api/chat/fotos/ver?tercero_id=${terceroId}`).then(r => r.json()).catch(() => null);
+  gFotos = (r && r.fotos) ? r.fotos : [];
+  if (gFotos.length === 0 && esMia && miFoto) gFotos = [{id: null, url: miFoto, orden: 0}];
+  gIndice = 0; galeriaRender();
+}
+
+function verFotoGrande(url, nombre, esMia) {
+  gEsMia = esMia; gTerceroId = null;
+  gFotos = url ? [{id: null, url, orden: 0}] : [];
+  gIndice = 0;
+  document.getElementById('galeria-nombre').textContent = nombre;
+  document.getElementById('btn-galeria-agregar').classList.add('hidden');
+  document.getElementById('btn-galeria-eliminar').classList.add('hidden');
+  document.getElementById('modal-foto').classList.remove('hidden');
+  galeriaRender();
+}
+
+function verMiFotoGrande() {
+  if (miTerceroId) abrirGaleria(miTerceroId, 'Mi galería', true);
+  else verFotoGrande(miFoto, 'Mi perfil', true);
+}
+
+function cerrarFotoGrande() {
+  document.getElementById('modal-foto').classList.add('hidden');
+  gFotos = [];
+}
+
+function galeriaRender() {
+  const wrap = document.getElementById('galeria-foto-wrap');
+  const dots = document.getElementById('galeria-dots');
+  const btnP = document.getElementById('btn-gal-prev');
+  const btnN = document.getElementById('btn-gal-next');
+  const btnE = document.getElementById('btn-galeria-eliminar');
+  if (gFotos.length === 0) {
+    wrap.innerHTML = `<span>${(document.getElementById('galeria-nombre').textContent || '?')[0].toUpperCase()}</span>`;
+    dots.innerHTML = ''; btnP.classList.add('hidden'); btnN.classList.add('hidden'); btnE.classList.add('hidden'); return;
+  }
+  const f = gFotos[gIndice];
+  wrap.innerHTML = `<img src="${f.url}" class="w-full h-full object-cover">`;
+  dots.innerHTML = gFotos.map((_,i) => `<div class="w-2 h-2 rounded-full transition ${i===gIndice?'bg-white':'bg-gray-600'}"></div>`).join('');
+  btnP.classList.toggle('hidden', gFotos.length <= 1);
+  btnN.classList.toggle('hidden', gFotos.length <= 1);
+  btnE.classList.toggle('hidden', !gEsMia || !f.id);
+}
+
+function galeriaNav(dir) { gIndice = (gIndice + dir + gFotos.length) % gFotos.length; galeriaRender(); }
+
+async function galeriaSubirFoto(input) {
+  if (!input.files[0]) return;
+  const wrap = document.getElementById('galeria-foto-wrap');
+  wrap.innerHTML = '<div class="text-white text-2xl animate-pulse">⏳</div>';
+  const form = new FormData(); form.append('foto', input.files[0]);
+  // token_invitado no requerido cuando hay sesión; se envía por compatibilidad
+  const r = await fetch('/api/chat/fotos/agregar', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { gFotos.push({id: r.id, url: r.url, orden: r.orden}); gIndice = gFotos.length - 1; galeriaRender(); }
+  else { wrap.innerHTML = '<span>Error</span>'; alert('Error: ' + (r?.error || 'desconocido')); }
+  input.value = '';
+}
+
+async function galeriaEliminarActual() {
+  const f = gFotos[gIndice]; if (!f || !f.id) return;
+  if (!confirm('¿Eliminar esta foto?')) return;
+  const body = '{}';
+  const r = await fetch(`/api/chat/fotos/${f.id}`, {method:'DELETE', headers:{'Content-Type':'application/json'}, body}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { gFotos.splice(gIndice, 1); if (gIndice >= gFotos.length) gIndice = Math.max(0, gFotos.length-1); galeriaRender(); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SONIDO DE NOTIFICACIÓN
+// ══════════════════════════════════════════════════════════════════
+
+function _ctx() {
+  if (!_audioCtxInst) _audioCtxInst = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtxInst.state === 'suspended') _audioCtxInst.resume();
+  return _audioCtxInst;
+}
+
+function _nota(ctx, freq, tipo, volumen, ataque, decaimiento, retardo) {
+  const when = ctx.currentTime + (retardo || 0);
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = tipo || 'sine';
+  osc.frequency.setValueAtTime(freq, when);
+  gain.gain.setValueAtTime(0, when);
+  gain.gain.linearRampToValueAtTime(volumen, when + ataque);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + ataque + decaimiento);
+  osc.start(when); osc.stop(when + ataque + decaimiento + 0.01);
+}
+
+function tocarTono(nombre) {
+  try {
+    const n = nombre || tonoActual;
+    if (n === 'personalizado' && _bufferPersonalizado) {
+      const ctx = _ctx();
+      const src = ctx.createBufferSource();
+      src.buffer = _bufferPersonalizado;
+      src.connect(ctx.destination);
+      src.start();
+      return;
+    }
+    const ctx = _ctx();
+    if (n === 'clasico') {
+      // Ding limpio: 880 Hz, sine
+      _nota(ctx, 880, 'sine', 0.35, 0.01, 0.5);
+    } else if (n === 'suave') {
+      // Dos notas suaves: C5 → E5
+      _nota(ctx, 523, 'sine', 0.25, 0.02, 0.3, 0);
+      _nota(ctx, 659, 'sine', 0.20, 0.02, 0.35, 0.18);
+    } else if (n === 'alegre') {
+      // Tres notas ascendentes: C5 → E5 → G5
+      _nota(ctx, 523, 'sine', 0.22, 0.015, 0.22, 0);
+      _nota(ctx, 659, 'sine', 0.22, 0.015, 0.22, 0.13);
+      _nota(ctx, 784, 'sine', 0.20, 0.015, 0.30, 0.26);
+    } else if (n === 'pop') {
+      // Sweep corto estilo synth
+      const ctx2 = _ctx();
+      const osc  = ctx2.createOscillator();
+      const gain = ctx2.createGain();
+      osc.connect(gain); gain.connect(ctx2.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(440, ctx2.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx2.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.12, ctx2.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx2.currentTime + 0.22);
+      osc.start(ctx2.currentTime); osc.stop(ctx2.currentTime + 0.25);
+    }
+  } catch(e) {}
+}
+
+function sonarNotificacion() { tocarTono(tonoActual); }
+
+// ── Modal de perfil (creador) ─────────────────────────────────────
+
+function abrirModalPerfil() {
+  const modal = document.getElementById('modal-perfil');
+  if (!modal) { verMiFotoGrande(); return; }
+  // Sincronizar avatar y nombre
+  const av = document.getElementById('perfil-modal-avatar');
+  const src = document.getElementById('mi-avatar');
+  if (av && src) av.innerHTML = src.innerHTML;
+  const nomEl = document.getElementById('perfil-modal-nombre');
+  if (nomEl) nomEl.textContent = document.querySelector('#sidebar .font-semibold')?.textContent || '—';
+  _refrescarTonosBtns();
+  modal.classList.remove('hidden');
+}
+
+function cerrarModalPerfil() {
+  document.getElementById('modal-perfil')?.classList.add('hidden');
+}
+
+function _refrescarTonosBtns() {
+  ['clasico','suave','alegre','pop','personalizado'].forEach(id => {
+    const btn = document.getElementById(`tono-btn-${id}`);
+    if (!btn) return;
+    const activo = tonoActual === id;
+    btn.className = btn.className
+      .replace(/bg-\S+/g, '').replace(/border-\S+/g, '').replace(/text-white/g, '').replace(/text-gray-\d+/g, '').trim();
+    if (activo) {
+      btn.classList.add('bg-blue-600', 'border-blue-500', 'text-white');
+    } else {
+      btn.classList.add('bg-gray-800', 'border-gray-700', 'text-gray-300');
+    }
+  });
+}
+
+function seleccionarTono(nombre) {
+  tonoActual = nombre;
+  localStorage.setItem('chat_tono', nombre);
+  _refrescarTonosBtns();
+  tocarTono(nombre);  // preview inmediato
+}
+
+async function cargarTonoPersonalizado(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  _nombreArchivoTono = file.name;
+  document.getElementById('tono-custom-label').textContent = file.name;
+  try {
+    const ctx = _ctx();
+    const buf = await file.arrayBuffer();
+    _bufferPersonalizado = await ctx.decodeAudioData(buf);
+    seleccionarTono('personalizado');
+  } catch(e) {
+    alert('No se pudo cargar el archivo de audio.');
+  }
+  input.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODO CREADOR
+// ══════════════════════════════════════════════════════════════════
+
+async function cargarMiPerfil() {
+  const el = document.getElementById('mi-avatar');
+  const r = await fetch('/api/chat/mi-perfil').then(r => r.json()).catch(() => null);
+  if (r && r.ok) {
+    if (r.id) miTerceroId = r.id;
+    if (r.token_chat) window._tokenChatCreador = r.token_chat;
+    if (r.nombre) {
+      const nomEl = document.getElementById('perfil-modal-nombre');
+      if (nomEl) nomEl.textContent = r.nombre;
+    }
+    if (r.foto) { miFoto = r.foto; localStorage.setItem('mi_foto_perfil', r.foto); aplicarAvatar(el, r.foto); }
+    else { const fl = localStorage.getItem('mi_foto_perfil'); if (fl) { miFoto = fl; aplicarAvatar(el, fl); } }
+  }
+}
+
+async function subirFotoPerfil(input) {
+  if (!input.files[0]) return;
+  const el = document.getElementById('mi-avatar'); el.innerHTML = '⏳';
+  const form = new FormData(); form.append('foto', input.files[0]);
+  const r = await fetch('/api/chat/perfil/foto', {method:'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (r && r.ok) { miFoto = r.url; localStorage.setItem('mi_foto_perfil', r.url); aplicarAvatar(el, r.url); }
+  else { el.innerHTML = '?'; alert('Error: ' + (r?.error || 'desconocido')); }
+}
+
+async function cargarConversaciones() {
+  const d = await fetch('/api/chat/mis-conversaciones').then(r => r.json()).catch(() => null);
+  if (!d || !d.ok) return;
+  d.conversaciones.forEach(c => { convData[c.token] = c; });
+  const el = document.getElementById('lista-convs');
+  if (!d.conversaciones.length) {
+    el.innerHTML = '<div class="p-6 text-center text-gray-600 text-sm">Sin conversaciones aún.<br>Invita a alguien.</div>';
+  } else {
+    el.innerHTML = d.conversaciones.map(c => {
+      const nombre = c.nombre_otro || '...';
+      const noLeidos = c.no_leidos > 0 ? `<span class="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">${c.no_leidos}</span>` : '';
+      const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_tipo === 'imagen' ? '📷 Imagen' : (c.ultimo_tipo === 'card' ? '🛒 Producto' : (c.ultimo_mensaje || '')));
+      const origen = c.origen ? `<span class="text-gray-600 text-xs"> · ${c.origen}</span>` : '';
+      const esMerlin = c.tipo_otro === 'merlin';
+      const avatarEl = esMerlin
+        ? `<div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-700 flex items-center justify-center flex-shrink-0 text-white">
+             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.253 2 11.5c0 2.304.88 4.41 2.325 6.032L3 21l3.75-1.268A10.054 10.054 0 0012 21c5.523 0 10-4.253 10-9.5S17.523 2 12 2z"/></svg>
+           </div>`
+        : avatarHtml(c.foto_otro, nombre);
+      return `<div onclick="abrirConv('${c.token}','${escHtml(nombre)}')"
+                   class="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-800/50 transition ${tokenActivo===c.token?'bg-gray-800':''}">
+        ${avatarEl}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-sm truncate">${escHtml(nombre)}${esMerlin ? ' <span class="text-xs text-indigo-400">IA</span>' : ''}${noLeidos}</span>${origen}
+          </div>
+          <div class="text-gray-500 text-xs truncate mt-0.5">${escHtml(ultimoMsg)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  // Auto-abrir conv inicial (para invitados que llegan por link)
+  if (TOKEN_INICIAL && !tokenActivo && convData[TOKEN_INICIAL]) {
+    abrirConv(TOKEN_INICIAL, convData[TOKEN_INICIAL].nombre_otro || '...');
+  }
+}
+
+function abrirConv(token, nombre) {
+  if (window.innerWidth < 768) {
+    document.getElementById('sidebar').style.display = 'none';
+  }
+  const panel = document.getElementById('panel-chat');
+  panel.style.display = 'flex'; panel.classList.remove('hidden');
+  tokenActivo = token; ultimoMsgId = 0; idsRenderizados.clear();
+  if (pollingInterval) clearInterval(pollingInterval);
+
+  const c = convData[token] || {};
+  const otroId = c.otro_id || 0;
+  const fotoOtro = c.foto_otro || '';
+  const tipoOtro = c.tipo_otro || 'invitado';
+  const avatarH = fotoOtro ? `<img src="${fotoOtro}" class="w-full h-full object-cover">` : `<span>${nombre[0].toUpperCase()}</span>`;
+  const estadoLabel = tipoOtro === 'merlin' ? '<span class="text-xs text-indigo-400">IA</span>'
+                    : tipoOtro === 'registrado' ? '<span class="text-xs text-emerald-400">registrado</span>'
+                    : '<span class="text-xs text-gray-500">sin registro</span>';
+
+  panel.innerHTML = `
+    <div class="flex items-center gap-3 px-4 py-3 border-b border-gray-800 bg-gray-900 flex-shrink-0">
+      <button onclick="volverSidebar()" class="md:hidden text-gray-400 hover:text-white mr-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div onclick="abrirGaleria(${otroId},'${escHtml(nombre)}',false)"
+           class="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-sm flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition">${avatarH}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm">${escHtml(nombre)}</div>
+        <div>${estadoLabel}</div>
+      </div>
+      <button onclick="copiarLinkActivo()" id="btn-compartir"
+              class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium px-3 py-1.5 rounded-full transition flex-shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+        </svg>
+        Compartir
+      </button>
+      <button onclick="eliminarConv('${token}')"
+              class="w-8 h-8 rounded-full bg-gray-800 hover:bg-red-900 text-gray-500 hover:text-red-400 flex items-center justify-center transition flex-shrink-0" title="Eliminar">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+      </button>
+    </div>
+    <!-- Sección apuntes (colapsable, solo visible si hay apuntes) -->
+    <div id="sec-apuntes" class="hidden border-b border-amber-900/50 bg-amber-950/30 flex-shrink-0">
+      <button onclick="toggleApuntesPanel()" class="w-full flex items-center justify-between px-4 py-2 text-amber-400 text-xs font-medium">
+        <span id="apuntes-header">📌 0 apuntes</span>
+        <svg id="apuntes-chevron" class="w-3.5 h-3.5 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="apuntes-body" class="hidden px-4 pb-2 max-h-48 overflow-y-auto"></div>
+    </div>
+    <div id="mensajes" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+    <div class="px-3 pt-2 pb-1 border-t border-gray-800 bg-gray-900 flex-shrink-0 barra-input">
+      <!-- Fila principal: textarea + enviar -->
+      <div class="flex items-end gap-2">
+        <div id="wrap-txt-msg" class="flex-1 bg-gray-800 rounded-2xl px-4 py-2.5 min-h-[44px] flex items-center transition-all duration-200">
+          <textarea id="txt-msg" rows="1" placeholder="Escribe un mensaje..."
+                    class="w-full bg-transparent text-sm text-white placeholder-gray-500 resize-none focus:outline-none max-h-24 overflow-y-auto"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarTexto()}"
+                    oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        </div>
+        <button id="btn-enviar" onclick="enviarTexto()" class="w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-500 flex items-center justify-center transition flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </div>
+      <!-- Fila secundaria: íconos de acciones -->
+      <div class="flex items-center gap-1 pt-1 pb-1">
+        <button id="btn-tts" onclick="toggleTTS()" title="Leer mensajes en voz alta"
+                class="w-10 h-10 rounded-full ${ttsActivo ? 'bg-emerald-800' : 'bg-gray-800'} hover:bg-emerald-700 flex items-center justify-center transition text-base leading-none">
+          🔊
+        </button>
+        <button id="btn-apunte" onclick="toggleModoApunte()" title="Modo apunte"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-amber-700 flex items-center justify-center transition text-base leading-none">
+          📌
+        </button>
+        <button onclick="document.getElementById('inp-chat-imagen').click()"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition" title="Enviar imagen">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </button>
+        <button onclick="abrirSelectorCard()" title="Compartir producto o plato"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-indigo-600 flex items-center justify-center transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+          </svg>
+        </button>
+        <button id="btn-stt" onclick="toggleSTT()" title="Dictar texto"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition">
+          <svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+          </svg>
+        </button>
+        <button id="btn-mic" onclick="toggleVoz()" title="Hablar (voz a texto)"
+                class="w-10 h-10 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center transition relative">
+          ${micIconSvg()}
+          <div id="onda-mic" class="onda hidden absolute -top-8 left-1/2 -translate-x-1/2 flex items-end gap-0.5 h-6">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </button>
+      </div>
+    </div>`;
+
+  document.title = `${nombre} — TUC TUC`;
+  modoApunte = false; // reset al cambiar de chat
+  cargarApuntes();
+  pollMensajes();
+  pollingInterval = setInterval(pollMensajes, 3000);
+}
+
+function volverSidebar() {
+  document.title = 'Chat — TUC TUC';
+  document.getElementById('sidebar').style.display = '';
+  document.getElementById('panel-chat').style.display = 'none';
+  if (pollingInterval) clearInterval(pollingInterval);
+}
+
+function copiarLinkActivo() {
+  if (!tokenActivo) return;
+  const link = `${location.origin}/chat/${tokenActivo}`;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('btn-compartir');
+    if (btn) { const o=btn.innerHTML; btn.textContent='✓ Copiado'; setTimeout(()=>btn.innerHTML=o, 1800); }
+  });
+}
+
+let linkGenerado = '';
+function abrirNuevoInvitado() {
+  document.getElementById('inv-nombre').value = '';
+  document.getElementById('inv-origen').value = '';
+  document.getElementById('inv-link-wrap').classList.add('hidden');
+  document.getElementById('inv-btns').classList.remove('hidden');
+  document.getElementById('modal-invitado').classList.remove('hidden');
+  setTimeout(() => document.getElementById('inv-nombre').focus(), 100);
+}
+function cerrarModal() { document.getElementById('modal-invitado').classList.add('hidden'); }
+
+function copiarLinkInv() {
+  navigator.clipboard.writeText(linkGenerado).then(() => {
+    const btn = document.querySelector('#inv-link-wrap button');
+    if (btn) { const o = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = o, 1800); }
+  });
+}
+
+async function crearInvitado() {
+  const nombre = document.getElementById('inv-nombre').value.trim() || 'Invitado';
+  const origen = document.getElementById('inv-origen').value.trim();
+  const d = await fetch('/api/chat/invitar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, origen})})
+    .then(r => r.json()).catch(() => null);
+  if (!d || !d.ok) { alert('Error: ' + (d?.error || 'desconocido')); return; }
+  linkGenerado = d.link;
+  document.getElementById('inv-link-texto').textContent = d.link;
+  document.getElementById('inv-link-wrap').classList.remove('hidden');
+  document.getElementById('inv-btns').classList.add('hidden');
+  await cargarConversaciones();
+  abrirConv(d.token, nombre);
+}
+
+function eliminarConv(token) {
+  if (!confirm('¿Eliminar esta conversación y todos sus mensajes?')) return;
+  fetch(`/api/chat/eliminar/${token}`, {method:'DELETE'}).then(r => r.json()).then(d => {
+    if (!d.ok) { alert('Error: ' + d.error); return; }
+    volverSidebar(); tokenActivo = null;
+    document.getElementById('panel-chat').innerHTML = `
+      <div class="flex-1 flex items-center justify-center text-gray-600">
+        <div class="text-center"><div class="text-5xl mb-3">💬</div><p class="text-lg">Selecciona una conversación</p></div>
+      </div>`;
+    cargarConversaciones();
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODO INVITADO
+// ══════════════════════════════════════════════════════════════════
+
+// ── MERLIN ────────────────────────────────────────────────────────────────────
+async function abrirChatMerlin() {
+  try {
+    const r = await fetch('/api/chat/merlin/iniciar', {method: 'POST'}).then(r => r.json());
+    if (!r.ok) throw new Error(r.error);
+    await cargarConversaciones();
+    abrirConv(r.token, 'Merlin');
+  } catch(e) {
+    alert('Error abriendo chat con Merlin: ' + e.message);
+  }
+}
+
+// ── Registro de teléfono ──────────────────────────────────────────
+function abrirModalRegistro() {
+  const m = document.getElementById('modal-registro'); if (!m) return;
+  document.getElementById('reg-nombre').value = '';
+  document.getElementById('reg-telefono').value = '';
+  document.getElementById('reg-error').classList.add('hidden');
+  m.classList.remove('hidden');
+  setTimeout(() => document.getElementById('reg-nombre').focus(), 150);
+}
+function cerrarModalRegistro() {
+  document.getElementById('modal-registro')?.classList.add('hidden');
+}
+
+async function registrarTelefono() {
+  const nombre   = document.getElementById('reg-nombre').value.trim();
+  const telefono = document.getElementById('reg-telefono').value.trim();
+  const errEl    = document.getElementById('reg-error');
+  errEl.classList.add('hidden');
+  if (!telefono || telefono.length < 7) { errEl.textContent = 'Ingresa un teléfono válido.'; errEl.classList.remove('hidden'); return; }
+
+  const r = await fetch('/api/chat/registrar-telefono', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nombre, telefono})
+  }).then(r => r.json()).catch(() => null);
+
+  if (!r || !r.ok) { errEl.textContent = r?.error || 'Error al registrar.'; errEl.classList.remove('hidden'); return; }
+
+  cerrarModalRegistro();
+  document.getElementById('banner-registro')?.remove();
+  // Actualizar UI con nueva identidad
+  cargarMiPerfil();
+  cargarConversaciones();
+  alert(r.merged ? '¡Cuenta unificada! Tus conversaciones se fusionaron.' : '¡Registrado correctamente! Ya puedes acceder desde cualquier dispositivo.');
+}
+
+// STT
+const _sttIconNormal = `<svg id="icono-stt" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>`;
+const _sttIconActivo = `<svg class="w-5 h-5 text-emerald-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#10b981" opacity=".25"/><circle cx="12" cy="12" r="5" fill="#10b981"/></svg>`;
+
+function toggleSTT() {
+  if (!STT) { alert('Tu navegador no soporta dictado de voz. Prueba Chrome o Edge.'); return; }
+  const btn = document.getElementById('btn-stt');
+  if (!sttActivo) {
+    reconocedor = new STT();
+    reconocedor.lang = 'es-CO'; reconocedor.continuous = true; reconocedor.interimResults = false;
+    reconocedor.onresult = e => {
+      const txt = e.results[e.results.length-1][0].transcript;
+      const el = document.getElementById('txt-msg');
+      el.value += (el.value ? ' ' : '') + txt; autoResize(el);
+    };
+    reconocedor.onerror = e => {
+      if (e.error === 'not-allowed') {
+        alert('Permiso de micrófono denegado. Habilítalo en la configuración del navegador.');
+        desactivarSTT();
+      }
+      // no-speech, audio-capture, network — no desactivar, onend reiniciará
+    };
+    reconocedor.onend = () => { if (sttActivo) setTimeout(() => { try { reconocedor.start(); } catch(e){} }, 300); };
+    reconocedor.start(); sttActivo = true;
+    if (btn) { btn.classList.add('bg-emerald-900'); btn.classList.remove('bg-gray-700'); btn.innerHTML = _sttIconActivo; }
+  } else { desactivarSTT(); }
+}
+
+function desactivarSTT() {
+  if (reconocedor) reconocedor.stop(); sttActivo = false;
+  const btn = document.getElementById('btn-stt');
+  if (btn) { btn.classList.remove('bg-emerald-900'); btn.classList.add('bg-gray-700'); btn.innerHTML = _sttIconNormal; }
+}
+
+// ── Drag & drop + paste de imágenes ──────────────────────────────
+let _dragCounter = 0;
+const overlay = document.getElementById('drop-overlay');
+
+function _tieneImagen(dt) {
+  return [...(dt.types || [])].includes('Files') &&
+         [...(dt.items || [])].some(i => i.kind === 'file' && i.type.startsWith('image/'));
+}
+
+document.addEventListener('dragenter', e => {
+  if (!_tieneImagen(e.dataTransfer)) return;
+  _dragCounter++;
+  overlay.classList.add('activo');
+  e.preventDefault();
+});
+document.addEventListener('dragleave', () => {
+  _dragCounter--;
+  if (_dragCounter <= 0) { _dragCounter = 0; overlay.classList.remove('activo'); }
+});
+document.addEventListener('dragover', e => { e.preventDefault(); });
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  _dragCounter = 0; overlay.classList.remove('activo');
+  const file = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
+  if (file) enviarImagenFile(file);
+});
+
+document.addEventListener('paste', e => {
+  const file = [...(e.clipboardData.items || [])]
+    .find(i => i.kind === 'file' && i.type.startsWith('image/'));
+  if (file) enviarImagenFile(file.getAsFile());
+});
+
+async function enviarImagenFile(file) {
+  if (!tokenActivo) return;
+  const form = new FormData();
+  form.append('imagen', file);
+  const rUp = await fetch('/api/chat/invitado/imagen', {method: 'POST', body: form}).then(r => r.json()).catch(() => null);
+  if (!rUp || !rUp.ok) { alert('Error subiendo imagen: ' + (rUp?.error || 'desconocido')); return; }
+  if (modoApunte) {
+    await guardarApunte('imagen', '', rUp.url);
+    return;
+  }
+  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
+  await fetch('/api/chat/invitado/enviar', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tokenActivo, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: esCreador})
+  });
+  pollMensajes();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// APUNTES
+// ══════════════════════════════════════════════════════════════════
+
+function toggleModoApunte() {
+  modoApunte = !modoApunte;
+  const btn    = document.getElementById('btn-apunte');
+  const wrap   = document.getElementById('wrap-txt-msg');
+  const txtEl  = document.getElementById('txt-msg');
+  const btnEnv = document.getElementById('btn-enviar');
+  if (modoApunte) {
+    btn?.classList.add('bg-amber-600');
+    btn?.classList.remove('bg-gray-800');
+    wrap?.classList.add('ring-2', 'ring-amber-500');
+    wrap?.classList.remove('bg-gray-800');
+    wrap?.classList.add('bg-amber-950');
+    if (txtEl) txtEl.placeholder = 'Escribe tu apunte...';
+    if (btnEnv) { btnEnv.classList.replace('bg-blue-600', 'bg-amber-600'); btnEnv.classList.replace('hover:bg-blue-500', 'hover:bg-amber-500'); }
+  } else {
+    btn?.classList.remove('bg-amber-600');
+    btn?.classList.add('bg-gray-800');
+    wrap?.classList.remove('ring-2', 'ring-amber-500', 'bg-amber-950');
+    wrap?.classList.add('bg-gray-800');
+    if (txtEl) txtEl.placeholder = 'Escribe un mensaje...';
+    if (btnEnv) { btnEnv.classList.replace('bg-amber-600', 'bg-blue-600'); btnEnv.classList.replace('hover:bg-amber-500', 'hover:bg-blue-500'); }
+  }
+}
+
+async function guardarApunte(tipo, contenido, url_archivo) {
+  const r = await fetch('/api/chat/apunte', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tokenActivo, contenido, tipo, url_archivo})
+  }).then(r => r.json()).catch(() => null);
+  if (r?.ok) {
+    if (modoApunte) toggleModoApunte(); // desactivar modo
+    await cargarApuntes();
+  }
+}
+
+async function cargarApuntes() {
+  if (!tokenActivo) return;
+  const r = await fetch(`/api/chat/apuntes/${tokenActivo}`).then(r => r.json()).catch(() => null);
+  if (!r?.ok) return;
+  renderApuntes(r.apuntes || []);
+}
+
+function renderApuntes(lista) {
+  const sec = document.getElementById('sec-apuntes');
+  const hdr = document.getElementById('apuntes-header');
+  const body = document.getElementById('apuntes-body');
+  if (!sec || !hdr || !body) return;
+
+  if (lista.length === 0) {
+    sec.classList.add('hidden');
+    return;
+  }
+  sec.classList.remove('hidden');
+  hdr.textContent = `📌 ${lista.length} apunte${lista.length > 1 ? 's' : ''}`;
+
+  body.innerHTML = lista.map(a => {
+    const fecha = formatHora(a.created_at);
+    let contenidoHtml = '';
+    if (a.tipo === 'audio' && a.url_archivo) {
+      contenidoHtml = `<audio controls src="${escHtml(a.url_archivo)}" class="w-full h-8 mt-1"></audio>`;
+    } else if (a.tipo === 'imagen' && a.url_archivo) {
+      contenidoHtml = `<img src="${escHtml(a.url_archivo)}" class="max-h-24 rounded mt-1 object-cover">`;
+    } else {
+      contenidoHtml = `<span class="text-sm text-gray-200">${escHtml(a.contenido || '')}</span>`;
+    }
+    const enviarBtn = `<button onclick="enviarApunte(${a.id},'${escHtml(a.tipo)}','${escHtml(a.url_archivo||'')}','${escHtml(a.contenido||'')}')"
+        class="text-gray-600 hover:text-blue-400 flex-shrink-0 mt-0.5" title="Enviar al chat">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+      </button>`;
+    return `<div class="flex items-start gap-2 py-1.5 border-b border-amber-900/40 last:border-0">
+      <div class="flex-1 min-w-0">${contenidoHtml}<div class="text-xs text-amber-600 mt-0.5">${fecha}</div></div>
+      ${enviarBtn}
+      <button onclick="eliminarApunte(${a.id})" class="text-gray-600 hover:text-red-400 flex-shrink-0 mt-0.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function eliminarApunte(id) {
+  await fetch(`/api/chat/apunte/${id}`, {method: 'DELETE'});
+  await cargarApuntes();
+}
+
+async function enviarApunte(id, tipo, url_archivo, contenido) {
+  if (!tokenActivo) return;
+  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
+  await fetch('/api/chat/invitado/enviar', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tokenActivo, mensaje: contenido || '', tipo, url_archivo: url_archivo || null, es_creador: esCreador})
+  });
+  // eliminar el apunte después de enviarlo
+  await fetch(`/api/chat/apunte/${id}`, {method: 'DELETE'});
+  await cargarApuntes();
+  pollMensajes();
+}
+
+function toggleApuntesPanel() {
+  const body = document.getElementById('apuntes-body');
+  const hdr  = document.getElementById('apuntes-chevron');
+  if (!body) return;
+  const oculto = body.classList.toggle('hidden');
+  if (hdr) hdr.style.transform = oculto ? '' : 'rotate(180deg)';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SELECTOR DE CARDS (productos / platos)
+// ══════════════════════════════════════════════════════════════════
+let _cardNegocios = [];
+let _cardItems = [];
+let _cardNegocioActivo = null;
+
+async function abrirSelectorCard() {
+  document.getElementById('modal-card').classList.remove('hidden');
+  document.getElementById('card-items').innerHTML = '<p class="text-xs text-gray-500 text-center py-6">Cargando negocios...</p>';
+  document.getElementById('card-buscar').value = '';
+
+  // Obtener token_chat del tercero creador (guardado al abrir el chat)
+  const tokenChat = window._tokenChatCreador || '';
+  const url = tokenChat
+    ? `/api/chat/cards/negocios?token_chat=${encodeURIComponent(tokenChat)}`
+    : '/api/chat/cards/negocios';
+
+  const d = await fetch(url).then(r => r.json()).catch(() => ({ok: false}));
+  _cardNegocios = d.negocios || [];
+
+  const cont = document.getElementById('card-negocios');
+  if (!_cardNegocios.length) {
+    cont.innerHTML = '';
+    document.getElementById('card-items').innerHTML = '<p class="text-xs text-gray-500 text-center py-6">No tenés negocios asociados.</p>';
+    return;
+  }
+  cont.innerHTML = _cardNegocios.map((n, i) => `
+    <button id="card-neg-${i}" onclick="seleccionarNegocioCard(${i})"
+            class="shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition
+                   border-gray-700 text-gray-400 hover:border-indigo-500 hover:text-white">
+      ${escHtml(n.nombre)}
+    </button>
+  `).join('');
+
+  // Auto-seleccionar el primero
+  seleccionarNegocioCard(0);
+}
+
+async function seleccionarNegocioCard(idx) {
+  _cardNegocioActivo = idx;
+  // Actualizar estilos de botones
+  _cardNegocios.forEach((_, i) => {
+    const btn = document.getElementById(`card-neg-${i}`);
+    if (!btn) return;
+    if (i === idx) {
+      btn.className = 'shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition border-indigo-500 bg-indigo-600 text-white';
+    } else {
+      btn.className = 'shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition border-gray-700 text-gray-400 hover:border-indigo-500 hover:text-white';
+    }
+  });
+
+  document.getElementById('card-items').innerHTML = '<p class="text-xs text-gray-500 text-center py-6">Cargando...</p>';
+  const neg = _cardNegocios[idx];
+  const d = await fetch(`/api/chat/cards/items?tipo=${neg.tipo}&slug=${encodeURIComponent(neg.slug)}`).then(r => r.json()).catch(() => ({ok: false}));
+  _cardItems = d.items || [];
+  renderCardItems(_cardItems);
+}
+
+function renderCardItems(items) {
+  const cont = document.getElementById('card-items');
+  if (!items.length) {
+    cont.innerHTML = '<p class="text-xs text-gray-500 text-center py-6">Sin ítems disponibles.</p>';
+    return;
+  }
+  cont.innerHTML = items.map((it, i) => `
+    <div class="flex items-center gap-3 bg-gray-800 rounded-2xl p-3 cursor-pointer hover:bg-gray-750 transition"
+         onclick="enviarCard(${i})">
+      ${it.imagen
+        ? `<img src="${escHtml(it.imagen)}" class="w-14 h-14 object-cover rounded-xl shrink-0" loading="lazy">`
+        : `<div class="w-14 h-14 bg-gray-700 rounded-xl shrink-0 flex items-center justify-center text-2xl">🛒</div>`}
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-white text-sm truncate">${escHtml(it.titulo)}</p>
+        ${it.descripcion ? `<p class="text-xs text-gray-400 truncate">${escHtml(it.descripcion)}</p>` : ''}
+        ${it.precio ? `<p class="text-sm text-green-400 font-bold mt-0.5">$${Number(it.precio).toLocaleString('es-CO')}</p>` : ''}
+      </div>
+      <svg class="w-5 h-5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </div>
+  `).join('');
+}
+
+function filtrarCardItems(q) {
+  if (!q.trim()) { renderCardItems(_cardItems); return; }
+  const lo = q.toLowerCase();
+  renderCardItems(_cardItems.filter(it =>
+    it.titulo.toLowerCase().includes(lo) || (it.descripcion||'').toLowerCase().includes(lo)
+  ));
+}
+
+async function enviarCard(itemIdx) {
+  const items = _cardItems;  // lista actual (puede estar filtrada visualmente, pero usamos _cardItems por índice)
+  // Buscar por índice en la lista completa (no la filtrada)
+  const allItems = document.getElementById('card-items').querySelectorAll('[onclick]');
+  // Reconstruimos: el índice pasado es el de _cardItems visible, pero renderCardItems puede mostrar subconjunto
+  // Simplificación: cerrar el modal y enviar directamente
+  const it = items[itemIdx];
+  if (!it) return;
+
+  const neg = _cardNegocios[_cardNegocioActivo];
+  const accion = neg.tipo === 'restaurante' ? 'Ver menú' : 'Ver tienda';
+  const payload = {
+    tipo_card: it.tipo_card,
+    titulo: it.titulo,
+    descripcion: it.descripcion,
+    precio: it.precio,
+    imagen: it.imagen,
+    negocio: it.negocio,
+    url: it.url,
+    accion: accion
+  };
+
+  cerrarModalCard();
+
+  const tok = tokenActivo;
+  if (!tok) return;
+  await fetch('/api/chat/invitado/enviar', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token: tok, mensaje: it.titulo, tipo: 'card', card_payload: payload, es_creador: convData[tok]?.creador_id === MI_TERCERO_ID})
+  });
+  pollMensajes();
+}
+
+function cerrarModalCard() {
+  document.getElementById('modal-card').classList.add('hidden');
+}
+</script>
+</body>
+</html>

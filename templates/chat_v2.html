@@ -427,7 +427,7 @@ async function _mostrarTraduccionEl(anchor, texto) {
   if (!traducido || !traduccionActiva) return;
   const div = document.createElement('div');
   div.className = 'trad-bubble';
-  div.style.cssText = 'font-size:11px;color:#94a3b8;font-style:italic;margin-top:4px;padding-left:2px;line-height:1.4';
+  div.style.cssText = 'font-size:14px;color:#ffffff;font-weight:600;margin-top:6px;padding-left:2px;line-height:1.4;display:block';
   div.textContent = '🌐 ' + traducido;
   anchor.appendChild(div);
 }

@@ -106,6 +106,13 @@ def _asegurar_schema_chat(conn):
         "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS nombre_invitado VARCHAR(200)",
         "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS invitacion_usada BOOLEAN DEFAULT FALSE",
         "ALTER TABLE conversaciones ADD COLUMN IF NOT EXISTS invitacion_usada_en TIMESTAMP",
+        # Fix secuencias SERIAL rotas (tabla preexistente sin DEFAULT en id)
+        "CREATE SEQUENCE IF NOT EXISTS mensajes_id_seq",
+        "ALTER TABLE mensajes ALTER COLUMN id SET DEFAULT nextval('mensajes_id_seq')",
+        "SELECT setval('mensajes_id_seq', COALESCE((SELECT MAX(id) FROM mensajes), 0) + 1, false)",
+        "CREATE SEQUENCE IF NOT EXISTS conversaciones_id_seq",
+        "ALTER TABLE conversaciones ALTER COLUMN id SET DEFAULT nextval('conversaciones_id_seq')",
+        "SELECT setval('conversaciones_id_seq', COALESCE((SELECT MAX(id) FROM conversaciones), 0) + 1, false)",
     ]:
         try:
             conn.execute(sql)

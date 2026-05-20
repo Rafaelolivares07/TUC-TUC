@@ -122,9 +122,14 @@ def checkin():
             return jsonify({'ok': True, 'token': existing['token'], 'reused': True})
         token = secrets.token_hex(24)
         conn.execute("UPDATE admin_agent_sesiones SET activo=FALSE WHERE cliente_id=%s", (cliente_id,))
+        alias_prev = conn.execute(
+            "SELECT alias FROM admin_agent_sesiones WHERE cliente_id=%s ORDER BY id DESC LIMIT 1",
+            (cliente_id,)
+        ).fetchone()
+        alias_heredado = alias_prev['alias'] if alias_prev else None
         conn.execute(
-            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd) VALUES (%s,%s,%s,%s,%s)",
-            (cliente_id, token, nombre, ip_local, ruta_bd)
+            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, alias) VALUES (%s,%s,%s,%s,%s,%s)",
+            (cliente_id, token, nombre, ip_local, ruta_bd, alias_heredado)
         )
         conn.commit()
         return jsonify({'ok': True, 'token': token})

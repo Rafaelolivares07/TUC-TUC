@@ -563,10 +563,11 @@ def agentes_page():
 # ── Permisos de reportes SAR por cliente ──────────────────────────────────────
 
 REPORTES_CATALOGO = [
-    {'id': 'inventario',       'nombre': 'Rotación de Inventario', 'categoria': 'Inventario'},
-    {'id': 'ventas_clientes',  'nombre': 'Ventas por Clientes',    'categoria': 'Ventas'},
-    {'id': 'consulta_cuentas', 'nombre': 'Consulta de Cuentas',    'categoria': 'Contabilidad'},
-    {'id': 'reg_ctas',         'nombre': 'Movimientos REG_CTAS',   'categoria': 'Contabilidad'},
+    {'id': 'inventario',        'nombre': 'Rotación de Inventario', 'categoria': 'Inventario'},
+    {'id': 'ventas_clientes',   'nombre': 'Ventas por Clientes',    'categoria': 'Ventas'},
+    {'id': 'consulta_cuentas',  'nombre': 'Consulta de Cuentas',    'categoria': 'Contabilidad'},
+    {'id': 'consulta_tercero',  'nombre': 'Consulta por Tercero',   'categoria': 'Contabilidad'},
+    {'id': 'reg_ctas',          'nombre': 'Movimientos REG_CTAS',   'categoria': 'Contabilidad'},
 ]
 
 

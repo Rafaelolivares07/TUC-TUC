@@ -415,14 +415,13 @@ async function _traducir(texto, desde = 'es', hacia = 'en') {
   } catch { return null; }
 }
 
-async function _mostrarTraduccion(msgId, texto) {
-  if (!traduccionActiva) return;
-  const anchor = document.getElementById(`trad-anchor-${msgId}`);
-  if (!anchor) return;
-  const traducido = await _traducir(texto);
-  if (!traducido) return;
-  // Verificar de nuevo por si se desactivó mientras esperaba
-  if (!traduccionActiva) return;
+async function _mostrarTraduccionEl(anchor, texto) {
+  if (!traduccionActiva || !anchor) return;
+  // Detectar idioma: si empieza con palabras inglesas comunes → en→es, si no → es→en
+  const esIngles = /^(the |a |an |i |you |he |she |we |they |this |that |it |is |are |was |were |in |on |at |to |of |and |or |but |with |for |yes|no |ok |hi |hello)/i.test(texto.trim());
+  const [desde, hacia] = esIngles ? ['en', 'es'] : ['es', 'en'];
+  const traducido = await _traducir(texto, desde, hacia);
+  if (!traducido || !traduccionActiva) return;
   const div = document.createElement('div');
   div.className = 'trad-bubble text-xs text-gray-400 italic mt-0.5 pl-1';
   div.textContent = '🌐 ' + traducido;
@@ -614,9 +613,8 @@ function renderMensajes(msgs, cont) {
         <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
           <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
           <div class="text-xs mt-0.5 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
-          ${!esMio ? `<div id="trad-anchor-${m.id}"></div>` : ''}
+          ${!esMio ? `<div class="trad-anchor" data-mid="${m.id}"></div>` : ''}
         </div>`;
-      if (!esMio && m.mensaje) _mostrarTraduccion(m.id, m.mensaje);
     }
     if (div.innerHTML) {
       cont.appendChild(div);
@@ -625,6 +623,11 @@ function renderMensajes(msgs, cont) {
       // TTS: leer mensajes ajenos nuevos (no al cargar el historial)
       if (!esInicio && !esMio && ttsActivo && m.tipo === 'texto' && m.mensaje) {
         leerEnVoz(m.mensaje);
+      }
+      // Traducción: llamar después del appendChild para que el anchor esté en DOM
+      if (!esMio && m.tipo === 'texto' && m.mensaje) {
+        const anchor = div.querySelector('.trad-anchor');
+        if (anchor) _mostrarTraduccionEl(anchor, m.mensaje);
       }
     }
   });
@@ -1175,13 +1178,15 @@ function toggleSTT() {
   };
 
   reconocedor.onend = () => {
-    // Asegura que quede el texto final (sin interim)
-    if (finalText) {
-      el.value = baseValue + (baseValue ? ' ' : '') + finalText.trim();
+    const texto = finalText.trim();
+    if (texto) {
+      el.value = baseValue + (baseValue ? ' ' : '') + texto;
       autoResize(el);
     }
     desactivarSTT();
-    el.focus();
+    // Auto-enviar si hay texto transcrito
+    if (texto) setTimeout(() => enviarTexto(), 120);
+    else el.focus();
   };
 
   reconocedor.start();

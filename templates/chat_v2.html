@@ -419,17 +419,20 @@ async function _traducir(texto, desde = 'es', hacia = 'en') {
 }
 
 async function _mostrarTraduccionEl(anchor, texto) {
+  console.log('[trad] activa='+traduccionActiva+' anchor='+!!anchor+' texto='+texto.substring(0,30));
   if (!traduccionActiva || !anchor) return;
-  // Detectar idioma: si empieza con palabras inglesas comunes → en→es, si no → es→en
   const esIngles = /^(the |a |an |i |you |he |she |we |they |this |that |it |is |are |was |were |in |on |at |to |of |and |or |but |with |for |yes|no |ok |hi |hello)/i.test(texto.trim());
   const [desde, hacia] = esIngles ? ['en', 'es'] : ['es', 'en'];
+  console.log('[trad] llamando API '+desde+'->'+hacia);
   const traducido = await _traducir(texto, desde, hacia);
+  console.log('[trad] resultado='+traducido);
   if (!traducido || !traduccionActiva) return;
   const div = document.createElement('div');
   div.className = 'trad-bubble';
   div.style.cssText = 'font-size:14px;color:#ffffff;font-weight:600;margin-top:6px;padding-left:2px;line-height:1.4;display:block';
   div.textContent = '🌐 ' + traducido;
   anchor.appendChild(div);
+  console.log('[trad] appendeado OK en anchor:', anchor);
 }
 
 // ── Enviar texto ──────────────────────────────────────────────────

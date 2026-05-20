@@ -267,7 +267,7 @@ const TOKEN_INICIAL  = "{{ token_inicial }}";
 let grabando = false, mediaRecorder = null, audioChunks = [];
 let modoApunte = false;
 let ttsActivo = localStorage.getItem('chat_tts') === '1';
-let traduccionActiva = localStorage.getItem('chat_traduccion') === '1';
+let traduccionActiva = localStorage.getItem('chat_traduccion') !== '0';
 const _tradCache = new Map();
 let _pendientesEstado = new Set();
 const idsRenderizados = new Set();
@@ -419,20 +419,16 @@ async function _traducir(texto, desde = 'es', hacia = 'en') {
 }
 
 async function _mostrarTraduccionEl(anchor, texto) {
-  console.log('[trad] activa='+traduccionActiva+' anchor='+!!anchor+' texto='+texto.substring(0,30));
   if (!traduccionActiva || !anchor) return;
-  const esIngles = /^(the |a |an |i |you |he |she |we |they |this |that |it |is |are |was |were |in |on |at |to |of |and |or |but |with |for |yes|no |ok |hi |hello)/i.test(texto.trim());
-  const [desde, hacia] = esIngles ? ['en', 'es'] : ['es', 'en'];
-  console.log('[trad] llamando API '+desde+'->'+hacia);
-  const traducido = await _traducir(texto, desde, hacia);
-  console.log('[trad] resultado='+traducido);
+  if (anchor.querySelector('.trad-bubble')) return;
+  const traducido = await _traducir(texto, 'en', 'es');
   if (!traducido || !traduccionActiva) return;
+  if (anchor.querySelector('.trad-bubble')) return;
   const div = document.createElement('div');
   div.className = 'trad-bubble';
-  div.style.cssText = 'font-size:14px;color:#ffffff;font-weight:600;margin-top:6px;padding-left:2px;line-height:1.4;display:block';
+  div.style.cssText = 'display:block;padding:3px 8px 3px 8px;margin-top:3px;font-size:12px;color:#a5b4fc;font-style:italic;line-height:1.5;border-left:2px solid rgba(99,102,241,0.6)';
   div.textContent = '🌐 ' + traducido;
   anchor.appendChild(div);
-  console.log('[trad] appendeado OK en anchor:', anchor);
 }
 
 // ── Enviar texto ──────────────────────────────────────────────────
@@ -616,12 +612,23 @@ function renderMensajes(msgs, cont) {
           <div class="text-xs px-3 pb-2 bg-gray-800 ${esMio ? 'text-right' : ''}"><span class="opacity-40">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
         </div>`;
     } else if (m.tipo !== 'sistema') {
-      div.innerHTML = `
-        <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
-          <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
-          <div class="text-xs mt-0.5 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
-          ${!esMio ? `<div class="trad-anchor" data-mid="${m.id}"></div>` : ''}
-        </div>`;
+      if (!esMio) {
+        div.className = `flex flex-col items-start ${animClass}`;
+        div.innerHTML = `
+          <div class="flex justify-start">
+            <div class="px-3 py-2 rounded-2xl bg-gray-800 rounded-bl-sm max-w-[75%]">
+              <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
+              <div class="text-xs mt-0.5"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+            </div>
+          </div>
+          <div class="trad-anchor" data-mid="${m.id}"></div>`;
+      } else {
+        div.innerHTML = `
+          <div class="px-3 py-2 rounded-2xl bg-blue-600 rounded-br-sm max-w-[75%]">
+            <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
+            <div class="text-xs mt-0.5 text-right"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+          </div>`;
+      }
     }
     if (div.innerHTML) {
       cont.appendChild(div);
@@ -905,9 +912,14 @@ async function cargarConversaciones() {
       </div>`;
     }).join('');
   }
-  // Auto-abrir conv inicial (para invitados que llegan por link)
+  // Auto-abrir conv inicial (invitados por link, o última conv usada)
   if (TOKEN_INICIAL && !tokenActivo && convData[TOKEN_INICIAL]) {
     abrirConv(TOKEN_INICIAL, convData[TOKEN_INICIAL].nombre_otro || '...');
+  } else if (!TOKEN_INICIAL && !tokenActivo) {
+    const lastToken = localStorage.getItem('chat_ultimo_token');
+    if (lastToken && convData[lastToken]) {
+      abrirConv(lastToken, convData[lastToken].nombre_otro || '...');
+    }
   }
 }
 
@@ -918,6 +930,7 @@ function abrirConv(token, nombre) {
   const panel = document.getElementById('panel-chat');
   panel.style.display = 'flex'; panel.classList.remove('hidden');
   tokenActivo = token; ultimoMsgId = 0; idsRenderizados.clear();
+  localStorage.setItem('chat_ultimo_token', token);
   if (pollingInterval) clearInterval(pollingInterval);
 
   const c = convData[token] || {};

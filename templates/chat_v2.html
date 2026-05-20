@@ -267,6 +267,8 @@ const TOKEN_INICIAL  = "{{ token_inicial }}";
 let grabando = false, mediaRecorder = null, audioChunks = [];
 let modoApunte = false;
 let ttsActivo = localStorage.getItem('chat_tts') === '1';
+let traduccionActiva = localStorage.getItem('chat_traduccion') === '1';
+const _tradCache = new Map();
 let _pendientesEstado = new Set();
 const idsRenderizados = new Set();
 let pollingInterval = null;
@@ -381,6 +383,50 @@ function leerEnVoz(texto) {
   const vozEs = voces.find(v => v.lang.startsWith('es') && v.localService) || voces.find(v => v.lang.startsWith('es'));
   if (vozEs) utt.voice = vozEs;
   speechSynthesis.speak(utt);
+}
+
+// ── Traducción automática (MyMemory API, gratis, sin clave) ──────
+function toggleTraduccion() {
+  traduccionActiva = !traduccionActiva;
+  localStorage.setItem('chat_traduccion', traduccionActiva ? '1' : '0');
+  const btn = document.getElementById('btn-traduccion');
+  if (!btn) return;
+  if (traduccionActiva) {
+    btn.classList.add('bg-blue-800'); btn.classList.remove('bg-gray-800');
+  } else {
+    btn.classList.remove('bg-blue-800'); btn.classList.add('bg-gray-800');
+    // Ocultar traducciones ya mostradas
+    document.querySelectorAll('.trad-bubble').forEach(el => el.remove());
+  }
+}
+
+async function _traducir(texto, desde = 'es', hacia = 'en') {
+  const key = `${desde}|${hacia}:${texto}`;
+  if (_tradCache.has(key)) return _tradCache.get(key);
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=${desde}|${hacia}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('network');
+    const data = await res.json();
+    const out = (data.responseData?.translatedText || '').trim();
+    if (!out || out === texto) throw new Error('empty');
+    _tradCache.set(key, out);
+    return out;
+  } catch { return null; }
+}
+
+async function _mostrarTraduccion(msgId, texto) {
+  if (!traduccionActiva) return;
+  const anchor = document.getElementById(`trad-anchor-${msgId}`);
+  if (!anchor) return;
+  const traducido = await _traducir(texto);
+  if (!traducido) return;
+  // Verificar de nuevo por si se desactivó mientras esperaba
+  if (!traduccionActiva) return;
+  const div = document.createElement('div');
+  div.className = 'trad-bubble text-xs text-gray-400 italic mt-0.5 pl-1';
+  div.textContent = '🌐 ' + traducido;
+  anchor.appendChild(div);
 }
 
 // ── Enviar texto ──────────────────────────────────────────────────
@@ -568,7 +614,9 @@ function renderMensajes(msgs, cont) {
         <div class="px-3 py-2 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
           <span class="text-sm whitespace-pre-wrap break-words">${escHtml(m.mensaje)}</span>
           <div class="text-xs mt-0.5 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+          ${!esMio ? `<div id="trad-anchor-${m.id}"></div>` : ''}
         </div>`;
+      if (!esMio && m.mensaje) _mostrarTraduccion(m.id, m.mensaje);
     }
     if (div.innerHTML) {
       cont.appendChild(div);
@@ -925,6 +973,10 @@ function abrirConv(token, nombre) {
         <button id="btn-tts" onclick="toggleTTS()" title="Leer mensajes en voz alta"
                 class="w-10 h-10 rounded-full ${ttsActivo ? 'bg-emerald-800' : 'bg-gray-800'} hover:bg-emerald-700 flex items-center justify-center transition text-base leading-none">
           🔊
+        </button>
+        <button id="btn-traduccion" onclick="toggleTraduccion()" title="Traducir mensajes al inglés"
+                class="w-10 h-10 rounded-full ${traduccionActiva ? 'bg-blue-800' : 'bg-gray-800'} hover:bg-blue-700 flex items-center justify-center transition text-base leading-none">
+          🌐
         </button>
         <button id="btn-apunte" onclick="toggleModoApunte()" title="Modo apunte"
                 class="w-10 h-10 rounded-full bg-gray-800 hover:bg-amber-700 flex items-center justify-center transition text-base leading-none">

@@ -409,58 +409,120 @@ function enviarImagen(input) {
   if (file) enviarImagenFile(file);
 }
 
-// ── Voz a texto (Web Speech API) ─────────────────────────────────
+// ── Audio + transcripción simultánea ────────────────────────────
+// MediaRecorder graba el archivo (sube a Cloudinary, queda en el chat).
+// SpeechRecognition corre en paralelo y acumula la transcripción.
+// Al terminar: el chat recibe el audio Y un mensaje de texto con la transcripción.
 const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let _uploadId = null, _chunkPromises = [];
+let _sttTranscript = '';
 
-function toggleVoz() {
+async function toggleVoz() {
   const btn  = document.getElementById('btn-mic');
   const onda = document.getElementById('onda-mic');
+  const tok  = tokenActivo;
 
-  if (vozActiva) {
-    if (vozRecognizer) try { vozRecognizer.stop(); } catch(e) {}
-    return;
-  }
-
-  if (!_SR) {
-    alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.');
-    return;
-  }
-
-  const r = new _SR();
-  r.lang = 'es-CO';
-  r.interimResults = true;
-  r.continuous = false;
-  vozRecognizer = r;
-
-  const el = document.getElementById('txt-msg');
-  const baseValue = el.value;
-
-  r.onresult = (e) => {
-    let interim = '', final = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) final += t;
-      else interim += t;
+  if (!vozActiva) {
+    // ── Arrancar ──────────────────────────────────────────────────
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    } catch(e) {
+      alert('No se pudo acceder al micrófono. Verifica los permisos.');
+      return;
     }
-    el.value = baseValue + (baseValue && (final || interim) ? ' ' : '') + (final || interim);
-    autoResize(el);
-  };
 
-  r.onerror = (e) => {
-    if (e.error === 'not-allowed') alert('Permiso de micrófono denegado. Habilítalo en la configuración del navegador.');
-    _vozDesactivar(btn, onda);
-  };
+    // MediaRecorder — igual que antes
+    _uploadId = crypto.randomUUID();
+    _chunkPromises = [];
+    let totalBytes = 0;
+    const mr = new MediaRecorder(stream, {audioBitsPerSecond: 32000});
+    vozRecognizer = mr; // reutilizamos la variable para el MediaRecorder
 
-  r.onend = () => { _vozDesactivar(btn, onda); };
+    mr.ondataavailable = e => {
+      if (!e.data || e.data.size === 0) return;
+      totalBytes += e.data.size;
+      const form = new FormData();
+      form.append('upload_id', _uploadId);
+      form.append('chunk', e.data, 'chunk.webm');
+      _chunkPromises.push(
+        fetch('/api/chat/audio/chunk', {method: 'POST', body: form}).catch(() => {})
+      );
+    };
 
-  vozActiva = true;
-  r.start();
-  btn.classList.replace('bg-gray-800', 'bg-red-600');
-  btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
-  if (onda) onda.classList.remove('hidden');
+    mr.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const transcript = _sttTranscript.trim();
+      if (totalBytes < 300) { _micDesactivar(btn, onda); return; }
+      btn.innerHTML = '⏳';
+      await Promise.all(_chunkPromises);
+      const form = new FormData();
+      form.append('upload_id', _uploadId);
+      const rUp = await fetch('/api/chat/audio/finalizar', {method: 'POST', body: form})
+        .then(r => r.json()).catch(() => null);
+      const esCreador = convData[tok]?.creador_id === MI_TERCERO_ID;
+      if (rUp && rUp.ok) {
+        if (modoApunte) {
+          await guardarApunte('audio', '', rUp.url);
+          if (transcript) await guardarApunte('texto', transcript, '');
+        } else {
+          // 1) Enviar audio
+          await fetch('/api/chat/invitado/enviar', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url, es_creador: esCreador})
+          });
+          // 2) Enviar transcripción si hay
+          if (transcript) {
+            await fetch('/api/chat/invitado/enviar', {
+              method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({token: tok, mensaje: '📝 ' + transcript, tipo: 'texto', es_creador: esCreador})
+            });
+          }
+          pollMensajes();
+        }
+      } else {
+        alert('Error subiendo audio: ' + (rUp?.error || 'desconocido'));
+      }
+      _micDesactivar(btn, onda);
+    };
+
+    mr.start(3000);
+
+    // SpeechRecognition — corre en paralelo sobre el mismo stream
+    _sttTranscript = '';
+    if (_SR) {
+      const sr = new _SR();
+      sr.lang = 'es-CO';
+      sr.interimResults = false;
+      sr.continuous = true;
+      sr.onresult = (e) => {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) _sttTranscript += e.results[i][0].transcript + ' ';
+        }
+      };
+      sr.onerror = () => {};  // silencioso — el audio sigue aunque falle STT
+      try { sr.start(); } catch(e) {}
+      // guardar ref para poder detenerlo
+      mr._srRef = sr;
+    }
+
+    vozActiva = true;
+    btn.classList.replace('bg-gray-800', 'bg-red-600');
+    btn.innerHTML = '<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+    if (onda) onda.classList.remove('hidden');
+
+  } else {
+    // ── Detener ───────────────────────────────────────────────────
+    const mr = vozRecognizer;
+    if (mr && mr._srRef) try { mr._srRef.stop(); } catch(e) {}
+    if (mr) mr.stop();
+    vozActiva = false;
+    btn.classList.replace('bg-red-600', 'bg-gray-800');
+    if (btn.classList.contains('hover:bg-red-500')) btn.classList.replace('hover:bg-red-500', 'hover:bg-gray-600');
+  }
 }
 
-function _vozDesactivar(btn, onda) {
+function _micDesactivar(btn, onda) {
   vozActiva = false;
   vozRecognizer = null;
   if (!btn) btn = document.getElementById('btn-mic');

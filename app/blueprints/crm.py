@@ -52,16 +52,6 @@ def chat_panel_v2():
                            token_inicial='')
 
 
-@bp.route('/chat3')
-def chat_panel_v3():
-    if 'usuario_id' not in session:
-        return redirect('/login')
-    mi_id = session.get('chat_tercero_id') or session.get('usuario_id')
-    return render_template('chat_v3.html',
-                           mi_tercero_id=mi_id,
-                           es_invitado=False,
-                           token_inicial='')
-
 
 @bp.route('/chat/<token>')
 def chat_invitado(token):

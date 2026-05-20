@@ -10,4 +10,6 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_DEPLOY_KEY }}
           script: |
-            sudo journalctl -u tuctuc -n 50 --no-pager
+            sudo systemctl cat tuctuc | grep -i database | head -5
+            cat /home/ubuntu/tuctucv2/.env 2>/dev/null | grep DATABASE | head -3
+            sudo cat /etc/environment 2>/dev/null | grep DATABASE | head -3

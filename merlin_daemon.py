@@ -49,7 +49,7 @@ LOCK_PORT      = 47835
 MAX_HISTORIAL  = 12
 MERLIN_NOMBRE  = 'Merlin'
 MERLIN_TIPO    = 'merlin'
-RAFAEL_ID      = 16
+RAFAEL_ID      = 38
 
 LOG_FILE       = r"C:\Users\RAFAEL OLIVARES\merlin_daemon.log"
 INBOX_FILE     = APP_DIR / 'merlin_inbox.json'
@@ -198,6 +198,7 @@ def get_or_create_merlin():
         row = cur.fetchone()
         if row:
             _merlin_id = row['id']
+            conn.commit()
             log(f"✓ Merlin encontrado: id={_merlin_id}")
             return _merlin_id
         cur.execute(
@@ -251,6 +252,7 @@ def get_pendientes(merlin_id):
                 'fecha':       r['fecha'],
                 'url_archivo': r.get('url_archivo'),
             })
+        conn.commit()
         return list(convs.values())
     finally:
         conn.close()
@@ -317,6 +319,7 @@ def get_contexto_usuario(creador_id, conv_id, merlin_id):
             ORDER BY m.fecha DESC LIMIT %s
         """, (merlin_id, nombre_usuario, conv_id, MAX_HISTORIAL))
         historial = list(reversed(cur.fetchall()))
+        conn.commit()
         return {
             'nombre':    nombre_usuario,
             'telefono':  telefono,
@@ -447,7 +450,7 @@ def llamar_claude(prompt):
 def _escribir_inbox(contenido):
     import json
     INBOX_FILE.write_text(
-        json.dumps({'contenido': contenido}, ensure_ascii=False),
+        json.dumps({'contenido': contenido, 'lang': 'en'}, ensure_ascii=False),
         encoding='utf-8'
     )
 
@@ -495,6 +498,7 @@ def get_captura_pendiente():
             ORDER BY id DESC LIMIT 1
         """)
         row = cur.fetchone()
+        conn.commit()
         if row:
             _escribir_inbox(row['contenido'])
             return True
@@ -517,13 +521,47 @@ def activar_claude():
         wshell = win32com.client.Dispatch("WScript.Shell")
         sent = False
 
-        if wshell.AppActivate(CLAUDE_WINDOW):
+        def _enviar_keys():
             time.sleep(0.4)
             wshell.SendKeys("__MERLIN__")
             wshell.SendKeys("{ENTER}")
+
+        # 1a. PID directo de WindowsTerminal.exe via PowerShell (siempre fresco)
+        try:
+            r = subprocess.run(
+                ['powershell', '-NoProfile', '-Command',
+                 'Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Id'],
+                capture_output=True, text=True, timeout=5
+            )
+            wt_pid_str = r.stdout.strip()
+            if wt_pid_str.isdigit():
+                wt_pid = int(wt_pid_str)
+                Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt").write_text(str(wt_pid))
+                if wshell.AppActivate(wt_pid):
+                    _enviar_keys()
+                    sent = True
+        except Exception:
+            pass
+
+        # 1b. PID guardado por chat_terminal_hook.py
+        if not sent:
+            pid_file = Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt")
+            if pid_file.exists():
+                try:
+                    saved_pid = int(pid_file.read_text().strip())
+                    if wshell.AppActivate(saved_pid):
+                        _enviar_keys()
+                        sent = True
+                except Exception:
+                    pass
+
+        # 2. Título exacto "Claude Code"
+        if not sent and wshell.AppActivate(CLAUDE_WINDOW):
+            _enviar_keys()
             sent = True
-        else:
-            # Fallback: buscar por WindowsTerminal
+
+        # 3. Enumerar ventanas con proceso WindowsTerminal o título con "claude"
+        if not sent:
             import win32process
             def _enum(hwnd, result):
                 if win32gui.IsWindowVisible(hwnd):
@@ -536,13 +574,38 @@ def activar_claude():
                 try:
                     _, pid = win32process.GetWindowThreadProcessId(hwnd)
                     if wshell.AppActivate(pid):
-                        time.sleep(0.4)
-                        wshell.SendKeys("__MERLIN__")
-                        wshell.SendKeys("{ENTER}")
+                        _enviar_keys()
                         sent = True
                         break
                 except Exception:
                     pass
+
+        # 4. Buscar por nombre de proceso WindowsTerminal.exe
+        if not sent:
+            try:
+                import win32process, win32api, win32con as _wc
+                def _enum2(hwnd, result):
+                    if not win32gui.IsWindowVisible(hwnd):
+                        return True
+                    try:
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        h = win32api.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
+                        name = win32process.GetModuleFileNameEx(h, 0)
+                        win32api.CloseHandle(h)
+                        if 'WindowsTerminal' in name or 'claude' in name.lower():
+                            result.append((hwnd, pid))
+                    except Exception:
+                        pass
+                    return True
+                candidates = []
+                win32gui.EnumWindows(_enum2, candidates)
+                for hwnd, pid in candidates:
+                    if wshell.AppActivate(pid):
+                        _enviar_keys()
+                        sent = True
+                        break
+            except Exception:
+                pass
 
         if sent:
             now = datetime.now()

@@ -105,31 +105,24 @@ def checkin():
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        # Si ya hay sesión activa con ping reciente (< 25s), reutilizarla
+        # Si ya existe un registro para este agente → actualizar, nunca insertar de nuevo
         existing = conn.execute(
-            "SELECT token FROM admin_agent_sesiones "
-            "WHERE cliente_id=%s AND activo=TRUE "
-            "AND ultimo_ping > NOW() - INTERVAL '25 seconds' "
-            "ORDER BY ultimo_ping DESC LIMIT 1",
+            "SELECT id, token FROM admin_agent_sesiones WHERE cliente_id=%s LIMIT 1",
             (cliente_id,)
         ).fetchone()
         if existing:
+            token = existing['token']
             conn.execute(
-                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s WHERE token=%s",
-                (nombre, ip_local, existing['token'])
+                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, activo=TRUE, ultimo_ping=NOW() WHERE cliente_id=%s",
+                (nombre, ip_local, ruta_bd, cliente_id)
             )
             conn.commit()
-            return jsonify({'ok': True, 'token': existing['token'], 'reused': True})
+            return jsonify({'ok': True, 'token': token, 'reused': True})
+        # Agente nuevo — primera vez que se conecta
         token = secrets.token_hex(24)
-        conn.execute("UPDATE admin_agent_sesiones SET activo=FALSE WHERE cliente_id=%s", (cliente_id,))
-        alias_prev = conn.execute(
-            "SELECT alias FROM admin_agent_sesiones WHERE cliente_id=%s ORDER BY id DESC LIMIT 1",
-            (cliente_id,)
-        ).fetchone()
-        alias_heredado = alias_prev['alias'] if alias_prev else None
         conn.execute(
-            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, alias) VALUES (%s,%s,%s,%s,%s,%s)",
-            (cliente_id, token, nombre, ip_local, ruta_bd, alias_heredado)
+            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd) VALUES (%s,%s,%s,%s,%s)",
+            (cliente_id, token, nombre, ip_local, ruta_bd)
         )
         conn.commit()
         return jsonify({'ok': True, 'token': token})

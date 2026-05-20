@@ -390,14 +390,17 @@ function toggleTraduccion() {
   traduccionActiva = !traduccionActiva;
   localStorage.setItem('chat_traduccion', traduccionActiva ? '1' : '0');
   const btn = document.getElementById('btn-traduccion');
-  if (!btn) return;
-  if (traduccionActiva) {
-    btn.classList.add('bg-blue-800'); btn.classList.remove('bg-gray-800');
-  } else {
-    btn.classList.remove('bg-blue-800'); btn.classList.add('bg-gray-800');
-    // Ocultar traducciones ya mostradas
-    document.querySelectorAll('.trad-bubble').forEach(el => el.remove());
+  if (btn) {
+    if (traduccionActiva) {
+      btn.classList.add('bg-blue-800'); btn.classList.remove('bg-gray-800');
+    } else {
+      btn.classList.remove('bg-blue-800'); btn.classList.add('bg-gray-800');
+    }
   }
+  // Mostrar u ocultar con CSS — sin borrar del DOM
+  document.querySelectorAll('.trad-bubble').forEach(el => {
+    el.style.display = traduccionActiva ? '' : 'none';
+  });
 }
 
 async function _traducir(texto, desde = 'es', hacia = 'en') {
@@ -423,7 +426,8 @@ async function _mostrarTraduccionEl(anchor, texto) {
   const traducido = await _traducir(texto, desde, hacia);
   if (!traducido || !traduccionActiva) return;
   const div = document.createElement('div');
-  div.className = 'trad-bubble text-xs text-gray-400 italic mt-0.5 pl-1';
+  div.className = 'trad-bubble';
+  div.style.cssText = 'font-size:11px;color:#94a3b8;font-style:italic;margin-top:4px;padding-left:2px;line-height:1.4';
   div.textContent = '🌐 ' + traducido;
   anchor.appendChild(div);
 }
@@ -624,8 +628,8 @@ function renderMensajes(msgs, cont) {
       if (!esInicio && !esMio && ttsActivo && m.tipo === 'texto' && m.mensaje) {
         leerEnVoz(m.mensaje);
       }
-      // Traducción: solo mensajes nuevos (igual que TTS, no al cargar historial)
-      if (!esInicio && !esMio && m.tipo === 'texto' && m.mensaje) {
+      // Traducción: todos los mensajes visibles (historial y nuevos)
+      if (!esMio && m.tipo === 'texto' && m.mensaje) {
         const anchor = div.querySelector('.trad-anchor');
         if (anchor) _mostrarTraduccionEl(anchor, m.mensaje);
       }

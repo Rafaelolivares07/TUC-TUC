@@ -2440,7 +2440,10 @@ async function cargarConversaciones() {
     if (!lista) return;
     lista.innerHTML = '';
     (data.conversaciones || []).forEach(c => {
-      const avatarEl = avatarHtml(c.foto, c.nombre, 40, c.es_ia);
+      const nombre = c.nombre_otro || c.nombre || 'Sin nombre';
+      const foto   = c.foto_otro   || c.foto   || '';
+      const esIa   = (c.tipo_otro  || c.tipo_tercero || '') === 'ia';
+      const avatarEl = avatarHtml(foto, nombre, 40, esIa);
       const ultimoTexto = c.ultimo_mensaje
         ? (c.ultimo_mensaje.length > 42 ? c.ultimo_mensaje.slice(0, 42) + '…' : c.ultimo_mensaje)
         : '';
@@ -2449,16 +2452,16 @@ async function cargarConversaciones() {
         : '';
       const item = document.createElement('div');
       item.className = 'conv-item';
-      item.dataset.nombre = (c.nombre || '').toLowerCase();
+      item.dataset.nombre = nombre.toLowerCase();
       item.dataset.token = c.token;
       item.innerHTML = `
         <div class="conv-avatar">${avatarEl}</div>
         <div class="conv-info">
-          <div class="conv-nombre">${c.nombre || 'Sin nombre'}</div>
+          <div class="conv-nombre">${nombre}</div>
           <div class="conv-ultimo">${ultimoTexto}</div>
         </div>
         ${badge}`;
-      item.addEventListener('click', () => abrirConv(c.token, c.nombre));
+      item.addEventListener('click', () => abrirConv(c.token, nombre));
       lista.appendChild(item);
     });
 
@@ -2480,17 +2483,16 @@ async function cargarMiPerfil() {
     const r = await fetch('/api/chat/mi-perfil');
     const data = await r.json();
     if (!data.ok) return;
-    const p = data.perfil;
-    miNombre = p.nombre || 'Yo';
-    miId = p.id;
+    miNombre = data.nombre || 'Yo';
+    miId = data.id;
     const avatarEl = document.getElementById('mi-avatar');
-    if (avatarEl) avatarEl.innerHTML = avatarHtml(p.foto, p.nombre, 40, false);
+    if (avatarEl) avatarEl.innerHTML = avatarHtml(data.foto, data.nombre, 40, false);
     const nomEl = document.getElementById('perfil-modal-nombre');
-    if (nomEl) nomEl.textContent = p.nombre || '';
+    if (nomEl) nomEl.textContent = data.nombre || '';
     const telEl = document.getElementById('perfil-modal-tel');
-    if (telEl) telEl.textContent = p.telefono || '';
+    if (telEl) telEl.textContent = data.telefono || '';
     const fotoEl = document.getElementById('perfil-modal-foto');
-    if (fotoEl) fotoEl.innerHTML = avatarHtml(p.foto, p.nombre, 80, false);
+    if (fotoEl) fotoEl.innerHTML = avatarHtml(data.foto, data.nombre, 80, false);
   } catch (e) { console.error('cargarMiPerfil', e); }
 }
 

@@ -83,6 +83,7 @@ class App(tk.Tk):
         self._proc_tunnel = None
         self._proc_named_tunnel = None
         self._proc_remote = None
+        self._proc_ssh = None
         self._rows_din  = []
         self._build()
         self.protocol("WM_DELETE_WINDOW", self._cerrar)
@@ -197,6 +198,27 @@ class App(tk.Tk):
     # ── Lógica arranque ───────────────────────────────────────────────────
 
     def _arrancar_sistema(self):
+        # 0. Túnel SSH → BD de producción (localhost:5435 → AWS:5432)
+        self.after(0, lambda: self._set_estado("Abriendo túnel SSH a producción...", AMAR))
+        try:
+            self._proc_ssh = subprocess.Popen(
+                ["ssh",
+                 "-i", r"C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem",
+                 "-L", "5435:localhost:5432",
+                 "-N",
+                 "-o", "StrictHostKeyChecking=no",
+                 "-o", "ServerAliveInterval=30",
+                 "-o", "ServerAliveCountMax=3",
+                 "-o", "ExitOnForwardFailure=yes",
+                 "ubuntu@18.217.231.167"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            time.sleep(2)  # dar tiempo para que el túnel se establezca
+        except Exception:
+            pass  # si ssh no está disponible, el daemon seguirá reintentando
+
         # 1. Flask
         if flask_ya_corre():
             self.after(0, lambda: self._set_estado("Flask ya estaba corriendo", AMAR))
@@ -301,6 +323,8 @@ class App(tk.Tk):
     # ── Acciones ──────────────────────────────────────────────────────────
 
     def _detener(self):
+        if self._proc_ssh:
+            self._proc_ssh.terminate()
         if self._proc_remote:
             self._proc_remote.terminate()
         if self._proc_named_tunnel:

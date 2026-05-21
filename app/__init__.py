@@ -97,11 +97,13 @@ def create_app():
                 return tienda_publica(slug)
             return restaurante_publico(slug)
 
-    if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        from apscheduler.schedulers.background import BackgroundScheduler
-        scheduler = BackgroundScheduler(daemon=True)
-        scheduler.add_job(ejecutar_programaciones_job, 'interval', minutes=1,
-                          args=[app], id='programaciones_contables')
-        scheduler.start()
+    # scheduler contabilidad desactivado — colgaba el worker de gunicorn
+    # reactivar cuando se confirme que las tablas existen y no hay locks
+    # if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    #     from apscheduler.schedulers.background import BackgroundScheduler
+    #     scheduler = BackgroundScheduler(daemon=True)
+    #     scheduler.add_job(ejecutar_programaciones_job, 'interval', minutes=1,
+    #                       args=[app], id='programaciones_contables')
+    #     scheduler.start()
 
     return app

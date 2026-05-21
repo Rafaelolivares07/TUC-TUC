@@ -1320,6 +1320,7 @@ function abrirConv(token, nombre) {
   panel.style.display = 'flex';
 
   tokenActivo = token;
+  window._convToken = token;
   ultimoMsgId = 0;
   idsRenderizados.clear();
   localStorage.setItem('chat_ultimo_token', token);
@@ -2439,7 +2440,9 @@ async function cargarConversaciones() {
     const lista = document.getElementById('lista-convs');
     if (!lista) return;
     lista.innerHTML = '';
+    convData = {};
     (data.conversaciones || []).forEach(c => {
+      convData[c.token] = c;
       const nombre = c.nombre_otro || c.nombre || 'Sin nombre';
       const foto   = c.foto_otro   || c.foto   || '';
       const esIa   = (c.tipo_otro  || c.tipo_tercero || '') === 'ia';
@@ -2533,9 +2536,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── 6D: Toggles + apuntes + STT ──────────────────────────────────────────
 
-let ttsActivo = false;
-let traduccionActiva = false;
-let modoApunte = false;
 let _tradCache = {};
 
 function toggleTTS() {

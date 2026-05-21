@@ -18,6 +18,8 @@ bp = Blueprint('crm', __name__)
 _AUDIO_TMP = os.path.join(tempfile.gettempdir(), 'tuctuc_audio_chunks')
 os.makedirs(_AUDIO_TMP, exist_ok=True)
 
+_schema_chat_listo = False
+
 
 def job_verificar_recordatorios():
     """Tarea APScheduler — verifica recordatorios pendientes"""
@@ -83,6 +85,10 @@ def chat_invitado(token):
 # ── Helpers de schema ─────────────────────────────────────────────────────
 
 def _asegurar_schema_chat(conn):
+    global _schema_chat_listo
+    if _schema_chat_listo:
+        return
+    _schema_chat_listo = True
     for sql in [
         """CREATE TABLE IF NOT EXISTS conversaciones (
             id SERIAL PRIMARY KEY,

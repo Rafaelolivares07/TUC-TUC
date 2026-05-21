@@ -46,7 +46,7 @@ def chat_panel_v2():
     if 'usuario_id' not in session:
         return redirect('/login')
     mi_id = session.get('chat_tercero_id') or session.get('usuario_id')
-    return render_template('chat_v2.html',
+    return render_template('chat_v3.html',
                            mi_tercero_id=mi_id,
                            es_invitado=False,
                            token_inicial='')

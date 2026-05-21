@@ -2433,10 +2433,12 @@ document.addEventListener('paste', e => {
 // ── 6C: Sidebar + perfil ──────────────────────────────────────────────────
 
 async function cargarConversaciones() {
+  const _r = await fetch('/api/chat/mis-conversaciones').catch(e => { console.error('[conv] fetch error', e); return null; });
+  if (!_r) return;
+  console.log('[conv] status', _r.status, _r.url);
+  const data = await _r.json().catch(e => { console.error('[conv] json error', e); return null; });
+  if (!data || !data.ok) return;
   try {
-    const r = await fetch('/api/chat/mis-conversaciones');
-    const data = await r.json();
-    if (!data.ok) return;
     const lista = document.getElementById('lista-convs');
     if (!lista) return;
     lista.innerHTML = '';
@@ -2482,10 +2484,12 @@ async function cargarConversaciones() {
 }
 
 async function cargarMiPerfil() {
+  const _r = await fetch('/api/chat/mi-perfil').catch(e => { console.error('[perfil] fetch error', e); return null; });
+  if (!_r) return;
+  console.log('[perfil] status', _r.status, _r.url);
+  const data = await _r.json().catch(e => { console.error('[perfil] json error', e); return null; });
+  if (!data || !data.ok) return;
   try {
-    const r = await fetch('/api/chat/mi-perfil');
-    const data = await r.json();
-    if (!data.ok) return;
     miNombre = data.nombre || 'Yo';
     miId = data.id;
     const avatarEl = document.getElementById('mi-avatar');

@@ -446,7 +446,7 @@ def _calcular_proximo(frecuencia, dia_semana, dia_mes, hora_val, desde=None):
 
 def ejecutar_programaciones_job(app):
     with app.app_context():
-        from .db import get_db_connection
+        from app.db import get_db_connection
         try:
             conn = get_db_connection()
             _asegurar_tablas(conn)

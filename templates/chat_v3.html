@@ -2438,6 +2438,7 @@ async function cargarConversaciones() {
   console.log('[conv] status', _r.status, _r.url);
   const data = await _r.json().catch(e => { console.error('[conv] json error', e); return null; });
   if (!data || !data.ok) return;
+  console.log('[conv] total:', (data.conversaciones||[]).length, data.conversaciones?.map(c=>c.nombre_otro));
   try {
     const lista = document.getElementById('lista-convs');
     if (!lista) return;

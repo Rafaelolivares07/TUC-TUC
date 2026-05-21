@@ -2540,8 +2540,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── 6D: Toggles + apuntes + STT ──────────────────────────────────────────
 
-let _tradCache = {};
-
 function toggleTTS() {
   ttsActivo = !ttsActivo;
   const btn = document.getElementById('btn-tts');
@@ -2659,7 +2657,6 @@ async function eliminarApunte(id) {
 // ── STT ──────────────────────────────────────────────────────────────────
 
 let _sttRec = null;
-let sttActivo = false;
 
 function toggleSTT() {
   if (sttActivo) {
@@ -2788,8 +2785,6 @@ function cerrarFotoGrande() {
 
 // ── Card selector ─────────────────────────────────────────────────────────
 
-let _cardNegocios = [];
-let _cardItems = [];
 let _cardNegocioSlug = null;
 let _cardNegocioTipo = null;
 

@@ -264,6 +264,24 @@
                 </label>
             </div>
 
+            <!-- Vista en móvil -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-1">Vista en móvil</h3>
+                <p class="text-xs text-gray-400 mb-3">Columnas de productos en pantallas pequeñas.</p>
+                <div class="flex gap-3">
+                    <button onclick="cambiarMovilCols(1)" id="btn-mc-1"
+                        class="mc-btn flex-1 flex flex-col items-center gap-1 py-4 rounded-xl border-2 transition {{ 'border-rose-500 bg-rose-50' if (tienda.movil_cols or 2) == 1 else 'border-gray-200' }}">
+                        <span class="text-xl">▬</span>
+                        <span class="text-xs font-semibold text-gray-700">1 columna</span>
+                    </button>
+                    <button onclick="cambiarMovilCols(2)" id="btn-mc-2"
+                        class="mc-btn flex-1 flex flex-col items-center gap-1 py-4 rounded-xl border-2 transition {{ 'border-rose-500 bg-rose-50' if (tienda.movil_cols or 2) == 2 else 'border-gray-200' }}">
+                        <span class="text-xl">▬▬</span>
+                        <span class="text-xs font-semibold text-gray-700">2 columnas</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Vista en escritorio -->
             <div class="mb-4">
                 <h3 class="font-bold text-gray-700 mb-1">Vista en escritorio</h3>
@@ -1594,6 +1612,27 @@ async function subirHeader(input) {
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+async function cambiarMovilCols(cols) {
+    try {
+        const r = await fetch(BASE + '/movil-cols', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({cols})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            [1, 2].forEach(c => {
+                const btn = document.getElementById('btn-mc-' + c);
+                if (!btn) return;
+                btn.classList.remove('border-rose-500', 'bg-rose-50', 'border-gray-200');
+                btn.classList.add(c === cols ? 'border-rose-500' : 'border-gray-200');
+                btn.classList.toggle('bg-rose-50', c === cols);
+            });
+            toast('Vista en móvil actualizada');
+        } else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
 }
 
 async function cambiarDesktopLayout(layout) {

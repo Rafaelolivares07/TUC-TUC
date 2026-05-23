@@ -164,6 +164,7 @@ def _crear_tablas(conn):
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS desktop_layout VARCHAR(20) DEFAULT 'movil'",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS movil_cols SMALLINT DEFAULT 2",
     ]
     for sql in alters:
         try:
@@ -936,6 +937,24 @@ def api_tienda_descripcion(slug):
     conn = get_db_connection()
     try:
         conn.execute("UPDATE tiendas SET descripcion = %s WHERE slug = %s", (descripcion, slug))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/movil-cols', methods=['POST'])
+def api_tienda_movil_cols(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    cols = (request.get_json() or {}).get('cols', 2)
+    if cols not in (1, 2):
+        cols = 2
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE tiendas SET movil_cols = %s WHERE slug = %s", (cols, slug))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

@@ -151,10 +151,12 @@
     </div>
 
     <!-- Grid productos -->
+    {% set mc = tienda.movil_cols or 2 %}
+    {% set dl = tienda.desktop_layout or 'movil' %}
     <div id="grid-productos" class="px-4 grid gap-3
-        {% if tienda.desktop_layout == 'ampliado' %}grid-cols-2 md:grid-cols-3
-        {% elif tienda.desktop_layout == 'galeria' %}grid-cols-2 md:grid-cols-3 lg:grid-cols-4
-        {% else %}grid-cols-2{% endif %}"></div>
+        {% if dl == 'ampliado' %}grid-cols-{{ mc }} md:grid-cols-3
+        {% elif dl == 'galeria' %}grid-cols-{{ mc }} md:grid-cols-3 lg:grid-cols-4
+        {% else %}grid-cols-{{ mc }}{% endif %}"></div>
 
     <!-- Sin productos -->
     <div id="sin-productos" class="hidden text-center py-16 px-4">

@@ -81,7 +81,7 @@ def api_config_get(tercero_id):
         config = _get_config(conn, tercero_id)
         try:
             catalogo = conn.execute(
-                "SELECT id, nombre, codigo, icono FROM metodos_pago_catalogo WHERE activo=TRUE ORDER BY orden, id"
+                "SELECT id, nombre, codigo, icono, grupo FROM metodos_pago_catalogo WHERE activo=TRUE ORDER BY orden, id"
             ).fetchall()
             catalogo = [dict(m) for m in catalogo]
         except Exception:

@@ -170,6 +170,8 @@ def _crear_tablas(conn):
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi Celular', 'nequi_movil', '📱', 22, 'nequi') ON CONFLICT (codigo) DO NOTHING",
         "UPDATE metodos_pago_catalogo SET grupo = 'nequi' WHERE codigo = 'nequi' AND grupo IS NULL",
+        "UPDATE metodos_pago_catalogo SET activo = FALSE WHERE codigo = 'nequi'",
+        """UPDATE config_negocio SET metodos_pago = array_replace(metodos_pago, 'nequi', 'nequi_movil') WHERE 'nequi' = ANY(metodos_pago)""",
     ]
     for sql in alters:
         try:

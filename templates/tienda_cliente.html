@@ -286,7 +286,20 @@ async function cargarConfig() {
             selEntrega(tipoEntrega);
         }
         renderMetodosPago(d.metodos_pago || []);
+        precargarImagenesPago(d.metodos_info || {});
     } catch(e) {}
+}
+
+function precargarImagenesPago(metodos_info) {
+    const old = document.getElementById('mp-preloader');
+    if (old) old.remove();
+    const imgs = Object.values(metodos_info).filter(i => i.imagen);
+    if (!imgs.length) return;
+    const c = document.createElement('div');
+    c.id = 'mp-preloader';
+    c.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;overflow:hidden;pointer-events:none;';
+    imgs.forEach(i => { const img = new Image(); img.src = i.imagen; c.appendChild(img); });
+    document.body.appendChild(c);
 }
 
 const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);

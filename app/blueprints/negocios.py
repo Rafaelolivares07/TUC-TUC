@@ -7,7 +7,6 @@ bp = Blueprint('negocios', __name__)
 MODALIDADES_CATALOGO = [
     {'codigo': 'domicilio', 'nombre': 'Domicilio',    'icono': '🛵', 'desc': 'El pedido llega a la dirección del cliente'},
     {'codigo': 'recoger',   'nombre': 'Para recoger', 'icono': '🏪', 'desc': 'El cliente recoge en el local'},
-    {'codigo': 'mesa',      'nombre': 'Mesa',         'icono': '🍽️', 'desc': 'Pedidos en mesa (restaurantes)'},
 ]
 
 

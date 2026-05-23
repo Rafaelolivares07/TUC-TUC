@@ -198,12 +198,25 @@ function renderMetodoFila(m, activos, enGrupo=false) {
   </div>`;
 }
 
-function toggleMetodo(codigo, nuevoEstado) {
+async function toggleMetodo(codigo, nuevoEstado) {
   if (nuevoEstado) {
     if (!activosMetodos.includes(codigo)) activosMetodos.push(codigo);
   } else {
     activosMetodos = activosMetodos.filter(c => c !== codigo);
   }
+  const modalidades = [...document.querySelectorAll('input[name="modalidad"]:checked')].map(cb => cb.value);
+  const aviso_pedido = document.getElementById('aviso-pedido').value.trim();
+  try {
+    await fetch(`/api/negocio/${TERCERO_ID}/config`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        modalidades: modalidades.length ? modalidades : ['domicilio', 'recoger'],
+        metodos_pago: activosMetodos,
+        aviso_pedido
+      })
+    });
+  } catch(e) {}
   fetch(`/api/negocio/${TERCERO_ID}/config`)
     .then(r => r.json())
     .then(d => { metodos_info_actual = d.metodos_info || {}; renderMetodos(d.catalogo_metodos, activosMetodos); });

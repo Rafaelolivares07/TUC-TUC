@@ -130,6 +130,7 @@
                     📦 Inventario
                 </a>
                 {% endif %}
+                {% if restaurante.tercero_id %}<a href="/admin/negocio/{{ restaurante.tercero_id }}/config" class="tab-btn flex items-center gap-1">⚙️ Configuración</a>{% endif %}
                 <a href="/admin/contactos" class="tab-btn flex items-center gap-1">
                     👥 Contactos
                 </a>

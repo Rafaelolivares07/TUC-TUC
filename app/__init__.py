@@ -33,6 +33,7 @@ def create_app():
     from .blueprints.pautas import bp as pautas_bp
     from .blueprints.agenda import bp as agenda_bp
     from .blueprints.chat import bp as chat_bp
+    from .blueprints.negocios import bp as negocios_bp, init_config_negocio
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -49,6 +50,16 @@ def create_app():
     app.register_blueprint(pautas_bp)
     app.register_blueprint(agenda_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(negocios_bp)
+
+    # Crear tabla config_negocio al arrancar (fuera de request handlers)
+    try:
+        from .db import get_db_connection
+        _conn = get_db_connection()
+        init_config_negocio(_conn)
+        _conn.close()
+    except Exception as _e:
+        print(f'[negocios] init: {_e}')
 
     @app.before_request
     def _cliente_subdominio():

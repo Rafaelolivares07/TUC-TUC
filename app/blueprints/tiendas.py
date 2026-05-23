@@ -163,6 +163,7 @@ def _crear_tablas(conn):
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN nombre DROP NOT NULL",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS desktop_layout VARCHAR(20) DEFAULT 'movil'",
     ]
     for sql in alters:
         try:
@@ -935,6 +936,24 @@ def api_tienda_descripcion(slug):
     conn = get_db_connection()
     try:
         conn.execute("UPDATE tiendas SET descripcion = %s WHERE slug = %s", (descripcion, slug))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/desktop-layout', methods=['POST'])
+def api_tienda_desktop_layout(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    layout = (request.get_json() or {}).get('layout', 'movil')
+    if layout not in ('movil', 'ampliado', 'galeria'):
+        layout = 'movil'
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE tiendas SET desktop_layout = %s WHERE slug = %s", (layout, slug))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

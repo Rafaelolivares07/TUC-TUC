@@ -89,7 +89,7 @@
     <img id="zoom-img" src="" class="max-w-[90vw] max-h-[85vh] rounded-xl shadow-2xl">
 </div>
 
-<div class="max-w-lg mx-auto">
+<div class="{{ 'max-w-lg' if (tienda.desktop_layout or 'movil') == 'movil' else ('max-w-5xl' if tienda.desktop_layout == 'ampliado' else 'max-w-7xl') }} mx-auto">
 
     <!-- Header / Portada -->
     {% if tienda.imagen_header %}
@@ -151,7 +151,10 @@
     </div>
 
     <!-- Grid productos -->
-    <div id="grid-productos" class="px-4 grid grid-cols-2 gap-3"></div>
+    <div id="grid-productos" class="px-4 grid gap-3
+        {% if tienda.desktop_layout == 'ampliado' %}grid-cols-2 md:grid-cols-3
+        {% elif tienda.desktop_layout == 'galeria' %}grid-cols-2 md:grid-cols-3 lg:grid-cols-4
+        {% else %}grid-cols-2{% endif %}"></div>
 
     <!-- Sin productos -->
     <div id="sin-productos" class="hidden text-center py-16 px-4">
@@ -162,7 +165,7 @@
 
 <!-- Barra carrito fija abajo -->
 <div id="carrito-bar" class="fixed bottom-0 left-0 right-0 carrito-bar border-t shadow-lg z-40 hidden">
-    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="{{ 'max-w-lg' if (tienda.desktop_layout or 'movil') == 'movil' else ('max-w-5xl' if tienda.desktop_layout == 'ampliado' else 'max-w-7xl') }} mx-auto px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3 cursor-pointer" onclick="toggleCarrito()">
             <div class="relative">
                 <svg class="w-7 h-7 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
@@ -177,7 +180,7 @@
 
     <!-- Panel carrito expandible -->
     <div id="carrito-panel" class="carrito-panel border-t hidden max-h-[50vh] overflow-y-auto">
-        <div class="max-w-lg mx-auto px-4 py-4">
+        <div class="{{ 'max-w-lg' if (tienda.desktop_layout or 'movil') == 'movil' else ('max-w-5xl' if tienda.desktop_layout == 'ampliado' else 'max-w-7xl') }} mx-auto px-4 py-4">
             <div id="carrito-items" class="space-y-3"></div>
         </div>
     </div>

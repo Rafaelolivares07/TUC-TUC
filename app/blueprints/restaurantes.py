@@ -126,6 +126,7 @@ def _crear_tablas(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS descripcion TEXT",
         "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
     ]
     conn.execute("SET statement_timeout = '3000'")
     for sql in alters:
@@ -1347,6 +1348,9 @@ def api_pedido_crear(slug):
             if insertados == 0:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Platos no encontrados en el menú'}), 400
+            pedido_id = conn.execute(
+                "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
+            ).fetchone()[0]
         else:
             tipo = data.get('tipo')
             sopa_id = data.get('sopa_id')
@@ -1374,6 +1378,9 @@ def api_pedido_crear(slug):
                 VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (rest['id'], mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total,
                   notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago))
+            pedido_id = conn.execute(
+                "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
+            ).fetchone()[0]
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
                     try:
@@ -1404,9 +1411,34 @@ def api_pedido_crear(slug):
                 print(f'[cont] venta rest {slug}: {_e}')
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'precio': precio_total})
+        return jsonify({'ok': True, 'precio': precio_total, 'pedido_id': pedido_id})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/restaurante/<slug>/pedido/<int:pedido_id>/comprobante', methods=['POST'])
+def api_restaurante_pedido_comprobante(slug, pedido_id):
+    data = request.get_json() or {}
+    imagen = (data.get('imagen') or '').strip()
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'Sin imagen'}), 400
+    conn = get_db_connection()
+    try:
+        rest = conn.execute("SELECT id FROM restaurantes WHERE slug=%s", (slug,)).fetchone()
+        if not rest:
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        cur = conn.execute(
+            "UPDATE pedidos_restaurante SET comprobante_pago=%s WHERE id=%s AND restaurante_id=%s",
+            (imagen, pedido_id, rest['id'])
+        )
+        if cur.rowcount == 0:
+            return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/api/restaurante/<slug>/pedidos')

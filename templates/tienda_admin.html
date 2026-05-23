@@ -1563,9 +1563,18 @@ async function cargarPedidos() {
                 </div>
                 ${p.nombre_cajero ? `<p class="text-xs text-gray-400 mt-2">Cajero: ${p.nombre_cajero}</p>` : ''}
                 ${p.notas ? `<p class="text-xs text-gray-400 mt-1 italic">${p.notas}</p>` : ''}
+                ${p.comprobante_pago ? `<div class="mt-2"><p class="text-xs text-gray-400 mb-1">Comprobante:</p><img src="${p.comprobante_pago}" class="h-20 rounded-lg border cursor-pointer" onclick="verComprobanteAdmin(this.src)"></div>` : ''}
             </div>`;
         }).join('');
     } catch(e) { console.error(e); }
+}
+
+function verComprobanteAdmin(src) {
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center';
+    overlay.onclick = () => overlay.remove();
+    overlay.innerHTML = `<img src="${src}" class="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl">`;
+    document.body.appendChild(overlay);
 }
 
 async function cambiarEstado(pedidoId, estado) {

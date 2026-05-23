@@ -222,10 +222,12 @@
             <textarea id="inp-notas" placeholder="Notas (opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-3" rows="2"></textarea>
 
             <!-- Método de pago -->
-            <div id="bloque-metodo-pago" class="hidden mb-4">
+            <div id="bloque-metodo-pago" class="hidden mb-3">
                 <p class="text-xs font-semibold txt-secondary mb-2">¿Cómo vas a pagar?</p>
                 <div id="btns-metodo-pago" class="flex flex-wrap gap-2"></div>
             </div>
+            <!-- Info de pago (QR / número) -->
+            <div id="bloque-info-pago" class="hidden mb-4 bg-gray-50 rounded-xl p-4 text-center"></div>
         </div>
 
         <button onclick="enviarPedido()" id="btn-enviar" class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold text-lg transition">
@@ -243,6 +245,14 @@
         <h2 class="text-xl font-extrabold txt-primary mb-2">Pedido enviado</h2>
         <p class="txt-secondary text-sm mb-4">Tu pedido fue recibido. Te avisaremos cuando este listo.</p>
         <p id="aviso-pedido-ok" class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 hidden"></p>
+        <div id="bloque-comprobante" class="hidden mb-4">
+            <p class="text-sm font-semibold text-gray-700 mb-2">📎 Adjunta tu comprobante de pago</p>
+            <label class="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-3 px-4 cursor-pointer hover:border-rose-400 transition text-sm text-gray-500">
+                📷 Subir foto del comprobante
+                <input type="file" accept="image/*" class="hidden" onchange="subirComprobante(this)">
+            </label>
+            <p id="comprobante-ok" class="hidden text-sm text-green-600 font-semibold mt-2">✓ Comprobante enviado</p>
+        </div>
         <button onclick="document.getElementById('modal-ok').classList.add('hidden')" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-bold transition">Aceptar</button>
     </div>
 </div>
@@ -256,6 +266,7 @@ let carrito = JSON.parse(localStorage.getItem('carrito_' + SLUG) || '{}');
 let tipoEntrega = 'domicilio';
 let configNegocio = null;
 let metodoPago = null;
+let ultimoPedidoId = null;
 let clienteData = {{ cliente_data | tojson if cliente_data else 'null' }};
 
 async function cargarConfig() {
@@ -277,6 +288,8 @@ async function cargarConfig() {
         renderMetodosPago(d.metodos_pago || []);
     } catch(e) {}
 }
+
+const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
 
 function renderMetodosPago(metodos) {
     const bloque = document.getElementById('bloque-metodo-pago');
@@ -306,6 +319,22 @@ function selMetodoPago(codigo) {
     if (btn) {
         btn.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-600');
         btn.classList.remove('border-gray-200', 'text-gray-600');
+    }
+    // Mostrar info de pago (QR o número)
+    const info = configNegocio && configNegocio.metodos_info && configNegocio.metodos_info[codigo];
+    const bloqueInfo = document.getElementById('bloque-info-pago');
+    if (!bloqueInfo) return;
+    if (!info) { bloqueInfo.classList.add('hidden'); return; }
+    if (info.imagen) {
+        bloqueInfo.innerHTML = `<p class="text-xs text-gray-500 mb-2">Escanea este QR para pagar:</p>
+            <img src="${info.imagen}" class="mx-auto rounded-xl border max-h-48">`;
+        bloqueInfo.classList.remove('hidden');
+    } else if (info.numero) {
+        bloqueInfo.innerHTML = `<p class="text-xs text-gray-500 mb-1">Transfiere a este número:</p>
+            <p class="text-lg font-extrabold text-gray-800 tracking-wider">${info.numero}</p>`;
+        bloqueInfo.classList.remove('hidden');
+    } else {
+        bloqueInfo.classList.add('hidden');
     }
 }
 
@@ -587,7 +616,7 @@ async function enviarPedido() {
         });
         const dataPedido = await rPedido.json();
         if (dataPedido.ok) {
-            // Limpiar carrito
+            ultimoPedidoId = dataPedido.pedido_id || null;
             carrito = {};
             carritoMeta = {};
             localStorage.removeItem('carrito_' + SLUG);
@@ -599,6 +628,13 @@ async function enviarPedido() {
                 const aviso = configNegocio && configNegocio.aviso_pedido;
                 avisoEl.textContent = aviso || '';
                 avisoEl.classList.toggle('hidden', !aviso);
+            }
+            const bloqueComp = document.getElementById('bloque-comprobante');
+            const compOk = document.getElementById('comprobante-ok');
+            if (bloqueComp) {
+                const necesita = ultimoPedidoId && metodoPago && !METODOS_SIN_COMPROBANTE.has(metodoPago);
+                bloqueComp.classList.toggle('hidden', !necesita);
+                if (compOk) compOk.classList.add('hidden');
             }
             document.getElementById('modal-ok').classList.remove('hidden');
 
@@ -622,6 +658,28 @@ async function enviarPedido() {
 
 function mostrarModalRegistro() {
     abrirPedido();
+}
+
+function subirComprobante(input) {
+    const file = input.files[0];
+    if (!file || !ultimoPedidoId) return;
+    const reader = new FileReader();
+    reader.onload = async e => {
+        try {
+            const r = await fetch(`${BASE}/pedido/${ultimoPedidoId}/comprobante`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({imagen: e.target.result})
+            });
+            const d = await r.json();
+            if (d.ok) {
+                document.getElementById('comprobante-ok').classList.remove('hidden');
+                document.querySelector('#bloque-comprobante label').style.display = 'none';
+                toast('Comprobante enviado');
+            } else toast(d.error || 'Error', true);
+        } catch(err) { toast('Error de red', true); }
+    };
+    reader.readAsDataURL(file);
 }
 
 // === Init ===

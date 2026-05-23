@@ -20,12 +20,13 @@ def init_config_negocio(conn):
             updated_at   TIMESTAMP DEFAULT NOW()
         )
     """)
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS metodos_info JSONB DEFAULT '{}'")
     conn.commit()
 
 
 def _get_config(conn, tercero_id):
     row = conn.execute(
-        "SELECT modalidades, metodos_pago, aviso_pedido FROM config_negocio WHERE tercero_id=%s",
+        "SELECT modalidades, metodos_pago, aviso_pedido, metodos_info FROM config_negocio WHERE tercero_id=%s",
         (tercero_id,)
     ).fetchone()
     if row:
@@ -33,6 +34,7 @@ def _get_config(conn, tercero_id):
             'modalidades':  row['modalidades'],
             'metodos_pago': row['metodos_pago'],
             'aviso_pedido': row['aviso_pedido'],
+            'metodos_info': dict(row['metodos_info'] or {}),
         }
     # Migrar datos existentes de metodos_pago_tienda si los hay
     try:
@@ -47,10 +49,11 @@ def _get_config(conn, tercero_id):
                 'modalidades':  ['domicilio', 'recoger'],
                 'metodos_pago': [m['codigo'] for m in existentes],
                 'aviso_pedido': None,
+                'metodos_info': {},
             }
     except Exception:
         pass
-    return {'modalidades': ['domicilio', 'recoger'], 'metodos_pago': ['efectivo'], 'aviso_pedido': None}
+    return {'modalidades': ['domicilio', 'recoger'], 'metodos_pago': ['efectivo'], 'aviso_pedido': None, 'metodos_info': {}}
 
 
 @bp.route('/admin/negocio/<int:tercero_id>/config')
@@ -83,7 +86,7 @@ def api_config_get(tercero_id):
             catalogo = [dict(m) for m in catalogo]
         except Exception:
             catalogo = [{'id': 0, 'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}]
-        return jsonify({'ok': True, 'config': config, 'catalogo_metodos': catalogo})
+        return jsonify({'ok': True, 'config': config, 'catalogo_metodos': catalogo, 'metodos_info': config.get('metodos_info', {})})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -132,13 +135,60 @@ def api_config_publica(tercero_id):
         except Exception:
             catalogo_dict = {'efectivo': {'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}}
         metodos = [catalogo_dict[c] for c in config['metodos_pago'] if c in catalogo_dict]
+        metodos_info = config.get('metodos_info', {})
+        # No exponer imágenes QR completas en la respuesta pública — sólo indicar si existe
+        info_publica = {}
+        for codigo, info in metodos_info.items():
+            entrada = {}
+            if 'imagen' in info:
+                entrada['imagen'] = info['imagen']
+            if 'numero' in info:
+                entrada['numero'] = info['numero']
+            if entrada:
+                info_publica[codigo] = entrada
         return jsonify({
             'ok': True,
             'modalidades':  config['modalidades'],
             'metodos_pago': metodos,
             'aviso_pedido': config['aviso_pedido'],
+            'metodos_info': info_publica,
         })
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/negocio/<int:tercero_id>/metodo-info', methods=['POST'])
+def api_metodo_info(tercero_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    codigo = (data.get('codigo') or '').strip()
+    info   = data.get('info', {})
+    if not codigo:
+        return jsonify({'ok': False, 'error': 'Código requerido'}), 400
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT metodos_info FROM config_negocio WHERE tercero_id=%s", (tercero_id,)
+        ).fetchone()
+        actual = dict(row['metodos_info'] or {}) if row else {}
+        if info:
+            actual[codigo] = info
+        else:
+            actual.pop(codigo, None)
+        conn.execute("""
+            INSERT INTO config_negocio (tercero_id, metodos_info, updated_at)
+            VALUES (%s, %s::jsonb, NOW())
+            ON CONFLICT (tercero_id) DO UPDATE
+            SET metodos_info = EXCLUDED.metodos_info, updated_at = NOW()
+        """, (tercero_id, json.dumps(actual)))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

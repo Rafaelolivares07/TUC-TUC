@@ -165,6 +165,11 @@ def _crear_tablas(conn):
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS desktop_layout VARCHAR(20) DEFAULT 'movil'",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS movil_cols SMALLINT DEFAULT 2",
+        "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
+        "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
+        "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi Celular', 'nequi_movil', '📱', 22, 'nequi') ON CONFLICT (codigo) DO NOTHING",
+        "UPDATE metodos_pago_catalogo SET grupo = 'nequi' WHERE codigo = 'nequi' AND grupo IS NULL",
     ]
     for sql in alters:
         try:
@@ -997,6 +1002,31 @@ def api_tienda_mostrar_nombre(slug):
         conn.close()
 
 
+@bp.route('/api/tienda/<slug>/pedido/<int:pedido_id>/comprobante', methods=['POST'])
+def api_tienda_pedido_comprobante(slug, pedido_id):
+    data = request.get_json() or {}
+    imagen = (data.get('imagen') or '').strip()
+    if not imagen:
+        return jsonify({'ok': False, 'error': 'Sin imagen'}), 400
+    conn = get_db_connection()
+    try:
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug=%s AND activo=TRUE", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        cur = conn.execute(
+            "UPDATE pedidos_tienda SET comprobante_pago=%s WHERE id=%s AND tienda_id=%s",
+            (imagen, pedido_id, tienda['id'])
+        )
+        if cur.rowcount == 0:
+            return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/tienda/<slug>/admin/ubicacion', methods=['POST'])
 def api_tienda_ubicacion(slug):
     uid = session.get('usuario_id')
@@ -1268,7 +1298,7 @@ def api_tienda_pedidos(slug):
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         pedidos = conn.execute("""
             SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega,
-                   estado, total, notas, created_at, nombre_cajero, metodo_pago
+                   estado, total, notas, created_at, nombre_cajero, metodo_pago, comprobante_pago
             FROM pedidos_tienda WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
             ORDER BY created_at DESC
         """, (tienda['id'],)).fetchall()
@@ -1290,6 +1320,7 @@ def api_tienda_pedidos(slug):
                 'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else '',
                 'nombre_cajero': p['nombre_cajero'] or '',
                 'metodo_pago': p['metodo_pago'] or 'efectivo',
+                'comprobante_pago': p['comprobante_pago'] or '',
                 'items': [{'nombre': i['nombre_producto'], 'cantidad': i['cantidad'], 'precio': float(i['precio_unitario'])} for i in items]
             })
         return jsonify({'ok': True, 'pedidos': resultado})

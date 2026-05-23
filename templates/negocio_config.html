@@ -84,6 +84,16 @@
 <script>
 const TERCERO_ID = {{ tercero_id }};
 let activosMetodos = [];
+let metodos_info_actual = {};
+
+// Qué campo pide cada método especial
+const METODO_INFO_TIPO = {
+  nequi_qr:      {tipo: 'imagen', label: 'Imagen del código QR de Nequi'},
+  nequi_movil:   {tipo: 'numero', label: 'Número celular Nequi'},
+  daviplata:     {tipo: 'numero', label: 'Número celular Daviplata'},
+  bancolombia:   {tipo: 'numero', label: 'Número de cuenta / Nequi Bancolombia'},
+  transferencia: {tipo: 'numero', label: 'Número de cuenta'},
+};
 
 function toast(msg, err=false) {
   const t = document.getElementById('toast');
@@ -98,17 +108,15 @@ async function cargar() {
     const d = await r.json();
     if (!d.ok) { toast('Error cargando config', true); return; }
 
-    // Marcar modalidades activas
     const activas = d.config.modalidades || [];
     document.querySelectorAll('input[name="modalidad"]').forEach(cb => {
       cb.checked = activas.includes(cb.value);
     });
 
-    // Métodos de pago
     activosMetodos = d.config.metodos_pago || [];
+    metodos_info_actual = d.metodos_info || {};
     renderMetodos(d.catalogo_metodos, activosMetodos);
 
-    // Aviso
     document.getElementById('aviso-pedido').value = d.config.aviso_pedido || '';
   } catch(e) { toast('Error de red', true); }
 }
@@ -118,25 +126,76 @@ function renderMetodos(catalogo, activos) {
     document.getElementById('lista-metodos').innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Sin métodos en el catálogo</p>';
     return;
   }
-  let html = '<table class="w-full text-sm"><thead><tr class="text-xs text-gray-400 font-semibold uppercase"><th class="text-left px-2 py-1">Método</th><th class="text-center px-2 py-1">Habilitado</th></tr></thead><tbody>';
+  // Agrupar por grupo (nequi, etc.) y los sin grupo como individuales
+  const grupos = {};
+  const orden = [];
   for (const m of catalogo) {
-    const on = activos.includes(m.codigo);
-    html += `<tr class="border-b border-gray-50 hover:bg-gray-50">
-      <td class="px-2 py-3">
-        <span class="text-xl mr-2">${m.icono}</span>
-        <span class="font-semibold text-gray-800">${m.nombre}</span>
-        <span class="text-xs text-gray-400 font-mono ml-2">${m.codigo}</span>
-      </td>
-      <td class="px-2 py-3 text-center">
-        <button onclick="toggleMetodo('${m.codigo}', ${!on})"
-                class="font-bold px-4 py-1 rounded-full text-xs transition ${on ? 'toggle-on' : 'toggle-off'}">
-          ${on ? 'Activo' : 'Inactivo'}
-        </button>
-      </td>
-    </tr>`;
+    const g = m.grupo || m.codigo;
+    if (!grupos[g]) { grupos[g] = []; orden.push(g); }
+    grupos[g].push(m);
   }
-  html += '</tbody></table>';
+
+  let html = '';
+  for (const g of orden) {
+    const items = grupos[g];
+    if (items.length === 1) {
+      html += renderMetodoFila(items[0], activos);
+    } else {
+      // Grupo: mostrar encabezado y los items agrupados
+      const grupoNombre = items[0].nombre.replace(/ (QR|Celular|Móvil)$/, '');
+      html += `<div class="mb-3 border border-gray-100 rounded-xl overflow-hidden">
+        <div class="bg-gray-50 px-3 py-2 text-xs font-bold text-gray-500 uppercase tracking-wide">${grupoNombre}</div>`;
+      for (const m of items) {
+        html += `<div class="border-t border-gray-50">${renderMetodoFila(m, activos, true)}</div>`;
+      }
+      html += '</div>';
+    }
+  }
   document.getElementById('lista-metodos').innerHTML = html;
+}
+
+function renderMetodoFila(m, activos, enGrupo=false) {
+  const on = activos.includes(m.codigo);
+  const infoConfig = METODO_INFO_TIPO[m.codigo];
+  const info = metodos_info_actual[m.codigo] || {};
+  const px = enGrupo ? 'px-3' : 'px-2';
+
+  let infoHtml = '';
+  if (on && infoConfig) {
+    if (infoConfig.tipo === 'imagen') {
+      const imgSrc = info.imagen || '';
+      infoHtml = `<div class="mt-2 mb-1">
+        <p class="text-xs text-gray-500 mb-1">${infoConfig.label}</p>
+        ${imgSrc ? `<img src="${imgSrc}" class="h-24 rounded-lg border mb-2 cursor-pointer" onclick="verImagen('${m.codigo}')">` : ''}
+        <label class="inline-flex items-center gap-1.5 cursor-pointer bg-indigo-50 border border-indigo-200 text-indigo-600 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition">
+          📤 ${imgSrc ? 'Cambiar QR' : 'Subir QR'}
+          <input type="file" accept="image/*" class="hidden" onchange="subirQR('${m.codigo}', this)">
+        </label>
+      </div>`;
+    } else {
+      const num = info.numero || '';
+      infoHtml = `<div class="mt-2 mb-1 flex gap-2 items-center">
+        <input id="num-${m.codigo}" type="tel" value="${num}" placeholder="${infoConfig.label}"
+          class="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-indigo-400">
+        <button onclick="guardarNumero('${m.codigo}')"
+          class="text-xs font-bold bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition">Guardar</button>
+      </div>`;
+    }
+  }
+
+  return `<div class="flex items-start justify-between ${px} py-3 hover:bg-gray-50 transition">
+    <div class="flex-1">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">${m.icono}</span>
+        <span class="font-semibold text-gray-800 text-sm">${m.nombre}</span>
+      </div>
+      ${infoHtml}
+    </div>
+    <button onclick="toggleMetodo('${m.codigo}', ${!on})"
+            class="ml-3 mt-0.5 font-bold px-4 py-1 rounded-full text-xs transition flex-shrink-0 ${on ? 'toggle-on' : 'toggle-off'}">
+      ${on ? 'Activo' : 'Inactivo'}
+    </button>
+  </div>`;
 }
 
 function toggleMetodo(codigo, nuevoEstado) {
@@ -145,10 +204,59 @@ function toggleMetodo(codigo, nuevoEstado) {
   } else {
     activosMetodos = activosMetodos.filter(c => c !== codigo);
   }
-  // Re-render sin recargar del servidor
   fetch(`/api/negocio/${TERCERO_ID}/config`)
     .then(r => r.json())
-    .then(d => renderMetodos(d.catalogo_metodos, activosMetodos));
+    .then(d => { metodos_info_actual = d.metodos_info || {}; renderMetodos(d.catalogo_metodos, activosMetodos); });
+}
+
+async function subirQR(codigo, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const imagen = e.target.result;
+    try {
+      const r = await fetch(`/api/negocio/${TERCERO_ID}/metodo-info`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({codigo, info: {imagen}})
+      });
+      const d = await r.json();
+      if (d.ok) {
+        metodos_info_actual[codigo] = {imagen};
+        toast('QR guardado');
+        fetch(`/api/negocio/${TERCERO_ID}/config`)
+          .then(r => r.json())
+          .then(d => { metodos_info_actual = d.metodos_info || {}; renderMetodos(d.catalogo_metodos, activosMetodos); });
+      } else toast(d.error, true);
+    } catch(e) { toast('Error de red', true); }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function guardarNumero(codigo) {
+  const num = (document.getElementById('num-' + codigo)?.value || '').trim();
+  if (!num) return toast('Escribe el número', true);
+  try {
+    const r = await fetch(`/api/negocio/${TERCERO_ID}/metodo-info`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({codigo, info: {numero: num}})
+    });
+    const d = await r.json();
+    if (d.ok) { metodos_info_actual[codigo] = {numero: num}; toast('Número guardado'); }
+    else toast(d.error, true);
+  } catch(e) { toast('Error de red', true); }
+}
+
+function verImagen(codigo) {
+  const src = (metodos_info_actual[codigo] || {}).imagen;
+  if (!src) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center';
+  overlay.onclick = () => overlay.remove();
+  overlay.innerHTML = `<img src="${src}" class="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl">`;
+  document.body.appendChild(overlay);
 }
 
 async function guardar() {

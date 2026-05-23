@@ -260,12 +260,14 @@
 const SLUG = '{{ restaurante.slug }}';
 const MESA = "{{ mesa_nombre }}";
 const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
+const TERCERO_ID = {{ restaurante.tercero_id | tojson }};
 const SOLO_CARTA = {{ solo_carta | tojson }};
 const BASE = `/api/restaurante/${SLUG}`;
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;
 const CLIENTE_DATA = {{ cliente_data | tojson | safe if cliente_data else 'null' }};
 let clienteId = CLIENTE_DATA ? CLIENTE_DATA.cliente_id : null;
 let tipoEntrega = '';
+let configNegocio = null;
 let telefonoCliente = CLIENTE_DATA ? CLIENTE_DATA.telefono : '';
 let direccionCliente = CLIENTE_DATA ? CLIENTE_DATA.direccion : '';
 
@@ -331,6 +333,32 @@ function actualizarStickyEstado(estado) {
         el.textContent = 'Preparando...';
         el.className = 'text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0 bg-yellow-100 text-yellow-700';
     }
+}
+
+async function cargarConfig() {
+    if (!TERCERO_ID) return;
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config/publica`);
+        const d = await r.json();
+        if (!d.ok) return;
+        configNegocio = d;
+        if (MESA !== '') return;
+        const mods = d.modalidades || ['domicilio', 'recoger'];
+        const btnD = document.getElementById('btn-domicilio');
+        const btnR = document.getElementById('btn-recoger');
+        if (btnD) btnD.style.display = mods.includes('domicilio') ? '' : 'none';
+        if (btnR) btnR.style.display = mods.includes('recoger') ? '' : 'none';
+        if (mods.length === 1) selTipoEntrega(mods[0]);
+    } catch(e) {}
+}
+
+function mostrarAvisoPedido() {
+    const aviso = configNegocio && configNegocio.aviso_pedido;
+    if (!aviso) return;
+    const t = document.getElementById('toast');
+    t.textContent = aviso;
+    t.className = 'toast show toast-ok';
+    setTimeout(() => t.classList.remove('show'), 7000);
 }
 
 function toast(msg, ok = true) {
@@ -588,6 +616,7 @@ async function enviarPedido() {
                 b.classList.add('border-transparent');
             });
             mostrarPedidoActivo(resumenMenu);
+            mostrarAvisoPedido();
             cargarMisPedidos();
         } else {
             if (data.error === 'suscripcion_agotada') {
@@ -854,6 +883,7 @@ enviarPedido = async function() {
                 });
                 cartaClienteTotal();
                 mostrarPedidoActivo(resumenCarta);
+                mostrarAvisoPedido();
                 cargarMisPedidos();
             } else {
                 if (data.error === 'suscripcion_agotada') {
@@ -981,6 +1011,7 @@ if (TIPO_REST === 'carta') {
 } else {
     cargarMenuHoy();
 }
+cargarConfig();
 
 // Polling mis pedidos cada 10s
 setInterval(cargarMisPedidos, 10000);

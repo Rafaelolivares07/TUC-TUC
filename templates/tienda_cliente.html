@@ -230,18 +230,40 @@
             <svg class="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
         </div>
         <h2 class="text-xl font-extrabold txt-primary mb-2">Pedido enviado</h2>
-        <p class="txt-secondary text-sm mb-6">Tu pedido fue recibido. Te avisaremos cuando este listo.</p>
+        <p class="txt-secondary text-sm mb-4">Tu pedido fue recibido. Te avisaremos cuando este listo.</p>
+        <p id="aviso-pedido-ok" class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 hidden"></p>
         <button onclick="document.getElementById('modal-ok').classList.add('hidden')" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-bold transition">Aceptar</button>
     </div>
 </div>
 
 <script>
 const SLUG = '{{ tienda.slug }}';
+const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 const BASE = '/api/tienda/' + SLUG;
 let productos = [];
 let carrito = JSON.parse(localStorage.getItem('carrito_' + SLUG) || '{}');
 let tipoEntrega = 'domicilio';
+let configNegocio = null;
 let clienteData = {{ cliente_data | tojson if cliente_data else 'null' }};
+
+async function cargarConfig() {
+    if (!TERCERO_ID) return;
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config/publica`);
+        const d = await r.json();
+        if (!d.ok) return;
+        configNegocio = d;
+        const mods = d.modalidades || ['domicilio', 'recoger'];
+        const btnD = document.getElementById('btn-domicilio');
+        const btnR = document.getElementById('btn-recoger');
+        if (btnD) btnD.style.display = mods.includes('domicilio') ? '' : 'none';
+        if (btnR) btnR.style.display = mods.includes('recoger') ? '' : 'none';
+        if (mods.length === 1) {
+            tipoEntrega = mods[0];
+            selEntrega(tipoEntrega);
+        }
+    } catch(e) {}
+}
 
 function toast(msg, error) {
     const t = document.getElementById('toast');
@@ -526,6 +548,12 @@ async function enviarPedido() {
             localStorage.removeItem('carrito_meta_' + SLUG);
             cerrarModalPedido();
             renderProductos();
+            const avisoEl = document.getElementById('aviso-pedido-ok');
+            if (avisoEl) {
+                const aviso = configNegocio && configNegocio.aviso_pedido;
+                avisoEl.textContent = aviso || '';
+                avisoEl.classList.toggle('hidden', !aviso);
+            }
             document.getElementById('modal-ok').classList.remove('hidden');
 
             // Mostrar info entrega
@@ -552,6 +580,7 @@ function mostrarModalRegistro() {
 
 // === Init ===
 cargarProductos();
+cargarConfig();
 
 // Pre-llenar info entrega si ya hay datos
 if (clienteData && clienteData.nombre) {

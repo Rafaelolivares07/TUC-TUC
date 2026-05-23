@@ -125,6 +125,7 @@ def _crear_tablas(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS solo_carta BOOLEAN DEFAULT FALSE",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)",
     ]
     conn.execute("SET statement_timeout = '3000'")
     for sql in alters:
@@ -1275,6 +1276,7 @@ def api_pedido_crear(slug):
         telefono_cliente = data.get('telefono_cliente') or None
         direccion_cliente = data.get('direccion_cliente') or None
         cliente_id = data.get('cliente_id')
+        metodo_pago = (data.get('metodo_pago') or '').strip() or None
         conn = get_db_connection()
         _crear_tablas(conn)
         rest = conn.execute("SELECT id, tipo_restaurante, dias_pagados, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
@@ -1320,10 +1322,10 @@ def api_pedido_crear(slug):
                 nota_item = p.get('nota', '').strip() or None
                 conn.execute("""
                     INSERT INTO pedidos_restaurante
-                    (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id)
-                    VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago)
+                    VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
-                      nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
+                      nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago))
                 if rest['tercero_id']:
                     try:
                         conn.execute("SAVEPOINT sp_inv")
@@ -1368,10 +1370,10 @@ def api_pedido_crear(slug):
                     precio_total += float(recargo['recargo'])
             conn.execute("""
                 INSERT INTO pedidos_restaurante
-                (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id)
-                VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago)
+                VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (rest['id'], mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total,
-                  notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id))
+                  notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago))
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
                     try:

@@ -268,6 +268,7 @@ const CLIENTE_DATA = {{ cliente_data | tojson | safe if cliente_data else 'null'
 let clienteId = CLIENTE_DATA ? CLIENTE_DATA.cliente_id : null;
 let tipoEntrega = '';
 let configNegocio = null;
+let metodoPago = null;
 let telefonoCliente = CLIENTE_DATA ? CLIENTE_DATA.telefono : '';
 let direccionCliente = CLIENTE_DATA ? CLIENTE_DATA.direccion : '';
 
@@ -349,7 +350,38 @@ async function cargarConfig() {
         if (btnD) btnD.style.display = mods.includes('domicilio') ? '' : 'none';
         if (btnR) btnR.style.display = mods.includes('recoger') ? '' : 'none';
         if (mods.length === 1) selTipoEntrega(mods[0]);
+        renderMetodosPagoRest(d.metodos_pago || []);
     } catch(e) {}
+}
+
+function renderMetodosPagoRest(metodos) {
+    const bloque = document.getElementById('bloque-metodo-pago-rest');
+    const cont = document.getElementById('btns-metodo-pago-rest');
+    if (!bloque || !cont || !metodos.length) return;
+    if (metodos.length === 1) {
+        metodoPago = metodos[0].codigo;
+        return;
+    }
+    bloque.classList.remove('hidden');
+    cont.innerHTML = metodos.map(m => `
+        <button onclick="selMetodoPagoRest('${m.codigo}')" id="rmp-${m.codigo}"
+            class="rmp-btn flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition border-gray-200 text-gray-600">
+            <span>${m.icono}</span><span>${m.nombre}</span>
+        </button>
+    `).join('');
+}
+
+function selMetodoPagoRest(codigo) {
+    metodoPago = codigo;
+    document.querySelectorAll('.rmp-btn').forEach(b => {
+        b.classList.remove('border-amber-500', 'bg-amber-50', 'text-amber-700');
+        b.classList.add('border-gray-200', 'text-gray-600');
+    });
+    const btn = document.getElementById('rmp-' + codigo);
+    if (btn) {
+        btn.classList.add('border-amber-500', 'bg-amber-50', 'text-amber-700');
+        btn.classList.remove('border-gray-200', 'text-gray-600');
+    }
 }
 
 function mostrarAvisoPedido() {
@@ -595,7 +627,8 @@ async function enviarPedido() {
                 tipo_entrega: MESA === '' ? tipoEntrega : 'mesa',
                 telefono_cliente: telefonoCliente || null,
                 direccion_cliente: direccionCliente || null,
-                cliente_id: clienteId || null
+                cliente_id: clienteId || null,
+                metodo_pago: metodoPago || null
             })
         });
         const data = await r.json();
@@ -864,7 +897,8 @@ enviarPedido = async function() {
                     tipo_entrega: MESA === '' ? tipoEntrega : 'mesa',
                     telefono_cliente: telefonoCliente || null,
                     direccion_cliente: direccionCliente || null,
-                    cliente_id: clienteId || null
+                    cliente_id: clienteId || null,
+                    metodo_pago: metodoPago || null
                 })
             });
             const data = await r.json();
@@ -938,6 +972,7 @@ async function confirmarRegistro() {
     if (telefono.replace(/\D/g,'').length < 10) return toast('Celular debe tener al menos 10 digitos', false);
     if (!tipoEntrega) return toast('Elige recoger o domicilio', false);
     if (tipoEntrega === 'domicilio' && !direccion) return toast('Escribe tu direccion', false);
+    if (configNegocio && (configNegocio.metodos_pago || []).length > 1 && !metodoPago) return toast('Elige el método de pago', false);
 
     try {
         const r = await fetch(`${BASE}/registrar-cliente`, {
@@ -1039,6 +1074,10 @@ setInterval(cargarMisPedidos, 10000);
             </div>
             <input id="reg-direccion" type="text" placeholder="Tu direccion de entrega"
                 class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none hidden">
+            <div id="bloque-metodo-pago-rest" class="hidden">
+                <p class="text-xs font-semibold text-gray-500 mb-2">¿Cómo vas a pagar?</p>
+                <div id="btns-metodo-pago-rest" class="flex flex-wrap gap-2"></div>
+            </div>
         </div>
         <button onclick="confirmarRegistro()"
             class="mt-4 bg-green-600 hover:bg-green-700 text-white w-full py-3 rounded-xl font-bold text-lg">

@@ -219,7 +219,13 @@
                 <input id="inp-direccion" type="text" placeholder="Direccion de entrega" class="w-full border rounded-lg px-3 py-2 text-sm mb-3">
             </div>
 
-            <textarea id="inp-notas" placeholder="Notas (opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-4" rows="2"></textarea>
+            <textarea id="inp-notas" placeholder="Notas (opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-3" rows="2"></textarea>
+
+            <!-- Método de pago -->
+            <div id="bloque-metodo-pago" class="hidden mb-4">
+                <p class="text-xs font-semibold txt-secondary mb-2">¿Cómo vas a pagar?</p>
+                <div id="btns-metodo-pago" class="flex flex-wrap gap-2"></div>
+            </div>
         </div>
 
         <button onclick="enviarPedido()" id="btn-enviar" class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold text-lg transition">
@@ -249,6 +255,7 @@ let productos = [];
 let carrito = JSON.parse(localStorage.getItem('carrito_' + SLUG) || '{}');
 let tipoEntrega = 'domicilio';
 let configNegocio = null;
+let metodoPago = null;
 let clienteData = {{ cliente_data | tojson if cliente_data else 'null' }};
 
 async function cargarConfig() {
@@ -267,7 +274,39 @@ async function cargarConfig() {
             tipoEntrega = mods[0];
             selEntrega(tipoEntrega);
         }
+        renderMetodosPago(d.metodos_pago || []);
     } catch(e) {}
+}
+
+function renderMetodosPago(metodos) {
+    const bloque = document.getElementById('bloque-metodo-pago');
+    const cont = document.getElementById('btns-metodo-pago');
+    if (!bloque || !cont || !metodos.length) return;
+    bloque.classList.remove('hidden');
+    if (metodos.length === 1) {
+        metodoPago = metodos[0].codigo;
+        bloque.classList.add('hidden');
+        return;
+    }
+    cont.innerHTML = metodos.map(m => `
+        <button onclick="selMetodoPago('${m.codigo}')" id="mp-${m.codigo}"
+            class="mp-btn flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition border-gray-200 text-gray-600">
+            <span>${m.icono}</span><span>${m.nombre}</span>
+        </button>
+    `).join('');
+}
+
+function selMetodoPago(codigo) {
+    metodoPago = codigo;
+    document.querySelectorAll('.mp-btn').forEach(b => {
+        b.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-600');
+        b.classList.add('border-gray-200', 'text-gray-600');
+    });
+    const btn = document.getElementById('mp-' + codigo);
+    if (btn) {
+        btn.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-600');
+        btn.classList.remove('border-gray-200', 'text-gray-600');
+    }
 }
 
 function toast(msg, error) {
@@ -498,6 +537,7 @@ async function enviarPedido() {
     const telLimpio = telefono.replace(/\D/g, '');
     if (telLimpio.length < 10) return toast('Celular debe tener al menos 10 digitos', true);
     if (tipoEntrega === 'domicilio' && !direccion) return toast('Ingresa la direccion de entrega', true);
+    if (configNegocio && (configNegocio.metodos_pago || []).length > 1 && !metodoPago) return toast('Elige el método de pago', true);
 
     const btn = document.getElementById('btn-enviar');
     btn.disabled = true;
@@ -541,6 +581,7 @@ async function enviarPedido() {
                 tipo_entrega: tipoEntrega,
                 notas,
                 cliente_id: clienteId,
+                metodo_pago: metodoPago,
                 items
             })
         });

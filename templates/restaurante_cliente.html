@@ -216,6 +216,13 @@
             <div id="barra-carrito">
                 <input id="cli-notas" type="text" placeholder="¿Alguna nota? (sin cebolla, extra arroz…)"
                        class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2 cli-notas-menu">
+                {% if not mesa_nombre %}
+                <div id="bloque-metodo-pago-rest" class="hidden mb-2">
+                    <p class="text-xs font-semibold text-gray-500 mb-1.5">¿Cómo vas a pagar?</p>
+                    <div id="btns-metodo-pago-rest" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div id="bloque-info-pago-rest" class="hidden mb-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-gray-700"></div>
+                {% endif %}
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <span class="txt-muted text-xs">Total</span>
@@ -343,7 +350,6 @@ async function cargarConfig() {
         const d = await r.json();
         if (!d.ok) return;
         configNegocio = d;
-        if (MESA !== '') return;
         const mods = d.modalidades || ['domicilio', 'recoger'];
         const btnD = document.getElementById('btn-domicilio');
         const btnR = document.getElementById('btn-recoger');
@@ -1140,11 +1146,6 @@ setInterval(cargarMisPedidos, 10000);
             </div>
             <input id="reg-direccion" type="text" placeholder="Tu direccion de entrega"
                 class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none hidden">
-            <div id="bloque-metodo-pago-rest" class="hidden">
-                <p class="text-xs font-semibold text-gray-500 mb-2">¿Cómo vas a pagar?</p>
-                <div id="btns-metodo-pago-rest" class="flex flex-wrap gap-2"></div>
-            </div>
-            <div id="bloque-info-pago-rest" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-gray-700"></div>
         </div>
         <button onclick="confirmarRegistro()"
             class="mt-4 bg-green-600 hover:bg-green-700 text-white w-full py-3 rounded-xl font-bold text-lg">

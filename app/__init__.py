@@ -93,7 +93,7 @@ def create_app():
             es_tienda = None
 
         # No interceptar llamadas API ni estáticos — dejar que Flask las enrute normal
-        if request.path.startswith('/api/') or request.path.startswith('/static/'):
+        if request.path.startswith('/api/') or request.path.startswith('/static/') or request.path.startswith('/pagar/'):
             return
 
         if es_tienda:

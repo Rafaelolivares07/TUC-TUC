@@ -1,5 +1,6 @@
 import itertools
 import json
+import random
 import uuid
 from datetime import date, timedelta
 
@@ -388,7 +389,7 @@ def mi_tienda(slug):
         es_admin_sistema = session.get('rol') == 'Administrador'
         if usuario_id and (es_admin_sistema or usuario_id == tienda['admin_id']):
             return render_template('tienda_admin.html', tienda=tienda, tiendas=None, es_dueno=True)
-        return redirect(f"/t/{slug}")
+        return render_template('tienda_recuperar.html', tienda=tienda)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -610,6 +611,86 @@ def api_tienda_metodos_pago_publico(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# ── Recuperación de acceso ────────────────────────────────────────────────────
+
+def _enviar_telegram_tienda(chat_id, texto):
+    import os
+    import requests as req
+    token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not token or not chat_id:
+        return
+    try:
+        req.post(f'https://api.telegram.org/bot{token}/sendMessage',
+                 json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'}, timeout=5)
+    except Exception:
+        pass
+
+
+@bp.route('/api/tienda/recuperar', methods=['POST'])
+def api_tienda_recuperar():
+    data = request.get_json()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    slug = data.get('slug', '')
+    if len(telefono) < 10:
+        return jsonify({'ok': False, 'error': 'Celular inválido'}), 400
+    try:
+        conn = get_db_connection()
+        tienda = conn.execute(
+            "SELECT id, admin_id, admin_telefono FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda or tienda['admin_telefono'] != telefono:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Este celular no corresponde al administrador'}), 400
+        tercero = conn.execute(
+            "SELECT id, telegram_chat_id FROM terceros WHERE id = %s", (tienda['admin_id'],)
+        ).fetchone()
+        conn.close()
+        if not tercero or not tercero['telegram_chat_id']:
+            return jsonify({'ok': False, 'necesita_telegram': True, 'error': 'No tenés Telegram vinculado'}), 400
+        codigo = str(random.randint(100000, 999999))
+        session['codigo_recuperacion_tienda'] = codigo
+        session['recuperar_tienda_admin_id'] = tercero['id']
+        session['recuperar_tienda_slug'] = slug
+        session.modified = True
+        _enviar_telegram_tienda(tercero['telegram_chat_id'],
+                                f"🔐 Tu código de acceso es:\n\n<b>{codigo}</b>\n\nIngresalo en la pantalla de recuperación.")
+        return jsonify({'ok': True, 'mensaje': 'Código enviado a tu Telegram'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/tienda/verificar-codigo', methods=['POST'])
+def api_tienda_verificar_codigo():
+    data = request.get_json()
+    codigo = data.get('codigo', '').strip()
+    codigo_guardado = session.get('codigo_recuperacion_tienda')
+    admin_id = session.get('recuperar_tienda_admin_id')
+    slug = session.get('recuperar_tienda_slug')
+    if not codigo_guardado or not admin_id:
+        return jsonify({'ok': False, 'error': 'No hay código pendiente'}), 400
+    if codigo != codigo_guardado:
+        return jsonify({'ok': False, 'error': 'Código incorrecto'}), 400
+    try:
+        conn = get_db_connection()
+        tercero = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE id = %s", (admin_id,)
+        ).fetchone()
+        conn.close()
+        if not tercero:
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 400
+        for k in ('codigo_recuperacion_tienda', 'recuperar_tienda_admin_id', 'recuperar_tienda_slug'):
+            session.pop(k, None)
+        session['usuario_id'] = tercero['id']
+        session['nombre'] = tercero['nombre']
+        session['telefono'] = tercero['telefono'] or ''
+        session['rol'] = 'Tienda'
+        session.permanent = True
+        session.modified = True
+        return jsonify({'ok': True, 'slug': slug})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ── API crear tienda ───────────────────────────────────────────────────────────

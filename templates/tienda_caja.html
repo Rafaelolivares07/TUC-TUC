@@ -194,6 +194,7 @@
 <script>
 const SLUG = '{{ slug }}';
 const TIENDA_NOMBRE = '{{ tienda.nombre }}';
+const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 let productos = [];
 let carrito = [];
 let categoriaActiva = '';
@@ -404,20 +405,16 @@ function renderCarrito() {
 
 async function cargarMetodosPago() {
     try {
-        const r = await fetch(`/api/tienda/${SLUG}/metodos-pago`);
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config/publica`);
         const d = await r.json();
-        if (d.ok && d.metodos.length) {
-            metodosDisponibles = d.metodos;
+        if (d.ok && d.metodos_pago && d.metodos_pago.length) {
+            metodosDisponibles = d.metodos_pago;
         } else {
-            // Fallback si no hay métodos configurados
-            metodosDisponibles = [
-                {id: 0, nombre: 'Efectivo', codigo: 'efectivo'},
-                {id: 0, nombre: 'Tarjeta',  codigo: 'tarjeta'},
-            ];
+            metodosDisponibles = [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
         }
         renderMetodosPago();
     } catch(e) {
-        metodosDisponibles = [{id: 0, nombre: 'Efectivo', codigo: 'efectivo'}];
+        metodosDisponibles = [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
         renderMetodosPago();
     }
 }

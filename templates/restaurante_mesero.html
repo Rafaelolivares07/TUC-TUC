@@ -193,17 +193,6 @@ const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
 const TERCERO_ID = {{ restaurante.tercero_id | tojson }};
 const BASE = `/api/restaurante/${SLUG}`;
 const TIENE_PIN = {{ 'true' if tiene_pin else 'false' }};
-const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
-let configMetodos = { metodos_pago: [], metodos_info: {} };
-
-async function cargarConfigPago() {
-    if (!TERCERO_ID) return;
-    try {
-        const r = await fetch(`/api/negocio/${TERCERO_ID}/config/publica`);
-        const d = await r.json();
-        if (d.ok) configMetodos = d;
-    } catch(e) {}
-}
 
 // ===== VERIFICACIÓN PIN =====
 async function verificarPin() {
@@ -781,7 +770,7 @@ async function cargarCuentas() {
                     <span class="text-xs text-gray-400">${c.cantidad} pedido${c.cantidad > 1 ? 's' : ''}</span>
                 </div>
                 <div class="text-2xl font-extrabold text-amber-400 mb-3">$${Number(c.total).toLocaleString()}</div>
-                <button onclick="cobrarMesa('${c.mesa_id}', ${c.total})"
+                <button onclick="cobrarMesa('${c.mesa_id}')"
                     class="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold transition">
                     Cobrar
                 </button>
@@ -790,94 +779,12 @@ async function cargarCuentas() {
     } catch(e) { console.error(e); }
 }
 
-let _cobrarMesaId = null;
-let _cobrarTotal = 0;
-let _metodoCobro = null;
-
-function cobrarMesa(mesaId, total) {
-    _cobrarMesaId = mesaId;
-    _cobrarTotal = total;
-    _metodoCobro = null;
-    document.getElementById('cobrar-mesa-titulo').textContent = `Mesa ${mesaId}`;
-    document.getElementById('cobrar-mesa-total').textContent = `$${Number(total).toLocaleString()}`;
-    const cont = document.getElementById('cobrar-metodos-cont');
-    const metodos = configMetodos.metodos_pago || [];
-    if (!metodos.length) {
-        cont.innerHTML = '<p class="text-xs text-gray-400">Sin métodos configurados</p>';
-    } else {
-        cont.innerHTML = metodos.map(m => `
-            <button onclick="selMetodoCobro('${m.codigo}')" id="cm-${m.codigo}"
-                class="cm-btn flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold text-sm transition border-gray-600 text-gray-300">
-                <span>${m.icono}</span><span>${m.nombre}</span>
-            </button>
-        `).join('');
-    }
-    document.getElementById('cobrar-info-pago').classList.add('hidden');
-    document.getElementById('cobrar-info-pago').innerHTML = '';
-    document.getElementById('btn-confirmar-cobro').disabled = !!(metodos.length);
-    if (!metodos.length) {
-        _metodoCobro = 'efectivo';
-        document.getElementById('btn-confirmar-cobro').disabled = false;
-    }
-    document.getElementById('modal-cobrar').classList.remove('hidden');
-}
-
-function selMetodoCobro(codigo) {
-    _metodoCobro = codigo;
-    document.querySelectorAll('.cm-btn').forEach(b => {
-        b.classList.remove('border-amber-400', 'bg-amber-900', 'text-amber-300');
-        b.classList.add('border-gray-600', 'text-gray-300');
-    });
-    const btn = document.getElementById('cm-' + codigo);
-    if (btn) {
-        btn.classList.add('border-amber-400', 'bg-amber-900', 'text-amber-300');
-        btn.classList.remove('border-gray-600', 'text-gray-300');
-    }
-    document.getElementById('btn-confirmar-cobro').disabled = false;
-    const info = configMetodos.metodos_info && configMetodos.metodos_info[codigo];
-    const bloqueInfo = document.getElementById('cobrar-info-pago');
-    if (!info) { bloqueInfo.classList.add('hidden'); return; }
-    if (info.imagen) {
-        bloqueInfo.innerHTML = `<p class="text-xs text-gray-400 mb-2 text-center">Muéstrale este QR al cliente:</p>
-            <img src="${info.imagen}" class="mx-auto rounded-xl border border-gray-600 max-h-52">`;
-        bloqueInfo.classList.remove('hidden');
-    } else if (info.numero) {
-        bloqueInfo.innerHTML = `<p class="text-xs text-gray-400 mb-1 text-center">Número de transferencia:</p>
-            <p class="text-2xl font-extrabold text-amber-400 text-center tracking-wider">${info.numero}</p>`;
-        bloqueInfo.classList.remove('hidden');
-    } else {
-        bloqueInfo.classList.add('hidden');
-    }
-}
-
-async function confirmarCobro() {
-    if (!_cobrarMesaId || !_metodoCobro) return;
-    const btn = document.getElementById('btn-confirmar-cobro');
-    btn.disabled = true;
-    btn.textContent = 'Cobrando…';
-    try {
-        const r = await fetch(`${BASE}/cobrar/${_cobrarMesaId}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({metodo_pago: _metodoCobro})
-        });
-        const data = await r.json();
-        if (data.ok) {
-            document.getElementById('modal-cobrar').classList.add('hidden');
-            toast(`Mesa ${_cobrarMesaId} cobrada — $${Number(_cobrarTotal).toLocaleString()}`);
-            cargarCuentas();
-            cargarPedidos();
-        } else {
-            toast(data.error || 'Error', false);
-        }
-    } catch(e) { toast('Error', false); }
-    btn.disabled = false;
-    btn.textContent = 'Confirmar cobro';
+function cobrarMesa(mesaId) {
+    window.open(`https://${SLUG}.tuc-tuc.co/cobrar-mesa/${mesaId}`, '_blank');
 }
 
 // ===== INIT =====
 function iniciarApp() {
-    cargarConfigPago();
     cargarMesas();
     if (TIPO_REST !== 'carta') cargarMenuHoy(); // también para 'ambos'
     cargarPedidos();
@@ -903,21 +810,6 @@ function compartirEnlace() {
     </a>
 </div>
 
-<!-- Modal cobrar mesa -->
-<div id="modal-cobrar" class="fixed inset-0 bg-black/70 z-50 flex items-end justify-center hidden" onclick="if(event.target===this)document.getElementById('modal-cobrar').classList.add('hidden')">
-    <div class="bg-gray-900 rounded-t-3xl w-full max-w-lg p-6 pb-8 border-t-2 border-amber-500">
-        <h2 class="font-extrabold text-xl text-white mb-1">Cobrar <span id="cobrar-mesa-titulo"></span></h2>
-        <div class="text-3xl font-extrabold text-amber-400 mb-4" id="cobrar-mesa-total"></div>
-        <p class="text-xs text-gray-400 mb-2">¿Cómo pagó el cliente?</p>
-        <div id="cobrar-metodos-cont" class="flex flex-wrap gap-2 mb-3"></div>
-        <div id="cobrar-info-pago" class="hidden mb-3 p-3 bg-gray-800 border border-gray-600 rounded-xl"></div>
-        <button onclick="confirmarCobro()" id="btn-confirmar-cobro"
-                class="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold text-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-            Confirmar cobro
-        </button>
-        <button onclick="document.getElementById('modal-cobrar').classList.add('hidden')"
-                class="mt-2 w-full text-gray-500 text-sm py-2 text-center">Cancelar</button>
-    </div>
-</div>
+
 </body>
 </html>

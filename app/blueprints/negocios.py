@@ -200,18 +200,17 @@ def api_config_publica(tercero_id):
 @bp.route('/pagar/<int:pedido_id>')
 def pagar(pedido_id):
     tipo = request.args.get('tipo', '')
-    slug = request.args.get('slug', '')
     conn = get_db_connection()
     try:
         if tipo == 'tienda':
             row = conn.execute("""
-                SELECT t.tercero_id, t.nombre, t.slug
+                SELECT t.tercero_id, t.nombre, t.slug, p.total
                 FROM pedidos_tienda p JOIN tiendas t ON t.id = p.tienda_id
                 WHERE p.id = %s
             """, (pedido_id,)).fetchone()
         else:
             row = conn.execute("""
-                SELECT r.tercero_id, r.nombre, r.slug
+                SELECT r.tercero_id, r.nombre, r.slug, p.precio AS total
                 FROM pedidos_restaurante p JOIN restaurantes r ON r.id = p.restaurante_id
                 WHERE p.id = %s
             """, (pedido_id,)).fetchone()
@@ -222,7 +221,8 @@ def pagar(pedido_id):
                                tipo=tipo,
                                tercero_id=row['tercero_id'],
                                negocio_nombre=row['nombre'],
-                               negocio_slug=row['slug'])
+                               negocio_slug=row['slug'],
+                               total=float(row['total'] or 0))
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -232,9 +232,10 @@ def pagar(pedido_id):
 @bp.route('/api/pagar/<int:pedido_id>', methods=['POST'])
 def api_pagar(pedido_id):
     data = request.get_json() or {}
-    tipo         = data.get('tipo', '')
-    metodo_pago  = (data.get('metodo_pago') or '').strip() or None
-    comprobante  = data.get('comprobante') or None
+    tipo        = data.get('tipo', '')
+    pagos       = data.get('pagos') or []
+    comprobante = data.get('comprobante') or None
+    metodo_pago = pagos[0]['codigo'] if pagos else (data.get('metodo_pago') or '').strip() or None
     if not metodo_pago:
         return jsonify({'ok': False, 'error': 'Selecciona un método de pago'}), 400
     conn = get_db_connection()

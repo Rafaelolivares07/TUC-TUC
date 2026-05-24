@@ -13,25 +13,27 @@
 <div class="max-w-sm w-full">
     <div class="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-amber-500">
 
-        <div class="text-center mb-6">
+        <div class="text-center mb-5">
             <div class="text-4xl mb-2">🛍️</div>
             <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
-            <p class="text-sm text-gray-500 mt-1">Tu pedido fue recibido. ¿Cómo vas a pagar?</p>
+            <p class="text-sm text-gray-500 mt-1">Tu pedido fue recibido</p>
         </div>
 
-        <div id="bloque-metodos">
-            <p class="text-xs text-gray-400 text-center py-4">Cargando métodos de pago…</p>
+        <div class="flex justify-between items-center bg-amber-50 rounded-xl px-4 py-3 mb-5">
+            <span class="text-sm font-semibold text-gray-600">Total a pagar</span>
+            <span class="text-2xl font-extrabold text-amber-600" id="total-display">${{ "{:,.0f}".format(total) }}</span>
         </div>
 
-        <div id="bloque-info-pago" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-gray-700 text-center"></div>
+        <p class="text-xs font-semibold text-gray-500 mb-2">¿Cómo vas a pagar?</p>
+        <div id="metodos-pago-inputs" class="space-y-2 mb-2">
+            <p class="text-xs text-gray-400">Cargando métodos…</p>
+        </div>
+        <p id="pago-alerta" class="hidden text-xs text-red-500 font-semibold mb-2"></p>
 
-        <button onclick="confirmarPago()" id="btn-confirmar"
-                class="mt-5 w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-lg transition hidden">
-            Confirmar pago
-        </button>
+        <div id="bloque-info-pago" class="hidden mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-gray-700 text-center"></div>
 
-        <div id="bloque-comprobante" class="hidden mt-3">
-            <p class="text-xs text-gray-500 mb-2 text-center">Adjunta tu comprobante de pago (opcional)</p>
+        <div id="bloque-comprobante" class="hidden mb-3">
+            <p class="text-xs text-gray-500 mb-2">Adjunta tu comprobante (opcional)</p>
             <label class="flex items-center justify-center gap-2 border-2 border-dashed border-amber-300 rounded-xl py-3 cursor-pointer hover:bg-amber-50 transition">
                 <span class="text-xl">📎</span>
                 <span id="lbl-comprobante" class="text-sm text-amber-600 font-semibold">Subir imagen</span>
@@ -40,15 +42,21 @@
             <img id="preview-comprobante" class="hidden mt-2 mx-auto rounded-xl max-h-40 border">
         </div>
 
+        <button onclick="confirmarPago()" id="btn-confirmar"
+                class="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white py-3 rounded-xl font-bold text-lg transition"
+                disabled>
+            Confirmar pago
+        </button>
+
         <a id="btn-volver" href="https://{{ negocio_slug }}.tuc-tuc.co"
-           class="mt-4 block text-center text-gray-400 hover:text-gray-600 text-sm py-2">
-            Volver al menú
+           class="mt-3 block text-center text-gray-400 hover:text-gray-600 text-sm py-2">
+            {{ volver_texto | default('Volver al menú') }}
         </a>
 
         <div id="msg-ok" class="hidden mt-4 bg-green-50 border border-green-200 rounded-xl p-4 text-center">
             <p class="text-2xl mb-1">✅</p>
             <p class="font-bold text-green-700">¡Pago registrado!</p>
-            <a href="https://{{ negocio_slug }}.tuc-tuc.co" class="mt-2 inline-block text-sm text-amber-600 underline">Volver al menú</a>
+            <a href="{{ volver_url | default('https://' ~ negocio_slug ~ '.tuc-tuc.co') }}" class="mt-2 inline-block text-sm text-amber-600 underline">{{ volver_texto | default('Volver al menú') }}</a>
         </div>
 
         <div id="msg-error" class="hidden mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
@@ -58,77 +66,57 @@
 </div>
 
 <script>
-const PEDIDO_ID  = {{ pedido_id }};
 const TIPO       = '{{ tipo }}';
 const TERCERO_ID = {{ tercero_id }};
+const TOTAL      = {{ total }};
+const API_URL    = '{{ api_url | default("/api/pagar/" ~ pedido_id) }}';
+const VOLVER_URL = '{{ volver_url | default("https://" ~ negocio_slug ~ ".tuc-tuc.co") }}';
 const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
 
-let metodoPago = null;
+let metodosDisponibles = [];
 let comprobanteB64 = null;
-let configNegocio = null;
+let configMetodos = {};
 
 async function init() {
     try {
         const r = await fetch(`/api/negocio/${TERCERO_ID}/config/publica`);
         const d = await r.json();
-        if (!d.ok) return mostrarError('No se pudo cargar la configuración del negocio');
-        configNegocio = d;
-        renderMetodos(d.metodos_pago || []);
-        precargarImagenes(d.metodos_info || {});
+        if (!d.ok) throw new Error();
+        configMetodos = d;
+        metodosDisponibles = d.metodos_pago && d.metodos_pago.length
+            ? d.metodos_pago
+            : [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
     } catch(e) {
-        mostrarError('Error de conexión');
+        metodosDisponibles = [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
     }
+    renderMetodos();
 }
 
-function renderMetodos(metodos) {
-    const bloque = document.getElementById('bloque-metodos');
-    if (!metodos.length) {
-        metodoPago = 'efectivo';
-        bloque.innerHTML = '';
-        document.getElementById('btn-confirmar').classList.remove('hidden');
-        return;
-    }
-    if (metodos.length === 1) {
-        metodoPago = metodos[0].codigo;
-        bloque.innerHTML = '';
-        document.getElementById('btn-confirmar').classList.remove('hidden');
-        mostrarInfoPago(metodoPago);
-        actualizarComprobante(metodoPago);
-        return;
-    }
-    bloque.innerHTML = `
-        <p class="text-xs font-semibold text-gray-500 mb-2">Elige cómo pagar:</p>
-        <div class="flex flex-wrap gap-2">
-            ${metodos.map(m => `
-                <button onclick="selMetodo('${m.codigo}')" id="mp-${m.codigo}"
-                    class="mp-btn flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition border-gray-200 text-gray-600">
-                    <span>${m.icono}</span><span>${m.nombre}</span>
-                </button>
-            `).join('')}
+function renderMetodos() {
+    const cont = document.getElementById('metodos-pago-inputs');
+    cont.innerHTML = metodosDisponibles.map(m => `
+        <div class="flex items-center gap-3">
+            <span class="text-lg w-7 text-center flex-shrink-0">${m.icono || '💳'}</span>
+            <span class="text-sm font-semibold text-gray-700 flex-1">${m.nombre}</span>
+            <input type="number" min="0" step="100" value="0" placeholder="$0"
+                   id="mp-${m.codigo}"
+                   class="border-2 rounded-xl px-3 py-2 text-sm w-28 text-right font-bold focus:border-amber-400 focus:outline-none"
+                   oninput="onInputPago('${m.codigo}')">
         </div>
-    `;
-}
-
-function selMetodo(codigo) {
-    metodoPago = codigo;
-    document.querySelectorAll('.mp-btn').forEach(b => {
-        b.classList.remove('border-amber-500', 'bg-amber-50', 'text-amber-700');
-        b.classList.add('border-gray-200', 'text-gray-600');
-    });
-    const btn = document.getElementById('mp-' + codigo);
-    if (btn) {
-        btn.classList.add('border-amber-500', 'bg-amber-50', 'text-amber-700');
-        btn.classList.remove('border-gray-200', 'text-gray-600');
+    `).join('');
+    if (metodosDisponibles.length === 1) {
+        const inp = document.getElementById(`mp-${metodosDisponibles[0].codigo}`);
+        if (inp) { inp.value = TOTAL; validarPagos(); }
     }
-    document.getElementById('btn-confirmar').classList.remove('hidden');
-    mostrarInfoPago(codigo);
-    actualizarComprobante(codigo);
 }
 
-function mostrarInfoPago(codigo) {
-    const info = configNegocio && configNegocio.metodos_info && configNegocio.metodos_info[codigo];
+function onInputPago(codigo) {
+    validarPagos();
+    // Mostrar info QR del método con monto > 0
+    const info = configMetodos.metodos_info && configMetodos.metodos_info[codigo];
+    const monto = parseFloat(document.getElementById(`mp-${codigo}`)?.value || 0);
     const bloque = document.getElementById('bloque-info-pago');
-    if (!info) { bloque.classList.add('hidden'); return; }
+    if (!info || monto <= 0) { bloque.classList.add('hidden'); return; }
     if (info.imagen) {
         bloque.innerHTML = `<p class="text-xs text-gray-500 mb-2">Escanea este QR para pagar:</p>
             <img src="${info.imagen}" class="mx-auto rounded-xl border max-h-48">`;
@@ -137,17 +125,34 @@ function mostrarInfoPago(codigo) {
         bloque.innerHTML = `<p class="text-xs text-gray-500 mb-1">Transfiere a este número:</p>
             <p class="text-2xl font-extrabold text-gray-800 tracking-wider">${info.numero}</p>`;
         bloque.classList.remove('hidden');
-    } else {
-        bloque.classList.add('hidden');
     }
 }
 
-function actualizarComprobante(codigo) {
-    const bloque = document.getElementById('bloque-comprobante');
-    if (METODOS_SIN_COMPROBANTE.has(codigo)) {
-        bloque.classList.add('hidden');
+function getPagos() {
+    return metodosDisponibles
+        .map(m => ({codigo: m.codigo, nombre: m.nombre, monto: parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)}))
+        .filter(p => p.monto > 0);
+}
+
+function validarPagos() {
+    const suma = metodosDisponibles.reduce((s, m) => s + (parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)), 0);
+    const alerta = document.getElementById('pago-alerta');
+    const btn = document.getElementById('btn-confirmar');
+    if (suma === 0) {
+        alerta.textContent = 'Ingresa el monto pagado';
+        alerta.classList.remove('hidden');
+        btn.disabled = true;
+    } else if (TOTAL > 0 && Math.round(suma) !== Math.round(TOTAL)) {
+        const diff = Math.round(TOTAL - suma);
+        alerta.textContent = diff > 0 ? `Faltan $${diff.toLocaleString()}` : `Excede $${Math.abs(diff).toLocaleString()}`;
+        alerta.classList.remove('hidden');
+        btn.disabled = true;
     } else {
-        bloque.classList.remove('hidden');
+        alerta.classList.add('hidden');
+        btn.disabled = false;
+        // Mostrar comprobante si algún método que lo requiere tiene monto > 0
+        const necesita = getPagos().some(p => !METODOS_SIN_COMPROBANTE.has(p.codigo));
+        document.getElementById('bloque-comprobante').classList.toggle('hidden', !necesita);
     }
 }
 
@@ -166,24 +171,25 @@ function previewComprobante(input) {
 }
 
 async function confirmarPago() {
-    if (!metodoPago) return mostrarError('Selecciona un método de pago');
+    const pagos = getPagos();
+    if (!pagos.length) return;
     const btn = document.getElementById('btn-confirmar');
     btn.disabled = true;
     btn.textContent = 'Confirmando…';
     ocultarError();
     try {
-        const r = await fetch(`/api/pagar/${PEDIDO_ID}`, {
+        const r = await fetch(API_URL, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({tipo: TIPO, metodo_pago: metodoPago, comprobante: comprobanteB64})
+            body: JSON.stringify({tipo: TIPO, pagos, comprobante: comprobanteB64})
         });
         const d = await r.json();
         if (d.ok) {
-            document.getElementById('bloque-metodos').classList.add('hidden');
+            document.getElementById('metodos-pago-inputs').classList.add('hidden');
             document.getElementById('bloque-info-pago').classList.add('hidden');
             document.getElementById('bloque-comprobante').classList.add('hidden');
+            document.getElementById('pago-alerta').classList.add('hidden');
             btn.classList.add('hidden');
-            document.getElementById('btn-volver').classList.add('hidden');
             document.getElementById('msg-ok').classList.remove('hidden');
         } else {
             mostrarError(d.error || 'Error al confirmar');

@@ -77,7 +77,7 @@ def create_app():
             return
         from .blueprints.restaurantes import (
             restaurante_publico, restaurante_mesero, restaurante_cocina,
-            mi_restaurante, restaurante_cliente
+            mi_restaurante, restaurante_cliente, cobrar_mesa_page
         )
         from .blueprints.tiendas import tienda_publica, mi_tienda, tienda_caja
         from .db import get_db_connection
@@ -118,6 +118,10 @@ def create_app():
                 mesa_nombre = request.path[len('/mesa/'):]
                 if mesa_nombre:
                     return restaurante_cliente(slug, mesa_nombre)
+            if request.path.startswith('/cobrar-mesa/'):
+                mesa_id = request.path[len('/cobrar-mesa/'):]
+                if mesa_id:
+                    return cobrar_mesa_page(slug, mesa_id)
             return restaurante_publico(slug)
 
     # scheduler contabilidad desactivado — colgaba el worker de gunicorn

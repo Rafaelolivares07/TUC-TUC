@@ -1575,10 +1575,42 @@ def api_cuentas(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def cobrar_mesa_page(slug, mesa_id):
+    conn = get_db_connection()
+    try:
+        rest = conn.execute(
+            "SELECT id, nombre, slug, tercero_id FROM restaurantes WHERE slug=%s AND activo=TRUE", (slug,)
+        ).fetchone()
+        if not rest:
+            return "Restaurante no encontrado", 404
+        row = conn.execute("""
+            SELECT COALESCE(SUM(precio), 0) AS total
+            FROM pedidos_restaurante
+            WHERE restaurante_id=%s
+            AND (mesa_nombre=%s OR (COALESCE(mesa_nombre,'')='' AND mesa_num::text=%s))
+            AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
+        """, (rest['id'], mesa_id, mesa_id)).fetchone()
+        total = float(row['total'] or 0)
+        return render_template('pagar.html',
+                               tipo='mesa',
+                               tercero_id=rest['tercero_id'],
+                               negocio_nombre=rest['nombre'],
+                               negocio_slug=slug,
+                               total=total,
+                               api_url=f'/api/restaurante/{slug}/cobrar/{mesa_id}',
+                               volver_url=f'https://{slug}.tuc-tuc.co/mesero',
+                               volver_texto='Volver al mesero')
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/restaurante/<slug>/cobrar/<mesa_id>', methods=['POST'])
 def api_cobrar(slug, mesa_id):
     data = request.get_json() or {}
-    metodo_pago = (data.get('metodo_pago') or '').strip() or None
+    pagos = data.get('pagos') or []
+    metodo_pago = pagos[0]['codigo'] if pagos else (data.get('metodo_pago') or '').strip() or None
     try:
         conn = get_db_connection()
         rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()

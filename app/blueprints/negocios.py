@@ -10,6 +10,19 @@ MODALIDADES_CATALOGO = [
 ]
 
 
+_METODOS_PAGO_CATALOGO = [
+    ('Efectivo',       'efectivo',       '💵', 1,  None),
+    ('Nequi Celular',  'nequi_movil',    '📱', 22, 'nequi'),
+    ('Nequi QR',       'nequi_qr',       '📲', 21, 'nequi'),
+    ('Bancolombia',    'bancolombia',    '🏦', 3,  None),
+    ('Daviplata',      'daviplata',      '📲', 4,  None),
+    ('Tarjeta débito', 'tarjeta_debito', '💳', 5,  None),
+    ('Tarjeta crédito','tarjeta_credito','💳', 6,  None),
+    ('Transferencia',  'transferencia',  '🔄', 7,  None),
+    ('Contraentrega',  'contraentrega',  '📦', 8,  None),
+]
+
+
 def init_config_negocio(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS config_negocio (
@@ -21,6 +34,31 @@ def init_config_negocio(conn):
         )
     """)
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS metodos_info JSONB DEFAULT '{}'")
+
+    # Garantizar que el catálogo de métodos de pago esté completo en prod
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS metodos_pago_catalogo (
+            id     SERIAL PRIMARY KEY,
+            nombre VARCHAR(50) NOT NULL,
+            codigo VARCHAR(30) UNIQUE NOT NULL,
+            icono  VARCHAR(10) DEFAULT '💳',
+            orden  INTEGER DEFAULT 99,
+            activo BOOLEAN DEFAULT TRUE
+        )
+    """)
+    conn.execute("ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)")
+    for nombre, codigo, icono, orden, grupo in _METODOS_PAGO_CATALOGO:
+        conn.execute("""
+            INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (codigo) DO UPDATE SET
+                nombre = EXCLUDED.nombre,
+                icono  = EXCLUDED.icono,
+                orden  = EXCLUDED.orden,
+                grupo  = EXCLUDED.grupo
+        """, (nombre, codigo, icono, orden, grupo))
+    # 'nequi' legacy desactivado — reemplazado por nequi_movil y nequi_qr
+    conn.execute("UPDATE metodos_pago_catalogo SET activo = FALSE WHERE codigo = 'nequi'")
     conn.commit()
 
 

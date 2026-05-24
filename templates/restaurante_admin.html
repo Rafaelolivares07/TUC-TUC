@@ -1502,7 +1502,7 @@ async function cargarCuentasAdmin() {
                         <span class="text-xs text-gray-400">${c.cantidad} pedido${c.cantidad > 1 ? 's' : ''}</span>
                     </div>
                     <div class="text-2xl font-extrabold text-amber-600 mb-2">$${Number(c.total).toLocaleString()}</div>
-                    <button onclick="cobrarMesaAdmin('${c.mesa_id}', ${c.total})"
+                    <button onclick="window.open('https://${SLUG}.tuc-tuc.co/cobrar-mesa/${c.mesa_id}','_blank')"
                         class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-bold text-sm">
                         Cobrar
                     </button>
@@ -1522,17 +1522,6 @@ async function cargarCuentasAdmin() {
     } catch(e) { console.error(e); }
 }
 
-async function cobrarMesaAdmin(mesaId, total) {
-    if (!confirm(`¿Cobrar Mesa ${mesaId}?\nTotal: $${Number(total).toLocaleString()}`)) return;
-    try {
-        const r = await fetch(`${BASE}/cobrar/${mesaId}`, {method: 'POST'});
-        const data = await r.json();
-        if (data.ok) {
-            toast(`Mesa ${mesaId} cobrada - $${Number(total).toLocaleString()}`);
-            cargarCuentasAdmin();
-        }
-    } catch(e) { toast('Error', false); }
-}
 
 // ===== AUTOCOMPLETE PRODUCTOS EXISTENTES =====
 let acTimer = null;

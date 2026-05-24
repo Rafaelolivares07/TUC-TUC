@@ -1662,12 +1662,11 @@ async function guardarPines() {
 }
 
 function actualizarEnlacesWA() {
-    const base = window.location.origin;
     const pinMesero = document.getElementById('inp-pin-mesero').value.trim();
     const pinCocina = document.getElementById('inp-pin-cocina').value.trim();
 
-    const urlMesero = `${base}/r/${SLUG}/mesero`;
-    const urlCocina = `${base}/r/${SLUG}/cocina`;
+    const urlMesero = `https://${SLUG}.tuc-tuc.co/mesero`;
+    const urlCocina = `https://${SLUG}.tuc-tuc.co/cocina`;
 
     const btnMesero = document.getElementById('link-wa-mesero');
     const btnCocina = document.getElementById('link-wa-cocina');

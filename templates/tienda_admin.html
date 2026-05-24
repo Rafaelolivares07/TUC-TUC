@@ -351,10 +351,10 @@
                     <div>
                         <h3 class="font-bold text-gray-700">Cajeros</h3>
                         <p class="text-sm text-gray-500 mt-0.5">Cada cajero tiene su propio nombre y PIN para acceder a
-                            <a href="/tienda/{{ tienda.slug }}/caja" target="_blank" class="text-blue-500 underline">la caja</a>.
+                            <a href="https://{{ tienda.slug }}.tuc-tuc.co/caja" target="_blank" class="text-blue-500 underline">la caja</a>.
                         </p>
                     </div>
-                    <a href="/tienda/{{ tienda.slug }}/caja" target="_blank"
+                    <a href="https://{{ tienda.slug }}.tuc-tuc.co/caja" target="_blank"
                        class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1 shrink-0">
                         🛒 Abrir caja
                     </a>
@@ -1769,7 +1769,7 @@ async function eliminarCajero(id) {
 }
 
 function enviarCajeroWA(nombre, pin) {
-    const url = `${location.origin}/tienda/{{ tienda.slug }}/caja`;
+    const url = `https://${SLUG}.tuc-tuc.co/caja`;
     const msg = `Hola ${nombre}! Acá está tu enlace de cajero:\n${url}\n\nTu PIN de acceso: ${pin}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }

@@ -1577,6 +1577,8 @@ def api_cuentas(slug):
 
 @bp.route('/api/restaurante/<slug>/cobrar/<mesa_id>', methods=['POST'])
 def api_cobrar(slug, mesa_id):
+    data = request.get_json() or {}
+    metodo_pago = (data.get('metodo_pago') or '').strip() or None
     try:
         conn = get_db_connection()
         rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
@@ -1584,11 +1586,12 @@ def api_cobrar(slug, mesa_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         conn.execute("""
-            UPDATE pedidos_restaurante SET estado = 'cobrado'
+            UPDATE pedidos_restaurante
+            SET estado = 'cobrado', metodo_pago = COALESCE(%s, metodo_pago)
             WHERE restaurante_id = %s
             AND (mesa_nombre = %s OR (COALESCE(mesa_nombre,'') = '' AND mesa_num::text = %s))
             AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
-        """, (rest['id'], mesa_id, mesa_id))
+        """, (metodo_pago, rest['id'], mesa_id, mesa_id))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

@@ -2224,13 +2224,17 @@ function selVd(tel, nombre) {
                     </div>
                 </div>
             </a>
-            <div class="flex gap-2 mt-3 pt-3 border-t">
+            <div class="flex gap-2 mt-3 pt-3 border-t flex-wrap">
                 <button onclick="event.stopPropagation(); enviarAcceso('{{ t.admin_telefono }}', '{{ t.token_acceso }}', '{{ t.nombre }}')" class="text-xs bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg font-bold text-white transition">
                     Enviar acceso por WhatsApp
                 </button>
                 <button onclick="event.stopPropagation(); copiar('{{ t.token_acceso }}')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-bold text-gray-600 transition">
-                    Copiar enlace
+                    Copiar enlace admin
                 </button>
+                <button onclick="event.stopPropagation(); copiarPublica('{{ t.slug }}')" class="text-xs bg-rose-100 hover:bg-rose-200 px-3 py-1 rounded-lg font-bold text-rose-700 transition">
+                    Copiar URL pública
+                </button>
+                <a href="https://{{ t.slug }}.tuc-tuc.co" target="_blank" onclick="event.stopPropagation()" class="text-xs text-gray-400 self-center font-mono hover:text-rose-600 transition">{{ t.slug }}.tuc-tuc.co</a>
             </div>
             <div class="flex items-center gap-2 mt-2 flex-wrap" onclick="event.stopPropagation()">
                 <span class="text-xs text-gray-500 font-semibold min-w-fit">{{ t.dias_pagados or 0 }} días</span>
@@ -2319,6 +2323,10 @@ function enviarAcceso(tel, token, nombre) {
 function copiar(token) {
     navigator.clipboard.writeText(location.origin + '/t/acceso/' + token);
     toast('Enlace copiado');
+}
+function copiarPublica(slug) {
+    navigator.clipboard.writeText('https://' + slug + '.tuc-tuc.co');
+    toast('URL pública copiada');
 }
 
 async function agregarDias(slug) {

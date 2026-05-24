@@ -661,11 +661,17 @@
                         <span class="text-gray-400 ml-1">{{ r.admin_telefono }}</span>
                     </div>
                     {% if r.token_acceso %}
-                    <a href="https://wa.me/57{{ r.admin_telefono }}?text={{ ('Hola ' + r.admin_nombre + '! Acá está tu enlace para administrar ' + r.nombre + ': ' + request.host_url + 'r/acceso/' + r.token_acceso) | urlencode }}"
-                       target="_blank"
-                       class="bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-1 rounded-lg font-semibold">
-                        Enviar enlace por WhatsApp
-                    </a>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <a href="https://wa.me/57{{ r.admin_telefono }}?text={{ ('Hola ' + r.admin_nombre + '! Acá está tu enlace para administrar ' + r.nombre + ': ' + request.host_url + 'r/acceso/' + r.token_acceso) | urlencode }}"
+                           target="_blank"
+                           class="bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-1 rounded-lg font-semibold">
+                            Enviar acceso por WhatsApp
+                        </a>
+                        <button onclick="copiarPublicaRest('{{ r.slug }}')" class="bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs px-3 py-1 rounded-lg font-semibold">
+                            Copiar URL pública
+                        </button>
+                        <a href="https://{{ r.slug }}.tuc-tuc.co" target="_blank" class="text-xs text-gray-400 font-mono hover:text-amber-600 transition">{{ r.slug }}.tuc-tuc.co</a>
+                    </div>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -2121,6 +2127,11 @@ function abrirQR() {
     document.getElementById('overlay-qr').classList.remove('hidden');
 }
 function cerrarQR() { document.getElementById('overlay-qr').classList.add('hidden'); }
+
+function copiarPublicaRest(slug) {
+    navigator.clipboard.writeText('https://' + slug + '.tuc-tuc.co');
+    toast('URL pública copiada');
+}
 
 function copiarEnlaceDueno() {
     const inp = document.getElementById('inp-enlace-dueno');

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ negocio_nombre }} - Pago</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Inter', sans-serif; background: #faf7f2; }</style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+<div class="max-w-sm w-full">
+    <div class="bg-white rounded-2xl shadow-lg p-6 border-t-4 border-amber-500">
+
+        <div class="text-center mb-6">
+            <div class="text-4xl mb-2">🛍️</div>
+            <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+            <p class="text-sm text-gray-500 mt-1">Tu pedido fue recibido. ¿Cómo vas a pagar?</p>
+        </div>
+
+        <div id="bloque-metodos">
+            <p class="text-xs text-gray-400 text-center py-4">Cargando métodos de pago…</p>
+        </div>
+
+        <div id="bloque-info-pago" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-gray-700 text-center"></div>
+
+        <button onclick="confirmarPago()" id="btn-confirmar"
+                class="mt-5 w-full bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-lg transition hidden">
+            Confirmar pago
+        </button>
+
+        <div id="bloque-comprobante" class="hidden mt-3">
+            <p class="text-xs text-gray-500 mb-2 text-center">Adjunta tu comprobante de pago (opcional)</p>
+            <label class="flex items-center justify-center gap-2 border-2 border-dashed border-amber-300 rounded-xl py-3 cursor-pointer hover:bg-amber-50 transition">
+                <span class="text-xl">📎</span>
+                <span id="lbl-comprobante" class="text-sm text-amber-600 font-semibold">Subir imagen</span>
+                <input type="file" id="inp-comprobante" accept="image/*" class="hidden" onchange="previewComprobante(this)">
+            </label>
+            <img id="preview-comprobante" class="hidden mt-2 mx-auto rounded-xl max-h-40 border">
+        </div>
+
+        <a id="btn-volver" href="https://{{ negocio_slug }}.tuc-tuc.co"
+           class="mt-4 block text-center text-gray-400 hover:text-gray-600 text-sm py-2">
+            Volver al menú
+        </a>
+
+        <div id="msg-ok" class="hidden mt-4 bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+            <p class="text-2xl mb-1">✅</p>
+            <p class="font-bold text-green-700">¡Pago registrado!</p>
+            <a href="https://{{ negocio_slug }}.tuc-tuc.co" class="mt-2 inline-block text-sm text-amber-600 underline">Volver al menú</a>
+        </div>
+
+        <div id="msg-error" class="hidden mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
+            <p class="text-sm text-red-700" id="txt-error"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+const PEDIDO_ID  = {{ pedido_id }};
+const TIPO       = '{{ tipo }}';
+const TERCERO_ID = {{ tercero_id }};
+const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
+
+let metodoPago = null;
+let comprobanteB64 = null;
+let configNegocio = null;
+
+async function init() {
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config/publica`);
+        const d = await r.json();
+        if (!d.ok) return mostrarError('No se pudo cargar la configuración del negocio');
+        configNegocio = d;
+        renderMetodos(d.metodos_pago || []);
+        precargarImagenes(d.metodos_info || {});
+    } catch(e) {
+        mostrarError('Error de conexión');
+    }
+}
+
+function renderMetodos(metodos) {
+    const bloque = document.getElementById('bloque-metodos');
+    if (!metodos.length) {
+        metodoPago = 'efectivo';
+        bloque.innerHTML = '';
+        document.getElementById('btn-confirmar').classList.remove('hidden');
+        return;
+    }
+    if (metodos.length === 1) {
+        metodoPago = metodos[0].codigo;
+        bloque.innerHTML = '';
+        document.getElementById('btn-confirmar').classList.remove('hidden');
+        mostrarInfoPago(metodoPago);
+        actualizarComprobante(metodoPago);
+        return;
+    }
+    bloque.innerHTML = `
+        <p class="text-xs font-semibold text-gray-500 mb-2">Elige cómo pagar:</p>
+        <div class="flex flex-wrap gap-2">
+            ${metodos.map(m => `
+                <button onclick="selMetodo('${m.codigo}')" id="mp-${m.codigo}"
+                    class="mp-btn flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition border-gray-200 text-gray-600">
+                    <span>${m.icono}</span><span>${m.nombre}</span>
+                </button>
+            `).join('')}
+        </div>
+    `;
+}
+
+function selMetodo(codigo) {
+    metodoPago = codigo;
+    document.querySelectorAll('.mp-btn').forEach(b => {
+        b.classList.remove('border-amber-500', 'bg-amber-50', 'text-amber-700');
+        b.classList.add('border-gray-200', 'text-gray-600');
+    });
+    const btn = document.getElementById('mp-' + codigo);
+    if (btn) {
+        btn.classList.add('border-amber-500', 'bg-amber-50', 'text-amber-700');
+        btn.classList.remove('border-gray-200', 'text-gray-600');
+    }
+    document.getElementById('btn-confirmar').classList.remove('hidden');
+    mostrarInfoPago(codigo);
+    actualizarComprobante(codigo);
+}
+
+function mostrarInfoPago(codigo) {
+    const info = configNegocio && configNegocio.metodos_info && configNegocio.metodos_info[codigo];
+    const bloque = document.getElementById('bloque-info-pago');
+    if (!info) { bloque.classList.add('hidden'); return; }
+    if (info.imagen) {
+        bloque.innerHTML = `<p class="text-xs text-gray-500 mb-2">Escanea este QR para pagar:</p>
+            <img src="${info.imagen}" class="mx-auto rounded-xl border max-h-48">`;
+        bloque.classList.remove('hidden');
+    } else if (info.numero) {
+        bloque.innerHTML = `<p class="text-xs text-gray-500 mb-1">Transfiere a este número:</p>
+            <p class="text-2xl font-extrabold text-gray-800 tracking-wider">${info.numero}</p>`;
+        bloque.classList.remove('hidden');
+    } else {
+        bloque.classList.add('hidden');
+    }
+}
+
+function actualizarComprobante(codigo) {
+    const bloque = document.getElementById('bloque-comprobante');
+    if (METODOS_SIN_COMPROBANTE.has(codigo)) {
+        bloque.classList.add('hidden');
+    } else {
+        bloque.classList.remove('hidden');
+    }
+}
+
+function previewComprobante(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('lbl-comprobante').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+        comprobanteB64 = e.target.result;
+        const img = document.getElementById('preview-comprobante');
+        img.src = comprobanteB64;
+        img.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+async function confirmarPago() {
+    if (!metodoPago) return mostrarError('Selecciona un método de pago');
+    const btn = document.getElementById('btn-confirmar');
+    btn.disabled = true;
+    btn.textContent = 'Confirmando…';
+    ocultarError();
+    try {
+        const r = await fetch(`/api/pagar/${PEDIDO_ID}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tipo: TIPO, metodo_pago: metodoPago, comprobante: comprobanteB64})
+        });
+        const d = await r.json();
+        if (d.ok) {
+            document.getElementById('bloque-metodos').classList.add('hidden');
+            document.getElementById('bloque-info-pago').classList.add('hidden');
+            document.getElementById('bloque-comprobante').classList.add('hidden');
+            btn.classList.add('hidden');
+            document.getElementById('btn-volver').classList.add('hidden');
+            document.getElementById('msg-ok').classList.remove('hidden');
+        } else {
+            mostrarError(d.error || 'Error al confirmar');
+            btn.disabled = false;
+            btn.textContent = 'Confirmar pago';
+        }
+    } catch(e) {
+        mostrarError('Error de conexión');
+        btn.disabled = false;
+        btn.textContent = 'Confirmar pago';
+    }
+}
+
+function mostrarError(msg) {
+    document.getElementById('txt-error').textContent = msg;
+    document.getElementById('msg-error').classList.remove('hidden');
+}
+function ocultarError() {
+    document.getElementById('msg-error').classList.add('hidden');
+}
+
+init();
+</script>
+</body>
+</html>

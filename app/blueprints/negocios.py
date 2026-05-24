@@ -197,6 +197,68 @@ def api_config_publica(tercero_id):
         conn.close()
 
 
+@bp.route('/pagar/<int:pedido_id>')
+def pagar(pedido_id):
+    tipo = request.args.get('tipo', '')
+    slug = request.args.get('slug', '')
+    conn = get_db_connection()
+    try:
+        if tipo == 'tienda':
+            row = conn.execute("""
+                SELECT t.tercero_id, t.nombre, t.slug
+                FROM pedidos_tienda p JOIN tiendas t ON t.id = p.tienda_id
+                WHERE p.id = %s
+            """, (pedido_id,)).fetchone()
+        else:
+            row = conn.execute("""
+                SELECT r.tercero_id, r.nombre, r.slug
+                FROM pedidos_restaurante p JOIN restaurantes r ON r.id = p.restaurante_id
+                WHERE p.id = %s
+            """, (pedido_id,)).fetchone()
+        if not row:
+            return "Pedido no encontrado", 404
+        return render_template('pagar.html',
+                               pedido_id=pedido_id,
+                               tipo=tipo,
+                               tercero_id=row['tercero_id'],
+                               negocio_nombre=row['nombre'],
+                               negocio_slug=row['slug'])
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/pagar/<int:pedido_id>', methods=['POST'])
+def api_pagar(pedido_id):
+    data = request.get_json() or {}
+    tipo         = data.get('tipo', '')
+    metodo_pago  = (data.get('metodo_pago') or '').strip() or None
+    comprobante  = data.get('comprobante') or None
+    if not metodo_pago:
+        return jsonify({'ok': False, 'error': 'Selecciona un método de pago'}), 400
+    conn = get_db_connection()
+    try:
+        if tipo == 'tienda':
+            conn.execute(
+                "UPDATE pedidos_tienda SET metodo_pago=%s, comprobante_pago=%s WHERE id=%s",
+                (metodo_pago, comprobante, pedido_id)
+            )
+        else:
+            conn.execute(
+                "UPDATE pedidos_restaurante SET metodo_pago=%s, comprobante_pago=%s WHERE id=%s",
+                (metodo_pago, comprobante, pedido_id)
+            )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/negocio/<int:tercero_id>/metodo-info', methods=['POST'])
 def api_metodo_info(tercero_id):
     if 'usuario_id' not in session:

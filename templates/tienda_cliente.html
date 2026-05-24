@@ -221,13 +221,6 @@
 
             <textarea id="inp-notas" placeholder="Notas (opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-3" rows="2"></textarea>
 
-            <!-- Método de pago -->
-            <div id="bloque-metodo-pago" class="hidden mb-3">
-                <p class="text-xs font-semibold txt-secondary mb-2">¿Cómo vas a pagar?</p>
-                <div id="btns-metodo-pago" class="flex flex-wrap gap-2"></div>
-            </div>
-            <!-- Info de pago (QR / número) -->
-            <div id="bloque-info-pago" class="hidden mb-4 bg-gray-50 rounded-xl p-4 text-center"></div>
         </div>
 
         <button onclick="enviarPedido()" id="btn-enviar" class="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold text-lg transition">
@@ -285,70 +278,7 @@ async function cargarConfig() {
             tipoEntrega = mods[0];
             selEntrega(tipoEntrega);
         }
-        renderMetodosPago(d.metodos_pago || []);
-        precargarImagenesPago(d.metodos_info || {});
     } catch(e) {}
-}
-
-function precargarImagenesPago(metodos_info) {
-    const old = document.getElementById('mp-preloader');
-    if (old) old.remove();
-    const imgs = Object.values(metodos_info).filter(i => i.imagen);
-    if (!imgs.length) return;
-    const c = document.createElement('div');
-    c.id = 'mp-preloader';
-    c.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;overflow:hidden;pointer-events:none;';
-    imgs.forEach(i => { const img = new Image(); img.src = i.imagen; c.appendChild(img); });
-    document.body.appendChild(c);
-}
-
-const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
-
-function renderMetodosPago(metodos) {
-    const bloque = document.getElementById('bloque-metodo-pago');
-    const cont = document.getElementById('btns-metodo-pago');
-    if (!bloque || !cont || !metodos.length) return;
-    bloque.classList.remove('hidden');
-    if (metodos.length === 1) {
-        metodoPago = metodos[0].codigo;
-        bloque.classList.add('hidden');
-        return;
-    }
-    cont.innerHTML = metodos.map(m => `
-        <button onclick="selMetodoPago('${m.codigo}')" id="mp-${m.codigo}"
-            class="mp-btn flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition border-gray-200 text-gray-600">
-            <span>${m.icono}</span><span>${m.nombre}</span>
-        </button>
-    `).join('');
-}
-
-function selMetodoPago(codigo) {
-    metodoPago = codigo;
-    document.querySelectorAll('.mp-btn').forEach(b => {
-        b.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-600');
-        b.classList.add('border-gray-200', 'text-gray-600');
-    });
-    const btn = document.getElementById('mp-' + codigo);
-    if (btn) {
-        btn.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-600');
-        btn.classList.remove('border-gray-200', 'text-gray-600');
-    }
-    // Mostrar info de pago (QR o número)
-    const info = configNegocio && configNegocio.metodos_info && configNegocio.metodos_info[codigo];
-    const bloqueInfo = document.getElementById('bloque-info-pago');
-    if (!bloqueInfo) return;
-    if (!info) { bloqueInfo.classList.add('hidden'); return; }
-    if (info.imagen) {
-        bloqueInfo.innerHTML = `<p class="text-xs text-gray-500 mb-2">Escanea este QR para pagar:</p>
-            <img src="${info.imagen}" class="mx-auto rounded-xl border max-h-48">`;
-        bloqueInfo.classList.remove('hidden');
-    } else if (info.numero) {
-        bloqueInfo.innerHTML = `<p class="text-xs text-gray-500 mb-1">Transfiere a este número:</p>
-            <p class="text-lg font-extrabold text-gray-800 tracking-wider">${info.numero}</p>`;
-        bloqueInfo.classList.remove('hidden');
-    } else {
-        bloqueInfo.classList.add('hidden');
-    }
 }
 
 function toast(msg, error) {
@@ -629,32 +559,12 @@ async function enviarPedido() {
         });
         const dataPedido = await rPedido.json();
         if (dataPedido.ok) {
-            ultimoPedidoId = dataPedido.pedido_id || null;
+            const pedidoId = dataPedido.pedido_id;
             carrito = {};
             carritoMeta = {};
             localStorage.removeItem('carrito_' + SLUG);
             localStorage.removeItem('carrito_meta_' + SLUG);
-            cerrarModalPedido();
-            renderProductos();
-            const avisoEl = document.getElementById('aviso-pedido-ok');
-            if (avisoEl) {
-                const aviso = configNegocio && configNegocio.aviso_pedido;
-                avisoEl.textContent = aviso || '';
-                avisoEl.classList.toggle('hidden', !aviso);
-            }
-            const bloqueComp = document.getElementById('bloque-comprobante');
-            const compOk = document.getElementById('comprobante-ok');
-            if (bloqueComp) {
-                const necesita = ultimoPedidoId && metodoPago && !METODOS_SIN_COMPROBANTE.has(metodoPago);
-                bloqueComp.classList.toggle('hidden', !necesita);
-                if (compOk) compOk.classList.add('hidden');
-            }
-            document.getElementById('modal-ok').classList.remove('hidden');
-
-            // Mostrar info entrega
-            document.getElementById('info-nombre').textContent = nombre;
-            document.getElementById('info-tipo-entrega').textContent = tipoEntrega === 'domicilio' ? 'Domicilio' : 'Recoger';
-            document.getElementById('info-entrega').classList.remove('hidden');
+            window.location.href = `/pagar/${pedidoId}?tipo=tienda&slug=${SLUG}`;
         } else {
             if (dataPedido.error === 'suscripcion_agotada') {
                 toast('La tienda no esta disponible en este momento', true);

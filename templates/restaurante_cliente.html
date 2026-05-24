@@ -216,13 +216,6 @@
             <div id="barra-carrito">
                 <input id="cli-notas" type="text" placeholder="¿Alguna nota? (sin cebolla, extra arroz…)"
                        class="card-input w-full border rounded-xl px-3 py-2 text-sm mb-2 cli-notas-menu">
-                {% if not mesa_nombre %}
-                <div id="bloque-metodo-pago-rest" class="hidden mb-2">
-                    <p class="text-xs font-semibold text-gray-500 mb-1.5">¿Cómo vas a pagar?</p>
-                    <div id="btns-metodo-pago-rest" class="flex flex-wrap gap-2"></div>
-                </div>
-                <div id="bloque-info-pago-rest" class="hidden mb-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-gray-700"></div>
-                {% endif %}
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <span class="txt-muted text-xs">Total</span>
@@ -356,103 +349,10 @@ async function cargarConfig() {
         if (btnD) btnD.style.display = mods.includes('domicilio') ? '' : 'none';
         if (btnR) btnR.style.display = mods.includes('recoger') ? '' : 'none';
         if (mods.length === 1) selTipoEntrega(mods[0]);
-        renderMetodosPagoRest(d.metodos_pago || []);
-        precargarImagenesPago(d.metodos_info || {});
     } catch(e) {}
 }
 
-function precargarImagenesPago(metodos_info) {
-    const old = document.getElementById('mp-preloader');
-    if (old) old.remove();
-    const imgs = Object.values(metodos_info).filter(i => i.imagen);
-    if (!imgs.length) return;
-    const c = document.createElement('div');
-    c.id = 'mp-preloader';
-    c.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;overflow:hidden;pointer-events:none;';
-    imgs.forEach(i => { const img = new Image(); img.src = i.imagen; c.appendChild(img); });
-    document.body.appendChild(c);
-}
-
-const METODOS_SIN_COMPROBANTE_R = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
 let ultimoPedidoId = null;
-
-function renderMetodosPagoRest(metodos) {
-    const bloque = document.getElementById('bloque-metodo-pago-rest');
-    const cont = document.getElementById('btns-metodo-pago-rest');
-    if (!bloque || !cont || !metodos.length) return;
-    if (metodos.length === 1) {
-        metodoPago = metodos[0].codigo;
-        return;
-    }
-    bloque.classList.remove('hidden');
-    cont.innerHTML = metodos.map(m => `
-        <button onclick="selMetodoPagoRest('${m.codigo}')" id="rmp-${m.codigo}"
-            class="rmp-btn flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold transition border-gray-200 text-gray-600">
-            <span>${m.icono}</span><span>${m.nombre}</span>
-        </button>
-    `).join('');
-}
-
-function selMetodoPagoRest(codigo) {
-    metodoPago = codigo;
-    document.querySelectorAll('.rmp-btn').forEach(b => {
-        b.classList.remove('border-amber-500', 'bg-amber-50', 'text-amber-700');
-        b.classList.add('border-gray-200', 'text-gray-600');
-    });
-    const btn = document.getElementById('rmp-' + codigo);
-    if (btn) {
-        btn.classList.add('border-amber-500', 'bg-amber-50', 'text-amber-700');
-        btn.classList.remove('border-gray-200', 'text-gray-600');
-    }
-    // Mostrar info de pago
-    const info = configNegocio && configNegocio.metodos_info && configNegocio.metodos_info[codigo];
-    const bloqueInfo = document.getElementById('bloque-info-pago-rest');
-    if (!bloqueInfo) return;
-    if (!info) { bloqueInfo.classList.add('hidden'); return; }
-    if (info.imagen) {
-        bloqueInfo.innerHTML = `<p class="text-xs text-gray-500 mb-2">Escanea este QR para pagar:</p>
-            <img src="${info.imagen}" class="mx-auto rounded-xl border max-h-44">`;
-        bloqueInfo.classList.remove('hidden');
-    } else if (info.numero) {
-        bloqueInfo.innerHTML = `<p class="text-xs text-gray-500 mb-1">Transfiere a este número:</p>
-            <p class="text-lg font-extrabold text-gray-800 tracking-wider">${info.numero}</p>`;
-        bloqueInfo.classList.remove('hidden');
-    } else {
-        bloqueInfo.classList.add('hidden');
-    }
-}
-
-function mostrarComprobanteRest(pedido_id) {
-    ultimoPedidoId = pedido_id;
-    if (!pedido_id || !metodoPago || METODOS_SIN_COMPROBANTE_R.has(metodoPago)) return;
-    const t = document.getElementById('toast');
-    t.innerHTML = `📎 <a href="#" onclick="abrirSubidaComprobante();return false;" style="text-decoration:underline;font-weight:bold;">Adjuntar comprobante</a>`;
-    t.className = 'toast show toast-ok';
-    setTimeout(() => t.classList.remove('show'), 10000);
-}
-
-function abrirSubidaComprobante() {
-    document.getElementById('input-comprobante-rest').click();
-}
-
-async function subirComprobanteRest(input) {
-    const file = input.files[0];
-    if (!file || !ultimoPedidoId) return;
-    const reader = new FileReader();
-    reader.onload = async e => {
-        try {
-            const r = await fetch(`${BASE}/pedido/${ultimoPedidoId}/comprobante`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({imagen: e.target.result})
-            });
-            const d = await r.json();
-            if (d.ok) toast('Comprobante enviado ✓', true);
-            else toast(d.error || 'Error', false);
-        } catch(err) { toast('Error de red', false); }
-    };
-    reader.readAsDataURL(file);
-}
 
 function mostrarAvisoPedido() {
     const aviso = configNegocio && configNegocio.aviso_pedido;
@@ -718,10 +618,13 @@ async function enviarPedido() {
                 b.classList.remove('selected', 'border-amber-500', 'bg-amber-50');
                 b.classList.add('border-transparent');
             });
-            mostrarPedidoActivo(resumenMenu);
-            mostrarAvisoPedido();
-            mostrarComprobanteRest(data.pedido_id);
-            cargarMisPedidos();
+            if (MESA === '') {
+                window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
+            } else {
+                mostrarPedidoActivo(resumenMenu);
+                mostrarAvisoPedido();
+                cargarMisPedidos();
+            }
         } else {
             if (data.error === 'suscripcion_agotada') {
                 toast('El restaurante no está disponible en este momento', false);
@@ -987,10 +890,13 @@ enviarPedido = async function() {
                     if (n) { n.value = ''; n.classList.add('hidden'); }
                 });
                 cartaClienteTotal();
-                mostrarPedidoActivo(resumenCarta);
-                mostrarAvisoPedido();
-                mostrarComprobanteRest(data.pedido_id);
-                cargarMisPedidos();
+                if (MESA === '') {
+                    window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
+                } else {
+                    mostrarPedidoActivo(resumenCarta);
+                    mostrarAvisoPedido();
+                    cargarMisPedidos();
+                }
             } else {
                 if (data.error === 'suscripcion_agotada') {
                     toast('El restaurante no está disponible en este momento', false);
@@ -1154,7 +1060,6 @@ setInterval(cargarMisPedidos, 10000);
         <button onclick="cerrarModal()" class="mt-2 text-gray-400 text-sm w-full text-center py-2">Cancelar</button>
     </div>
 </div>
-<input type="file" id="input-comprobante-rest" class="hidden" accept="image/*" onchange="subirComprobanteRest(this)">
 
 {% if restaurante.lat and restaurante.lon %}
 <script>

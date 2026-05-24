@@ -220,7 +220,7 @@ def admin_restaurante_detalle(slug):
         conn.close()
         if not restaurante:
             return redirect(url_for('restaurantes.admin_restaurante_lista'))
-        cliente_url = f"https://{restaurante['slug']}.tuc-tuc.co"
+        cliente_url = f"https://admin.tuc-tuc.co/r/{restaurante['slug']}"
         return render_template('restaurante_admin.html', restaurante=restaurante, restaurantes=None, cliente_url=cliente_url)
     except Exception as e:
         return f"Error: {e}", 500
@@ -243,7 +243,7 @@ def mi_restaurante(slug):
         autenticado = es_admin or (uid and uid == restaurante['admin_id']) or (tok and tok == restaurante['token_acceso'])
         conn.close()
         if autenticado:
-            cliente_url = f"https://{restaurante['slug']}.tuc-tuc.co"
+            cliente_url = f"https://admin.tuc-tuc.co/r/{restaurante['slug']}"
             return render_template('restaurante_admin.html', restaurante=restaurante, restaurantes=None, es_dueno=True, cliente_url=cliente_url)
         return render_template('restaurante_recuperar.html', restaurante=restaurante)
     except Exception as e:

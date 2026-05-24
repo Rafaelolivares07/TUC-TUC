@@ -22,7 +22,7 @@ def backup_tuctuc():
         env = os.environ.copy()
         env['PGPASSWORD'] = p.password or ''
         cmd = [
-            'pg_dump',
+            '/usr/bin/pg_dump',
             '-h', p.hostname or 'localhost',
             '-p', str(p.port or 5432),
             '-U', p.username or 'postgres',

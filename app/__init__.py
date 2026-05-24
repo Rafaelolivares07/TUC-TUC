@@ -79,35 +79,41 @@ def create_app():
             restaurante_publico, restaurante_mesero, restaurante_cocina,
             mi_restaurante, restaurante_cliente
         )
-        from .blueprints.tiendas import tienda_publica
+        from .blueprints.tiendas import tienda_publica, mi_tienda, tienda_caja
         from .db import get_db_connection
 
-        # Rutas exclusivas de restaurante (mesero/cocina/admin)
-        _MAP_REST = {
-            '/mesero': restaurante_mesero,
-            '/cocina': restaurante_cocina,
-            '/admin':  mi_restaurante,
-        }
-        fn = _MAP_REST.get(request.path)
-        if fn:
-            return fn(slug)
-        if request.path.startswith('/mesa/'):
-            mesa_nombre = request.path[len('/mesa/'):]
-            if mesa_nombre:
-                return restaurante_cliente(slug, mesa_nombre)
+        # Detectar tipo de negocio una sola vez
+        try:
+            conn = get_db_connection()
+            es_tienda = conn.execute(
+                "SELECT 1 FROM tiendas WHERE slug = %s LIMIT 1", (slug,)
+            ).fetchone()
+            conn.close()
+        except Exception:
+            es_tienda = None
 
-        # Raíz ('/') o cualquier otra ruta: detectar tipo de negocio
-        if request.path in ('', '/'):
-            try:
-                conn = get_db_connection()
-                es_tienda = conn.execute(
-                    "SELECT 1 FROM tiendas WHERE slug = %s LIMIT 1", (slug,)
-                ).fetchone()
-                conn.close()
-            except Exception:
-                es_tienda = None
-            if es_tienda:
-                return tienda_publica(slug)
+        if es_tienda:
+            _MAP_TIENDA = {
+                '/admin': mi_tienda,
+                '/caja':  tienda_caja,
+            }
+            fn = _MAP_TIENDA.get(request.path)
+            if fn:
+                return fn(slug)
+            return tienda_publica(slug)
+        else:
+            _MAP_REST = {
+                '/mesero': restaurante_mesero,
+                '/cocina': restaurante_cocina,
+                '/admin':  mi_restaurante,
+            }
+            fn = _MAP_REST.get(request.path)
+            if fn:
+                return fn(slug)
+            if request.path.startswith('/mesa/'):
+                mesa_nombre = request.path[len('/mesa/'):]
+                if mesa_nombre:
+                    return restaurante_cliente(slug, mesa_nombre)
             return restaurante_publico(slug)
 
     # scheduler contabilidad desactivado — colgaba el worker de gunicorn

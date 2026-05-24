@@ -92,6 +92,10 @@ def create_app():
         except Exception:
             es_tienda = None
 
+        # No interceptar llamadas API ni estáticos — dejar que Flask las enrute normal
+        if request.path.startswith('/api/') or request.path.startswith('/static/'):
+            return
+
         if es_tienda:
             _MAP_TIENDA = {
                 '/admin': mi_tienda,

@@ -1591,12 +1591,14 @@ def cobrar_mesa_page(slug, mesa_id):
             AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
         """, (rest['id'], mesa_id, mesa_id)).fetchone()
         total = float(row['total'] or 0)
+        mesa_label = 'En línea' if str(mesa_id) == '0' else f'Mesa {mesa_id}'
         return render_template('pagar.html',
                                tipo='mesa',
                                tercero_id=rest['tercero_id'],
                                negocio_nombre=rest['nombre'],
                                negocio_slug=slug,
                                total=total,
+                               mesa_label=mesa_label,
                                api_url=f'/api/restaurante/{slug}/cobrar/{mesa_id}',
                                volver_url=f'https://{slug}.tuc-tuc.co/mesero',
                                volver_texto='Volver al mesero')

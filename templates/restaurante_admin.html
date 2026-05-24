@@ -2095,7 +2095,7 @@ if (SLUG) {
     cargarSuscripcion();
 
     // Mostrar URL pública y QR
-    const _urlRest = `${location.origin}/r/${SLUG}`;
+    const _urlRest = `https://${SLUG}.tuc-tuc.co`;
     const urlPub = document.getElementById('url-publica');
     if (urlPub) urlPub.textContent = _urlRest;
     new QRCode(document.getElementById('qr-restaurante'), {
@@ -2113,7 +2113,7 @@ let _qrRestGrande = false;
 function abrirQR() {
     if (!_qrRestGrande) {
         new QRCode(document.getElementById('qr-grande'), {
-            text: `${location.origin}/r/${SLUG}`, width: 260, height: 260,
+            text: `https://${SLUG}.tuc-tuc.co`, width: 260, height: 260,
             colorDark: '#1f2937', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M
         });
         _qrRestGrande = true;
@@ -2129,12 +2129,12 @@ function copiarEnlaceDueno() {
 }
 
 function copiarEnlace() {
-    const url = `${location.origin}/r/${SLUG}`;
+    const url = `https://${SLUG}.tuc-tuc.co`;
     navigator.clipboard.writeText(url).then(() => toast('Enlace copiado'));
 }
 
 function compartirWhatsApp() {
-    const url = `${location.origin}/r/${SLUG}`;
+    const url = `https://${SLUG}.tuc-tuc.co`;
     const texto = encodeURIComponent(`Pide desde tu celular en {{ restaurante.nombre }}: ${url}`);
     window.open(`https://wa.me/?text=${texto}`, '_blank');
 }

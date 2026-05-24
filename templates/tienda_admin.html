@@ -1072,7 +1072,7 @@ async function guardarUbicacion() {
 }
 
 // === URL pública y enlaces ===
-const URL_PUBLICA = location.origin + '/t/' + SLUG;
+const URL_PUBLICA = 'https://' + SLUG + '.tuc-tuc.co';
 document.getElementById('url-publica').textContent = URL_PUBLICA;
 try {
     new QRCode(document.getElementById('qr-tienda'), {

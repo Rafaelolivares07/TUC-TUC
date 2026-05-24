@@ -801,7 +801,7 @@ function iniciarApp() {
 }
 
 function compartirEnlace() {
-    const url = `${location.origin}/r/${SLUG}`;
+    const url = `https://${SLUG}.tuc-tuc.co`;
     const texto = `Pide desde tu celular en {{ restaurante.nombre }}: ${url}`;
     if (navigator.share) {
         navigator.share({title: '{{ restaurante.nombre }}', text: texto, url: url});

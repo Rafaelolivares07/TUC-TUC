@@ -509,7 +509,6 @@ async function enviarPedido() {
     const telLimpio = telefono.replace(/\D/g, '');
     if (telLimpio.length < 10) return toast('Celular debe tener al menos 10 digitos', true);
     if (tipoEntrega === 'domicilio' && !direccion) return toast('Ingresa la direccion de entrega', true);
-    if (configNegocio && (configNegocio.metodos_pago || []).length > 1 && !metodoPago) return toast('Elige el método de pago', true);
 
     const btn = document.getElementById('btn-enviar');
     btn.disabled = true;

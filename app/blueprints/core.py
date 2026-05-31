@@ -98,15 +98,38 @@ def index():
 def api_version():
     import subprocess
     repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-    try:
-        commit = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            cwd=repo_dir,
-            encoding='utf-8'
-        ).strip()
-    except Exception:
-        commit = ''
-    return jsonify({'version': '2.0.0', 'ok': True, 'commit': commit})
+    commit = ''
+    commit_source = ''
+    commit_error = ''
+
+    for env_name in ('GIT_COMMIT', 'COMMIT_SHA', 'SOURCE_VERSION', 'RENDER_GIT_COMMIT', 'HEROKU_SLUG_COMMIT'):
+        env_commit = os.environ.get(env_name, '').strip()
+        if env_commit:
+            commit = env_commit[:7]
+            commit_source = env_name
+            break
+
+    if not commit:
+        for git_dir in (repo_dir, os.getcwd()):
+            try:
+                commit = subprocess.check_output(
+                    ['git', 'rev-parse', '--short', 'HEAD'],
+                    cwd=git_dir,
+                    stderr=subprocess.STDOUT,
+                    encoding='utf-8'
+                ).strip()
+                commit_source = git_dir
+                break
+            except Exception as e:
+                commit_error = str(e)
+
+    return jsonify({
+        'version': '2.0.0',
+        'ok': True,
+        'commit': commit,
+        'commit_source': commit_source,
+        'commit_error': commit_error,
+    })
 
 
 @bp.route('/empieza')

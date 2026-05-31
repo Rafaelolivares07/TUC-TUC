@@ -226,6 +226,7 @@
 const SLUG = '{{ slug }}';
 const TIENDA_NOMBRE = '{{ tienda.nombre }}';
 const TERCERO_ID = {{ tienda.tercero_id | tojson }};
+const MODO_ADMIN = {{ (modo_admin|default(false)) | tojson }};
 let productos = [];
 let carrito = [];
 let categoriaActiva = '';
@@ -240,6 +241,24 @@ let clienteUrl = '';
 let clienteQrGenerado = false;
 // Datos del último recibo (para ticket e imprimir)
 let ultimoRecibo = null;
+
+async function iniciarCajaAdmin() {
+    autenticado = true;
+    cajeroId = null;
+    cajeroNombre = 'Administrador';
+    cajeroTerceroId = null;
+    const badge = document.getElementById('badge-cajero');
+    badge.textContent = 'Administrador';
+    badge.classList.remove('hidden');
+    document.getElementById('pantalla-pin').classList.add('hidden');
+    document.getElementById('pantalla-caja').classList.remove('hidden');
+    cargarMetodosPago();
+    cargarProductos();
+}
+
+if (MODO_ADMIN) {
+    iniciarCajaAdmin();
+}
 
 // ── PIN ──────────────────────────────────────────────────────────────────────
 

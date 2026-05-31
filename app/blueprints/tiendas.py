@@ -466,6 +466,24 @@ def tienda_caja(slug):
 
 # ── Promo páginas ──────────────────────────────────────────────────────────────
 
+@bp.route('/admin/tienda/<slug>/caja')
+@solo_admin
+def admin_tienda_caja(slug):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute(
+            "SELECT id, nombre, imagen_header, color_primario, tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            return "Tienda no encontrada", 404
+        return render_template('tienda_caja.html', tienda=tienda, slug=slug, modo_admin=True)
+    except Exception as e:
+        return str(e), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/tienda/<slug>/caja/cliente/<token>')
 def tienda_caja_cliente(slug, token):
     conn = get_db_connection()

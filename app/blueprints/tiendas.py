@@ -10,6 +10,7 @@ from flask import (Blueprint, jsonify, redirect, render_template,
                    request, session)
 
 from ..db import get_db_connection
+from .auth import solo_admin
 from .inventarios import _aplicar_tarjeta, _es_ensamble
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto

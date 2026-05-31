@@ -97,10 +97,11 @@ def index():
 @bp.route('/api/version')
 def api_version():
     import subprocess
+    repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
     try:
         commit = subprocess.check_output(
             ['git', 'rev-parse', '--short', 'HEAD'],
-            cwd=os.path.dirname(__file__),
+            cwd=repo_dir,
             encoding='utf-8'
         ).strip()
     except Exception:

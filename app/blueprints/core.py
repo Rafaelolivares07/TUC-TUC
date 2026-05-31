@@ -102,12 +102,53 @@ def api_version():
     commit_source = ''
     commit_error = ''
 
+    def _commit_from_git_files(base_dir):
+        git_dir = os.path.join(base_dir, '.git')
+        if os.path.isfile(git_dir):
+            with open(git_dir, encoding='utf-8') as f:
+                git_ref = f.read().strip()
+            if git_ref.startswith('gitdir:'):
+                git_dir = os.path.abspath(os.path.join(base_dir, git_ref.split(':', 1)[1].strip()))
+
+        head_path = os.path.join(git_dir, 'HEAD')
+        with open(head_path, encoding='utf-8') as f:
+            head = f.read().strip()
+
+        if not head.startswith('ref:'):
+            return head[:7]
+
+        ref = head.split(' ', 1)[1].strip()
+        ref_path = os.path.join(git_dir, *ref.split('/'))
+        if os.path.exists(ref_path):
+            with open(ref_path, encoding='utf-8') as f:
+                return f.read().strip()[:7]
+
+        packed_refs = os.path.join(git_dir, 'packed-refs')
+        with open(packed_refs, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or line.startswith('^'):
+                    continue
+                sha, packed_ref = line.split(' ', 1)
+                if packed_ref == ref:
+                    return sha[:7]
+
+        return ''
+
     for env_name in ('GIT_COMMIT', 'COMMIT_SHA', 'SOURCE_VERSION', 'RENDER_GIT_COMMIT', 'HEROKU_SLUG_COMMIT'):
         env_commit = os.environ.get(env_name, '').strip()
         if env_commit:
             commit = env_commit[:7]
             commit_source = env_name
             break
+
+    if not commit:
+        try:
+            commit = _commit_from_git_files(repo_dir)
+            if commit:
+                commit_source = os.path.join(repo_dir, '.git')
+        except Exception as e:
+            commit_error = str(e)
 
     if not commit:
         for git_dir in (repo_dir, os.getcwd()):

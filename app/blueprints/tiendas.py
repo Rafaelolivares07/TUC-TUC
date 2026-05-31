@@ -439,7 +439,7 @@ def tienda_caja(slug):
     try:
         _crear_tablas(conn)
         tienda = conn.execute(
-            "SELECT id, nombre, imagen_header, color_primario FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+            "SELECT id, nombre, imagen_header, color_primario, tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
         ).fetchone()
         if not tienda:
             return "Tienda no encontrada", 404

@@ -1,6 +1,8 @@
 import itertools
 import json
 import random
+import secrets
+import time
 import uuid
 from datetime import date, timedelta
 
@@ -17,6 +19,18 @@ except ImportError:
 bp = Blueprint('tiendas', __name__)
 
 _tablas_listas = False
+_sesiones_caja_cliente = {}
+_SESION_CAJA_TTL = 60 * 60 * 4
+
+
+def _limpiar_sesiones_caja():
+    ahora = time.time()
+    expiradas = [
+        token for token, sesion in _sesiones_caja_cliente.items()
+        if ahora - sesion.get('updated_at', sesion.get('created_at', ahora)) > _SESION_CAJA_TTL
+    ]
+    for token in expiradas:
+        _sesiones_caja_cliente.pop(token, None)
 
 
 def _crear_tablas(conn):
@@ -451,6 +465,78 @@ def tienda_caja(slug):
 
 
 # ── Promo páginas ──────────────────────────────────────────────────────────────
+
+@bp.route('/tienda/<slug>/caja/cliente/<token>')
+def tienda_caja_cliente(slug, token):
+    conn = get_db_connection()
+    try:
+        tienda = conn.execute(
+            "SELECT id, nombre, imagen_header FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            return "Tienda no encontrada", 404
+        return render_template('tienda_caja_cliente.html', tienda=tienda, slug=slug, token=token)
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/caja/sesion', methods=['POST'])
+def api_tienda_caja_sesion_crear(slug):
+    _limpiar_sesiones_caja()
+    conn = get_db_connection()
+    try:
+        tienda = conn.execute(
+            "SELECT id, nombre FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        token = secrets.token_urlsafe(18)
+        update_key = secrets.token_urlsafe(24)
+        ahora = time.time()
+        _sesiones_caja_cliente[token] = {
+            'slug': slug,
+            'tienda_id': tienda['id'],
+            'tienda_nombre': tienda['nombre'],
+            'update_key': update_key,
+            'estado': 'activa',
+            'items': [],
+            'total': 0,
+            'iva': 0,
+            'updated_at': ahora,
+            'created_at': ahora,
+        }
+        return jsonify({'ok': True, 'token': token, 'update_key': update_key, 'url': f'/tienda/{slug}/caja/cliente/{token}'})
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/caja/sesion/<token>', methods=['GET', 'POST'])
+def api_tienda_caja_sesion(slug, token):
+    _limpiar_sesiones_caja()
+    sesion = _sesiones_caja_cliente.get(token)
+    if not sesion or sesion.get('slug') != slug:
+        return jsonify({'ok': False, 'error': 'Sesion no encontrada'}), 404
+
+    if request.method == 'GET':
+        public_sesion = {k: v for k, v in sesion.items() if k != 'update_key'}
+        return jsonify({'ok': True, **public_sesion})
+
+    data = request.get_json(silent=True) or {}
+    update_key = request.headers.get('X-Caja-Session-Key', '')
+    if update_key != sesion.get('update_key'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+    items = data.get('items') or []
+    sesion.update({
+        'estado': data.get('estado') or 'activa',
+        'items': items[:80] if isinstance(items, list) else [],
+        'total': float(data.get('total') or 0),
+        'iva': float(data.get('iva') or 0),
+        'updated_at': time.time(),
+    })
+    return jsonify({'ok': True})
+
 
 @bp.route('/promo/tienda/<slug>/<int:producto_id>/imagen')
 def promo_tienda_imagen(slug, producto_id):

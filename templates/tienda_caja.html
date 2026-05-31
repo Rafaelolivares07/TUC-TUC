@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Caja — {{ tienda.nombre }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
@@ -148,6 +149,11 @@
                     Cobrar
                 </button>
 
+                <button onclick="abrirPantallaCliente()"
+                        class="w-full mt-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 font-bold py-2.5 rounded-xl text-sm">
+                    Pantalla cliente
+                </button>
+
                 <!-- Vaciar -->
                 <button onclick="vaciarCarrito()"
                         class="w-full mt-2 text-xs text-gray-400 hover:text-red-500">
@@ -159,6 +165,31 @@
 </div>
 
 <!-- ── Modal recibo ─────────────────────────────────────────────────── -->
+<div id="modal-cliente" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6" onclick="event.stopPropagation()">
+        <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+                <h2 class="font-bold text-xl text-gray-800">Pantalla cliente</h2>
+                <p class="text-sm text-gray-500 mt-1">Muestra este QR para que el cliente vea su compra en el celular.</p>
+            </div>
+            <button onclick="cerrarPantallaCliente()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+        <div id="qr-cliente" class="flex justify-center bg-gray-50 rounded-2xl p-4 mb-4"></div>
+        <input id="link-cliente" readonly
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600 mb-3">
+        <div class="grid grid-cols-2 gap-2">
+            <button onclick="copiarLinkCliente()"
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-sm">
+                Copiar link
+            </button>
+            <a id="wa-cliente" target="_blank"
+               class="text-center bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 rounded-xl text-sm">
+                WhatsApp
+            </a>
+        </div>
+    </div>
+</div>
+
 <div id="modal-recibo" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
         <div class="text-center mb-4">
@@ -203,6 +234,10 @@ let autenticado = false;
 let cajeroId = null;
 let cajeroNombre = '';
 let cajeroTerceroId = null;
+let clienteToken = null;
+let clienteUpdateKey = '';
+let clienteUrl = '';
+let clienteQrGenerado = false;
 // Datos del último recibo (para ticket e imprimir)
 let ultimoRecibo = null;
 
@@ -250,6 +285,10 @@ function cerrarSesionCaja() {
     cajeroId = null;
     cajeroNombre = '';
     cajeroTerceroId = null;
+    clienteToken = null;
+    clienteUpdateKey = '';
+    clienteUrl = '';
+    clienteQrGenerado = false;
     carrito = [];
     document.getElementById('badge-cajero').classList.add('hidden');
     document.getElementById('pantalla-caja').classList.add('hidden');
@@ -259,6 +298,76 @@ function cerrarSesionCaja() {
 }
 
 // ── Productos ────────────────────────────────────────────────────────────────
+
+function resumenCarrito(estado = 'activa') {
+    const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+    const iva = carrito.reduce((s, i) => {
+        if (!i.iva_pct) return s;
+        return s + (i.precio * i.cantidad * i.iva_pct / (100 + i.iva_pct));
+    }, 0);
+    return {
+        estado,
+        total,
+        iva: Math.round(iva),
+        items: carrito.map(i => ({
+            producto_id: i.producto_id,
+            nombre: i.nombre,
+            precio: i.precio,
+            cantidad: i.cantidad,
+            iva_pct: i.iva_pct || 0
+        }))
+    };
+}
+
+async function abrirPantallaCliente() {
+    try {
+        if (!clienteToken) {
+            const r = await fetch(`/api/tienda/${SLUG}/caja/sesion`, {method: 'POST'});
+            const d = await r.json();
+            if (!d.ok) throw new Error(d.error || 'No se pudo crear la sesion');
+            clienteToken = d.token;
+            clienteUpdateKey = d.update_key || '';
+            clienteUrl = new URL(d.url, location.origin).href;
+            clienteQrGenerado = false;
+            await publicarPantallaCliente();
+        }
+
+        document.getElementById('link-cliente').value = clienteUrl;
+        document.getElementById('wa-cliente').href = `https://wa.me/?text=${encodeURIComponent('Puedes ver tu compra aqui: ' + clienteUrl)}`;
+        const qr = document.getElementById('qr-cliente');
+        if (!clienteQrGenerado) {
+            qr.innerHTML = '';
+            new QRCode(qr, {text: clienteUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+            clienteQrGenerado = true;
+        }
+        document.getElementById('modal-cliente').classList.remove('hidden');
+    } catch (e) {
+        toast(e.message || 'Error al crear pantalla cliente', true);
+    }
+}
+
+function cerrarPantallaCliente() {
+    document.getElementById('modal-cliente').classList.add('hidden');
+}
+
+async function copiarLinkCliente() {
+    if (!clienteUrl) return;
+    await navigator.clipboard.writeText(clienteUrl);
+    toast('Link copiado');
+}
+
+async function publicarPantallaCliente(estado = 'activa') {
+    if (!clienteToken) return;
+    try {
+        await fetch(`/api/tienda/${SLUG}/caja/sesion/${clienteToken}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Caja-Session-Key': clienteUpdateKey},
+            body: JSON.stringify(resumenCarrito(estado))
+        });
+    } catch (e) {
+        console.warn('No se pudo actualizar pantalla cliente', e);
+    }
+}
 
 async function cargarProductos() {
     try {
@@ -364,6 +473,7 @@ function renderCarrito() {
         const ivaElEmpty = document.getElementById('iva-display');
         if (ivaElEmpty) ivaElEmpty.classList.add('hidden');
         document.getElementById('btn-cobrar').disabled = true;
+        publicarPantallaCliente();
         return;
     }
 
@@ -399,6 +509,7 @@ function renderCarrito() {
         }
     }
     validarPagos();  // delegar al validador de pagos
+    publicarPantallaCliente();
 }
 
 // ── Métodos de pago ───────────────────────────────────────────────────────────
@@ -517,6 +628,7 @@ async function cobrar() {
                 cajero: cajeroNombre,
                 items: carrito.map(i => ({...i}))
             };
+            publicarPantallaCliente('cobrada');
             mostrarRecibo();
         } else {
             toast(d.error || 'Error al registrar venta', true);
@@ -624,6 +736,11 @@ function nuevaVenta() {
     document.getElementById('modal-recibo').classList.add('hidden');
     carrito = [];
     ultimoRecibo = null;
+    clienteToken = null;
+    clienteUpdateKey = '';
+    clienteUrl = '';
+    clienteQrGenerado = false;
+    document.getElementById('modal-cliente').classList.add('hidden');
     document.getElementById('nombre-cliente').value = '';
     document.getElementById('tel-cliente').value = '';
     renderCarrito();

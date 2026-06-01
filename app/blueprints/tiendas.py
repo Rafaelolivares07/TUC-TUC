@@ -520,6 +520,7 @@ def api_tienda_caja_sesion_crear(slug):
             'update_key': update_key,
             'estado': 'activa',
             'items': [],
+            'recibo': None,
             'total': 0,
             'iva': 0,
             'updated_at': ahora,
@@ -550,6 +551,7 @@ def api_tienda_caja_sesion(slug, token):
     sesion.update({
         'estado': data.get('estado') or 'activa',
         'items': items[:80] if isinstance(items, list) else [],
+        'recibo': data.get('recibo') if isinstance(data.get('recibo'), dict) else sesion.get('recibo'),
         'total': float(data.get('total') or 0),
         'iva': float(data.get('iva') or 0),
         'updated_at': time.time(),

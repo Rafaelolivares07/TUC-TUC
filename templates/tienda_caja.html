@@ -318,7 +318,7 @@ function cerrarSesionCaja() {
 
 // ── Productos ────────────────────────────────────────────────────────────────
 
-function resumenCarrito(estado = 'activa') {
+function resumenCarrito(estado = 'activa', recibo = null) {
     const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
     const iva = carrito.reduce((s, i) => {
         if (!i.iva_pct) return s;
@@ -334,7 +334,8 @@ function resumenCarrito(estado = 'activa') {
             precio: i.precio,
             cantidad: i.cantidad,
             iva_pct: i.iva_pct || 0
-        }))
+        })),
+        recibo
     };
 }
 
@@ -375,13 +376,13 @@ async function copiarLinkCliente() {
     toast('Link copiado');
 }
 
-async function publicarPantallaCliente(estado = 'activa') {
+async function publicarPantallaCliente(estado = 'activa', recibo = null) {
     if (!clienteToken) return;
     try {
         await fetch(`/api/tienda/${SLUG}/caja/sesion/${clienteToken}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-Caja-Session-Key': clienteUpdateKey},
-            body: JSON.stringify(resumenCarrito(estado))
+            body: JSON.stringify(resumenCarrito(estado, recibo))
         });
     } catch (e) {
         console.warn('No se pudo actualizar pantalla cliente', e);
@@ -645,9 +646,12 @@ async function cobrar() {
                 cliente: nombre,
                 telefono,
                 cajero: cajeroNombre,
+                pedido_id: d.pedido_id || null,
+                fecha: new Date().toISOString(),
+                tienda: TIENDA_NOMBRE,
                 items: carrito.map(i => ({...i}))
             };
-            publicarPantallaCliente('cobrada');
+            publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
             mostrarRecibo();
         } else {
             toast(d.error || 'Error al registrar venta', true);

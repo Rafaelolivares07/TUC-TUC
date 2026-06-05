@@ -565,6 +565,7 @@ REPORTES_CATALOGO = [
     {'id': 'ventas_clientes',   'nombre': 'Ventas por Clientes',    'categoria': 'Ventas'},
     {'id': 'consulta_cuentas',  'nombre': 'Consulta de Cuentas',    'categoria': 'Contabilidad'},
     {'id': 'consulta_tercero',  'nombre': 'Consulta por Tercero',   'categoria': 'Contabilidad'},
+    {'id': 'matriz_terceros_cuentas', 'nombre': 'Matriz Terceros por Cuentas', 'categoria': 'Contabilidad'},
     {'id': 'reg_ctas',          'nombre': 'Movimientos REG_CTAS',   'categoria': 'Contabilidad'},
 ]
 
@@ -861,7 +862,7 @@ def permisos_reportes_page():
 
 VERSIONES_AGENTES = {
     'sar_reportes': {
-        'version': '1.2.2',
+        'version': '1.2.3',
         'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/SarReportes.exe',
     },
     'admin_agent': {

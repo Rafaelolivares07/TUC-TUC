@@ -129,6 +129,9 @@
                 <a href="/admin/inventario/{{ restaurante.tercero_id }}" class="tab-btn flex items-center gap-1">
                     📦 Inventario
                 </a>
+                <a href="/admin/compras/{{ restaurante.tercero_id }}" class="tab-btn flex items-center gap-1">
+                    Compras y agotados
+                </a>
                 {% endif %}
                 {% if restaurante.tercero_id %}<a href="/admin/negocio/{{ restaurante.tercero_id }}/config" class="tab-btn flex items-center gap-1">⚙️ Configuración</a>{% endif %}
                 <a href="/admin/contactos" class="tab-btn flex items-center gap-1">

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compras - {{ negocio_nombre }}</title>
+  <title>Compras y agotados - {{ negocio_nombre }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -31,7 +31,7 @@
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
     <div class="flex items-center justify-between gap-4 flex-wrap">
       <div>
-        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Compras</p>
+        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Compras y agotados</p>
         <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
       </div>
       <div class="flex gap-3">
@@ -41,7 +41,17 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl shadow p-5 mb-5">
+  <div class="bg-white rounded-2xl shadow mb-5 px-4 py-2">
+    <div class="flex gap-2 overflow-x-auto">
+      <a href="#politicas" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Politicas de rotacion</a>
+      <a href="#cotizaciones" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Cotizaciones</a>
+      <a href="#agotados" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Informe de agotados</a>
+      <a href="#proveedores" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Proveedores</a>
+    </div>
+  </div>
+
+  <div id="politicas" class="bg-white rounded-2xl shadow p-5 mb-5">
+    <h2 class="font-bold text-gray-700 mb-4">Politicas de rotacion</h2>
     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
       <div>
         <label>Dias alerta</label>
@@ -61,11 +71,11 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl shadow p-5 mb-5">
+  <div id="cotizaciones" class="bg-white rounded-2xl shadow p-5 mb-5">
     <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
       <h2 class="font-bold text-gray-700">Cotizaciones de compra</h2>
       <button onclick="guardarCotizacion()" class="px-4 py-2 bg-rose-500 text-white rounded-xl font-bold text-sm hover:bg-rose-600">
-        Guardar cotizacion
+        Guardar nueva cotizacion
       </button>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-4">
@@ -146,9 +156,9 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl shadow p-5 mb-5">
+  <div id="agotados" class="bg-white rounded-2xl shadow p-5 mb-5">
     <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
-      <h2 class="font-bold text-gray-700">Items por rotacion</h2>
+      <h2 class="font-bold text-gray-700">Informe de agotados por rotacion</h2>
       <select id="filtro-estado" onchange="renderItems()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
         <option value="todos">Todos</option>
         <option value="criticos">Criticos</option>
@@ -181,7 +191,7 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-2xl shadow p-5">
+  <div id="proveedores" class="bg-white rounded-2xl shadow p-5">
     <h2 class="font-bold text-gray-700 mb-4">Resumen por proveedor</h2>
     <div id="proveedores" class="space-y-3 text-sm text-gray-600">
       <p class="text-gray-400">Sin proveedores sugeridos.</p>

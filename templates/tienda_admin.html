@@ -104,6 +104,7 @@
                 <button onclick="cambiarTab('pauta')" id="tab-pauta" class="tab-btn">📣 Pauta</button>
                 <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">🛒 Pedidos</button>
                 {% if tienda.tercero_id %}<a href="/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
+                {% if tienda.tercero_id %}<a href="/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Tienda</button>
                 <button onclick="cambiarTab('acceso')" id="tab-acceso" class="tab-btn">🔑 Acceso</button>
                 <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">📍 Ubicación</button>

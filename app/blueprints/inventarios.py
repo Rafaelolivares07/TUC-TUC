@@ -177,6 +177,76 @@ def _negocio_id_tienda(conn, slug):
     return row['tercero_id'], None
 
 
+def _contexto_negocio(conn, negocio_id):
+    negocio = conn.execute(
+        "SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)
+    ).fetchone()
+    if not negocio:
+        return None
+
+    tienda = conn.execute(
+        "SELECT slug, nombre, admin_id FROM tiendas WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+        (negocio_id,)
+    ).fetchone()
+    restaurante = None
+    if not tienda:
+        restaurante = conn.execute(
+            "SELECT slug, nombre, admin_id FROM restaurantes WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+
+    volver_url = '/admin'
+    volver_label = 'Admin'
+    admin_id = None
+    if tienda:
+        volver_url = f"/admin/tienda/{tienda['slug']}"
+        volver_label = tienda['nombre'] or 'Tienda'
+        admin_id = tienda['admin_id']
+    elif restaurante:
+        volver_url = f"/admin/restaurante/{restaurante['slug']}"
+        volver_label = restaurante['nombre'] or 'Restaurante'
+        admin_id = restaurante['admin_id']
+
+    return {
+        'negocio_nombre': negocio['nombre'],
+        'volver_url': volver_url,
+        'volver_label': volver_label,
+        'admin_id': admin_id,
+    }
+
+
+def _mismo_id(a, b):
+    try:
+        return int(a) == int(b)
+    except Exception:
+        return False
+
+
+def _puede_gestionar_negocio(contexto):
+    usuario_id = session.get('usuario_id')
+    return (
+        session.get('rol') == 'Administrador'
+        or (usuario_id and contexto.get('admin_id') and _mismo_id(usuario_id, contexto['admin_id']))
+    )
+
+
+def _validar_negocio_json(conn, negocio_id):
+    contexto = _contexto_negocio(conn, negocio_id)
+    if not contexto:
+        return None, (jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404)
+    if not _puede_gestionar_negocio(contexto):
+        return None, (jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403)
+    return contexto, None
+
+
+def _negocio_id_de_producto(conn, producto_id):
+    row = conn.execute(
+        "SELECT negocio_id FROM productos WHERE id = %s",
+        (producto_id,)
+    ).fetchone()
+    return row['negocio_id'] if row else None
+
+
 def _es_ensamble(conn, producto_id):
     """Retorna True si el producto tiene componentes distintos a sí mismo."""
     rows = conn.execute(
@@ -406,6 +476,9 @@ def api_inventario_producto_crear():
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, int(negocio_id))
+        if error:
+            return error
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden)
@@ -436,6 +509,9 @@ def api_inventario_productos(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         rows = conn.execute("""
             SELECT p.id, p.nombre, p.categoria, p.precio, p.costo,
                    p.codigo_barra, p.iva_pct, p.disponible, p.orden,
@@ -462,6 +538,12 @@ def api_inventario_tarjeta_ver(producto_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         rows = conn.execute("""
             SELECT te.componente_id, te.cantidad, p.nombre
             FROM tarjeta_estandar te
@@ -486,6 +568,12 @@ def api_inventario_tarjeta_guardar(producto_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         conn.execute("DELETE FROM tarjeta_estandar WHERE producto_id = %s", (producto_id,))
         for ln in lineas:
             conn.execute("""
@@ -512,6 +600,9 @@ def api_inventario_entrada(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         resultado, status = _registrar_entrada_inventario(
             conn, negocio_id, data, session['usuario_id']
         )
@@ -596,6 +687,9 @@ def api_tienda_inventario_entrada(slug):
         negocio_id, error = _negocio_id_tienda(conn, slug)
         if error:
             return jsonify({'ok': False, 'error': error}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         resultado, status = _registrar_entrada_inventario(
             conn, negocio_id, data, session['usuario_id']
         )
@@ -618,6 +712,9 @@ def api_inventario_stock(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         rows = conn.execute("""
             SELECT p.id, p.nombre, p.categoria, s.bodega,
                    s.stock, s.costo_und, s.valor_existencia, s.updated_at
@@ -643,6 +740,9 @@ def api_tienda_inventario_stock(slug):
         negocio_id, error = _negocio_id_tienda(conn, slug)
         if error:
             return jsonify({'ok': False, 'error': error}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         rows = conn.execute("""
             SELECT p.id, p.nombre, p.categoria, s.bodega,
                    s.stock, s.costo_und, s.valor_existencia, s.updated_at
@@ -665,6 +765,12 @@ def api_inventario_kardex(producto_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         rows = conn.execute("""
             SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
                    valor_unitario, costo_und, notas, tipo_documento,
@@ -695,6 +801,9 @@ def api_tienda_inventario_kardex(slug):
         negocio_id, error = _negocio_id_tienda(conn, slug)
         if error:
             return jsonify({'ok': False, 'error': error}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         rows = conn.execute("""
             SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
                    valor_unitario, costo_und, notas, tipo_documento,
@@ -720,6 +829,12 @@ def api_inventario_producto_editar(producto_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         conn.execute("""
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
@@ -758,6 +873,9 @@ def api_produccion_preview(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         producto = conn.execute(
             "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
             (producto_id, negocio_id)
@@ -819,6 +937,9 @@ def api_produccion_registrar(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         producto = conn.execute(
             "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
             (producto_id, negocio_id)
@@ -914,34 +1035,17 @@ def admin_inventario(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        negocio = conn.execute(
-            "SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)
-        ).fetchone()
-        tienda = conn.execute(
-            "SELECT slug, nombre FROM tiendas WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
-            (negocio_id,)
-        ).fetchone()
-        restaurante = None
-        if not tienda:
-            restaurante = conn.execute(
-                "SELECT slug, nombre FROM restaurantes WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
-                (negocio_id,)
-            ).fetchone()
-        conn.close()
-        if not negocio:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
             return "Negocio no encontrado", 404
-        volver_url = '/admin'
-        volver_label = 'Admin'
-        if tienda:
-            volver_url = f"/admin/tienda/{tienda['slug']}"
-            volver_label = tienda['nombre'] or 'Tienda'
-        elif restaurante:
-            volver_url = f"/admin/restaurante/{restaurante['slug']}"
-            volver_label = restaurante['nombre'] or 'Restaurante'
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
         return render_template('inventario_admin.html',
                                negocio_id=negocio_id,
-                               negocio_nombre=negocio['nombre'],
-                               volver_url=volver_url,
-                               volver_label=volver_label)
+                               negocio_nombre=contexto['negocio_nombre'],
+                               volver_url=contexto['volver_url'],
+                               volver_label=contexto['volver_label'])
     except Exception as e:
         return f"Error: {e}", 500
+    finally:
+        conn.close()

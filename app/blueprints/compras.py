@@ -347,6 +347,68 @@ def _listar_cotizaciones(conn, negocio_id, producto_id=None):
     return [_row_cotizacion(r) for r in rows]
 
 
+def _contexto_negocio(conn, negocio_id):
+    negocio = conn.execute(
+        "SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)
+    ).fetchone()
+    if not negocio:
+        return None
+
+    tienda = conn.execute(
+        "SELECT slug, nombre, admin_id FROM tiendas WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+        (negocio_id,)
+    ).fetchone()
+    restaurante = None
+    if not tienda:
+        restaurante = conn.execute(
+            "SELECT slug, nombre, admin_id FROM restaurantes WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+
+    volver_url = '/admin'
+    volver_label = 'Admin'
+    admin_id = None
+    if tienda:
+        volver_url = f"/admin/tienda/{tienda['slug']}"
+        volver_label = tienda['nombre'] or 'Tienda'
+        admin_id = tienda['admin_id']
+    elif restaurante:
+        volver_url = f"/admin/restaurante/{restaurante['slug']}"
+        volver_label = restaurante['nombre'] or 'Restaurante'
+        admin_id = restaurante['admin_id']
+
+    return {
+        'negocio_nombre': negocio['nombre'],
+        'volver_url': volver_url,
+        'volver_label': volver_label,
+        'admin_id': admin_id,
+    }
+
+
+def _mismo_id(a, b):
+    try:
+        return int(a) == int(b)
+    except Exception:
+        return False
+
+
+def _puede_gestionar_negocio(contexto):
+    usuario_id = session.get('usuario_id')
+    return (
+        session.get('rol') == 'Administrador'
+        or (usuario_id and contexto.get('admin_id') and _mismo_id(usuario_id, contexto['admin_id']))
+    )
+
+
+def _validar_negocio_json(conn, negocio_id):
+    contexto = _contexto_negocio(conn, negocio_id)
+    if not contexto:
+        return None, (jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404)
+    if not _puede_gestionar_negocio(contexto):
+        return None, (jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403)
+    return contexto, None
+
+
 @bp.route('/admin/compras/<int:negocio_id>')
 def admin_compras(negocio_id):
     if 'usuario_id' not in session:
@@ -354,35 +416,17 @@ def admin_compras(negocio_id):
     conn = get_db_connection()
     try:
         _asegurar_tablas(conn)
-        negocio = conn.execute(
-            "SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)
-        ).fetchone()
-        if not negocio:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
             return "Negocio no encontrado", 404
-        tienda = conn.execute(
-            "SELECT slug, nombre FROM tiendas WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
-            (negocio_id,)
-        ).fetchone()
-        restaurante = None
-        if not tienda:
-            restaurante = conn.execute(
-                "SELECT slug, nombre FROM restaurantes WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
-                (negocio_id,)
-            ).fetchone()
-        volver_url = '/admin'
-        volver_label = 'Admin'
-        if tienda:
-            volver_url = f"/admin/tienda/{tienda['slug']}"
-            volver_label = tienda['nombre'] or 'Tienda'
-        elif restaurante:
-            volver_url = f"/admin/restaurante/{restaurante['slug']}"
-            volver_label = restaurante['nombre'] or 'Restaurante'
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
         return render_template(
             'compras_admin.html',
             negocio_id=negocio_id,
-            negocio_nombre=negocio['nombre'],
-            volver_url=volver_url,
-            volver_label=volver_label,
+            negocio_nombre=contexto['negocio_nombre'],
+            volver_url=contexto['volver_url'],
+            volver_label=contexto['volver_label'],
         )
     except Exception as e:
         return f"Error: {e}", 500
@@ -399,6 +443,9 @@ def api_compras_rotacion(negocio_id):
     dias_objetivo = request.args.get('dias_objetivo', default=15, type=int)
     conn = get_db_connection()
     try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         data = construir_propuesta_rotacion(
             conn, negocio_id,
             dias_alerta_agotamiento=max(1, dias_alerta),
@@ -420,6 +467,9 @@ def api_cotizaciones_listar(negocio_id):
     conn = get_db_connection()
     try:
         _asegurar_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         return jsonify({'ok': True, 'cotizaciones': _listar_cotizaciones(conn, negocio_id, producto_id)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -445,6 +495,9 @@ def api_cotizaciones_crear(negocio_id):
     conn = get_db_connection()
     try:
         _asegurar_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
         producto = conn.execute(
             "SELECT id FROM productos WHERE id = %s AND negocio_id = %s",
             (int(item_id), negocio_id)
@@ -505,6 +558,15 @@ def api_cotizaciones_actualizar(cotizacion_id):
     conn = get_db_connection()
     try:
         _asegurar_tablas(conn)
+        existente = conn.execute(
+            "SELECT negocio_id, fecha_cotizacion FROM cotizaciones_compras WHERE id = %s",
+            (cotizacion_id,)
+        ).fetchone()
+        if not existente:
+            return jsonify({'ok': False, 'error': 'Cotizacion no encontrada'}), 404
+        _contexto, error = _validar_negocio_json(conn, existente['negocio_id'])
+        if error:
+            return error
         tercero_id = data.get('tercero_id')
         if tercero_id:
             tercero_id = int(tercero_id)
@@ -512,13 +574,7 @@ def api_cotizaciones_actualizar(cotizacion_id):
             tercero_id = _tercero_por_nombre(conn, data.get('proveedor_nombre'))
         if not tercero_id:
             return jsonify({'ok': False, 'error': 'Proveedor requerido'}), 400
-        row = conn.execute(
-            "SELECT fecha_cotizacion FROM cotizaciones_compras WHERE id = %s",
-            (cotizacion_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({'ok': False, 'error': 'Cotizacion no encontrada'}), 404
-        fecha_cot = _date_or_default(data.get('fecha_cotizacion'), row['fecha_cotizacion'] or date.today())
+        fecha_cot = _date_or_default(data.get('fecha_cotizacion'), existente['fecha_cotizacion'] or date.today())
         fecha_vence = _date_or_default(data.get('fecha_vencimiento'), fecha_cot + timedelta(days=180))
         conn.execute("""
             UPDATE cotizaciones_compras
@@ -556,6 +612,15 @@ def api_cotizaciones_eliminar(cotizacion_id):
     conn = get_db_connection()
     try:
         _asegurar_tablas(conn)
+        existente = conn.execute(
+            "SELECT negocio_id FROM cotizaciones_compras WHERE id = %s",
+            (cotizacion_id,)
+        ).fetchone()
+        if not existente:
+            return jsonify({'ok': False, 'error': 'Cotizacion no encontrada'}), 404
+        _contexto, error = _validar_negocio_json(conn, existente['negocio_id'])
+        if error:
+            return error
         conn.execute("DELETE FROM cotizaciones_compras WHERE id=%s", (cotizacion_id,))
         conn.commit()
         return jsonify({'ok': True})

@@ -155,7 +155,10 @@
         <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Inventario</p>
         <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
       </div>
-      <a href="/admin" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">← Admin</a>
+      <div class="flex gap-3">
+        <a href="/admin/compras/{{ negocio_id }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">Compras</a>
+        <a href="{{ volver_url or '/admin' }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">← {{ volver_label or 'Admin' }}</a>
+      </div>
     </div>
   </div>
 
@@ -215,6 +218,32 @@
       <div>
         <label>Notas (opcional)</label>
         <input id="entrada-notas" type="text" placeholder="">
+      </div>
+      <div>
+        <label>Tipo doc.</label>
+        <select id="entrada-tipo-doc">
+          <option value="factura">Factura</option>
+          <option value="remision">Remision</option>
+          <option value="ajuste">Ajuste</option>
+          <option value="devolucion">Devolucion</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div>
+        <label>No. documento</label>
+        <input id="entrada-num-doc" type="text" placeholder="FAC-0234">
+      </div>
+      <div>
+        <label>Fecha documento</label>
+        <input id="entrada-fecha-doc" type="date">
+      </div>
+      <div>
+        <label>Proveedor</label>
+        <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor">
+      </div>
+      <div>
+        <label>IVA</label>
+        <input id="entrada-iva" type="number" min="0" step="0.01" value="0">
       </div>
     </div>
 
@@ -334,6 +363,7 @@
             <th class="num">Ant.</th>
             <th class="num">Nuevo</th>
             <th class="num">Costo und</th>
+            <th>Documento</th>
             <th>Notas</th>
           </tr>
         </thead>
@@ -613,6 +643,11 @@ function agregarLineaEntrada() {
 async function registrarEntrada() {
   const motivo = document.getElementById('entrada-motivo').value;
   const notas  = document.getElementById('entrada-notas').value.trim() || null;
+  const tipo_documento = document.getElementById('entrada-tipo-doc').value || null;
+  const numero_documento = document.getElementById('entrada-num-doc').value.trim() || null;
+  const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
+  const proveedor_nombre = document.getElementById('entrada-proveedor').value.trim() || null;
+  const iva = parseFloat(document.getElementById('entrada-iva').value) || 0;
   const cont   = document.getElementById('entrada-lineas');
   const divs   = [...cont.querySelectorAll('.grid')];
   const lineas = [];
@@ -627,13 +662,19 @@ async function registrarEntrada() {
   if (!lineas.length) { toast('Agrega al menos una línea', false); return; }
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({lineas, motivo, notas})
+    body: JSON.stringify({
+      lineas, motivo, notas, tipo_documento, numero_documento,
+      fecha_documento, proveedor_nombre, iva
+    })
   });
   const d = await r.json();
   if (d.ok) {
     toast('Entrada registrada');
     cont.innerHTML = '';
     entradaLineas = [];
+    document.getElementById('entrada-num-doc').value = '';
+    document.getElementById('entrada-proveedor').value = '';
+    document.getElementById('entrada-iva').value = '0';
     cargarProductos();
   } else {
     toast(d.error, false);
@@ -675,12 +716,12 @@ function verKardex(id, nombre) {
 }
 async function cargarKardex(productoId) {
   const tb = document.getElementById('tabla-kardex');
-  tb.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
   const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
   if (!d.movimientos.length) {
-    tb.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
   }
   tb.innerHTML = d.movimientos.map(m => `
@@ -692,6 +733,10 @@ async function cargarKardex(productoId) {
       <td class="num text-gray-400">${fmt(m.stock_anterior)}</td>
       <td class="num font-semibold">${fmt(m.stock_nuevo)}</td>
       <td class="num text-xs">${m.costo_und != null ? fmtMon(m.costo_und) : '—'}</td>
+      <td class="text-xs text-gray-500">
+        ${(m.tipo_documento || m.documento_numero) ? `${m.tipo_documento || ''} ${m.documento_numero || ''}` : ''}
+        ${m.proveedor_nombre ? `<div class="text-gray-400">${m.proveedor_nombre}</div>` : ''}
+      </td>
       <td class="text-xs text-gray-400">${m.notas || ''}</td>
     </tr>
   `).join('');
@@ -772,6 +817,7 @@ async function registrarProduccion() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   cargarProductos();
+  document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
 
   // AC tarjeta (usa productos cargados)
   setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, null);

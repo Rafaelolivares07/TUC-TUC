@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compras - {{ negocio_nombre }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: Inter, sans-serif; background: #f3f4f6; }
+    input { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 10px; width: 100%; font-size: .875rem; }
+    label { display: block; font-size: .72rem; font-weight: 700; color: #6b7280; text-transform: uppercase; margin-bottom: 3px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: .72rem; color: #9ca3af; text-transform: uppercase; padding: 8px 10px; border-bottom: 2px solid #f3f4f6; }
+    td { padding: 9px 10px; font-size: .83rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    .num { text-align: right; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .7rem; font-weight: 800; white-space: nowrap; }
+    .agotado_real { background: #fee2e2; color: #991b1b; }
+    .agotado_funcional { background: #ffedd5; color: #9a3412; }
+    .comprar_pronto { background: #fef3c7; color: #92400e; }
+    .sano { background: #dcfce7; color: #166534; }
+    .sin_rotacion { background: #e5e7eb; color: #4b5563; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border-radius: 8px; background: #dc2626; color: white; font-weight: 700; opacity: 0; transition: opacity .2s; }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+<div id="toast" class="toast"></div>
+
+<div class="max-w-6xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Compras</p>
+        <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+      </div>
+      <div class="flex gap-3">
+        <a href="/admin/inventario/{{ negocio_id }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">Inventario</a>
+        <a href="{{ volver_url or '/admin' }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">{{ volver_label or 'Admin' }}</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-5 mb-5">
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+      <div>
+        <label>Dias alerta</label>
+        <input id="dias-alerta" type="number" min="1" value="2">
+      </div>
+      <div>
+        <label>Cobertura minima</label>
+        <input id="dias-minima" type="number" min="1" value="7">
+      </div>
+      <div>
+        <label>Cobertura objetivo</label>
+        <input id="dias-objetivo" type="number" min="1" value="15">
+      </div>
+      <button onclick="cargarPropuesta()" class="px-5 py-2.5 bg-rose-500 text-white rounded-xl font-bold text-sm hover:bg-rose-600">
+        Recalcular
+      </button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-5 mb-5">
+    <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      <h2 class="font-bold text-gray-700">Cotizaciones de compra</h2>
+      <button onclick="guardarCotizacion()" class="px-4 py-2 bg-rose-500 text-white rounded-xl font-bold text-sm hover:bg-rose-600">
+        Guardar cotizacion
+      </button>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-4">
+      <div class="sm:col-span-2">
+        <label>Producto</label>
+        <select id="cot-producto" class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full"></select>
+      </div>
+      <div class="sm:col-span-2">
+        <label>Proveedor</label>
+        <input id="cot-proveedor" type="text" placeholder="Nombre del proveedor">
+      </div>
+      <div>
+        <label>No. cotizacion</label>
+        <input id="cot-numero" type="text" placeholder="Opcional">
+      </div>
+      <div>
+        <label>Vence</label>
+        <input id="cot-vence" type="date">
+      </div>
+      <div class="sm:col-span-2">
+        <label>Presentacion</label>
+        <input id="cot-presentacion" type="text" placeholder="Caja x 12">
+      </div>
+      <div>
+        <label>Unidades item</label>
+        <input id="cot-unidades" type="number" min="0.0001" step="0.0001" value="1">
+      </div>
+      <div>
+        <label>Precio</label>
+        <input id="cot-precio" type="number" min="0" step="0.01" placeholder="0">
+      </div>
+      <div class="sm:col-span-2">
+        <label>Observaciones</label>
+        <input id="cot-observaciones" type="text" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Proveedor</th>
+            <th>Presentacion</th>
+            <th class="num">Unidades</th>
+            <th class="num">Precio</th>
+            <th class="num">Precio und</th>
+            <th>Vence</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tabla-cotizaciones">
+          <tr><td colspan="8" class="text-center text-gray-400 py-6">Sin cotizaciones cargadas</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-400 font-bold uppercase">Agotados</p>
+      <p id="kpi-agotado" class="text-2xl font-extrabold text-red-600">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-400 font-bold uppercase">Funcionales</p>
+      <p id="kpi-funcional" class="text-2xl font-extrabold text-orange-600">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-400 font-bold uppercase">Comprar</p>
+      <p id="kpi-comprar" class="text-2xl font-extrabold text-amber-600">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-400 font-bold uppercase">Sin cotizacion</p>
+      <p id="kpi-sin-cot" class="text-2xl font-extrabold text-gray-700">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-4">
+      <p class="text-xs text-gray-400 font-bold uppercase">Estimado</p>
+      <p id="kpi-estimado" class="text-2xl font-extrabold text-green-700">$0</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-5 mb-5">
+    <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      <h2 class="font-bold text-gray-700">Items por rotacion</h2>
+      <select id="filtro-estado" onchange="renderItems()" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <option value="todos">Todos</option>
+        <option value="criticos">Criticos</option>
+        <option value="agotado_real">Agotado real</option>
+        <option value="agotado_funcional">Agotado funcional</option>
+        <option value="comprar_pronto">Comprar pronto</option>
+        <option value="sin_rotacion">Sin rotacion</option>
+        <option value="sano">Sano</option>
+      </select>
+    </div>
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Estado</th>
+            <th class="num">Stock</th>
+            <th class="num">Demanda/dia</th>
+            <th class="num">Dias</th>
+            <th class="num">Sugerido</th>
+            <th>Proveedor</th>
+            <th class="num">Estimado</th>
+            <th>Alertas</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-items">
+          <tr><td colspan="9" class="text-center text-gray-400 py-8">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="font-bold text-gray-700 mb-4">Resumen por proveedor</h2>
+    <div id="proveedores" class="space-y-3 text-sm text-gray-600">
+      <p class="text-gray-400">Sin proveedores sugeridos.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+let propuesta = null;
+let cotizaciones = [];
+
+const fmt = n => Number(n || 0).toLocaleString('es-CO', {maximumFractionDigits: 2});
+const money = n => '$' + Number(n || 0).toLocaleString('es-CO', {maximumFractionDigits: 0});
+const estadoLabel = {
+  agotado_real: 'Agotado real',
+  agotado_funcional: 'Agotado funcional',
+  comprar_pronto: 'Comprar pronto',
+  sano: 'Sano',
+  sin_rotacion: 'Sin rotacion'
+};
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function cargarPropuesta() {
+  const a = parseInt(document.getElementById('dias-alerta').value) || 2;
+  const m = parseInt(document.getElementById('dias-minima').value) || 7;
+  const o = parseInt(document.getElementById('dias-objetivo').value) || 15;
+  const tb = document.getElementById('tabla-items');
+  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Calculando...</td></tr>';
+  try {
+    const r = await fetch(`/api/compras/${NEGOCIO_ID}/rotacion?dias_alerta=${a}&dias_minima=${m}&dias_objetivo=${o}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error');
+    propuesta = d;
+    llenarProductosCotizacion();
+    renderItems();
+    renderProveedores();
+    renderKpis();
+    await cargarCotizaciones();
+  } catch (e) {
+    toast(e.message);
+    tb.innerHTML = '<tr><td colspan="9" class="text-center text-red-500 py-8">No se pudo calcular</td></tr>';
+  }
+}
+
+function llenarProductosCotizacion() {
+  const sel = document.getElementById('cot-producto');
+  const actual = sel.value;
+  const productos = [...(propuesta?.items || [])].sort((a, b) => a.producto_nombre.localeCompare(b.producto_nombre));
+  sel.innerHTML = productos.map(p => `<option value="${p.producto_id}">${p.producto_nombre}</option>`).join('');
+  if (actual) sel.value = actual;
+}
+
+async function cargarCotizaciones() {
+  try {
+    const r = await fetch(`/api/compras/${NEGOCIO_ID}/cotizaciones`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Error cotizaciones');
+    cotizaciones = d.cotizaciones || [];
+    renderCotizaciones();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function guardarCotizacion() {
+  const body = {
+    item_id: parseInt(document.getElementById('cot-producto').value),
+    proveedor_nombre: document.getElementById('cot-proveedor').value.trim(),
+    numero_cotizacion: document.getElementById('cot-numero').value.trim() || null,
+    fecha_vencimiento: document.getElementById('cot-vence').value || null,
+    descripcion_presentacion: document.getElementById('cot-presentacion').value.trim() || null,
+    unidades_item: parseFloat(document.getElementById('cot-unidades').value) || 1,
+    precio: parseFloat(document.getElementById('cot-precio').value) || 0,
+    observaciones: document.getElementById('cot-observaciones').value.trim() || null,
+    validada_proveedor: true
+  };
+  if (!body.item_id) return toast('Selecciona producto');
+  if (!body.proveedor_nombre) return toast('Proveedor requerido');
+  if (body.precio <= 0) return toast('Precio requerido');
+  try {
+    const r = await fetch(`/api/compras/${NEGOCIO_ID}/cotizaciones`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'No se pudo guardar');
+    limpiarCotizacion();
+    await cargarPropuesta();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+function limpiarCotizacion() {
+  document.getElementById('cot-proveedor').value = '';
+  document.getElementById('cot-numero').value = '';
+  document.getElementById('cot-presentacion').value = '';
+  document.getElementById('cot-unidades').value = '1';
+  document.getElementById('cot-precio').value = '';
+  document.getElementById('cot-observaciones').value = '';
+  document.getElementById('cot-vence').value = '';
+}
+
+async function eliminarCotizacion(id) {
+  if (!confirm('Eliminar cotizacion?')) return;
+  try {
+    const r = await fetch(`/api/compras/cotizaciones/${id}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'No se pudo eliminar');
+    await cargarPropuesta();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+function renderCotizaciones() {
+  const tb = document.getElementById('tabla-cotizaciones');
+  if (!cotizaciones.length) {
+    tb.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-6">Sin cotizaciones cargadas</td></tr>';
+    return;
+  }
+  tb.innerHTML = cotizaciones.map(c => `
+    <tr>
+      <td class="font-semibold text-gray-700">${c.item_nombre}</td>
+      <td>${c.proveedor_nombre || ''}</td>
+      <td>${c.descripcion_presentacion || ''}</td>
+      <td class="num">${fmt(c.unidades_item)}</td>
+      <td class="num">${money(c.precio)}</td>
+      <td class="num">${money(c.precio_unitario)}</td>
+      <td class="text-xs text-gray-500">${c.fecha_vencimiento || ''}</td>
+      <td class="num"><button onclick="eliminarCotizacion(${c.id})" class="text-red-500 text-xs font-bold">Eliminar</button></td>
+    </tr>
+  `).join('');
+}
+
+function itemsFiltrados() {
+  if (!propuesta) return [];
+  const filtro = document.getElementById('filtro-estado').value;
+  if (filtro === 'todos') return propuesta.items;
+  if (filtro === 'criticos') {
+    return propuesta.items.filter(i => ['agotado_real', 'agotado_funcional', 'comprar_pronto'].includes(i.estado_rotacion));
+  }
+  return propuesta.items.filter(i => i.estado_rotacion === filtro);
+}
+
+function renderItems() {
+  const tb = document.getElementById('tabla-items');
+  const items = itemsFiltrados();
+  if (!items.length) {
+    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin items para mostrar</td></tr>';
+    return;
+  }
+  tb.innerHTML = items.map(i => `
+    <tr>
+      <td>
+        <div class="font-semibold text-gray-800">${i.producto_nombre}</div>
+        <div class="text-xs text-gray-400">${i.categoria || ''}</div>
+      </td>
+      <td><span class="badge ${i.estado_rotacion}">${estadoLabel[i.estado_rotacion] || i.estado_rotacion}</span><div class="text-xs text-gray-400 mt-1">${i.confianza}</div></td>
+      <td class="num">${fmt(i.stock_actual)}</td>
+      <td class="num">${fmt(i.demanda_diaria)}</td>
+      <td class="num">${i.dias_para_agotarse == null ? '-' : fmt(i.dias_para_agotarse)}</td>
+      <td class="num font-bold">${fmt(i.cantidad_final || i.cantidad_sugerida)}</td>
+      <td>
+        ${i.proveedor_nombre || '<span class="text-gray-400">Sin cotizacion</span>'}
+        ${i.cotizacion_sugerida ? `<div class="text-xs text-gray-400">${i.cotizacion_sugerida.descripcion_presentacion || ''}</div>` : ''}
+      </td>
+      <td class="num">${money(i.valor_estimado)}</td>
+      <td class="text-xs text-gray-500">${(i.alertas || []).join('<br>')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderProveedores() {
+  const cont = document.getElementById('proveedores');
+  const proveedores = propuesta?.proveedores || [];
+  if (!proveedores.length) {
+    cont.innerHTML = '<p class="text-gray-400">Sin proveedores sugeridos.</p>';
+    return;
+  }
+  cont.innerHTML = proveedores.map(p => `
+    <div class="border border-gray-100 rounded-xl p-4">
+      <div class="flex justify-between gap-4">
+        <div class="font-bold text-gray-800">${p.proveedor_nombre || 'Proveedor'}</div>
+        <div class="font-extrabold text-green-700">${money(p.total_estimado)}</div>
+      </div>
+      <div class="mt-2 text-xs text-gray-500">${p.items.map(i => `${i.producto_nombre} x ${fmt(i.cantidad_final)}`).join(' | ')}</div>
+    </div>
+  `).join('');
+}
+
+function renderKpis() {
+  const items = propuesta.items || [];
+  const compra = items.filter(i => ['agotado_real', 'agotado_funcional', 'comprar_pronto'].includes(i.estado_rotacion));
+  document.getElementById('kpi-agotado').textContent = items.filter(i => i.estado_rotacion === 'agotado_real').length;
+  document.getElementById('kpi-funcional').textContent = items.filter(i => i.estado_rotacion === 'agotado_funcional').length;
+  document.getElementById('kpi-comprar').textContent = compra.length;
+  document.getElementById('kpi-sin-cot').textContent = compra.filter(i => !i.cotizacion_sugerida).length;
+  document.getElementById('kpi-estimado').textContent = money(compra.reduce((s, i) => s + Number(i.valor_estimado || 0), 0));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const vence = new Date();
+  vence.setDate(vence.getDate() + 180);
+  document.getElementById('cot-vence').value = vence.toISOString().slice(0, 10);
+  cargarPropuesta();
+});
+</script>
+</body>
+</html>

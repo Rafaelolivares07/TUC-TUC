@@ -27,6 +27,7 @@ def create_app():
     from .blueprints.admin_agent_bp import bp as admin_agent_bp
     from .blueprints.vendedor import bp as vendedor_bp
     from .blueprints.inventarios import bp as inventarios_bp
+    from .blueprints.compras import bp as compras_bp
     from .blueprints.contabilidad import bp as contabilidad_bp, ejecutar_programaciones_job
     from .blueprints.tracking import bp as tracking_bp
     from .blueprints.watch import bp as watch_bp
@@ -45,6 +46,7 @@ def create_app():
     app.register_blueprint(admin_agent_bp)
     app.register_blueprint(vendedor_bp)
     app.register_blueprint(inventarios_bp)
+    app.register_blueprint(compras_bp)
     app.register_blueprint(contabilidad_bp)
     app.register_blueprint(tracking_bp)
     app.register_blueprint(watch_bp)

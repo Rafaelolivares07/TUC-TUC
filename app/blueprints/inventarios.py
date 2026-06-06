@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
 from decimal import Decimal
+from datetime import date
 
 try:
     from .contabilidad import _ejecutar_asiento_costo_mov as _asiento_costo_mov
@@ -89,6 +90,13 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_tarjeta_producto ON tarjeta_estandar(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_saldos_negocio_producto ON saldos_inventario(negocio_id, producto_id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS costo_und NUMERIC(12,4)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_numero VARCHAR(80)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_fecha DATE",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES terceros(id)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS proveedor_nombre VARCHAR(255)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_total NUMERIC(14,2)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_total NUMERIC(14,2)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS recargo DECIMAL(10,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
     ]
@@ -128,6 +136,47 @@ def _crear_tablas(conn):
     _tablas_listas = True
 
 
+def _txt(value):
+    value = str(value or '').strip()
+    return value or None
+
+
+def _dec(value, default='0'):
+    try:
+        return Decimal(str(value if value not in (None, '') else default))
+    except Exception:
+        return Decimal(default)
+
+
+def _int_o_none(value):
+    try:
+        return int(value) if value not in (None, '') else None
+    except Exception:
+        return None
+
+
+def _fecha_o_none(value):
+    value = _txt(value)
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except Exception:
+        return None
+
+
+def _negocio_id_tienda(conn, slug):
+    row = conn.execute(
+        "SELECT tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE",
+        (slug,)
+    ).fetchone()
+    if not row:
+        return None, 'Tienda no encontrada'
+    if not row['tercero_id']:
+        return None, 'La tienda no tiene tercero_id asociado para inventario'
+    return row['tercero_id'], None
+
+
 def _es_ensamble(conn, producto_id):
     """Retorna True si el producto tiene componentes distintos a sí mismo."""
     rows = conn.execute(
@@ -151,7 +200,11 @@ def _componentes_de(conn, producto_id):
 
 def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  registrado_por, valor_unitario=None, notas=None, bodega=1,
-                 referencia_id=None, referencia_tipo=None):
+                 referencia_id=None, referencia_tipo=None,
+                 tipo_documento=None, documento_numero=None,
+                 documento_fecha=None, proveedor_id=None,
+                 proveedor_nombre=None, iva_total=None,
+                 documento_total=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -182,8 +235,10 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         INSERT INTO movimientos_inventario
             (negocio_id, producto_id, nombre_producto, tipo, motivo,
              cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
-             valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
+             tipo_documento, documento_numero, documento_fecha, proveedor_id,
+             proveedor_nombre, iva_total, documento_total)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -193,7 +248,11 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(valor_unitario) if valor_unitario else None,
         float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None,
         float(costo_nuevo),
-        referencia_id, referencia_tipo
+        referencia_id, referencia_tipo,
+        tipo_documento, documento_numero, documento_fecha, proveedor_id,
+        proveedor_nombre,
+        float(iva_total) if iva_total is not None else None,
+        float(documento_total) if documento_total is not None else None
     ))
 
     if saldo:
@@ -222,7 +281,11 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
 def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      registrado_por, valor_unitario=None, notas=None, bodega=1,
-                     referencia_id=None, referencia_tipo=None):
+                     referencia_id=None, referencia_tipo=None,
+                     tipo_documento=None, documento_numero=None,
+                     documento_fecha=None, proveedor_id=None,
+                     proveedor_nombre=None, iva_total=None,
+                     documento_total=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -237,7 +300,96 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         cant_comp = Decimal(str(comp['cantidad'])) * cantidad
         _mov_directo(conn, negocio_id, comp['componente_id'], cant_comp, tipo, motivo,
                      registrado_por, valor_unitario, notas, bodega,
-                     referencia_id, referencia_tipo)
+                     referencia_id, referencia_tipo, tipo_documento,
+                     documento_numero, documento_fecha, proveedor_id,
+                     proveedor_nombre, iva_total, documento_total)
+
+
+def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
+    lineas = data.get('lineas', [])
+    motivo = data.get('motivo', 'compra')
+    notas = _txt(data.get('notas'))
+    if not lineas:
+        return {'ok': False, 'error': 'Debe agregar al menos una linea'}, 400
+
+    tipo_documento = _txt(data.get('tipo_documento'))
+    documento_numero = _txt(data.get('documento_numero') or data.get('numero_documento'))
+    documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
+    proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
+    proveedor_nombre = _txt(data.get('proveedor_nombre'))
+    iva_total = _dec(data.get('iva') or data.get('iva_total'))
+    subtotal_compra = Decimal('0')
+    advertencias = []
+
+    if proveedor_id and not proveedor_nombre:
+        prov = conn.execute(
+            "SELECT nombre FROM terceros WHERE id = %s",
+            (proveedor_id,)
+        ).fetchone()
+        proveedor_nombre = prov['nombre'] if prov else None
+        if not prov:
+            return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
+
+    for ln in lineas:
+        prod_id = int(ln['producto_id'])
+        prod = conn.execute(
+            "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
+            (prod_id, negocio_id)
+        ).fetchone()
+        if not prod:
+            return {'ok': False, 'error': f'Producto {prod_id} no pertenece al negocio'}, 400
+        if _es_ensamble(conn, prod_id):
+            comps = _componentes_de(conn, prod_id)
+            nombres = ', '.join(f"{c['nombre']} x{c['cantidad']}" for c in comps)
+            return {
+                'ok': False,
+                'error': f'"{prod["nombre"]}" es un ensamble - no se puede comprar directamente. '
+                         f'Compre sus componentes: {nombres}'
+            }, 400
+        subtotal_compra += _dec(ln.get('cantidad')) * _dec(ln.get('valor_unitario'))
+
+    documento_total = subtotal_compra + iva_total
+
+    for ln in lineas:
+        _aplicar_tarjeta(
+            conn, negocio_id,
+            producto_id=int(ln['producto_id']),
+            cantidad=float(ln['cantidad']),
+            tipo='entrada',
+            motivo=motivo,
+            registrado_por=usuario_id,
+            valor_unitario=float(ln.get('valor_unitario') or 0) or None,
+            notas=notas,
+            referencia_id=data.get('referencia_id'),
+            referencia_tipo=data.get('referencia_tipo'),
+            tipo_documento=tipo_documento,
+            documento_numero=documento_numero,
+            documento_fecha=documento_fecha,
+            proveedor_id=proveedor_id,
+            proveedor_nombre=proveedor_nombre,
+            iva_total=iva_total,
+            documento_total=documento_total,
+        )
+
+    if _asiento_auto:
+        try:
+            if documento_total > 0:
+                _asiento_auto(conn, negocio_id, 'COMPRA',
+                              {'subtotal_compra': float(subtotal_compra),
+                               'iva_compra': float(iva_total),
+                               'total_compra': float(documento_total)},
+                              registrado_por=usuario_id)
+        except Exception as _e:
+            print(f'[cont] compra negocio={negocio_id}: {_e}')
+
+    return {
+        'ok': True,
+        'advertencias': advertencias,
+        'lineas': len(lineas),
+        'subtotal_compra': float(subtotal_compra),
+        'iva_compra': float(iva_total),
+        'total_compra': float(documento_total),
+    }, 200
 
 
 # ── Productos ──────────────────────────────────────────────────────────────────
@@ -357,6 +509,23 @@ def api_inventario_entrada(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     data   = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        resultado, status = _registrar_entrada_inventario(
+            conn, negocio_id, data, session['usuario_id']
+        )
+        if not resultado.get('ok'):
+            conn.rollback()
+            return jsonify(resultado), status
+        conn.commit()
+        return jsonify(resultado), status
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
     lineas = data.get('lineas', [])
     motivo = data.get('motivo', 'compra')
     notas  = data.get('notas') or None
@@ -416,6 +585,32 @@ def api_inventario_entrada(negocio_id):
 
 # ── Stock y kardex ─────────────────────────────────────────────────────────────
 
+@bp.route('/api/tienda/<slug>/inventario/entrada', methods=['POST'])
+def api_tienda_inventario_entrada(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id, error = _negocio_id_tienda(conn, slug)
+        if error:
+            return jsonify({'ok': False, 'error': error}), 404
+        resultado, status = _registrar_entrada_inventario(
+            conn, negocio_id, data, session['usuario_id']
+        )
+        if not resultado.get('ok'):
+            conn.rollback()
+            return jsonify(resultado), status
+        conn.commit()
+        return jsonify(resultado), status
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/stock')
 def api_inventario_stock(negocio_id):
     if 'usuario_id' not in session:
@@ -423,6 +618,31 @@ def api_inventario_stock(negocio_id):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
+        rows = conn.execute("""
+            SELECT p.id, p.nombre, p.categoria, s.bodega,
+                   s.stock, s.costo_und, s.valor_existencia, s.updated_at
+            FROM saldos_inventario s
+            JOIN productos p ON p.id = s.producto_id
+            WHERE s.negocio_id = %s
+            ORDER BY p.categoria, p.nombre
+        """, (negocio_id,)).fetchall()
+        return jsonify({'ok': True, 'saldos': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/inventario/stock')
+def api_tienda_inventario_stock(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id, error = _negocio_id_tienda(conn, slug)
+        if error:
+            return jsonify({'ok': False, 'error': error}), 404
         rows = conn.execute("""
             SELECT p.id, p.nombre, p.categoria, s.bodega,
                    s.stock, s.costo_und, s.valor_existencia, s.updated_at
@@ -447,12 +667,44 @@ def api_inventario_kardex(producto_id):
         _crear_tablas(conn)
         rows = conn.execute("""
             SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
-                   valor_unitario, costo_und, notas,
+                   valor_unitario, costo_und, notas, tipo_documento,
+                   documento_numero, documento_fecha, proveedor_id,
+                   proveedor_nombre, iva_total, documento_total,
                    TO_CHAR(created_at, 'DD/MM/YY HH24:MI') AS fecha
             FROM movimientos_inventario
             WHERE producto_id = %s
             ORDER BY created_at DESC LIMIT 300
         """, (producto_id,)).fetchall()
+        return jsonify({'ok': True, 'movimientos': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/inventario/kardex')
+def api_tienda_inventario_kardex(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    producto_id = request.args.get('producto_id', type=int)
+    if not producto_id:
+        return jsonify({'ok': False, 'error': 'producto_id requerido'}), 400
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id, error = _negocio_id_tienda(conn, slug)
+        if error:
+            return jsonify({'ok': False, 'error': error}), 404
+        rows = conn.execute("""
+            SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
+                   valor_unitario, costo_und, notas, tipo_documento,
+                   documento_numero, documento_fecha, proveedor_id,
+                   proveedor_nombre, iva_total, documento_total,
+                   TO_CHAR(created_at, 'DD/MM/YY HH24:MI') AS fecha
+            FROM movimientos_inventario
+            WHERE producto_id = %s AND negocio_id = %s
+            ORDER BY created_at DESC LIMIT 300
+        """, (producto_id, negocio_id)).fetchall()
         return jsonify({'ok': True, 'movimientos': [dict(r) for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -665,11 +917,31 @@ def admin_inventario(negocio_id):
         negocio = conn.execute(
             "SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)
         ).fetchone()
+        tienda = conn.execute(
+            "SELECT slug, nombre FROM tiendas WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+        restaurante = None
+        if not tienda:
+            restaurante = conn.execute(
+                "SELECT slug, nombre FROM restaurantes WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+                (negocio_id,)
+            ).fetchone()
         conn.close()
         if not negocio:
             return "Negocio no encontrado", 404
+        volver_url = '/admin'
+        volver_label = 'Admin'
+        if tienda:
+            volver_url = f"/admin/tienda/{tienda['slug']}"
+            volver_label = tienda['nombre'] or 'Tienda'
+        elif restaurante:
+            volver_url = f"/admin/restaurante/{restaurante['slug']}"
+            volver_label = restaurante['nombre'] or 'Restaurante'
         return render_template('inventario_admin.html',
                                negocio_id=negocio_id,
-                               negocio_nombre=negocio['nombre'])
+                               negocio_nombre=negocio['nombre'],
+                               volver_url=volver_url,
+                               volver_label=volver_label)
     except Exception as e:
         return f"Error: {e}", 500

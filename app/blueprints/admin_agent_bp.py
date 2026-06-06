@@ -107,14 +107,14 @@ def checkin():
         _crear_tablas(conn)
         # Si ya existe un registro para este agente → actualizar, nunca insertar de nuevo
         existing = conn.execute(
-            "SELECT id, token FROM admin_agent_sesiones WHERE cliente_id=%s LIMIT 1",
+            "SELECT id, token FROM admin_agent_sesiones WHERE cliente_id=%s ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
             (cliente_id,)
         ).fetchone()
         if existing:
             token = existing['token']
             conn.execute(
-                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, activo=TRUE, ultimo_ping=NOW() WHERE cliente_id=%s",
-                (nombre, ip_local, ruta_bd, cliente_id)
+                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, activo=TRUE, ultimo_ping=NOW() WHERE id=%s",
+                (nombre, ip_local, ruta_bd, existing['id'])
             )
             conn.commit()
             return jsonify({'ok': True, 'token': token, 'reused': True})
@@ -293,7 +293,7 @@ def consultar():
         if not _puede_ver(session['usuario_id'], session.get('rol', ''), cliente_id, conn):
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         sesion = conn.execute(
-            "SELECT id FROM admin_agent_sesiones WHERE cliente_id=%s AND activo=TRUE ORDER BY id DESC LIMIT 1",
+            "SELECT id FROM admin_agent_sesiones WHERE cliente_id=%s AND activo=TRUE ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
             (cliente_id,)
         ).fetchone()
         if not sesion:
@@ -437,7 +437,7 @@ def estado(cliente_id):
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         sesion = conn.execute(
             "SELECT ultimo_ping FROM admin_agent_sesiones "
-            "WHERE cliente_id=%s AND activo=TRUE ORDER BY id DESC LIMIT 1",
+            "WHERE cliente_id=%s AND activo=TRUE ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
             (cliente_id,)
         ).fetchone()
         if not sesion:
@@ -466,7 +466,7 @@ def agentes():
                     cliente_id, nombre, alias, ip_local, ruta_bd, activo, ultimo_ping
                 FROM admin_agent_sesiones
                 WHERE ultimo_ping > NOW() - INTERVAL '24 hours'
-                ORDER BY cliente_id, id DESC
+                ORDER BY cliente_id, ultimo_ping DESC, id DESC
             """).fetchall()
         else:
             rows = conn.execute("""
@@ -476,7 +476,7 @@ def agentes():
                 JOIN admin_agent_permisos p ON p.cliente_id = s.cliente_id
                 WHERE p.usuario_id = %s
                   AND s.ultimo_ping > NOW() - INTERVAL '24 hours'
-                ORDER BY s.cliente_id, s.id DESC
+                ORDER BY s.cliente_id, s.ultimo_ping DESC, s.id DESC
             """, (session['usuario_id'],)).fetchall()
         now = datetime.now(timezone.utc)
         result = []
@@ -712,7 +712,7 @@ def agentes_activos():
             SELECT DISTINCT ON (cliente_id) cliente_id, nombre, alias, ultimo_ping
             FROM admin_agent_sesiones
             WHERE ultimo_ping > NOW() - INTERVAL '30 days'
-            ORDER BY cliente_id, id DESC
+            ORDER BY cliente_id, ultimo_ping DESC, id DESC
         """).fetchall()
         now = datetime.now(timezone.utc)
         agentes = []

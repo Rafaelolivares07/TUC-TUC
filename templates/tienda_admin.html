@@ -103,6 +103,7 @@
                 <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="tab-btn tab-active">📦 Catálogo</button>
                 <button onclick="cambiarTab('pauta')" id="tab-pauta" class="tab-btn">📣 Pauta</button>
                 <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">🛒 Pedidos</button>
+                {% if tienda.slug == 'home-solar-panel' %}<button onclick="cambiarTab('proyectos-solares')" id="tab-proyectos-solares" class="tab-btn">PROYECTOS SOLARES</button>{% endif %}
                 <button onclick="cambiarTab('cotizaciones')" id="tab-cotizaciones" class="tab-btn">Cotizaciones</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
@@ -200,6 +201,65 @@
                 <p class="text-sm mt-1">Los pedidos apareceran aqui automaticamente</p>
             </div>
         </div>
+
+        {% if tienda.slug == 'home-solar-panel' %}
+        <!-- ====== TAB: PROYECTOS SOLARES ====== -->
+        <div id="panel-proyectos-solares" class="p-4 md:p-6 hidden">
+            <div class="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5">
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <h3 class="font-bold text-gray-700">Proyecto solar</h3>
+                        <button onclick="limpiarProyectoSolar()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">Limpiar</button>
+                    </div>
+                    <div class="grid lg:grid-cols-2 gap-3 mb-4">
+                        <input id="ps-cliente" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cliente">
+                        <input id="ps-telefono" class="border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
+                        <input id="ps-ubicacion" class="border rounded-lg px-3 py-2 text-sm" placeholder="Ubicacion">
+                        <select id="ps-objetivo" class="border rounded-lg px-3 py-2 text-sm">
+                            <option value="ahorro">Ahorro</option>
+                            <option value="respaldo">Respaldo</option>
+                            <option value="mixto">Ahorro + respaldo</option>
+                            <option value="aislado">Sistema aislado</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Factura electrica</p>
+                        <div class="grid md:grid-cols-3 gap-2 mb-3">
+                            <input id="ps-consumo-mensual" type="number" min="0" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="kWh mes">
+                            <input id="ps-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar">
+                            <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="border rounded-lg px-3 py-2 text-sm" placeholder="% cobertura">
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
+                            {% for i in range(1, 7) %}
+                            <input id="ps-consumo-{{ i }}" type="number" min="0" step="0.01" onchange="calcularPromedioProyectoSolar()" class="ps-consumo-factura border rounded-lg px-3 py-2 text-sm" placeholder="{{ i }}">
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <p class="text-xs font-semibold text-gray-500">Equipos / cargas</p>
+                            <button onclick="agregarCargaProyectoSolar()" class="text-xs font-bold text-emerald-600">Agregar equipo</button>
+                        </div>
+                        <div id="ps-cargas" class="space-y-2"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-xl p-4 h-fit">
+                    <h3 class="font-bold text-gray-700 mb-4">Resultado inicial</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo diario</span><strong id="ps-res-diario">0 kWh</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel">550 W</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles</span><strong id="ps-res-paneles">0</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo fuera de sol</span><strong id="ps-res-noche">0 Wh</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Pico estimado</span><strong id="ps-res-pico">0 W</strong></div>
+                    </div>
+                    <button onclick="calcularProyectoSolar()" class="w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- ====== TAB: COTIZACIONES ====== -->
         <div id="panel-cotizaciones" class="p-4 md:p-6 hidden">
@@ -965,8 +1025,10 @@ function fmt(v) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','cotizaciones','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
-        document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
+    ['catalogo','pedidos','proyectos-solares','cotizaciones','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
+        const panel = document.getElementById('panel-' + t);
+        if (!panel) return;
+        panel.classList.toggle('hidden', t !== tab);
         const btn = document.getElementById('tab-' + t);
         if (btn) btn.classList.toggle('tab-active', t === tab);
     });
@@ -979,6 +1041,7 @@ function cambiarTab(tab) {
     if (tab === 'inventario') cargarStock();
     if (tab === 'vendedores') cargarVendedores();
     if (tab === 'cotizaciones') { prepararCotizaciones(); cargarCotizaciones(); }
+    if (tab === 'proyectos-solares') prepararProyectoSolar();
 }
 
 function scrollNavTabs(delta) {
@@ -1448,6 +1511,75 @@ async function abrirCotizacion(id) {
         renderLineasCotizacion();
         toast('Cotizacion cargada');
     } catch(e) { toast('Error de conexion', true); }
+}
+
+function prepararProyectoSolar() {
+    const cont = document.getElementById('ps-cargas');
+    if (cont && !cont.children.length) agregarCargaProyectoSolar();
+}
+
+function limpiarProyectoSolar() {
+    ['ps-cliente','ps-telefono','ps-ubicacion','ps-consumo-mensual','ps-factor'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const cobertura = document.getElementById('ps-cobertura');
+    if (cobertura) cobertura.value = 100;
+    document.querySelectorAll('.ps-consumo-factura').forEach(el => el.value = '');
+    const cont = document.getElementById('ps-cargas');
+    if (cont) cont.innerHTML = '';
+    prepararProyectoSolar();
+    calcularProyectoSolar();
+}
+
+function agregarCargaProyectoSolar() {
+    const cont = document.getElementById('ps-cargas');
+    if (!cont) return;
+    const idx = cont.children.length + 1;
+    const div = document.createElement('div');
+    div.className = 'grid lg:grid-cols-[minmax(0,1fr)_80px_95px_95px_95px_auto] gap-2';
+    div.innerHTML = `
+        <input class="ps-equipo border rounded-lg px-3 py-2 text-sm" placeholder="Equipo ${idx}">
+        <input class="ps-cantidad border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" value="1" placeholder="Cant.">
+        <input class="ps-watts border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W nominal">
+        <input class="ps-pico border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W pico">
+        <input class="ps-horas-noche border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="h noche">
+        <button onclick="this.closest('div').remove(); calcularProyectoSolar()" class="text-xs text-red-500 font-bold">Quitar</button>
+    `;
+    cont.appendChild(div);
+}
+
+function calcularPromedioProyectoSolar() {
+    const vals = Array.from(document.querySelectorAll('.ps-consumo-factura'))
+        .map(el => Number(el.value || 0))
+        .filter(v => v > 0);
+    if (!vals.length) return;
+    document.getElementById('ps-consumo-mensual').value = (vals.reduce((a,b) => a + b, 0) / vals.length).toFixed(2);
+}
+
+function calcularProyectoSolar() {
+    const consumoMes = Number(document.getElementById('ps-consumo-mensual')?.value || 0);
+    const factor = Number(document.getElementById('ps-factor')?.value || 0);
+    const cobertura = Number(document.getElementById('ps-cobertura')?.value || 100) / 100;
+    const eficiencia = 0.80;
+    const panelW = 550;
+    const consumoDiario = consumoMes * cobertura / 30;
+    const produccionPanel = (panelW / 1000) * factor * eficiencia;
+    const paneles = produccionPanel > 0 ? Math.ceil(consumoDiario / produccionPanel) : 0;
+    let nocheWh = 0;
+    let picoW = 0;
+    document.querySelectorAll('#ps-cargas > div').forEach(row => {
+        const cant = Number(row.querySelector('.ps-cantidad')?.value || 0);
+        const watts = Number(row.querySelector('.ps-watts')?.value || 0);
+        const pico = Number(row.querySelector('.ps-pico')?.value || watts);
+        const horasNoche = Number(row.querySelector('.ps-horas-noche')?.value || 0);
+        nocheWh += cant * watts * horasNoche;
+        picoW += cant * pico;
+    });
+    document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
+    document.getElementById('ps-res-paneles').textContent = paneles || '0';
+    document.getElementById('ps-res-noche').textContent = `${fmt(nocheWh)} Wh`;
+    document.getElementById('ps-res-pico').textContent = `${fmt(picoW)} W`;
 }
 
 function renderCategoriasVisuales(categorias) {

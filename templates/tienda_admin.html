@@ -104,6 +104,7 @@
                 <button onclick="cambiarTab('pauta')" id="tab-pauta" class="tab-btn">📣 Pauta</button>
                 <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">🛒 Pedidos</button>
                 {% if tienda.slug == 'home-solar-panel' %}<button onclick="cambiarTab('proyectos-solares')" id="tab-proyectos-solares" class="tab-btn">PROYECTOS SOLARES</button>{% endif %}
+                {% if tienda.slug == 'home-solar-panel' %}<button onclick="cambiarTab('fichas-solares')" id="tab-fichas-solares" class="tab-btn">FICHAS SOLARES</button>{% endif %}
                 <button onclick="cambiarTab('cotizaciones')" id="tab-cotizaciones" class="tab-btn">Cotizaciones</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
@@ -256,11 +257,20 @@
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Referencias del catalogo</p>
-                        <div class="grid md:grid-cols-2 gap-2">
+                        <div class="grid md:grid-cols-3 gap-2">
                             <label class="text-xs font-semibold text-gray-500">Panel
                                 <select id="ps-panel-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
                             </label>
-                            <label class="text-xs font-semibold text-gray-500">Bateria LiFePO4
+                            <label class="text-xs font-semibold text-gray-500">Tipo de bateria
+                                <select id="ps-tipo-bateria" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                                    <option value="lifepo4">LiFePO4</option>
+                                    <option value="">Todas</option>
+                                    <option value="gel">Gel / AGM</option>
+                                    <option value="ion">Ion de litio</option>
+                                    <option value="plomo">Plomo acido</option>
+                                </select>
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Bateria
                                 <select id="ps-bateria-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
                             </label>
                         </div>
@@ -289,6 +299,89 @@
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias">0</strong></div>
                     </div>
                     <button onclick="calcularProyectoSolar()" class="w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== TAB: FICHAS SOLARES ====== -->
+        <div id="panel-fichas-solares" class="p-4 md:p-6 hidden">
+            <div class="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-5">
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <h3 class="font-bold text-gray-700 mb-4">Ficha tecnica solar</h3>
+                    <div class="grid lg:grid-cols-[minmax(0,1fr)_220px] gap-3 mb-4">
+                        <label class="text-xs font-semibold text-gray-500">Buscar producto
+                            <input id="fs-buscar" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Escribe para filtrar el catalogo">
+                        </label>
+                        <label class="text-xs font-semibold text-gray-500">Tipo tecnico solar
+                            <select id="fs-tipo" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                                <option value="">Sin ficha solar</option>
+                                <option value="panel">Panel solar</option>
+                                <option value="bateria">Bateria</option>
+                                <option value="inversor">Inversor</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="text-xs font-semibold text-gray-500 block mb-4">Producto del catalogo
+                        <select id="fs-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
+                    </label>
+
+                    <div id="fs-form-panel" class="hidden bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-3">Datos del panel</p>
+                        <div class="grid md:grid-cols-3 gap-3">
+                            <label class="text-xs font-semibold text-gray-500">Potencia W<input data-fs="potencia_w" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Eficiencia %<input data-fs="eficiencia_pct" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje VOC<input data-fs="voc_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Corriente ISC<input data-fs="isc_a" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Ancho mm<input data-fs="ancho_mm" type="number" step="1" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Alto mm<input data-fs="alto_mm" type="number" step="1" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                        </div>
+                    </div>
+
+                    <div id="fs-form-bateria" class="hidden bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-3">Datos de la bateria</p>
+                        <div class="grid md:grid-cols-3 gap-3">
+                            <label class="text-xs font-semibold text-gray-500">Tipo de bateria<input data-fs="tipo_bateria" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="LiFePO4, gel, AGM..."></label>
+                            <label class="text-xs font-semibold text-gray-500">Capacidad nominal kWh<input data-fs="capacidad_nominal_kwh" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Capacidad util %<input data-fs="capacidad_util_pct" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="80"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje nominal V<input data-fs="voltaje_nominal_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje minimo descarga V<input data-fs="voltaje_min_descarga_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje maximo carga V<input data-fs="voltaje_max_carga_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje de flotacion V (si aplica)<input data-fs="voltaje_flotacion_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Amperios hora Ah<input data-fs="amperios_hora_ah" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Potencia max descarga W<input data-fs="potencia_max_descarga_w" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Corriente max descarga A<input data-fs="corriente_max_descarga_a" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Ciclos estimados<input data-fs="ciclos_estimados" type="number" step="1" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Peso kg<input data-fs="peso_kg" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                        </div>
+                    </div>
+
+                    <div id="fs-form-inversor" class="hidden bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-3">Datos del inversor</p>
+                        <div class="grid md:grid-cols-3 gap-3">
+                            <label class="text-xs font-semibold text-gray-500">Tipo de inversor<input data-fs="tipo_inversor" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="On-grid, hibrido, off-grid"></label>
+                            <label class="text-xs font-semibold text-gray-500">Potencia nominal W<input data-fs="potencia_nominal_w" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Potencia pico W<input data-fs="potencia_pico_w" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje AC salida V<input data-fs="voltaje_ac_salida_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Fases<input data-fs="fases" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Mono, tri, split"></label>
+                            <label class="text-xs font-semibold text-gray-500">Voltaje banco bateria V<input data-fs="voltaje_banco_bateria_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Bateria min V<input data-fs="bateria_min_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Bateria max V<input data-fs="bateria_max_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">VOC max FV<input data-fs="voc_max_fv_v" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Corriente FV max A<input data-fs="corriente_max_fv_a" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Potencia FV max W<input data-fs="potencia_max_fv_w" type="number" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                            <label class="text-xs font-semibold text-gray-500">Numero MPPT<input data-fs="numero_mppt" type="number" step="1" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></label>
+                        </div>
+                        <label class="text-xs font-semibold text-gray-500 block mt-3">Observaciones
+                            <textarea data-fs="observaciones" rows="2" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+                        </label>
+                    </div>
+
+                    <button onclick="guardarFichaSolar()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar ficha solar</button>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-xl p-4 h-fit">
+                    <h3 class="font-bold text-gray-700 mb-4">Estado</h3>
+                    <div id="fs-resumen" class="space-y-4 text-sm"></div>
                 </div>
             </div>
         </div>
@@ -1036,6 +1129,7 @@ const TOKEN = '{{ tienda.token_acceso }}';
 const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
 const ES_TIENDA_SOLAR = SLUG === 'home-solar-panel';
 let productos = [];
+let solarFichas = {};
 let cotizacionLineas = [];
 let pollingInterval = null;
 let productoEditandoId = null;
@@ -1058,7 +1152,7 @@ function fmt(v) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','proyectos-solares','cotizaciones','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
+    ['catalogo','pedidos','proyectos-solares','fichas-solares','cotizaciones','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
         const panel = document.getElementById('panel-' + t);
         if (!panel) return;
         panel.classList.toggle('hidden', t !== tab);
@@ -1075,6 +1169,7 @@ function cambiarTab(tab) {
     if (tab === 'vendedores') cargarVendedores();
     if (tab === 'cotizaciones') { prepararCotizaciones(); cargarCotizaciones(); }
     if (tab === 'proyectos-solares') prepararProyectoSolar();
+    if (tab === 'fichas-solares') prepararFichasSolares();
 }
 
 function scrollNavTabs(delta) {
@@ -1366,11 +1461,26 @@ async function cargarProductos() {
         const data = await r.json();
         if (!data.ok) return toast(data.error || 'Error', true);
         productos = data.productos;
+        if (ES_TIENDA_SOLAR) await cargarFichasSolares();
         renderCategoriasVisuales(data.categorias || []);
         renderSelectorCotizacion();
         renderSelectoresProyectoSolar();
+        renderSelectorFichaSolar();
         renderProductos();
     } catch(e) { toast('Error de conexion', true); }
+}
+
+async function cargarFichasSolares() {
+    if (!ES_TIENDA_SOLAR) return;
+    try {
+        const r = await fetch(BASE + '/fichas-solares');
+        const data = await r.json();
+        if (!data.ok) return;
+        solarFichas = {};
+        (data.fichas || []).forEach(f => {
+            solarFichas[f.producto_id] = f;
+        });
+    } catch(e) {}
 }
 
 function prepararCotizaciones() {
@@ -1547,17 +1657,150 @@ async function abrirCotizacion(id) {
     } catch(e) { toast('Error de conexion', true); }
 }
 
+function prepararFichasSolares() {
+    if (!productos.length) cargarProductos();
+    else {
+        renderSelectorFichaSolar();
+        renderResumenFichasSolares();
+    }
+    ['fs-buscar','fs-producto','fs-tipo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el.dataset.bound) return;
+        el.dataset.bound = '1';
+        el.addEventListener(id === 'fs-buscar' ? 'input' : 'change', () => {
+            if (id === 'fs-buscar') renderSelectorFichaSolar();
+            else if (id === 'fs-producto') cargarFichaSolarSeleccionada();
+            else mostrarFormularioFichaSolar(el.value);
+        });
+    });
+}
+
+function renderSelectorFichaSolar() {
+    const sel = document.getElementById('fs-producto');
+    if (!sel) return;
+    const actual = sel.value;
+    const q = (document.getElementById('fs-buscar')?.value || '').trim().toLowerCase();
+    const lista = productos.filter(p => {
+        const txt = `${p.nombre || ''} ${p.categoria || ''}`.toLowerCase();
+        return !q || txt.includes(q);
+    });
+    sel.innerHTML = '<option value="">Selecciona un producto</option>' + lista.map(p => {
+        const ficha = solarFichas[p.id];
+        const marca = ficha?.tipo ? ` - ${etiquetaTipoSolar(ficha.tipo)}` : '';
+        return `<option value="${p.id}">${p.nombre}${marca}</option>`;
+    }).join('');
+    if (actual && Array.from(sel.options).some(o => o.value === actual)) sel.value = actual;
+    cargarFichaSolarSeleccionada();
+}
+
+function etiquetaTipoSolar(tipo) {
+    return {panel: 'Panel solar', bateria: 'Bateria', inversor: 'Inversor'}[tipo] || 'Sin ficha';
+}
+
+function cargarFichaSolarSeleccionada() {
+    const productoId = Number(document.getElementById('fs-producto')?.value || 0);
+    const ficha = solarFichas[productoId] || {tipo: '', datos: {}};
+    const tipoEl = document.getElementById('fs-tipo');
+    if (tipoEl) tipoEl.value = ficha.tipo || '';
+    mostrarFormularioFichaSolar(tipoEl?.value || '');
+    document.querySelectorAll('[data-fs]').forEach(el => {
+        const valor = (ficha.datos || {})[el.dataset.fs];
+        el.value = valor ?? '';
+    });
+}
+
+function mostrarFormularioFichaSolar(tipo) {
+    ['panel','bateria','inversor'].forEach(t => {
+        const el = document.getElementById('fs-form-' + t);
+        if (el) el.classList.toggle('hidden', t !== tipo);
+    });
+}
+
+function datosFichaSolarActual(tipo) {
+    const datos = {};
+    const form = document.getElementById('fs-form-' + tipo);
+    if (!form) return datos;
+    form.querySelectorAll('[data-fs]').forEach(el => {
+        const raw = (el.value || '').trim();
+        if (raw === '') return;
+        datos[el.dataset.fs] = el.type === 'number' ? Number(raw) : raw;
+    });
+    return datos;
+}
+
+async function guardarFichaSolar() {
+    const productoId = Number(document.getElementById('fs-producto')?.value || 0);
+    const tipo = document.getElementById('fs-tipo')?.value || '';
+    if (!productoId) return toast('Selecciona un producto', true);
+    try {
+        const r = await fetch(`${BASE}/producto/${productoId}/ficha-solar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tipo, datos: tipo ? datosFichaSolarActual(tipo) : {}})
+        });
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        toast(tipo ? 'Ficha solar guardada' : 'Ficha solar eliminada');
+        await cargarFichasSolares();
+        renderSelectorFichaSolar();
+        renderResumenFichasSolares();
+        renderSelectoresProyectoSolar();
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function resumenFichaSolar(f) {
+    const d = f.datos || {};
+    if (f.tipo === 'panel') return `${fmt(d.potencia_w)} W | VOC ${fmt(d.voc_v)} V | ISC ${fmt(d.isc_a)} A`;
+    if (f.tipo === 'bateria') return `${d.tipo_bateria || 'Bateria'} | ${fmt(d.capacidad_nominal_kwh)} kWh | util ${fmt(d.capacidad_util_pct || 80)}%`;
+    if (f.tipo === 'inversor') return `${d.tipo_inversor || 'Inversor'} | ${fmt(d.potencia_nominal_w)} W | FV max ${fmt(d.potencia_max_fv_w)} W`;
+    return 'Sin ficha solar';
+}
+
+function renderResumenFichasSolares() {
+    const cont = document.getElementById('fs-resumen');
+    if (!cont) return;
+    const filas = productos.map(p => ({producto: p, ficha: solarFichas[p.id] || {tipo: '', datos: {}}}));
+    const pendientes = filas.filter(x => !x.ficha.tipo).slice(0, 8);
+    const completas = filas.filter(x => x.ficha.tipo).slice(0, 8);
+    const bloque = (titulo, items) => `
+        <div>
+            <p class="text-xs font-bold text-gray-500 uppercase mb-2">${titulo}</p>
+            <div class="space-y-2">${items.length ? items.map(x => `
+                <button onclick="seleccionarProductoFichaSolar(${x.producto.id})" class="w-full text-left border border-gray-200 rounded-xl px-3 py-2 hover:bg-gray-50">
+                    <p class="font-semibold text-gray-700 truncate">${x.producto.nombre}</p>
+                    <p class="text-xs text-gray-400">${x.ficha.tipo ? etiquetaTipoSolar(x.ficha.tipo) + ' - ' + resumenFichaSolar(x.ficha) : 'Sin ficha solar'}</p>
+                </button>
+            `).join('') : '<p class="text-xs text-gray-400">Sin productos en este grupo</p>'}</div>
+        </div>`;
+    cont.innerHTML = bloque('Pendientes de ficha', pendientes) + bloque('Con ficha solar', completas);
+}
+
+function seleccionarProductoFichaSolar(productoId) {
+    const sel = document.getElementById('fs-producto');
+    if (!sel) return;
+    sel.value = String(productoId);
+    cargarFichaSolarSeleccionada();
+    sel.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
 function prepararProyectoSolar() {
     if (!productos.length) cargarProductos();
     else renderSelectoresProyectoSolar();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
-    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-bateria-producto'].forEach(id => {
+    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.calcBound) {
             el.dataset.calcBound = '1';
             el.addEventListener('input', calcularProyectoSolar);
-            el.addEventListener('change', calcularProyectoSolar);
+            el.addEventListener('change', () => {
+                if (id === 'ps-tipo-bateria') {
+                    const bateriaSel = document.getElementById('ps-bateria-producto');
+                    if (bateriaSel) bateriaSel.dataset.manual = '';
+                    renderSelectoresProyectoSolar();
+                }
+                calcularProyectoSolar();
+            });
         }
     });
 }
@@ -1585,10 +1828,15 @@ function extraerNumero(nombre, patron) {
 }
 
 function potenciaPanelProducto(p) {
-    return extraerNumero(p.nombre, /(\d+(?:[.,]\d+)?)\s*W/i);
+    const ficha = solarFichas[p.id];
+    const valor = Number(ficha?.tipo === 'panel' ? ficha.datos?.potencia_w : 0);
+    return valor || extraerNumero(p.nombre, /(\d+(?:[.,]\d+)?)\s*W/i);
 }
 
 function capacidadBateriaProducto(p) {
+    const ficha = solarFichas[p.id];
+    const valor = Number(ficha?.tipo === 'bateria' ? ficha.datos?.capacidad_nominal_kwh : 0);
+    if (valor) return valor;
     const nombre = p.nombre || '';
     const kwh = extraerNumero(nombre, /(\d+(?:[.,]\d+)?)\s*kWh/i);
     if (kwh) return kwh;
@@ -1601,17 +1849,26 @@ function capacidadBateriaProducto(p) {
 
 function productosPanelSolar() {
     return productos
-        .filter(p => p.disponible !== false && String(p.categoria || '').toUpperCase().includes('PANEL'))
+        .filter(p => p.disponible !== false && (solarFichas[p.id]?.tipo === 'panel' || String(p.categoria || '').toUpperCase().includes('PANEL')))
         .map(p => ({...p, watts: potenciaPanelProducto(p)}))
         .filter(p => p.watts > 0)
         .sort((a, b) => b.watts - a.watts || Number(a.precio || 0) - Number(b.precio || 0));
 }
 
-function productosBateriaLifepo() {
+function productosBateriaSolar() {
+    const filtro = String(document.getElementById('ps-tipo-bateria')?.value || '').toUpperCase();
     return productos
         .filter(p => {
             const txt = `${p.categoria || ''} ${p.nombre || ''}`.toUpperCase();
-            return p.disponible !== false && txt.includes('BATERIA') && txt.includes('LIFEPO4');
+            const ficha = solarFichas[p.id];
+            const tipoFicha = String(ficha?.datos?.tipo_bateria || '').toUpperCase();
+            const tipoTxt = `${tipoFicha} ${txt}`;
+            return p.disponible !== false
+                && (ficha?.tipo === 'bateria' || txt.includes('BATERIA'))
+                && (!filtro
+                    || tipoTxt.includes(filtro)
+                    || (filtro === 'GEL' && (tipoTxt.includes('AGM') || tipoTxt.includes('DEEP CYCLE')))
+                    || (filtro === 'ION' && tipoTxt.includes('LITIO')));
         })
         .map(p => ({...p, kwh: capacidadBateriaProducto(p)}))
         .filter(p => p.kwh > 0)
@@ -1625,13 +1882,13 @@ function renderSelectoresProyectoSolar() {
     const panelActual = panelSel.value;
     const bateriaActual = bateriaSel.value;
     const paneles = productosPanelSolar();
-    const baterias = productosBateriaLifepo();
+    const baterias = productosBateriaSolar();
     panelSel.innerHTML = paneles.length
         ? paneles.map(p => `<option value="${p.id}" data-watts="${p.watts}">${p.nombre} (${p.watts} W)</option>`).join('')
         : '<option value="" data-watts="550">Panel 550 W (manual)</option>';
     bateriaSel.innerHTML = baterias.length
         ? baterias.map(p => `<option value="${p.id}" data-kwh="${p.kwh}">${p.nombre} (${fmt(p.kwh)} kWh)</option>`).join('')
-        : '<option value="" data-kwh="0">Sin bateria LiFePO4 en catalogo</option>';
+        : '<option value="" data-kwh="0">Sin bateria compatible en catalogo</option>';
     if (panelActual && Array.from(panelSel.options).some(o => o.value === panelActual)) panelSel.value = panelActual;
     else {
         const preferido = paneles.find(p => p.watts === 550) || paneles[0];
@@ -1708,7 +1965,7 @@ function calcularProyectoSolar() {
     const energiaProducir = consumoDiario + energiaRecargaKwh;
     const produccionPanel = (panelW / 1000) * factor * eficienciaPanel;
     const paneles = produccionPanel > 0 ? Math.ceil(energiaProducir / produccionPanel) : 0;
-    const baterias = productosBateriaLifepo();
+    const baterias = productosBateriaSolar();
     let bateriaElegida = baterias.find(b => b.kwh >= bateriaNominalKwh) || baterias[baterias.length - 1];
     const bateriaManual = bateriaSel?.dataset.manual === '1';
     if (!bateriaManual && bateriaElegida && bateriaSel && String(bateriaSel.value) !== String(bateriaElegida.id) && bateriaNominalKwh > 0) {

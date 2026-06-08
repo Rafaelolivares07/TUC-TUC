@@ -211,6 +211,13 @@ def _crear_tablas(conn):
             notas TEXT,
             orden INTEGER DEFAULT 0
         )""",
+        """CREATE TABLE IF NOT EXISTS producto_fichas_solares (
+            producto_id INTEGER PRIMARY KEY REFERENCES productos(id) ON DELETE CASCADE,
+            tipo VARCHAR(40) NOT NULL DEFAULT '',
+            datos JSONB DEFAULT '{}'::jsonb,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -243,6 +250,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_cotizaciones_tienda ON cotizaciones_tienda(tienda_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_cot_items_cotizacion ON cotizacion_items_tienda(cotizacion_id)",
         "CREATE INDEX IF NOT EXISTS idx_producto_documentos_producto ON producto_documentos(producto_id)",
+        "CREATE INDEX IF NOT EXISTS idx_producto_fichas_solares_tipo ON producto_fichas_solares(tipo)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -2528,6 +2536,96 @@ def api_tienda_producto_documento_eliminar(slug, producto_id, documento_id):
             WHERE d.id = %s AND d.producto_id = %s
               AND p.id = d.producto_id AND p.negocio_id = %s
         """, (documento_id, producto_id, tienda['tercero_id']))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/fichas-solares')
+def api_tienda_fichas_solares(slug):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        filas = conn.execute("""
+            SELECT p.id AS producto_id, p.nombre, p.categoria, f.tipo, f.datos, f.updated_at
+            FROM productos p
+            LEFT JOIN producto_fichas_solares f ON f.producto_id = p.id
+            WHERE p.negocio_id = %s
+            ORDER BY (f.producto_id IS NULL) DESC, p.categoria, p.nombre
+        """, (tienda['tercero_id'],)).fetchall()
+        fichas = []
+        for f in filas:
+            fichas.append({
+                'producto_id': f['producto_id'],
+                'nombre': f['nombre'],
+                'categoria': f['categoria'] or '',
+                'tipo': f['tipo'] or '',
+                'datos': f['datos'] or {},
+                'updated_at': str(f['updated_at']) if f['updated_at'] else '',
+            })
+        return jsonify({'ok': True, 'fichas': fichas})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/producto/<int:producto_id>/ficha-solar', methods=['GET', 'POST'])
+def api_tienda_producto_ficha_solar(slug, producto_id):
+    if request.method == 'POST' and 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        producto = conn.execute(
+            "SELECT id FROM productos WHERE id = %s AND negocio_id = %s",
+            (producto_id, tienda['tercero_id'])
+        ).fetchone()
+        if not producto:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        if request.method == 'GET':
+            ficha = conn.execute(
+                "SELECT tipo, datos, updated_at FROM producto_fichas_solares WHERE producto_id = %s",
+                (producto_id,)
+            ).fetchone()
+            return jsonify({
+                'ok': True,
+                'ficha': {
+                    'producto_id': producto_id,
+                    'tipo': ficha['tipo'] if ficha else '',
+                    'datos': ficha['datos'] if ficha else {},
+                    'updated_at': str(ficha['updated_at']) if ficha else '',
+                }
+            })
+
+        data = request.get_json() or {}
+        tipo = (data.get('tipo') or '').strip()
+        datos = data.get('datos') or {}
+        if tipo not in ('', 'panel', 'bateria', 'inversor'):
+            return jsonify({'ok': False, 'error': 'Tipo solar invalido'}), 400
+        if not isinstance(datos, dict):
+            return jsonify({'ok': False, 'error': 'Datos invalidos'}), 400
+
+        if not tipo:
+            conn.execute("DELETE FROM producto_fichas_solares WHERE producto_id = %s", (producto_id,))
+        else:
+            conn.execute("""
+                INSERT INTO producto_fichas_solares (producto_id, tipo, datos, updated_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (producto_id) DO UPDATE
+                SET tipo = EXCLUDED.tipo, datos = EXCLUDED.datos, updated_at = NOW()
+            """, (producto_id, tipo, json.dumps(datos)))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

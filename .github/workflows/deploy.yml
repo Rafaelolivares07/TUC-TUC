@@ -22,5 +22,7 @@ jobs:
           script: |
             cd /home/ubuntu/tuctucv2
             git pull origin v2
+            if [ -x venv/bin/python ]; then PY=venv/bin/python; elif [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=python3; fi
+            $PY scripts/seed_home_solar_products.py
             sudo systemctl restart tuctuc
             sudo systemctl is-active tuctuc

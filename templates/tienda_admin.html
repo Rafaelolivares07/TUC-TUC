@@ -103,6 +103,7 @@
                 <button onclick="cambiarTab('catalogo')" id="tab-catalogo" class="tab-btn tab-active">📦 Catálogo</button>
                 <button onclick="cambiarTab('pauta')" id="tab-pauta" class="tab-btn">📣 Pauta</button>
                 <button onclick="cambiarTab('pedidos')" id="tab-pedidos" class="tab-btn">🛒 Pedidos</button>
+                <button onclick="cambiarTab('cotizaciones')" id="tab-cotizaciones" class="tab-btn">Cotizaciones</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Tienda</button>
@@ -197,6 +198,70 @@
                 <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 <p class="font-semibold">No hay pedidos hoy</p>
                 <p class="text-sm mt-1">Los pedidos apareceran aqui automaticamente</p>
+            </div>
+        </div>
+
+        <!-- ====== TAB: COTIZACIONES ====== -->
+        <div id="panel-cotizaciones" class="p-6 hidden">
+            <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-5">
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <h3 class="font-bold text-gray-700">Nueva cotizacion</h3>
+                        <button onclick="limpiarCotizacion()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">Limpiar</button>
+                    </div>
+                    <input id="cot-id" type="hidden">
+                    <div class="grid md:grid-cols-2 gap-3 mb-4">
+                        <input id="cot-cliente" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cliente">
+                        <input id="cot-telefono" class="border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
+                        <input id="cot-email" class="border rounded-lg px-3 py-2 text-sm" placeholder="Email">
+                        <select id="cot-objetivo" class="border rounded-lg px-3 py-2 text-sm">
+                            <option value="ahorro">Ahorro</option>
+                            <option value="respaldo">Respaldo</option>
+                            <option value="mixto">Ahorro + respaldo</option>
+                            <option value="aislado">Sistema aislado</option>
+                        </select>
+                        <input id="cot-ubicacion" class="border rounded-lg px-3 py-2 text-sm" placeholder="Ubicacion">
+                        <input id="cot-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar (2 a 6)">
+                        <input id="cot-consumo" type="number" min="0" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Consumo mensual kWh">
+                        <input id="cot-paneles" type="number" min="0" step="1" class="border rounded-lg px-3 py-2 text-sm" placeholder="Paneles estimados">
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Consumos de facturas kWh</p>
+                        <div id="cot-consumos-grid" class="grid grid-cols-2 md:grid-cols-6 gap-2">
+                            {% for i in range(1, 7) %}
+                            <input id="cot-consumo-{{ i }}" type="number" min="0" step="0.01" onchange="calcularConsumoCotizacion()" class="cot-consumo-factura border rounded-lg px-3 py-2 text-sm" placeholder="{{ i }}">
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <textarea id="cot-notas" class="w-full border rounded-lg px-3 py-2 text-sm mb-4" rows="2" placeholder="Notas tecnicas o comerciales"></textarea>
+
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <div class="grid md:grid-cols-[1fr_90px_120px_auto] gap-2">
+                            <select id="cot-producto" class="border rounded-lg px-3 py-2 text-sm"></select>
+                            <input id="cot-cantidad" type="number" min="0" step="0.01" value="1" class="border rounded-lg px-3 py-2 text-sm">
+                            <input id="cot-precio" type="number" min="0" step="1" class="border rounded-lg px-3 py-2 text-sm" placeholder="Precio">
+                            <button onclick="agregarLineaCotizacion()" class="bg-gray-800 hover:bg-black text-white rounded-lg px-4 py-2 text-sm font-bold">Agregar</button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto bg-white border border-gray-200 rounded-xl mb-4">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+                                <tr><th class="text-left p-3">Item</th><th class="num p-3">Cant.</th><th class="num p-3">Precio</th><th class="num p-3">Total</th><th></th></tr>
+                            </thead>
+                            <tbody id="cot-lineas"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-sm text-gray-500">Total <span id="cot-total" class="text-xl font-extrabold text-gray-800">$0</span></div>
+                        <button onclick="guardarCotizacion()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar cotizacion</button>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <h3 class="font-bold text-gray-700 mb-4">Cotizaciones guardadas</h3>
+                    <div id="lista-cotizaciones" class="space-y-3 text-sm"></div>
+                </div>
             </div>
         </div>
 
@@ -859,6 +924,7 @@ const BASE = '/api/tienda/' + SLUG;
 const TOKEN = '{{ tienda.token_acceso }}';
 const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
 let productos = [];
+let cotizacionLineas = [];
 let pollingInterval = null;
 let productoEditandoId = null;
 
@@ -870,9 +936,17 @@ function toast(msg, error) {
     setTimeout(() => t.className = 'toast', 2500);
 }
 
+function money(v) {
+    return '$' + Number(v || 0).toLocaleString('es-CO', {maximumFractionDigits: 0});
+}
+
+function fmt(v) {
+    return Number(v || 0).toLocaleString('es-CO', {maximumFractionDigits: 2});
+}
+
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
+    ['catalogo','pedidos','cotizaciones','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== tab);
         const btn = document.getElementById('tab-' + t);
         if (btn) btn.classList.toggle('tab-active', t === tab);
@@ -885,6 +959,7 @@ function cambiarTab(tab) {
     if (tab === 'ubicacion') iniciarMapaUbicacion();
     if (tab === 'inventario') cargarStock();
     if (tab === 'vendedores') cargarVendedores();
+    if (tab === 'cotizaciones') { prepararCotizaciones(); cargarCotizaciones(); }
 }
 
 function scrollNavTabs(delta) {
@@ -1177,7 +1252,182 @@ async function cargarProductos() {
         if (!data.ok) return toast(data.error || 'Error', true);
         productos = data.productos;
         renderCategoriasVisuales(data.categorias || []);
+        renderSelectorCotizacion();
         renderProductos();
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function prepararCotizaciones() {
+    if (!productos.length) cargarProductos();
+    else renderSelectorCotizacion();
+    renderLineasCotizacion();
+}
+
+function renderSelectorCotizacion() {
+    const sel = document.getElementById('cot-producto');
+    if (!sel) return;
+    const disponibles = productos.filter(p => p.disponible !== false);
+    sel.innerHTML = '<option value="">Selecciona producto o servicio</option>' + disponibles.map(p =>
+        `<option value="${p.id}" data-precio="${p.precio || 0}" data-categoria="${(p.categoria || '').replace(/"/g, '&quot;')}">${p.nombre}</option>`
+    ).join('');
+    sel.onchange = () => {
+        const opt = sel.selectedOptions[0];
+        if (opt) document.getElementById('cot-precio').value = Number(opt.dataset.precio || 0);
+    };
+}
+
+function agregarLineaCotizacion() {
+    const sel = document.getElementById('cot-producto');
+    const opt = sel.selectedOptions[0];
+    if (!opt || !sel.value) return toast('Selecciona un producto', true);
+    const cantidad = Number(document.getElementById('cot-cantidad').value || 0);
+    const precio = Number(document.getElementById('cot-precio').value || 0);
+    if (cantidad <= 0) return toast('Cantidad invalida', true);
+    cotizacionLineas.push({
+        producto_id: Number(sel.value),
+        nombre: opt.textContent,
+        categoria: opt.dataset.categoria || '',
+        cantidad,
+        precio_unitario: precio,
+        notas: ''
+    });
+    document.getElementById('cot-cantidad').value = 1;
+    renderLineasCotizacion();
+}
+
+function quitarLineaCotizacion(idx) {
+    cotizacionLineas.splice(idx, 1);
+    renderLineasCotizacion();
+}
+
+function consumosCotizacion() {
+    return Array.from(document.querySelectorAll('.cot-consumo-factura'))
+        .map(el => Number(el.value || 0))
+        .filter(v => v > 0);
+}
+
+function calcularConsumoCotizacion() {
+    const vals = consumosCotizacion();
+    if (!vals.length) return;
+    const prom = vals.reduce((a, b) => a + b, 0) / vals.length;
+    document.getElementById('cot-consumo').value = prom.toFixed(2);
+}
+
+function renderLineasCotizacion() {
+    const tb = document.getElementById('cot-lineas');
+    const totalEl = document.getElementById('cot-total');
+    if (!tb || !totalEl) return;
+    let total = 0;
+    if (!cotizacionLineas.length) {
+        tb.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">Sin lineas todavia</td></tr>';
+    } else {
+        tb.innerHTML = cotizacionLineas.map((l, idx) => {
+            const lineaTotal = Number(l.cantidad || 0) * Number(l.precio_unitario || 0);
+            total += lineaTotal;
+            return `<tr class="border-t">
+                <td class="p-3">${l.nombre}<div class="text-xs text-gray-400">${l.categoria || ''}</div></td>
+                <td class="num p-3">${fmt(l.cantidad)}</td>
+                <td class="num p-3">${money(l.precio_unitario)}</td>
+                <td class="num p-3 font-semibold">${money(lineaTotal)}</td>
+                <td class="p-3 text-right"><button onclick="quitarLineaCotizacion(${idx})" class="text-xs text-red-500 font-bold">Quitar</button></td>
+            </tr>`;
+        }).join('');
+    }
+    totalEl.textContent = money(total);
+}
+
+function limpiarCotizacion() {
+    ['cot-id','cot-cliente','cot-telefono','cot-email','cot-ubicacion','cot-factor','cot-consumo','cot-paneles','cot-notas'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('cot-objetivo').value = 'ahorro';
+    document.querySelectorAll('.cot-consumo-factura').forEach(el => el.value = '');
+    cotizacionLineas = [];
+    renderLineasCotizacion();
+}
+
+async function guardarCotizacion() {
+    const cliente = document.getElementById('cot-cliente').value.trim();
+    if (!cliente) return toast('Cliente requerido', true);
+    if (!cotizacionLineas.length) return toast('Agrega al menos una linea', true);
+    const body = {
+        id: document.getElementById('cot-id').value || null,
+        cliente_nombre: cliente,
+        cliente_telefono: document.getElementById('cot-telefono').value.trim(),
+        cliente_email: document.getElementById('cot-email').value.trim(),
+        ubicacion: document.getElementById('cot-ubicacion').value.trim(),
+        factor_generacion: Number(document.getElementById('cot-factor').value || 0),
+        consumo_mensual: Number(document.getElementById('cot-consumo').value || 0),
+        objetivo: document.getElementById('cot-objetivo').value,
+        consumos: consumosCotizacion(),
+        datos_tecnicos: {paneles_estimados: Number(document.getElementById('cot-paneles').value || 0)},
+        notas: document.getElementById('cot-notas').value.trim(),
+        estado: 'borrador',
+        items: cotizacionLineas
+    };
+    try {
+        const r = await fetch(BASE + '/cotizacion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        document.getElementById('cot-id').value = data.cotizacion_id;
+        toast('Cotizacion guardada');
+        cargarCotizaciones();
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function cargarCotizaciones() {
+    const cont = document.getElementById('lista-cotizaciones');
+    if (!cont) return;
+    try {
+        const r = await fetch(BASE + '/cotizaciones');
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        if (!data.cotizaciones.length) {
+            cont.innerHTML = '<p class="text-gray-400">No hay cotizaciones guardadas.</p>';
+            return;
+        }
+        cont.innerHTML = data.cotizaciones.map(c => `
+            <button onclick="abrirCotizacion(${c.id})" class="w-full text-left border border-gray-200 rounded-xl p-3 hover:border-emerald-300 hover:bg-emerald-50 transition">
+                <div class="flex justify-between gap-3">
+                    <div>
+                        <p class="font-bold text-gray-800">${c.cliente_nombre || 'Cliente'}</p>
+                        <p class="text-xs text-gray-400">${c.ubicacion || c.cliente_telefono || ''}</p>
+                    </div>
+                    <p class="font-extrabold text-gray-800">${money(c.total)}</p>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">${c.objetivo || 'borrador'} · ${c.created_at ? new Date(c.created_at).toLocaleDateString('es-CO') : ''}</p>
+            </button>
+        `).join('');
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function abrirCotizacion(id) {
+    try {
+        const r = await fetch(BASE + '/cotizacion/' + id);
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        const c = data.cotizacion;
+        document.getElementById('cot-id').value = c.id;
+        document.getElementById('cot-cliente').value = c.cliente_nombre || '';
+        document.getElementById('cot-telefono').value = c.cliente_telefono || '';
+        document.getElementById('cot-email').value = c.cliente_email || '';
+        document.getElementById('cot-ubicacion').value = c.ubicacion || '';
+        document.getElementById('cot-factor').value = c.factor_generacion || '';
+        document.getElementById('cot-consumo').value = c.consumo_mensual || '';
+        document.getElementById('cot-objetivo').value = c.objetivo || 'ahorro';
+        document.getElementById('cot-paneles').value = c.datos_tecnicos?.paneles_estimados || '';
+        document.querySelectorAll('.cot-consumo-factura').forEach((el, idx) => {
+            el.value = (c.consumos || [])[idx] || '';
+        });
+        document.getElementById('cot-notas').value = c.notas || '';
+        cotizacionLineas = c.items || [];
+        renderLineasCotizacion();
+        toast('Cotizacion cargada');
     } catch(e) { toast('Error de conexion', true); }
 }
 

@@ -165,6 +165,39 @@ def _crear_tablas(conn):
             updated_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(tienda_id, categoria)
         )""",
+        """CREATE TABLE IF NOT EXISTS cotizaciones_tienda (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL,
+            cliente_id INTEGER REFERENCES terceros(id),
+            cliente_nombre VARCHAR(255),
+            cliente_telefono VARCHAR(30),
+            cliente_email VARCHAR(120),
+            ubicacion VARCHAR(255),
+            factor_generacion NUMERIC(6,2),
+            consumo_mensual NUMERIC(12,2),
+            objetivo VARCHAR(80),
+            consumos_json JSONB DEFAULT '[]'::jsonb,
+            datos_tecnicos JSONB DEFAULT '{}'::jsonb,
+            notas TEXT,
+            estado VARCHAR(30) DEFAULT 'borrador',
+            subtotal NUMERIC(14,2) DEFAULT 0,
+            total NUMERIC(14,2) DEFAULT 0,
+            token_publico VARCHAR(80) UNIQUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS cotizacion_items_tienda (
+            id SERIAL PRIMARY KEY,
+            cotizacion_id INTEGER NOT NULL REFERENCES cotizaciones_tienda(id) ON DELETE CASCADE,
+            producto_id INTEGER REFERENCES productos(id),
+            nombre VARCHAR(255) NOT NULL,
+            categoria VARCHAR(100),
+            cantidad NUMERIC(12,3) NOT NULL DEFAULT 1,
+            precio_unitario NUMERIC(14,2) NOT NULL DEFAULT 0,
+            total NUMERIC(14,2) NOT NULL DEFAULT 0,
+            notas TEXT,
+            orden INTEGER DEFAULT 0
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -194,6 +227,8 @@ def _crear_tablas(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS color_accion VARCHAR(20) DEFAULT '#e11d48'",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS imagen_header_movil TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_cotizaciones_tienda ON cotizaciones_tienda(tienda_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_cot_items_cotizacion ON cotizacion_items_tienda(cotizacion_id)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -1273,6 +1308,210 @@ def api_tienda_categoria_imagen(slug):
         """, (tienda['id'], categoria, imagen))
         conn.commit()
         return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/cotizaciones')
+def api_tienda_cotizaciones(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        rows = conn.execute("""
+            SELECT id, cliente_nombre, cliente_telefono, ubicacion, objetivo,
+                   consumo_mensual, factor_generacion, estado, total, created_at
+            FROM cotizaciones_tienda
+            WHERE tienda_id = %s
+            ORDER BY created_at DESC
+            LIMIT 80
+        """, (tienda['id'],)).fetchall()
+        cotizaciones = []
+        for r in rows:
+            cotizaciones.append({
+                'id': r['id'],
+                'cliente_nombre': r['cliente_nombre'] or '',
+                'cliente_telefono': r['cliente_telefono'] or '',
+                'ubicacion': r['ubicacion'] or '',
+                'objetivo': r['objetivo'] or '',
+                'consumo_mensual': float(r['consumo_mensual'] or 0),
+                'factor_generacion': float(r['factor_generacion'] or 0),
+                'estado': r['estado'] or 'borrador',
+                'total': float(r['total'] or 0),
+                'created_at': r['created_at'].isoformat() if r['created_at'] else None,
+            })
+        return jsonify({'ok': True, 'cotizaciones': cotizaciones})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/cotizacion/<int:cotizacion_id>')
+def api_tienda_cotizacion_detalle(slug, cotizacion_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        cot = conn.execute("""
+            SELECT c.*
+            FROM cotizaciones_tienda c
+            JOIN tiendas t ON t.id = c.tienda_id
+            WHERE t.slug = %s AND c.id = %s
+        """, (slug, cotizacion_id)).fetchone()
+        if not cot:
+            return jsonify({'ok': False, 'error': 'Cotizacion no encontrada'}), 404
+        consumos = cot['consumos_json'] or []
+        datos_tecnicos = cot['datos_tecnicos'] or {}
+        if isinstance(consumos, str):
+            consumos = json.loads(consumos or '[]')
+        if isinstance(datos_tecnicos, str):
+            datos_tecnicos = json.loads(datos_tecnicos or '{}')
+        items = conn.execute("""
+            SELECT id, producto_id, nombre, categoria, cantidad, precio_unitario, total, notas, orden
+            FROM cotizacion_items_tienda
+            WHERE cotizacion_id = %s
+            ORDER BY orden, id
+        """, (cotizacion_id,)).fetchall()
+        return jsonify({
+            'ok': True,
+            'cotizacion': {
+                'id': cot['id'],
+                'cliente_nombre': cot['cliente_nombre'] or '',
+                'cliente_telefono': cot['cliente_telefono'] or '',
+                'cliente_email': cot['cliente_email'] or '',
+                'ubicacion': cot['ubicacion'] or '',
+                'factor_generacion': float(cot['factor_generacion'] or 0),
+                'consumo_mensual': float(cot['consumo_mensual'] or 0),
+                'objetivo': cot['objetivo'] or '',
+                'consumos': consumos,
+                'datos_tecnicos': datos_tecnicos,
+                'notas': cot['notas'] or '',
+                'estado': cot['estado'] or 'borrador',
+                'subtotal': float(cot['subtotal'] or 0),
+                'total': float(cot['total'] or 0),
+                'items': [{
+                    'id': it['id'],
+                    'producto_id': it['producto_id'],
+                    'nombre': it['nombre'],
+                    'categoria': it['categoria'] or '',
+                    'cantidad': float(it['cantidad'] or 0),
+                    'precio_unitario': float(it['precio_unitario'] or 0),
+                    'total': float(it['total'] or 0),
+                    'notas': it['notas'] or '',
+                } for it in items]
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/cotizacion', methods=['POST'])
+def api_tienda_cotizacion_guardar(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    items = data.get('items') or []
+    if not data.get('cliente_nombre'):
+        return jsonify({'ok': False, 'error': 'Cliente requerido'}), 400
+    if not items:
+        return jsonify({'ok': False, 'error': 'Agrega al menos una linea'}), 400
+
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+
+        subtotal = 0.0
+        lineas = []
+        for idx, item in enumerate(items):
+            cantidad = float(item.get('cantidad') or 0)
+            precio = float(item.get('precio_unitario') or 0)
+            if cantidad <= 0:
+                continue
+            total = round(cantidad * precio, 2)
+            subtotal += total
+            lineas.append({
+                'producto_id': item.get('producto_id') or None,
+                'nombre': (item.get('nombre') or 'Item').strip(),
+                'categoria': (item.get('categoria') or '').strip() or None,
+                'cantidad': cantidad,
+                'precio_unitario': precio,
+                'total': total,
+                'notas': (item.get('notas') or '').strip() or None,
+                'orden': idx,
+            })
+        if not lineas:
+            return jsonify({'ok': False, 'error': 'Agrega cantidades validas'}), 400
+
+        cotizacion_id = data.get('id')
+        total = round(subtotal, 2)
+        payload = (
+            data.get('cliente_nombre', '').strip(),
+            (data.get('cliente_telefono') or '').strip() or None,
+            (data.get('cliente_email') or '').strip() or None,
+            (data.get('ubicacion') or '').strip() or None,
+            float(data.get('factor_generacion') or 0) or None,
+            float(data.get('consumo_mensual') or 0) or None,
+            (data.get('objetivo') or '').strip() or None,
+            json.dumps(data.get('consumos') or []),
+            json.dumps(data.get('datos_tecnicos') or {}),
+            (data.get('notas') or '').strip() or None,
+            data.get('estado') or 'borrador',
+            subtotal,
+            total,
+        )
+
+        if cotizacion_id:
+            row = conn.execute("""
+                UPDATE cotizaciones_tienda
+                   SET cliente_nombre=%s, cliente_telefono=%s, cliente_email=%s,
+                       ubicacion=%s, factor_generacion=%s, consumo_mensual=%s,
+                       objetivo=%s, consumos_json=%s::jsonb, datos_tecnicos=%s::jsonb,
+                       notas=%s, estado=%s, subtotal=%s, total=%s, updated_at=NOW()
+                 WHERE id=%s AND tienda_id=%s
+                 RETURNING id
+            """, (*payload, cotizacion_id, tienda['id'])).fetchone()
+            if not row:
+                return jsonify({'ok': False, 'error': 'Cotizacion no encontrada'}), 404
+            conn.execute("DELETE FROM cotizacion_items_tienda WHERE cotizacion_id=%s", (cotizacion_id,))
+        else:
+            token = secrets.token_urlsafe(18)
+            row = conn.execute("""
+                INSERT INTO cotizaciones_tienda
+                    (tienda_id, cliente_nombre, cliente_telefono, cliente_email,
+                     ubicacion, factor_generacion, consumo_mensual, objetivo,
+                     consumos_json, datos_tecnicos, notas, estado, subtotal, total, token_publico)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (tienda['id'], *payload, token)).fetchone()
+            cotizacion_id = row['id']
+
+        for item in lineas:
+            conn.execute("""
+                INSERT INTO cotizacion_items_tienda
+                    (cotizacion_id, producto_id, nombre, categoria, cantidad,
+                     precio_unitario, total, notas, orden)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                cotizacion_id, item['producto_id'], item['nombre'], item['categoria'],
+                item['cantidad'], item['precio_unitario'], item['total'],
+                item['notas'], item['orden']
+            ))
+        conn.commit()
+        return jsonify({'ok': True, 'cotizacion_id': cotizacion_id, 'total': total})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

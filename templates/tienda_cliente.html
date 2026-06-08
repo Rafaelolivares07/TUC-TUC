@@ -138,11 +138,22 @@
 <div class="{{ 'max-w-lg' if (tienda.desktop_layout or 'movil') == 'movil' else ('max-w-5xl' if tienda.desktop_layout == 'ampliado' else 'max-w-7xl') }} mx-auto">
 
     <!-- Header / Portada -->
-    {% if tienda.imagen_header %}
+    {% if tienda.imagen_header or tienda.imagen_header_movil %}
+    {% set header_img = tienda.imagen_header or tienda.imagen_header_movil %}
     <div>
         <div class="header-wrap">
-            <img src="{{ tienda.imagen_header }}" class="img-bg-blur" aria-hidden="true">
-            <img src="{{ tienda.imagen_header }}" class="img-principal" alt="{{ tienda.nombre }}">
+            <picture>
+                {% if tienda.imagen_header_movil %}
+                <source media="(max-width: 767px)" srcset="{{ tienda.imagen_header_movil }}">
+                {% endif %}
+                <img src="{{ header_img }}" class="img-bg-blur" aria-hidden="true">
+            </picture>
+            <picture>
+                {% if tienda.imagen_header_movil %}
+                <source media="(max-width: 767px)" srcset="{{ tienda.imagen_header_movil }}">
+                {% endif %}
+                <img src="{{ header_img }}" class="img-principal" alt="{{ tienda.nombre }}">
+            </picture>
         </div>
         {% if tienda.mostrar_nombre | default(true) %}
         <div class="store-intro px-4 pt-4 pb-3 text-center">

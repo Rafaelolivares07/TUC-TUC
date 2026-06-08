@@ -49,6 +49,7 @@ def _crear_tablas(conn):
             token_acceso VARCHAR(100) UNIQUE,
             dias_pagados INTEGER DEFAULT 0,
             imagen_header TEXT,
+            imagen_header_movil TEXT,
             tema VARCHAR(10) DEFAULT 'claro',
             mostrar_nombre BOOLEAN DEFAULT TRUE,
             activo BOOLEAN DEFAULT TRUE,
@@ -192,6 +193,7 @@ def _crear_tablas(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS movil_cols SMALLINT DEFAULT 2",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS color_accion VARCHAR(20) DEFAULT '#e11d48'",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS imagen_header_movil TEXT",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -1125,10 +1127,13 @@ def api_tienda_adoptar_producto(slug):
 def api_tienda_imagen_header(slug):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    imagen = (request.get_json() or {}).get('imagen', '')
+    data = request.get_json() or {}
+    imagen = data.get('imagen', '')
+    tipo = data.get('tipo', 'desktop')
+    campo = 'imagen_header_movil' if tipo == 'movil' else 'imagen_header'
     conn = get_db_connection()
     try:
-        conn.execute("UPDATE tiendas SET imagen_header = %s WHERE slug = %s", (imagen, slug))
+        conn.execute(f"UPDATE tiendas SET {campo} = %s WHERE slug = %s", (imagen, slug))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

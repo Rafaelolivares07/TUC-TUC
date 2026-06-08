@@ -207,26 +207,47 @@
             <!-- Imagen de portada -->
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-3">Imagen de portada</h3>
-                <div id="preview-header" class="w-full min-h-[120px] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden relative" onclick="document.getElementById('inp-header').click()">
-                    {% if tienda.imagen_header %}
-                    <img src="{{ tienda.imagen_header }}" class="img-bg-blur" aria-hidden="true">
-                    <img src="{{ tienda.imagen_header }}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">
-                    {% else %}
-                    <span class="text-gray-400 text-sm">Toca para subir imagen</span>
-                    {% endif %}
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Computador</p>
+                        <div id="preview-header" class="w-full min-h-[120px] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden relative" onclick="document.getElementById('inp-header').click()">
+                            {% if tienda.imagen_header %}
+                            <img src="{{ tienda.imagen_header }}" class="img-bg-blur" aria-hidden="true">
+                            <img src="{{ tienda.imagen_header }}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">
+                            {% else %}
+                            <span class="text-gray-400 text-sm">Toca para subir imagen</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Movil</p>
+                        <div id="preview-header-movil" class="w-full min-h-[120px] bg-gray-100 rounded-xl flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-rose-400 transition overflow-hidden relative" onclick="document.getElementById('inp-header-movil').click()">
+                            {% if tienda.imagen_header_movil %}
+                            <img src="{{ tienda.imagen_header_movil }}" class="img-bg-blur" aria-hidden="true">
+                            <img src="{{ tienda.imagen_header_movil }}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">
+                            {% else %}
+                            <span class="text-gray-400 text-sm px-3 text-center">Opcional. Si no subes esta, usamos la de computador</span>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
-                <input id="inp-header" type="file" accept="image/*" class="hidden" onchange="subirHeader(this)">
-                <input id="inp-header-chatgpt" type="file" accept="image/*" class="hidden" onchange="subirHeader(this)">
+                <input id="inp-header" type="file" accept="image/*" class="hidden" onchange="subirHeader(this, 'desktop')">
+                <input id="inp-header-movil" type="file" accept="image/*" class="hidden" onchange="subirHeader(this, 'movil')">
+                <input id="inp-header-chatgpt" type="file" accept="image/*" class="hidden" onchange="subirHeader(this, 'desktop')">
+                <input id="inp-header-chatgpt-movil" type="file" accept="image/*" class="hidden" onchange="subirHeader(this, 'movil')">
                 <div class="flex gap-2 mt-2">
-                    <button onclick="generarHeaderChatGPT()" class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-semibold text-sm bg-rose-50 hover:bg-rose-100 transition">
-                        ✨ Generar con ChatGPT
+                    <button onclick="generarHeaderChatGPT('desktop')" class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-semibold text-sm bg-rose-50 hover:bg-rose-100 transition">
+                        Generar computador
+                    </button>
+                    <button onclick="generarHeaderChatGPT('movil')" class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-semibold text-sm bg-rose-50 hover:bg-rose-100 transition">
+                        Generar movil
                     </button>
                 </div>
-                <!-- Banner "¿Ya tenés la imagen?" — aparece al volver de ChatGPT -->
+                <!-- Banner para asignar la imagen descargada desde ChatGPT -->
                 <div id="banner-asignar-header" class="hidden mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                    <span class="text-sm text-green-700 flex-1">¿Ya descargaste tu imagen? Asignala como portada</span>
-                    <button onclick="document.getElementById('inp-header-chatgpt').click()" class="text-sm font-bold text-white bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-lg transition">Asignar</button>
-                    <button onclick="document.getElementById('banner-asignar-header').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+                    <span class="text-sm text-green-700 flex-1">Ya descargaste tu imagen? Asignala como portada</span>
+                    <button onclick="asignarHeaderChatGPT()" class="text-sm font-bold text-white bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-lg transition">Asignar</button>
+                    <button onclick="document.getElementById('banner-asignar-header').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-lg leading-none">x</button>
                 </div>
             </div>
 
@@ -1702,7 +1723,7 @@ async function cambiarEstado(pedidoId, estado) {
 }
 
 // === Personalización ===
-async function subirHeader(input) {
+async function subirHeader(input, tipo = 'desktop') {
     const file = input.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -1720,11 +1741,12 @@ async function subirHeader(input) {
                 const r = await fetch(BASE + '/imagen-header', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({imagen: base64})
+                    body: JSON.stringify({imagen: base64, tipo})
                 });
                 const data = await r.json();
                 if (data.ok) {
-                    document.getElementById('preview-header').innerHTML = `<img src="${base64}" class="img-bg-blur" aria-hidden="true"><img src="${base64}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">`;
+                    const previewId = tipo === 'movil' ? 'preview-header-movil' : 'preview-header';
+                    document.getElementById(previewId).innerHTML = `<img src="${base64}" class="img-bg-blur" aria-hidden="true"><img src="${base64}" class="img-principal-admin" style="height:auto;width:100%;object-fit:unset;">`;
                     toast('Imagen actualizada');
                 } else toast(data.error || 'Error', true);
             } catch(e) { toast('Error de conexion', true); }
@@ -3173,22 +3195,32 @@ async function guardarDescripcion() {
 
 // Generar header con ChatGPT
 let _chatgptAbierto = false;
-function generarHeaderChatGPT() {
+let _headerTipoChatGPT = 'desktop';
+function generarHeaderChatGPT(tipo = 'desktop') {
+    _headerTipoChatGPT = tipo;
     const nombre = {{ (tienda.nombre if tienda else none) | tojson }};
     const mostrarNombre = document.getElementById('chk-mostrar-nombre').checked;
     const desc = document.getElementById('txt-descripcion').value.trim();
     const parteDesc = desc
-        ? ` El negocio se describe así: "${desc}".`
+        ? ` El negocio se describe asi: "${desc}".`
         : '';
     const parteNombre = mostrarNombre
-        ? ' Sin texto, letras ni nombres en la imagen — solo composición visual.'
-        : ` Incluye el nombre "${nombre}" en la imagen con total libertad creativa: tipografía, posición y estilo a criterio del diseñador.`;
-    const prompt = `Imagen de portada para una tienda llamada "${nombre}".${parteDesc} Estilo fotorrealista y atractivo, formato horizontal 1792×1024px. Colores vibrantes, iluminación cálida, composición profesional que transmita la esencia del negocio.${parteNombre}`;
+        ? ' Sin texto, letras ni nombres en la imagen; solo composicion visual.'
+        : ` Incluye el nombre "${nombre}" en la imagen con libertad creativa: tipografia, posicion y estilo a criterio del disenador.`;
+    const formato = tipo === 'movil'
+        ? 'Formato vertical para portada movil de tienda online, pensado para una pantalla angosta. Composicion centrada, con el sujeto principal visible sin depender de los bordes.'
+        : 'Formato horizontal ancho para portada de tienda online en computador. Composicion compacta, centrada y clara, pensada para que se vea contenido debajo del header.';
+    const prompt = `Imagen de portada para una tienda llamada "${nombre}".${parteDesc} ${formato} Estilo fotorrealista y atractivo. Colores vibrantes, iluminacion calida, composicion profesional que transmita la esencia del negocio.${parteNombre}`;
     navigator.clipboard.writeText(prompt).then(() => {
-        toast('Prompt copiado — abriendo ChatGPT...');
+        toast('Prompt copiado - abriendo ChatGPT...');
         window.open('https://chatgpt.com', '_blank');
         _chatgptAbierto = true;
     });
+}
+
+function asignarHeaderChatGPT() {
+    const inputId = _headerTipoChatGPT === 'movil' ? 'inp-header-chatgpt-movil' : 'inp-header-chatgpt';
+    document.getElementById(inputId).click();
 }
 
 // Detectar regreso de ChatGPT

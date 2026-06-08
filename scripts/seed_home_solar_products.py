@@ -29,6 +29,27 @@ from app.db import get_db_connection  # noqa: E402
 SLUG = 'home-solar-panel'
 
 
+CATEGORIAS_PUBLICAS = {
+    'DISENO Y COTIZACION': '01. Empieza aqui',
+    'KITS SOLARES': '02. Kits solares',
+    'INSTALACION': '03. Instalacion',
+    'PANEL SOLAR': '04. Paneles solares',
+    'INVERSOR': '05. Inversores solares',
+    'BATERIA': '06. Baterias solares',
+    'BMS': '07. Monitoreo y control',
+    'CT': '07. Monitoreo y control',
+    'DTU': '07. Monitoreo y control',
+    'METER': '07. Monitoreo y control',
+    'MPPT': '07. Monitoreo y control',
+    'WIFI': '07. Monitoreo y control',
+    'ACCESORIO': '08. Accesorios y protecciones',
+}
+
+
+def categoria_publica(categoria):
+    return CATEGORIAS_PUBLICAS.get(categoria, categoria)
+
+
 def desc_generica(categoria, nombre, marca):
     marca_txt = f" {marca}" if marca else ""
     if categoria == 'PANEL SOLAR':
@@ -47,7 +68,7 @@ def desc_generica(categoria, nombre, marca):
 SERVICIOS = [
     {
         'marca': 'HOME SOLAR PANEL',
-        'categoria': 'DISENO Y COTIZACION',
+        'categoria': categoria_publica('DISENO Y COTIZACION'),
         'nombre': 'Cotizacion solar inicial',
         'precio': 120000,
         'costo': 0,
@@ -55,7 +76,7 @@ SERVICIOS = [
     },
     {
         'marca': 'HOME SOLAR PANEL',
-        'categoria': 'DISENO Y COTIZACION',
+        'categoria': categoria_publica('DISENO Y COTIZACION'),
         'nombre': 'Diseno tecnico solar completo',
         'precio': 250000,
         'costo': 0,
@@ -63,7 +84,7 @@ SERVICIOS = [
     },
     {
         'marca': 'HOME SOLAR PANEL',
-        'categoria': 'KITS SOLARES',
+        'categoria': categoria_publica('KITS SOLARES'),
         'nombre': 'Kit solar a la medida',
         'precio': 0,
         'costo': 0,
@@ -71,7 +92,7 @@ SERVICIOS = [
     },
     {
         'marca': 'HOME SOLAR PANEL',
-        'categoria': 'INSTALACION',
+        'categoria': categoria_publica('INSTALACION'),
         'nombre': 'Instalacion de sistema solar',
         'precio': 0,
         'costo': 0,
@@ -160,7 +181,7 @@ def _productos():
     for marca, categoria, nombre, precio, costo in EQUIPOS:
         productos.append({
             'marca': marca,
-            'categoria': categoria,
+            'categoria': categoria_publica(categoria),
             'nombre': f"{marca} - {nombre}",
             'precio': precio,
             'costo': costo,

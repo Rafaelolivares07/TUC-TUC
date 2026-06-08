@@ -81,6 +81,16 @@
             color: #fff;
         }
         .btn-accion:hover { filter: brightness(0.93); }
+        .cliente-pill {
+            position: fixed; top: 12px; right: 12px; z-index: 45;
+            max-width: min(220px, calc(100vw - 24px));
+            background: rgba(255,255,255,0.9); backdrop-filter: blur(10px);
+            border: 1px solid rgba(229,231,235,0.9);
+            box-shadow: 0 8px 22px rgba(15,23,42,0.12);
+        }
+        .tema-oscuro .cliente-pill {
+            background: rgba(31,41,55,0.88); border-color: rgba(55,65,81,0.9);
+        }
         .cat-card-visual {
             aspect-ratio: 1 / 0.72;
             background: color-mix(in srgb, var(--color-accion, #e11d48) 14%, white);
@@ -166,14 +176,12 @@
     {% endif %}
 
     <!-- Info entrega (después de registro) -->
-    <div id="info-entrega" class="hidden px-4 py-2">
-        <div class="bg-rose-50 rounded-xl p-3 flex items-center justify-between card">
-            <div>
-                <span id="info-nombre" class="font-bold text-sm txt-primary"></span>
-                <span id="info-tipo-entrega" class="text-xs txt-secondary ml-2"></span>
-            </div>
-            <button onclick="mostrarModalRegistro()" class="text-xs text-rose-500 font-bold">Cambiar</button>
-        </div>
+    <div id="info-entrega" class="cliente-pill hidden rounded-full px-3 py-2">
+        <button onclick="mostrarModalRegistro()" class="flex items-center gap-2 max-w-full">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+            <span id="info-nombre" class="font-bold text-xs txt-primary truncate"></span>
+            <span id="info-tipo-entrega" class="hidden"></span>
+        </button>
     </div>
 
     <!-- Filtro categorías -->

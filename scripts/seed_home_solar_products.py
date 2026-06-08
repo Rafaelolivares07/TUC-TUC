@@ -1,9 +1,15 @@
 import os
+import sys
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
 def _load_env_file():
-    env_path = Path(__file__).resolve().parents[1] / '.env'
+    env_path = ROOT / '.env'
     if not env_path.exists():
         return
     for line in env_path.read_text(encoding='utf-8', errors='ignore').splitlines():

@@ -81,6 +81,17 @@
             color: #fff;
         }
         .btn-accion:hover { filter: brightness(0.93); }
+        .txt-accion { color: var(--color-accion, #e11d48); }
+        .link-accion:hover { color: var(--color-accion, #e11d48); }
+        .bg-accion { background: var(--color-accion, #e11d48); }
+        .border-accion { border-color: var(--color-accion, #e11d48); }
+        .bg-accion-suave {
+            background: color-mix(in srgb, var(--color-accion, #e11d48) 10%, white);
+        }
+        .border-accion-suave {
+            border-color: color-mix(in srgb, var(--color-accion, #e11d48) 28%, white);
+        }
+        .hover-border-accion:hover { border-color: var(--color-accion, #e11d48); }
         .cliente-pill {
             position: fixed; top: 12px; right: 12px; z-index: 45;
             max-width: min(220px, calc(100vw - 24px));
@@ -169,7 +180,7 @@
     {% if tienda.lat and tienda.lon %}
     <div class="px-4 pb-2">
         <button onclick="abrirComoLlegar()"
-            class="w-full flex items-center justify-center gap-2 border border-rose-200 text-rose-600 font-semibold py-2.5 rounded-xl text-sm bg-rose-50">
+            class="w-full flex items-center justify-center gap-2 border border-accion-suave txt-accion font-semibold py-2.5 rounded-xl text-sm bg-accion-suave">
             📍 Cómo llegar
         </button>
     </div>
@@ -209,8 +220,8 @@
     <div class="{{ 'max-w-lg' if (tienda.desktop_layout or 'movil') == 'movil' else ('max-w-5xl' if tienda.desktop_layout == 'ampliado' else 'max-w-7xl') }} mx-auto px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-3 cursor-pointer" onclick="toggleCarrito()">
             <div class="relative">
-                <svg class="w-7 h-7 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
-                <span id="carrito-badge" class="absolute -top-2 -right-2 bg-rose-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">0</span>
+                <svg class="w-7 h-7 txt-accion" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+                <span id="carrito-badge" class="absolute -top-2 -right-2 bg-accion text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">0</span>
             </div>
             <span class="font-bold txt-primary" id="carrito-total-bar">$0</span>
         </div>
@@ -236,7 +247,7 @@
 
         <div class="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-xl card">
             <span class="font-bold txt-primary">Total</span>
-            <span class="text-xl font-extrabold text-rose-600" id="modal-total">$0</span>
+            <span class="text-xl font-extrabold txt-accion" id="modal-total">$0</span>
         </div>
 
         <!-- Datos del cliente -->
@@ -246,7 +257,7 @@
 
             <!-- Tipo entrega -->
             <div class="flex gap-3 mb-3">
-                <button onclick="selEntrega('domicilio')" id="btn-domicilio" class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega border-rose-500 bg-rose-50 text-rose-600 transition">
+                <button onclick="selEntrega('domicilio')" id="btn-domicilio" class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega border-accion bg-accion-suave txt-accion transition">
                     Domicilio
                 </button>
                 <button onclick="selEntrega('recoger')" id="btn-recoger" class="flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega border-gray-200 text-gray-500 transition">
@@ -279,13 +290,13 @@
         <p id="aviso-pedido-ok" class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 hidden"></p>
         <div id="bloque-comprobante" class="hidden mb-4">
             <p class="text-sm font-semibold text-gray-700 mb-2">📎 Adjunta tu comprobante de pago</p>
-            <label class="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-3 px-4 cursor-pointer hover:border-rose-400 transition text-sm text-gray-500">
+            <label class="flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-3 px-4 cursor-pointer hover-border-accion transition text-sm text-gray-500">
                 📷 Subir foto del comprobante
                 <input type="file" accept="image/*" class="hidden" onchange="subirComprobante(this)">
             </label>
             <p id="comprobante-ok" class="hidden text-sm text-green-600 font-semibold mt-2">✓ Comprobante enviado</p>
         </div>
-        <button onclick="document.getElementById('modal-ok').classList.add('hidden')" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-bold transition">Aceptar</button>
+        <button onclick="document.getElementById('modal-ok').classList.add('hidden')" class="btn-accion px-8 py-3 rounded-xl font-bold transition">Aceptar</button>
     </div>
 </div>
 
@@ -399,7 +410,7 @@ function renderProductos() {
             <div class="p-3">
                 <p class="font-semibold text-sm txt-primary truncate">${p.nombre}</p>
                 ${p.descripcion ? `<p class="text-xs txt-secondary leading-tight mt-0.5 line-clamp-2">${p.descripcion}</p>` : ''}
-                <p class="text-rose-600 font-bold text-sm mt-1">$${p.precio.toLocaleString()}</p>
+                <p class="txt-accion font-bold text-sm mt-1">$${p.precio.toLocaleString()}</p>
                 ${agotado ?
                     `<p class="text-xs text-red-500 font-bold mt-2">Agotado</p>` :
                     p.tiene_variantes ?
@@ -509,8 +520,8 @@ function cerrarZoom() {
 // === Pedido ===
 function selEntrega(tipo) {
     tipoEntrega = tipo;
-    document.getElementById('btn-domicilio').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'domicilio' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-gray-200 text-gray-500'}`;
-    document.getElementById('btn-recoger').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'recoger' ? 'border-rose-500 bg-rose-50 text-rose-600' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('btn-domicilio').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'domicilio' ? 'border-accion bg-accion-suave txt-accion' : 'border-gray-200 text-gray-500'}`;
+    document.getElementById('btn-recoger').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'recoger' ? 'border-accion bg-accion-suave txt-accion' : 'border-gray-200 text-gray-500'}`;
     document.getElementById('campo-direccion').classList.toggle('hidden', tipo === 'recoger');
 }
 
@@ -670,7 +681,7 @@ if (clienteData && clienteData.nombre) {
 
 <!-- Footer -->
 <div class="text-center py-4 pb-24">
-    <a href="/empieza" class="txt-muted text-xs hover:text-rose-500 transition">Powered by <span class="font-bold">TUC TUC</span></a>
+    <a href="/empieza" class="txt-muted text-xs link-accion transition">Powered by <span class="font-bold">TUC TUC</span></a>
 </div>
 
 <!-- Modal selección de variante -->
@@ -693,7 +704,7 @@ if (clienteData && clienteData.nombre) {
             <button onclick="cerrarModalVariante()" class="text-gray-400 text-2xl leading-none">&times;</button>
         </div>
         <p id="var-cli-desc" class="text-sm txt-secondary mb-3 hidden"></p>
-        <p id="var-cli-precio-base" class="text-rose-600 font-bold mb-4"></p>
+        <p id="var-cli-precio-base" class="txt-accion font-bold mb-4"></p>
         <div id="var-cli-selectores" class="space-y-4 mb-5"></div>
         <div id="var-cli-estado" class="text-sm text-center mb-3 hidden"></div>
         <button id="btn-cli-agregar" onclick="confirmarVariante()" class="w-full btn-accion py-3 rounded-xl font-semibold transition">
@@ -736,7 +747,7 @@ async function abrirModalVariante(productoId) {
                 const todasFotos = [varCliProducto.imagen, ...di.imagenes.map(x => x.imagen)];
                 miniaturas.innerHTML = todasFotos.map((src, i) => `
                     <img src="${src}" onclick="cambiarFotoModal('${src}')"
-                        class="w-16 h-16 object-cover rounded-lg cursor-pointer flex-shrink-0 border-2 ${i === 0 ? 'border-rose-500' : 'border-transparent'} transition">
+                        class="w-16 h-16 object-cover rounded-lg cursor-pointer flex-shrink-0 border-2 ${i === 0 ? 'border-accion' : 'border-transparent'} transition">
                 `).join('');
             }
         } catch(e) { /* sin extras, ok */ }
@@ -757,7 +768,7 @@ async function abrirModalVariante(productoId) {
                 <div class="flex flex-wrap gap-2">
                     ${a.valores.map(v => `
                         <button onclick="seleccionarVar('${a.nombre}', '${v.valor}', this)"
-                            class="var-btn-${a.id} px-3 py-1.5 rounded-full border-2 border-gray-200 text-sm font-medium text-gray-700 hover:border-rose-400 transition">
+                            class="var-btn-${a.id} px-3 py-1.5 rounded-full border-2 border-gray-200 text-sm font-medium text-gray-700 hover-border-accion transition">
                             ${v.valor}
                         </button>
                     `).join('')}
@@ -770,7 +781,7 @@ async function abrirModalVariante(productoId) {
 function cambiarFotoModal(src) {
     document.getElementById('var-cli-foto-grande').src = src;
     document.querySelectorAll('#var-cli-miniaturas img').forEach(img => {
-        img.classList.toggle('border-rose-500', img.src === src || img.getAttribute('src') === src);
+        img.classList.toggle('border-accion', img.src === src || img.getAttribute('src') === src);
         img.classList.toggle('border-transparent', img.src !== src && img.getAttribute('src') !== src);
     });
 }
@@ -786,10 +797,10 @@ function seleccionarVar(atributo, valor, btn) {
     // Highlight el botón seleccionado dentro del grupo
     const clase = btn.className.match(/var-btn-\d+/)?.[0];
     if (clase) document.querySelectorAll('.' + clase).forEach(b => {
-        b.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-600');
+        b.classList.remove('border-accion', 'bg-accion-suave', 'txt-accion');
         b.classList.add('border-gray-200', 'text-gray-700');
     });
-    btn.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-600');
+    btn.classList.add('border-accion', 'bg-accion-suave', 'txt-accion');
     btn.classList.remove('border-gray-200', 'text-gray-700');
 
     varCliSeleccion[atributo] = valor;
@@ -875,11 +886,11 @@ function pedirTucTuc() {
             </div>
         </button>
         <button onclick="pedirTucTuc()"
-            class="w-full flex items-center gap-4 bg-rose-50 border border-rose-200 rounded-2xl px-5 py-4 mb-5 text-left">
+            class="w-full flex items-center gap-4 bg-accion-suave border border-accion-suave rounded-2xl px-5 py-4 mb-5 text-left">
             <span class="text-3xl">🛺</span>
             <div>
-                <p class="font-bold text-rose-700 text-sm">TUC TUC TE LLEVA</p>
-                <p class="text-xs text-rose-400">Solicita un conductor que te lleve</p>
+                <p class="font-bold txt-accion text-sm">TUC TUC TE LLEVA</p>
+                <p class="text-xs txt-secondary">Solicita un conductor que te lleve</p>
             </div>
         </button>
         <button onclick="cerrarComoLlegar()" class="w-full text-gray-400 text-sm font-semibold py-2">Cancelar</button>

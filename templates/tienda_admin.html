@@ -212,39 +212,57 @@
                         <button onclick="limpiarProyectoSolar()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">Limpiar</button>
                     </div>
                     <div class="grid lg:grid-cols-2 gap-3 mb-4">
-                        <input id="ps-cliente" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cliente">
-                        <input id="ps-telefono" class="border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
-                        <input id="ps-ubicacion" class="border rounded-lg px-3 py-2 text-sm" placeholder="Ubicacion">
-                        <select id="ps-tipo-sistema" class="border rounded-lg px-3 py-2 text-sm">
-                            <option value="on_grid">On-grid</option>
-                            <option value="hibrido">Hibrido</option>
-                            <option value="off_grid">Off-grid</option>
-                            <option value="respaldo">Respaldo / cargas criticas</option>
-                        </select>
+                        <label class="text-xs font-semibold text-gray-500">Cliente
+                            <input id="ps-cliente" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nombre del cliente">
+                        </label>
+                        <label class="text-xs font-semibold text-gray-500">Telefono
+                            <input id="ps-telefono" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
+                        </label>
+                        <label class="text-xs font-semibold text-gray-500">Ubicacion
+                            <input id="ps-ubicacion" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ciudad, zona o direccion">
+                        </label>
+                        <label class="text-xs font-semibold text-gray-500">Tipo de sistema
+                            <select id="ps-tipo-sistema" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                                <option value="on_grid">On-grid</option>
+                                <option value="hibrido">Hibrido</option>
+                                <option value="off_grid">Off-grid</option>
+                                <option value="respaldo">Respaldo / cargas criticas</option>
+                            </select>
+                        </label>
                     </div>
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Factura electrica</p>
                         <div class="grid md:grid-cols-3 gap-2">
-                            <input id="ps-consumo-mensual" type="number" min="0" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Consumo maximo mensual kWh">
-                            <input id="ps-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar">
-                            <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cobertura %">
+                            <label class="text-xs font-semibold text-gray-500">Consumo maximo mensual kWh
+                                <input id="ps-consumo-mensual" type="number" min="0" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 100">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Factor solar
+                                <input id="ps-factor" type="number" min="2" max="6" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 4.05">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Cobertura %
+                                <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 100">
+                            </label>
                         </div>
-                        <div class="grid md:grid-cols-[minmax(0,1fr)_120px] gap-2 mt-2">
-                            <select id="ps-escenario" class="border rounded-lg px-3 py-2 text-sm">
-                                <option value="">Escenario rapido...</option>
-                                <option value="100|65">201 + zonas comunes (100 kWh / 65%)</option>
-                                <option value="340|60">Edificio completo (340 kWh / 60%)</option>
-                            </select>
-                            <input id="ps-fuera-pct" type="number" min="0" max="100" step="1" value="60" class="border rounded-lg px-3 py-2 text-sm" placeholder="% fuera gen">
+                        <div class="grid md:grid-cols-[minmax(0,1fr)_150px] gap-2 mt-2">
+                            <label class="text-xs font-semibold text-gray-500">Nombre del escenario
+                                <input id="ps-escenario" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. Escenario principal">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">% fuera gen util
+                                <input id="ps-fuera-pct" type="number" min="0" max="100" step="1" value="60" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 65">
+                            </label>
                         </div>
                     </div>
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Referencias del catalogo</p>
                         <div class="grid md:grid-cols-2 gap-2">
-                            <select id="ps-panel-producto" class="border rounded-lg px-3 py-2 text-sm"></select>
-                            <select id="ps-bateria-producto" class="border rounded-lg px-3 py-2 text-sm"></select>
+                            <label class="text-xs font-semibold text-gray-500">Panel
+                                <select id="ps-panel-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Bateria LiFePO4
+                                <select id="ps-bateria-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
+                            </label>
                         </div>
                     </div>
 
@@ -1534,20 +1552,6 @@ function prepararProyectoSolar() {
     else renderSelectoresProyectoSolar();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
-    const escenario = document.getElementById('ps-escenario');
-    if (escenario && !escenario.dataset.bound) {
-        escenario.dataset.bound = '1';
-        escenario.onchange = () => {
-            if (!escenario.value) return;
-            const [consumo, fueraPct] = escenario.value.split('|');
-            document.getElementById('ps-consumo-mensual').value = consumo || '';
-            document.getElementById('ps-fuera-pct').value = fueraPct || '';
-            document.getElementById('ps-tipo-sistema').value = 'hibrido';
-            const bateriaSel = document.getElementById('ps-bateria-producto');
-            if (bateriaSel) bateriaSel.dataset.manual = '';
-            calcularProyectoSolar();
-        };
-    }
     ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-bateria-producto'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.calcBound) {
@@ -1648,14 +1652,26 @@ function agregarCargaProyectoSolar() {
     if (!cont) return;
     const idx = cont.children.length + 1;
     const div = document.createElement('div');
-    div.className = 'grid lg:grid-cols-[minmax(0,1fr)_70px_95px_95px_110px_120px_auto] gap-2';
+    div.className = 'grid lg:grid-cols-[minmax(0,1fr)_70px_95px_95px_110px_120px_auto] gap-2 items-end';
     div.innerHTML = `
-        <input class="ps-equipo border rounded-lg px-3 py-2 text-sm" placeholder="Equipo ${idx}">
-        <input class="ps-cantidad border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" value="1" placeholder="Cant.">
-        <input class="ps-watts border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W nominal">
-        <input class="ps-pico border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W pico">
-        <input class="ps-horas-util border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="h gen util">
-        <input class="ps-horas-fuera border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="h fuera gen">
+        <label class="text-xs font-semibold text-gray-500">Equipo
+            <input class="ps-equipo mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Equipo ${idx}">
+        </label>
+        <label class="text-xs font-semibold text-gray-500">Cant.
+            <input class="ps-cantidad mt-1 w-full border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" value="1" placeholder="1">
+        </label>
+        <label class="text-xs font-semibold text-gray-500">W nom.
+            <input class="ps-watts mt-1 w-full border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W">
+        </label>
+        <label class="text-xs font-semibold text-gray-500">W pico
+            <input class="ps-pico mt-1 w-full border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W">
+        </label>
+        <label class="text-xs font-semibold text-gray-500">h gen util
+            <input class="ps-horas-util mt-1 w-full border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="Horas">
+        </label>
+        <label class="text-xs font-semibold text-gray-500">h fuera gen
+            <input class="ps-horas-fuera mt-1 w-full border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="Horas">
+        </label>
         <button onclick="this.closest('div').remove(); calcularProyectoSolar()" class="text-xs text-red-500 font-bold">Quitar</button>
     `;
     cont.appendChild(div);

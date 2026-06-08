@@ -300,6 +300,11 @@
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-1">Imagenes de categorias</h3>
                 <p class="text-xs text-gray-400 mb-3">Opcional. Si una categoria no tiene imagen, se vera como una tarjeta limpia.</p>
+                <div id="banner-asignar-categoria" class="hidden mb-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                    <span id="banner-asignar-categoria-texto" class="text-sm text-green-700 flex-1">Ya descargaste tu imagen? Asignala a la categoria</span>
+                    <button onclick="asignarCategoriaChatGPT()" class="text-sm font-bold text-white bg-green-500 hover:bg-green-600 px-4 py-1.5 rounded-lg transition">Asignar</button>
+                    <button onclick="document.getElementById('banner-asignar-categoria').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-lg leading-none">x</button>
+                </div>
                 <div id="admin-categorias-visuales" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
             </div>
 
@@ -1185,13 +1190,17 @@ function renderCategoriasVisuales(categorias) {
     }
     cont.innerHTML = categorias.map(c => {
         const safe = c.nombre.replace(/"/g, '&quot;');
+        const jsCat = c.nombre.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return `<div class="border border-gray-200 rounded-xl overflow-hidden bg-white">
-            <button type="button" onclick="seleccionarImagenCategoria('${c.nombre.replace(/'/g, "\\'")}')" class="w-full h-24 bg-gray-100 flex items-center justify-center overflow-hidden">
+            <button type="button" onclick="seleccionarImagenCategoria('${jsCat}')" class="w-full h-24 bg-gray-100 flex items-center justify-center overflow-hidden">
                 ${c.imagen ? `<img src="${c.imagen}" class="w-full h-full object-cover">` : `<span class="text-xs text-gray-400 px-3 text-center">Sin imagen</span>`}
             </button>
             <div class="p-3">
                 <p class="text-sm font-semibold text-gray-700 truncate" title="${safe}">${c.nombre}</p>
-                <button type="button" onclick="seleccionarImagenCategoria('${c.nombre.replace(/'/g, "\\'")}')" class="text-xs text-rose-600 font-semibold mt-1">Cambiar imagen</button>
+                <div class="flex items-center gap-3 mt-1">
+                    <button type="button" onclick="seleccionarImagenCategoria('${jsCat}')" class="text-xs text-rose-600 font-semibold">Cambiar</button>
+                    <button type="button" onclick="generarCategoriaChatGPT('${jsCat}')" class="text-xs text-emerald-600 font-semibold">Generar</button>
+                </div>
             </div>
         </div>`;
     }).join('');
@@ -1257,6 +1266,28 @@ function subirImagenCategoria(categoria, file) {
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+let _categoriaChatGPT = '';
+function generarCategoriaChatGPT(categoria) {
+    _categoriaChatGPT = categoria;
+    const nombre = {{ (tienda.nombre if tienda else none) | tojson }};
+    const desc = document.getElementById('txt-descripcion').value.trim();
+    const parteDesc = desc ? ` La tienda se describe asi: "${desc}".` : '';
+    const prompt = `Imagen para categoria "${categoria}" de una tienda llamada "${nombre}".${parteDesc} Debe funcionar como tarjeta visual de categoria en una tienda online: composicion limpia, sujeto principal claro, sin textos ni letras, estilo fotorrealista y comercial, formato cuadrado o ligeramente horizontal, usable tambien en movil.`;
+    navigator.clipboard.writeText(prompt).then(() => {
+        const banner = document.getElementById('banner-asignar-categoria');
+        const texto = document.getElementById('banner-asignar-categoria-texto');
+        if (texto) texto.textContent = `Ya descargaste la imagen de "${categoria}"? Asignala a esta categoria`;
+        if (banner) banner.classList.add('hidden');
+        toast('Prompt copiado - abriendo ChatGPT...');
+        window.open('https://chatgpt.com', '_blank');
+        _chatgptAbiertoCategoria = true;
+    });
+}
+
+function asignarCategoriaChatGPT() {
+    if (_categoriaChatGPT) seleccionarImagenCategoria(_categoriaChatGPT);
 }
 
 function renderProductos() {
@@ -3195,6 +3226,7 @@ async function guardarDescripcion() {
 
 // Generar header con ChatGPT
 let _chatgptAbierto = false;
+let _chatgptAbiertoCategoria = false;
 let _headerTipoChatGPT = 'desktop';
 function generarHeaderChatGPT(tipo = 'desktop') {
     _headerTipoChatGPT = tipo;
@@ -3228,6 +3260,10 @@ document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible' && _chatgptAbierto) {
         _chatgptAbierto = false;
         document.getElementById('banner-asignar-header').classList.remove('hidden');
+    }
+    if (document.visibilityState === 'visible' && _chatgptAbiertoCategoria) {
+        _chatgptAbiertoCategoria = false;
+        document.getElementById('banner-asignar-categoria').classList.remove('hidden');
     }
 });
 </script>

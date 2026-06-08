@@ -202,28 +202,41 @@
         </div>
 
         <!-- ====== TAB: COTIZACIONES ====== -->
-        <div id="panel-cotizaciones" class="p-6 hidden">
-            <div class="grid lg:grid-cols-[1.15fr_0.85fr] gap-5">
+        <div id="panel-cotizaciones" class="p-4 md:p-6 hidden">
+            <div class="grid xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)] gap-5">
                 <div class="bg-gray-50 rounded-xl p-4">
                     <div class="flex items-center justify-between gap-3 mb-4">
                         <h3 class="font-bold text-gray-700">Nueva cotizacion</h3>
                         <button onclick="limpiarCotizacion()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">Limpiar</button>
                     </div>
                     <input id="cot-id" type="hidden">
-                    <div class="grid md:grid-cols-2 gap-3 mb-4">
+                    <div class="grid lg:grid-cols-2 gap-3 mb-4">
                         <input id="cot-cliente" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cliente">
                         <input id="cot-telefono" class="border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
                         <input id="cot-email" class="border rounded-lg px-3 py-2 text-sm" placeholder="Email">
                         <select id="cot-objetivo" class="border rounded-lg px-3 py-2 text-sm">
+                            {% if tienda.slug == 'home-solar-panel' %}
                             <option value="ahorro">Ahorro</option>
                             <option value="respaldo">Respaldo</option>
                             <option value="mixto">Ahorro + respaldo</option>
                             <option value="aislado">Sistema aislado</option>
+                            {% else %}
+                            <option value="venta">Venta</option>
+                            <option value="servicio">Servicio</option>
+                            <option value="proyecto">Proyecto</option>
+                            <option value="otro">Otro</option>
+                            {% endif %}
                         </select>
                         <input id="cot-ubicacion" class="border rounded-lg px-3 py-2 text-sm" placeholder="Ubicacion">
-                        <input id="cot-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar (2 a 6)">
-                        <input id="cot-consumo" type="number" min="0" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Consumo mensual kWh">
-                        <input id="cot-paneles" type="number" min="0" step="1" class="border rounded-lg px-3 py-2 text-sm" placeholder="Paneles estimados">
+                    </div>
+                    {% if tienda.slug == 'home-solar-panel' %}
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Datos solares</p>
+                        <div class="grid lg:grid-cols-3 gap-2">
+                            <input id="cot-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar (2 a 6)">
+                            <input id="cot-consumo" type="number" min="0" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Consumo mensual kWh">
+                            <input id="cot-paneles" type="number" min="0" step="1" class="border rounded-lg px-3 py-2 text-sm" placeholder="Paneles estimados">
+                        </div>
                     </div>
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Consumos de facturas kWh</p>
@@ -233,10 +246,15 @@
                             {% endfor %}
                         </div>
                     </div>
+                    {% else %}
+                    <input id="cot-factor" type="hidden" value="">
+                    <input id="cot-consumo" type="hidden" value="">
+                    <input id="cot-paneles" type="hidden" value="">
+                    {% endif %}
                     <textarea id="cot-notas" class="w-full border rounded-lg px-3 py-2 text-sm mb-4" rows="2" placeholder="Notas tecnicas o comerciales"></textarea>
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
-                        <div class="grid md:grid-cols-[1fr_90px_120px_auto] gap-2">
+                        <div class="grid lg:grid-cols-[minmax(0,1fr)_90px_120px_auto] gap-2">
                             <select id="cot-producto" class="border rounded-lg px-3 py-2 text-sm"></select>
                             <input id="cot-cantidad" type="number" min="0" step="0.01" value="1" class="border rounded-lg px-3 py-2 text-sm">
                             <input id="cot-precio" type="number" min="0" step="1" class="border rounded-lg px-3 py-2 text-sm" placeholder="Precio">
@@ -923,6 +941,7 @@ const SLUG = '{{ tienda.slug }}';
 const BASE = '/api/tienda/' + SLUG;
 const TOKEN = '{{ tienda.token_acceso }}';
 const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
+const ES_TIENDA_SOLAR = SLUG === 'home-solar-panel';
 let productos = [];
 let cotizacionLineas = [];
 let pollingInterval = null;
@@ -1341,7 +1360,7 @@ function limpiarCotizacion() {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    document.getElementById('cot-objetivo').value = 'ahorro';
+    document.getElementById('cot-objetivo').value = ES_TIENDA_SOLAR ? 'ahorro' : 'venta';
     document.querySelectorAll('.cot-consumo-factura').forEach(el => el.value = '');
     cotizacionLineas = [];
     renderLineasCotizacion();
@@ -1419,7 +1438,7 @@ async function abrirCotizacion(id) {
         document.getElementById('cot-ubicacion').value = c.ubicacion || '';
         document.getElementById('cot-factor').value = c.factor_generacion || '';
         document.getElementById('cot-consumo').value = c.consumo_mensual || '';
-        document.getElementById('cot-objetivo').value = c.objetivo || 'ahorro';
+        document.getElementById('cot-objetivo').value = c.objetivo || (ES_TIENDA_SOLAR ? 'ahorro' : 'venta');
         document.getElementById('cot-paneles').value = c.datos_tecnicos?.paneles_estimados || '';
         document.querySelectorAll('.cot-consumo-factura').forEach((el, idx) => {
             el.value = (c.consumos || [])[idx] || '';

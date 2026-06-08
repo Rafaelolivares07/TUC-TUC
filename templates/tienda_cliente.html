@@ -422,6 +422,7 @@ function renderProductos() {
                 <p class="font-semibold text-sm txt-primary truncate">${p.nombre}</p>
                 ${p.descripcion ? `<p class="text-xs txt-secondary leading-tight mt-0.5 line-clamp-2">${p.descripcion}</p>` : ''}
                 <p class="txt-accion font-bold text-sm mt-1">$${p.precio.toLocaleString()}</p>
+                ${p.ficha_tecnica_id ? `<a href="${BASE}/producto/${p.id}/documento/${p.ficha_tecnica_id}" target="_blank" class="inline-flex items-center mt-1 text-xs font-bold txt-accion hover:underline">Ver ficha tecnica</a>` : ''}
                 ${agotado ?
                     `<p class="text-xs text-red-500 font-bold mt-2">Agotado</p>` :
                     p.tiene_variantes ?

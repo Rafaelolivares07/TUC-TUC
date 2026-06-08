@@ -1,3 +1,4 @@
+import base64
 import itertools
 import json
 import random
@@ -6,7 +7,7 @@ import time
 import uuid
 from datetime import date, timedelta
 
-from flask import (Blueprint, jsonify, redirect, render_template,
+from flask import (Blueprint, Response, jsonify, redirect, render_template,
                    request, session)
 
 from ..db import get_db_connection
@@ -103,6 +104,18 @@ def _crear_tablas(conn):
             imagen TEXT NOT NULL,
             orden INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS producto_documentos (
+            id SERIAL PRIMARY KEY,
+            producto_id INTEGER NOT NULL,
+            tipo VARCHAR(40) DEFAULT 'ficha_tecnica',
+            nombre VARCHAR(255) NOT NULL,
+            mime VARCHAR(120) DEFAULT 'application/pdf',
+            archivo TEXT NOT NULL,
+            visible_cliente BOOLEAN DEFAULT TRUE,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS catalogo_productos (
             id SERIAL PRIMARY KEY,
@@ -229,6 +242,7 @@ def _crear_tablas(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS imagen_header_movil TEXT",
         "CREATE INDEX IF NOT EXISTS idx_cotizaciones_tienda ON cotizaciones_tienda(tienda_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_cot_items_cotizacion ON cotizacion_items_tienda(cotizacion_id)",
+        "CREATE INDEX IF NOT EXISTS idx_producto_documentos_producto ON producto_documentos(producto_id)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -951,6 +965,14 @@ def api_tienda_productos(slug):
         for p in productos:
             nv = conn.execute("SELECT COUNT(*) FROM producto_variantes WHERE producto_id = %s", (p['id'],)).fetchone()[0]
             nf = conn.execute("SELECT COUNT(*) FROM producto_imagenes WHERE producto_id = %s", (p['id'],)).fetchone()[0]
+            doc = conn.execute("""
+                SELECT id, nombre
+                FROM producto_documentos
+                WHERE producto_id = %s AND visible_cliente = TRUE
+                ORDER BY tipo = 'ficha_tecnica' DESC, orden, id
+                LIMIT 1
+            """, (p['id'],)).fetchone()
+            nd = conn.execute("SELECT COUNT(*) FROM producto_documentos WHERE producto_id = %s", (p['id'],)).fetchone()[0]
             resultado.append({
                 'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
                 'precio': float(p['precio']), 'imagen': p['imagen'] or '',
@@ -960,7 +982,10 @@ def api_tienda_productos(slug):
                 'catalogo_id': p['catalogo_id'],
                 'iva_pct': float(p['iva_pct'] or 0),
                 'tiene_variantes': nv > 0,
-                'n_fotos': nf
+                'n_fotos': nf,
+                'n_documentos': nd,
+                'ficha_tecnica_id': doc['id'] if doc else None,
+                'ficha_tecnica_nombre': doc['nombre'] if doc else '',
             })
         categorias = []
         vistas = set()
@@ -2376,6 +2401,141 @@ def api_tienda_producto_imagen_extra_eliminar(slug, producto_id, imagen_id):
 
 
 # ── Docs ───────────────────────────────────────────────────────────────────────
+
+
+@bp.route('/api/tienda/<slug>/producto/<int:producto_id>/documentos')
+def api_tienda_producto_documentos(slug, producto_id):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        producto = conn.execute(
+            "SELECT id FROM productos WHERE id = %s AND negocio_id = %s",
+            (producto_id, tienda['tercero_id'])
+        ).fetchone()
+        if not producto:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        docs = conn.execute("""
+            SELECT id, tipo, nombre, mime, visible_cliente, orden, created_at
+            FROM producto_documentos
+            WHERE producto_id = %s
+            ORDER BY tipo = 'ficha_tecnica' DESC, orden, id
+        """, (producto_id,)).fetchall()
+        return jsonify({'ok': True, 'documentos': [{
+            'id': d['id'],
+            'tipo': d['tipo'],
+            'nombre': d['nombre'],
+            'mime': d['mime'],
+            'visible_cliente': bool(d['visible_cliente']),
+            'orden': d['orden'],
+            'url': f'/api/tienda/{slug}/producto/{producto_id}/documento/{d["id"]}',
+        } for d in docs]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/producto/<int:producto_id>/documento', methods=['POST'])
+def api_tienda_producto_documento_subir(slug, producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    archivo = data.get('archivo') or ''
+    nombre = (data.get('nombre') or 'Ficha tecnica.pdf').strip()
+    mime = (data.get('mime') or 'application/pdf').strip()
+    tipo = (data.get('tipo') or 'ficha_tecnica').strip()
+    if not archivo:
+        return jsonify({'ok': False, 'error': 'Archivo requerido'}), 400
+    if mime != 'application/pdf':
+        return jsonify({'ok': False, 'error': 'Por ahora solo PDF'}), 400
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        producto = conn.execute(
+            "SELECT id FROM productos WHERE id = %s AND negocio_id = %s",
+            (producto_id, tienda['tercero_id'])
+        ).fetchone()
+        if not producto:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        max_orden = conn.execute(
+            "SELECT COALESCE(MAX(orden), -1) FROM producto_documentos WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        row = conn.execute("""
+            INSERT INTO producto_documentos
+                (producto_id, tipo, nombre, mime, archivo, visible_cliente, orden)
+            VALUES (%s,%s,%s,%s,%s,TRUE,%s)
+            RETURNING id
+        """, (producto_id, tipo, nombre, mime, archivo, max_orden + 1)).fetchone()
+        conn.commit()
+        return jsonify({'ok': True, 'id': row['id']})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/producto/<int:producto_id>/documento/<int:documento_id>')
+def api_tienda_producto_documento_ver(slug, producto_id, documento_id):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        doc = conn.execute("""
+            SELECT d.nombre, d.mime, d.archivo
+            FROM producto_documentos d
+            JOIN productos p ON p.id = d.producto_id
+            WHERE d.id = %s AND d.producto_id = %s AND p.negocio_id = %s
+        """, (documento_id, producto_id, tienda['tercero_id'])).fetchone()
+        if not doc:
+            return jsonify({'ok': False, 'error': 'Documento no encontrado'}), 404
+        archivo = doc['archivo'] or ''
+        payload = archivo.split(',', 1)[1] if ',' in archivo else archivo
+        contenido = base64.b64decode(payload)
+        nombre = (doc['nombre'] or 'ficha-tecnica.pdf').replace('"', "'")
+        return Response(
+            contenido,
+            mimetype=doc['mime'] or 'application/pdf',
+            headers={'Content-Disposition': f'inline; filename="{nombre}"'}
+        )
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/producto/<int:producto_id>/documento/<int:documento_id>', methods=['DELETE'])
+def api_tienda_producto_documento_eliminar(slug, producto_id, documento_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        tienda = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("""
+            DELETE FROM producto_documentos d
+            USING productos p
+            WHERE d.id = %s AND d.producto_id = %s
+              AND p.id = d.producto_id AND p.negocio_id = %s
+        """, (documento_id, producto_id, tienda['tercero_id']))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
 
 @bp.route('/docs/tienda')
 def docs_tienda():

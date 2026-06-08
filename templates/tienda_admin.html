@@ -1611,7 +1611,7 @@ function renderProductos() {
                 </div>
                 <div class="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:gap-2">
                     <button onclick="editarProducto(${p.id})" class="text-xs text-blue-600 font-semibold py-1.5 border border-blue-200 rounded-lg hover:bg-blue-50 transition">Editar</button>
-                    <button onclick="abrirFotos(${p.id})" class="text-xs text-rose-500 font-semibold py-1.5 border border-rose-200 rounded-lg hover:bg-rose-50 transition">${p.imagen ? 'Cambiar Fotos' : 'Fotos'}</button>
+                    <button onclick="abrirFotos(${p.id})" class="text-xs text-rose-500 font-semibold py-1.5 border border-rose-200 rounded-lg hover:bg-rose-50 transition">${p.n_documentos > 0 ? 'Fotos / Docs' : (p.imagen ? 'Cambiar Fotos' : 'Fotos')}</button>
                     <button onclick="abrirVariantes(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="text-xs text-purple-600 font-semibold py-1.5 border border-purple-200 rounded-lg hover:bg-purple-50 transition">Variantes</button>
                     <button onclick="compartirProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', '${(p.imagen||'').replace(/'/g, "\\'")}', ${p.precio}, '${(p.descripcion||'').replace(/'/g, "\\'").replace(/\n/g, ' ')}')" class="text-xs text-emerald-600 font-semibold py-1.5 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition">Compartir</button>
                 </div>
@@ -2821,6 +2821,16 @@ async function agregarDias(slug) {
             + Agregar foto
         </button>
         <input type="file" id="inp-foto-extra" accept="image/*" multiple class="hidden" onchange="subirFotoExtra(this)">
+
+        <!-- Documentos -->
+        <div class="border-t border-gray-100 mt-5 pt-4">
+            <p class="text-xs font-semibold text-gray-500 uppercase mb-2">Ficha tecnica / documentos</p>
+            <div id="docs-producto-lista" class="space-y-2 mb-3"></div>
+            <button onclick="document.getElementById('inp-doc-producto').click()" class="block w-full border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-400 hover:border-emerald-400 hover:text-emerald-600 transition font-semibold text-center cursor-pointer">
+                + Subir ficha tecnica PDF
+            </button>
+            <input type="file" id="inp-doc-producto" accept="application/pdf,.pdf" class="hidden" onchange="subirDocumentoProducto(this)">
+        </div>
     </div>
 </div>
 
@@ -2840,6 +2850,7 @@ async function abrirFotos(productoId) {
 
     document.getElementById('modal-fotos').classList.remove('hidden');
     await cargarFotosExtra();
+    await cargarDocumentosProducto();
 }
 
 function cerrarFotos() {
@@ -2865,6 +2876,29 @@ async function cargarFotosExtra() {
             </div>
         `).join('');
     } catch(e) { toast('Error cargando fotos', true); }
+}
+
+async function cargarDocumentosProducto() {
+    const cont = document.getElementById('docs-producto-lista');
+    if (!cont || !fotosProductoId) return;
+    try {
+        const r = await fetch(`${BASE}/producto/${fotosProductoId}/documentos`);
+        const data = await r.json();
+        if (!data.ok || !data.documentos.length) {
+            cont.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin ficha tecnica</p>';
+            return;
+        }
+        cont.innerHTML = data.documentos.map(d => `
+            <div class="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-gray-700 truncate">${d.nombre}</p>
+                    <p class="text-xs text-gray-400">${d.tipo || 'documento'} · PDF</p>
+                </div>
+                <a href="${d.url}" target="_blank" class="text-xs font-bold text-emerald-600">Ver</a>
+                <button onclick="eliminarDocumentoProducto(${d.id})" class="text-xs font-bold text-red-500">Quitar</button>
+            </div>
+        `).join('');
+    } catch(e) { toast('Error cargando documentos', true); }
 }
 
 function procesarImagen(file, maxSize, quality, callback) {
@@ -2939,6 +2973,50 @@ async function eliminarFotoExtra(imagenId) {
         const data = await r.json();
         if (data.ok) await cargarFotosExtra();
         else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function subirDocumentoProducto(input) {
+    const file = input.files[0];
+    if (!file || !fotosProductoId) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        input.value = '';
+        return toast('Solo PDF por ahora', true);
+    }
+    const reader = new FileReader();
+    reader.onload = async e => {
+        try {
+            const r = await fetch(`${BASE}/producto/${fotosProductoId}/documento`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    tipo: 'ficha_tecnica',
+                    nombre: file.name,
+                    mime: 'application/pdf',
+                    archivo: e.target.result
+                })
+            });
+            const data = await r.json();
+            if (data.ok) {
+                toast('Ficha tecnica subida');
+                await cargarDocumentosProducto();
+                await cargarProductos();
+            } else toast(data.error || 'Error', true);
+        } catch(err) { toast('Error de conexion', true); }
+        input.value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function eliminarDocumentoProducto(documentoId) {
+    if (!confirm('Quitar este documento?')) return;
+    try {
+        const r = await fetch(`${BASE}/producto/${fotosProductoId}/documento/${documentoId}`, {method: 'DELETE'});
+        const data = await r.json();
+        if (data.ok) {
+            await cargarDocumentosProducto();
+            await cargarProductos();
+        } else toast(data.error || 'Error', true);
     } catch(e) { toast('Error de conexion', true); }
 }
 </script>

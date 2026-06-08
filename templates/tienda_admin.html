@@ -256,6 +256,32 @@
                 </div>
             </div>
 
+            <!-- Experiencia -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-2">Pantalla inicial</h3>
+                <label class="flex items-center gap-3 cursor-pointer mb-4">
+                    <input type="checkbox" id="chk-pantalla-experiencial" {{ 'checked' if tienda.pantalla_experiencial else '' }} onchange="guardarExperiencia()" class="w-5 h-5 accent-rose-500">
+                    <span class="text-sm text-gray-600">Usar pantalla experiencial antes de categorias</span>
+                </label>
+                <p class="text-xs text-gray-400 mb-2">Color principal de botones</p>
+                <div class="flex items-center gap-2 flex-wrap">
+                    {% set color_actual = tienda.color_accion or '#e11d48' %}
+                    {% for c in ['#e11d48','#16a34a','#2563eb','#f59e0b','#111827','#7c3aed'] %}
+                    <button type="button" onclick="seleccionarColorAccion('{{ c }}')" data-color-accion="{{ c }}"
+                        class="color-accion w-9 h-9 rounded-full border-4 {{ 'border-gray-800' if color_actual == c else 'border-white' }} shadow"
+                        style="background: {{ c }}"></button>
+                    {% endfor %}
+                    <input id="color-accion" type="color" value="{{ color_actual }}" onchange="seleccionarColorAccion(this.value)" class="w-10 h-10 rounded border border-gray-200">
+                </div>
+            </div>
+
+            <!-- Categorias visuales -->
+            <div class="mb-8">
+                <h3 class="font-bold text-gray-700 mb-1">Imagenes de categorias</h3>
+                <p class="text-xs text-gray-400 mb-3">Opcional. Si una categoria no tiene imagen, se vera como una tarjeta limpia.</p>
+                <div id="admin-categorias-visuales" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
+            </div>
+
             <!-- Mostrar nombre -->
             <div class="mb-8">
                 <h3 class="font-bold text-gray-700 mb-3">Mostrar nombre sobre la imagen</h3>
@@ -1124,8 +1150,92 @@ async function cargarProductos() {
         const data = await r.json();
         if (!data.ok) return toast(data.error || 'Error', true);
         productos = data.productos;
+        renderCategoriasVisuales(data.categorias || []);
         renderProductos();
     } catch(e) { toast('Error de conexion', true); }
+}
+
+function renderCategoriasVisuales(categorias) {
+    const cont = document.getElementById('admin-categorias-visuales');
+    if (!cont) return;
+    if (!categorias.length) {
+        cont.innerHTML = '<p class="col-span-full text-sm text-gray-400">Agrega productos para crear categorias.</p>';
+        return;
+    }
+    cont.innerHTML = categorias.map(c => {
+        const safe = c.nombre.replace(/"/g, '&quot;');
+        return `<div class="border border-gray-200 rounded-xl overflow-hidden bg-white">
+            <button type="button" onclick="seleccionarImagenCategoria('${c.nombre.replace(/'/g, "\\'")}')" class="w-full h-24 bg-gray-100 flex items-center justify-center overflow-hidden">
+                ${c.imagen ? `<img src="${c.imagen}" class="w-full h-full object-cover">` : `<span class="text-xs text-gray-400 px-3 text-center">Sin imagen</span>`}
+            </button>
+            <div class="p-3">
+                <p class="text-sm font-semibold text-gray-700 truncate" title="${safe}">${c.nombre}</p>
+                <button type="button" onclick="seleccionarImagenCategoria('${c.nombre.replace(/'/g, "\\'")}')" class="text-xs text-rose-600 font-semibold mt-1">Cambiar imagen</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function seleccionarColorAccion(color) {
+    document.getElementById('color-accion').value = color;
+    document.querySelectorAll('.color-accion').forEach(b => {
+        b.classList.toggle('border-gray-800', b.dataset.colorAccion === color);
+        b.classList.toggle('border-white', b.dataset.colorAccion !== color);
+    });
+    guardarExperiencia();
+}
+
+async function guardarExperiencia() {
+    try {
+        const r = await fetch(BASE + '/experiencia', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                pantalla_experiencial: document.getElementById('chk-pantalla-experiencial').checked,
+                color_accion: document.getElementById('color-accion').value
+            })
+        });
+        const data = await r.json();
+        if (data.ok) toast('Experiencia actualizada');
+        else toast(data.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function seleccionarImagenCategoria(categoria) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => subirImagenCategoria(categoria, input.files[0]);
+    input.click();
+}
+
+function subirImagenCategoria(categoria, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = new Image();
+        img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const MAX_W = 900;
+            const w = Math.min(img.width, MAX_W);
+            const h = Math.round(img.height * (w / img.width));
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            const base64 = canvas.toDataURL('image/jpeg', 0.75);
+            try {
+                const r = await fetch(BASE + '/categoria-imagen', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({categoria, imagen: base64})
+                });
+                const data = await r.json();
+                if (data.ok) { toast('Categoria actualizada'); cargarProductos(); }
+                else toast(data.error || 'Error', true);
+            } catch(err) { toast('Error de conexion', true); }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
 function renderProductos() {

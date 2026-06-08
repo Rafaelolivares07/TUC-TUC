@@ -155,6 +155,15 @@ def _crear_tablas(conn):
             monto NUMERIC(12,2) NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS tienda_categorias (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL,
+            categoria VARCHAR(100) NOT NULL,
+            imagen TEXT,
+            orden INTEGER DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(tienda_id, categoria)
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -181,6 +190,8 @@ def _crear_tablas(conn):
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS desktop_layout VARCHAR(20) DEFAULT 'movil'",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS movil_cols SMALLINT DEFAULT 2",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS color_accion VARCHAR(20) DEFAULT '#e11d48'",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -890,6 +901,15 @@ def api_tienda_productos(slug):
             "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos WHERE negocio_id = %s ORDER BY categoria, orden, nombre",
             (tienda['tercero_id'],)
         ).fetchall()
+        categorias_media = conn.execute(
+            """
+            SELECT categoria, imagen
+            FROM tienda_categorias
+            WHERE tienda_id = %s
+            """,
+            (tienda['id'],)
+        ).fetchall()
+        media_por_categoria = {c['categoria']: c['imagen'] for c in categorias_media}
         resultado = []
         for p in productos:
             nv = conn.execute("SELECT COUNT(*) FROM producto_variantes WHERE producto_id = %s", (p['id'],)).fetchone()[0]
@@ -905,7 +925,18 @@ def api_tienda_productos(slug):
                 'tiene_variantes': nv > 0,
                 'n_fotos': nf
             })
-        return jsonify({'ok': True, 'productos': resultado})
+        categorias = []
+        vistas = set()
+        for p in productos:
+            categoria = p['categoria'] or 'Sin categoria'
+            if categoria in vistas:
+                continue
+            vistas.add(categoria)
+            categorias.append({
+                'nombre': categoria,
+                'imagen': media_por_categoria.get(categoria) or '',
+            })
+        return jsonify({'ok': True, 'productos': resultado, 'categorias': categorias})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -1187,6 +1218,58 @@ def api_tienda_mostrar_nombre(slug):
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/experiencia', methods=['POST'])
+def api_tienda_experiencia(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    pantalla = bool(data.get('pantalla_experiencial', False))
+    color = (data.get('color_accion') or '#e11d48').strip()
+    if not color.startswith('#') or len(color) not in (4, 7):
+        color = '#e11d48'
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE tiendas SET pantalla_experiencial = %s, color_accion = %s WHERE slug = %s",
+            (pantalla, color, slug)
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/categoria-imagen', methods=['POST'])
+def api_tienda_categoria_imagen(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    categoria = (data.get('categoria') or '').strip()
+    imagen = (data.get('imagen') or '').strip() or None
+    if not categoria:
+        return jsonify({'ok': False, 'error': 'Categoria requerida'}), 400
+    conn = get_db_connection()
+    try:
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("""
+            INSERT INTO tienda_categorias (tienda_id, categoria, imagen, updated_at)
+            VALUES (%s,%s,%s,NOW())
+            ON CONFLICT (tienda_id, categoria)
+            DO UPDATE SET imagen = EXCLUDED.imagen, updated_at = NOW()
+        """, (tienda['id'], categoria, imagen))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

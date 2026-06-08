@@ -230,6 +230,22 @@
                             <input id="ps-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar">
                             <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cobertura %">
                         </div>
+                        <div class="grid md:grid-cols-[minmax(0,1fr)_120px] gap-2 mt-2">
+                            <select id="ps-escenario" class="border rounded-lg px-3 py-2 text-sm">
+                                <option value="">Escenario rapido...</option>
+                                <option value="100|65">201 + zonas comunes (100 kWh / 65%)</option>
+                                <option value="340|60">Edificio completo (340 kWh / 60%)</option>
+                            </select>
+                            <input id="ps-fuera-pct" type="number" min="0" max="100" step="1" value="60" class="border rounded-lg px-3 py-2 text-sm" placeholder="% fuera gen">
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Referencias del catalogo</p>
+                        <div class="grid md:grid-cols-2 gap-2">
+                            <select id="ps-panel-producto" class="border rounded-lg px-3 py-2 text-sm"></select>
+                            <select id="ps-bateria-producto" class="border rounded-lg px-3 py-2 text-sm"></select>
+                        </div>
                     </div>
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
@@ -251,6 +267,8 @@
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Energia diaria a producir</span><strong id="ps-res-producir">0 kWh</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel">550 W</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles">0</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref">---</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias">0</strong></div>
                     </div>
                     <button onclick="calcularProyectoSolar()" class="w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
                 </div>
@@ -1332,6 +1350,7 @@ async function cargarProductos() {
         productos = data.productos;
         renderCategoriasVisuales(data.categorias || []);
         renderSelectorCotizacion();
+        renderSelectoresProyectoSolar();
         renderProductos();
     } catch(e) { toast('Error de conexion', true); }
 }
@@ -1511,8 +1530,32 @@ async function abrirCotizacion(id) {
 }
 
 function prepararProyectoSolar() {
+    if (!productos.length) cargarProductos();
+    else renderSelectoresProyectoSolar();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
+    const escenario = document.getElementById('ps-escenario');
+    if (escenario && !escenario.dataset.bound) {
+        escenario.dataset.bound = '1';
+        escenario.onchange = () => {
+            if (!escenario.value) return;
+            const [consumo, fueraPct] = escenario.value.split('|');
+            document.getElementById('ps-consumo-mensual').value = consumo || '';
+            document.getElementById('ps-fuera-pct').value = fueraPct || '';
+            document.getElementById('ps-tipo-sistema').value = 'hibrido';
+            const bateriaSel = document.getElementById('ps-bateria-producto');
+            if (bateriaSel) bateriaSel.dataset.manual = '';
+            calcularProyectoSolar();
+        };
+    }
+    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-bateria-producto'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.calcBound) {
+            el.dataset.calcBound = '1';
+            el.addEventListener('input', calcularProyectoSolar);
+            el.addEventListener('change', calcularProyectoSolar);
+        }
+    });
 }
 
 function limpiarProyectoSolar() {
@@ -1522,10 +1565,82 @@ function limpiarProyectoSolar() {
     });
     const cobertura = document.getElementById('ps-cobertura');
     if (cobertura) cobertura.value = 100;
+    const fueraPct = document.getElementById('ps-fuera-pct');
+    if (fueraPct) fueraPct.value = 60;
+    const escenario = document.getElementById('ps-escenario');
+    if (escenario) escenario.value = '';
     const cont = document.getElementById('ps-cargas');
     if (cont) cont.innerHTML = '';
     prepararProyectoSolar();
     calcularProyectoSolar();
+}
+
+function extraerNumero(nombre, patron) {
+    const m = String(nombre || '').match(patron);
+    return m ? Number(String(m[1]).replace(',', '.')) : 0;
+}
+
+function potenciaPanelProducto(p) {
+    return extraerNumero(p.nombre, /(\d+(?:[.,]\d+)?)\s*W/i);
+}
+
+function capacidadBateriaProducto(p) {
+    const nombre = p.nombre || '';
+    const kwh = extraerNumero(nombre, /(\d+(?:[.,]\d+)?)\s*kWh/i);
+    if (kwh) return kwh;
+    const volts = extraerNumero(nombre, /(\d+(?:[.,]\d+)?)\s*V/i);
+    const ah = extraerNumero(nombre, /(\d+(?:[.,]\d+)?)\s*Ah/i);
+    if (volts && ah) return volts * ah / 1000;
+    const serie5k = nombre.match(/\bEOS-?5K\b/i) || nombre.match(/\b5K\b/i);
+    return serie5k ? 5 : 0;
+}
+
+function productosPanelSolar() {
+    return productos
+        .filter(p => p.disponible !== false && String(p.categoria || '').toUpperCase().includes('PANEL'))
+        .map(p => ({...p, watts: potenciaPanelProducto(p)}))
+        .filter(p => p.watts > 0)
+        .sort((a, b) => b.watts - a.watts || Number(a.precio || 0) - Number(b.precio || 0));
+}
+
+function productosBateriaLifepo() {
+    return productos
+        .filter(p => {
+            const txt = `${p.categoria || ''} ${p.nombre || ''}`.toUpperCase();
+            return p.disponible !== false && txt.includes('BATERIA') && txt.includes('LIFEPO4');
+        })
+        .map(p => ({...p, kwh: capacidadBateriaProducto(p)}))
+        .filter(p => p.kwh > 0)
+        .sort((a, b) => a.kwh - b.kwh || Number(a.precio || 0) - Number(b.precio || 0));
+}
+
+function renderSelectoresProyectoSolar() {
+    const panelSel = document.getElementById('ps-panel-producto');
+    const bateriaSel = document.getElementById('ps-bateria-producto');
+    if (!panelSel || !bateriaSel) return;
+    const panelActual = panelSel.value;
+    const bateriaActual = bateriaSel.value;
+    const paneles = productosPanelSolar();
+    const baterias = productosBateriaLifepo();
+    panelSel.innerHTML = paneles.length
+        ? paneles.map(p => `<option value="${p.id}" data-watts="${p.watts}">${p.nombre} (${p.watts} W)</option>`).join('')
+        : '<option value="" data-watts="550">Panel 550 W (manual)</option>';
+    bateriaSel.innerHTML = baterias.length
+        ? baterias.map(p => `<option value="${p.id}" data-kwh="${p.kwh}">${p.nombre} (${fmt(p.kwh)} kWh)</option>`).join('')
+        : '<option value="" data-kwh="0">Sin bateria LiFePO4 en catalogo</option>';
+    if (panelActual && Array.from(panelSel.options).some(o => o.value === panelActual)) panelSel.value = panelActual;
+    else {
+        const preferido = paneles.find(p => p.watts === 550) || paneles[0];
+        if (preferido) panelSel.value = String(preferido.id);
+    }
+    if (bateriaActual && Array.from(bateriaSel.options).some(o => o.value === bateriaActual)) bateriaSel.value = bateriaActual;
+    if (!bateriaSel.dataset.boundManual) {
+        bateriaSel.dataset.boundManual = '1';
+        bateriaSel.addEventListener('change', () => {
+            bateriaSel.dataset.manual = '1';
+            calcularProyectoSolar();
+        });
+    }
 }
 
 function agregarCargaProyectoSolar() {
@@ -1550,33 +1665,54 @@ function calcularProyectoSolar() {
     const consumoMes = Number(document.getElementById('ps-consumo-mensual')?.value || 0);
     const factor = Number(document.getElementById('ps-factor')?.value || 0);
     const cobertura = Number(document.getElementById('ps-cobertura')?.value || 100) / 100;
+    const fueraPct = Number(document.getElementById('ps-fuera-pct')?.value || 0) / 100;
     const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || 'on_grid';
+    const panelOpt = document.getElementById('ps-panel-producto')?.selectedOptions[0];
+    const bateriaSel = document.getElementById('ps-bateria-producto');
+    const bateriaOpt = bateriaSel?.selectedOptions[0];
     const eficienciaPanel = 0.80;
     const eficienciaBateria = 0.80;
-    const panelW = 550;
+    const panelW = Number(panelOpt?.dataset.watts || 550);
     const consumoDiario = consumoMes * cobertura / 30;
-    let fueraWh = 0;
+    let fueraWhPorCargas = 0;
     let picoW = 0;
     document.querySelectorAll('#ps-cargas > div').forEach(row => {
         const cant = Number(row.querySelector('.ps-cantidad')?.value || 0);
         const watts = Number(row.querySelector('.ps-watts')?.value || 0);
         const pico = Number(row.querySelector('.ps-pico')?.value || watts);
         const horasFuera = Number(row.querySelector('.ps-horas-fuera')?.value || 0);
-        fueraWh += cant * watts * horasFuera;
+        fueraWhPorCargas += cant * watts * horasFuera;
         picoW += cant * pico;
     });
+    const fueraWhPorPct = consumoDiario * fueraPct * 1000;
+    const fueraWh = fueraPct > 0 ? fueraWhPorPct : fueraWhPorCargas;
     const usaBateria = ['hibrido', 'off_grid', 'respaldo'].includes(tipoSistema);
     const bateriaNominalKwh = usaBateria ? (fueraWh / 1000) / eficienciaBateria : 0;
     const energiaRecargaKwh = usaBateria ? bateriaNominalKwh : 0;
     const energiaProducir = consumoDiario + energiaRecargaKwh;
     const produccionPanel = (panelW / 1000) * factor * eficienciaPanel;
     const paneles = produccionPanel > 0 ? Math.ceil(energiaProducir / produccionPanel) : 0;
+    const baterias = productosBateriaLifepo();
+    let bateriaElegida = baterias.find(b => b.kwh >= bateriaNominalKwh) || baterias[baterias.length - 1];
+    const bateriaManual = bateriaSel?.dataset.manual === '1';
+    if (!bateriaManual && bateriaElegida && bateriaSel && String(bateriaSel.value) !== String(bateriaElegida.id) && bateriaNominalKwh > 0) {
+        bateriaSel.value = String(bateriaElegida.id);
+        bateriaElegida = baterias.find(b => String(b.id) === String(bateriaSel.value)) || bateriaElegida;
+    } else if (bateriaOpt) {
+        const kwhSel = Number(bateriaOpt.dataset.kwh || 0);
+        bateriaElegida = kwhSel ? {nombre: bateriaOpt.textContent, kwh: kwhSel} : bateriaElegida;
+    }
+    const bateriaKwh = Number(bateriaElegida?.kwh || bateriaOpt?.dataset.kwh || 0);
+    const bateriasEstimadas = bateriaKwh > 0 && bateriaNominalKwh > 0 ? Math.ceil(bateriaNominalKwh / bateriaKwh) : 0;
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
     document.getElementById('ps-res-fuera').textContent = `${fmt(fueraWh)} Wh`;
     document.getElementById('ps-res-bateria').textContent = `${fmt(bateriaNominalKwh)} kWh`;
     document.getElementById('ps-res-pico').textContent = `${fmt(picoW)} W`;
     document.getElementById('ps-res-producir').textContent = `${fmt(energiaProducir)} kWh`;
+    document.getElementById('ps-res-panel').textContent = `${fmt(panelW)} W`;
     document.getElementById('ps-res-paneles').textContent = paneles || '0';
+    document.getElementById('ps-res-bateria-ref').textContent = bateriaElegida ? bateriaElegida.nombre.replace(/\s*\([^)]*\)\s*$/, '') : '---';
+    document.getElementById('ps-res-baterias').textContent = bateriasEstimadas || '0';
 }
 
 function renderCategoriasVisuales(categorias) {

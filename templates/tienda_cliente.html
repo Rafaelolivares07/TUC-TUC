@@ -27,14 +27,10 @@
         .tema-oscuro .modal-card { background: #1f2937; }
         .tema-oscuro .modal-card input, .tema-oscuro .modal-card textarea { background: #111827; border-color: #4b5563; color: #f3f4f6; }
         .tema-oscuro .btn-entrega { border-color: #374151; color: #9ca3af; }
-        .tema-oscuro .cat-btn { background: #1f2937; border-color: #374151; color: #d1d5db; }
-        .tema-oscuro .cat-btn.selected { background: #881337; border-color: #e11d48; color: #fff; }
         .tema-oscuro .placeholder-sin-img { background: #374151; }
         .tema-oscuro .carrito-bar { background: #1f2937; border-color: #374151; }
         .tema-oscuro .carrito-panel { background: #111827; }
 
-        .tema-claro .cat-btn { background: #fff; border-color: #e5e7eb; color: #374151; }
-        .tema-claro .cat-btn.selected { background: #fff1f2; border-color: #e11d48; color: #e11d48; }
         .tema-claro .carrito-bar { background: #fff; border-color: #e5e7eb; }
         .tema-claro .carrito-panel { background: #fff; }
 
@@ -177,12 +173,6 @@
     <section id="categorias-portada" class="px-4 py-3">
         <div id="grid-categorias" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
     </section>
-
-    <div class="px-4 py-3 overflow-x-auto flex gap-2" id="filtro-categorias">
-        <button onclick="filtrarCategoria('')" class="cat-btn selected text-sm font-semibold px-4 py-2 rounded-full border whitespace-nowrap transition" data-cat="">
-            Todos
-        </button>
-    </div>
 
     <!-- Grid productos -->
     {% set mc = tienda.movil_cols or 2 %}
@@ -338,16 +328,11 @@ async function cargarProductos() {
 
 function renderCategorias() {
     const cats = categorias.length ? categorias : [...new Set(productos.map(p => p.categoria || 'Sin categoria'))].map(nombre => ({nombre, imagen: ''}));
-    const cont = document.getElementById('filtro-categorias');
-    cont.innerHTML = `<button onclick="filtrarCategoria('')" class="cat-btn selected text-sm font-semibold px-4 py-2 rounded-full border whitespace-nowrap transition" data-cat="">Todos</button>`;
-    cats.forEach(c => {
-        cont.innerHTML += `<button onclick="filtrarCategoria('${c.nombre.replace(/'/g,"\\'")}')" class="cat-btn text-sm font-semibold px-4 py-2 rounded-full border whitespace-nowrap transition" data-cat="${c.nombre}">${c.nombre}</button>`;
-    });
     const grid = document.getElementById('grid-categorias');
     if (!grid) return;
     grid.innerHTML = cats.map(c => {
         const nombre = c.nombre || 'Sin categoria';
-        return `<button onclick="filtrarCategoria('${nombre.replace(/'/g,"\\'")}', true)" class="card bg-white border rounded-xl overflow-hidden text-left shadow-sm">
+        return `<button onclick="filtrarCategoria('${nombre.replace(/'/g,"\\'")}', true)" class="cat-card card bg-white border rounded-xl overflow-hidden text-left shadow-sm" data-cat="${nombre}">
             <div class="cat-card-visual flex items-center justify-center overflow-hidden">
                 ${c.imagen ? `<img src="${c.imagen}" class="w-full h-full object-cover">` : ``}
             </div>
@@ -361,8 +346,10 @@ function renderCategorias() {
 let filtroActual = '';
 function filtrarCategoria(cat, bajar=false) {
     filtroActual = cat;
-    document.querySelectorAll('.cat-btn').forEach(b => {
-        b.classList.toggle('selected', b.dataset.cat === cat);
+    document.querySelectorAll('.cat-card').forEach(b => {
+        const activo = b.dataset.cat === cat;
+        b.classList.toggle('ring-2', activo);
+        b.classList.toggle('ring-offset-2', activo);
     });
     renderProductos();
     if (bajar) document.getElementById('grid-productos').scrollIntoView({behavior:'smooth', block:'start'});

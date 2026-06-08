@@ -309,8 +309,9 @@
                 <div class="bg-gray-50 rounded-xl p-4">
                     <h3 class="font-bold text-gray-700 mb-4">Ficha tecnica solar</h3>
                     <div class="grid lg:grid-cols-[minmax(0,1fr)_220px] gap-3 mb-4">
-                        <label class="text-xs font-semibold text-gray-500">Buscar producto
-                            <input id="fs-buscar" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Escribe para filtrar el catalogo">
+                        <label class="text-xs font-semibold text-gray-500 relative">Buscar producto
+                            <input id="fs-buscar" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Escribe para filtrar el catalogo" autocomplete="off">
+                            <div id="fs-dropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-y-auto z-40"></div>
                         </label>
                         <label class="text-xs font-semibold text-gray-500">Tipo tecnico solar
                             <select id="fs-tipo" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
@@ -321,8 +322,9 @@
                             </select>
                         </label>
                     </div>
-                    <label class="text-xs font-semibold text-gray-500 block mb-4">Producto del catalogo
-                        <select id="fs-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
+                    <label class="text-xs font-semibold text-gray-500 block mb-4">Producto seleccionado
+                        <select id="fs-producto" class="hidden"></select>
+                        <div id="fs-producto-seleccionado" class="mt-1 border rounded-lg px-3 py-2 text-sm bg-white text-gray-500">Ningun producto seleccionado</div>
                     </label>
 
                     <div id="fs-form-panel" class="hidden bg-white border border-gray-200 rounded-xl p-3 mb-4">
@@ -376,7 +378,10 @@
                         </label>
                     </div>
 
-                    <button onclick="guardarFichaSolar()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar ficha solar</button>
+                    <div class="grid md:grid-cols-2 gap-2">
+                        <button onclick="sugerirFichaSolarDesdeNombre()" class="w-full bg-gray-800 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Sugerir datos</button>
+                        <button onclick="guardarFichaSolar()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar ficha solar</button>
+                    </div>
                 </div>
 
                 <div class="bg-white border border-gray-200 rounded-xl p-4 h-fit">
@@ -1130,6 +1135,8 @@ const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
 const ES_TIENDA_SOLAR = SLUG === 'home-solar-panel';
 let productos = [];
 let solarFichas = {};
+let fsResultados = [];
+let fsActivoIdx = -1;
 let cotizacionLineas = [];
 let pollingInterval = null;
 let productoEditandoId = null;
@@ -1668,22 +1675,29 @@ function prepararFichasSolares() {
         if (!el || el.dataset.bound) return;
         el.dataset.bound = '1';
         el.addEventListener(id === 'fs-buscar' ? 'input' : 'change', () => {
-            if (id === 'fs-buscar') renderSelectorFichaSolar();
+            if (id === 'fs-buscar') {
+                fsActivoIdx = -1;
+                renderDropdownFichaSolar();
+            }
             else if (id === 'fs-producto') cargarFichaSolarSeleccionada();
             else mostrarFormularioFichaSolar(el.value);
         });
+        if (id === 'fs-buscar') {
+            el.addEventListener('focus', renderDropdownFichaSolar);
+            el.addEventListener('keydown', manejarTecladoFichaSolar);
+        }
     });
+    if (!document.body.dataset.fsClickBound) {
+        document.body.dataset.fsClickBound = '1';
+        document.addEventListener('click', cerrarDropdownFichaSolarSiClickAfuera);
+    }
 }
 
 function renderSelectorFichaSolar() {
     const sel = document.getElementById('fs-producto');
     if (!sel) return;
     const actual = sel.value;
-    const q = (document.getElementById('fs-buscar')?.value || '').trim().toLowerCase();
-    const lista = productos.filter(p => {
-        const txt = `${p.nombre || ''} ${p.categoria || ''}`.toLowerCase();
-        return !q || txt.includes(q);
-    });
+    const lista = productos;
     sel.innerHTML = '<option value="">Selecciona un producto</option>' + lista.map(p => {
         const ficha = solarFichas[p.id];
         const marca = ficha?.tipo ? ` - ${etiquetaTipoSolar(ficha.tipo)}` : '';
@@ -1691,6 +1705,76 @@ function renderSelectorFichaSolar() {
     }).join('');
     if (actual && Array.from(sel.options).some(o => o.value === actual)) sel.value = actual;
     cargarFichaSolarSeleccionada();
+    renderDropdownFichaSolar(false);
+}
+
+function productosFiltradosFichaSolar() {
+    const q = (document.getElementById('fs-buscar')?.value || '').trim().toLowerCase();
+    const lista = productos.filter(p => {
+        const txt = `${p.nombre || ''} ${p.categoria || ''}`.toLowerCase();
+        return !q || txt.includes(q);
+    });
+    return lista.slice(0, 20);
+}
+
+function renderDropdownFichaSolar(mostrar = true) {
+    const drop = document.getElementById('fs-dropdown');
+    if (!drop) return;
+    fsResultados = productosFiltradosFichaSolar();
+    fsActivoIdx = fsResultados.length ? Math.max(0, Math.min(fsActivoIdx, fsResultados.length - 1)) : -1;
+    if (!mostrar || !fsResultados.length) {
+        drop.classList.add('hidden');
+        drop.innerHTML = '';
+        return;
+    }
+    drop.innerHTML = fsResultados.map((p, idx) => {
+        const ficha = solarFichas[p.id];
+        const estado = ficha?.tipo ? etiquetaTipoSolar(ficha.tipo) : 'Sin ficha solar';
+        const activo = idx === fsActivoIdx ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-transparent';
+        return `<button type="button" data-fs-idx="${idx}" onmousedown="seleccionarResultadoFichaSolar(${idx})" class="w-full text-left px-3 py-2 border ${activo} hover:bg-gray-50">
+            <p class="text-sm font-semibold text-gray-700 truncate">${p.nombre}</p>
+            <p class="text-xs text-gray-400 truncate">${p.categoria || 'Sin categoria'} - ${estado}</p>
+        </button>`;
+    }).join('');
+    drop.classList.remove('hidden');
+}
+
+function manejarTecladoFichaSolar(e) {
+    if (!fsResultados.length) renderDropdownFichaSolar();
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        fsActivoIdx = Math.min((fsActivoIdx < 0 ? 0 : fsActivoIdx + 1), fsResultados.length - 1);
+        renderDropdownFichaSolar();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        fsActivoIdx = Math.max(fsActivoIdx - 1, 0);
+        renderDropdownFichaSolar();
+    } else if (e.key === 'Enter') {
+        if (fsActivoIdx >= 0 && fsResultados[fsActivoIdx]) {
+            e.preventDefault();
+            seleccionarResultadoFichaSolar(fsActivoIdx);
+        }
+    } else if (e.key === 'Escape') {
+        document.getElementById('fs-dropdown')?.classList.add('hidden');
+    }
+}
+
+function seleccionarResultadoFichaSolar(idx) {
+    const p = fsResultados[idx];
+    if (!p) return;
+    const sel = document.getElementById('fs-producto');
+    const buscar = document.getElementById('fs-buscar');
+    if (sel) sel.value = String(p.id);
+    if (buscar) buscar.value = p.nombre;
+    document.getElementById('fs-dropdown')?.classList.add('hidden');
+    cargarFichaSolarSeleccionada();
+    document.getElementById('fs-tipo')?.focus();
+}
+
+function cerrarDropdownFichaSolarSiClickAfuera(e) {
+    if (!e.target.closest?.('#fs-buscar') && !e.target.closest?.('#fs-dropdown')) {
+        document.getElementById('fs-dropdown')?.classList.add('hidden');
+    }
 }
 
 function etiquetaTipoSolar(tipo) {
@@ -1699,6 +1783,13 @@ function etiquetaTipoSolar(tipo) {
 
 function cargarFichaSolarSeleccionada() {
     const productoId = Number(document.getElementById('fs-producto')?.value || 0);
+    const producto = productos.find(p => Number(p.id) === productoId);
+    const selTxt = document.getElementById('fs-producto-seleccionado');
+    if (selTxt) {
+        selTxt.textContent = producto ? producto.nombre : 'Ningun producto seleccionado';
+        selTxt.classList.toggle('text-gray-800', !!producto);
+        selTxt.classList.toggle('text-gray-500', !producto);
+    }
     const ficha = solarFichas[productoId] || {tipo: '', datos: {}};
     const tipoEl = document.getElementById('fs-tipo');
     if (tipoEl) tipoEl.value = ficha.tipo || '';
@@ -1726,6 +1817,48 @@ function datosFichaSolarActual(tipo) {
         datos[el.dataset.fs] = el.type === 'number' ? Number(raw) : raw;
     });
     return datos;
+}
+
+function setFichaCampo(nombre, valor, sobreescribir = false) {
+    const el = document.querySelector(`[data-fs="${nombre}"]`);
+    if (!el || valor === undefined || valor === null || valor === '') return;
+    if (!sobreescribir && String(el.value || '').trim() !== '') return;
+    el.value = valor;
+}
+
+function sugerirFichaSolarDesdeNombre() {
+    const productoId = Number(document.getElementById('fs-producto')?.value || 0);
+    const tipo = document.getElementById('fs-tipo')?.value || '';
+    const producto = productos.find(p => Number(p.id) === productoId);
+    if (!producto) return toast('Selecciona un producto', true);
+    if (!tipo) return toast('Selecciona el tipo tecnico solar', true);
+    const nombre = producto.nombre || '';
+    const nombreUp = nombre.toUpperCase();
+    const num = patron => extraerNumero(nombre, patron);
+    if (tipo === 'panel') {
+        setFichaCampo('potencia_w', num(/(\d+(?:[.,]\d+)?)\s*W/i));
+    } else if (tipo === 'bateria') {
+        const volts = num(/(\d+(?:[.,]\d+)?)\s*V/i);
+        const ah = num(/(\d+(?:[.,]\d+)?)\s*Ah/i);
+        let kwh = num(/(\d+(?:[.,]\d+)?)\s*kWh/i);
+        if (!kwh && volts && ah) kwh = volts * ah / 1000;
+        if (!kwh && /\bEOS-?5K\b/i.test(nombre)) kwh = 5;
+        setFichaCampo('tipo_bateria', nombreUp.includes('LIFEPO4') ? 'LiFePO4' : nombreUp.includes('GEL') ? 'Gel' : nombreUp.includes('AGM') ? 'AGM' : '');
+        setFichaCampo('capacidad_nominal_kwh', kwh ? Number(kwh.toFixed(2)) : '');
+        setFichaCampo('capacidad_util_pct', 80);
+        setFichaCampo('voltaje_nominal_v', volts);
+        setFichaCampo('amperios_hora_ah', ah);
+    } else if (tipo === 'inversor') {
+        let w = num(/(\d+(?:[.,]\d+)?)\s*kW/i);
+        if (w) w *= 1000;
+        else w = num(/(\d+(?:[.,]\d+)?)\s*W/i);
+        const banco = num(/DC\s*(\d+(?:[.,]\d+)?)\s*V/i) || num(/(\d+(?:[.,]\d+)?)\s*V/i);
+        setFichaCampo('tipo_inversor', nombreUp.includes('HYBRID') || nombreUp.includes('HIBRIDO') ? 'Hibrido' : nombreUp.includes('ON-GRID') || nombreUp.includes('ON GRID') ? 'On-grid' : nombreUp.includes('OFF-GRID') || nombreUp.includes('OFF GRID') ? 'Off-grid' : '');
+        setFichaCampo('potencia_nominal_w', w ? Math.round(w) : '');
+        setFichaCampo('voltaje_banco_bateria_v', banco);
+        setFichaCampo('numero_mppt', nombreUp.includes('TWO-MPPT') ? 2 : '');
+    }
+    toast('Datos sugeridos. Revisa contra la ficha tecnica.');
 }
 
 async function guardarFichaSolar() {
@@ -1779,8 +1912,11 @@ function seleccionarProductoFichaSolar(productoId) {
     const sel = document.getElementById('fs-producto');
     if (!sel) return;
     sel.value = String(productoId);
+    const producto = productos.find(p => Number(p.id) === Number(productoId));
+    const buscar = document.getElementById('fs-buscar');
+    if (buscar && producto) buscar.value = producto.nombre;
     cargarFichaSolarSeleccionada();
-    sel.scrollIntoView({behavior: 'smooth', block: 'center'});
+    document.getElementById('fs-buscar')?.scrollIntoView({behavior: 'smooth', block: 'center'});
 }
 
 function prepararProyectoSolar() {

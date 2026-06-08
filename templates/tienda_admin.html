@@ -215,11 +215,11 @@
                         <input id="ps-cliente" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cliente">
                         <input id="ps-telefono" class="border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
                         <input id="ps-ubicacion" class="border rounded-lg px-3 py-2 text-sm" placeholder="Ubicacion">
-                        <select id="ps-objetivo" class="border rounded-lg px-3 py-2 text-sm">
-                            <option value="ahorro">Ahorro</option>
-                            <option value="respaldo">Respaldo</option>
-                            <option value="mixto">Ahorro + respaldo</option>
-                            <option value="aislado">Sistema aislado</option>
+                        <select id="ps-tipo-sistema" class="border rounded-lg px-3 py-2 text-sm">
+                            <option value="on_grid">On-grid</option>
+                            <option value="hibrido">Hibrido</option>
+                            <option value="off_grid">Off-grid</option>
+                            <option value="respaldo">Respaldo / cargas criticas</option>
                         </select>
                     </div>
 
@@ -228,7 +228,7 @@
                         <div class="grid md:grid-cols-3 gap-2">
                             <input id="ps-consumo-mensual" type="number" min="0" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Consumo maximo mensual kWh">
                             <input id="ps-factor" type="number" min="2" max="6" step="0.01" class="border rounded-lg px-3 py-2 text-sm" placeholder="Factor solar">
-                            <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="border rounded-lg px-3 py-2 text-sm" placeholder="% cobertura">
+                            <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="border rounded-lg px-3 py-2 text-sm" placeholder="Cobertura %">
                         </div>
                     </div>
 
@@ -244,11 +244,13 @@
                 <div class="bg-white border border-gray-200 rounded-xl p-4 h-fit">
                     <h3 class="font-bold text-gray-700 mb-4">Resultado inicial</h3>
                     <div class="space-y-3 text-sm">
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo diario</span><strong id="ps-res-diario">0 kWh</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel">550 W</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles</span><strong id="ps-res-paneles">0</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo fuera de sol</span><strong id="ps-res-noche">0 Wh</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo diario de diseno</span><strong id="ps-res-diario">0 kWh</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo fuera de generacion util</span><strong id="ps-res-fuera">0 Wh</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Bateria nominal requerida</span><strong id="ps-res-bateria">0 kWh</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Pico estimado</span><strong id="ps-res-pico">0 W</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Energia diaria a producir</span><strong id="ps-res-producir">0 kWh</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel">550 W</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles">0</strong></div>
                     </div>
                     <button onclick="calcularProyectoSolar()" class="w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
                 </div>
@@ -1531,13 +1533,14 @@ function agregarCargaProyectoSolar() {
     if (!cont) return;
     const idx = cont.children.length + 1;
     const div = document.createElement('div');
-    div.className = 'grid lg:grid-cols-[minmax(0,1fr)_80px_95px_95px_95px_auto] gap-2';
+    div.className = 'grid lg:grid-cols-[minmax(0,1fr)_70px_95px_95px_110px_120px_auto] gap-2';
     div.innerHTML = `
         <input class="ps-equipo border rounded-lg px-3 py-2 text-sm" placeholder="Equipo ${idx}">
         <input class="ps-cantidad border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" value="1" placeholder="Cant.">
         <input class="ps-watts border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W nominal">
         <input class="ps-pico border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="1" placeholder="W pico">
-        <input class="ps-horas-noche border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="h noche">
+        <input class="ps-horas-util border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="h gen util">
+        <input class="ps-horas-fuera border rounded-lg px-3 py-2 text-sm" type="number" min="0" step="0.1" placeholder="h fuera gen">
         <button onclick="this.closest('div').remove(); calcularProyectoSolar()" class="text-xs text-red-500 font-bold">Quitar</button>
     `;
     cont.appendChild(div);
@@ -1547,25 +1550,33 @@ function calcularProyectoSolar() {
     const consumoMes = Number(document.getElementById('ps-consumo-mensual')?.value || 0);
     const factor = Number(document.getElementById('ps-factor')?.value || 0);
     const cobertura = Number(document.getElementById('ps-cobertura')?.value || 100) / 100;
-    const eficiencia = 0.80;
+    const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || 'on_grid';
+    const eficienciaPanel = 0.80;
+    const eficienciaBateria = 0.80;
     const panelW = 550;
     const consumoDiario = consumoMes * cobertura / 30;
-    const produccionPanel = (panelW / 1000) * factor * eficiencia;
-    const paneles = produccionPanel > 0 ? Math.ceil(consumoDiario / produccionPanel) : 0;
-    let nocheWh = 0;
+    let fueraWh = 0;
     let picoW = 0;
     document.querySelectorAll('#ps-cargas > div').forEach(row => {
         const cant = Number(row.querySelector('.ps-cantidad')?.value || 0);
         const watts = Number(row.querySelector('.ps-watts')?.value || 0);
         const pico = Number(row.querySelector('.ps-pico')?.value || watts);
-        const horasNoche = Number(row.querySelector('.ps-horas-noche')?.value || 0);
-        nocheWh += cant * watts * horasNoche;
+        const horasFuera = Number(row.querySelector('.ps-horas-fuera')?.value || 0);
+        fueraWh += cant * watts * horasFuera;
         picoW += cant * pico;
     });
+    const usaBateria = ['hibrido', 'off_grid', 'respaldo'].includes(tipoSistema);
+    const bateriaNominalKwh = usaBateria ? (fueraWh / 1000) / eficienciaBateria : 0;
+    const energiaRecargaKwh = usaBateria ? bateriaNominalKwh : 0;
+    const energiaProducir = consumoDiario + energiaRecargaKwh;
+    const produccionPanel = (panelW / 1000) * factor * eficienciaPanel;
+    const paneles = produccionPanel > 0 ? Math.ceil(energiaProducir / produccionPanel) : 0;
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
-    document.getElementById('ps-res-paneles').textContent = paneles || '0';
-    document.getElementById('ps-res-noche').textContent = `${fmt(nocheWh)} Wh`;
+    document.getElementById('ps-res-fuera').textContent = `${fmt(fueraWh)} Wh`;
+    document.getElementById('ps-res-bateria').textContent = `${fmt(bateriaNominalKwh)} kWh`;
     document.getElementById('ps-res-pico').textContent = `${fmt(picoW)} W`;
+    document.getElementById('ps-res-producir').textContent = `${fmt(energiaProducir)} kWh`;
+    document.getElementById('ps-res-paneles').textContent = paneles || '0';
 }
 
 function renderCategoriasVisuales(categorias) {

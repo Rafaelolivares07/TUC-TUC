@@ -317,6 +317,7 @@ const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 const BASE = '/api/tienda/' + SLUG;
 let productos = [];
 let categorias = [];
+let productoInicialEnfocado = false;
 let carrito = JSON.parse(localStorage.getItem('carrito_' + SLUG) || '{}');
 let tipoEntrega = 'domicilio';
 let configNegocio = null;
@@ -360,6 +361,7 @@ async function cargarProductos() {
         categorias = data.categorias || [];
         renderCategorias();
         renderProductos();
+        enfocarProductoInicial();
     } catch(e) { toast('Error cargando productos', true); }
 }
 
@@ -440,6 +442,25 @@ function renderProductos() {
         </div>`;
     }).join('');
     actualizarCarritoUI();
+}
+
+function enfocarProductoInicial() {
+    if (productoInicialEnfocado) return;
+    const productoId = new URLSearchParams(window.location.search).get('producto');
+    if (!productoId || !productos.length) return;
+    const p = productos.find(x => String(x.id) === String(productoId));
+    if (!p) return;
+    productoInicialEnfocado = true;
+    filtroActual = p.categoria || 'Sin categoria';
+    renderCategorias();
+    renderProductos();
+    setTimeout(() => {
+        const card = document.getElementById('prod-' + productoId);
+        if (!card) return;
+        card.scrollIntoView({behavior: 'smooth', block: 'center'});
+        card.classList.add('ring-4', 'ring-offset-2', 'border-accion');
+        setTimeout(() => card.classList.remove('ring-4', 'ring-offset-2'), 3200);
+    }, 120);
 }
 
 // === Carrito ===

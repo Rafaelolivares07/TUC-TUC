@@ -2722,6 +2722,43 @@ def _proyecto_solar_dict(p, incluir_detalle=True):
     return item
 
 
+def _enriquecer_lineas_proyecto_solar(conn, slug, proyecto):
+    presupuesto = proyecto.get('presupuesto') or {}
+    lineas = presupuesto.get('lineas') or []
+    producto_ids = [int(l.get('producto_id') or 0) for l in lineas if l.get('producto_id')]
+    if not producto_ids:
+        return proyecto
+    productos = conn.execute("""
+        SELECT id, nombre, categoria, imagen, descripcion
+        FROM productos
+        WHERE id = ANY(%s)
+    """, (producto_ids,)).fetchall()
+    producto_por_id = {p['id']: p for p in productos}
+    docs = conn.execute("""
+        SELECT DISTINCT ON (producto_id) producto_id, id, nombre
+        FROM producto_documentos
+        WHERE producto_id = ANY(%s) AND visible_cliente = TRUE
+        ORDER BY producto_id, tipo = 'ficha_tecnica' DESC, orden, id
+    """, (producto_ids,)).fetchall()
+    doc_por_producto = {d['producto_id']: d for d in docs}
+    tienda_url = f'https://{slug}.tuc-tuc.co'
+    for linea in lineas:
+        producto_id = int(linea.get('producto_id') or 0)
+        producto = producto_por_id.get(producto_id)
+        doc = doc_por_producto.get(producto_id)
+        if producto:
+            linea['imagen'] = producto['imagen'] or ''
+            linea['descripcion'] = producto['descripcion'] or ''
+            linea['categoria'] = producto['categoria'] or linea.get('categoria') or ''
+            linea['producto_url'] = f'{tienda_url}?producto={producto_id}'
+        if doc:
+            linea['ficha_tecnica_url'] = f'/api/tienda/{slug}/producto/{producto_id}/documento/{doc["id"]}'
+            linea['ficha_tecnica_nombre'] = doc['nombre'] or 'Ficha tecnica'
+    presupuesto['lineas'] = lineas
+    proyecto['presupuesto'] = presupuesto
+    return proyecto
+
+
 @bp.route('/api/tienda/<slug>/proyectos-solares')
 def api_tienda_proyectos_solares(slug):
     if 'usuario_id' not in session:
@@ -2861,7 +2898,8 @@ def solar_proyecto_publico(token):
     try:
         _crear_tablas(conn)
         row = conn.execute("""
-            SELECT p.*, t.nombre AS tienda_nombre, t.slug, t.admin_telefono, t.color_accion
+            SELECT p.*, t.nombre AS tienda_nombre, t.slug, t.admin_telefono, t.color_accion,
+                   t.imagen_header, t.imagen_header_movil, t.descripcion
             FROM proyectos_solares p
             JOIN tiendas t ON t.id = p.tienda_id
             WHERE p.token_publico = %s AND t.activo = TRUE
@@ -2873,8 +2911,13 @@ def solar_proyecto_publico(token):
             'slug': row['slug'],
             'admin_telefono': row['admin_telefono'] or '',
             'color_accion': row['color_accion'] or '#e11d48',
+            'imagen_header': row['imagen_header'] or '',
+            'imagen_header_movil': row['imagen_header_movil'] or '',
+            'descripcion': row['descripcion'] or '',
+            'url': f'https://{row["slug"]}.tuc-tuc.co',
         }
         proyecto = _proyecto_solar_dict(row, True)
+        proyecto = _enriquecer_lineas_proyecto_solar(conn, row['slug'], proyecto)
         return render_template('solar_proyecto_publico.html', tienda=tienda, proyecto=proyecto)
     except Exception as e:
         return f"Error: {e}", 500

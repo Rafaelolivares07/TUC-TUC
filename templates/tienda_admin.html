@@ -257,7 +257,7 @@
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Referencias del catalogo</p>
-                        <div class="grid md:grid-cols-3 gap-2">
+                        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-2">
                             <label class="text-xs font-semibold text-gray-500">Panel
                                 <select id="ps-panel-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
                             </label>
@@ -273,7 +273,11 @@
                             <label class="text-xs font-semibold text-gray-500">Bateria
                                 <select id="ps-bateria-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
                             </label>
+                            <label class="text-xs font-semibold text-gray-500">Inversor
+                                <select id="ps-inversor-producto" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></select>
+                            </label>
                         </div>
+                        <div id="ps-detalle-referencias" class="grid md:grid-cols-3 gap-2 mt-3 text-xs"></div>
                     </div>
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
@@ -297,8 +301,16 @@
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles">0</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref">---</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias">0</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-gray-500">Inversor seleccionado</span><strong id="ps-res-inversor">---</strong></div>
+                        <div class="border-t border-gray-100 pt-3 mt-3">
+                            <div class="flex justify-between gap-3"><span class="text-gray-500">Total equipos</span><strong id="ps-res-total">$0</strong></div>
+                        </div>
                     </div>
-                    <button onclick="calcularProyectoSolar()" class="w-full mt-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
+                    <div id="ps-lineas-presupuesto" class="mt-4 space-y-2 text-sm"></div>
+                    <div class="grid gap-2 mt-5">
+                        <button onclick="calcularProyectoSolar()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
+                        <button onclick="pasarProyectoACotizacion()" class="w-full bg-gray-900 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Pasar a cotizacion</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1137,6 +1149,7 @@ let productos = [];
 let solarFichas = {};
 let fsResultados = [];
 let fsActivoIdx = -1;
+let proyectoSolarResultado = null;
 let cotizacionLineas = [];
 let pollingInterval = null;
 let productoEditandoId = null;
@@ -1924,7 +1937,7 @@ function prepararProyectoSolar() {
     else renderSelectoresProyectoSolar();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
-    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto'].forEach(id => {
+    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.calcBound) {
             el.dataset.calcBound = '1';
@@ -1935,6 +1948,12 @@ function prepararProyectoSolar() {
                     if (bateriaSel) bateriaSel.dataset.manual = '';
                     renderSelectoresProyectoSolar();
                 }
+                if (id === 'ps-tipo-sistema') {
+                    const inversorSel = document.getElementById('ps-inversor-producto');
+                    if (inversorSel) inversorSel.dataset.manual = '';
+                    renderSelectoresProyectoSolar();
+                }
+                if (id === 'ps-inversor-producto') el.dataset.manual = '1';
                 calcularProyectoSolar();
             });
         }
@@ -1952,8 +1971,11 @@ function limpiarProyectoSolar() {
     if (fueraPct) fueraPct.value = 60;
     const escenario = document.getElementById('ps-escenario');
     if (escenario) escenario.value = '';
+    const inversorSel = document.getElementById('ps-inversor-producto');
+    if (inversorSel) inversorSel.dataset.manual = '';
     const cont = document.getElementById('ps-cargas');
     if (cont) cont.innerHTML = '';
+    proyectoSolarResultado = null;
     prepararProyectoSolar();
     calcularProyectoSolar();
 }
@@ -1981,6 +2003,24 @@ function capacidadBateriaProducto(p) {
     if (volts && ah) return volts * ah / 1000;
     const serie5k = nombre.match(/\bEOS-?5K\b/i) || nombre.match(/\b5K\b/i);
     return serie5k ? 5 : 0;
+}
+
+function fichaSolar(productoId, tipo) {
+    const f = solarFichas[productoId];
+    return f?.tipo === tipo ? (f.datos || {}) : {};
+}
+
+function productoPorId(id) {
+    return productos.find(p => String(p.id) === String(id));
+}
+
+function potenciaInversorProducto(p) {
+    const ficha = solarFichas[p.id];
+    const valor = Number(ficha?.tipo === 'inversor' ? ficha.datos?.potencia_nominal_w : 0);
+    if (valor) return valor;
+    let kw = extraerNumero(p.nombre, /(\d+(?:[.,]\d+)?)\s*kW/i);
+    if (kw) return kw * 1000;
+    return extraerNumero(p.nombre, /(\d+(?:[.,]\d+)?)\s*W/i);
 }
 
 function productosPanelSolar() {
@@ -2011,14 +2051,33 @@ function productosBateriaSolar() {
         .sort((a, b) => a.kwh - b.kwh || Number(a.precio || 0) - Number(b.precio || 0));
 }
 
+function productosInversorSolar() {
+    const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || '';
+    return productos
+        .filter(p => p.disponible !== false && solarFichas[p.id]?.tipo === 'inversor')
+        .map(p => ({...p, watts: potenciaInversorProducto(p), datos: solarFichas[p.id]?.datos || {}}))
+        .filter(p => {
+            const tipo = String(p.datos.tipo_inversor || '').toLowerCase();
+            if (tipoSistema === 'hibrido') return tipo.includes('hibrido') || tipo.includes('hybrid');
+            if (tipoSistema === 'off_grid' || tipoSistema === 'respaldo') return tipo.includes('off');
+            if (tipoSistema === 'on_grid') return tipo.includes('on');
+            return true;
+        })
+        .filter(p => p.watts > 0)
+        .sort((a, b) => a.watts - b.watts || Number(a.precio || 0) - Number(b.precio || 0));
+}
+
 function renderSelectoresProyectoSolar() {
     const panelSel = document.getElementById('ps-panel-producto');
     const bateriaSel = document.getElementById('ps-bateria-producto');
-    if (!panelSel || !bateriaSel) return;
+    const inversorSel = document.getElementById('ps-inversor-producto');
+    if (!panelSel || !bateriaSel || !inversorSel) return;
     const panelActual = panelSel.value;
     const bateriaActual = bateriaSel.value;
+    const inversorActual = inversorSel.value;
     const paneles = productosPanelSolar();
     const baterias = productosBateriaSolar();
+    const inversores = productosInversorSolar();
     panelSel.innerHTML = paneles.length
         ? paneles.map(p => `<option value="${p.id}" data-watts="${p.watts}">${p.nombre} (${p.watts} W)</option>`).join('')
         : '<option value="" data-watts="550">Panel 550 W (manual)</option>';
@@ -2031,6 +2090,10 @@ function renderSelectoresProyectoSolar() {
         if (preferido) panelSel.value = String(preferido.id);
     }
     if (bateriaActual && Array.from(bateriaSel.options).some(o => o.value === bateriaActual)) bateriaSel.value = bateriaActual;
+    inversorSel.innerHTML = inversores.length
+        ? inversores.map(p => `<option value="${p.id}" data-watts="${p.watts}">${p.nombre} (${fmt(p.watts)} W)</option>`).join('')
+        : '<option value="" data-watts="0">Sin inversor compatible con ficha</option>';
+    if (inversorActual && Array.from(inversorSel.options).some(o => o.value === inversorActual)) inversorSel.value = inversorActual;
     if (!bateriaSel.dataset.boundManual) {
         bateriaSel.dataset.boundManual = '1';
         bateriaSel.addEventListener('change', () => {
@@ -2038,6 +2101,28 @@ function renderSelectoresProyectoSolar() {
             calcularProyectoSolar();
         });
     }
+    renderDetalleReferenciasProyectoSolar();
+}
+
+function renderDetalleReferenciasProyectoSolar() {
+    const cont = document.getElementById('ps-detalle-referencias');
+    if (!cont) return;
+    const panel = productoPorId(document.getElementById('ps-panel-producto')?.value);
+    const bateria = productoPorId(document.getElementById('ps-bateria-producto')?.value);
+    const inversor = productoPorId(document.getElementById('ps-inversor-producto')?.value);
+    const pd = panel ? fichaSolar(panel.id, 'panel') : {};
+    const bd = bateria ? fichaSolar(bateria.id, 'bateria') : {};
+    const id = inversor ? fichaSolar(inversor.id, 'inversor') : {};
+    const card = (titulo, nombre, lineas) => `<div class="border border-gray-200 rounded-xl bg-white p-3">
+        <p class="font-bold text-gray-700">${titulo}</p>
+        <p class="text-gray-500 truncate" title="${nombre || ''}">${nombre || 'Sin seleccionar'}</p>
+        <p class="text-gray-400 mt-1">${lineas.filter(Boolean).join(' | ') || 'Sin ficha completa'}</p>
+    </div>`;
+    cont.innerHTML = [
+        card('Panel', panel?.nombre, [`${fmt(pd.potencia_w || potenciaPanelProducto(panel || {}))} W`, pd.voc_v ? `VOC ${fmt(pd.voc_v)} V` : '', pd.isc_a ? `ISC ${fmt(pd.isc_a)} A` : '']),
+        card('Bateria', bateria?.nombre, [bd.tipo_bateria || '', bd.capacidad_nominal_kwh ? `${fmt(bd.capacidad_nominal_kwh)} kWh` : '', `util ${fmt(bd.capacidad_util_pct || 80)}%`]),
+        card('Inversor', inversor?.nombre, [id.tipo_inversor || '', `${fmt(id.potencia_nominal_w || potenciaInversorProducto(inversor || {}))} W`, id.fases || '']),
+    ].join('');
 }
 
 function agregarCargaProyectoSolar() {
@@ -2076,12 +2161,15 @@ function calcularProyectoSolar() {
     const cobertura = Number(document.getElementById('ps-cobertura')?.value || 100) / 100;
     const fueraPct = Number(document.getElementById('ps-fuera-pct')?.value || 0) / 100;
     const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || 'on_grid';
-    const panelOpt = document.getElementById('ps-panel-producto')?.selectedOptions[0];
     const bateriaSel = document.getElementById('ps-bateria-producto');
-    const bateriaOpt = bateriaSel?.selectedOptions[0];
+    const inversorSel = document.getElementById('ps-inversor-producto');
+    const panelProducto = productoPorId(document.getElementById('ps-panel-producto')?.value);
+    let bateriaProducto = productoPorId(bateriaSel?.value);
+    let inversorProducto = productoPorId(inversorSel?.value);
+    const bateriaDatos = bateriaProducto ? fichaSolar(bateriaProducto.id, 'bateria') : {};
     const eficienciaPanel = 0.80;
-    const eficienciaBateria = 0.80;
-    const panelW = Number(panelOpt?.dataset.watts || 550);
+    const utilidadBateria = Math.max(1, Math.min(100, Number(bateriaDatos.capacidad_util_pct || 80))) / 100;
+    const panelW = Number(potenciaPanelProducto(panelProducto || {}) || 550);
     const consumoDiario = consumoMes * cobertura / 30;
     let fueraWhPorCargas = 0;
     let picoW = 0;
@@ -2096,7 +2184,7 @@ function calcularProyectoSolar() {
     const fueraWhPorPct = consumoDiario * fueraPct * 1000;
     const fueraWh = fueraPct > 0 ? fueraWhPorPct : fueraWhPorCargas;
     const usaBateria = ['hibrido', 'off_grid', 'respaldo'].includes(tipoSistema);
-    const bateriaNominalKwh = usaBateria ? (fueraWh / 1000) / eficienciaBateria : 0;
+    const bateriaNominalKwh = usaBateria ? (fueraWh / 1000) / utilidadBateria : 0;
     const energiaRecargaKwh = usaBateria ? bateriaNominalKwh : 0;
     const energiaProducir = consumoDiario + energiaRecargaKwh;
     const produccionPanel = (panelW / 1000) * factor * eficienciaPanel;
@@ -2107,12 +2195,33 @@ function calcularProyectoSolar() {
     if (!bateriaManual && bateriaElegida && bateriaSel && String(bateriaSel.value) !== String(bateriaElegida.id) && bateriaNominalKwh > 0) {
         bateriaSel.value = String(bateriaElegida.id);
         bateriaElegida = baterias.find(b => String(b.id) === String(bateriaSel.value)) || bateriaElegida;
-    } else if (bateriaOpt) {
-        const kwhSel = Number(bateriaOpt.dataset.kwh || 0);
-        bateriaElegida = kwhSel ? {nombre: bateriaOpt.textContent, kwh: kwhSel} : bateriaElegida;
+        bateriaProducto = productoPorId(bateriaSel.value);
+    } else if (bateriaProducto) {
+        bateriaElegida = {...bateriaProducto, kwh: capacidadBateriaProducto(bateriaProducto)};
     }
-    const bateriaKwh = Number(bateriaElegida?.kwh || bateriaOpt?.dataset.kwh || 0);
+    const bateriaKwh = Number(bateriaElegida?.kwh || 0);
     const bateriasEstimadas = bateriaKwh > 0 && bateriaNominalKwh > 0 ? Math.ceil(bateriaNominalKwh / bateriaKwh) : 0;
+    const potenciaPanelesW = panelW * paneles;
+    const inversores = productosInversorSolar();
+    const potenciaObjetivoInversor = Math.max(picoW, potenciaPanelesW * 0.8);
+    const inversorManual = inversorSel?.dataset.manual === '1';
+    if (!inversorManual && inversores.length) {
+        const sugerido = inversores.find(i => i.watts >= potenciaObjetivoInversor) || inversores[inversores.length - 1];
+        if (sugerido && inversorSel && String(inversorSel.value) !== String(sugerido.id)) {
+            inversorSel.value = String(sugerido.id);
+            inversorProducto = productoPorId(sugerido.id);
+        }
+    }
+    const lineas = [];
+    if (panelProducto && paneles > 0) lineas.push({producto: panelProducto, cantidad: paneles, etiqueta: 'Paneles'});
+    if (bateriaProducto && bateriasEstimadas > 0) lineas.push({producto: bateriaProducto, cantidad: bateriasEstimadas, etiqueta: 'Baterias'});
+    if (inversorProducto) lineas.push({producto: inversorProducto, cantidad: 1, etiqueta: 'Inversor'});
+    const totalEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
+    proyectoSolarResultado = {
+        lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW, energiaProducir,
+        panelW, paneles, bateriasEstimadas, totalEquipos,
+        escenario: document.getElementById('ps-escenario')?.value || '',
+    };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
     document.getElementById('ps-res-fuera').textContent = `${fmt(fueraWh)} Wh`;
     document.getElementById('ps-res-bateria').textContent = `${fmt(bateriaNominalKwh)} kWh`;
@@ -2122,6 +2231,62 @@ function calcularProyectoSolar() {
     document.getElementById('ps-res-paneles').textContent = paneles || '0';
     document.getElementById('ps-res-bateria-ref').textContent = bateriaElegida ? bateriaElegida.nombre.replace(/\s*\([^)]*\)\s*$/, '') : '---';
     document.getElementById('ps-res-baterias').textContent = bateriasEstimadas || '0';
+    document.getElementById('ps-res-inversor').textContent = inversorProducto ? inversorProducto.nombre : '---';
+    document.getElementById('ps-res-total').textContent = money(totalEquipos);
+    renderDetalleReferenciasProyectoSolar();
+    renderLineasPresupuestoSolar(lineas);
+}
+
+function renderLineasPresupuestoSolar(lineas) {
+    const cont = document.getElementById('ps-lineas-presupuesto');
+    if (!cont) return;
+    if (!lineas.length) {
+        cont.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin equipos para presupuestar todavia</p>';
+        return;
+    }
+    cont.innerHTML = lineas.map(l => {
+        const total = Number(l.cantidad || 0) * Number(l.producto.precio || 0);
+        return `<div class="border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
+            <div class="flex justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="font-semibold text-gray-700 truncate">${l.etiqueta}: ${l.producto.nombre}</p>
+                    <p class="text-xs text-gray-400">${fmt(l.cantidad)} x ${money(l.producto.precio)}</p>
+                </div>
+                <strong class="text-gray-800">${money(total)}</strong>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function pasarProyectoACotizacion() {
+    calcularProyectoSolar();
+    if (!proyectoSolarResultado || !proyectoSolarResultado.lineas.length) return toast('Calcula un proyecto con equipos', true);
+    limpiarCotizacion();
+    document.getElementById('cot-cliente').value = document.getElementById('ps-cliente').value || '';
+    document.getElementById('cot-telefono').value = document.getElementById('ps-telefono').value || '';
+    document.getElementById('cot-ubicacion').value = document.getElementById('ps-ubicacion').value || '';
+    document.getElementById('cot-factor').value = document.getElementById('ps-factor').value || '';
+    document.getElementById('cot-consumo').value = document.getElementById('ps-consumo-mensual').value || '';
+    document.getElementById('cot-paneles').value = proyectoSolarResultado.paneles || '';
+    document.getElementById('cot-objetivo').value = document.getElementById('ps-tipo-sistema').value === 'on_grid' ? 'ahorro' : 'mixto';
+    document.getElementById('cot-notas').value = [
+        proyectoSolarResultado.escenario ? `Escenario: ${proyectoSolarResultado.escenario}` : '',
+        `Consumo diario diseno: ${fmt(proyectoSolarResultado.consumoDiario)} kWh`,
+        `Fuera de generacion util: ${fmt(proyectoSolarResultado.fueraWh / 1000)} kWh/dia`,
+        `Bateria nominal requerida: ${fmt(proyectoSolarResultado.bateriaNominalKwh)} kWh`,
+        `Energia diaria a producir: ${fmt(proyectoSolarResultado.energiaProducir)} kWh`,
+    ].filter(Boolean).join('\\n');
+    cotizacionLineas = proyectoSolarResultado.lineas.map(l => ({
+        producto_id: Number(l.producto.id),
+        nombre: l.producto.nombre,
+        categoria: l.producto.categoria || '',
+        cantidad: Number(l.cantidad || 0),
+        precio_unitario: Number(l.producto.precio || 0),
+        notas: l.etiqueta,
+    }));
+    renderLineasCotizacion();
+    cambiarTab('cotizaciones');
+    toast('Proyecto pasado a cotizacion');
 }
 
 function renderCategoriasVisuales(categorias) {

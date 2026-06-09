@@ -221,6 +221,7 @@ def _crear_tablas(conn):
         """CREATE TABLE IF NOT EXISTS proyectos_solares (
             id SERIAL PRIMARY KEY,
             tienda_id INTEGER NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+            cliente_id INTEGER REFERENCES terceros(id),
             cliente_nombre VARCHAR(255),
             cliente_telefono VARCHAR(30),
             ubicacion VARCHAR(255),
@@ -267,7 +268,9 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_cot_items_cotizacion ON cotizacion_items_tienda(cotizacion_id)",
         "CREATE INDEX IF NOT EXISTS idx_producto_documentos_producto ON producto_documentos(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_producto_fichas_solares_tipo ON producto_fichas_solares(tipo)",
+        "ALTER TABLE proyectos_solares ADD COLUMN IF NOT EXISTS cliente_id INTEGER REFERENCES terceros(id)",
         "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_tienda ON proyectos_solares(tienda_id, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_cliente ON proyectos_solares(cliente_id)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -2652,9 +2655,55 @@ def api_tienda_producto_ficha_solar(slug, producto_id):
         conn.close()
 
 
+def _normalizar_telefono_tercero(valor):
+    return ''.join(filter(str.isdigit, valor or ''))
+
+
+def _resolver_tercero_cliente(conn, cliente_id=None, nombre='', telefono=''):
+    nombre = (nombre or '').strip()
+    telefono = _normalizar_telefono_tercero(telefono)
+    try:
+        cliente_id = int(cliente_id or 0)
+    except (TypeError, ValueError):
+        cliente_id = 0
+    if cliente_id:
+        row = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE id = %s LIMIT 1",
+            (cliente_id,)
+        ).fetchone()
+        if not row:
+            raise ValueError('Tercero no encontrado')
+        if nombre or telefono:
+            conn.execute(
+                "UPDATE terceros SET nombre = COALESCE(NULLIF(%s, ''), nombre), telefono = COALESCE(NULLIF(%s, ''), telefono) WHERE id = %s",
+                (nombre, telefono, row['id'])
+            )
+        return {
+            'id': row['id'],
+            'nombre': nombre or row['nombre'] or '',
+            'telefono': telefono or row['telefono'] or '',
+        }
+    if not nombre:
+        raise ValueError('Cliente requerido')
+    if telefono:
+        row = conn.execute(
+            "SELECT id, nombre, telefono FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+            (telefono,)
+        ).fetchone()
+        if row:
+            conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, row['id']))
+            return {'id': row['id'], 'nombre': nombre, 'telefono': telefono}
+    row = conn.execute(
+        "INSERT INTO terceros (nombre, telefono, fecha_creacion) VALUES (%s, %s, NOW()) RETURNING id",
+        (nombre, telefono or None)
+    ).fetchone()
+    return {'id': row['id'], 'nombre': nombre, 'telefono': telefono}
+
+
 def _proyecto_solar_dict(p, incluir_detalle=True):
     item = {
         'id': p['id'],
+        'cliente_id': p['cliente_id'] if 'cliente_id' in p.keys() else None,
         'cliente_nombre': p['cliente_nombre'] or '',
         'cliente_telefono': p['cliente_telefono'] or '',
         'ubicacion': p['ubicacion'] or '',
@@ -2684,7 +2733,7 @@ def api_tienda_proyectos_solares(slug):
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         filas = conn.execute("""
-            SELECT id, cliente_nombre, cliente_telefono, ubicacion, escenario, tipo_sistema,
+            SELECT id, cliente_id, cliente_nombre, cliente_telefono, ubicacion, escenario, tipo_sistema,
                    total, estado, token_publico, created_at, updated_at
             FROM proyectos_solares
             WHERE tienda_id = %s
@@ -2710,12 +2759,17 @@ def api_tienda_proyecto_solar_guardar(slug):
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         proyecto_id = data.get('id')
-        cliente = (data.get('cliente_nombre') or '').strip()
+        tercero = _resolver_tercero_cliente(
+            conn,
+            data.get('cliente_id'),
+            data.get('cliente_nombre') or '',
+            data.get('cliente_telefono') or ''
+        )
+        cliente = tercero['nombre']
+        telefono = tercero['telefono']
         presupuesto = data.get('presupuesto') or {}
         datos = data.get('datos_tecnicos') or {}
         total = float(presupuesto.get('total') or data.get('total') or 0)
-        if not cliente:
-            return jsonify({'ok': False, 'error': 'Cliente requerido'}), 400
         if proyecto_id:
             existente = conn.execute(
                 "SELECT token_publico FROM proyectos_solares WHERE id = %s AND tienda_id = %s",
@@ -2726,13 +2780,14 @@ def api_tienda_proyecto_solar_guardar(slug):
             token = existente['token_publico']
             conn.execute("""
                 UPDATE proyectos_solares
-                SET cliente_nombre=%s, cliente_telefono=%s, ubicacion=%s, escenario=%s,
+                SET cliente_id=%s, cliente_nombre=%s, cliente_telefono=%s, ubicacion=%s, escenario=%s,
                     tipo_sistema=%s, datos_tecnicos=%s, presupuesto=%s, total=%s,
                     estado=%s, updated_at=NOW()
                 WHERE id=%s AND tienda_id=%s
             """, (
+                tercero['id'],
                 cliente,
-                (data.get('cliente_telefono') or '').strip(),
+                telefono,
                 (data.get('ubicacion') or '').strip(),
                 (data.get('escenario') or '').strip(),
                 (data.get('tipo_sistema') or '').strip(),
@@ -2747,14 +2802,15 @@ def api_tienda_proyecto_solar_guardar(slug):
             token = secrets.token_urlsafe(18)
             row = conn.execute("""
                 INSERT INTO proyectos_solares
-                    (tienda_id, cliente_nombre, cliente_telefono, ubicacion, escenario,
+                    (tienda_id, cliente_id, cliente_nombre, cliente_telefono, ubicacion, escenario,
                      tipo_sistema, datos_tecnicos, presupuesto, total, estado, token_publico)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
                 tienda['id'],
+                tercero['id'],
                 cliente,
-                (data.get('cliente_telefono') or '').strip(),
+                telefono,
                 (data.get('ubicacion') or '').strip(),
                 (data.get('escenario') or '').strip(),
                 (data.get('tipo_sistema') or '').strip(),
@@ -2766,7 +2822,10 @@ def api_tienda_proyecto_solar_guardar(slug):
             )).fetchone()
             proyecto_id = row['id']
         conn.commit()
-        return jsonify({'ok': True, 'proyecto_id': proyecto_id, 'token_publico': token, 'url_publica': f'/solar/proyecto/{token}'})
+        return jsonify({'ok': True, 'proyecto_id': proyecto_id, 'cliente_id': tercero['id'], 'token_publico': token, 'url_publica': f'/solar/proyecto/{token}'})
+    except ValueError as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 400
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

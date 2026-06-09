@@ -278,12 +278,23 @@ def api_vendedor_buscar_terceros():
     q = request.args.get('q', '').strip()
     if len(q) < 2:
         return jsonify([])
+    q_digits = ''.join(filter(str.isdigit, q))
     try:
         conn = get_db_connection()
-        rows = conn.execute(
-            "SELECT id, nombre, telefono FROM terceros WHERE nombre ILIKE %s ORDER BY nombre LIMIT 8",
-            ('%' + q + '%',)
-        ).fetchall()
+        if q_digits:
+            rows = conn.execute("""
+                SELECT id, nombre, telefono
+                FROM terceros
+                WHERE nombre ILIKE %s
+                   OR REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') ILIKE %s
+                ORDER BY nombre
+                LIMIT 8
+            """, ('%' + q + '%', '%' + q_digits + '%')).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, nombre, telefono FROM terceros WHERE nombre ILIKE %s ORDER BY nombre LIMIT 8",
+                ('%' + q + '%',)
+            ).fetchall()
         conn.close()
         return jsonify([{'id': r['id'], 'nombre': r['nombre'] or '', 'telefono': r['telefono'] or ''} for r in rows])
     except Exception:

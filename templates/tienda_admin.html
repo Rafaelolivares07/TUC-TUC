@@ -214,9 +214,12 @@
                     </div>
                     <input id="ps-proyecto-id" type="hidden">
                     <input id="ps-token-publico" type="hidden">
+                    <input id="ps-cliente-id" type="hidden">
                     <div class="grid lg:grid-cols-2 gap-3 mb-4">
-                        <label class="text-xs font-semibold text-gray-500">Cliente
-                            <input id="ps-cliente" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nombre del cliente">
+                        <label class="text-xs font-semibold text-gray-500 relative">Cliente / tercero
+                            <input id="ps-cliente" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Buscar o escribir cliente">
+                            <div id="ps-tercero-dropdown" class="hidden absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-56 overflow-auto"></div>
+                            <span id="ps-tercero-estado" class="block mt-1 text-[11px] text-gray-400">Sin tercero seleccionado</span>
                         </label>
                         <label class="text-xs font-semibold text-gray-500">Telefono
                             <input id="ps-telefono" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Telefono">
@@ -1159,6 +1162,8 @@ let productos = [];
 let solarFichas = {};
 let fsResultados = [];
 let fsActivoIdx = -1;
+let psTerceroResultados = [];
+let psTerceroActivoIdx = -1;
 let proyectoSolarResultado = null;
 let cotizacionLineas = [];
 let pollingInterval = null;
@@ -1200,6 +1205,12 @@ function cambiarTab(tab) {
     if (tab === 'cotizaciones') { prepararCotizaciones(); cargarCotizaciones(); }
     if (tab === 'proyectos-solares') prepararProyectoSolar();
     if (tab === 'fichas-solares') prepararFichasSolares();
+}
+
+function htmlSeguro(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
 }
 
 function scrollNavTabs(delta) {
@@ -1942,9 +1953,105 @@ function seleccionarProductoFichaSolar(productoId) {
     document.getElementById('fs-buscar')?.scrollIntoView({behavior: 'smooth', block: 'center'});
 }
 
+function actualizarEstadoTerceroProyectoSolar() {
+    const estado = document.getElementById('ps-tercero-estado');
+    if (!estado) return;
+    const id = document.getElementById('ps-cliente-id')?.value || '';
+    estado.textContent = id ? `Tercero seleccionado #${id}` : 'Sin tercero seleccionado; se creara al guardar si escribes nombre y telefono';
+    estado.className = `block mt-1 text-[11px] ${id ? 'text-emerald-600' : 'text-gray-400'}`;
+}
+
+function cerrarDropdownTerceroProyectoSolar() {
+    const dd = document.getElementById('ps-tercero-dropdown');
+    if (dd) {
+        dd.classList.add('hidden');
+        dd.innerHTML = '';
+    }
+    psTerceroResultados = [];
+    psTerceroActivoIdx = -1;
+}
+
+function renderDropdownTerceroProyectoSolar() {
+    const dd = document.getElementById('ps-tercero-dropdown');
+    if (!dd) return;
+    if (!psTerceroResultados.length) {
+        cerrarDropdownTerceroProyectoSolar();
+        return;
+    }
+    dd.classList.remove('hidden');
+    dd.innerHTML = psTerceroResultados.map((t, i) => `
+        <button type="button" class="w-full text-left px-3 py-2 text-sm ${i === psTerceroActivoIdx ? 'bg-gray-100' : 'hover:bg-gray-50'}" onclick="seleccionarTerceroProyectoSolar(${i})">
+            <span class="block font-semibold text-gray-700">${htmlSeguro(t.nombre || 'Sin nombre')}</span>
+            <span class="block text-xs text-gray-400">${htmlSeguro(t.telefono || '')}</span>
+        </button>
+    `).join('');
+}
+
+function seleccionarTerceroProyectoSolar(idx) {
+    const t = psTerceroResultados[idx];
+    if (!t) return;
+    document.getElementById('ps-cliente-id').value = t.id || '';
+    document.getElementById('ps-cliente').value = t.nombre || '';
+    document.getElementById('ps-telefono').value = t.telefono || '';
+    actualizarEstadoTerceroProyectoSolar();
+    cerrarDropdownTerceroProyectoSolar();
+    document.getElementById('ps-ubicacion')?.focus();
+}
+
+async function buscarTercerosProyectoSolar(q) {
+    if ((q || '').trim().length < 2) {
+        cerrarDropdownTerceroProyectoSolar();
+        return;
+    }
+    try {
+        const r = await fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(q));
+        psTerceroResultados = await r.json();
+        psTerceroActivoIdx = psTerceroResultados.length ? 0 : -1;
+        renderDropdownTerceroProyectoSolar();
+    } catch(e) {
+        cerrarDropdownTerceroProyectoSolar();
+    }
+}
+
+function prepararBuscadorTerceroProyectoSolar() {
+    const input = document.getElementById('ps-cliente');
+    if (!input || input.dataset.terceroBound) return;
+    input.dataset.terceroBound = '1';
+    let timer = null;
+    input.addEventListener('input', () => {
+        document.getElementById('ps-cliente-id').value = '';
+        actualizarEstadoTerceroProyectoSolar();
+        clearTimeout(timer);
+        timer = setTimeout(() => buscarTercerosProyectoSolar(input.value), 180);
+    });
+    input.addEventListener('keydown', (e) => {
+        if (!psTerceroResultados.length) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            psTerceroActivoIdx = (psTerceroActivoIdx + 1) % psTerceroResultados.length;
+            renderDropdownTerceroProyectoSolar();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            psTerceroActivoIdx = (psTerceroActivoIdx - 1 + psTerceroResultados.length) % psTerceroResultados.length;
+            renderDropdownTerceroProyectoSolar();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            seleccionarTerceroProyectoSolar(psTerceroActivoIdx);
+        } else if (e.key === 'Escape') {
+            cerrarDropdownTerceroProyectoSolar();
+        }
+    });
+    document.addEventListener('click', (e) => {
+        const dd = document.getElementById('ps-tercero-dropdown');
+        if (dd && !dd.contains(e.target) && e.target !== input) cerrarDropdownTerceroProyectoSolar();
+    });
+    actualizarEstadoTerceroProyectoSolar();
+}
+
 function prepararProyectoSolar() {
     if (!productos.length) cargarProductos();
     else renderSelectoresProyectoSolar();
+    prepararBuscadorTerceroProyectoSolar();
     cargarProyectosSolares();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
@@ -1972,7 +2079,7 @@ function prepararProyectoSolar() {
 }
 
 function limpiarProyectoSolar() {
-    ['ps-proyecto-id','ps-token-publico','ps-cliente','ps-telefono','ps-ubicacion','ps-consumo-mensual','ps-factor'].forEach(id => {
+    ['ps-proyecto-id','ps-token-publico','ps-cliente-id','ps-cliente','ps-telefono','ps-ubicacion','ps-consumo-mensual','ps-factor'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -1989,6 +2096,8 @@ function limpiarProyectoSolar() {
     proyectoSolarResultado = null;
     const link = document.getElementById('ps-link-publico');
     if (link) { link.classList.add('hidden'); link.href = '#'; }
+    actualizarEstadoTerceroProyectoSolar();
+    cerrarDropdownTerceroProyectoSolar();
     prepararProyectoSolar();
     calcularProyectoSolar();
 }
@@ -2275,6 +2384,7 @@ function cuerpoProyectoSolar() {
     calcularProyectoSolar();
     return {
         id: document.getElementById('ps-proyecto-id').value || null,
+        cliente_id: Number(document.getElementById('ps-cliente-id').value || 0) || null,
         cliente_nombre: document.getElementById('ps-cliente').value.trim(),
         cliente_telefono: document.getElementById('ps-telefono').value.trim(),
         ubicacion: document.getElementById('ps-ubicacion').value.trim(),
@@ -2320,6 +2430,7 @@ function cuerpoProyectoSolar() {
 async function guardarProyectoSolar() {
     const body = cuerpoProyectoSolar();
     if (!body.cliente_nombre) return toast('Cliente requerido', true);
+    if (!body.cliente_id && !body.cliente_telefono) return toast('Selecciona el tercero o escribe telefono para crearlo', true);
     if (!body.presupuesto.lineas.length) return toast('Calcula un proyecto con equipos', true);
     try {
         const r = await fetch(BASE + '/proyecto-solar', {
@@ -2330,7 +2441,9 @@ async function guardarProyectoSolar() {
         const data = await r.json();
         if (!data.ok) return toast(data.error || 'Error', true);
         document.getElementById('ps-proyecto-id').value = data.proyecto_id;
+        document.getElementById('ps-cliente-id').value = data.cliente_id || '';
         document.getElementById('ps-token-publico').value = data.token_publico || '';
+        actualizarEstadoTerceroProyectoSolar();
         actualizarLinkPublicoProyecto(data.url_publica);
         toast('Proyecto guardado');
         cargarProyectosSolares();
@@ -2382,8 +2495,10 @@ async function abrirProyectoSolar(id) {
         const d = p.datos_tecnicos || {};
         document.getElementById('ps-proyecto-id').value = p.id;
         document.getElementById('ps-token-publico').value = p.token_publico || '';
+        document.getElementById('ps-cliente-id').value = p.cliente_id || '';
         document.getElementById('ps-cliente').value = p.cliente_nombre || '';
         document.getElementById('ps-telefono').value = p.cliente_telefono || '';
+        actualizarEstadoTerceroProyectoSolar();
         document.getElementById('ps-ubicacion').value = p.ubicacion || '';
         document.getElementById('ps-escenario').value = p.escenario || '';
         document.getElementById('ps-tipo-sistema').value = p.tipo_sistema || 'hibrido';

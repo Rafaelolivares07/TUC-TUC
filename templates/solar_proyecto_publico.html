@@ -58,7 +58,7 @@
 
         <section class="bg-white border border-gray-200 rounded-2xl p-5 mt-5 shadow-sm">
             <div class="flex items-center justify-between gap-4 mb-4">
-                <h2 class="text-xl font-extrabold">Presupuesto</h2>
+                <h2 class="text-xl font-extrabold">Propuesta</h2>
                 <p class="text-2xl font-extrabold">{{ "${:,.0f}".format(proyecto.total or 0).replace(",", ".") }}</p>
             </div>
             <div class="divide-y divide-gray-100">
@@ -66,9 +66,8 @@
                 <div class="py-3 flex justify-between gap-4">
                     <div>
                         <p class="font-bold">{{ item.nombre }}</p>
-                        <p class="text-sm text-gray-400">{{ item.etiqueta }} · {{ item.cantidad }} x {{ "${:,.0f}".format(item.precio_unitario or 0).replace(",", ".") }}</p>
+                        <p class="text-sm text-gray-400">{{ item.etiqueta }} · Cantidad: {{ item.cantidad }}</p>
                     </div>
-                    <p class="font-bold">{{ "${:,.0f}".format(item.total or 0).replace(",", ".") }}</p>
                 </div>
                 {% endfor %}
             </div>

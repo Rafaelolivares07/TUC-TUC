@@ -206,7 +206,7 @@
         {% if tienda.slug == 'home-solar-panel' %}
         <!-- ====== TAB: PROYECTOS SOLARES ====== -->
         <div id="panel-proyectos-solares" class="p-4 md:p-6 hidden">
-            <div class="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5">
+            <div class="space-y-5">
                 <div class="bg-gray-50 rounded-xl p-4">
                     <div class="flex items-center justify-between gap-3 mb-4">
                         <h3 class="font-bold text-gray-700">Proyecto solar</h3>
@@ -297,31 +297,38 @@
                     </div>
                 </div>
 
-                <div class="bg-white border border-gray-200 rounded-xl p-4 h-fit">
-                    <h3 class="font-bold text-gray-700 mb-4">Resultado inicial</h3>
-                    <div class="space-y-3 text-sm">
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo diario de diseno</span><strong id="ps-res-diario">0 kWh</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo fuera de generacion util</span><strong id="ps-res-fuera">0 Wh</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Bateria nominal requerida</span><strong id="ps-res-bateria">0 kWh</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Pico estimado</span><strong id="ps-res-pico">0 W</strong></div>
-                        <p id="ps-res-pico-nota" class="text-xs text-gray-400 -mt-2"></p>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Energia diaria a producir</span><strong id="ps-res-producir">0 kWh</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel">550 W</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles">0</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref">---</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias">0</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-gray-500">Inversor seleccionado</span><strong id="ps-res-inversor">---</strong></div>
-                        <div class="border-t border-gray-100 pt-3 mt-3">
-                            <div class="flex justify-between gap-3"><span class="text-gray-500">Total venta equipos</span><strong id="ps-res-total">$0</strong></div>
-                            <div class="flex justify-between gap-3"><span class="text-gray-500">Costo equipos</span><strong id="ps-res-costo">$0</strong></div>
-                            <div class="flex justify-between gap-3"><span class="text-gray-500">Margen equipos</span><strong id="ps-res-margen">$0</strong></div>
-                        </div>
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <h3 class="font-bold text-gray-700">Resultado tecnico</h3>
+                        <button onclick="calcularProyectoSolar()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-xs font-bold">Calcular</button>
+                    </div>
+                    <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Consumo diario de diseno</span><strong id="ps-res-diario" class="block text-gray-800 mt-1">0 kWh</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Fuera de generacion util</span><strong id="ps-res-fuera" class="block text-gray-800 mt-1">0 Wh</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Bateria nominal requerida</span><strong id="ps-res-bateria" class="block text-gray-800 mt-1">0 kWh</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Pico estimado</span><strong id="ps-res-pico" class="block text-gray-800 mt-1">0 W</strong><p id="ps-res-pico-nota" class="text-xs text-gray-400 mt-1"></p></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Energia diaria a producir</span><strong id="ps-res-producir" class="block text-gray-800 mt-1">0 kWh</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel" class="block text-gray-800 mt-1">550 W</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles" class="block text-gray-800 mt-1">0</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias" class="block text-gray-800 mt-1">0</strong></div>
+                    </div>
+                    <div class="grid lg:grid-cols-2 gap-3 mt-3 text-sm">
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref" class="block text-gray-800 mt-1">---</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Inversor seleccionado</span><strong id="ps-res-inversor" class="block text-gray-800 mt-1">---</strong></div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <h3 class="font-bold text-gray-700 mb-4">Presupuesto interno</h3>
+                    <div class="grid md:grid-cols-3 gap-3 text-sm mb-4">
+                        <div class="bg-emerald-50 rounded-xl p-3"><span class="text-emerald-700">Total venta equipos</span><strong id="ps-res-total" class="block text-gray-900 mt-1">$0</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Costo equipos</span><strong id="ps-res-costo" class="block text-gray-900 mt-1">$0</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Margen equipos</span><strong id="ps-res-margen" class="block text-gray-900 mt-1">$0</strong></div>
                     </div>
                     <div id="ps-lineas-presupuesto" class="mt-4 space-y-2 text-sm"></div>
-                    <div class="grid gap-2 mt-5">
-                        <button onclick="calcularProyectoSolar()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
-                        <button onclick="guardarProyectoSolar()" class="w-full bg-gray-900 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar proyecto</button>
-                        <a id="ps-link-publico" href="#" target="_blank" class="hidden w-full text-center border border-gray-200 hover:bg-gray-50 rounded-xl px-5 py-3 text-sm font-bold text-gray-700">Ver pagina del cliente</a>
+                    <div class="flex flex-col sm:flex-row gap-2 mt-5">
+                        <button onclick="guardarProyectoSolar()" class="bg-gray-900 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar proyecto</button>
+                        <a id="ps-link-publico" href="#" target="_blank" class="hidden text-center border border-gray-200 hover:bg-gray-50 rounded-xl px-5 py-3 text-sm font-bold text-gray-700">Ver pagina del cliente</a>
                     </div>
                 </div>
             </div>
@@ -2388,20 +2395,37 @@ function renderLineasPresupuestoSolar(lineas) {
         cont.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">Sin equipos para presupuestar todavia</p>';
         return;
     }
-    cont.innerHTML = lineas.map(l => {
+    cont.innerHTML = `<div class="overflow-x-auto border border-gray-100 rounded-xl">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500">
+                <tr>
+                    <th class="text-left p-3">Equipo</th>
+                    <th class="text-right p-3">Cant.</th>
+                    <th class="text-right p-3">Precio und.</th>
+                    <th class="text-right p-3">Venta</th>
+                    <th class="text-right p-3">Costo und.</th>
+                    <th class="text-right p-3">Costo</th>
+                    <th class="text-right p-3">Margen</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+    ` + lineas.map(l => {
         const total = Number(l.cantidad || 0) * Number(l.producto.precio || 0);
         const costo = Number(l.cantidad || 0) * Number(l.producto.costo || 0);
         const margen = total - costo;
-        return `<div class="border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
-            <div class="flex justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="font-semibold text-gray-700 truncate">${l.etiqueta}: ${l.producto.nombre}</p>
-                    <p class="text-xs text-gray-400">${fmt(l.cantidad)} x ${money(l.producto.precio)} | costo ${money(l.producto.costo || 0)} | margen ${money(margen)}</p>
-                </div>
-                <strong class="text-gray-800">${money(total)}</strong>
-            </div>
-        </div>`;
-    }).join('');
+        return `<tr>
+            <td class="p-3 min-w-[260px]">
+                <p class="font-semibold text-gray-700">${l.etiqueta}: ${l.producto.nombre}</p>
+                <p class="text-xs text-gray-400">${l.producto.categoria || ''}</p>
+            </td>
+            <td class="p-3 text-right">${fmt(l.cantidad)}</td>
+            <td class="p-3 text-right">${money(l.producto.precio || 0)}</td>
+            <td class="p-3 text-right font-semibold text-gray-800">${money(total)}</td>
+            <td class="p-3 text-right">${money(l.producto.costo || 0)}</td>
+            <td class="p-3 text-right">${money(costo)}</td>
+            <td class="p-3 text-right font-semibold ${margen >= 0 ? 'text-emerald-700' : 'text-red-600'}">${money(margen)}</td>
+        </tr>`;
+    }).join('') + `</tbody></table></div>`;
 }
 
 function cuerpoProyectoSolar() {

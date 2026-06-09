@@ -239,7 +239,7 @@
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Factura electrica</p>
-                        <div class="grid md:grid-cols-3 gap-2">
+                        <div class="grid md:grid-cols-4 gap-2">
                             <label class="text-xs font-semibold text-gray-500">Consumo maximo mensual kWh
                                 <input id="ps-consumo-mensual" type="number" min="0" step="0.01" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 100">
                             </label>
@@ -248,6 +248,9 @@
                             </label>
                             <label class="text-xs font-semibold text-gray-500">Cobertura %
                                 <input id="ps-cobertura" type="number" min="1" max="100" step="1" value="100" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 100">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Horas concentracion
+                                <input id="ps-horas-concentracion" type="number" min="1" max="24" step="0.5" value="4" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 4">
                             </label>
                         </div>
                         <div class="grid md:grid-cols-[minmax(0,1fr)_150px] gap-2 mt-2">
@@ -301,6 +304,7 @@
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Consumo fuera de generacion util</span><strong id="ps-res-fuera">0 Wh</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Bateria nominal requerida</span><strong id="ps-res-bateria">0 kWh</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Pico estimado</span><strong id="ps-res-pico">0 W</strong></div>
+                        <p id="ps-res-pico-nota" class="text-xs text-gray-400 -mt-2"></p>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Energia diaria a producir</span><strong id="ps-res-producir">0 kWh</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel">550 W</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles">0</strong></div>
@@ -2056,7 +2060,7 @@ function prepararProyectoSolar() {
     cargarProyectosSolares();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
-    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
+    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-horas-concentracion','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.calcBound) {
             el.dataset.calcBound = '1';
@@ -2086,6 +2090,8 @@ function limpiarProyectoSolar() {
     });
     const cobertura = document.getElementById('ps-cobertura');
     if (cobertura) cobertura.value = 100;
+    const horasConcentracion = document.getElementById('ps-horas-concentracion');
+    if (horasConcentracion) horasConcentracion.value = 4;
     const fueraPct = document.getElementById('ps-fuera-pct');
     if (fueraPct) fueraPct.value = 60;
     const escenario = document.getElementById('ps-escenario');
@@ -2282,6 +2288,7 @@ function calcularProyectoSolar() {
     const consumoMes = Number(document.getElementById('ps-consumo-mensual')?.value || 0);
     const factor = Number(document.getElementById('ps-factor')?.value || 0);
     const cobertura = Number(document.getElementById('ps-cobertura')?.value || 100) / 100;
+    const horasConcentracion = Math.max(1, Number(document.getElementById('ps-horas-concentracion')?.value || 4));
     const fueraPct = Number(document.getElementById('ps-fuera-pct')?.value || 0) / 100;
     const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || 'on_grid';
     const bateriaSel = document.getElementById('ps-bateria-producto');
@@ -2306,6 +2313,9 @@ function calcularProyectoSolar() {
     });
     const fueraWhPorPct = consumoDiario * fueraPct * 1000;
     const fueraWh = fueraPct > 0 ? fueraWhPorPct : fueraWhPorCargas;
+    const picoPorConsumoW = consumoDiario > 0 ? (consumoDiario / horasConcentracion) * 1000 : 0;
+    const picoEstimadoW = picoW > 0 ? picoW : picoPorConsumoW;
+    const picoMetodo = picoW > 0 ? 'cargas' : 'consumo_concentrado';
     const usaBateria = ['hibrido', 'off_grid', 'respaldo'].includes(tipoSistema);
     const bateriaNominalKwh = usaBateria ? (fueraWh / 1000) / utilidadBateria : 0;
     const energiaRecargaKwh = usaBateria ? bateriaNominalKwh : 0;
@@ -2324,9 +2334,8 @@ function calcularProyectoSolar() {
     }
     const bateriaKwh = Number(bateriaElegida?.kwh || 0);
     const bateriasEstimadas = bateriaKwh > 0 && bateriaNominalKwh > 0 ? Math.ceil(bateriaNominalKwh / bateriaKwh) : 0;
-    const potenciaPanelesW = panelW * paneles;
     const inversores = productosInversorSolar();
-    const potenciaObjetivoInversor = Math.max(picoW, potenciaPanelesW * 0.8);
+    const potenciaObjetivoInversor = picoEstimadoW;
     const inversorManual = inversorSel?.dataset.manual === '1';
     if (!inversorManual && inversores.length) {
         const sugerido = inversores.find(i => i.watts >= potenciaObjetivoInversor) || inversores[inversores.length - 1];
@@ -2341,14 +2350,18 @@ function calcularProyectoSolar() {
     if (inversorProducto) lineas.push({producto: inversorProducto, cantidad: 1, etiqueta: 'Inversor'});
     const totalEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
     proyectoSolarResultado = {
-        lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW, energiaProducir,
-        panelW, paneles, bateriasEstimadas, totalEquipos,
+        lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW: picoEstimadoW, energiaProducir,
+        panelW, paneles, bateriasEstimadas, totalEquipos, horasConcentracion, picoMetodo,
         escenario: document.getElementById('ps-escenario')?.value || '',
     };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
     document.getElementById('ps-res-fuera').textContent = `${fmt(fueraWh)} Wh`;
     document.getElementById('ps-res-bateria').textContent = `${fmt(bateriaNominalKwh)} kWh`;
-    document.getElementById('ps-res-pico').textContent = `${fmt(picoW)} W`;
+    document.getElementById('ps-res-pico').textContent = `${fmt(picoEstimadoW)} W`;
+    const picoNota = document.getElementById('ps-res-pico-nota');
+    if (picoNota) picoNota.textContent = picoMetodo === 'cargas'
+        ? 'Calculado con los equipos/cargas digitadas.'
+        : `Estimado con consumo diario concentrado en ${fmt(horasConcentracion)} horas.`;
     document.getElementById('ps-res-producir').textContent = `${fmt(energiaProducir)} kWh`;
     document.getElementById('ps-res-panel').textContent = `${fmt(panelW)} W`;
     document.getElementById('ps-res-paneles').textContent = paneles || '0';
@@ -2395,6 +2408,7 @@ function cuerpoProyectoSolar() {
             consumo_mensual_kwh: Number(document.getElementById('ps-consumo-mensual').value || 0),
             factor_solar: Number(document.getElementById('ps-factor').value || 0),
             cobertura_pct: Number(document.getElementById('ps-cobertura').value || 100),
+            horas_concentracion: Number(document.getElementById('ps-horas-concentracion').value || 4),
             fuera_generacion_pct: Number(document.getElementById('ps-fuera-pct').value || 0),
             panel_producto_id: Number(document.getElementById('ps-panel-producto').value || 0),
             tipo_bateria: document.getElementById('ps-tipo-bateria').value,
@@ -2405,6 +2419,8 @@ function cuerpoProyectoSolar() {
                 fuera_generacion_wh: proyectoSolarResultado?.fueraWh || 0,
                 bateria_nominal_kwh: proyectoSolarResultado?.bateriaNominalKwh || 0,
                 pico_w: proyectoSolarResultado?.picoW || 0,
+                pico_metodo: proyectoSolarResultado?.picoMetodo || '',
+                horas_concentracion: proyectoSolarResultado?.horasConcentracion || 0,
                 energia_producir_kwh: proyectoSolarResultado?.energiaProducir || 0,
                 panel_w: proyectoSolarResultado?.panelW || 0,
                 paneles: proyectoSolarResultado?.paneles || 0,
@@ -2506,6 +2522,7 @@ async function abrirProyectoSolar(id) {
         document.getElementById('ps-consumo-mensual').value = d.consumo_mensual_kwh || '';
         document.getElementById('ps-factor').value = d.factor_solar || '';
         document.getElementById('ps-cobertura').value = d.cobertura_pct || 100;
+        document.getElementById('ps-horas-concentracion').value = d.horas_concentracion || d.resultado?.horas_concentracion || 4;
         document.getElementById('ps-fuera-pct').value = d.fuera_generacion_pct || 60;
         document.getElementById('ps-tipo-bateria').value = d.tipo_bateria || 'lifepo4';
         renderSelectoresProyectoSolar();
@@ -2514,7 +2531,7 @@ async function abrirProyectoSolar(id) {
         if (d.inversor_producto_id) {
             const inv = document.getElementById('ps-inversor-producto');
             inv.value = d.inversor_producto_id;
-            inv.dataset.manual = '1';
+            inv.dataset.manual = '';
         }
         actualizarLinkPublicoProyecto(p.url_publica);
         calcularProyectoSolar();

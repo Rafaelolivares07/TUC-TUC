@@ -337,6 +337,11 @@
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Ahorro anual estimado</span><strong id="ps-res-ahorro-anual" class="block text-gray-800 mt-1">$0</strong></div>
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Retorno estimado</span><strong id="ps-res-retorno" class="block text-gray-800 mt-1">---</strong></div>
                     </div>
+                    <div class="grid md:grid-cols-3 gap-3 mt-3 text-sm">
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Paneles vida / kWh</span><strong id="ps-res-vida-paneles" class="block text-gray-800 mt-1">---</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Baterias vida / kWh</span><strong id="ps-res-vida-baterias" class="block text-gray-800 mt-1">---</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Inversor vida / kWh</span><strong id="ps-res-vida-inversor" class="block text-gray-800 mt-1">---</strong></div>
+                    </div>
                     <div class="grid lg:grid-cols-2 gap-3 mt-3 text-sm">
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref" class="block text-gray-800 mt-1">---</strong></div>
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Inversor seleccionado</span><strong id="ps-res-inversor" class="block text-gray-800 mt-1">---</strong></div>
@@ -2415,6 +2420,12 @@ function calcularProyectoSolar() {
     const totalEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
     const costoEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.costo || 0) * Number(l.cantidad || 0), 0);
     const margenEquipos = totalEquipos - costoEquipos;
+    const ventaPorEtiqueta = etiqueta => lineas
+        .filter(l => l.etiqueta === etiqueta)
+        .reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
+    const ventaPaneles = ventaPorEtiqueta('Paneles');
+    const ventaBaterias = ventaPorEtiqueta('Baterias');
+    const ventaInversor = ventaPorEtiqueta('Inversor');
     const areaPanelM2 = Number(panelDatos.ancho_mm || 0) > 0 && Number(panelDatos.alto_mm || 0) > 0
         ? (Number(panelDatos.ancho_mm) * Number(panelDatos.alto_mm)) / 1000000
         : 0;
@@ -2428,12 +2439,16 @@ function calcularProyectoSolar() {
     const kwhVidaPaneles = energiaProducir * 365 * vidaPaneles;
     const kwhVidaBaterias = (fueraWh / 1000) * 365 * vidaBaterias;
     const kwhVidaInversor = consumoDiario * 365 * vidaInversor;
+    const costoKwhPaneles = kwhVidaPaneles > 0 ? ventaPaneles / kwhVidaPaneles : 0;
+    const costoKwhBaterias = kwhVidaBaterias > 0 ? ventaBaterias / kwhVidaBaterias : 0;
+    const costoKwhInversor = kwhVidaInversor > 0 ? ventaInversor / kwhVidaInversor : 0;
     proyectoSolarResultado = {
         lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW: picoEstimadoW, energiaProducir,
         panelW, paneles, bateriasEstimadas, totalEquipos, costoEquipos, margenEquipos, horasConcentracion, picoMetodo,
         areaPanelM2, areaNetaM2, areaRecomendadaM2, areaHolguraPct, valorKwh, ahorroAnual, retornoAnios,
         vidaPaneles, vidaBaterias, vidaInversor, vidaReferencia, kwhVidaReferencia, costoKwhInversion,
         kwhVidaPaneles, kwhVidaBaterias, kwhVidaInversor,
+        costoKwhPaneles, costoKwhBaterias, costoKwhInversor,
         escenario: document.getElementById('ps-escenario')?.value || '',
     };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
@@ -2451,6 +2466,9 @@ function calcularProyectoSolar() {
     document.getElementById('ps-res-area-total').textContent = `${fmt(areaRecomendadaM2)} m2`;
     document.getElementById('ps-res-ahorro-anual').textContent = money(ahorroAnual);
     document.getElementById('ps-res-retorno').textContent = retornoAnios > 0 ? `${fmt(retornoAnios)} anos` : '---';
+    document.getElementById('ps-res-vida-paneles').textContent = kwhVidaPaneles > 0 ? `${fmt(vidaPaneles)} anos / ${money(costoKwhPaneles)} kWh` : '---';
+    document.getElementById('ps-res-vida-baterias').textContent = kwhVidaBaterias > 0 ? `${fmt(vidaBaterias)} anos / ${money(costoKwhBaterias)} kWh` : '---';
+    document.getElementById('ps-res-vida-inversor').textContent = kwhVidaInversor > 0 ? `${fmt(vidaInversor)} anos / ${money(costoKwhInversor)} kWh` : '---';
     document.getElementById('ps-res-bateria-ref').textContent = bateriaElegida ? bateriaElegida.nombre.replace(/\s*\([^)]*\)\s*$/, '') : '---';
     document.getElementById('ps-res-baterias').textContent = bateriasEstimadas || '0';
     document.getElementById('ps-res-inversor').textContent = inversorProducto ? inversorProducto.nombre : '---';
@@ -2555,6 +2573,9 @@ function cuerpoProyectoSolar() {
                 kwh_vida_paneles: proyectoSolarResultado?.kwhVidaPaneles || 0,
                 kwh_vida_baterias: proyectoSolarResultado?.kwhVidaBaterias || 0,
                 kwh_vida_inversor: proyectoSolarResultado?.kwhVidaInversor || 0,
+                costo_kwh_paneles: proyectoSolarResultado?.costoKwhPaneles || 0,
+                costo_kwh_baterias: proyectoSolarResultado?.costoKwhBaterias || 0,
+                costo_kwh_inversor: proyectoSolarResultado?.costoKwhInversor || 0,
             }
         },
         presupuesto: {

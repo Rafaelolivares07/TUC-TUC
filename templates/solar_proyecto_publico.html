@@ -140,10 +140,34 @@
             <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
                 <h2 class="text-xl font-black">Retorno estimado</h2>
                 <div class="space-y-3 mt-4 text-sm">
-                    <div class="flex justify-between gap-3"><span class="text-gray-500">Valor kWh actual usado</span><strong>{{ "${:,.0f}".format(res.valor_kwh_actual or datos.valor_kwh_actual or 0).replace(",", ".") }}</strong></div>
-                    <div class="flex justify-between gap-3"><span class="text-gray-500">Ahorro anual estimado</span><strong>{{ "${:,.0f}".format(res.ahorro_anual or 0).replace(",", ".") }}</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Valor kWh actual usado</span><strong>{% if res.valor_kwh_actual or datos.valor_kwh_actual %}{{ "${:,.0f}".format(res.valor_kwh_actual or datos.valor_kwh_actual).replace(",", ".") }}{% else %}Por definir{% endif %}</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Ahorro anual estimado</span><strong>{% if res.ahorro_anual %}{{ "${:,.0f}".format(res.ahorro_anual).replace(",", ".") }}{% else %}Por calcular{% endif %}</strong></div>
                     <div class="flex justify-between gap-3"><span class="text-gray-500">Recuperacion estimada</span><strong>{% if res.retorno_anios %}{{ "%.1f"|format(res.retorno_anios) }} anos{% else %}Por calcular{% endif %}</strong></div>
                     <div class="flex justify-between gap-3"><span class="text-gray-500">Costo kWh de inversion</span><strong>{{ "${:,.0f}".format(res.costo_kwh_inversion or 0).replace(",", ".") }}</strong></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-5 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+            <h2 class="text-xl font-black">Vida util estimada de los equipos</h2>
+            <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <p class="text-gray-500">Paneles solares</p>
+                    <strong class="block text-gray-800 mt-1">{{ res.vida_paneles_anios or datos.vida_paneles_anios or 0 }} anos</strong>
+                    <p class="text-xs text-gray-500 mt-2">{{ "%.0f"|format(res.kwh_vida_paneles or 0) }} kWh estimados</p>
+                    <p class="text-xs font-bold text-gray-700 mt-1">{{ "${:,.0f}".format(res.costo_kwh_paneles or 0).replace(",", ".") }} por kWh</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <p class="text-gray-500">Baterias</p>
+                    <strong class="block text-gray-800 mt-1">{{ res.vida_baterias_anios or datos.vida_baterias_anios or 0 }} anos</strong>
+                    <p class="text-xs text-gray-500 mt-2">{{ "%.0f"|format(res.kwh_vida_baterias or 0) }} kWh estimados</p>
+                    <p class="text-xs font-bold text-gray-700 mt-1">{{ "${:,.0f}".format(res.costo_kwh_baterias or 0).replace(",", ".") }} por kWh</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-4">
+                    <p class="text-gray-500">Inversor</p>
+                    <strong class="block text-gray-800 mt-1">{{ res.vida_inversor_anios or datos.vida_inversor_anios or 0 }} anos</strong>
+                    <p class="text-xs text-gray-500 mt-2">{{ "%.0f"|format(res.kwh_vida_inversor or 0) }} kWh estimados</p>
+                    <p class="text-xs font-bold text-gray-700 mt-1">{{ "${:,.0f}".format(res.costo_kwh_inversor or 0).replace(",", ".") }} por kWh</p>
                 </div>
             </div>
         </section>

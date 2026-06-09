@@ -46,7 +46,7 @@
                     <tr class="border-b"><td class="py-2 text-gray-500">Factor solar</td><td class="py-2 text-right font-bold">{{ datos.factor_solar or 0 }}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Consumo fuera de generacion util</td><td class="py-2 text-right font-bold">{{ datos.fuera_generacion_pct or 0 }}%</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Horas de concentracion usadas</td><td class="py-2 text-right font-bold">{{ datos.horas_concentracion or res.horas_concentracion or 4 }}</td></tr>
-                    <tr class="border-b"><td class="py-2 text-gray-500">Valor kWh actual</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(datos.valor_kwh_actual or res.valor_kwh_actual or 0).replace(",", ".") }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Valor kWh actual</td><td class="py-2 text-right font-bold">{% if datos.valor_kwh_actual or res.valor_kwh_actual %}{{ "${:,.0f}".format(datos.valor_kwh_actual or res.valor_kwh_actual).replace(",", ".") }}{% else %}Por definir{% endif %}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Holgura de area para mantenimiento</td><td class="py-2 text-right font-bold">{{ datos.area_holgura_pct or res.area_holgura_pct or 0 }}%</td></tr>
                 </tbody>
             </table>
@@ -63,9 +63,28 @@
                     <tr class="border-b"><td class="py-2 text-gray-500">Potencia estimada inversor</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.pico_w or 0) }} W</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Area neta de paneles</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.area_neta_m2 or 0) }} m2</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Area recomendada con mantenimiento</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.area_recomendada_m2 or 0) }} m2</td></tr>
-                    <tr class="border-b"><td class="py-2 text-gray-500">Ahorro anual estimado</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.ahorro_anual or 0).replace(",", ".") }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Ahorro anual estimado</td><td class="py-2 text-right font-bold">{% if res.ahorro_anual %}{{ "${:,.0f}".format(res.ahorro_anual).replace(",", ".") }}{% else %}Por calcular{% endif %}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Retorno estimado</td><td class="py-2 text-right font-bold">{% if res.retorno_anios %}{{ "%.1f"|format(res.retorno_anios) }} anos{% else %}Por calcular{% endif %}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Costo kWh inversion</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.costo_kwh_inversion or 0).replace(",", ".") }}</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="mt-7">
+            <h2 class="text-xl font-black">Vida util y costo por kWh</h2>
+            <table class="w-full mt-3 text-sm border-collapse">
+                <thead>
+                    <tr class="border-b text-gray-500">
+                        <th class="py-2 text-left">Equipo</th>
+                        <th class="py-2 text-right">Vida util</th>
+                        <th class="py-2 text-right">kWh estimados</th>
+                        <th class="py-2 text-right">Costo por kWh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Paneles solares</td><td class="py-2 text-right font-bold">{{ res.vida_paneles_anios or datos.vida_paneles_anios or 0 }} anos</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.kwh_vida_paneles or 0) }}</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.costo_kwh_paneles or 0).replace(",", ".") }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Baterias</td><td class="py-2 text-right font-bold">{{ res.vida_baterias_anios or datos.vida_baterias_anios or 0 }} anos</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.kwh_vida_baterias or 0) }}</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.costo_kwh_baterias or 0).replace(",", ".") }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Inversor</td><td class="py-2 text-right font-bold">{{ res.vida_inversor_anios or datos.vida_inversor_anios or 0 }} anos</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.kwh_vida_inversor or 0) }}</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.costo_kwh_inversor or 0).replace(",", ".") }}</td></tr>
                 </tbody>
             </table>
         </section>

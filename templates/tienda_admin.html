@@ -1887,7 +1887,8 @@ function sugerirFichaSolarDesdeNombre() {
         if (w) w *= 1000;
         else w = num(/(\d+(?:[.,]\d+)?)\s*W/i);
         const banco = num(/DC\s*(\d+(?:[.,]\d+)?)\s*V/i) || num(/(\d+(?:[.,]\d+)?)\s*V/i);
-        setFichaCampo('tipo_inversor', nombreUp.includes('HYBRID') || nombreUp.includes('HIBRIDO') ? 'Hibrido' : nombreUp.includes('ON-GRID') || nombreUp.includes('ON GRID') ? 'On-grid' : nombreUp.includes('OFF-GRID') || nombreUp.includes('OFF GRID') ? 'Off-grid' : '');
+        const esMustHibrido = nombreUp.includes('MUST') && (nombreUp.includes('PV') || nombreUp.includes('MPPT') || nombreUp.includes('CARGADOR') || nombreUp.includes('OFF-GRID') || nombreUp.includes('OFF GRID'));
+        setFichaCampo('tipo_inversor', nombreUp.includes('HYBRID') || nombreUp.includes('HIBRIDO') || esMustHibrido ? 'Hibrido' : nombreUp.includes('ON-GRID') || nombreUp.includes('ON GRID') ? 'On-grid' : nombreUp.includes('OFF-GRID') || nombreUp.includes('OFF GRID') ? 'Off-grid' : '');
         setFichaCampo('potencia_nominal_w', w ? Math.round(w) : '');
         setFichaCampo('voltaje_banco_bateria_v', banco);
         setFichaCampo('numero_mppt', nombreUp.includes('TWO-MPPT') ? 2 : '');

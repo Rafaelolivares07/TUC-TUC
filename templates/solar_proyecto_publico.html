@@ -15,10 +15,11 @@
     </style>
 </head>
 <body class="min-h-screen" style="--accent: {{ tienda.color_accion or '#e11d48' }};">
-    {% set datos = proyecto.datos_tecnicos or {} %}
-    {% set res = datos.resultado or {} %}
-    {% set presupuesto = proyecto.presupuesto or {} %}
-    {% set lineas = presupuesto.lineas or [] %}
+        {% set datos = proyecto.datos_tecnicos or {} %}
+        {% set res = datos.resultado or {} %}
+        {% set conexion = res.conexion or {} %}
+        {% set presupuesto = proyecto.presupuesto or {} %}
+        {% set lineas = presupuesto.lineas or [] %}
     {% set header_img = tienda.imagen_header or tienda.imagen_header_movil %}
     {% set total_fmt = "${:,.0f}".format(proyecto.total or 0).replace(",", ".") %}
 
@@ -169,6 +170,15 @@
                     <p class="text-xs text-gray-500 mt-2">{{ "%.0f"|format(res.kwh_vida_inversor or 0) }} kWh estimados</p>
                     <p class="text-xs font-bold text-gray-700 mt-1">{{ "${:,.0f}".format(res.costo_kwh_inversor or 0).replace(",", ".") }} por kWh</p>
                 </div>
+            </div>
+        </section>
+
+        <section class="mt-5 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+            <h2 class="text-xl font-black">Conexion sugerida</h2>
+            <div class="space-y-3 mt-4 text-sm text-gray-600">
+                <p>{{ conexion.paneles.texto if conexion.paneles else 'Paneles: conexion pendiente por validar con fichas tecnicas completas.' }}</p>
+                <p>{{ conexion.baterias.texto if conexion.baterias else 'Baterias: conexion pendiente por validar con fichas tecnicas completas.' }}</p>
+                <p class="text-xs text-gray-400">Esta sugerencia es preliminar. La conexion final se valida con visita tecnica, temperatura del sitio, protecciones, calibreado, fichas oficiales y norma aplicable.</p>
             </div>
         </section>
 

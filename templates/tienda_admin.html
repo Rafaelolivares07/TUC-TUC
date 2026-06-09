@@ -346,6 +346,12 @@
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref" class="block text-gray-800 mt-1">---</strong></div>
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Inversor seleccionado</span><strong id="ps-res-inversor" class="block text-gray-800 mt-1">---</strong></div>
                     </div>
+                    <div class="mt-3 bg-gray-50 rounded-xl p-3 text-sm">
+                        <span class="text-gray-500">Conexion sugerida</span>
+                        <div id="ps-res-conexion" class="mt-2 space-y-2 text-gray-700">
+                            <p class="text-gray-400">Calcula el proyecto para sugerir conexion de paneles y baterias.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="bg-white border border-gray-200 rounded-xl p-4">
@@ -2317,6 +2323,84 @@ function renderDetalleReferenciasProyectoSolar() {
     ].join('');
 }
 
+function sugerirConexionPaneles(panelDatos, inversorDatos, paneles, panelW) {
+    const vocPanel = Number(panelDatos.voc_v || 0);
+    const iscPanel = Number(panelDatos.isc_a || 0);
+    const vocMax = Number(inversorDatos.voc_max_fv_v || 0);
+    const corrienteMax = Number(inversorDatos.corriente_max_fv_a || 0);
+    const potenciaMaxFv = Number(inversorDatos.potencia_max_fv_w || 0);
+    const mppt = Math.max(1, Number(inversorDatos.numero_mppt || 1));
+    if (!paneles || !vocPanel || !iscPanel || !vocMax || !corrienteMax) {
+        return {ok: false, texto: 'Paneles: faltan VOC/ISC del panel o VOC/corriente FV max del inversor para sugerir serie/paralelo.'};
+    }
+    const margen = 0.90;
+    const maxSerie = Math.max(1, Math.floor((vocMax * margen) / vocPanel));
+    const maxParaleloMppt = Math.max(1, Math.floor((corrienteMax * margen) / iscPanel));
+    const maxStrings = maxParaleloMppt * mppt;
+    let mejor = null;
+    for (let serie = maxSerie; serie >= 1; serie--) {
+        const strings = Math.ceil(paneles / serie);
+        if (strings <= maxStrings) {
+            mejor = {serie, strings};
+            break;
+        }
+    }
+    if (!mejor) {
+        return {ok: false, texto: `Paneles: ${paneles} paneles exceden los limites FV conservadores del inversor seleccionado.`};
+    }
+    const panelesConectados = mejor.serie * mejor.strings;
+    const stringsPorMppt = Math.ceil(mejor.strings / mppt);
+    const vocString = mejor.serie * vocPanel;
+    const corrienteMppt = stringsPorMppt * iscPanel;
+    const maxPanelesVoltCorr = maxSerie * maxStrings;
+    const maxPanelesPotencia = potenciaMaxFv && panelW ? Math.floor((potenciaMaxFv * margen) / panelW) : maxPanelesVoltCorr;
+    const maxPanelesFuturo = Math.min(maxPanelesVoltCorr, maxPanelesPotencia || maxPanelesVoltCorr);
+    const reserva = Math.max(0, maxPanelesFuturo - paneles);
+    return {
+        ok: true,
+        serie: mejor.serie,
+        strings: mejor.strings,
+        paneles_conectados: panelesConectados,
+        voc_string_v: vocString,
+        corriente_mppt_a: corrienteMppt,
+        mppt,
+        max_paneles_futuro: maxPanelesFuturo,
+        reserva_paneles: reserva,
+        texto: `Paneles: ${mejor.serie} en serie x ${mejor.strings} strings en paralelo, distribuidos en ${mppt} MPPT. VOC string ${fmt(vocString)} V y corriente aprox. por MPPT ${fmt(corrienteMppt)} A. Capacidad conservadora futura: hasta ${maxPanelesFuturo} paneles (${reserva} de reserva).`
+    };
+}
+
+function sugerirConexionBaterias(bateriaDatos, inversorDatos, bateriasEstimadas) {
+    const voltBateria = Number(bateriaDatos.voltaje_nominal_v || 0);
+    const banco = Number(inversorDatos.voltaje_banco_bateria_v || 0);
+    if (!bateriasEstimadas) return {ok: true, texto: 'Baterias: no aplica para este tipo de sistema o no se requieren baterias.'};
+    if (!voltBateria || !banco) {
+        return {ok: false, texto: 'Baterias: faltan voltaje nominal de la bateria o voltaje de banco requerido por el inversor.'};
+    }
+    const serie = Math.max(1, Math.round(banco / voltBateria));
+    const voltSerie = serie * voltBateria;
+    const paralelo = Math.max(1, Math.ceil(bateriasEstimadas / serie));
+    const bateriasConectadas = serie * paralelo;
+    return {
+        ok: true,
+        serie,
+        paralelo,
+        baterias_conectadas: bateriasConectadas,
+        voltaje_banco_v: voltSerie,
+        texto: `Baterias: ${serie} en serie x ${paralelo} ramas en paralelo para banco aprox. ${fmt(voltSerie)} V. Cantidad conectada sugerida: ${bateriasConectadas} bateria(s).`
+    };
+}
+
+function renderConexionProyectoSolar(conexion) {
+    const cont = document.getElementById('ps-res-conexion');
+    if (!cont) return;
+    cont.innerHTML = `
+        <p class="${conexion.paneles?.ok ? 'text-gray-700' : 'text-amber-700'}">${conexion.paneles?.texto || ''}</p>
+        <p class="${conexion.baterias?.ok ? 'text-gray-700' : 'text-amber-700'}">${conexion.baterias?.texto || ''}</p>
+        <p class="text-xs text-gray-400">Sugerencia preliminar con margen conservador del 90% sobre limites electricos. Validar contra ficha tecnica completa, temperatura, protecciones, calibreado y norma aplicable.</p>
+    `;
+}
+
 function agregarCargaProyectoSolar() {
     const cont = document.getElementById('ps-cargas');
     if (!cont) return;
@@ -2366,6 +2450,7 @@ function calcularProyectoSolar() {
     let inversorProducto = productoPorId(inversorSel?.value);
     const bateriaDatos = bateriaProducto ? fichaSolar(bateriaProducto.id, 'bateria') : {};
     const panelDatos = panelProducto ? fichaSolar(panelProducto.id, 'panel') : {};
+    let inversorDatos = inversorProducto ? fichaSolar(inversorProducto.id, 'inversor') : {};
     const eficienciaPanel = 0.80;
     const utilidadBateria = Math.max(1, Math.min(100, Number(bateriaDatos.capacidad_util_pct || 80))) / 100;
     const panelW = Number(potenciaPanelProducto(panelProducto || {}) || 550);
@@ -2411,6 +2496,7 @@ function calcularProyectoSolar() {
         if (sugerido && inversorSel && String(inversorSel.value) !== String(sugerido.id)) {
             inversorSel.value = String(sugerido.id);
             inversorProducto = productoPorId(sugerido.id);
+            inversorDatos = inversorProducto ? fichaSolar(inversorProducto.id, 'inversor') : {};
         }
     }
     const lineas = [];
@@ -2442,6 +2528,9 @@ function calcularProyectoSolar() {
     const costoKwhPaneles = kwhVidaPaneles > 0 ? ventaPaneles / kwhVidaPaneles : 0;
     const costoKwhBaterias = kwhVidaBaterias > 0 ? ventaBaterias / kwhVidaBaterias : 0;
     const costoKwhInversor = kwhVidaInversor > 0 ? ventaInversor / kwhVidaInversor : 0;
+    const conexionPaneles = sugerirConexionPaneles(panelDatos, inversorDatos, paneles, panelW);
+    const conexionBaterias = sugerirConexionBaterias(bateriaDatos, inversorDatos, bateriasEstimadas);
+    const conexion = {paneles: conexionPaneles, baterias: conexionBaterias};
     proyectoSolarResultado = {
         lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW: picoEstimadoW, energiaProducir,
         panelW, paneles, bateriasEstimadas, totalEquipos, costoEquipos, margenEquipos, horasConcentracion, picoMetodo,
@@ -2449,6 +2538,7 @@ function calcularProyectoSolar() {
         vidaPaneles, vidaBaterias, vidaInversor, vidaReferencia, kwhVidaReferencia, costoKwhInversion,
         kwhVidaPaneles, kwhVidaBaterias, kwhVidaInversor,
         costoKwhPaneles, costoKwhBaterias, costoKwhInversor,
+        conexion,
         escenario: document.getElementById('ps-escenario')?.value || '',
     };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
@@ -2477,6 +2567,7 @@ function calcularProyectoSolar() {
     if (costoEl) costoEl.textContent = money(costoEquipos);
     const margenEl = document.getElementById('ps-res-margen');
     if (margenEl) margenEl.textContent = money(margenEquipos);
+    renderConexionProyectoSolar(conexion);
     renderDetalleReferenciasProyectoSolar();
     renderLineasPresupuestoSolar(lineas);
 }
@@ -2576,6 +2667,7 @@ function cuerpoProyectoSolar() {
                 costo_kwh_paneles: proyectoSolarResultado?.costoKwhPaneles || 0,
                 costo_kwh_baterias: proyectoSolarResultado?.costoKwhBaterias || 0,
                 costo_kwh_inversor: proyectoSolarResultado?.costoKwhInversor || 0,
+                conexion: proyectoSolarResultado?.conexion || {},
             }
         },
         presupuesto: {

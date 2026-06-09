@@ -14,6 +14,7 @@
 <body class="bg-gray-100">
     {% set datos = proyecto.datos_tecnicos or {} %}
     {% set res = datos.resultado or {} %}
+    {% set conexion = res.conexion or {} %}
     {% set presupuesto = proyecto.presupuesto or {} %}
     {% set lineas = presupuesto.lineas or [] %}
     <main class="max-w-4xl mx-auto bg-white min-h-screen p-8">
@@ -87,6 +88,15 @@
                     <tr class="border-b"><td class="py-2 text-gray-500">Inversor</td><td class="py-2 text-right font-bold">{{ res.vida_inversor_anios or datos.vida_inversor_anios or 0 }} anos</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.kwh_vida_inversor or 0) }}</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.costo_kwh_inversor or 0).replace(",", ".") }}</td></tr>
                 </tbody>
             </table>
+        </section>
+
+        <section class="mt-7">
+            <h2 class="text-xl font-black">Conexion sugerida</h2>
+            <div class="mt-3 text-sm border rounded-lg p-3 space-y-2">
+                <p>{{ conexion.paneles.texto if conexion.paneles else 'Paneles: conexion pendiente por validar con fichas tecnicas completas.' }}</p>
+                <p>{{ conexion.baterias.texto if conexion.baterias else 'Baterias: conexion pendiente por validar con fichas tecnicas completas.' }}</p>
+                <p class="text-xs text-gray-500">Sugerencia preliminar. Validar contra ficha tecnica completa, temperatura, protecciones, calibreado y norma aplicable.</p>
+            </div>
         </section>
 
         <section class="mt-7">

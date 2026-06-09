@@ -9,8 +9,8 @@ import unicodedata
 import uuid
 from datetime import date, timedelta
 
-from flask import (Blueprint, Response, jsonify, redirect, render_template,
-                   request, session)
+from flask import (Blueprint, Response, jsonify, make_response, redirect,
+                   render_template, request, session)
 
 from ..db import get_db_connection
 from .auth import solo_admin
@@ -239,6 +239,34 @@ def _crear_tablas(conn):
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS tienda_visitantes_publicos (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+            visitante_token VARCHAR(80) NOT NULL,
+            usuario_id INTEGER,
+            primer_path TEXT,
+            ultimo_path TEXT,
+            user_agent TEXT,
+            ip_primera VARCHAR(80),
+            ip_ultima VARCHAR(80),
+            visitas INTEGER DEFAULT 1,
+            first_seen TIMESTAMP DEFAULT NOW(),
+            last_seen TIMESTAMP DEFAULT NOW(),
+            UNIQUE(tienda_id, visitante_token)
+        )""",
+        """CREATE TABLE IF NOT EXISTS tienda_visitas_publicas (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+            visitante_id INTEGER REFERENCES tienda_visitantes_publicos(id) ON DELETE SET NULL,
+            usuario_id INTEGER,
+            proyecto_id INTEGER,
+            tipo VARCHAR(40),
+            path TEXT,
+            referrer TEXT,
+            ip VARCHAR(80),
+            user_agent TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -277,6 +305,9 @@ def _crear_tablas(conn):
         "ALTER TABLE proyectos_solares ADD COLUMN IF NOT EXISTS pdf_habilitado BOOLEAN DEFAULT FALSE",
         "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_tienda ON proyectos_solares(tienda_id, updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_cliente ON proyectos_solares(cliente_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tienda_visitantes_publicos_tienda ON tienda_visitantes_publicos(tienda_id, last_seen DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_tienda_visitas_publicas_tienda ON tienda_visitas_publicas(tienda_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_tienda_visitas_publicas_proyecto ON tienda_visitas_publicas(proyecto_id, created_at DESC)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -344,6 +375,75 @@ def _enviar_telegram_tienda(conn, chat_id, texto):
             )
     except Exception:
         pass
+
+
+def _ip_cliente():
+    reenviada = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+    return reenviada or request.remote_addr or ''
+
+
+def _registrar_visita_publica(conn, tienda_id, tipo='tienda', proyecto_id=None):
+    cookie_name = f'tt_visitante_{tienda_id}'
+    token = request.cookies.get(cookie_name) or secrets.token_urlsafe(24)
+    usuario_id = session.get('usuario_id')
+    path = request.full_path.rstrip('?') or request.path
+    referrer = request.referrer or ''
+    user_agent = (request.headers.get('User-Agent') or '')[:1000]
+    ip = _ip_cliente()[:80]
+    try:
+        existente = conn.execute("""
+            SELECT id
+            FROM tienda_visitantes_publicos
+            WHERE tienda_id = %s AND visitante_token = %s
+        """, (tienda_id, token)).fetchone()
+        es_nuevo = not bool(existente)
+        if existente:
+            visitante_id = existente['id']
+            conn.execute("""
+                UPDATE tienda_visitantes_publicos
+                SET usuario_id = COALESCE(%s, usuario_id),
+                    ultimo_path = %s,
+                    user_agent = %s,
+                    ip_ultima = %s,
+                    visitas = COALESCE(visitas, 0) + 1,
+                    last_seen = NOW()
+                WHERE id = %s
+            """, (usuario_id, path, user_agent, ip, visitante_id))
+        else:
+            row = conn.execute("""
+                INSERT INTO tienda_visitantes_publicos
+                    (tienda_id, visitante_token, usuario_id, primer_path, ultimo_path, user_agent, ip_primera, ip_ultima)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (tienda_id, token, usuario_id, path, path, user_agent, ip, ip)).fetchone()
+            visitante_id = row['id']
+        conn.execute("""
+            INSERT INTO tienda_visitas_publicas
+                (tienda_id, visitante_id, usuario_id, proyecto_id, tipo, path, referrer, ip, user_agent)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (tienda_id, visitante_id, usuario_id, proyecto_id, tipo, path, referrer, ip, user_agent))
+        conn.commit()
+        return {'cookie_name': cookie_name, 'token': token, 'nuevo': es_nuevo}
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"[visitas tienda] {e}")
+        return {'cookie_name': cookie_name, 'token': token, 'nuevo': False}
+
+
+def _respuesta_con_visitante(response, visita):
+    if visita and visita.get('cookie_name') and visita.get('token'):
+        response.set_cookie(
+            visita['cookie_name'],
+            visita['token'],
+            max_age=60 * 60 * 24 * 365 * 2,
+            httponly=True,
+            samesite='Lax',
+            secure=request.is_secure,
+        )
+    return response
 
 
 def _registrar_negocio_en_pois(conn, nombre, lat, lon, uid):
@@ -535,7 +635,9 @@ def tienda_publica(slug):
                     }
             finally:
                 conn2.close()
-        return render_template('tienda_cliente.html', tienda=tienda, cliente_data=cliente_data)
+        visita = _registrar_visita_publica(conn, tienda['id'], 'tienda')
+        response = make_response(render_template('tienda_cliente.html', tienda=tienda, cliente_data=cliente_data))
+        return _respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -2964,6 +3066,64 @@ def api_tienda_proyecto_solar_ver(slug, proyecto_id):
         conn.close()
 
 
+@bp.route('/api/tienda/<slug>/visitas-publicas')
+def api_tienda_visitas_publicas(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute(
+            "SELECT id, admin_id FROM tiendas WHERE slug = %s AND activo = TRUE",
+            (slug,)
+        ).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if session.get('rol') != 'Administrador' and session.get('usuario_id') != tienda['admin_id']:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        visitantes = conn.execute("""
+            SELECT v.id, v.usuario_id, v.primer_path, v.ultimo_path, v.ip_primera, v.ip_ultima,
+                   v.visitas, v.first_seen, v.last_seen, v.user_agent,
+                   t.nombre AS usuario_nombre, t.telefono AS usuario_telefono
+            FROM tienda_visitantes_publicos v
+            LEFT JOIN terceros t ON t.id = v.usuario_id
+            WHERE v.tienda_id = %s
+            ORDER BY v.last_seen DESC
+            LIMIT 80
+        """, (tienda['id'],)).fetchall()
+        visitas = conn.execute("""
+            SELECT vi.id, vi.visitante_id, vi.usuario_id, vi.proyecto_id, vi.tipo, vi.path,
+                   vi.referrer, vi.ip, vi.user_agent, vi.created_at,
+                   t.nombre AS usuario_nombre, p.cliente_nombre, p.escenario
+            FROM tienda_visitas_publicas vi
+            LEFT JOIN terceros t ON t.id = vi.usuario_id
+            LEFT JOIN proyectos_solares p ON p.id = vi.proyecto_id
+            WHERE vi.tienda_id = %s
+            ORDER BY vi.created_at DESC
+            LIMIT 120
+        """, (tienda['id'],)).fetchall()
+        visitantes_out = []
+        for v in visitantes:
+            item = dict(v)
+            item['first_seen'] = str(v['first_seen']) if v['first_seen'] else ''
+            item['last_seen'] = str(v['last_seen']) if v['last_seen'] else ''
+            visitantes_out.append(item)
+        visitas_out = []
+        for v in visitas:
+            item = dict(v)
+            item['created_at'] = str(v['created_at']) if v['created_at'] else ''
+            visitas_out.append(item)
+        return jsonify({
+            'ok': True,
+            'visitantes': visitantes_out,
+            'visitas': visitas_out,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/solar/proyecto/<token>')
 def solar_proyecto_publico(token):
     conn = get_db_connection()
@@ -2990,7 +3150,9 @@ def solar_proyecto_publico(token):
         }
         proyecto = _proyecto_solar_dict(row, True)
         proyecto = _enriquecer_lineas_proyecto_solar(conn, row['slug'], proyecto)
-        return render_template('solar_proyecto_publico.html', tienda=tienda, proyecto=proyecto)
+        visita = _registrar_visita_publica(conn, row['tienda_id'], 'proyecto_solar', row['id'])
+        response = make_response(render_template('solar_proyecto_publico.html', tienda=tienda, proyecto=proyecto))
+        return _respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -3021,7 +3183,9 @@ def solar_proyecto_pdf(token):
         if not row:
             return "Proyecto no encontrado", 404
         if not row['asesoria_pagada'] or not row['pdf_habilitado']:
-            return "PDF tecnico no habilitado para este proyecto", 403
+            visita = _registrar_visita_publica(conn, row['tienda_id'], 'proyecto_solar_pdf_bloqueado', row['id'])
+            response = make_response("PDF tecnico no habilitado para este proyecto", 403)
+            return _respuesta_con_visitante(response, visita)
         tienda = {
             'nombre': row['tienda_nombre'],
             'slug': row['slug'],
@@ -3030,7 +3194,9 @@ def solar_proyecto_pdf(token):
             'url': f'https://{row["slug"]}.tuc-tuc.co',
         }
         proyecto = _enriquecer_lineas_proyecto_solar(conn, row['slug'], _proyecto_solar_dict(row, True))
-        return render_template('solar_proyecto_pdf.html', tienda=tienda, proyecto=proyecto)
+        visita = _registrar_visita_publica(conn, row['tienda_id'], 'proyecto_solar_pdf', row['id'])
+        response = make_response(render_template('solar_proyecto_pdf.html', tienda=tienda, proyecto=proyecto))
+        return _respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
     finally:

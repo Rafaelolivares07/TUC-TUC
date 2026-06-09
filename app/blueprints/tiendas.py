@@ -977,7 +977,7 @@ def api_tienda_productos(slug):
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos WHERE negocio_id = %s ORDER BY categoria, orden, nombre",
+            "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos WHERE negocio_id = %s ORDER BY categoria, orden, nombre",
             (tienda['tercero_id'],)
         ).fetchall()
         categorias_media = conn.execute(
@@ -1003,7 +1003,7 @@ def api_tienda_productos(slug):
             nd = conn.execute("SELECT COUNT(*) FROM producto_documentos WHERE producto_id = %s", (p['id'],)).fetchone()[0]
             resultado.append({
                 'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
-                'precio': float(p['precio']), 'imagen': p['imagen'] or '',
+                'precio': float(p['precio']), 'costo': float(p['costo'] or 0), 'imagen': p['imagen'] or '',
                 'disponible': p['disponible'], 'orden': p['orden'],
                 'descripcion': p['descripcion'] or '',
                 'codigo_barra': p['codigo_barra'] or '',

@@ -312,7 +312,9 @@
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias">0</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-gray-500">Inversor seleccionado</span><strong id="ps-res-inversor">---</strong></div>
                         <div class="border-t border-gray-100 pt-3 mt-3">
-                            <div class="flex justify-between gap-3"><span class="text-gray-500">Total equipos</span><strong id="ps-res-total">$0</strong></div>
+                            <div class="flex justify-between gap-3"><span class="text-gray-500">Total venta equipos</span><strong id="ps-res-total">$0</strong></div>
+                            <div class="flex justify-between gap-3"><span class="text-gray-500">Costo equipos</span><strong id="ps-res-costo">$0</strong></div>
+                            <div class="flex justify-between gap-3"><span class="text-gray-500">Margen equipos</span><strong id="ps-res-margen">$0</strong></div>
                         </div>
                     </div>
                     <div id="ps-lineas-presupuesto" class="mt-4 space-y-2 text-sm"></div>
@@ -2349,9 +2351,11 @@ function calcularProyectoSolar() {
     if (bateriaProducto && bateriasEstimadas > 0) lineas.push({producto: bateriaProducto, cantidad: bateriasEstimadas, etiqueta: 'Baterias'});
     if (inversorProducto) lineas.push({producto: inversorProducto, cantidad: 1, etiqueta: 'Inversor'});
     const totalEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
+    const costoEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.costo || 0) * Number(l.cantidad || 0), 0);
+    const margenEquipos = totalEquipos - costoEquipos;
     proyectoSolarResultado = {
         lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW: picoEstimadoW, energiaProducir,
-        panelW, paneles, bateriasEstimadas, totalEquipos, horasConcentracion, picoMetodo,
+        panelW, paneles, bateriasEstimadas, totalEquipos, costoEquipos, margenEquipos, horasConcentracion, picoMetodo,
         escenario: document.getElementById('ps-escenario')?.value || '',
     };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
@@ -2369,6 +2373,10 @@ function calcularProyectoSolar() {
     document.getElementById('ps-res-baterias').textContent = bateriasEstimadas || '0';
     document.getElementById('ps-res-inversor').textContent = inversorProducto ? inversorProducto.nombre : '---';
     document.getElementById('ps-res-total').textContent = money(totalEquipos);
+    const costoEl = document.getElementById('ps-res-costo');
+    if (costoEl) costoEl.textContent = money(costoEquipos);
+    const margenEl = document.getElementById('ps-res-margen');
+    if (margenEl) margenEl.textContent = money(margenEquipos);
     renderDetalleReferenciasProyectoSolar();
     renderLineasPresupuestoSolar(lineas);
 }
@@ -2382,11 +2390,13 @@ function renderLineasPresupuestoSolar(lineas) {
     }
     cont.innerHTML = lineas.map(l => {
         const total = Number(l.cantidad || 0) * Number(l.producto.precio || 0);
+        const costo = Number(l.cantidad || 0) * Number(l.producto.costo || 0);
+        const margen = total - costo;
         return `<div class="border border-gray-200 rounded-xl px-3 py-2 bg-gray-50">
             <div class="flex justify-between gap-3">
                 <div class="min-w-0">
                     <p class="font-semibold text-gray-700 truncate">${l.etiqueta}: ${l.producto.nombre}</p>
-                    <p class="text-xs text-gray-400">${fmt(l.cantidad)} x ${money(l.producto.precio)}</p>
+                    <p class="text-xs text-gray-400">${fmt(l.cantidad)} x ${money(l.producto.precio)} | costo ${money(l.producto.costo || 0)} | margen ${money(margen)}</p>
                 </div>
                 <strong class="text-gray-800">${money(total)}</strong>
             </div>
@@ -2429,13 +2439,18 @@ function cuerpoProyectoSolar() {
         },
         presupuesto: {
             total: proyectoSolarResultado?.totalEquipos || 0,
+            costo_total: proyectoSolarResultado?.costoEquipos || 0,
+            margen_total: proyectoSolarResultado?.margenEquipos || 0,
             lineas: (proyectoSolarResultado?.lineas || []).map(l => ({
                 producto_id: Number(l.producto.id),
                 nombre: l.producto.nombre,
                 categoria: l.producto.categoria || '',
                 cantidad: Number(l.cantidad || 0),
                 precio_unitario: Number(l.producto.precio || 0),
+                costo_unitario: Number(l.producto.costo || 0),
                 total: Number(l.cantidad || 0) * Number(l.producto.precio || 0),
+                costo_total: Number(l.cantidad || 0) * Number(l.producto.costo || 0),
+                margen_total: (Number(l.cantidad || 0) * Number(l.producto.precio || 0)) - (Number(l.cantidad || 0) * Number(l.producto.costo || 0)),
                 etiqueta: l.etiqueta,
             }))
         },

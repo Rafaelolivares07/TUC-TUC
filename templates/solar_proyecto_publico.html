@@ -149,6 +149,18 @@
             </div>
         </section>
 
+        {% if res.vehiculo_electrico %}
+        <section class="mt-5 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+            <h2 class="text-xl font-black">Carga de vehiculo electrico</h2>
+            <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
+                <div class="rounded-xl bg-gray-50 p-4"><span class="text-gray-500">Potencia del cargador</span><strong class="block mt-1">{{ "%.1f"|format(res.vehiculo_potencia_cargador_kw or datos.vehiculo_potencia_cargador_kw or 0) }} kW</strong></div>
+                <div class="rounded-xl bg-gray-50 p-4"><span class="text-gray-500">Horas solares de carga</span><strong class="block mt-1">{{ "%.1f"|format(res.vehiculo_horas_carga_dia or datos.vehiculo_horas_carga_dia or 0) }} h/dia</strong></div>
+                <div class="rounded-xl bg-gray-50 p-4"><span class="text-gray-500">Frecuencia</span><strong class="block mt-1">{{ "%.0f"|format(res.vehiculo_dias_carga_semana or datos.vehiculo_dias_carga_semana or 0) }} dias/semana</strong></div>
+            </div>
+            <p class="text-sm text-gray-500 mt-4">El dimensionamiento busca compensar energia de carga durante generacion solar util. No incluye baterias estacionarias; el vehiculo es la carga principal.</p>
+        </section>
+        {% endif %}
+
         <section class="mt-5 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <h2 class="text-xl font-black">Vida util estimada de los equipos</h2>
             <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm">
@@ -207,10 +219,10 @@
                 <div class="grid md:grid-cols-[220px_minmax(0,1fr)_180px] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
                     <div>
                         <p class="text-xs font-bold text-gray-400 uppercase">3. Banco de baterias</p>
-                        <p class="text-xl font-black">{{ "%.2f"|format(res.bateria_nominal_kwh or 0) }} kWh</p>
+                        <p class="text-xl font-black">{% if res.vehiculo_electrico %}No estacionario{% else %}{{ "%.2f"|format(res.bateria_nominal_kwh or 0) }} kWh{% endif %}</p>
                     </div>
-                    <p class="text-sm text-gray-600">La bateria se calcula considerando que no toda la energia almacenada es utilizable. Por eso se estima una capacidad nominal mayor a la energia que se espera entregar.</p>
-                    <p class="text-xs text-gray-400 md:text-right">Energia fuera de sol / capacidad util</p>
+                    <p class="text-sm text-gray-600">{% if res.vehiculo_electrico %}En este escenario la bateria del vehiculo es la carga a atender; no se presupuestan baterias estacionarias para respaldo.{% else %}La bateria se calcula considerando que no toda la energia almacenada es utilizable. Por eso se estima una capacidad nominal mayor a la energia que se espera entregar.{% endif %}</p>
+                    <p class="text-xs text-gray-400 md:text-right">{% if res.vehiculo_electrico %}Carga directa del vehiculo{% else %}Energia fuera de sol / capacidad util{% endif %}</p>
                 </div>
                 <div class="grid md:grid-cols-[220px_minmax(0,1fr)_180px] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
                     <div>
@@ -234,7 +246,9 @@
                         <p class="text-xl font-black">{{ "%.0f"|format(res.pico_w or 0) }} W</p>
                     </div>
                     <p class="text-sm text-gray-600">
-                        {% if res.pico_metodo == 'cargas' %}
+                        {% if res.pico_metodo == 'cargador_vehiculo' %}
+                        La potencia se toma de la demanda del cargador del vehiculo electrico, porque es la carga principal a atender durante generacion solar util.
+                        {% elif res.pico_metodo == 'cargas' %}
                         La potencia se estima con las cargas/equipos indicados y su consumo pico.
                         {% else %}
                         Como no se detallaron cargas medidas, la potencia se estima concentrando el consumo diario en {{ res.horas_concentracion or datos.horas_concentracion or 4 }} horas.

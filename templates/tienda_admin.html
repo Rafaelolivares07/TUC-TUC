@@ -233,6 +233,7 @@
                                 <option value="hibrido">Hibrido</option>
                                 <option value="off_grid">Off-grid</option>
                                 <option value="respaldo">Respaldo / cargas criticas</option>
+                                <option value="vehiculo_electrico">Carga vehiculo electrico</option>
                             </select>
                         </label>
                     </div>
@@ -259,6 +260,17 @@
                             </label>
                             <label class="text-xs font-semibold text-gray-500">% fuera gen util
                                 <input id="ps-fuera-pct" type="number" min="0" max="100" step="1" value="60" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 65">
+                            </label>
+                        </div>
+                        <div id="ps-ve-campos" class="hidden grid md:grid-cols-3 gap-2 mt-2">
+                            <label class="text-xs font-semibold text-gray-500">Potencia cargador EV kW
+                                <input id="ps-ve-potencia-kw" type="number" min="0" step="0.1" value="5.6" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 5.6">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Horas carga solar util/dia
+                                <input id="ps-ve-horas-dia" type="number" min="0" max="12" step="0.5" value="4" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 4">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Dias de carga/semana
+                                <input id="ps-ve-dias-semana" type="number" min="0" max="7" step="1" value="7" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 7">
                             </label>
                         </div>
                     </div>
@@ -2115,7 +2127,7 @@ function prepararProyectoSolar() {
     cargarProyectosSolares();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
-    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-horas-concentracion','ps-fuera-pct','ps-valor-kwh','ps-area-holgura','ps-vida-paneles','ps-vida-baterias','ps-vida-inversor','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
+    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-horas-concentracion','ps-fuera-pct','ps-ve-potencia-kw','ps-ve-horas-dia','ps-ve-dias-semana','ps-valor-kwh','ps-area-holgura','ps-vida-paneles','ps-vida-baterias','ps-vida-inversor','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.calcBound) {
             el.dataset.calcBound = '1';
@@ -2129,6 +2141,7 @@ function prepararProyectoSolar() {
                 if (id === 'ps-tipo-sistema') {
                     const inversorSel = document.getElementById('ps-inversor-producto');
                     if (inversorSel) inversorSel.dataset.manual = '';
+                    actualizarModoVehiculoElectrico();
                     renderSelectoresProyectoSolar();
                 }
                 if (id === 'ps-inversor-producto') el.dataset.manual = '1';
@@ -2136,6 +2149,7 @@ function prepararProyectoSolar() {
             });
         }
     });
+    actualizarModoVehiculoElectrico();
 }
 
 function limpiarProyectoSolar() {
@@ -2149,6 +2163,12 @@ function limpiarProyectoSolar() {
     if (horasConcentracion) horasConcentracion.value = 4;
     const fueraPct = document.getElementById('ps-fuera-pct');
     if (fueraPct) fueraPct.value = 60;
+    const vePotencia = document.getElementById('ps-ve-potencia-kw');
+    if (vePotencia) vePotencia.value = 5.6;
+    const veHoras = document.getElementById('ps-ve-horas-dia');
+    if (veHoras) veHoras.value = 4;
+    const veDias = document.getElementById('ps-ve-dias-semana');
+    if (veDias) veDias.value = 7;
     const valorKwh = document.getElementById('ps-valor-kwh');
     if (valorKwh) valorKwh.value = '';
     const areaHolgura = document.getElementById('ps-area-holgura');
@@ -2174,8 +2194,19 @@ function limpiarProyectoSolar() {
     if (link) { link.classList.add('hidden'); link.href = '#'; }
     actualizarEstadoTerceroProyectoSolar();
     cerrarDropdownTerceroProyectoSolar();
+    actualizarModoVehiculoElectrico();
     prepararProyectoSolar();
     calcularProyectoSolar();
+}
+
+function actualizarModoVehiculoElectrico() {
+    const tipo = document.getElementById('ps-tipo-sistema')?.value || '';
+    const esVE = tipo === 'vehiculo_electrico';
+    document.getElementById('ps-ve-campos')?.classList.toggle('hidden', !esVE);
+    const tipoBateria = document.getElementById('ps-tipo-bateria');
+    const bateria = document.getElementById('ps-bateria-producto');
+    if (tipoBateria) tipoBateria.disabled = esVE;
+    if (bateria) bateria.disabled = esVE;
 }
 
 function extraerNumero(nombre, patron) {
@@ -2443,6 +2474,10 @@ function calcularProyectoSolar() {
     const vidaBaterias = Math.max(1, Number(document.getElementById('ps-vida-baterias')?.value || 10));
     const vidaInversor = Math.max(1, Number(document.getElementById('ps-vida-inversor')?.value || 10));
     const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || 'on_grid';
+    const esVehiculoElectrico = tipoSistema === 'vehiculo_electrico';
+    const vePotenciaKw = Math.max(0, Number(document.getElementById('ps-ve-potencia-kw')?.value || 0));
+    const veHorasDia = Math.max(0, Number(document.getElementById('ps-ve-horas-dia')?.value || 0));
+    const veDiasSemana = Math.max(0, Math.min(7, Number(document.getElementById('ps-ve-dias-semana')?.value || 0)));
     const bateriaSel = document.getElementById('ps-bateria-producto');
     const inversorSel = document.getElementById('ps-inversor-producto');
     const panelProducto = productoPorId(document.getElementById('ps-panel-producto')?.value);
@@ -2454,7 +2489,9 @@ function calcularProyectoSolar() {
     const eficienciaPanel = 0.80;
     const utilidadBateria = Math.max(1, Math.min(100, Number(bateriaDatos.capacidad_util_pct || 80))) / 100;
     const panelW = Number(potenciaPanelProducto(panelProducto || {}) || 550);
-    const consumoDiario = consumoMes * cobertura / 30;
+    const consumoDiarioBase = consumoMes * cobertura / 30;
+    const consumoDiarioVehiculo = vePotenciaKw * veHorasDia * (veDiasSemana / 7);
+    const consumoDiario = esVehiculoElectrico ? consumoDiarioVehiculo : consumoDiarioBase;
     let fueraWhPorCargas = 0;
     let picoW = 0;
     document.querySelectorAll('#ps-cargas > div').forEach(row => {
@@ -2468,9 +2505,9 @@ function calcularProyectoSolar() {
     const fueraWhPorPct = consumoDiario * fueraPct * 1000;
     const fueraWh = fueraPct > 0 ? fueraWhPorPct : fueraWhPorCargas;
     const picoPorConsumoW = consumoDiario > 0 ? (consumoDiario / horasConcentracion) * 1000 : 0;
-    const picoEstimadoW = picoW > 0 ? picoW : picoPorConsumoW;
-    const picoMetodo = picoW > 0 ? 'cargas' : 'consumo_concentrado';
-    const usaBateria = ['hibrido', 'off_grid', 'respaldo'].includes(tipoSistema);
+    const picoEstimadoW = esVehiculoElectrico ? vePotenciaKw * 1000 : (picoW > 0 ? picoW : picoPorConsumoW);
+    const picoMetodo = esVehiculoElectrico ? 'cargador_vehiculo' : (picoW > 0 ? 'cargas' : 'consumo_concentrado');
+    const usaBateria = !esVehiculoElectrico && ['hibrido', 'off_grid', 'respaldo'].includes(tipoSistema);
     const bateriaNominalKwh = usaBateria ? (fueraWh / 1000) / utilidadBateria : 0;
     const energiaRecargaKwh = usaBateria ? bateriaNominalKwh : 0;
     const energiaProducir = consumoDiario + energiaRecargaKwh;
@@ -2501,7 +2538,7 @@ function calcularProyectoSolar() {
     }
     const lineas = [];
     if (panelProducto && paneles > 0) lineas.push({producto: panelProducto, cantidad: paneles, etiqueta: 'Paneles'});
-    if (bateriaProducto && bateriasEstimadas > 0) lineas.push({producto: bateriaProducto, cantidad: bateriasEstimadas, etiqueta: 'Baterias'});
+    if (!esVehiculoElectrico && bateriaProducto && bateriasEstimadas > 0) lineas.push({producto: bateriaProducto, cantidad: bateriasEstimadas, etiqueta: 'Baterias'});
     if (inversorProducto) lineas.push({producto: inversorProducto, cantidad: 1, etiqueta: 'Inversor'});
     const totalEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
     const costoEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.costo || 0) * Number(l.cantidad || 0), 0);
@@ -2529,7 +2566,9 @@ function calcularProyectoSolar() {
     const costoKwhBaterias = kwhVidaBaterias > 0 ? ventaBaterias / kwhVidaBaterias : 0;
     const costoKwhInversor = kwhVidaInversor > 0 ? ventaInversor / kwhVidaInversor : 0;
     const conexionPaneles = sugerirConexionPaneles(panelDatos, inversorDatos, paneles, panelW);
-    const conexionBaterias = sugerirConexionBaterias(bateriaDatos, inversorDatos, bateriasEstimadas);
+    const conexionBaterias = esVehiculoElectrico
+        ? {ok: true, texto: 'Baterias: no se presupuestan baterias estacionarias; la bateria del vehiculo es la carga a atender.'}
+        : sugerirConexionBaterias(bateriaDatos, inversorDatos, bateriasEstimadas);
     const conexion = {paneles: conexionPaneles, baterias: conexionBaterias};
     proyectoSolarResultado = {
         lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW: picoEstimadoW, energiaProducir,
@@ -2538,7 +2577,7 @@ function calcularProyectoSolar() {
         vidaPaneles, vidaBaterias, vidaInversor, vidaReferencia, kwhVidaReferencia, costoKwhInversion,
         kwhVidaPaneles, kwhVidaBaterias, kwhVidaInversor,
         costoKwhPaneles, costoKwhBaterias, costoKwhInversor,
-        conexion,
+        conexion, esVehiculoElectrico, vePotenciaKw, veHorasDia, veDiasSemana,
         escenario: document.getElementById('ps-escenario')?.value || '',
     };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
@@ -2628,6 +2667,9 @@ function cuerpoProyectoSolar() {
             cobertura_pct: Number(document.getElementById('ps-cobertura').value || 100),
             horas_concentracion: Number(document.getElementById('ps-horas-concentracion').value || 4),
             fuera_generacion_pct: Number(document.getElementById('ps-fuera-pct').value || 0),
+            vehiculo_potencia_cargador_kw: Number(document.getElementById('ps-ve-potencia-kw')?.value || 0),
+            vehiculo_horas_carga_dia: Number(document.getElementById('ps-ve-horas-dia')?.value || 0),
+            vehiculo_dias_carga_semana: Number(document.getElementById('ps-ve-dias-semana')?.value || 0),
             valor_kwh_actual: Number(document.getElementById('ps-valor-kwh').value || 0),
             area_holgura_pct: Number(document.getElementById('ps-area-holgura').value || 0),
             vida_paneles_anios: Number(document.getElementById('ps-vida-paneles').value || 25),
@@ -2668,6 +2710,10 @@ function cuerpoProyectoSolar() {
                 costo_kwh_baterias: proyectoSolarResultado?.costoKwhBaterias || 0,
                 costo_kwh_inversor: proyectoSolarResultado?.costoKwhInversor || 0,
                 conexion: proyectoSolarResultado?.conexion || {},
+                vehiculo_electrico: proyectoSolarResultado?.esVehiculoElectrico || false,
+                vehiculo_potencia_cargador_kw: proyectoSolarResultado?.vePotenciaKw || 0,
+                vehiculo_horas_carga_dia: proyectoSolarResultado?.veHorasDia || 0,
+                vehiculo_dias_carga_semana: proyectoSolarResultado?.veDiasSemana || 0,
             }
         },
         presupuesto: {
@@ -2775,6 +2821,9 @@ async function abrirProyectoSolar(id) {
         document.getElementById('ps-cobertura').value = d.cobertura_pct || 100;
         document.getElementById('ps-horas-concentracion').value = d.horas_concentracion || d.resultado?.horas_concentracion || 4;
         document.getElementById('ps-fuera-pct').value = d.fuera_generacion_pct || 60;
+        document.getElementById('ps-ve-potencia-kw').value = d.vehiculo_potencia_cargador_kw || d.resultado?.vehiculo_potencia_cargador_kw || 5.6;
+        document.getElementById('ps-ve-horas-dia').value = d.vehiculo_horas_carga_dia || d.resultado?.vehiculo_horas_carga_dia || 4;
+        document.getElementById('ps-ve-dias-semana').value = d.vehiculo_dias_carga_semana || d.resultado?.vehiculo_dias_carga_semana || 7;
         document.getElementById('ps-valor-kwh').value = d.valor_kwh_actual || d.resultado?.valor_kwh_actual || '';
         document.getElementById('ps-area-holgura').value = d.area_holgura_pct || d.resultado?.area_holgura_pct || 25;
         document.getElementById('ps-vida-paneles').value = d.vida_paneles_anios || d.resultado?.vida_paneles_anios || 25;
@@ -2784,6 +2833,7 @@ async function abrirProyectoSolar(id) {
         document.getElementById('ps-asesoria-pagada').checked = !!p.asesoria_pagada;
         document.getElementById('ps-pdf-habilitado').checked = !!p.pdf_habilitado;
         renderSelectoresProyectoSolar();
+        actualizarModoVehiculoElectrico();
         if (d.panel_producto_id) document.getElementById('ps-panel-producto').value = d.panel_producto_id;
         if (d.bateria_producto_id) document.getElementById('ps-bateria-producto').value = d.bateria_producto_id;
         if (d.inversor_producto_id) {

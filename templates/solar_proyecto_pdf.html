@@ -47,6 +47,11 @@
                     <tr class="border-b"><td class="py-2 text-gray-500">Factor solar</td><td class="py-2 text-right font-bold">{{ datos.factor_solar or 0 }}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Consumo fuera de generacion util</td><td class="py-2 text-right font-bold">{{ datos.fuera_generacion_pct or 0 }}%</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Horas de concentracion usadas</td><td class="py-2 text-right font-bold">{{ datos.horas_concentracion or res.horas_concentracion or 4 }}</td></tr>
+                    {% if res.vehiculo_electrico %}
+                    <tr class="border-b"><td class="py-2 text-gray-500">Potencia cargador vehiculo</td><td class="py-2 text-right font-bold">{{ "%.1f"|format(res.vehiculo_potencia_cargador_kw or datos.vehiculo_potencia_cargador_kw or 0) }} kW</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Horas solares de carga</td><td class="py-2 text-right font-bold">{{ "%.1f"|format(res.vehiculo_horas_carga_dia or datos.vehiculo_horas_carga_dia or 0) }} h/dia</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Dias de carga por semana</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.vehiculo_dias_carga_semana or datos.vehiculo_dias_carga_semana or 0) }}</td></tr>
+                    {% endif %}
                     <tr class="border-b"><td class="py-2 text-gray-500">Valor kWh actual</td><td class="py-2 text-right font-bold">{% if datos.valor_kwh_actual or res.valor_kwh_actual %}{{ "${:,.0f}".format(datos.valor_kwh_actual or res.valor_kwh_actual).replace(",", ".") }}{% else %}Por definir{% endif %}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Holgura de area para mantenimiento</td><td class="py-2 text-right font-bold">{{ datos.area_holgura_pct or res.area_holgura_pct or 0 }}%</td></tr>
                 </tbody>
@@ -59,7 +64,7 @@
                 <tbody>
                     <tr class="border-b"><td class="py-2 text-gray-500">Consumo diario calculado</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.consumo_diario_kwh or 0) }} kWh/dia</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Energia fuera de generacion util</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.fuera_generacion_wh or 0) }} Wh</td></tr>
-                    <tr class="border-b"><td class="py-2 text-gray-500">Bateria nominal requerida</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.bateria_nominal_kwh or 0) }} kWh</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Bateria nominal requerida</td><td class="py-2 text-right font-bold">{% if res.vehiculo_electrico %}No estacionaria{% else %}{{ "%.2f"|format(res.bateria_nominal_kwh or 0) }} kWh{% endif %}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Energia diaria a producir</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.energia_producir_kwh or 0) }} kWh/dia</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Potencia estimada inversor</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.pico_w or 0) }} W</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Area neta de paneles</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.area_neta_m2 or 0) }} m2</td></tr>

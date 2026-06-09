@@ -2,8 +2,10 @@ import base64
 import itertools
 import json
 import random
+import re
 import secrets
 import time
+import unicodedata
 import uuid
 from datetime import date, timedelta
 
@@ -2704,7 +2706,58 @@ def _resolver_tercero_cliente(conn, cliente_id=None, nombre='', telefono=''):
     return {'id': row['id'], 'nombre': nombre, 'telefono': telefono}
 
 
+def _slug_publico_proyecto(valor):
+    texto = (valor or '').strip().lower()
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii')
+    texto = re.sub(r'[^a-z0-9]+', '-', texto)
+    texto = re.sub(r'-+', '-', texto).strip('-')
+    return texto or 'proyecto'
+
+
+def _url_publica_proyecto(slug_tienda, cliente, escenario, token=None):
+    cliente_slug = _slug_publico_proyecto(cliente)
+    escenario_slug = _slug_publico_proyecto(escenario or 'proyecto-solar')
+    return f'https://{slug_tienda}.tuc-tuc.co/{cliente_slug}/{escenario_slug}'
+
+
+def _slug_tienda_desde_host():
+    host = request.host.split(':')[0]
+    sufijo = '.tuc-tuc.co'
+    if host.endswith(sufijo):
+        subdominio = host[:-len(sufijo)]
+        if subdominio and '.' not in subdominio:
+            return subdominio
+    return ''
+
+
+def solar_proyecto_publico_desde_slugs(tienda_slug, cliente_slug, escenario_slug):
+    cliente_slug = _slug_publico_proyecto(cliente_slug)
+    escenario_slug = _slug_publico_proyecto(escenario_slug)
+    if not tienda_slug or not cliente_slug or not escenario_slug:
+        return None
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        filas = conn.execute("""
+            SELECT p.token_publico, p.cliente_nombre, p.escenario
+            FROM proyectos_solares p
+            JOIN tiendas t ON t.id = p.tienda_id
+            WHERE t.slug = %s AND t.activo = TRUE
+            ORDER BY p.updated_at DESC, p.id DESC
+        """, (tienda_slug,)).fetchall()
+        for fila in filas:
+            if (
+                _slug_publico_proyecto(fila['cliente_nombre']) == cliente_slug
+                and _slug_publico_proyecto(fila['escenario']) == escenario_slug
+            ):
+                return solar_proyecto_publico(fila['token_publico'])
+        return None
+    finally:
+        conn.close()
+
+
 def _proyecto_solar_dict(p, incluir_detalle=True):
+    tienda_slug = p['slug'] if 'slug' in p.keys() else ''
     item = {
         'id': p['id'],
         'cliente_id': p['cliente_id'] if 'cliente_id' in p.keys() else None,
@@ -2718,7 +2771,7 @@ def _proyecto_solar_dict(p, incluir_detalle=True):
         'asesoria_pagada': bool(p['asesoria_pagada']) if 'asesoria_pagada' in p.keys() else False,
         'pdf_habilitado': bool(p['pdf_habilitado']) if 'pdf_habilitado' in p.keys() else False,
         'token_publico': p['token_publico'],
-        'url_publica': f'/solar/proyecto/{p["token_publico"]}',
+        'url_publica': _url_publica_proyecto(tienda_slug, p['cliente_nombre'], p['escenario'], p['token_publico']) if tienda_slug else f'/solar/proyecto/{p["token_publico"]}',
         'url_pdf': f'/solar/proyecto/{p["token_publico"]}/pdf',
         'created_at': str(p['created_at']) if p['created_at'] else '',
         'updated_at': str(p['updated_at']) if p['updated_at'] else '',
@@ -2773,17 +2826,17 @@ def api_tienda_proyectos_solares(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, slug FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         filas = conn.execute("""
-            SELECT id, cliente_id, cliente_nombre, cliente_telefono, ubicacion, escenario, tipo_sistema,
+            SELECT id, %s AS slug, cliente_id, cliente_nombre, cliente_telefono, ubicacion, escenario, tipo_sistema,
                    total, estado, asesoria_pagada, pdf_habilitado, token_publico, created_at, updated_at
             FROM proyectos_solares
             WHERE tienda_id = %s
             ORDER BY updated_at DESC, id DESC
             LIMIT 60
-        """, (tienda['id'],)).fetchall()
+        """, (tienda['slug'], tienda['id'])).fetchall()
         return jsonify({'ok': True, 'proyectos': [_proyecto_solar_dict(p, False) for p in filas]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -2799,7 +2852,7 @@ def api_tienda_proyecto_solar_guardar(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        tienda = conn.execute("SELECT id, slug FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         proyecto_id = data.get('id')
@@ -2872,7 +2925,13 @@ def api_tienda_proyecto_solar_guardar(slug):
             )).fetchone()
             proyecto_id = row['id']
         conn.commit()
-        return jsonify({'ok': True, 'proyecto_id': proyecto_id, 'cliente_id': tercero['id'], 'token_publico': token, 'url_publica': f'/solar/proyecto/{token}'})
+        return jsonify({
+            'ok': True,
+            'proyecto_id': proyecto_id,
+            'cliente_id': tercero['id'],
+            'token_publico': token,
+            'url_publica': _url_publica_proyecto(tienda['slug'], cliente, data.get('escenario') or '', token)
+        })
     except ValueError as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -2891,7 +2950,7 @@ def api_tienda_proyecto_solar_ver(slug, proyecto_id):
     try:
         _crear_tablas(conn)
         p = conn.execute("""
-            SELECT p.*
+            SELECT p.*, t.slug
             FROM proyectos_solares p
             JOIN tiendas t ON t.id = p.tienda_id
             WHERE p.id = %s AND t.slug = %s
@@ -2936,6 +2995,15 @@ def solar_proyecto_publico(token):
         return f"Error: {e}", 500
     finally:
         conn.close()
+
+
+@bp.route('/proyecto/<cliente_slug>/<path:resto>')
+def solar_proyecto_publico_bonito(cliente_slug, resto):
+    tienda_slug = _slug_tienda_desde_host()
+    respuesta = solar_proyecto_publico_desde_slugs(tienda_slug, cliente_slug, resto)
+    if respuesta is None:
+        return "Proyecto no encontrado", 404
+    return respuesta
 
 
 @bp.route('/solar/proyecto/<token>/pdf')

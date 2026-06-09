@@ -127,6 +127,27 @@
             </div>
         </section>
 
+        <section class="mt-5 grid md:grid-cols-2 gap-5">
+            <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                <h2 class="text-xl font-black">Espacio recomendado</h2>
+                <div class="space-y-3 mt-4 text-sm">
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Area neta de paneles</span><strong>{{ "%.2f"|format(res.area_neta_m2 or 0) }} m2</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Holgura para mantenimiento</span><strong>{{ "%.0f"|format(res.area_holgura_pct or datos.area_holgura_pct or 0) }}%</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Area recomendada</span><strong>{{ "%.2f"|format(res.area_recomendada_m2 or 0) }} m2</strong></div>
+                    <p class="text-xs text-gray-400">El area recomendada incluye espacio adicional para instalacion, limpieza, conexiones y mantenimiento.</p>
+                </div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                <h2 class="text-xl font-black">Retorno estimado</h2>
+                <div class="space-y-3 mt-4 text-sm">
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Valor kWh actual usado</span><strong>{{ "${:,.0f}".format(res.valor_kwh_actual or datos.valor_kwh_actual or 0).replace(",", ".") }}</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Ahorro anual estimado</span><strong>{{ "${:,.0f}".format(res.ahorro_anual or 0).replace(",", ".") }}</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Recuperacion estimada</span><strong>{% if res.retorno_anios %}{{ "%.1f"|format(res.retorno_anios) }} anos{% else %}Por calcular{% endif %}</strong></div>
+                    <div class="flex justify-between gap-3"><span class="text-gray-500">Costo kWh de inversion</span><strong>{{ "${:,.0f}".format(res.costo_kwh_inversion or 0).replace(",", ".") }}</strong></div>
+                </div>
+            </div>
+        </section>
+
         <section class="mt-5 bg-white border border-gray-200 rounded-2xl p-5 md:p-7 shadow-sm">
             <div class="max-w-3xl">
                 <h2 class="text-2xl font-black">Memoria del calculo</h2>
@@ -186,6 +207,22 @@
                         {% endif %}
                     </p>
                     <p class="text-xs text-gray-400 md:text-right">Potencia maxima estimada del uso</p>
+                </div>
+                <div class="grid md:grid-cols-[220px_minmax(0,1fr)_180px] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase">7. Area requerida</p>
+                        <p class="text-xl font-black">{{ "%.2f"|format(res.area_recomendada_m2 or 0) }} m2</p>
+                    </div>
+                    <p class="text-sm text-gray-600">Primero se calcula el area fisica neta de los paneles. Luego se suma una holgura para permitir conexiones, circulacion, limpieza y mantenimiento.</p>
+                    <p class="text-xs text-gray-400 md:text-right">Area neta x (1 + holgura)</p>
+                </div>
+                <div class="grid md:grid-cols-[220px_minmax(0,1fr)_180px] gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <div>
+                        <p class="text-xs font-bold text-gray-400 uppercase">8. Retorno</p>
+                        <p class="text-xl font-black">{% if res.retorno_anios %}{{ "%.1f"|format(res.retorno_anios) }} anos{% else %}Por calcular{% endif %}</p>
+                    </div>
+                    <p class="text-sm text-gray-600">El retorno se estima comparando la inversion del proyecto contra el ahorro anual esperado con el valor actual del kWh informado.</p>
+                    <p class="text-xs text-gray-400 md:text-right">Inversion / ahorro anual</p>
                 </div>
             </div>
         </section>

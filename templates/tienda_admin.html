@@ -264,6 +264,27 @@
                     </div>
 
                     <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
+                        <p class="text-xs font-semibold text-gray-500 mb-2">Area y retorno</p>
+                        <div class="grid md:grid-cols-2 xl:grid-cols-5 gap-2">
+                            <label class="text-xs font-semibold text-gray-500">Valor kWh actual
+                                <input id="ps-valor-kwh" type="number" min="0" step="1" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 950">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">% espacio mantenimiento
+                                <input id="ps-area-holgura" type="number" min="0" max="200" step="1" value="25" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Ej. 25">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Vida paneles anos
+                                <input id="ps-vida-paneles" type="number" min="1" step="1" value="25" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Vida baterias anos
+                                <input id="ps-vida-baterias" type="number" min="1" step="1" value="10" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                            </label>
+                            <label class="text-xs font-semibold text-gray-500">Vida inversor anos
+                                <input id="ps-vida-inversor" type="number" min="1" step="1" value="10" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-gray-200 rounded-xl p-3 mb-4">
                         <p class="text-xs font-semibold text-gray-500 mb-2">Referencias del catalogo</p>
                         <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-2">
                             <label class="text-xs font-semibold text-gray-500">Panel
@@ -311,6 +332,10 @@
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Panel sugerido</span><strong id="ps-res-panel" class="block text-gray-800 mt-1">550 W</strong></div>
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Paneles estimados</span><strong id="ps-res-paneles" class="block text-gray-800 mt-1">0</strong></div>
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Baterias estimadas</span><strong id="ps-res-baterias" class="block text-gray-800 mt-1">0</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Area neta paneles</span><strong id="ps-res-area-neta" class="block text-gray-800 mt-1">0 m2</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Area recomendada</span><strong id="ps-res-area-total" class="block text-gray-800 mt-1">0 m2</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Ahorro anual estimado</span><strong id="ps-res-ahorro-anual" class="block text-gray-800 mt-1">$0</strong></div>
+                        <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Retorno estimado</span><strong id="ps-res-retorno" class="block text-gray-800 mt-1">---</strong></div>
                     </div>
                     <div class="grid lg:grid-cols-2 gap-3 mt-3 text-sm">
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Bateria sugerida</span><strong id="ps-res-bateria-ref" class="block text-gray-800 mt-1">---</strong></div>
@@ -2079,7 +2104,7 @@ function prepararProyectoSolar() {
     cargarProyectosSolares();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
-    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-horas-concentracion','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
+    ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-horas-concentracion','ps-fuera-pct','ps-valor-kwh','ps-area-holgura','ps-vida-paneles','ps-vida-baterias','ps-vida-inversor','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.calcBound) {
             el.dataset.calcBound = '1';
@@ -2113,6 +2138,16 @@ function limpiarProyectoSolar() {
     if (horasConcentracion) horasConcentracion.value = 4;
     const fueraPct = document.getElementById('ps-fuera-pct');
     if (fueraPct) fueraPct.value = 60;
+    const valorKwh = document.getElementById('ps-valor-kwh');
+    if (valorKwh) valorKwh.value = '';
+    const areaHolgura = document.getElementById('ps-area-holgura');
+    if (areaHolgura) areaHolgura.value = 25;
+    const vidaPaneles = document.getElementById('ps-vida-paneles');
+    if (vidaPaneles) vidaPaneles.value = 25;
+    const vidaBaterias = document.getElementById('ps-vida-baterias');
+    if (vidaBaterias) vidaBaterias.value = 10;
+    const vidaInversor = document.getElementById('ps-vida-inversor');
+    if (vidaInversor) vidaInversor.value = 10;
     const pagada = document.getElementById('ps-asesoria-pagada');
     if (pagada) pagada.checked = false;
     const pdf = document.getElementById('ps-pdf-habilitado');
@@ -2313,6 +2348,11 @@ function calcularProyectoSolar() {
     const cobertura = Number(document.getElementById('ps-cobertura')?.value || 100) / 100;
     const horasConcentracion = Math.max(1, Number(document.getElementById('ps-horas-concentracion')?.value || 4));
     const fueraPct = Number(document.getElementById('ps-fuera-pct')?.value || 0) / 100;
+    const valorKwh = Number(document.getElementById('ps-valor-kwh')?.value || 0);
+    const areaHolguraPct = Math.max(0, Number(document.getElementById('ps-area-holgura')?.value || 0));
+    const vidaPaneles = Math.max(1, Number(document.getElementById('ps-vida-paneles')?.value || 25));
+    const vidaBaterias = Math.max(1, Number(document.getElementById('ps-vida-baterias')?.value || 10));
+    const vidaInversor = Math.max(1, Number(document.getElementById('ps-vida-inversor')?.value || 10));
     const tipoSistema = document.getElementById('ps-tipo-sistema')?.value || 'on_grid';
     const bateriaSel = document.getElementById('ps-bateria-producto');
     const inversorSel = document.getElementById('ps-inversor-producto');
@@ -2320,6 +2360,7 @@ function calcularProyectoSolar() {
     let bateriaProducto = productoPorId(bateriaSel?.value);
     let inversorProducto = productoPorId(inversorSel?.value);
     const bateriaDatos = bateriaProducto ? fichaSolar(bateriaProducto.id, 'bateria') : {};
+    const panelDatos = panelProducto ? fichaSolar(panelProducto.id, 'panel') : {};
     const eficienciaPanel = 0.80;
     const utilidadBateria = Math.max(1, Math.min(100, Number(bateriaDatos.capacidad_util_pct || 80))) / 100;
     const panelW = Number(potenciaPanelProducto(panelProducto || {}) || 550);
@@ -2374,9 +2415,25 @@ function calcularProyectoSolar() {
     const totalEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.precio || 0) * Number(l.cantidad || 0), 0);
     const costoEquipos = lineas.reduce((acc, l) => acc + Number(l.producto.costo || 0) * Number(l.cantidad || 0), 0);
     const margenEquipos = totalEquipos - costoEquipos;
+    const areaPanelM2 = Number(panelDatos.ancho_mm || 0) > 0 && Number(panelDatos.alto_mm || 0) > 0
+        ? (Number(panelDatos.ancho_mm) * Number(panelDatos.alto_mm)) / 1000000
+        : 0;
+    const areaNetaM2 = areaPanelM2 * paneles;
+    const areaRecomendadaM2 = areaNetaM2 * (1 + areaHolguraPct / 100);
+    const ahorroAnual = consumoDiario * 365 * valorKwh;
+    const retornoAnios = ahorroAnual > 0 ? totalEquipos / ahorroAnual : 0;
+    const vidaReferencia = usaBateria ? Math.min(vidaPaneles, vidaBaterias, vidaInversor) : Math.min(vidaPaneles, vidaInversor);
+    const kwhVidaReferencia = consumoDiario * 365 * vidaReferencia;
+    const costoKwhInversion = kwhVidaReferencia > 0 ? totalEquipos / kwhVidaReferencia : 0;
+    const kwhVidaPaneles = energiaProducir * 365 * vidaPaneles;
+    const kwhVidaBaterias = (fueraWh / 1000) * 365 * vidaBaterias;
+    const kwhVidaInversor = consumoDiario * 365 * vidaInversor;
     proyectoSolarResultado = {
         lineas, consumoDiario, fueraWh, bateriaNominalKwh, picoW: picoEstimadoW, energiaProducir,
         panelW, paneles, bateriasEstimadas, totalEquipos, costoEquipos, margenEquipos, horasConcentracion, picoMetodo,
+        areaPanelM2, areaNetaM2, areaRecomendadaM2, areaHolguraPct, valorKwh, ahorroAnual, retornoAnios,
+        vidaPaneles, vidaBaterias, vidaInversor, vidaReferencia, kwhVidaReferencia, costoKwhInversion,
+        kwhVidaPaneles, kwhVidaBaterias, kwhVidaInversor,
         escenario: document.getElementById('ps-escenario')?.value || '',
     };
     document.getElementById('ps-res-diario').textContent = `${fmt(consumoDiario)} kWh`;
@@ -2390,6 +2447,10 @@ function calcularProyectoSolar() {
     document.getElementById('ps-res-producir').textContent = `${fmt(energiaProducir)} kWh`;
     document.getElementById('ps-res-panel').textContent = `${fmt(panelW)} W`;
     document.getElementById('ps-res-paneles').textContent = paneles || '0';
+    document.getElementById('ps-res-area-neta').textContent = `${fmt(areaNetaM2)} m2`;
+    document.getElementById('ps-res-area-total').textContent = `${fmt(areaRecomendadaM2)} m2`;
+    document.getElementById('ps-res-ahorro-anual').textContent = money(ahorroAnual);
+    document.getElementById('ps-res-retorno').textContent = retornoAnios > 0 ? `${fmt(retornoAnios)} anos` : '---';
     document.getElementById('ps-res-bateria-ref').textContent = bateriaElegida ? bateriaElegida.nombre.replace(/\s*\([^)]*\)\s*$/, '') : '---';
     document.getElementById('ps-res-baterias').textContent = bateriasEstimadas || '0';
     document.getElementById('ps-res-inversor').textContent = inversorProducto ? inversorProducto.nombre : '---';
@@ -2458,6 +2519,11 @@ function cuerpoProyectoSolar() {
             cobertura_pct: Number(document.getElementById('ps-cobertura').value || 100),
             horas_concentracion: Number(document.getElementById('ps-horas-concentracion').value || 4),
             fuera_generacion_pct: Number(document.getElementById('ps-fuera-pct').value || 0),
+            valor_kwh_actual: Number(document.getElementById('ps-valor-kwh').value || 0),
+            area_holgura_pct: Number(document.getElementById('ps-area-holgura').value || 0),
+            vida_paneles_anios: Number(document.getElementById('ps-vida-paneles').value || 25),
+            vida_baterias_anios: Number(document.getElementById('ps-vida-baterias').value || 10),
+            vida_inversor_anios: Number(document.getElementById('ps-vida-inversor').value || 10),
             panel_producto_id: Number(document.getElementById('ps-panel-producto').value || 0),
             tipo_bateria: document.getElementById('ps-tipo-bateria').value,
             bateria_producto_id: Number(document.getElementById('ps-bateria-producto').value || 0),
@@ -2473,6 +2539,22 @@ function cuerpoProyectoSolar() {
                 panel_w: proyectoSolarResultado?.panelW || 0,
                 paneles: proyectoSolarResultado?.paneles || 0,
                 baterias: proyectoSolarResultado?.bateriasEstimadas || 0,
+                area_panel_m2: proyectoSolarResultado?.areaPanelM2 || 0,
+                area_neta_m2: proyectoSolarResultado?.areaNetaM2 || 0,
+                area_recomendada_m2: proyectoSolarResultado?.areaRecomendadaM2 || 0,
+                area_holgura_pct: proyectoSolarResultado?.areaHolguraPct || 0,
+                valor_kwh_actual: proyectoSolarResultado?.valorKwh || 0,
+                ahorro_anual: proyectoSolarResultado?.ahorroAnual || 0,
+                retorno_anios: proyectoSolarResultado?.retornoAnios || 0,
+                vida_paneles_anios: proyectoSolarResultado?.vidaPaneles || 0,
+                vida_baterias_anios: proyectoSolarResultado?.vidaBaterias || 0,
+                vida_inversor_anios: proyectoSolarResultado?.vidaInversor || 0,
+                vida_referencia_anios: proyectoSolarResultado?.vidaReferencia || 0,
+                kwh_vida_referencia: proyectoSolarResultado?.kwhVidaReferencia || 0,
+                costo_kwh_inversion: proyectoSolarResultado?.costoKwhInversion || 0,
+                kwh_vida_paneles: proyectoSolarResultado?.kwhVidaPaneles || 0,
+                kwh_vida_baterias: proyectoSolarResultado?.kwhVidaBaterias || 0,
+                kwh_vida_inversor: proyectoSolarResultado?.kwhVidaInversor || 0,
             }
         },
         presupuesto: {
@@ -2580,6 +2662,11 @@ async function abrirProyectoSolar(id) {
         document.getElementById('ps-cobertura').value = d.cobertura_pct || 100;
         document.getElementById('ps-horas-concentracion').value = d.horas_concentracion || d.resultado?.horas_concentracion || 4;
         document.getElementById('ps-fuera-pct').value = d.fuera_generacion_pct || 60;
+        document.getElementById('ps-valor-kwh').value = d.valor_kwh_actual || d.resultado?.valor_kwh_actual || '';
+        document.getElementById('ps-area-holgura').value = d.area_holgura_pct || d.resultado?.area_holgura_pct || 25;
+        document.getElementById('ps-vida-paneles').value = d.vida_paneles_anios || d.resultado?.vida_paneles_anios || 25;
+        document.getElementById('ps-vida-baterias').value = d.vida_baterias_anios || d.resultado?.vida_baterias_anios || 10;
+        document.getElementById('ps-vida-inversor').value = d.vida_inversor_anios || d.resultado?.vida_inversor_anios || 10;
         document.getElementById('ps-tipo-bateria').value = d.tipo_bateria || 'lifepo4';
         document.getElementById('ps-asesoria-pagada').checked = !!p.asesoria_pagada;
         document.getElementById('ps-pdf-habilitado').checked = !!p.pdf_habilitado;

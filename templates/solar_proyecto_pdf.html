@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF tecnico - {{ proyecto.cliente_nombre }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; color: #111827; }
         @media print { .no-print { display: none; } body { background: white; } }
@@ -20,10 +21,14 @@
             <button onclick="window.print()" class="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-bold">Imprimir / guardar PDF</button>
         </div>
 
-        <header class="border-b border-gray-200 pb-5">
+        <header class="relative border-b border-gray-200 pb-5 pr-44">
             <p class="text-sm font-bold text-gray-500">{{ tienda.nombre }}</p>
             <h1 class="text-3xl font-black mt-1">Memoria tecnica del proyecto solar</h1>
             <p class="text-gray-500 mt-2">{{ proyecto.escenario or 'Proyecto solar' }} · {{ proyecto.ubicacion or 'Ubicacion por confirmar' }}</p>
+            <div class="absolute right-0 top-0 w-36 text-center">
+                <div id="qr-propuesta-digital" class="inline-flex bg-white border border-gray-200 rounded-lg p-2"></div>
+                <p class="text-[10px] leading-tight text-gray-500 mt-2">Escanea para abrir la propuesta digital</p>
+            </div>
         </header>
 
         <section class="grid grid-cols-3 gap-3 mt-6 text-sm">
@@ -41,6 +46,8 @@
                     <tr class="border-b"><td class="py-2 text-gray-500">Factor solar</td><td class="py-2 text-right font-bold">{{ datos.factor_solar or 0 }}</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Consumo fuera de generacion util</td><td class="py-2 text-right font-bold">{{ datos.fuera_generacion_pct or 0 }}%</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Horas de concentracion usadas</td><td class="py-2 text-right font-bold">{{ datos.horas_concentracion or res.horas_concentracion or 4 }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Valor kWh actual</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(datos.valor_kwh_actual or res.valor_kwh_actual or 0).replace(",", ".") }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Holgura de area para mantenimiento</td><td class="py-2 text-right font-bold">{{ datos.area_holgura_pct or res.area_holgura_pct or 0 }}%</td></tr>
                 </tbody>
             </table>
         </section>
@@ -54,6 +61,11 @@
                     <tr class="border-b"><td class="py-2 text-gray-500">Bateria nominal requerida</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.bateria_nominal_kwh or 0) }} kWh</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Energia diaria a producir</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.energia_producir_kwh or 0) }} kWh/dia</td></tr>
                     <tr class="border-b"><td class="py-2 text-gray-500">Potencia estimada inversor</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.pico_w or 0) }} W</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Area neta de paneles</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.area_neta_m2 or 0) }} m2</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Area recomendada con mantenimiento</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.area_recomendada_m2 or 0) }} m2</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Ahorro anual estimado</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.ahorro_anual or 0).replace(",", ".") }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Retorno estimado</td><td class="py-2 text-right font-bold">{% if res.retorno_anios %}{{ "%.1f"|format(res.retorno_anios) }} anos{% else %}Por calcular{% endif %}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Costo kWh inversion</td><td class="py-2 text-right font-bold">{{ "${:,.0f}".format(res.costo_kwh_inversion or 0).replace(",", ".") }}</td></tr>
                 </tbody>
             </table>
         </section>
@@ -74,8 +86,23 @@
         </section>
 
         <section class="mt-7 text-xs text-gray-500 border-t pt-4">
+            <p class="mb-2">Propuesta digital: <span class="font-bold text-gray-700 break-all">{{ proyecto.url_publica }}</span></p>
             <p>Este documento corresponde a una memoria tecnica preliminar. La instalacion final depende de visita tecnica, disponibilidad de equipos, condiciones electricas existentes, protecciones requeridas y validacion del sitio.</p>
         </section>
     </main>
+    <script>
+        const urlPropuestaDigital = {{ proyecto.url_publica|tojson }};
+        const contenedorQr = document.getElementById('qr-propuesta-digital');
+        if (contenedorQr && window.QRCode && urlPropuestaDigital) {
+            new QRCode(contenedorQr, {
+                text: urlPropuestaDigital,
+                width: 104,
+                height: 104,
+                colorDark: '#111827',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+    </script>
 </body>
 </html>

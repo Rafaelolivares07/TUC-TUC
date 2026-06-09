@@ -81,7 +81,7 @@ def create_app():
             restaurante_publico, restaurante_mesero, restaurante_cocina,
             mi_restaurante, restaurante_cliente, cobrar_mesa_page
         )
-        from .blueprints.tiendas import tienda_publica, mi_tienda, tienda_caja
+        from .blueprints.tiendas import tienda_publica, mi_tienda, tienda_caja, solar_proyecto_publico_desde_slugs
         from .db import get_db_connection
 
         # Detectar tipo de negocio una sola vez
@@ -95,7 +95,7 @@ def create_app():
             es_tienda = None
 
         # No interceptar llamadas API ni estáticos — dejar que Flask las enrute normal
-        if request.path.startswith('/api/') or request.path.startswith('/static/') or request.path.startswith('/pagar/'):
+        if request.path.startswith('/api/') or request.path.startswith('/static/') or request.path.startswith('/pagar/') or request.path.startswith('/proyecto/'):
             return
 
         if es_tienda:
@@ -106,6 +106,11 @@ def create_app():
             fn = _MAP_TIENDA.get(request.path)
             if fn:
                 return fn(slug)
+            partes = [p for p in request.path.strip('/').split('/') if p]
+            if len(partes) >= 2:
+                respuesta_proyecto = solar_proyecto_publico_desde_slugs(slug, partes[0], '/'.join(partes[1:]))
+                if respuesta_proyecto is not None:
+                    return respuesta_proyecto
             return tienda_publica(slug)
         else:
             _MAP_REST = {

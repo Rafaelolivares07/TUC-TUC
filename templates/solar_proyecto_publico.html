@@ -234,6 +234,13 @@
                     <p class="text-gray-500 mt-2">Incluye los equipos principales recomendados para este escenario. El alcance final se valida con visita, disponibilidad y condiciones del sitio.</p>
                 </div>
                 <div class="flex flex-col gap-3 min-w-[220px]">
+                    {% if proyecto.asesoria_pagada and proyecto.pdf_habilitado %}
+                    <a href="{{ proyecto.url_pdf }}" target="_blank" class="text-center border-2 border-accent font-bold rounded-xl px-5 py-3 accent hover:bg-gray-50">Abrir PDF tecnico</a>
+                    {% else %}
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                        PDF tecnico disponible cuando la asesoria este habilitada.
+                    </div>
+                    {% endif %}
                     {% if tienda.admin_telefono %}
                     <a href="https://wa.me/{{ tienda.admin_telefono }}?text={{ ('Hola, quiero revisar el proyecto solar ' ~ proyecto.escenario)|urlencode }}" class="text-center text-white font-bold rounded-xl px-5 py-3 bg-accent">Hablar por WhatsApp</a>
                     {% endif %}

@@ -231,6 +231,8 @@ def _crear_tablas(conn):
             presupuesto JSONB DEFAULT '{}'::jsonb,
             total NUMERIC(14,2) DEFAULT 0,
             estado VARCHAR(30) DEFAULT 'borrador',
+            asesoria_pagada BOOLEAN DEFAULT FALSE,
+            pdf_habilitado BOOLEAN DEFAULT FALSE,
             token_publico VARCHAR(80) UNIQUE NOT NULL,
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
@@ -269,6 +271,8 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_producto_documentos_producto ON producto_documentos(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_producto_fichas_solares_tipo ON producto_fichas_solares(tipo)",
         "ALTER TABLE proyectos_solares ADD COLUMN IF NOT EXISTS cliente_id INTEGER REFERENCES terceros(id)",
+        "ALTER TABLE proyectos_solares ADD COLUMN IF NOT EXISTS asesoria_pagada BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE proyectos_solares ADD COLUMN IF NOT EXISTS pdf_habilitado BOOLEAN DEFAULT FALSE",
         "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_tienda ON proyectos_solares(tienda_id, updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_cliente ON proyectos_solares(cliente_id)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
@@ -2711,8 +2715,11 @@ def _proyecto_solar_dict(p, incluir_detalle=True):
         'tipo_sistema': p['tipo_sistema'] or '',
         'total': float(p['total'] or 0),
         'estado': p['estado'] or 'borrador',
+        'asesoria_pagada': bool(p['asesoria_pagada']) if 'asesoria_pagada' in p.keys() else False,
+        'pdf_habilitado': bool(p['pdf_habilitado']) if 'pdf_habilitado' in p.keys() else False,
         'token_publico': p['token_publico'],
         'url_publica': f'/solar/proyecto/{p["token_publico"]}',
+        'url_pdf': f'/solar/proyecto/{p["token_publico"]}/pdf',
         'created_at': str(p['created_at']) if p['created_at'] else '',
         'updated_at': str(p['updated_at']) if p['updated_at'] else '',
     }
@@ -2771,7 +2778,7 @@ def api_tienda_proyectos_solares(slug):
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         filas = conn.execute("""
             SELECT id, cliente_id, cliente_nombre, cliente_telefono, ubicacion, escenario, tipo_sistema,
-                   total, estado, token_publico, created_at, updated_at
+                   total, estado, asesoria_pagada, pdf_habilitado, token_publico, created_at, updated_at
             FROM proyectos_solares
             WHERE tienda_id = %s
             ORDER BY updated_at DESC, id DESC
@@ -2807,6 +2814,8 @@ def api_tienda_proyecto_solar_guardar(slug):
         presupuesto = data.get('presupuesto') or {}
         datos = data.get('datos_tecnicos') or {}
         total = float(presupuesto.get('total') or data.get('total') or 0)
+        asesoria_pagada = bool(data.get('asesoria_pagada'))
+        pdf_habilitado = bool(data.get('pdf_habilitado'))
         if proyecto_id:
             existente = conn.execute(
                 "SELECT token_publico FROM proyectos_solares WHERE id = %s AND tienda_id = %s",
@@ -2819,7 +2828,7 @@ def api_tienda_proyecto_solar_guardar(slug):
                 UPDATE proyectos_solares
                 SET cliente_id=%s, cliente_nombre=%s, cliente_telefono=%s, ubicacion=%s, escenario=%s,
                     tipo_sistema=%s, datos_tecnicos=%s, presupuesto=%s, total=%s,
-                    estado=%s, updated_at=NOW()
+                    estado=%s, asesoria_pagada=%s, pdf_habilitado=%s, updated_at=NOW()
                 WHERE id=%s AND tienda_id=%s
             """, (
                 tercero['id'],
@@ -2832,6 +2841,8 @@ def api_tienda_proyecto_solar_guardar(slug):
                 json.dumps(presupuesto),
                 total,
                 (data.get('estado') or 'borrador').strip(),
+                asesoria_pagada,
+                pdf_habilitado,
                 proyecto_id,
                 tienda['id'],
             ))
@@ -2840,8 +2851,8 @@ def api_tienda_proyecto_solar_guardar(slug):
             row = conn.execute("""
                 INSERT INTO proyectos_solares
                     (tienda_id, cliente_id, cliente_nombre, cliente_telefono, ubicacion, escenario,
-                     tipo_sistema, datos_tecnicos, presupuesto, total, estado, token_publico)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     tipo_sistema, datos_tecnicos, presupuesto, total, estado, asesoria_pagada, pdf_habilitado, token_publico)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
             """, (
                 tienda['id'],
@@ -2855,6 +2866,8 @@ def api_tienda_proyecto_solar_guardar(slug):
                 json.dumps(presupuesto),
                 total,
                 (data.get('estado') or 'borrador').strip(),
+                asesoria_pagada,
+                pdf_habilitado,
                 token,
             )).fetchone()
             proyecto_id = row['id']
@@ -2919,6 +2932,37 @@ def solar_proyecto_publico(token):
         proyecto = _proyecto_solar_dict(row, True)
         proyecto = _enriquecer_lineas_proyecto_solar(conn, row['slug'], proyecto)
         return render_template('solar_proyecto_publico.html', tienda=tienda, proyecto=proyecto)
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/solar/proyecto/<token>/pdf')
+def solar_proyecto_pdf(token):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        row = conn.execute("""
+            SELECT p.*, t.nombre AS tienda_nombre, t.slug, t.admin_telefono, t.color_accion,
+                   t.imagen_header, t.imagen_header_movil, t.descripcion
+            FROM proyectos_solares p
+            JOIN tiendas t ON t.id = p.tienda_id
+            WHERE p.token_publico = %s AND t.activo = TRUE
+        """, (token,)).fetchone()
+        if not row:
+            return "Proyecto no encontrado", 404
+        if not row['asesoria_pagada'] or not row['pdf_habilitado']:
+            return "PDF tecnico no habilitado para este proyecto", 403
+        tienda = {
+            'nombre': row['tienda_nombre'],
+            'slug': row['slug'],
+            'admin_telefono': row['admin_telefono'] or '',
+            'color_accion': row['color_accion'] or '#e11d48',
+            'url': f'https://{row["slug"]}.tuc-tuc.co',
+        }
+        proyecto = _enriquecer_lineas_proyecto_solar(conn, row['slug'], _proyecto_solar_dict(row, True))
+        return render_template('solar_proyecto_pdf.html', tienda=tienda, proyecto=proyecto)
     except Exception as e:
         return f"Error: {e}", 500
     finally:

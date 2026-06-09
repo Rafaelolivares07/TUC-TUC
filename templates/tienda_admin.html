@@ -325,6 +325,16 @@
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Costo equipos</span><strong id="ps-res-costo" class="block text-gray-900 mt-1">$0</strong></div>
                         <div class="bg-gray-50 rounded-xl p-3"><span class="text-gray-500">Margen equipos</span><strong id="ps-res-margen" class="block text-gray-900 mt-1">$0</strong></div>
                     </div>
+                    <div class="grid md:grid-cols-2 gap-3 mb-4 text-sm">
+                        <label class="flex items-center gap-3 border border-gray-200 rounded-xl p-3 bg-gray-50">
+                            <input id="ps-asesoria-pagada" type="checkbox" class="w-4 h-4 accent-emerald-600">
+                            <span><strong class="block text-gray-700">Asesoria pagada</strong><span class="text-xs text-gray-400">Marca cuando el cliente ya pago la asesoria/cotizacion.</span></span>
+                        </label>
+                        <label class="flex items-center gap-3 border border-gray-200 rounded-xl p-3 bg-gray-50">
+                            <input id="ps-pdf-habilitado" type="checkbox" class="w-4 h-4 accent-emerald-600">
+                            <span><strong class="block text-gray-700">Habilitar PDF tecnico</strong><span class="text-xs text-gray-400">El cliente solo lo vera si tambien esta pagado.</span></span>
+                        </label>
+                    </div>
                     <div id="ps-lineas-presupuesto" class="mt-4 space-y-2 text-sm"></div>
                     <div class="flex flex-col sm:flex-row gap-2 mt-5">
                         <button onclick="guardarProyectoSolar()" class="bg-gray-900 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar proyecto</button>
@@ -2103,6 +2113,10 @@ function limpiarProyectoSolar() {
     if (horasConcentracion) horasConcentracion.value = 4;
     const fueraPct = document.getElementById('ps-fuera-pct');
     if (fueraPct) fueraPct.value = 60;
+    const pagada = document.getElementById('ps-asesoria-pagada');
+    if (pagada) pagada.checked = false;
+    const pdf = document.getElementById('ps-pdf-habilitado');
+    if (pdf) pdf.checked = false;
     const escenario = document.getElementById('ps-escenario');
     if (escenario) escenario.value = '';
     const inversorSel = document.getElementById('ps-inversor-producto');
@@ -2479,6 +2493,8 @@ function cuerpoProyectoSolar() {
             }))
         },
         total: proyectoSolarResultado?.totalEquipos || 0,
+        asesoria_pagada: document.getElementById('ps-asesoria-pagada')?.checked || false,
+        pdf_habilitado: document.getElementById('ps-pdf-habilitado')?.checked || false,
         estado: 'borrador',
     };
 }
@@ -2535,6 +2551,7 @@ async function cargarProyectosSolares() {
                         <p class="font-extrabold text-gray-800">${money(p.total)}</p>
                     </div>
                     <p class="text-xs text-gray-400 mt-2">${p.tipo_sistema || 'proyecto'} - ${p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-CO') : ''}</p>
+                    <p class="text-xs text-gray-400 mt-1">${p.asesoria_pagada ? 'Asesoria pagada' : 'Asesoria pendiente'} · ${p.pdf_habilitado ? 'PDF habilitado' : 'PDF cerrado'}</p>
                 </button>
                 <a href="${p.url_publica}" target="_blank" class="inline-block mt-2 text-xs font-bold text-emerald-600">Ver pagina del cliente</a>
             </div>
@@ -2564,6 +2581,8 @@ async function abrirProyectoSolar(id) {
         document.getElementById('ps-horas-concentracion').value = d.horas_concentracion || d.resultado?.horas_concentracion || 4;
         document.getElementById('ps-fuera-pct').value = d.fuera_generacion_pct || 60;
         document.getElementById('ps-tipo-bateria').value = d.tipo_bateria || 'lifepo4';
+        document.getElementById('ps-asesoria-pagada').checked = !!p.asesoria_pagada;
+        document.getElementById('ps-pdf-habilitado').checked = !!p.pdf_habilitado;
         renderSelectoresProyectoSolar();
         if (d.panel_producto_id) document.getElementById('ps-panel-producto').value = d.panel_producto_id;
         if (d.bateria_producto_id) document.getElementById('ps-bateria-producto').value = d.bateria_producto_id;

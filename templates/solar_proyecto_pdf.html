@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF tecnico - {{ proyecto.cliente_nombre }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: Arial, sans-serif; color: #111827; }
+        @media print { .no-print { display: none; } body { background: white; } }
+    </style>
+</head>
+<body class="bg-gray-100">
+    {% set datos = proyecto.datos_tecnicos or {} %}
+    {% set res = datos.resultado or {} %}
+    {% set presupuesto = proyecto.presupuesto or {} %}
+    {% set lineas = presupuesto.lineas or [] %}
+    <main class="max-w-4xl mx-auto bg-white min-h-screen p-8">
+        <div class="no-print flex justify-end mb-4">
+            <button onclick="window.print()" class="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-bold">Imprimir / guardar PDF</button>
+        </div>
+
+        <header class="border-b border-gray-200 pb-5">
+            <p class="text-sm font-bold text-gray-500">{{ tienda.nombre }}</p>
+            <h1 class="text-3xl font-black mt-1">Memoria tecnica del proyecto solar</h1>
+            <p class="text-gray-500 mt-2">{{ proyecto.escenario or 'Proyecto solar' }} · {{ proyecto.ubicacion or 'Ubicacion por confirmar' }}</p>
+        </header>
+
+        <section class="grid grid-cols-3 gap-3 mt-6 text-sm">
+            <div class="border rounded-lg p-3"><span class="text-gray-500">Cliente</span><strong class="block">{{ proyecto.cliente_nombre }}</strong></div>
+            <div class="border rounded-lg p-3"><span class="text-gray-500">Sistema</span><strong class="block">{{ (proyecto.tipo_sistema or 'Solar')|replace('_', ' ')|title }}</strong></div>
+            <div class="border rounded-lg p-3"><span class="text-gray-500">Total proyecto</span><strong class="block">{{ "${:,.0f}".format(proyecto.total or 0).replace(",", ".") }}</strong></div>
+        </section>
+
+        <section class="mt-7">
+            <h2 class="text-xl font-black">Datos base</h2>
+            <table class="w-full mt-3 text-sm border-collapse">
+                <tbody>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Consumo mensual de diseno</td><td class="py-2 text-right font-bold">{{ datos.consumo_mensual_kwh or 0 }} kWh</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Cobertura objetivo</td><td class="py-2 text-right font-bold">{{ datos.cobertura_pct or 100 }}%</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Factor solar</td><td class="py-2 text-right font-bold">{{ datos.factor_solar or 0 }}</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Consumo fuera de generacion util</td><td class="py-2 text-right font-bold">{{ datos.fuera_generacion_pct or 0 }}%</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Horas de concentracion usadas</td><td class="py-2 text-right font-bold">{{ datos.horas_concentracion or res.horas_concentracion or 4 }}</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="mt-7">
+            <h2 class="text-xl font-black">Resultados del calculo</h2>
+            <table class="w-full mt-3 text-sm border-collapse">
+                <tbody>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Consumo diario calculado</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.consumo_diario_kwh or 0) }} kWh/dia</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Energia fuera de generacion util</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.fuera_generacion_wh or 0) }} Wh</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Bateria nominal requerida</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.bateria_nominal_kwh or 0) }} kWh</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Energia diaria a producir</td><td class="py-2 text-right font-bold">{{ "%.2f"|format(res.energia_producir_kwh or 0) }} kWh/dia</td></tr>
+                    <tr class="border-b"><td class="py-2 text-gray-500">Potencia estimada inversor</td><td class="py-2 text-right font-bold">{{ "%.0f"|format(res.pico_w or 0) }} W</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="mt-7">
+            <h2 class="text-xl font-black">Equipos principales</h2>
+            <div class="mt-3 divide-y border rounded-lg">
+                {% for item in lineas %}
+                <div class="p-3 flex justify-between gap-4 text-sm">
+                    <div>
+                        <p class="font-bold">{{ item.nombre }}</p>
+                        <p class="text-gray-500">{{ item.etiqueta }}</p>
+                    </div>
+                    <p class="font-bold">Cantidad: {{ item.cantidad }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="mt-7 text-xs text-gray-500 border-t pt-4">
+            <p>Este documento corresponde a una memoria tecnica preliminar. La instalacion final depende de visita tecnica, disponibilidad de equipos, condiciones electricas existentes, protecciones requeridas y validacion del sitio.</p>
+        </section>
+    </main>
+</body>
+</html>

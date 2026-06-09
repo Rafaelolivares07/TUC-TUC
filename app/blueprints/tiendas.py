@@ -218,6 +218,22 @@ def _crear_tablas(conn):
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS proyectos_solares (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+            cliente_nombre VARCHAR(255),
+            cliente_telefono VARCHAR(30),
+            ubicacion VARCHAR(255),
+            escenario VARCHAR(255),
+            tipo_sistema VARCHAR(40),
+            datos_tecnicos JSONB DEFAULT '{}'::jsonb,
+            presupuesto JSONB DEFAULT '{}'::jsonb,
+            total NUMERIC(14,2) DEFAULT 0,
+            estado VARCHAR(30) DEFAULT 'borrador',
+            token_publico VARCHAR(80) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
     ]
     for sql in sqls:
         conn.execute(sql)
@@ -251,6 +267,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_cot_items_cotizacion ON cotizacion_items_tienda(cotizacion_id)",
         "CREATE INDEX IF NOT EXISTS idx_producto_documentos_producto ON producto_documentos(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_producto_fichas_solares_tipo ON producto_fichas_solares(tipo)",
+        "CREATE INDEX IF NOT EXISTS idx_proyectos_solares_tienda ON proyectos_solares(tienda_id, updated_at DESC)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -2631,6 +2648,177 @@ def api_tienda_producto_ficha_solar(slug, producto_id):
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+def _proyecto_solar_dict(p, incluir_detalle=True):
+    item = {
+        'id': p['id'],
+        'cliente_nombre': p['cliente_nombre'] or '',
+        'cliente_telefono': p['cliente_telefono'] or '',
+        'ubicacion': p['ubicacion'] or '',
+        'escenario': p['escenario'] or '',
+        'tipo_sistema': p['tipo_sistema'] or '',
+        'total': float(p['total'] or 0),
+        'estado': p['estado'] or 'borrador',
+        'token_publico': p['token_publico'],
+        'url_publica': f'/solar/proyecto/{p["token_publico"]}',
+        'created_at': str(p['created_at']) if p['created_at'] else '',
+        'updated_at': str(p['updated_at']) if p['updated_at'] else '',
+    }
+    if incluir_detalle:
+        item['datos_tecnicos'] = p['datos_tecnicos'] or {}
+        item['presupuesto'] = p['presupuesto'] or {}
+    return item
+
+
+@bp.route('/api/tienda/<slug>/proyectos-solares')
+def api_tienda_proyectos_solares(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        filas = conn.execute("""
+            SELECT id, cliente_nombre, cliente_telefono, ubicacion, escenario, tipo_sistema,
+                   total, estado, token_publico, created_at, updated_at
+            FROM proyectos_solares
+            WHERE tienda_id = %s
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 60
+        """, (tienda['id'],)).fetchall()
+        return jsonify({'ok': True, 'proyectos': [_proyecto_solar_dict(p, False) for p in filas]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/proyecto-solar', methods=['POST'])
+def api_tienda_proyecto_solar_guardar(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        proyecto_id = data.get('id')
+        cliente = (data.get('cliente_nombre') or '').strip()
+        presupuesto = data.get('presupuesto') or {}
+        datos = data.get('datos_tecnicos') or {}
+        total = float(presupuesto.get('total') or data.get('total') or 0)
+        if not cliente:
+            return jsonify({'ok': False, 'error': 'Cliente requerido'}), 400
+        if proyecto_id:
+            existente = conn.execute(
+                "SELECT token_publico FROM proyectos_solares WHERE id = %s AND tienda_id = %s",
+                (proyecto_id, tienda['id'])
+            ).fetchone()
+            if not existente:
+                return jsonify({'ok': False, 'error': 'Proyecto no encontrado'}), 404
+            token = existente['token_publico']
+            conn.execute("""
+                UPDATE proyectos_solares
+                SET cliente_nombre=%s, cliente_telefono=%s, ubicacion=%s, escenario=%s,
+                    tipo_sistema=%s, datos_tecnicos=%s, presupuesto=%s, total=%s,
+                    estado=%s, updated_at=NOW()
+                WHERE id=%s AND tienda_id=%s
+            """, (
+                cliente,
+                (data.get('cliente_telefono') or '').strip(),
+                (data.get('ubicacion') or '').strip(),
+                (data.get('escenario') or '').strip(),
+                (data.get('tipo_sistema') or '').strip(),
+                json.dumps(datos),
+                json.dumps(presupuesto),
+                total,
+                (data.get('estado') or 'borrador').strip(),
+                proyecto_id,
+                tienda['id'],
+            ))
+        else:
+            token = secrets.token_urlsafe(18)
+            row = conn.execute("""
+                INSERT INTO proyectos_solares
+                    (tienda_id, cliente_nombre, cliente_telefono, ubicacion, escenario,
+                     tipo_sistema, datos_tecnicos, presupuesto, total, estado, token_publico)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                tienda['id'],
+                cliente,
+                (data.get('cliente_telefono') or '').strip(),
+                (data.get('ubicacion') or '').strip(),
+                (data.get('escenario') or '').strip(),
+                (data.get('tipo_sistema') or '').strip(),
+                json.dumps(datos),
+                json.dumps(presupuesto),
+                total,
+                (data.get('estado') or 'borrador').strip(),
+                token,
+            )).fetchone()
+            proyecto_id = row['id']
+        conn.commit()
+        return jsonify({'ok': True, 'proyecto_id': proyecto_id, 'token_publico': token, 'url_publica': f'/solar/proyecto/{token}'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/proyecto-solar/<int:proyecto_id>')
+def api_tienda_proyecto_solar_ver(slug, proyecto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        p = conn.execute("""
+            SELECT p.*
+            FROM proyectos_solares p
+            JOIN tiendas t ON t.id = p.tienda_id
+            WHERE p.id = %s AND t.slug = %s
+        """, (proyecto_id, slug)).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'error': 'Proyecto no encontrado'}), 404
+        return jsonify({'ok': True, 'proyecto': _proyecto_solar_dict(p, True)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/solar/proyecto/<token>')
+def solar_proyecto_publico(token):
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        row = conn.execute("""
+            SELECT p.*, t.nombre AS tienda_nombre, t.slug, t.admin_telefono, t.color_accion
+            FROM proyectos_solares p
+            JOIN tiendas t ON t.id = p.tienda_id
+            WHERE p.token_publico = %s AND t.activo = TRUE
+        """, (token,)).fetchone()
+        if not row:
+            return "Proyecto no encontrado", 404
+        tienda = {
+            'nombre': row['tienda_nombre'],
+            'slug': row['slug'],
+            'admin_telefono': row['admin_telefono'] or '',
+            'color_accion': row['color_accion'] or '#e11d48',
+        }
+        proyecto = _proyecto_solar_dict(row, True)
+        return render_template('solar_proyecto_publico.html', tienda=tienda, proyecto=proyecto)
+    except Exception as e:
+        return f"Error: {e}", 500
     finally:
         conn.close()
 

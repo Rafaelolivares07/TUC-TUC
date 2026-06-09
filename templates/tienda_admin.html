@@ -212,6 +212,8 @@
                         <h3 class="font-bold text-gray-700">Proyecto solar</h3>
                         <button onclick="limpiarProyectoSolar()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">Limpiar</button>
                     </div>
+                    <input id="ps-proyecto-id" type="hidden">
+                    <input id="ps-token-publico" type="hidden">
                     <div class="grid lg:grid-cols-2 gap-3 mb-4">
                         <label class="text-xs font-semibold text-gray-500">Cliente
                             <input id="ps-cliente" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nombre del cliente">
@@ -309,9 +311,17 @@
                     <div id="ps-lineas-presupuesto" class="mt-4 space-y-2 text-sm"></div>
                     <div class="grid gap-2 mt-5">
                         <button onclick="calcularProyectoSolar()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-5 py-3 text-sm font-bold">Calcular proyecto</button>
-                        <button onclick="pasarProyectoACotizacion()" class="w-full bg-gray-900 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Pasar a cotizacion</button>
+                        <button onclick="guardarProyectoSolar()" class="w-full bg-gray-900 hover:bg-black text-white rounded-xl px-5 py-3 text-sm font-bold">Guardar proyecto</button>
+                        <a id="ps-link-publico" href="#" target="_blank" class="hidden w-full text-center border border-gray-200 hover:bg-gray-50 rounded-xl px-5 py-3 text-sm font-bold text-gray-700">Ver pagina del cliente</a>
                     </div>
                 </div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl p-4 mt-5">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h3 class="font-bold text-gray-700">Proyectos guardados</h3>
+                    <button onclick="cargarProyectosSolares()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">Actualizar</button>
+                </div>
+                <div id="ps-lista-proyectos" class="grid md:grid-cols-2 gap-3 text-sm"></div>
             </div>
         </div>
 
@@ -1935,6 +1945,7 @@ function seleccionarProductoFichaSolar(productoId) {
 function prepararProyectoSolar() {
     if (!productos.length) cargarProductos();
     else renderSelectoresProyectoSolar();
+    cargarProyectosSolares();
     const cont = document.getElementById('ps-cargas');
     if (cont && !cont.children.length) agregarCargaProyectoSolar();
     ['ps-consumo-mensual','ps-factor','ps-cobertura','ps-fuera-pct','ps-tipo-sistema','ps-panel-producto','ps-tipo-bateria','ps-bateria-producto','ps-inversor-producto'].forEach(id => {
@@ -1961,7 +1972,7 @@ function prepararProyectoSolar() {
 }
 
 function limpiarProyectoSolar() {
-    ['ps-cliente','ps-telefono','ps-ubicacion','ps-consumo-mensual','ps-factor'].forEach(id => {
+    ['ps-proyecto-id','ps-token-publico','ps-cliente','ps-telefono','ps-ubicacion','ps-consumo-mensual','ps-factor'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
@@ -1976,6 +1987,8 @@ function limpiarProyectoSolar() {
     const cont = document.getElementById('ps-cargas');
     if (cont) cont.innerHTML = '';
     proyectoSolarResultado = null;
+    const link = document.getElementById('ps-link-publico');
+    if (link) { link.classList.add('hidden'); link.href = '#'; }
     prepararProyectoSolar();
     calcularProyectoSolar();
 }
@@ -2258,35 +2271,139 @@ function renderLineasPresupuestoSolar(lineas) {
     }).join('');
 }
 
-function pasarProyectoACotizacion() {
+function cuerpoProyectoSolar() {
     calcularProyectoSolar();
-    if (!proyectoSolarResultado || !proyectoSolarResultado.lineas.length) return toast('Calcula un proyecto con equipos', true);
-    limpiarCotizacion();
-    document.getElementById('cot-cliente').value = document.getElementById('ps-cliente').value || '';
-    document.getElementById('cot-telefono').value = document.getElementById('ps-telefono').value || '';
-    document.getElementById('cot-ubicacion').value = document.getElementById('ps-ubicacion').value || '';
-    document.getElementById('cot-factor').value = document.getElementById('ps-factor').value || '';
-    document.getElementById('cot-consumo').value = document.getElementById('ps-consumo-mensual').value || '';
-    document.getElementById('cot-paneles').value = proyectoSolarResultado.paneles || '';
-    document.getElementById('cot-objetivo').value = document.getElementById('ps-tipo-sistema').value === 'on_grid' ? 'ahorro' : 'mixto';
-    document.getElementById('cot-notas').value = [
-        proyectoSolarResultado.escenario ? `Escenario: ${proyectoSolarResultado.escenario}` : '',
-        `Consumo diario diseno: ${fmt(proyectoSolarResultado.consumoDiario)} kWh`,
-        `Fuera de generacion util: ${fmt(proyectoSolarResultado.fueraWh / 1000)} kWh/dia`,
-        `Bateria nominal requerida: ${fmt(proyectoSolarResultado.bateriaNominalKwh)} kWh`,
-        `Energia diaria a producir: ${fmt(proyectoSolarResultado.energiaProducir)} kWh`,
-    ].filter(Boolean).join('\\n');
-    cotizacionLineas = proyectoSolarResultado.lineas.map(l => ({
-        producto_id: Number(l.producto.id),
-        nombre: l.producto.nombre,
-        categoria: l.producto.categoria || '',
-        cantidad: Number(l.cantidad || 0),
-        precio_unitario: Number(l.producto.precio || 0),
-        notas: l.etiqueta,
-    }));
-    renderLineasCotizacion();
-    cambiarTab('cotizaciones');
-    toast('Proyecto pasado a cotizacion');
+    return {
+        id: document.getElementById('ps-proyecto-id').value || null,
+        cliente_nombre: document.getElementById('ps-cliente').value.trim(),
+        cliente_telefono: document.getElementById('ps-telefono').value.trim(),
+        ubicacion: document.getElementById('ps-ubicacion').value.trim(),
+        escenario: document.getElementById('ps-escenario').value.trim(),
+        tipo_sistema: document.getElementById('ps-tipo-sistema').value,
+        datos_tecnicos: {
+            consumo_mensual_kwh: Number(document.getElementById('ps-consumo-mensual').value || 0),
+            factor_solar: Number(document.getElementById('ps-factor').value || 0),
+            cobertura_pct: Number(document.getElementById('ps-cobertura').value || 100),
+            fuera_generacion_pct: Number(document.getElementById('ps-fuera-pct').value || 0),
+            panel_producto_id: Number(document.getElementById('ps-panel-producto').value || 0),
+            tipo_bateria: document.getElementById('ps-tipo-bateria').value,
+            bateria_producto_id: Number(document.getElementById('ps-bateria-producto').value || 0),
+            inversor_producto_id: Number(document.getElementById('ps-inversor-producto').value || 0),
+            resultado: {
+                consumo_diario_kwh: proyectoSolarResultado?.consumoDiario || 0,
+                fuera_generacion_wh: proyectoSolarResultado?.fueraWh || 0,
+                bateria_nominal_kwh: proyectoSolarResultado?.bateriaNominalKwh || 0,
+                pico_w: proyectoSolarResultado?.picoW || 0,
+                energia_producir_kwh: proyectoSolarResultado?.energiaProducir || 0,
+                panel_w: proyectoSolarResultado?.panelW || 0,
+                paneles: proyectoSolarResultado?.paneles || 0,
+                baterias: proyectoSolarResultado?.bateriasEstimadas || 0,
+            }
+        },
+        presupuesto: {
+            total: proyectoSolarResultado?.totalEquipos || 0,
+            lineas: (proyectoSolarResultado?.lineas || []).map(l => ({
+                producto_id: Number(l.producto.id),
+                nombre: l.producto.nombre,
+                categoria: l.producto.categoria || '',
+                cantidad: Number(l.cantidad || 0),
+                precio_unitario: Number(l.producto.precio || 0),
+                total: Number(l.cantidad || 0) * Number(l.producto.precio || 0),
+                etiqueta: l.etiqueta,
+            }))
+        },
+        total: proyectoSolarResultado?.totalEquipos || 0,
+        estado: 'borrador',
+    };
+}
+
+async function guardarProyectoSolar() {
+    const body = cuerpoProyectoSolar();
+    if (!body.cliente_nombre) return toast('Cliente requerido', true);
+    if (!body.presupuesto.lineas.length) return toast('Calcula un proyecto con equipos', true);
+    try {
+        const r = await fetch(BASE + '/proyecto-solar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        document.getElementById('ps-proyecto-id').value = data.proyecto_id;
+        document.getElementById('ps-token-publico').value = data.token_publico || '';
+        actualizarLinkPublicoProyecto(data.url_publica);
+        toast('Proyecto guardado');
+        cargarProyectosSolares();
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function actualizarLinkPublicoProyecto(url) {
+    const link = document.getElementById('ps-link-publico');
+    if (!link || !url) return;
+    link.href = url;
+    link.classList.remove('hidden');
+}
+
+async function cargarProyectosSolares() {
+    const cont = document.getElementById('ps-lista-proyectos');
+    if (!cont) return;
+    try {
+        const r = await fetch(BASE + '/proyectos-solares');
+        const data = await r.json();
+        if (!data.ok) return;
+        if (!data.proyectos.length) {
+            cont.innerHTML = '<p class="text-gray-400">No hay proyectos guardados.</p>';
+            return;
+        }
+        cont.innerHTML = data.proyectos.map(p => `
+            <div class="border border-gray-200 rounded-xl p-3">
+                <button onclick="abrirProyectoSolar(${p.id})" class="w-full text-left">
+                    <div class="flex justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-bold text-gray-800 truncate">${p.cliente_nombre || 'Cliente'}</p>
+                            <p class="text-xs text-gray-400 truncate">${p.escenario || p.ubicacion || ''}</p>
+                        </div>
+                        <p class="font-extrabold text-gray-800">${money(p.total)}</p>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">${p.tipo_sistema || 'proyecto'} - ${p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-CO') : ''}</p>
+                </button>
+                <a href="${p.url_publica}" target="_blank" class="inline-block mt-2 text-xs font-bold text-emerald-600">Ver pagina del cliente</a>
+            </div>
+        `).join('');
+    } catch(e) {}
+}
+
+async function abrirProyectoSolar(id) {
+    try {
+        const r = await fetch(BASE + '/proyecto-solar/' + id);
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', true);
+        const p = data.proyecto;
+        const d = p.datos_tecnicos || {};
+        document.getElementById('ps-proyecto-id').value = p.id;
+        document.getElementById('ps-token-publico').value = p.token_publico || '';
+        document.getElementById('ps-cliente').value = p.cliente_nombre || '';
+        document.getElementById('ps-telefono').value = p.cliente_telefono || '';
+        document.getElementById('ps-ubicacion').value = p.ubicacion || '';
+        document.getElementById('ps-escenario').value = p.escenario || '';
+        document.getElementById('ps-tipo-sistema').value = p.tipo_sistema || 'hibrido';
+        document.getElementById('ps-consumo-mensual').value = d.consumo_mensual_kwh || '';
+        document.getElementById('ps-factor').value = d.factor_solar || '';
+        document.getElementById('ps-cobertura').value = d.cobertura_pct || 100;
+        document.getElementById('ps-fuera-pct').value = d.fuera_generacion_pct || 60;
+        document.getElementById('ps-tipo-bateria').value = d.tipo_bateria || 'lifepo4';
+        renderSelectoresProyectoSolar();
+        if (d.panel_producto_id) document.getElementById('ps-panel-producto').value = d.panel_producto_id;
+        if (d.bateria_producto_id) document.getElementById('ps-bateria-producto').value = d.bateria_producto_id;
+        if (d.inversor_producto_id) {
+            const inv = document.getElementById('ps-inversor-producto');
+            inv.value = d.inversor_producto_id;
+            inv.dataset.manual = '1';
+        }
+        actualizarLinkPublicoProyecto(p.url_publica);
+        calcularProyectoSolar();
+        toast('Proyecto cargado');
+    } catch(e) { toast('Error de conexion', true); }
 }
 
 function renderCategoriasVisuales(categorias) {

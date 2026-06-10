@@ -106,6 +106,7 @@
                 {% if tienda.slug == 'home-solar-panel' %}<button onclick="cambiarTab('proyectos-solares')" id="tab-proyectos-solares" class="tab-btn">PROYECTOS SOLARES</button>{% endif %}
                 {% if tienda.slug == 'home-solar-panel' %}<button onclick="cambiarTab('fichas-solares')" id="tab-fichas-solares" class="tab-btn">FICHAS SOLARES</button>{% endif %}
                 <button onclick="cambiarTab('cotizaciones')" id="tab-cotizaciones" class="tab-btn">Cotizaciones</button>
+                <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">👁️ Visitantes</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Tienda</button>
@@ -566,6 +567,50 @@
                 <div class="bg-white border border-gray-200 rounded-xl p-4">
                     <h3 class="font-bold text-gray-700 mb-4">Cotizaciones guardadas</h3>
                     <div id="lista-cotizaciones" class="space-y-3 text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== TAB: VISITANTES ====== -->
+        <div id="panel-visitantes" class="p-4 md:p-6 hidden">
+            <div class="mb-6">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    👁️ Registro de Visitas y Dispositivos
+                </h2>
+                <p class="text-sm text-gray-500 mt-1">
+                    Monitorea en tiempo real quién abre tu tienda, propuestas y descargas de PDF.
+                </p>
+            </div>
+
+            <!-- Sub-tabs para alternar vistas -->
+            <div class="flex border-b border-gray-200 mb-6 gap-6">
+                <button onclick="cambiarSubTabVisitantes('visitantes-dispositivos')" id="subtab-visitantes-dispositivos" class="pb-3 text-sm font-bold border-b-2 border-rose-500 text-rose-600 transition">
+                    📱 Dispositivos Únicos
+                </button>
+                <button onclick="cambiarSubTabVisitantes('visitantes-log')" id="subtab-visitantes-log" class="pb-3 text-sm font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-800 transition">
+                    ⚡ Actividad en Vivo
+                </button>
+            </div>
+
+            <!-- Contenido Sub-tab 1: Dispositivos -->
+            <div id="visitantes-dispositivos" class="space-y-4">
+                <div class="flex items-center justify-between text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">
+                    <span>Dispositivo / Usuario</span>
+                    <span>Historial y Visitas</span>
+                </div>
+                <div id="visitantes-dispositivos-lista" class="space-y-3">
+                    <p class="text-sm text-gray-400 py-4 text-center">Cargando dispositivos...</p>
+                </div>
+            </div>
+
+            <!-- Contenido Sub-tab 2: Log de visitas -->
+            <div id="visitantes-log" class="space-y-4 hidden">
+                <div class="flex items-center justify-between text-xs text-gray-400 font-semibold uppercase tracking-wider mb-2">
+                    <span>Acción / Ruta</span>
+                    <span>Fecha y Hora</span>
+                </div>
+                <div id="visitantes-log-lista" class="space-y-3">
+                    <p class="text-sm text-gray-400 py-4 text-center">Cargando actividad...</p>
                 </div>
             </div>
         </div>
@@ -1258,7 +1303,7 @@ function fmt(v) {
 
 // === Tabs ===
 function cambiarTab(tab) {
-    ['catalogo','pedidos','proyectos-solares','fichas-solares','cotizaciones','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
+    ['catalogo','pedidos','proyectos-solares','fichas-solares','cotizaciones','visitantes','inventario','personalizar','acceso','ubicacion','pauta','vendedores','soporte'].forEach(t => {
         const panel = document.getElementById('panel-' + t);
         if (!panel) return;
         panel.classList.toggle('hidden', t !== tab);
@@ -1276,6 +1321,7 @@ function cambiarTab(tab) {
     if (tab === 'cotizaciones') { prepararCotizaciones(); cargarCotizaciones(); }
     if (tab === 'proyectos-solares') prepararProyectoSolar();
     if (tab === 'fichas-solares') prepararFichasSolares();
+    if (tab === 'visitantes') cargarVisitantes();
 }
 
 function htmlSeguro(valor) {
@@ -5010,6 +5056,180 @@ document.addEventListener('visibilitychange', function() {
         document.getElementById('banner-asignar-categoria').classList.remove('hidden');
     }
 });
+
+// === Registro de Visitantes ===
+async function cargarVisitantes() {
+    try {
+        const contDispositivos = document.getElementById('visitantes-dispositivos-lista');
+        const contLog = document.getElementById('visitantes-log-lista');
+        if (contDispositivos) contDispositivos.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando visitantes...</div>';
+        if (contLog) contLog.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando actividad...</div>';
+
+        const r = await fetch(BASE + '/visitas-publicas');
+        const data = await r.json();
+        if (!data.ok) {
+            if (contDispositivos) contDispositivos.innerHTML = '<div class="text-center py-8 text-red-500">Error al cargar datos.</div>';
+            return;
+        }
+
+        // Renderizar dispositivos/visitantes únicos
+        if (contDispositivos) {
+            if (data.visitantes.length === 0) {
+                contDispositivos.innerHTML = `
+                    <div class="text-center py-12 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <p class="font-semibold">Sin dispositivos registrados</p>
+                        <p class="text-xs">Las visitas a tu tienda pública se mostrarán aquí.</p>
+                    </div>
+                `;
+            } else {
+                contDispositivos.innerHTML = data.visitantes.map(v => {
+                    const tokenCorto = v.visitante_token ? v.visitante_token.substring(0, 8) : 'Anónimo';
+                    const userLabel = v.usuario_nombre 
+                        ? `<span class="bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded text-xs">👤 ${htmlSeguro(v.usuario_nombre)} (${htmlSeguro(v.usuario_telefono)})</span>`
+                        : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-xs">Dispositivo Anónimo</span>`;
+                    
+                    const fechaUltima = v.last_seen ? formatearFecha(v.last_seen) : '---';
+                    const fechaPrimera = v.first_seen ? formatearFecha(v.first_seen) : '---';
+                    
+                    return `
+                        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <div class="font-bold text-gray-800 text-sm flex items-center gap-2 flex-wrap">
+                                        Dispositivo ${tokenCorto}
+                                        ${userLabel}
+                                    </div>
+                                    <p class="text-[11px] text-gray-400 mt-1">IP actual: ${htmlSeguro(v.ip_ultima)} ${v.ip_primera !== v.ip_ultima ? `(inicial: ${htmlSeguro(v.ip_primera)})` : ''}</p>
+                                </div>
+                                <div class="bg-gray-50 border border-gray-100 px-3 py-1 rounded-lg text-center">
+                                    <span class="block text-[10px] text-gray-400">Visitas</span>
+                                    <span class="font-bold text-gray-700 text-sm">${v.visitas}</span>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs border-t border-gray-100 pt-3 mt-3">
+                                <div>
+                                    <span class="text-gray-400 block font-semibold uppercase tracking-wider text-[9px]">Primera visita</span>
+                                    <span class="text-gray-600 font-medium">${fechaPrimera}</span>
+                                    <span class="text-gray-400 block truncate mt-1 text-[11px]" title="${htmlSeguro(v.primer_path)}">${htmlSeguro(v.primer_path)}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-400 block font-semibold uppercase tracking-wider text-[9px]">Última visita</span>
+                                    <span class="text-gray-600 font-medium">${fechaUltima}</span>
+                                    <span class="text-gray-400 block truncate mt-1 text-[11px]" title="${htmlSeguro(v.ultimo_path)}">${htmlSeguro(v.ultimo_path)}</span>
+                                </div>
+                            </div>
+                            <div class="text-[10px] text-gray-400 mt-2 bg-gray-50 px-2 py-1 rounded border border-gray-100 truncate" title="${htmlSeguro(v.user_agent)}">
+                                <b>Navegador:</b> ${htmlSeguro(v.user_agent)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Renderizar actividad reciente (log)
+        if (contLog) {
+            if (data.visitas.length === 0) {
+                contLog.innerHTML = `
+                    <div class="text-center py-12 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <p class="font-semibold">Sin actividad reciente</p>
+                        <p class="text-xs">Toda la actividad en vivo aparecerá aquí.</p>
+                    </div>
+                `;
+            } else {
+                contLog.innerHTML = data.visitas.map(v => {
+                    const fecha = v.created_at ? formatearFecha(v.created_at) : '---';
+                    
+                    let typeBadge = '';
+                    if (v.tipo === 'tienda') {
+                        typeBadge = '<span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">🏪 Tienda</span>';
+                    } else if (v.tipo === 'proyecto_solar') {
+                        typeBadge = '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">☀️ Propuesta</span>';
+                    } else if (v.tipo === 'proyecto_solar_pdf') {
+                        typeBadge = '<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">📄 PDF Técnico</span>';
+                    } else if (v.tipo === 'proyecto_solar_pdf_bloqueado') {
+                        typeBadge = '<span class="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded">🔒 PDF Bloqueado</span>';
+                    } else {
+                        typeBadge = `<span class="bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded">${htmlSeguro(v.tipo)}</span>`;
+                    }
+
+                    const projText = v.proyecto_id 
+                        ? `<div class="text-xs font-semibold text-gray-600 mt-1">Proyecto: ${htmlSeguro(v.cliente_nombre)} - ${htmlSeguro(v.escenario)}</div>` 
+                        : '';
+                    
+                    const userLabel = v.usuario_nombre 
+                        ? `<span class="text-xs bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded font-bold">👤 ${htmlSeguro(v.usuario_nombre)}</span>`
+                        : '';
+
+                    const refText = v.referrer 
+                        ? `<div class="text-[10px] text-gray-400 mt-1"><b>Referente:</b> <a href="${htmlSeguro(v.referrer)}" target="_blank" class="hover:underline text-rose-500">${htmlSeguro(v.referrer)}</a></div>`
+                        : '';
+
+                    return `
+                        <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                            <div class="flex justify-between items-start flex-wrap gap-2 mb-2">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    ${typeBadge}
+                                    <span class="text-xs font-mono bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-gray-600">IP: ${htmlSeguro(v.ip)}</span>
+                                    ${userLabel}
+                                </div>
+                                <span class="text-xs text-gray-400 font-medium">${fecha}</span>
+                            </div>
+                            <div class="text-xs font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 mt-1 break-all">
+                                ${htmlSeguro(v.path)}
+                            </div>
+                            ${projText}
+                            ${refText}
+                            <div class="text-[10px] text-gray-400 mt-2 truncate" title="${htmlSeguro(v.user_agent)}">
+                                <b>UA:</b> ${htmlSeguro(v.user_agent)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+    } catch (e) {
+        console.error("Error al cargar visitantes", e);
+    }
+}
+
+function cambiarSubTabVisitantes(subTab) {
+    ['visitantes-dispositivos', 'visitantes-log'].forEach(t => {
+        const p = document.getElementById(t);
+        if (p) p.classList.toggle('hidden', t !== subTab);
+        
+        const btn = document.getElementById('subtab-' + t);
+        if (btn) {
+            btn.classList.toggle('border-rose-500', t === subTab);
+            btn.classList.toggle('text-rose-600', t === subTab);
+            btn.classList.toggle('border-transparent', t !== subTab);
+            btn.classList.toggle('text-gray-500', t !== subTab);
+        }
+    });
+}
+
+function formatearFecha(fechaStr) {
+    if (!fechaStr) return '';
+    try {
+        const d = new Date(fechaStr.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return fechaStr;
+        return d.toLocaleString('es-CO', { 
+            day: '2-digit', 
+            month: 'short', 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: true 
+        });
+    } catch(e) {
+        return fechaStr;
+    }
+}
 </script>
 {% include 'ayuda_contextual_widget.html' %}
 </body>

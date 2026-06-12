@@ -1916,6 +1916,7 @@ def api_tienda_pedido_crear(slug):
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
             if tienda['tercero_id']:
                 try:
+                    conn.execute("SAVEPOINT sp_inv_tienda")
                     _aplicar_tarjeta(
                         conn, tienda['tercero_id'],
                         producto_id    = it['producto_id'],
@@ -1926,9 +1927,10 @@ def api_tienda_pedido_crear(slug):
                         referencia_id  = pedido_id,
                         referencia_tipo= 'pedido_tienda',
                     )
+                    conn.execute("RELEASE SAVEPOINT sp_inv_tienda")
                 except Exception as _e:
                     print(f'[inv] salida tienda {it["producto_id"]}: {_e}')
-                    try: conn.rollback()
+                    try: conn.execute("ROLLBACK TO SAVEPOINT sp_inv_tienda")
                     except: pass
         pagos_validos = [p for p in pagos if float(p.get('monto') or 0) > 0]
         if pagos_validos:

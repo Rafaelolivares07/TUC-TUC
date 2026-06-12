@@ -376,24 +376,30 @@ def _enviar_telegram_tienda(*args):
         import requests as req
         token = ''
         if conn:
-            config = conn.execute(
-                "SELECT telegram_token FROM configuracion_sistema WHERE id = 1"
-            ).fetchone()
-            if config:
-                try:
-                    token = config['telegram_token'] or ''
-                except Exception:
-                    token = config[0] or ''
+            try:
+                config = conn.execute(
+                    "SELECT telegram_token FROM configuracion_sistema WHERE id = 1"
+                ).fetchone()
+                if config:
+                    try:
+                        token = config['telegram_token'] or ''
+                    except Exception:
+                        token = config[0] or ''
+            except Exception as _e:
+                print(f'[telegram tienda] token config no disponible: {_e}')
         token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
         if not token:
+            print('[telegram tienda] sin token configurado')
             return
-        req.post(
+        resp = req.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'},
             timeout=10
         )
-    except Exception:
-        pass
+        if resp.status_code >= 400:
+            print(f'[telegram tienda] error {resp.status_code}: {resp.text[:200]}')
+    except Exception as _e:
+        print(f'[telegram tienda] envio fallido: {_e}')
 
 
 def _ip_cliente():

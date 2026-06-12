@@ -132,16 +132,21 @@ function onInputPago(codigo) {
 }
 
 function getPagos() {
-    return metodosDisponibles
+    const pagos = metodosDisponibles
         .map(m => ({codigo: m.codigo, nombre: m.nombre, monto: parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)}))
         .filter(p => p.monto > 0);
+    if (!pagos.length && TOTAL <= 0 && metodosDisponibles.length) {
+        const m = metodosDisponibles[0];
+        return [{codigo: m.codigo, nombre: m.nombre, monto: 0}];
+    }
+    return pagos;
 }
 
 function validarPagos() {
     const suma = metodosDisponibles.reduce((s, m) => s + (parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)), 0);
     const alerta = document.getElementById('pago-alerta');
     const btn = document.getElementById('btn-confirmar');
-    if (suma === 0) {
+    if (suma === 0 && TOTAL > 0) {
         alerta.textContent = 'Ingresa el monto pagado';
         alerta.classList.remove('hidden');
         btn.disabled = true;

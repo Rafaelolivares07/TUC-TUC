@@ -1871,7 +1871,7 @@ def api_tienda_pedido_crear(slug):
     try:
         _crear_tablas(conn)
         tienda = conn.execute(
-            "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence, tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE",
+            "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence, tercero_id, admin_id FROM tiendas WHERE slug = %s AND activo = TRUE",
             (slug,)
         ).fetchone()
         if not tienda:
@@ -1961,6 +1961,11 @@ def api_tienda_pedido_crear(slug):
         conn.commit()
         # Notificación Telegram
         chat_id = tienda['telegram_chat_id']
+        if not chat_id and tienda['admin_id']:
+            admin = conn.execute(
+                "SELECT telegram_chat_id FROM terceros WHERE id = %s", (tienda['admin_id'],)
+            ).fetchone()
+            chat_id = admin['telegram_chat_id'] if admin else None
         if chat_id:
             items_txt = '\n'.join([f"  {it['cantidad']}x {it['nombre_producto']} - ${it['precio_unitario'] * it['cantidad']:,.0f}" for it in items_validos])
             entrega   = 'Domicilio' if tipo_entrega == 'domicilio' else 'Recoger'

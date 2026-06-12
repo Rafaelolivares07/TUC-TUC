@@ -164,6 +164,39 @@ def _enviar_telegram(chat_id, texto):
         pass
 
 
+def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo_entrega,
+                                  direccion, mesa, items, total):
+    try:
+        admin_id = rest['admin_id']
+        nombre_rest = rest['nombre']
+    except Exception:
+        admin_id = dict(rest).get('admin_id') if rest else None
+        nombre_rest = dict(rest).get('nombre', 'restaurante') if rest else 'restaurante'
+    if not admin_id:
+        return
+    admin = conn.execute(
+        "SELECT telegram_chat_id FROM terceros WHERE id = %s", (admin_id,)
+    ).fetchone()
+    if not admin or not admin['telegram_chat_id']:
+        return
+    entrega = {
+        'domicilio': 'Domicilio',
+        'recoger': 'Recoger',
+        'mesa': 'Mesa'
+    }.get(tipo_entrega, tipo_entrega or 'Pedido')
+    ubicacion = direccion or mesa or 'N/A'
+    items_txt = '\n'.join(f"  {item}" for item in items) or '  Pedido registrado'
+    msg = (
+        f"🍽️ <b>Nuevo pedido en {nombre_rest}</b>\n"
+        f"🧾 Pedido #{pedido_id}\n"
+        f"👤 {cliente or 'Cliente'} - {telefono or 'Sin telefono'}\n"
+        f"📦 {entrega}: {ubicacion}\n\n"
+        f"{items_txt}\n\n"
+        f"💰 Total: ${total:,.0f}"
+    )
+    _enviar_telegram(admin['telegram_chat_id'], msg)
+
+
 def _auth_rest(slug, conn):
     """Devuelve (rest_row, ok) verificando sesión o token."""
     rest = conn.execute(
@@ -1280,7 +1313,10 @@ def api_pedido_crear(slug):
         metodo_pago = (data.get('metodo_pago') or '').strip() or None
         conn = get_db_connection()
         _crear_tablas(conn)
-        rest = conn.execute("SELECT id, tipo_restaurante, dias_pagados, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest = conn.execute(
+            "SELECT id, nombre, tipo_restaurante, dias_pagados, tercero_id, admin_id FROM restaurantes WHERE slug = %s",
+            (slug,)
+        ).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
@@ -1302,6 +1338,7 @@ def api_pedido_crear(slug):
                                 'dias_pagados': dias_pagados, 'dias_usados': dias_usados}), 402
 
         precio_total = 0
+        items_notificacion = []
         es_carta = rest['tipo_restaurante'] == 'carta' or (rest['tipo_restaurante'] == 'ambos' and data.get('platos'))
 
         if es_carta:
@@ -1320,6 +1357,7 @@ def api_pedido_crear(slug):
                 cant = p.get('cantidad', 1)
                 precio_item = float(opcion['precio']) * cant
                 precio_total += precio_item
+                items_notificacion.append(f"{cant}x {opcion['nombre']} - ${precio_item:,.0f}")
                 nota_item = p.get('nota', '').strip() or None
                 conn.execute("""
                     INSERT INTO pedidos_restaurante
@@ -1372,6 +1410,12 @@ def api_pedido_crear(slug):
                 recargo = conn.execute("SELECT recargo FROM productos WHERE id = %s", (proteina_id,)).fetchone()
                 if recargo and recargo['recargo']:
                     precio_total += float(recargo['recargo'])
+            items_notificacion.append(f"Menu {tipo} - ${precio_total:,.0f}")
+            for etiqueta, prod_id in (('Sopa', sopa_id), ('Proteina', proteina_id), ('Principio', principio_id)):
+                if prod_id:
+                    prod = conn.execute("SELECT nombre FROM productos WHERE id = %s", (prod_id,)).fetchone()
+                    if prod:
+                        items_notificacion.append(f"{etiqueta}: {prod['nombre']}")
             conn.execute("""
                 INSERT INTO pedidos_restaurante
                 (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago)
@@ -1410,6 +1454,13 @@ def api_pedido_crear(slug):
             except Exception as _e:
                 print(f'[cont] venta rest {slug}: {_e}')
         conn.commit()
+        try:
+            _notificar_pedido_restaurante(
+                conn, rest, pedido_id, nombre_cliente, telefono_cliente, tipo_entrega,
+                direccion_cliente, mesa_nombre, items_notificacion, precio_total
+            )
+        except Exception as _e:
+            print(f'[telegram] pedido rest {slug}: {_e}')
         conn.close()
         return jsonify({'ok': True, 'precio': precio_total, 'pedido_id': pedido_id})
     except Exception as e:

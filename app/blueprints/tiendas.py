@@ -361,18 +361,37 @@ def _generar_slug(nombre):
     return s
 
 
-def _enviar_telegram_tienda(conn, chat_id, texto):
+def _enviar_telegram_tienda(*args):
+    conn = None
+    if len(args) == 3:
+        conn, chat_id, texto = args
+    elif len(args) == 2:
+        chat_id, texto = args
+    else:
+        return
+    if not chat_id:
+        return
     try:
+        import os
         import requests as req
-        config = conn.execute(
-            "SELECT telegram_token FROM configuracion_sistema WHERE id = 1"
-        ).fetchone()
-        if config and config[0]:
-            req.post(
-                f"https://api.telegram.org/bot{config[0]}/sendMessage",
-                json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'},
-                timeout=10
-            )
+        token = ''
+        if conn:
+            config = conn.execute(
+                "SELECT telegram_token FROM configuracion_sistema WHERE id = 1"
+            ).fetchone()
+            if config:
+                try:
+                    token = config['telegram_token'] or ''
+                except Exception:
+                    token = config[0] or ''
+        token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+        if not token:
+            return
+        req.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'},
+            timeout=10
+        )
     except Exception:
         pass
 
@@ -919,19 +938,6 @@ def api_tienda_metodos_pago_publico(slug):
 
 
 # ── Recuperación de acceso ────────────────────────────────────────────────────
-
-def _enviar_telegram_tienda(chat_id, texto):
-    import os
-    import requests as req
-    token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-    if not token or not chat_id:
-        return
-    try:
-        req.post(f'https://api.telegram.org/bot{token}/sendMessage',
-                 json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'}, timeout=5)
-    except Exception:
-        pass
-
 
 @bp.route('/api/tienda/recuperar', methods=['POST'])
 def api_tienda_recuperar():
@@ -3082,7 +3088,7 @@ def api_tienda_visitas_publicas(slug):
         if session.get('rol') != 'Administrador' and session.get('usuario_id') != tienda['admin_id']:
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         visitantes = conn.execute("""
-            SELECT v.id, v.usuario_id, v.primer_path, v.ultimo_path, v.ip_primera, v.ip_ultima,
+            SELECT v.id, v.visitante_token, v.usuario_id, v.primer_path, v.ultimo_path, v.ip_primera, v.ip_ultima,
                    v.visitas, v.first_seen, v.last_seen, v.user_agent,
                    t.nombre AS usuario_nombre, t.telefono AS usuario_telefono
             FROM tienda_visitantes_publicos v
@@ -3094,10 +3100,12 @@ def api_tienda_visitas_publicas(slug):
         visitas = conn.execute("""
             SELECT vi.id, vi.visitante_id, vi.usuario_id, vi.proyecto_id, vi.tipo, vi.path,
                    vi.referrer, vi.ip, vi.user_agent, vi.created_at,
-                   t.nombre AS usuario_nombre, p.cliente_nombre, p.escenario
+                   t.nombre AS usuario_nombre, p.cliente_nombre, p.escenario,
+                   vp.visitante_token
             FROM tienda_visitas_publicas vi
             LEFT JOIN terceros t ON t.id = vi.usuario_id
             LEFT JOIN proyectos_solares p ON p.id = vi.proyecto_id
+            LEFT JOIN tienda_visitantes_publicos vp ON vp.id = vi.visitante_id
             WHERE vi.tienda_id = %s
             ORDER BY vi.created_at DESC
             LIMIT 120
@@ -3115,6 +3123,7 @@ def api_tienda_visitas_publicas(slug):
             visitas_out.append(item)
         return jsonify({
             'ok': True,
+            'zona_horaria': 'America/Bogota',
             'visitantes': visitantes_out,
             'visitas': visitas_out,
         })

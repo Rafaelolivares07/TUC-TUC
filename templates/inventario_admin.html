@@ -457,9 +457,22 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 async function cargarProductos() {
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
   const d = await r.json();
-  if (!d.ok) { toast(d.error, false); return; }
+  if (!d.ok) { toast(d.error, false); return []; }
   productos = d.productos;
   renderTablaProductos(productos);
+  return productos;
+}
+
+function abrirTarjetaInicialDesdeUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('tarjeta') !== '1') return;
+  const productoId = Number(params.get('producto_id') || 0);
+  if (!productoId) return;
+
+  const producto = productos.find(p => Number(p.id) === productoId);
+  if (producto) {
+    abrirModalTarjeta(producto.id, producto.nombre);
+  }
 }
 
 function renderTablaProductos(lista) {
@@ -815,8 +828,9 @@ async function registrarProduccion() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  cargarProductos();
+document.addEventListener('DOMContentLoaded', async () => {
+  await cargarProductos();
+  abrirTarjetaInicialDesdeUrl();
   document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
 
   // AC tarjeta (usa productos cargados)

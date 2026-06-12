@@ -582,6 +582,8 @@
                 </p>
             </div>
 
+            <div id="visitantes-resumen" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6"></div>
+
             <!-- Sub-tabs para alternar vistas -->
             <div class="flex border-b border-gray-200 mb-6 gap-6">
                 <button onclick="cambiarSubTabVisitantes('visitantes-dispositivos')" id="subtab-visitantes-dispositivos" class="pb-3 text-sm font-bold border-b-2 border-rose-500 text-rose-600 transition">
@@ -3056,6 +3058,9 @@ function renderProductos() {
                     <button onclick="editarProducto(${p.id})" class="text-xs text-blue-600 font-semibold py-1.5 border border-blue-200 rounded-lg hover:bg-blue-50 transition">Editar</button>
                     <button onclick="abrirFotos(${p.id})" class="text-xs text-rose-500 font-semibold py-1.5 border border-rose-200 rounded-lg hover:bg-rose-50 transition">${p.n_documentos > 0 ? 'Fotos / Docs' : (p.imagen ? 'Cambiar Fotos' : 'Fotos')}</button>
                     <button onclick="abrirVariantes(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" class="text-xs text-purple-600 font-semibold py-1.5 border border-purple-200 rounded-lg hover:bg-purple-50 transition">Variantes</button>
+                    {% if tienda.tercero_id %}
+                    <a href="/admin/inventario/{{ tienda.tercero_id }}?tarjeta=1&producto_id=${p.id}" class="text-xs text-indigo-600 font-semibold py-1.5 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition text-center">Tarjeta</a>
+                    {% endif %}
                     <button onclick="compartirProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', '${(p.imagen||'').replace(/'/g, "\\'")}', ${p.precio}, '${(p.descripcion||'').replace(/'/g, "\\'").replace(/\n/g, ' ')}')" class="text-xs text-emerald-600 font-semibold py-1.5 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition">Compartir</button>
                 </div>
                 <button onclick="pautarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', '${(p.imagen||'').replace(/'/g, "\\'")}')" class="w-full mt-1.5 text-xs text-white bg-rose-500 font-bold py-2 rounded-lg hover:bg-rose-600 transition">📣 Pautar este producto</button>
@@ -5058,6 +5063,10 @@ document.addEventListener('visibilitychange', function() {
 });
 
 // === Registro de Visitantes ===
+let datosVisitas = null;
+let filtroVisitanteId = null;
+let filtroVisitanteToken = '';
+
 async function cargarVisitantes() {
     try {
         const contDispositivos = document.getElementById('visitantes-dispositivos-lista');
@@ -5072,138 +5081,205 @@ async function cargarVisitantes() {
             return;
         }
 
-        // Renderizar dispositivos/visitantes únicos
-        if (contDispositivos) {
-            if (data.visitantes.length === 0) {
-                contDispositivos.innerHTML = `
-                    <div class="text-center py-12 text-gray-400">
-                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                        <p class="font-semibold">Sin dispositivos registrados</p>
-                        <p class="text-xs">Las visitas a tu tienda pública se mostrarán aquí.</p>
-                    </div>
-                `;
-            } else {
-                contDispositivos.innerHTML = data.visitantes.map(v => {
-                    const tokenCorto = v.visitante_token ? v.visitante_token.substring(0, 8) : 'Anónimo';
-                    const userLabel = v.usuario_nombre 
-                        ? `<span class="bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded text-xs">👤 ${htmlSeguro(v.usuario_nombre)} (${htmlSeguro(v.usuario_telefono)})</span>`
-                        : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-xs">Dispositivo Anónimo</span>`;
-                    
-                    const fechaUltima = v.last_seen ? formatearFecha(v.last_seen) : '---';
-                    const fechaPrimera = v.first_seen ? formatearFecha(v.first_seen) : '---';
-                    
-                    return `
-                        <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
-                            <div class="flex justify-between items-start mb-2">
-                                <div>
-                                    <div class="font-bold text-gray-800 text-sm flex items-center gap-2 flex-wrap">
-                                        Dispositivo ${tokenCorto}
-                                        ${userLabel}
-                                    </div>
-                                    <p class="text-[11px] text-gray-400 mt-1">IP actual: ${htmlSeguro(v.ip_ultima)} ${v.ip_primera !== v.ip_ultima ? `(inicial: ${htmlSeguro(v.ip_primera)})` : ''}</p>
-                                </div>
-                                <div class="bg-gray-50 border border-gray-100 px-3 py-1 rounded-lg text-center">
-                                    <span class="block text-[10px] text-gray-400">Visitas</span>
-                                    <span class="font-bold text-gray-700 text-sm">${v.visitas}</span>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2 text-xs border-t border-gray-100 pt-3 mt-3">
-                                <div>
-                                    <span class="text-gray-400 block font-semibold uppercase tracking-wider text-[9px]">Primera visita</span>
-                                    <span class="text-gray-600 font-medium">${fechaPrimera}</span>
-                                    <span class="text-gray-400 block truncate mt-1 text-[11px]" title="${htmlSeguro(v.primer_path)}">${htmlSeguro(v.primer_path)}</span>
-                                </div>
-                                <div>
-                                    <span class="text-gray-400 block font-semibold uppercase tracking-wider text-[9px]">Última visita</span>
-                                    <span class="text-gray-600 font-medium">${fechaUltima}</span>
-                                    <span class="text-gray-400 block truncate mt-1 text-[11px]" title="${htmlSeguro(v.ultimo_path)}">${htmlSeguro(v.ultimo_path)}</span>
-                                </div>
-                            </div>
-                            <div class="text-[10px] text-gray-400 mt-2 bg-gray-50 px-2 py-1 rounded border border-gray-100 truncate" title="${htmlSeguro(v.user_agent)}">
-                                <b>Navegador:</b> ${htmlSeguro(v.user_agent)}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
-
-        // Renderizar actividad reciente (log)
-        if (contLog) {
-            if (data.visitas.length === 0) {
-                contLog.innerHTML = `
-                    <div class="text-center py-12 text-gray-400">
-                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <p class="font-semibold">Sin actividad reciente</p>
-                        <p class="text-xs">Toda la actividad en vivo aparecerá aquí.</p>
-                    </div>
-                `;
-            } else {
-                contLog.innerHTML = data.visitas.map(v => {
-                    const fecha = v.created_at ? formatearFecha(v.created_at) : '---';
-                    
-                    let typeBadge = '';
-                    if (v.tipo === 'tienda') {
-                        typeBadge = '<span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">🏪 Tienda</span>';
-                    } else if (v.tipo === 'proyecto_solar') {
-                        typeBadge = '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">☀️ Propuesta</span>';
-                    } else if (v.tipo === 'proyecto_solar_pdf') {
-                        typeBadge = '<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">📄 PDF Técnico</span>';
-                    } else if (v.tipo === 'proyecto_solar_pdf_bloqueado') {
-                        typeBadge = '<span class="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded">🔒 PDF Bloqueado</span>';
-                    } else {
-                        typeBadge = `<span class="bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded">${htmlSeguro(v.tipo)}</span>`;
-                    }
-
-                    const projText = v.proyecto_id 
-                        ? `<div class="text-xs font-semibold text-gray-600 mt-1">Proyecto: ${htmlSeguro(v.cliente_nombre)} - ${htmlSeguro(v.escenario)}</div>` 
-                        : '';
-                    
-                    const userLabel = v.usuario_nombre 
-                        ? `<span class="text-xs bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded font-bold">👤 ${htmlSeguro(v.usuario_nombre)}</span>`
-                        : '';
-
-                    const refText = v.referrer 
-                        ? `<div class="text-[10px] text-gray-400 mt-1"><b>Referente:</b> <a href="${htmlSeguro(v.referrer)}" target="_blank" class="hover:underline text-rose-500">${htmlSeguro(v.referrer)}</a></div>`
-                        : '';
-
-                    return `
-                        <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                            <div class="flex justify-between items-start flex-wrap gap-2 mb-2">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    ${typeBadge}
-                                    <span class="text-xs font-mono bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-gray-600">IP: ${htmlSeguro(v.ip)}</span>
-                                    ${userLabel}
-                                </div>
-                                <span class="text-xs text-gray-400 font-medium">${fecha}</span>
-                            </div>
-                            <div class="text-xs font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 mt-1 break-all">
-                                ${htmlSeguro(v.path)}
-                            </div>
-                            ${projText}
-                            ${refText}
-                            <div class="text-[10px] text-gray-400 mt-2 truncate" title="${htmlSeguro(v.user_agent)}">
-                                <b>UA:</b> ${htmlSeguro(v.user_agent)}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-        }
+        datosVisitas = data;
+        renderizarVisitantes();
     } catch (e) {
         console.error("Error al cargar visitantes", e);
     }
+}
+
+function renderizarVisitantes() {
+    if (!datosVisitas) return;
+    renderizarResumenVisitantes();
+    const contDispositivos = document.getElementById('visitantes-dispositivos-lista');
+    const contLog = document.getElementById('visitantes-log-lista');
+
+    // 1. Renderizar dispositivos únicos
+    if (contDispositivos) {
+        if (datosVisitas.visitantes.length === 0) {
+            contDispositivos.innerHTML = `
+                <div class="text-center py-12 text-gray-400">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <p class="font-semibold">Sin dispositivos registrados</p>
+                    <p class="text-xs">Las visitas a tu tienda pública se mostrarán aquí.</p>
+                </div>
+            `;
+        } else {
+            contDispositivos.innerHTML = datosVisitas.visitantes.map(v => {
+                const tokenCorto = v.visitante_token ? v.visitante_token.substring(0, 8) : 'Anónimo';
+                const userLabel = v.usuario_nombre
+                    ? `<span class="bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded text-xs">👤 ${htmlSeguro(v.usuario_nombre)} (${htmlSeguro(v.usuario_telefono)})</span>`
+                    : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-xs">Dispositivo Anónimo</span>`;
+
+                const fechaUltima = v.last_seen ? formatearFecha(v.last_seen) : '---';
+                const fechaPrimera = v.first_seen ? formatearFecha(v.first_seen) : '---';
+                const esActivo = filtroVisitanteId === v.id;
+
+                return `
+                    <div onclick="filtrarVisitasPorVisitante(${v.id}, '${tokenCorto}')"
+                         class="bg-white border ${esActivo ? 'border-rose-500 ring-2 ring-rose-200' : 'border-gray-200 hover:border-rose-300 hover:bg-gray-50'} rounded-xl p-4 shadow-sm transition cursor-pointer">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <div class="font-bold text-gray-800 text-sm flex items-center gap-2 flex-wrap">
+                                    Dispositivo ${tokenCorto}
+                                    ${userLabel}
+                                </div>
+                                <p class="text-[11px] text-gray-400 mt-1">IP actual: ${htmlSeguro(v.ip_ultima)} ${v.ip_primera !== v.ip_ultima ? `(inicial: ${htmlSeguro(v.ip_primera)})` : ''}</p>
+                            </div>
+                            <div class="bg-gray-50 border border-gray-100 px-3 py-1 rounded-lg text-center">
+                                <span class="block text-[10px] text-gray-400">Visitas</span>
+                                <span class="font-bold text-gray-700 text-sm">${v.visitas}</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs border-t border-gray-100 pt-3 mt-3">
+                            <div>
+                                <span class="text-gray-400 block font-semibold uppercase tracking-wider text-[9px]">Primera visita</span>
+                                <span class="text-gray-600 font-medium">${fechaPrimera}</span>
+                                <span class="text-gray-400 block truncate mt-1 text-[11px]" title="${htmlSeguro(v.primer_path)}">${htmlSeguro(v.primer_path)}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-400 block font-semibold uppercase tracking-wider text-[9px]">Última visita</span>
+                                <span class="text-gray-600 font-medium">${fechaUltima}</span>
+                                <span class="text-gray-400 block truncate mt-1 text-[11px]" title="${htmlSeguro(v.ultimo_path)}">${htmlSeguro(v.ultimo_path)}</span>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-gray-400 mt-2 bg-gray-50 px-2 py-1 rounded border border-gray-100 truncate" title="${htmlSeguro(v.user_agent)}">
+                            <b>Navegador:</b> ${htmlSeguro(v.user_agent)}
+                        </div>
+                        <div class="text-[10px] text-rose-500 font-bold mt-2 text-right">Ver historial de clics →</div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // 2. Renderizar actividad reciente (log)
+    if (contLog) {
+        let visitasFiltradas = datosVisitas.visitas;
+        let filtroBanner = '';
+
+        if (filtroVisitanteId !== null) {
+            visitasFiltradas = datosVisitas.visitas.filter(v => v.visitante_id === filtroVisitanteId);
+            filtroBanner = `
+                <div class="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4 flex items-center justify-between text-xs text-rose-800">
+                    <span>Mostrando solo actividad del <b>Dispositivo ${filtroVisitanteToken}</b></span>
+                    <button onclick="quitarFiltroVisitante()" class="bg-rose-600 text-white font-bold px-3 py-1 rounded-lg hover:bg-rose-700 transition">Ver todos</button>
+                </div>
+            `;
+        }
+
+        if (visitasFiltradas.length === 0) {
+            contLog.innerHTML = filtroBanner + `
+                <div class="text-center py-12 text-gray-400">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <p class="font-semibold">Sin actividad reciente</p>
+                    <p class="text-xs">Toda la actividad en vivo aparecerá aquí.</p>
+                </div>
+            `;
+        } else {
+            contLog.innerHTML = filtroBanner + visitasFiltradas.map(v => {
+                const fecha = v.created_at ? formatearFecha(v.created_at) : '---';
+                const tokenCorto = v.visitante_token ? v.visitante_token.substring(0, 8) : (v.visitante_id ? `ID ${v.visitante_id}` : 'Anon.');
+
+                let typeBadge = '';
+                if (v.tipo === 'tienda') {
+                    typeBadge = '<span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">🏪 Tienda</span>';
+                } else if (v.tipo === 'proyecto_solar') {
+                    typeBadge = '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">☀️ Propuesta</span>';
+                } else if (v.tipo === 'proyecto_solar_pdf') {
+                    typeBadge = '<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">📄 PDF Técnico</span>';
+                } else if (v.tipo === 'proyecto_solar_pdf_bloqueado') {
+                    typeBadge = '<span class="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded">🔒 PDF Bloqueado</span>';
+                } else {
+                    typeBadge = `<span class="bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded">${htmlSeguro(v.tipo)}</span>`;
+                }
+
+                const projText = v.proyecto_id
+                    ? `<div class="text-xs font-semibold text-gray-600 mt-1">Proyecto: ${htmlSeguro(v.cliente_nombre)} - ${htmlSeguro(v.escenario)}</div>`
+                    : '';
+
+                const userLabel = v.usuario_nombre
+                    ? `<span class="text-xs bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded font-bold">👤 ${htmlSeguro(v.usuario_nombre)}</span>`
+                    : '';
+
+                const refText = v.referrer
+                    ? `<div class="text-[10px] text-gray-400 mt-1"><b>Referente:</b> <a href="${htmlSeguro(v.referrer)}" target="_blank" class="hover:underline text-rose-500">${htmlSeguro(v.referrer)}</a></div>`
+                    : '';
+
+                return `
+                    <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                        <div class="flex justify-between items-start flex-wrap gap-2 mb-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                ${typeBadge}
+                                <span class="text-xs font-mono bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded text-indigo-600">Disp. ${htmlSeguro(tokenCorto)}</span>
+                                <span class="text-xs font-mono bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-gray-600">IP: ${htmlSeguro(v.ip)}</span>
+                                ${userLabel}
+                            </div>
+                            <span class="text-xs text-gray-400 font-medium">${fecha}</span>
+                        </div>
+                        <div class="text-xs font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 mt-1 break-all">
+                            ${htmlSeguro(v.path)}
+                        </div>
+                        ${projText}
+                        ${refText}
+                        <div class="text-[10px] text-gray-400 mt-2 truncate" title="${htmlSeguro(v.user_agent)}">
+                            <b>UA:</b> ${htmlSeguro(v.user_agent)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+}
+
+function renderizarResumenVisitantes() {
+    const resumen = document.getElementById('visitantes-resumen');
+    if (!resumen) return;
+    const dispositivos = datosVisitas.visitantes || [];
+    const visitas = datosVisitas.visitas || [];
+    const reconocidos = dispositivos.filter(v => v.usuario_nombre).length;
+    const totalVisitas = dispositivos.reduce((acc, v) => acc + Number(v.visitas || 0), 0);
+    resumen.innerHTML = `
+        <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+            <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Dispositivos</p>
+            <p class="text-2xl font-bold text-gray-800">${dispositivos.length}</p>
+            <p class="text-xs text-gray-400">Reconocidos por cookie del navegador</p>
+        </div>
+        <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+            <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Visitas registradas</p>
+            <p class="text-2xl font-bold text-gray-800">${totalVisitas}</p>
+            <p class="text-xs text-gray-400">Historial visible: ${visitas.length} entradas recientes</p>
+        </div>
+        <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+            <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Usuarios reconocidos</p>
+            <p class="text-2xl font-bold text-gray-800">${reconocidos}</p>
+            <p class="text-xs text-gray-400">Hora mostrada: Colombia</p>
+        </div>
+    `;
+}
+
+function filtrarVisitasPorVisitante(id, token) {
+    filtroVisitanteId = id;
+    filtroVisitanteToken = token;
+    cambiarSubTabVisitantes('visitantes-log');
+    renderizarVisitantes();
+}
+
+function quitarFiltroVisitante() {
+    filtroVisitanteId = null;
+    filtroVisitanteToken = '';
+    renderizarVisitantes();
 }
 
 function cambiarSubTabVisitantes(subTab) {
     ['visitantes-dispositivos', 'visitantes-log'].forEach(t => {
         const p = document.getElementById(t);
         if (p) p.classList.toggle('hidden', t !== subTab);
-        
+
         const btn = document.getElementById('subtab-' + t);
         if (btn) {
             btn.classList.toggle('border-rose-500', t === subTab);
@@ -5217,14 +5293,19 @@ function cambiarSubTabVisitantes(subTab) {
 function formatearFecha(fechaStr) {
     if (!fechaStr) return '';
     try {
-        const d = new Date(fechaStr.replace(' ', 'T'));
+        let normalizada = String(fechaStr).replace(' ', 'T');
+        if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalizada)) {
+            normalizada += 'Z';
+        }
+        const d = new Date(normalizada);
         if (isNaN(d.getTime())) return fechaStr;
-        return d.toLocaleString('es-CO', { 
-            day: '2-digit', 
-            month: 'short', 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: true 
+        return d.toLocaleString('es-CO', {
+            timeZone: 'America/Bogota',
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
         });
     } catch(e) {
         return fechaStr;

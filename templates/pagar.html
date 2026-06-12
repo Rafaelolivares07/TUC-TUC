@@ -111,6 +111,7 @@ function renderMetodos() {
         const inp = document.getElementById(`mp-${metodosDisponibles[0].codigo}`);
         if (inp) { inp.value = TOTAL; validarPagos(); }
     }
+    validarPagos();
 }
 
 function onInputPago(codigo) {

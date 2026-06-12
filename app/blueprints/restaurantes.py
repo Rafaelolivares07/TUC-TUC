@@ -149,19 +149,44 @@ def _generar_slug(nombre):
     return slug.strip('-')
 
 
-def _enviar_telegram(chat_id, texto):
-    import os, requests as req
-    token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-    if not token or not chat_id:
+def _enviar_telegram(*args):
+    conn = None
+    if len(args) == 3:
+        conn, chat_id, texto = args
+    elif len(args) == 2:
+        chat_id, texto = args
+    else:
+        return
+    if not chat_id:
         return
     try:
-        req.post(
+        import os, requests as req
+        token = ''
+        if conn:
+            try:
+                config = conn.execute(
+                    'SELECT telegram_token FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
+                ).fetchone()
+                if config:
+                    try:
+                        token = config['telegram_token'] or ''
+                    except Exception:
+                        token = config[0] or ''
+            except Exception as _e:
+                print(f'[telegram rest] token CONFIGURACION_SISTEMA no disponible: {_e}')
+        token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+        if not token:
+            print('[telegram rest] sin token configurado')
+            return
+        resp = req.post(
             f'https://api.telegram.org/bot{token}/sendMessage',
             json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'},
-            timeout=5
+            timeout=10
         )
-    except Exception:
-        pass
+        if resp.status_code >= 400:
+            print(f'[telegram rest] error {resp.status_code}: {resp.text[:200]}')
+    except Exception as _e:
+        print(f'[telegram rest] envio fallido: {_e}')
 
 
 def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo_entrega,
@@ -172,12 +197,23 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
     except Exception:
         admin_id = dict(rest).get('admin_id') if rest else None
         nombre_rest = dict(rest).get('nombre', 'restaurante') if rest else 'restaurante'
-    if not admin_id:
-        return
-    admin = conn.execute(
-        "SELECT telegram_chat_id FROM terceros WHERE id = %s", (admin_id,)
-    ).fetchone()
-    if not admin or not admin['telegram_chat_id']:
+    chat_id = None
+    if admin_id:
+        admin = conn.execute(
+            "SELECT telegram_chat_id FROM terceros WHERE id = %s", (admin_id,)
+        ).fetchone()
+        chat_id = admin['telegram_chat_id'] if admin else None
+    if not chat_id:
+        try:
+            config = conn.execute(
+                'SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
+            ).fetchone()
+            if config:
+                chat_id = config['telegram_chat_id'] or None
+        except Exception as _e:
+            print(f'[telegram rest] chat global no disponible: {_e}')
+    if not chat_id:
+        print(f'[telegram rest] sin chat_id para restaurante {nombre_rest}')
         return
     entrega = {
         'domicilio': 'Domicilio',
@@ -194,7 +230,7 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
         f"{items_txt}\n\n"
         f"💰 Total: ${total:,.0f}"
     )
-    _enviar_telegram(admin['telegram_chat_id'], msg)
+    _enviar_telegram(conn, chat_id, msg)
 
 
 def _auth_rest(slug, conn):

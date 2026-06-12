@@ -94,6 +94,16 @@ const METODO_INFO_TIPO = {
   bancolombia:   {tipo: 'numero', label: 'Número de cuenta / Nequi Bancolombia'},
   transferencia: {tipo: 'numero', label: 'Número de cuenta'},
 };
+METODO_INFO_TIPO.bancolombia = {tipo: 'numero', label: 'Cuenta Bancolombia o instrucciones'};
+METODO_INFO_TIPO.bancolombia_qr = {tipo: 'imagen', label: 'Imagen del QR de Bancolombia'};
+METODO_INFO_TIPO.llave = {tipo: 'numero', label: 'Llave bancaria. Ej: Bancolombia @rafael100902'};
+METODO_INFO_TIPO.transferencia = {tipo: 'numero', label: 'Cuenta bancaria o instrucciones de transferencia'};
+
+const METODO_NOTAS = {
+  contraentrega: 'Solo efectivo al momento de recibir el pedido.',
+  llave: 'El cliente paga usando la llave registrada desde su banco.',
+  bancolombia_qr: 'El cliente escanea el QR desde Bancolombia o una app compatible.'
+};
 
 function toast(msg, err=false) {
   const t = document.getElementById('toast');
@@ -157,6 +167,7 @@ function renderMetodos(catalogo, activos) {
 function renderMetodoFila(m, activos, enGrupo=false) {
   const on = activos.includes(m.codigo);
   const infoConfig = METODO_INFO_TIPO[m.codigo];
+  const notaMetodo = METODO_NOTAS[m.codigo];
   const info = metodos_info_actual[m.codigo] || {};
   const px = enGrupo ? 'px-3' : 'px-2';
 
@@ -189,6 +200,7 @@ function renderMetodoFila(m, activos, enGrupo=false) {
         <span class="text-xl">${m.icono}</span>
         <span class="font-semibold text-gray-800 text-sm">${m.nombre}</span>
       </div>
+      ${notaMetodo ? `<p class="text-xs text-gray-400 mt-1">${notaMetodo}</p>` : ''}
       ${infoHtml}
     </div>
     <button onclick="toggleMetodo('${m.codigo}', ${!on})"

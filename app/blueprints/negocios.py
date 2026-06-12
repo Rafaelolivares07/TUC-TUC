@@ -58,6 +58,31 @@ def init_config_negocio(conn):
                 grupo  = EXCLUDED.grupo
         """, (nombre, codigo, icono, orden, grupo))
     # 'nequi' legacy desactivado — reemplazado por nequi_movil y nequi_qr
+    conn.execute("""
+        INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo)
+        VALUES ('Bancolombia QR', 'bancolombia_qr', '🏦', 31, 'bancolombia')
+        ON CONFLICT (codigo) DO UPDATE SET
+            nombre = EXCLUDED.nombre,
+            icono = EXCLUDED.icono,
+            orden = EXCLUDED.orden,
+            grupo = EXCLUDED.grupo,
+            activo = TRUE
+    """)
+    conn.execute("""
+        INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo)
+        VALUES ('Llave bancaria', 'llave', '🔑', 32, NULL)
+        ON CONFLICT (codigo) DO UPDATE SET
+            nombre = EXCLUDED.nombre,
+            icono = EXCLUDED.icono,
+            orden = EXCLUDED.orden,
+            grupo = EXCLUDED.grupo,
+            activo = TRUE
+    """)
+    conn.execute("""
+        UPDATE metodos_pago_catalogo
+        SET nombre = 'Contraentrega en efectivo'
+        WHERE codigo = 'contraentrega'
+    """)
     conn.execute("UPDATE metodos_pago_catalogo SET activo = FALSE WHERE codigo = 'nequi'")
     conn.commit()
 

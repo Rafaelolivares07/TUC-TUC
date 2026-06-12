@@ -75,6 +75,11 @@ const TOTAL      = {{ total }};
 const API_URL    = '{{ api_url | default("/api/pagar/" ~ pedido_id) }}';
 const VOLVER_URL = '{{ volver_url | default("https://" ~ negocio_slug ~ ".tuc-tuc.co") }}';
 const METODOS_SIN_COMPROBANTE = new Set(['efectivo','contraentrega','tarjeta_debito','tarjeta_credito']);
+const METODO_NOTAS = {
+    contraentrega: 'Solo efectivo al momento de recibir el pedido.',
+    llave: 'Paga usando la llave bancaria registrada por el negocio.',
+    bancolombia_qr: 'Escanea el QR desde Bancolombia o una app compatible.'
+};
 
 let metodosDisponibles = [];
 let comprobanteB64 = null;
@@ -100,7 +105,10 @@ function renderMetodos() {
     cont.innerHTML = metodosDisponibles.map(m => `
         <div class="flex items-center gap-3">
             <span class="text-lg w-7 text-center flex-shrink-0">${m.icono || '💳'}</span>
-            <span class="text-sm font-semibold text-gray-700 flex-1">${m.nombre}</span>
+            <span class="text-sm font-semibold text-gray-700 flex-1">
+                ${m.nombre}
+                ${METODO_NOTAS[m.codigo] ? `<small class="block text-[11px] font-normal text-gray-400 leading-tight">${METODO_NOTAS[m.codigo]}</small>` : ''}
+            </span>
             <input type="number" min="0" step="100" value="0" placeholder="$0"
                    id="mp-${m.codigo}"
                    class="border-2 rounded-xl px-3 py-2 text-sm w-28 text-right font-bold focus:border-amber-400 focus:outline-none"
@@ -122,7 +130,8 @@ function onInputPago(codigo) {
     const bloque = document.getElementById('bloque-info-pago');
     if (!info || monto <= 0) { bloque.classList.add('hidden'); return; }
     if (info.imagen) {
-        bloque.innerHTML = `<p class="text-xs text-gray-500 mb-2">Escanea este QR para pagar:</p>
+        const label = codigo === 'bancolombia_qr' ? 'Escanea este QR de Bancolombia para pagar:' : 'Escanea este QR para pagar:';
+        bloque.innerHTML = `<p class="text-xs text-gray-500 mb-2">${label}</p>
             <img src="${info.imagen}" class="mx-auto rounded-xl border max-h-48">`;
         bloque.classList.remove('hidden');
     } else if (info.numero) {

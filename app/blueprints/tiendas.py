@@ -378,7 +378,7 @@ def _enviar_telegram_tienda(*args):
         if conn:
             try:
                 config = conn.execute(
-                    "SELECT telegram_token FROM configuracion_sistema WHERE id = 1"
+                    'SELECT telegram_token FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
                 ).fetchone()
                 if config:
                     try:
@@ -386,7 +386,18 @@ def _enviar_telegram_tienda(*args):
                     except Exception:
                         token = config[0] or ''
             except Exception as _e:
-                print(f'[telegram tienda] token config no disponible: {_e}')
+                print(f'[telegram tienda] token CONFIGURACION_SISTEMA no disponible: {_e}')
+                try:
+                    config = conn.execute(
+                        "SELECT telegram_token FROM configuracion_sistema WHERE id = 1"
+                    ).fetchone()
+                    if config:
+                        try:
+                            token = config['telegram_token'] or ''
+                        except Exception:
+                            token = config[0] or ''
+                except Exception as _e2:
+                    print(f'[telegram tienda] token config no disponible: {_e2}')
         token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
         if not token:
             print('[telegram tienda] sin token configurado')
@@ -1972,11 +1983,22 @@ def api_tienda_pedido_crear(slug):
                 "SELECT telegram_chat_id FROM terceros WHERE id = %s", (tienda['admin_id'],)
             ).fetchone()
             chat_id = admin['telegram_chat_id'] if admin else None
+        if not chat_id:
+            try:
+                config = conn.execute(
+                    'SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
+                ).fetchone()
+                if config:
+                    chat_id = config['telegram_chat_id'] or None
+            except Exception as _e:
+                print(f'[telegram tienda] chat global no disponible: {_e}')
         if chat_id:
             items_txt = '\n'.join([f"  {it['cantidad']}x {it['nombre_producto']} - ${it['precio_unitario'] * it['cantidad']:,.0f}" for it in items_validos])
             entrega   = 'Domicilio' if tipo_entrega == 'domicilio' else 'Recoger'
             msg = f"🛒 <b>Nuevo pedido en {tienda['nombre']}</b>\n👤 {nombre_cliente} - {telefono_cliente}\n📦 {entrega}: {direccion_cliente or 'N/A'}\n\n{items_txt}\n\n💰 Total: ${total:,.0f}"
             _enviar_telegram_tienda(conn, chat_id, msg)
+        else:
+            print(f'[telegram tienda] sin chat_id para tienda {slug}')
         return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

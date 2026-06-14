@@ -116,6 +116,9 @@
                 <button onclick="cambiarTab('cuentas')" id="tab-cuentas" class="tab-btn">
                     🧾 Cuentas
                 </button>
+                <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">
+                    Visitantes
+                </button>
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">
                     🎨 Personalizar
                 </button>
@@ -494,6 +497,25 @@
             </div>
         </div>
 
+        <!-- ====== TAB: VISITANTES ====== -->
+        <div id="panel-visitantes" class="p-6 hidden">
+            <div class="mb-5">
+                <h2 class="text-lg font-bold text-gray-800">Visitantes</h2>
+                <p class="text-sm text-gray-500">Dispositivos que abrieron la carta publica, QR de mesa o enlaces compartidos.</p>
+            </div>
+            <div id="visitantes-resumen" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div>
+                    <h3 class="text-sm font-bold text-gray-700 mb-3">Dispositivos</h3>
+                    <div id="visitantes-dispositivos-lista" class="space-y-3"></div>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-gray-700 mb-3">Actividad reciente</h3>
+                    <div id="visitantes-log-lista" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- ====== TAB: PERSONALIZAR ====== -->
         <div id="panel-personalizar" class="p-6 hidden">
 
@@ -780,9 +802,137 @@ async function verHistorial(slug) {
     }
 }
 
+// ===== VISITANTES =====
+let datosVisitas = null;
+
+function htmlSeguroVisitantes(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function formatearFechaVisitante(fechaStr) {
+    if (!fechaStr) return '';
+    try {
+        let normalizada = String(fechaStr).replace(' ', 'T');
+        if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalizada)) normalizada += 'Z';
+        return new Date(normalizada).toLocaleString('es-CO', {
+            timeZone: 'America/Bogota',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch(e) {
+        return fechaStr;
+    }
+}
+
+async function cargarVisitantes() {
+    const contDispositivos = document.getElementById('visitantes-dispositivos-lista');
+    const contLog = document.getElementById('visitantes-log-lista');
+    if (contDispositivos) contDispositivos.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando visitantes...</div>';
+    if (contLog) contLog.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando actividad...</div>';
+    try {
+        const r = await fetch(BASE + '/visitas-publicas');
+        const data = await r.json();
+        if (!data.ok) throw new Error(data.error || 'Error');
+        datosVisitas = data;
+        renderizarVisitantes();
+    } catch(e) {
+        if (contDispositivos) contDispositivos.innerHTML = '<div class="text-center py-8 text-red-500">No fue posible cargar visitantes.</div>';
+        if (contLog) contLog.innerHTML = '';
+    }
+}
+
+function renderizarVisitantes() {
+    const resumen = document.getElementById('visitantes-resumen');
+    const contDispositivos = document.getElementById('visitantes-dispositivos-lista');
+    const contLog = document.getElementById('visitantes-log-lista');
+    const visitantes = datosVisitas?.visitantes || [];
+    const visitas = datosVisitas?.visitas || [];
+    const totalVisitas = visitantes.reduce((acc, v) => acc + Number(v.visitas || 0), 0);
+    const reconocidos = visitantes.filter(v => v.usuario_nombre).length;
+
+    if (resumen) {
+        resumen.innerHTML = `
+            <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Dispositivos</p>
+                <p class="text-2xl font-bold text-gray-800">${visitantes.length}</p>
+                <p class="text-xs text-gray-400">Reconocidos por navegador</p>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Visitas</p>
+                <p class="text-2xl font-bold text-gray-800">${totalVisitas}</p>
+                <p class="text-xs text-gray-400">Actividad publica registrada</p>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Usuarios</p>
+                <p class="text-2xl font-bold text-gray-800">${reconocidos}</p>
+                <p class="text-xs text-gray-400">Hora Colombia</p>
+            </div>
+        `;
+    }
+
+    if (contDispositivos) {
+        contDispositivos.innerHTML = visitantes.length ? visitantes.map(v => {
+            const token = v.visitante_token ? v.visitante_token.substring(0, 8) : 'Anon.';
+            return `
+                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <div class="flex justify-between gap-3">
+                        <div>
+                            <div class="font-bold text-gray-800 text-sm">Dispositivo ${htmlSeguroVisitantes(token)}</div>
+                            <div class="text-xs text-gray-500 mt-1">Ultima: ${htmlSeguroVisitantes(formatearFechaVisitante(v.last_seen))}</div>
+                            <div class="text-[11px] text-gray-400 truncate mt-1" title="${htmlSeguroVisitantes(v.ultimo_path)}">${htmlSeguroVisitantes(v.ultimo_path)}</div>
+                        </div>
+                        <div class="bg-gray-50 border border-gray-100 px-3 py-1 rounded-lg text-center h-fit">
+                            <span class="block text-[10px] text-gray-400">Visitas</span>
+                            <span class="font-bold text-gray-700 text-sm">${Number(v.visitas || 0)}</span>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mt-2 truncate" title="${htmlSeguroVisitantes(v.user_agent)}">${htmlSeguroVisitantes(v.user_agent)}</div>
+                </div>
+            `;
+        }).join('') : '<div class="text-center py-10 text-gray-400">Sin dispositivos registrados.</div>';
+    }
+
+    if (contLog) {
+        contLog.innerHTML = visitas.length ? visitas.map(v => {
+            const token = v.visitante_token ? v.visitante_token.substring(0, 8) : 'Anon.';
+            const titulo = v.titulo || v.detalle || v.path || 'Visita publica';
+            let badge = '<span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">Carta</span>';
+            if (v.tipo === 'mesa') {
+                badge = '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">Mesa</span>';
+            } else if (v.tipo === 'menu_compartido') {
+                badge = '<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">Menu compartido</span>';
+            } else if (v.tipo === 'producto_compartido') {
+                badge = '<span class="bg-violet-100 text-violet-800 text-[10px] font-bold px-2 py-0.5 rounded">Producto</span>';
+            }
+            return `
+                <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                    <div class="flex justify-between gap-2 flex-wrap mb-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            ${badge}
+                            <span class="text-xs font-mono bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded text-indigo-600">Disp. ${htmlSeguroVisitantes(token)}</span>
+                            <span class="text-xs font-mono bg-gray-50 border border-gray-100 px-1.5 py-0.5 rounded text-gray-600">IP: ${htmlSeguroVisitantes(v.ip)}</span>
+                        </div>
+                        <span class="text-xs text-gray-400">${htmlSeguroVisitantes(formatearFechaVisitante(v.created_at))}</span>
+                    </div>
+                    <div class="text-sm font-semibold text-gray-800">${htmlSeguroVisitantes(titulo)}</div>
+                    <div class="text-[11px] font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 mt-2 break-all text-gray-500">${htmlSeguroVisitantes(v.path)}</div>
+                </div>
+            `;
+        }).join('') : '<div class="text-center py-10 text-gray-400">Sin actividad reciente.</div>';
+    }
+}
+
 // ===== TABS =====
 function cambiarTab(tab) {
-    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'personalizar', 'ubicacion'].forEach(t => {
+    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'visitantes', 'personalizar', 'ubicacion'].forEach(t => {
         const panel = document.getElementById(`panel-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
@@ -794,6 +944,7 @@ function cambiarTab(tab) {
     if (tab === 'opcmenudia') cargarOpcionesMenuDia();
     if (tab === 'mesas') cargarMesas();
     if (tab === 'cuentas') cargarCuentasAdmin();
+    if (tab === 'visitantes') cargarVisitantes();
     if (tab === 'ubicacion') iniciarMapaUbicacion();
 }
 

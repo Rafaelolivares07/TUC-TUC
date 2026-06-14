@@ -4,10 +4,15 @@ import unicodedata
 import uuid
 from datetime import date, timezone
 
-from flask import (Blueprint, jsonify, redirect, render_template,
+from flask import (Blueprint, jsonify, make_response, redirect, render_template,
                    request, session, url_for)
 
 from ..db import get_db_connection
+from ..visitas_publicas import (
+    listar_visitas_publicas,
+    registrar_visita_publica,
+    respuesta_con_visitante,
+)
 from .auth import admin_required
 from .inventarios import _aplicar_tarjeta
 try:
@@ -1270,8 +1275,18 @@ def restaurante_publico(slug):
                 cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '',
                                 'direccion': tercero['direccion'] or '', 'cliente_id': tercero_id}
         solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
-        return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
-                               cliente_data=cliente_data, solo_carta=solo_carta)
+        conn = get_db_connection()
+        visita = registrar_visita_publica(
+            conn,
+            'restaurante',
+            rest['id'],
+            recurso_tipo='carta',
+            titulo='Carta restaurante',
+        )
+        conn.close()
+        response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
+                                                 cliente_data=cliente_data, solo_carta=solo_carta))
+        return respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
 
@@ -1286,17 +1301,126 @@ def restaurante_cliente(slug, mesa_nombre):
             conn.close()
             return "Restaurante no encontrado", 404
         mesa = conn.execute(
-            "SELECT id FROM mesas_restaurante WHERE restaurante_id = %s AND (nombre = %s OR numero::text = %s) AND activo = TRUE",
+            "SELECT id, COALESCE(NULLIF(nombre, ''), numero::text) AS etiqueta FROM mesas_restaurante WHERE restaurante_id = %s AND (nombre = %s OR numero::text = %s) AND activo = TRUE",
             (rest['id'], mesa_nombre, mesa_nombre)
         ).fetchone()
-        conn.close()
         if not mesa:
+            conn.close()
             return "Mesa no encontrada", 404
         solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
-        return render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre=mesa_nombre,
-                               cliente_data=None, solo_carta=solo_carta)
+        visita = registrar_visita_publica(
+            conn,
+            'restaurante',
+            rest['id'],
+            recurso_tipo='mesa',
+            recurso_id=mesa['id'],
+            titulo=f"Mesa {mesa['etiqueta']} - carta",
+            detalle='Acceso desde QR o enlace de mesa',
+        )
+        conn.close()
+        response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre=mesa_nombre,
+                                                 cliente_data=None, solo_carta=solo_carta))
+        return respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
+
+
+@bp.route('/promo/restaurante/<slug>/menu')
+def promo_restaurante_menu(slug):
+    conn = get_db_connection()
+    try:
+        rest = conn.execute("SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
+        if not rest:
+            return "Restaurante no encontrado", 404
+        solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
+        txt = request.args.get('txt', '')
+        visita = registrar_visita_publica(
+            conn,
+            'restaurante',
+            rest['id'],
+            recurso_tipo='menu_compartido',
+            titulo=f"Menu compartido: {rest['nombre']}",
+            detalle=txt or None,
+        )
+        response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
+                                                 cliente_data=None, solo_carta=solo_carta))
+        return respuesta_con_visitante(response, visita)
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/promo/restaurante/<slug>/<int:opcion_id>/imagen')
+def promo_restaurante_imagen(slug, opcion_id):
+    conn = get_db_connection()
+    try:
+        rest = conn.execute(
+            "SELECT tercero_id FROM restaurantes WHERE slug = %s AND activo = TRUE",
+            (slug,)
+        ).fetchone()
+        if not rest:
+            return '', 404
+        opcion = conn.execute(
+            "SELECT imagen FROM productos WHERE id = %s AND negocio_id = %s AND disponible = TRUE",
+            (opcion_id, rest['tercero_id'])
+        ).fetchone()
+        if not opcion or not opcion['imagen']:
+            return '', 404
+        return redirect(opcion['imagen'])
+    except Exception:
+        return '', 500
+    finally:
+        conn.close()
+
+
+@bp.route('/promo/restaurante/<slug>/<int:opcion_id>')
+def promo_restaurante_opcion(slug, opcion_id):
+    conn = get_db_connection()
+    try:
+        rest = conn.execute(
+            "SELECT id, nombre, slug, tercero_id, imagen_header FROM restaurantes WHERE slug = %s AND activo = TRUE",
+            (slug,)
+        ).fetchone()
+        if not rest:
+            return "Restaurante no encontrado", 404
+        opcion = conn.execute(
+            "SELECT id, nombre, descripcion, precio, imagen FROM productos WHERE id = %s AND negocio_id = %s AND disponible = TRUE",
+            (opcion_id, rest['tercero_id'])
+        ).fetchone()
+        if not opcion:
+            return "Producto no disponible", 404
+        tiene_imagen = bool(opcion['imagen'])
+        mostrar_foto = request.args.get('foto', '1') != '0'
+        mostrar_precio = request.args.get('precio', '1') != '0'
+        mostrar_desc = request.args.get('desc', '1') != '0'
+        txt = request.args.get('txt', '')
+        leyenda = request.args.get('leyenda', '¿A quién le llevamos?')
+        visita = registrar_visita_publica(
+            conn,
+            'restaurante',
+            rest['id'],
+            recurso_tipo='producto_compartido',
+            recurso_id=opcion['id'],
+            titulo=f"Producto restaurante compartido: {opcion['nombre']}",
+            detalle=txt or None,
+        )
+        response = make_response(render_template(
+            'promo_restaurante.html',
+            restaurante=rest,
+            opcion=opcion,
+            tiene_imagen=tiene_imagen,
+            mostrar_foto=mostrar_foto,
+            mostrar_precio=mostrar_precio,
+            mostrar_desc=mostrar_desc,
+            txt=txt,
+            leyenda=leyenda,
+        ))
+        return respuesta_con_visitante(response, visita)
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
 
 
 # ── Pedidos ───────────────────────────────────────────────────────────────────
@@ -1785,6 +1909,33 @@ def api_ventas(slug):
 
 
 # ── Docs ──────────────────────────────────────────────────────────────────────
+
+@bp.route('/api/restaurante/<slug>/visitas-publicas')
+def api_restaurante_visitas_publicas(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        rest = conn.execute(
+            "SELECT id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE",
+            (slug,)
+        ).fetchone()
+        if not rest:
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        visitantes, visitas = listar_visitas_publicas(conn, 'restaurante', rest['id'])
+        return jsonify({
+            'ok': True,
+            'zona_horaria': 'America/Bogota',
+            'visitantes': visitantes,
+            'visitas': visitas,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
 
 @bp.route('/docs/restaurante')
 @bp.route('/admin/docs/restaurante')

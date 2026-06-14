@@ -5115,10 +5115,11 @@ function renderizarVisitantes() {
 
                 const fechaUltima = v.last_seen ? formatearFecha(v.last_seen) : '---';
                 const fechaPrimera = v.first_seen ? formatearFecha(v.first_seen) : '---';
-                const esActivo = filtroVisitanteId === v.id;
+                const visitanteId = String(v.id);
+                const esActivo = filtroVisitanteId === visitanteId;
 
                 return `
-                    <div onclick="filtrarVisitasPorVisitante(${v.id}, '${tokenCorto}')"
+                    <div onclick="filtrarVisitasPorVisitante('${visitanteId}', '${tokenCorto}')"
                          class="bg-white border ${esActivo ? 'border-rose-500 ring-2 ring-rose-200' : 'border-gray-200 hover:border-rose-300 hover:bg-gray-50'} rounded-xl p-4 shadow-sm transition cursor-pointer">
                         <div class="flex justify-between items-start mb-2">
                             <div>
@@ -5186,8 +5187,10 @@ function renderizarVisitantes() {
                 const tokenCorto = v.visitante_token ? v.visitante_token.substring(0, 8) : (v.visitante_id ? `ID ${v.visitante_id}` : 'Anon.');
 
                 let typeBadge = '';
-                if (v.tipo === 'tienda') {
+                if (v.tipo === 'portada' || v.tipo === 'tienda') {
                     typeBadge = '<span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded">🏪 Tienda</span>';
+                } else if (v.tipo === 'producto_compartido') {
+                    typeBadge = '<span class="bg-violet-100 text-violet-800 text-[10px] font-bold px-2 py-0.5 rounded">Producto</span>';
                 } else if (v.tipo === 'proyecto_solar') {
                     typeBadge = '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">☀️ Propuesta</span>';
                 } else if (v.tipo === 'proyecto_solar_pdf') {
@@ -5198,8 +5201,9 @@ function renderizarVisitantes() {
                     typeBadge = `<span class="bg-gray-100 text-gray-800 text-[10px] font-bold px-2 py-0.5 rounded">${htmlSeguro(v.tipo)}</span>`;
                 }
 
-                const projText = v.proyecto_id
-                    ? `<div class="text-xs font-semibold text-gray-600 mt-1">Proyecto: ${htmlSeguro(v.cliente_nombre)} - ${htmlSeguro(v.escenario)}</div>`
+                const tituloVisita = v.titulo || v.detalle || v.path || 'Visita publica';
+                const detalleVisita = v.detalle && v.detalle !== v.titulo
+                    ? `<div class="text-xs text-gray-500 mt-1">${htmlSeguro(v.detalle)}</div>`
                     : '';
 
                 const userLabel = v.usuario_nombre
@@ -5221,10 +5225,13 @@ function renderizarVisitantes() {
                             </div>
                             <span class="text-xs text-gray-400 font-medium">${fecha}</span>
                         </div>
-                        <div class="text-xs font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 mt-1 break-all">
+                        <div class="text-sm font-semibold text-gray-800 mt-1">
+                            ${htmlSeguro(tituloVisita)}
+                        </div>
+                        ${detalleVisita}
+                        <div class="text-[11px] font-mono bg-gray-50 px-2 py-1 rounded border border-gray-100 mt-2 break-all text-gray-500">
                             ${htmlSeguro(v.path)}
                         </div>
-                        ${projText}
                         ${refText}
                         <div class="text-[10px] text-gray-400 mt-2 truncate" title="${htmlSeguro(v.user_agent)}">
                             <b>UA:</b> ${htmlSeguro(v.user_agent)}

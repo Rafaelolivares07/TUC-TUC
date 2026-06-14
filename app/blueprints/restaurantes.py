@@ -1385,9 +1385,10 @@ def restaurante_publico(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_experiencia_restaurante(conn)
         rest = conn.execute("SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
-        conn.close()
         if not rest:
+            conn.close()
             return "Restaurante no encontrado", 404
         cliente_data = None
         tercero_id = session.get('chat_tercero_id')

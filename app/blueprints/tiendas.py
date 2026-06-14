@@ -185,6 +185,18 @@ def _crear_tablas(conn):
             updated_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(tienda_id, categoria)
         )""",
+        """CREATE TABLE IF NOT EXISTS tienda_experiencia_bloques (
+            id SERIAL PRIMARY KEY,
+            tienda_id INTEGER NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
+            tipo VARCHAR(20) NOT NULL,
+            titulo VARCHAR(180),
+            texto TEXT,
+            media JSONB DEFAULT '[]'::jsonb,
+            activo BOOLEAN DEFAULT TRUE,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
         """CREATE TABLE IF NOT EXISTS cotizaciones_tienda (
             id SERIAL PRIMARY KEY,
             tienda_id INTEGER NOT NULL,
@@ -313,6 +325,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_tienda_visitantes_publicos_tienda ON tienda_visitantes_publicos(tienda_id, last_seen DESC)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_visitas_publicas_tienda ON tienda_visitas_publicas(tienda_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_visitas_publicas_proyecto ON tienda_visitas_publicas(proyecto_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_tienda_experiencia_bloques ON tienda_experiencia_bloques(tienda_id, orden, id)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
@@ -643,7 +656,24 @@ def tienda_publica(slug):
             recurso_tipo='portada',
             titulo=f"Portada de tienda: {tienda['nombre']}",
         )
-        response = make_response(render_template('tienda_cliente.html', tienda=tienda, cliente_data=cliente_data))
+        bloques_experiencia = []
+        if tienda['pantalla_experiencial']:
+            bloques = conn.execute("""
+                SELECT id, tipo, titulo, texto, media, activo, orden
+                FROM tienda_experiencia_bloques
+                WHERE tienda_id = %s AND activo = TRUE
+                ORDER BY orden, id
+            """, (tienda['id'],)).fetchall()
+            for b in bloques:
+                item = dict(b)
+                item['media'] = item.get('media') or []
+                bloques_experiencia.append(item)
+        response = make_response(render_template(
+            'tienda_cliente.html',
+            tienda=tienda,
+            cliente_data=cliente_data,
+            bloques_experiencia=bloques_experiencia,
+        ))
         return _respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
@@ -1446,6 +1476,68 @@ def api_tienda_experiencia(slug):
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/tienda/<slug>/experiencia-bloques', methods=['GET', 'PUT'])
+def api_tienda_experiencia_bloques(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+        if not tienda:
+            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        if request.method == 'GET':
+            rows = conn.execute("""
+                SELECT id, tipo, titulo, texto, media, activo, orden
+                FROM tienda_experiencia_bloques
+                WHERE tienda_id = %s
+                ORDER BY orden, id
+            """, (tienda['id'],)).fetchall()
+            return jsonify({'ok': True, 'bloques': [dict(r) for r in rows]})
+
+        data = request.get_json() or {}
+        bloques = data.get('bloques') or []
+        if not isinstance(bloques, list):
+            return jsonify({'ok': False, 'error': 'Formato invalido'}), 400
+        bloques = bloques[:12]
+        tipos_validos = {'video', 'collage', 'galeria', 'texto'}
+        conn.execute("DELETE FROM tienda_experiencia_bloques WHERE tienda_id = %s", (tienda['id'],))
+        for idx, bloque in enumerate(bloques):
+            if not isinstance(bloque, dict):
+                continue
+            tipo = (bloque.get('tipo') or 'texto').strip().lower()
+            if tipo not in tipos_validos:
+                tipo = 'texto'
+            titulo = (bloque.get('titulo') or '').strip()[:180] or None
+            texto = (bloque.get('texto') or '').strip()[:1200] or None
+            activo = bool(bloque.get('activo', True))
+            media = bloque.get('media') or []
+            if not isinstance(media, list):
+                media = []
+            media = [str(m).strip() for m in media if str(m).strip()]
+            if tipo == 'texto':
+                media = []
+            elif tipo == 'video':
+                media = media[:3]
+            else:
+                media = media[:12]
+            conn.execute("""
+                INSERT INTO tienda_experiencia_bloques
+                    (tienda_id, tipo, titulo, texto, media, activo, orden)
+                VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)
+            """, (tienda['id'], tipo, titulo, texto, json.dumps(media), activo, idx))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

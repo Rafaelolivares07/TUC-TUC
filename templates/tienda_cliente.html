@@ -109,6 +109,24 @@
         .tema-oscuro .cat-card-visual {
             background: color-mix(in srgb, var(--color-accion, #e11d48) 26%, #1f2937);
         }
+        .exp-media {
+            border-radius: 18px; overflow: hidden;
+            border: 1px solid rgba(148,163,184,0.24);
+            background: rgba(255,255,255,0.7);
+        }
+        .tema-oscuro .exp-media { background: rgba(31,41,55,0.76); border-color: rgba(75,85,99,0.7); }
+        .exp-collage {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-auto-rows: minmax(92px, 18vw); gap: 8px;
+        }
+        .exp-collage img:first-child { grid-column: span 2; grid-row: span 2; }
+        .exp-collage img { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; }
+        .exp-gallery {
+            display: grid; grid-auto-flow: column; grid-auto-columns: minmax(210px, 72%);
+            overflow-x: auto; gap: 10px; scroll-snap-type: x mandatory; padding-bottom: 4px;
+        }
+        .exp-gallery img { width: 100%; height: 240px; object-fit: cover; border-radius: 16px; scroll-snap-align: start; }
+        .exp-video-frame iframe, .exp-video-frame video { width: 100%; aspect-ratio: 16 / 9; display: block; border: 0; border-radius: 18px; background: #111; }
         @media (min-width: 768px) {
             .header-wrap {
                 display: flex; align-items: center; justify-content: center;
@@ -125,6 +143,8 @@
             .store-intro h1 { font-size: 1.25rem; line-height: 1.2; }
             .store-intro p { margin-top: 0; max-width: 520px; font-size: 0.875rem; }
             #categorias-portada { padding-top: 8px; }
+            .exp-collage { grid-auto-rows: 130px; }
+            .exp-gallery { grid-auto-columns: minmax(260px, 38%); }
         }
     </style>
 </head>
@@ -179,11 +199,47 @@
     </div>
     {% endif %}
 
-    {% if tienda.pantalla_experiencial %}
-    <section class="px-4 pb-2 text-center">
-        <button onclick="document.getElementById('categorias-portada').scrollIntoView({behavior:'smooth', block:'start'})" class="btn-accion px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm">
-            Ver opciones
-        </button>
+    {% set bloques_exp = bloques_experiencia | default([]) %}
+    {% if tienda.pantalla_experiencial and bloques_exp %}
+    <section class="px-4 pb-4 space-y-4">
+        {% for bloque in bloques_exp %}
+        <article class="exp-media p-3 md:p-4">
+            {% if bloque.titulo or bloque.texto %}
+            <div class="mb-3 text-center">
+                {% if bloque.titulo %}
+                <h2 class="text-lg md:text-xl font-extrabold txt-primary leading-tight">{{ bloque.titulo }}</h2>
+                {% endif %}
+                {% if bloque.texto %}
+                <p class="text-sm txt-secondary mt-1 leading-relaxed max-w-2xl mx-auto">{{ bloque.texto }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if bloque.tipo == 'video' and bloque.media %}
+            <div class="space-y-3">
+                {% for media in bloque.media %}
+                <div class="exp-video-frame" data-url="{{ media }}"></div>
+                {% endfor %}
+            </div>
+            {% elif bloque.tipo == 'collage' and bloque.media %}
+            <div class="exp-collage">
+                {% for media in bloque.media %}
+                <img src="{{ media }}" alt="{{ bloque.titulo or tienda.nombre }}" loading="lazy">
+                {% endfor %}
+            </div>
+            {% elif bloque.tipo == 'galeria' and bloque.media %}
+            <div class="exp-gallery">
+                {% for media in bloque.media %}
+                <img src="{{ media }}" alt="{{ bloque.titulo or tienda.nombre }}" loading="lazy">
+                {% endfor %}
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+        <div class="text-center">
+            <button onclick="document.getElementById('categorias-portada').scrollIntoView({behavior:'smooth', block:'start'})" class="btn-accion px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm">
+                Ver opciones
+            </button>
+        </div>
     </section>
     {% endif %}
 
@@ -349,6 +405,39 @@ function toast(msg, error) {
     t.textContent = msg;
     t.className = 'toast show ' + (error ? 'toast-err' : 'toast-ok');
     setTimeout(() => t.className = 'toast', 2500);
+}
+
+function normalizarVideoUrl(url) {
+    try {
+        const u = new URL(url, window.location.origin);
+        if (u.hostname.includes('youtube.com')) {
+            const id = u.searchParams.get('v') || u.pathname.split('/').filter(Boolean).pop();
+            return id ? `https://www.youtube.com/embed/${id}` : url;
+        }
+        if (u.hostname.includes('youtu.be')) {
+            const id = u.pathname.split('/').filter(Boolean)[0];
+            return id ? `https://www.youtube.com/embed/${id}` : url;
+        }
+        if (u.hostname.includes('vimeo.com')) {
+            const id = u.pathname.split('/').filter(Boolean).pop();
+            return id ? `https://player.vimeo.com/video/${id}` : url;
+        }
+    } catch(e) {}
+    return url;
+}
+
+function inicializarVideosExperiencia() {
+    document.querySelectorAll('.exp-video-frame[data-url]').forEach(frame => {
+        const raw = frame.dataset.url || '';
+        if (!raw || frame.dataset.rendered) return;
+        frame.dataset.rendered = '1';
+        const url = normalizarVideoUrl(raw);
+        if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(url)) {
+            frame.innerHTML = `<video src="${url.replace(/"/g, '&quot;')}" controls playsinline preload="metadata"></video>`;
+        } else {
+            frame.innerHTML = `<iframe src="${url.replace(/"/g, '&quot;')}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+        }
+    });
 }
 
 // === Productos ===
@@ -701,6 +790,7 @@ function subirComprobante(input) {
 }
 
 // === Init ===
+inicializarVideosExperiencia();
 cargarProductos();
 cargarConfig();
 
